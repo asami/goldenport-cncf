@@ -1,6 +1,10 @@
 package org.goldenport.cncf.entity.runtime
 
 import org.simplemodeling.model.datatype.EntityCollectionId
+import org.goldenport.cncf.entity.{
+  EntityRevisionModelKind,
+  EntityRevisionRepresentation
+}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.goldenport.schema.Schema
 
@@ -14,7 +18,8 @@ import org.goldenport.schema.Schema
  *
  * @since   Mar. 27, 2026
  *  version Apr. 24, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityRuntimeDescriptor(
@@ -35,7 +40,9 @@ final case class EntityRuntimeDescriptor(
   operationKind: EntityOperationKind = EntityOperationKind.default,
   applicationDomain: EntityApplicationDomain = EntityApplicationDomain.default,
   entityKindExplicit: Boolean = false,
-  operationKindExplicit: Boolean = false
+  operationKindExplicit: Boolean = false,
+  revisionModelKind: Option[EntityRevisionModelKind] = None,
+  revisionRepresentation: Option[EntityRevisionRepresentation] = None
 ) {
   def withSchema(p: Schema): EntityRuntimeDescriptor =
     copy(schema = Some(p))

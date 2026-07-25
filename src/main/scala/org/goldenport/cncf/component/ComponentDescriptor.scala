@@ -3,6 +3,7 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
+import org.goldenport.cncf.entity.EntityRevisionRepresentation
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
@@ -14,7 +15,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  *
  * @since   Mar. 27, 2026
  *  version Apr. 24, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentletDescriptor(
@@ -44,41 +46,65 @@ object ComponentDescriptor {
   given RecordDecoder[EntityRuntimeDescriptor] with
     def fromRecord(rec: Record): Consequence[EntityRuntimeDescriptor] =
       for {
-        entityName <- _string(rec, "entity", "entityName").map(Consequence.success).getOrElse(Consequence.argumentMissing("entity/entityName"))
+        entityname <- _string(rec, "entity", "entityName")
+          .map(Consequence.success)
+          .getOrElse(Consequence.argumentMissing("entity/entityName"))
         major = _string(rec, "collectionMajor", "major").getOrElse("sys")
         minor = _string(rec, "collectionMinor", "minor").getOrElse("sys")
-        name = _string(rec, "collectionName", "name").getOrElse(entityName)
+        name = _string(rec, "collectionName", "name").getOrElse(entityname)
         memory = _memory_policy(_string(rec, "memoryPolicy", "memory_policy").getOrElse("LoadToMemory"))
         partition = _partition_strategy(_string(rec, "partitionStrategy", "partition_strategy").getOrElse("byOrganizationMonthUTC"))
-        maxPartitions = _int_value(rec, List("maxPartitions", "max_partitions"), 64)
-        maxEntities = _int_value(rec, List("maxEntitiesPerPartition", "max_entities_per_partition"), 10000)
-        entityKindText = _string(rec, "entityKind", "entity_kind", "entityKindName", "entity_kind_name")
-        operationKindText = _string(rec, "operationKind", "operation_kind", "entityOperationKind", "entity_operation_kind")
-        entityKind <- entityKindText
+        maxpartitions = _int_value(rec, List("maxPartitions", "max_partitions"), 64)
+        maxentities = _int_value(rec, List("maxEntitiesPerPartition", "max_entities_per_partition"), 10000)
+        entitykindtext = _string(rec, "entityKind", "entity_kind", "entityKindName", "entity_kind_name")
+        operationkindtext = _string(rec, "operationKind", "operation_kind", "entityOperationKind", "entity_operation_kind")
+        entitykind <- entitykindtext
           .map(EntityKind.parseC)
-          .getOrElse(Consequence.success(operationKindText.map(x => EntityRuntimeDescriptor.legacyEntityKind(EntityOperationKind.parse(x))).getOrElse(EntityKind.default)))
-        usageKind = _string(rec, "usageKind", "usage_kind", "entityUsage", "entity_usage").map(EntityUsageKind.parse).getOrElse(EntityUsageKind.default)
-        operationKind = operationKindText
+          .getOrElse(
+            Consequence.success(
+              operationkindtext
+                .map(x =>
+                  EntityRuntimeDescriptor.legacyEntityKind(
+                    EntityOperationKind.parse(x)
+                  )
+                )
+                .getOrElse(EntityKind.default)
+            )
+          )
+        usagekind = _string(rec, "usageKind", "usage_kind", "entityUsage", "entity_usage")
+          .map(EntityUsageKind.parse)
+          .getOrElse(EntityUsageKind.default)
+        operationkind = operationkindtext
           .map(EntityOperationKind.parse)
-          .orElse(entityKindText.map(_ => entityKind.legacyOperationKind))
+          .orElse(entitykindtext.map(_ => entitykind.legacyOperationKind))
           .getOrElse(EntityOperationKind.default)
-        applicationDomain = _string(rec, "applicationDomain", "application_domain", "entityApplicationDomain", "entity_application_domain").map(EntityApplicationDomain.parse).getOrElse(EntityApplicationDomain.default)
+        applicationdomain = _string(
+          rec,
+          "applicationDomain",
+          "application_domain",
+          "entityApplicationDomain",
+          "entity_application_domain"
+        )
+          .map(EntityApplicationDomain.parse)
+          .getOrElse(EntityApplicationDomain.default)
         workingsetpolicy <- _working_set_policy(rec)
+        revisionrepresentation <- _optional_revision_representation(rec)
       } yield EntityRuntimeDescriptor(
-        entityName = entityName,
+        entityName = entityname,
         collectionId = EntityCollectionId(major, minor, name),
         memoryPolicy = memory,
         partitionStrategy = partition,
-        maxPartitions = maxPartitions,
-        maxEntitiesPerPartition = maxEntities,
+        maxPartitions = maxpartitions,
+        maxEntitiesPerPartition = maxentities,
         workingSetPolicy = workingsetpolicy,
         workingSetPolicySource = workingsetpolicy.map(_ => WorkingSetPolicySource.Cml),
-        entityKind = entityKind,
-        usageKind = usageKind,
-        operationKind = operationKind,
-        applicationDomain = applicationDomain,
-        entityKindExplicit = entityKindText.nonEmpty,
-        operationKindExplicit = operationKindText.nonEmpty
+        entityKind = entitykind,
+        usageKind = usagekind,
+        operationKind = operationkind,
+        applicationDomain = applicationdomain,
+        entityKindExplicit = entitykindtext.nonEmpty,
+        operationKindExplicit = operationkindtext.nonEmpty,
+        revisionRepresentation = revisionrepresentation
       )
 
   given RecordDecoder[ComponentletDescriptor] with
@@ -103,22 +129,30 @@ object ComponentDescriptor {
   given RecordDecoder[ComponentDescriptor] with
     def fromRecord(rec: Record): Consequence[ComponentDescriptor] = {
       val componentrec = _component_record(rec)
-      val componentName = _string(componentrec, "component", "componentName").orElse(_string(componentrec, "name"))
-      val entitiesC = _entity_descriptors(componentrec)
-      val componentletsC = _componentlet_descriptors(rec)
-      val extensionBindings = _record_value(componentrec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty)
+      val componentname = _string(componentrec, "component", "componentName")
+        .orElse(_string(componentrec, "name"))
+      val entitiesc = _entity_descriptors(componentrec)
+      val componentletsc = _componentlet_descriptors(rec)
+      val extensionbindings = _record_value(
+        componentrec,
+        List(
+          "extension_bindings",
+          "extensionBindings",
+          "extension_binding"
+        )
+      ).getOrElse(Record.empty)
       for {
-        xs <- entitiesC
-        componentlets <- componentletsC
+        xs <- entitiesc
+        componentlets <- componentletsc
       } yield
         ComponentDescriptor(
-          name = _string(componentrec, "name").orElse(componentName),
+          name = _string(componentrec, "name").orElse(componentname),
           version = _string(componentrec, "version").orElse(_string(rec, "version")),
-          componentName = componentName,
+          componentName = componentname,
           subsystemName = _string(componentrec, "subsystem", "subsystemName").orElse(_string(rec, "subsystem", "subsystemName")),
           componentlets = componentlets,
           entityRuntimeDescriptors = xs,
-          extensionBindings = extensionBindings,
+          extensionBindings = extensionbindings,
           extensions = _component_extensions(componentrec),
           config = _string_map_value(componentrec, List("config"))
         )
@@ -178,6 +212,20 @@ object ComponentDescriptor {
   private def _string(rec: Record, keys: String*): Option[String] =
     keys.iterator.map(rec.getString).collectFirst { case Some(s) if s.trim.nonEmpty => s.trim }
 
+  private def _optional_revision_representation(
+    rec: Record
+  ): Consequence[Option[EntityRevisionRepresentation]] = {
+    val keys = Vector("revisionRepresentation", "revision_representation")
+    keys.iterator
+      .flatMap(key => rec.getAny(key).map(key -> _))
+      .toVector
+      .headOption
+      .map { case (_, value) =>
+        EntityRevisionRepresentation.parseC(value.toString).map(Some(_))
+      }
+      .getOrElse(Consequence.success(None))
+  }
+
   private def _working_set_policy(
     rec: Record
   ): Consequence[Option[WorkingSetPolicy]] = {
@@ -225,6 +273,8 @@ object ComponentDescriptor {
       "componentlets",
       "entity",
       "entityName",
+      "revisionRepresentation",
+      "revision_representation",
       "extension",
       "extensions",
       "extension_bindings",

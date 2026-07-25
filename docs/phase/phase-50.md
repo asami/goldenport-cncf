@@ -95,10 +95,11 @@ implementation assets.
   beside the domain value.
 - Revision representation is fixed at Entity or collection registration. It
   cannot be selected per request.
-- Generated Entity metadata and `EntityRuntimeDescriptor` use
+- Generated Entity metadata carries explicit `revisionModelKind` evidence and
   `revisionRepresentation`. `SimpleEntity` is forced to `Embedded`; only a
-  non-`SimpleEntity` may explicitly select `Detached`. Conflicting declarations
-  fail assembly instead of using precedence.
+  proven non-`SimpleEntity` may explicitly select `Detached`. Missing model-kind
+  evidence and conflicting declarations fail assembly instead of using
+  precedence or absence-based inference.
 - One Entity has exactly one authoritative revision representation:
   `Embedded` for `SimpleEntity`, or explicit `Detached` for a
   non-`SimpleEntity` model.
@@ -203,7 +204,7 @@ implementation assets.
 | --- | --- | --- | --- |
 | SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | done |
 | SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; generated Entity outputs consume it as managed metadata while application input variants omit it. | done |
-| SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. | planned |
+| SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. | in progress |
 | SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. | planned |
 | SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual representation, or implicit fallback. | planned |
 | SE-06 | Conditional Transition integration | Both admitted representations use the common revision kernel and retain Phase 49 exactly-one-winner semantics. | planned |

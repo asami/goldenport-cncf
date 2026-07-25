@@ -215,7 +215,7 @@ Review-fix evidence:
 ## SE-03: Common Revision Kernel and Binding
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN PROGRESS
 - Owner: CNCF EntityStore, UnitOfWork, and datastore maintainers
 - Entry rule: SE-02 is DONE.
 - Completion rule: Embedded and detached paths use one `EntityRevision`,
@@ -234,7 +234,56 @@ Stage Status:
   Specifications.
 
 Evidence:
-- Pending.
+- `SE-03A Revision Representation Contract Propagation` is implemented.
+  Independent review findings were fixed, and the clean re-review found no
+  remaining actionable finding.
+- SimpleModeler now carries `revisionModelKind` and
+  `revisionRepresentation` through
+  `MComponent.EntityRuntimeDescriptor`, the Scala component model, and
+  generated CNCF `EntityRuntimeDescriptor` construction.
+- Cozy emits explicit `SimpleEntity` or `NonSimpleEntity` model-kind evidence
+  for generated Entities and declares `Embedded` only when the source Entity
+  inherits `SimpleEntity`; CNCF does not infer this from schema fields, class
+  names, representation absence, or persisted data.
+- CNCF defines `EntityRevisionRepresentation` and the immutable
+  `EntityRevisionBinding` resolver. Generated model-kind evidence is required
+  before binding, so a missing model declaration cannot admit Detached.
+  The contract validator rejects conflicts, implicit detached fallback, missing
+  persisted revision, wrong physical fields, and mirrored/dual fields when
+  invoked; registration-time enforcement remains part of SE-03B.
+- `EntityRuntimeDescriptor` and component descriptor decoding expose the
+  collection declaration without inventing a default or accepting an unknown
+  value.
+- Focused SimpleModeler Executable Specifications passed: 4 tests in 2 suites.
+- Focused Cozy SimpleEntity generation Executable Specifications passed:
+  2 tests in 1 suite.
+- Focused CNCF representation and component-descriptor Executable
+  Specifications passed: 21 tests in 2 suites.
+- Full SimpleModeler suite passed.
+- Full Cozy suite passed: 662 tests, 2 canceled.
+- Full CNCF suite passed with the development Cozy launcher selected
+  explicitly: 2442 tests, 7 canceled, 1 ignored, and 59 pending.
+- Remaining SE-03 work is registration-time binding and replacement of the
+  Phase 49 token vocabulary/provider kernel with common `EntityRevision`.
+
+### SE-03A Modified Scala File Compliance Ledger
+
+All paths are repository-relative. Every modified Scala source was checked as
+a whole file rather than only on changed lines.
+
+| Repository | Scala file | Naming | Spec style | Validation | Commit |
+| --- | --- | --- | --- | --- | --- |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/generator/scala/ComponentPart.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/generator/scala/model/ScalaModel.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/ComponentScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/model/MComponent.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `simple-modeler` | `src/test/scala/org/simplemodeling/SimpleModeler/generator/scala/ComponentRevisionRepresentationGenerationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 4 focused tests and full suite passed | this SE-03A release commit |
+| `cozy` | `src/main/scala/cozy/modeler/Modeler.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `cozy` | `src/test/scala/cozy/modeler/ModelerSimpleEntityRevisionGenerationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 2 focused tests and full suite passed | this SE-03A release commit |
+| `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/component/ComponentDescriptor.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/entity/EntityRevisionRepresentation.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/entity/runtime/EntityRuntimeDescriptor.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
+| `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityRevisionRepresentationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 5 focused tests and full suite passed | this SE-03A release commit |
 
 ## SE-04: Embedded SimpleEntity Lifecycle and OCC
 
