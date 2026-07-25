@@ -27,6 +27,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.Query
 import org.simplemodeling.model.directive.{Condition, Update}
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.testutil.EntityRevisionFixture
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.record.{Record, RecordPresentable}
 import org.scalatest.GivenWhenThen
@@ -37,7 +38,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 16, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -46,8 +47,8 @@ final class EntityStoreQueryRouteSpec
     with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "a", "person")
-  private val _legacyexpectation =
-    EntityMutationExpectation(EntityConcurrencyToken.LEGACY)
+  private val _initialexpectation =
+    EntityMutationExpectation(EntityConcurrencyToken.INITIAL)
 
   "EntityPersistent store record contract" should {
     "delegate default store APIs to RecordCodex compatibility methods" in {
@@ -110,9 +111,9 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
           )
         )
       )
@@ -160,11 +161,11 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               p1.toStoreRecord
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               p2.toStoreRecord
             )
@@ -235,7 +236,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
                 "id"         -> id,
@@ -355,15 +356,15 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p1.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive")
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p2.toRecord() ++ Record.dataAuto("postStatus" -> "Draft", "aliveness" -> "Alive")
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p3.toRecord() ++ Record.dataAuto("postStatus" -> "Archived", "aliveness" -> "Dead")
             )
@@ -408,15 +409,15 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p1.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive")
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p2.toRecord() ++ Record.dataAuto("postStatus" -> "Draft", "aliveness" -> "Alive")
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p3.toRecord() ++ Record.dataAuto("postStatus" -> "Archived", "aliveness" -> "Dead")
             )
@@ -465,19 +466,19 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p1.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive")
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p2.toRecord() ++ Record.dataAuto("postStatus" -> "Draft", "aliveness" -> "Alive")
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p3.toRecord() ++ Record.dataAuto("postStatus" -> "Archived", "aliveness" -> "Dead")
             ),
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               p4.toRecord() ++ Record.dataAuto(
                 "postStatus" -> "Published",
@@ -522,7 +523,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), entity.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), entity.toRecord())
           )
         )
       )
@@ -534,7 +535,7 @@ final class EntityStoreQueryRouteSpec
           name = Update.set("hanako"),
           age = Update.noop[Int]
         ),
-        expectation = _legacyexpectation,
+        expectation = _initialexpectation,
         tc = summon[EntityPersistentUpdate[PersonPatch]]
       )
       val updated = entitystorespace.updateById(op)
@@ -560,7 +561,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
                 "id"         -> id,
@@ -576,7 +577,7 @@ final class EntityStoreQueryRouteSpec
         UnitOfWorkOp.EntityStoreUpdateById(
           id = id,
           patch = StorePatchCandidate(Update.set("after")),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistentUpdate[StorePatchCandidate]]
         )
       )
@@ -671,7 +672,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
                 "id"        -> id.print,
@@ -692,7 +693,7 @@ final class EntityStoreQueryRouteSpec
             name = None,
             age = Some(21)
           ),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
@@ -741,7 +742,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
                 "id"        -> id.print,
@@ -762,7 +763,7 @@ final class EntityStoreQueryRouteSpec
             name = Some("resurrected"),
             age = Some(21)
           ),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
@@ -799,7 +800,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               stored
             )
@@ -815,7 +816,7 @@ final class EntityStoreQueryRouteSpec
             name = Some("saved"),
             age = Some(21)
           ),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
@@ -893,7 +894,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
                 "id"         -> id.print,
@@ -914,7 +915,7 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
@@ -962,7 +963,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
                 "id"        -> id.print,
@@ -982,7 +983,7 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
@@ -1019,7 +1020,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               stored
             )
@@ -1034,7 +1035,7 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
@@ -1068,7 +1069,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
                 "id"        -> id.print,
@@ -1088,7 +1089,7 @@ final class EntityStoreQueryRouteSpec
             updatedAt = Instant.EPOCH,
             updatedBy = "attacker"
           ),
-          expectation = _legacyexpectation,
+          expectation = _initialexpectation,
           tc = summon[EntityPersistent[AuditSpoofUpdateCandidate]]
         )
       )
@@ -1122,7 +1123,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               Record.dataAuto(
                 "id"         -> id.print,
@@ -1173,7 +1174,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               Record.dataAuto(
                 "id"         -> id.print,
@@ -1211,7 +1212,7 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               Record.dataAuto(
                 "id"   -> id.print,

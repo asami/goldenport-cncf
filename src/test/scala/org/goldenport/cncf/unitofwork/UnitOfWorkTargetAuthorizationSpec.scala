@@ -34,6 +34,7 @@ import org.goldenport.cncf.entity.{
   SimpleEntityStorageShapePolicy
 }
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.testutil.EntityRevisionFixture
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.operation.CmlOperationAccess
 import org.goldenport.cncf.security.{
@@ -55,7 +56,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 26, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
@@ -64,8 +65,8 @@ final class UnitOfWorkTargetAuthorizationSpec
     with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "authz", "person")
-  private val _legacyexpectation =
-    EntityMutationExpectation(EntityConcurrencyToken.LEGACY)
+  private val _initialexpectation =
+    EntityMutationExpectation(EntityConcurrencyToken.INITIAL)
 
   "UnitOfWork target authorization" should {
     "authorize operation preflight and aggregate command admission" which {
@@ -320,7 +321,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreSave(
                 entity = PersonEntity(id, "taro-2", "owner-x", groupid = Some("team-a")),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -352,11 +353,13 @@ final class UnitOfWorkTargetAuthorizationSpec
         val id = EntityId("test", "save_typed_security", _cid)
         val _ = summon[ExecutionContext].dataStoreSpace.inject(
           DataStore.CollectionId.EntityStore(_cid),
-          TypedSecurityTargetEntity(
-            id,
-            "typed-before",
-            "typed-owner"
-          ).toRecord()
+          EntityRevisionFixture.persistedRecord(
+            TypedSecurityTargetEntity(
+              id,
+              "typed-before",
+              "typed-owner"
+            ).toRecord()
+          )
         )
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -366,7 +369,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreSave(
                 entity = TypedSecurityTargetEntity(id, "typed-after", "typed-owner"),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -428,7 +431,7 @@ final class UnitOfWorkTargetAuthorizationSpec
                   "typed-owner",
                   stalesecurity = true
                 ),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -464,7 +467,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreSave(
                 entity = TypedSecurityTargetEntity(id, "typed-denied", "typed-owner"),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -501,7 +504,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreUpdate(
                 entity = PersonEntity(id, "shiro-2", "owner-x"),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -541,7 +544,7 @@ final class UnitOfWorkTargetAuthorizationSpec
               UnitOfWorkOp.EntityStoreUpdateById(
                 id = id,
                 patch = PersonPatch(name = Some("hanako-2")),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistentUpdate[PersonPatch]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -613,7 +616,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreUpdate(
                 entity = PersonEntity(id, "order-2", "sales-org"),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -651,7 +654,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreUpdate(
                 entity = PersonEntity(id, "projection-2", "business-owner"),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -693,7 +696,7 @@ final class UnitOfWorkTargetAuthorizationSpec
               cats.free.Free.liftF(
                 UnitOfWorkOp.EntityStoreUpdate(
                   entity = PersonEntity(id, "order-2", "sales-org"),
-                  expectation = _legacyexpectation,
+                  expectation = _initialexpectation,
                   tc = summon[EntityPersistent[PersonEntity]],
                   authorization = Some(
                     UnitOfWorkAuthorization(
@@ -738,7 +741,7 @@ final class UnitOfWorkTargetAuthorizationSpec
               cats.free.Free.liftF(
                 UnitOfWorkOp.EntityStoreUpdate(
                   entity = PersonEntity(id, "projection-2", "business-owner"),
-                  expectation = _legacyexpectation,
+                  expectation = _initialexpectation,
                   tc = summon[EntityPersistent[PersonEntity]],
                   authorization = Some(
                     UnitOfWorkAuthorization(
@@ -778,7 +781,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreUpdate(
                 entity = PersonEntity(id, "order-2", "sales-org"),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -822,7 +825,7 @@ final class UnitOfWorkTargetAuthorizationSpec
               cats.free.Free.liftF(
                 UnitOfWorkOp.EntityStoreUpdate(
                   entity = PersonEntity(id, "stock-2", "inventory-org"),
-                  expectation = _legacyexpectation,
+                  expectation = _initialexpectation,
                   tc = summon[EntityPersistent[PersonEntity]],
                   authorization = Some(
                     UnitOfWorkAuthorization(
@@ -866,7 +869,7 @@ final class UnitOfWorkTargetAuthorizationSpec
             cats.free.Free.liftF(
               UnitOfWorkOp.EntityStoreUpdate(
                 entity = PersonEntity(id, "stock-2", "inventory-org"),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -958,7 +961,7 @@ final class UnitOfWorkTargetAuthorizationSpec
                   "sales-org",
                   customerid = Some("customer-123")
                 ),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -1006,7 +1009,7 @@ final class UnitOfWorkTargetAuthorizationSpec
                   "sales-org",
                   customerid = Some("customer-123")
                 ),
-                expectation = _legacyexpectation,
+                expectation = _initialexpectation,
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -1447,7 +1450,7 @@ final class UnitOfWorkTargetAuthorizationSpec
     val _ = ctx.dataStoreSpace.inject(
       DataStoreSpace.Seed(
         Vector(
-          DataStoreSpace.SeedEntry(
+          EntityRevisionFixture.entitySeed(
             DataStore.CollectionId.EntityStore(_cid),
             entity.toRecord()
           )

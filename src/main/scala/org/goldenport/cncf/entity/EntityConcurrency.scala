@@ -4,39 +4,27 @@ import scala.util.Try
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.cncf.datastore.DataStoreRevisionState
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object EntityConcurrencyTokenSupport {
   private[cncf] def _create(value: Long): Consequence[EntityConcurrencyToken] =
-    if (value >= 0L)
-      Consequence.success(EntityConcurrencyToken.createInternal(value))
-    else
-      Consequence.argumentInvalid(
-        "entityConcurrencyToken",
-        "non-negative Long",
-        value
-      )
+    EntityRevision
+      .createC(value)
+      .map(revision => EntityConcurrencyToken.createInternal(revision.value))
 
   private[cncf] def _advance(
     token: EntityConcurrencyToken
   ): Consequence[EntityConcurrencyToken] =
-    if (_storage_value(token) < Long.MaxValue)
-      Consequence.success(
-        EntityConcurrencyToken.createInternal(_storage_value(token) + 1L)
-      )
-    else
-      Consequence.argumentLimitExceeded(
-        "entityConcurrencyToken",
-        Long.MaxValue - 1L,
-        _storage_value(token),
-        "entity-concurrency-token.advance"
-      )
+    EntityRevision
+      .createC(_storage_value(token))
+      .flatMap(_.nextC)
+      .map(revision => EntityConcurrencyToken.createInternal(revision.value))
 
   private[cncf] def _storage_value(token: EntityConcurrencyToken): Long =
     EntityConcurrencyToken.storageValueInternal(token)
@@ -82,7 +70,7 @@ object EntityConcurrencyMetadata {
     }
     values match {
       case Vector() =>
-        Consequence.success(EntityConcurrencyToken.LEGACY)
+        Consequence.argumentMissing(STORAGE_FIELD_NAME)
       case Vector(value) =>
         _token_value(value)
       case _ =>
@@ -99,7 +87,7 @@ object EntityConcurrencyMetadata {
 
   def initializeForCreate(record: Record): Record =
     withoutManagedField(record) ++
-      _storage_record(EntityConcurrencyToken.INITIAL)
+      _storage_record(EntityRevision.INITIAL)
 
   def preserveForMutation(
     record: Record,
@@ -139,24 +127,17 @@ object EntityConcurrencyMetadata {
 
   def mutationRevision(
     expectation: EntityMutationExpectation
-  ): Consequence[(DataStoreRevisionState, Long)] =
-    EntityConcurrencyTokenSupport
-      ._advance(expectation.token)
-      .map { next =>
-        val expected =
-          if (expectation.token == EntityConcurrencyToken.LEGACY)
-            DataStoreRevisionState.Absent
-          else
-            DataStoreRevisionState.Present(
-              EntityConcurrencyTokenSupport._storage_value(expectation.token)
-            )
-        expected ->
-          EntityConcurrencyTokenSupport._storage_value(next)
-      }
+  ): Consequence[(EntityRevision, EntityRevision)] =
+    for {
+      expected <- EntityRevision.createC(
+        EntityConcurrencyTokenSupport._storage_value(expectation.token)
+      )
+      next <- expected.nextC
+    } yield expected -> next
 
   def staleMutation[A](
     expectation: EntityMutationExpectation,
-    actual: DataStoreRevisionState
+    actual: EntityRevision
   ): Consequence.Failure[A] =
     Consequence.operationConflict(
       "entity-versioned-mutation",
@@ -167,7 +148,7 @@ object EntityConcurrencyMetadata {
         Descriptor.Facet.Expected(
           EntityConcurrencyTokenSupport._storage_value(expectation.token)
         ),
-        Descriptor.Facet.Actual(_revision_value(actual))
+        Descriptor.Facet.Actual(actual.value)
       )
     )
 
@@ -201,6 +182,13 @@ object EntityConcurrencyMetadata {
         EntityConcurrencyTokenSupport._storage_value(token)
     )
 
+  private def _storage_record(
+    revision: EntityRevision
+  ): Record =
+    Record.dataAuto(
+      STORAGE_FIELD_NAME -> revision.value
+    )
+
   private def _token_value(
       value: Any,
       fieldname: String = STORAGE_FIELD_NAME
@@ -211,7 +199,7 @@ object EntityConcurrencyMetadata {
       case None =>
         Consequence.argumentFormatError(
           fieldname,
-          "non-negative integral Long",
+          "positive integral Long",
           value
         )
     }
@@ -258,11 +246,4 @@ object EntityConcurrencyMetadata {
         content
     }
 
-  private def _revision_value(
-    revision: DataStoreRevisionState
-  ): Any =
-    revision match {
-      case DataStoreRevisionState.Absent => "absent"
-      case DataStoreRevisionState.Present(value) => value
-    }
 }

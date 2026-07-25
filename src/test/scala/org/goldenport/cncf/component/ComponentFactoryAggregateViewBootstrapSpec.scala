@@ -16,7 +16,7 @@ import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntitySt
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.aggregate.{AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
-import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.testutil.{EntityRevisionFixture, TestComponentFactory}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec
@@ -68,7 +68,7 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       )
       val seeded = summon[ExecutionContext].dataStoreSpace.inject(
         DataStoreSpace.Seed(entities.map { entity =>
-          DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), entity.toRecord())
+          EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), entity.toRecord())
         })
       )
       val component = _create_component_with_metadata()
@@ -126,7 +126,7 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       )
       val seeded = summon[ExecutionContext].dataStoreSpace.inject(
         DataStoreSpace.Seed(persisted.map { entity =>
-          DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), entity.toRecord())
+          EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), entity.toRecord())
         })
       )
       val component = _create_component_with_metadata()

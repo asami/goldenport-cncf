@@ -9,11 +9,15 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{
+  EntityCollectionId,
+  EntityId,
+  EntityRevision
+}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DataStoreConditionalTransitionSpec
@@ -87,7 +91,7 @@ final class DataStoreConditionalTransitionSpec
           None,
           Vector(expected),
           Record.dataAuto("status" -> "closed"),
-          2L
+          _revision(2L)
         )
         val duplicatefields =
           _root(Vector(expected, expected))
@@ -99,10 +103,10 @@ final class DataStoreConditionalTransitionSpec
             _root_collection,
             _root_entry,
             _revision_field,
-            Some(DataStoreRevisionState.Present(1L)),
+            Some(EntityRevision.INITIAL),
             Vector(expected),
             Record.empty,
-            2L
+            _revision(2L)
           )
         val excessfields = _root(toomany)
 
@@ -170,10 +174,10 @@ final class DataStoreConditionalTransitionSpec
             _root_collection,
             _root_entry,
             _revision_field,
-            Some(DataStoreRevisionState.Present(1L)),
+            Some(EntityRevision.INITIAL),
             Vector.empty,
             Record.dataAuto("unsafe" -> new Object),
-            2L
+            _revision(2L)
           )
         val unsafesuccessor =
           DataStoreConditionalSuccessor.Create(
@@ -252,10 +256,10 @@ final class DataStoreConditionalTransitionSpec
             _root_collection,
             _root_entry,
             _revision_field,
-            Some(DataStoreRevisionState.Present(1L)),
+            Some(EntityRevision.INITIAL),
             expectedfields,
             maximumrecord,
-            2L
+            _revision(2L)
           )
         val sideeffects =
           Vector.tabulate(
@@ -277,10 +281,10 @@ final class DataStoreConditionalTransitionSpec
             _root_collection,
             _root_entry,
             _revision_field,
-            Some(DataStoreRevisionState.Present(1L)),
+            Some(EntityRevision.INITIAL),
             Vector.empty,
             changes,
-            2L
+            _revision(2L)
           )
         def _nested_record_(
           nestedrecords: Int
@@ -324,13 +328,13 @@ final class DataStoreConditionalTransitionSpec
             _root_collection,
             _root_entry,
             _revision_field,
-            Some(DataStoreRevisionState.Present(1L)),
+            Some(EntityRevision.INITIAL),
             Vector.empty,
             Record.dataAuto(
               ("f" * (EntityConditionalTransitionSupport.MAX_FIELD_LENGTH + 1)) ->
                 "changed"
             ),
-            2L
+            _revision(2L)
           )
         val oversizedcorrelation =
           root.flatMap(
@@ -420,10 +424,10 @@ final class DataStoreConditionalTransitionSpec
             DataStore.CollectionId("plain_root"),
             _root_entry,
             _revision_field,
-            Some(DataStoreRevisionState.Present(1L)),
+            Some(EntityRevision.INITIAL),
             Vector(_expected("status", "open")),
             Record.dataAuto("status" -> "closed"),
-            2L
+            _revision(2L)
           )
         val nonentitysuccessor =
           DataStoreConditionalSuccessor.Create(
@@ -583,13 +587,13 @@ final class DataStoreConditionalTransitionSpec
       _root_collection,
       _root_entry,
       _revision_field,
-      Some(DataStoreRevisionState.Present(1L)),
+      Some(EntityRevision.INITIAL),
       fields,
       Record.dataAuto(
         "status" -> "closed",
         "successor_id" -> _successor_entry.print
       ),
-      2L
+      _revision(2L)
     )
 
   private def _create_successor(
@@ -638,6 +642,13 @@ final class DataStoreConditionalTransitionSpec
       case Consequence.Failure(conclusion) =>
         fail(conclusion.display)
     }
+
+  private def _revision(
+    value: Long
+  ): EntityRevision =
+    EntityRevision.createC(value).toOption.getOrElse(
+      fail(s"valid EntityRevision expected: $value")
+    )
 
   private def _is_failure[A](
     consequence: Consequence[A]

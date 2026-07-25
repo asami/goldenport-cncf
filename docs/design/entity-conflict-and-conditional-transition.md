@@ -82,6 +82,14 @@ cncf_revision
 The field is part of the canonical SimpleEntity storage-shape policy and is
 reserved independently of application naming aliases.
 
+> **Phase 50 supersession annotation (2026-07-25):** The legacy-record design
+> below describes the Phase 49 provisional token path. A provider path migrated
+> to the Phase 50 `EntityRevision` kernel requires a physically present
+> revision from `1` through `Long.MaxValue` and rejects absence until explicit
+> migration or recreation. It does not synthesize virtual revision `0`. The
+> historical design remains visible until Phase 50 SE-09 replaces the complete
+> provisional token/snapshot design after acceptance.
+
 ### Legacy records
 
 A stored Entity record without `cncf_revision` has virtual token `0`.

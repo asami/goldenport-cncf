@@ -1,23 +1,16 @@
 package org.goldenport.cncf.datastore
 
-import scala.util.Try
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.record.{Field, Record}
+import org.simplemodeling.model.datatype.EntityRevision
 import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
-sealed abstract class DataStoreRevisionState
-
-object DataStoreRevisionState {
-  case object Absent extends DataStoreRevisionState
-  final case class Present(value: Long) extends DataStoreRevisionState
-}
-
 sealed abstract class EntityVersionedRootMutation
 
 object EntityVersionedRootMutation {
@@ -47,8 +40,8 @@ final case class EntityVersionedMutationPlan(
   collection: DataStore.CollectionId,
   entryId: DataStore.EntryId,
   revisionField: String,
-  expectedRevision: DataStoreRevisionState,
-  nextRevision: Long,
+  expectedRevision: EntityRevision,
+  nextRevision: EntityRevision,
   rootMutation: EntityVersionedRootMutation,
   sideEffects: Vector[EntityVersionedSideEffect] = Vector.empty
 )
@@ -57,7 +50,7 @@ sealed abstract class EntityVersionedMutationResult
 
 object EntityVersionedMutationResult {
   final case class Applied(record: Record) extends EntityVersionedMutationResult
-  final case class Stale(actualRevision: DataStoreRevisionState)
+  final case class Stale(actualRevision: EntityRevision)
       extends EntityVersionedMutationResult
 }
 
@@ -78,28 +71,19 @@ private[datastore] object EntityVersionedMutationSupport {
       _ <- _validate_side_effects(plan)
     } yield ()
 
-  def revisionState(
+  def revision(
     record: Record,
     revisionfield: String
-  ): Consequence[DataStoreRevisionState] = {
+  ): Consequence[EntityRevision] = {
     val values = record.fields.collect {
       case field if field.key == revisionfield =>
         _single_value(field.value.single)
     }
     values match {
       case Vector() =>
-        Consequence.success(DataStoreRevisionState.Absent)
+        Consequence.argumentMissing(revisionfield)
       case Vector(value) =>
-        _exact_long(value) match {
-          case Some(number) if number >= 0L =>
-            Consequence.success(DataStoreRevisionState.Present(number))
-          case _ =>
-            Consequence.argumentFormatError(
-              revisionfield,
-              "one non-negative integral Long",
-              value
-            )
-        }
+        EntityRevision.createC(value)
       case _ =>
         Consequence.argumentInvalid(
           revisionfield,
@@ -120,7 +104,7 @@ private[datastore] object EntityVersionedMutationSupport {
         _merge(existing, changes)
     }
     _without_field(changed, plan.revisionField) ++
-      Record.dataAuto(plan.revisionField -> plan.nextRevision)
+      Record.dataAuto(plan.revisionField -> plan.nextRevision.value)
   }
 
   private def _validate_revision_field(
@@ -133,34 +117,22 @@ private[datastore] object EntityVersionedMutationSupport {
 
   private def _validate_revision_progression(
     plan: EntityVersionedMutationPlan
-  ): Consequence[Unit] = {
-    val expectednext = plan.expectedRevision match {
-      case DataStoreRevisionState.Absent =>
-        Some(1L)
-      case DataStoreRevisionState.Present(value)
-          if value >= 0L && value < Long.MaxValue =>
-        Some(value + 1L)
-      case _ =>
-        None
-    }
-    expectednext match {
-      case Some(value) if value == plan.nextRevision =>
-        Consequence.unit
-      case Some(value) =>
-        Consequence.argumentExpectedActualMismatch(
-          "nextRevision",
-          value,
-          plan.nextRevision
-        )
+  ): Consequence[Unit] =
+    Option(plan.expectedRevision) match {
       case None =>
-        Consequence.argumentLimitExceeded(
-          "expectedRevision",
-          Long.MaxValue - 1L,
-          plan.expectedRevision,
-          "entity-versioned-mutation.advance"
-        )
+        Consequence.argumentMissing("expectedRevision")
+      case Some(expected) =>
+        expected.nextC.flatMap { expectednext =>
+          if (expectednext == plan.nextRevision)
+            Consequence.unit
+          else
+            Consequence.argumentExpectedActualMismatch(
+              "nextRevision",
+              expectednext,
+              plan.nextRevision
+            )
+        }
     }
-  }
 
   private def _validate_root_mutation(
     plan: EntityVersionedMutationPlan
@@ -230,28 +202,6 @@ private[datastore] object EntityVersionedMutationSupport {
     field.value.single match {
       case Update.SetNull => true
       case _ => false
-    }
-
-  private def _exact_long(
-    value: Any
-  ): Option[Long] =
-    value match {
-      case number: Byte => Some(number.toLong)
-      case number: Short => Some(number.toLong)
-      case number: Int => Some(number.toLong)
-      case number: Long => Some(number)
-      case number: BigInt if number.isValidLong => Some(number.toLong)
-      case number: BigDecimal =>
-        number.toBigIntExact.filter(_.isValidLong).map(_.toLong)
-      case number: java.lang.Byte => Some(number.longValue)
-      case number: java.lang.Short => Some(number.longValue)
-      case number: java.lang.Integer => Some(number.longValue)
-      case number: java.lang.Long => Some(number.longValue)
-      case number: java.math.BigInteger =>
-        Try(number.longValueExact).toOption
-      case number: java.math.BigDecimal =>
-        Try(number.toBigIntegerExact.longValueExact).toOption
-      case _ => None
     }
 
   private def _single_value(

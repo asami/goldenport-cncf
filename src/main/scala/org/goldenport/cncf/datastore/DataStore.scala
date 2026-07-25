@@ -16,7 +16,7 @@ import scala.util.control.NonFatal
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version May.  2, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -297,7 +297,7 @@ object DataStore {
             .map(Consequence.success)
             .getOrElse(Consequence.DataStoreNotFound(plan.entryId.print))
           actual <-
-            EntityVersionedMutationSupport.revisionState(
+            EntityVersionedMutationSupport.revision(
               existing,
               plan.revisionField
             )
@@ -547,7 +547,7 @@ object DataStore {
               Consequence.DataStoreNotFound(bind.entryId.print)
             case Some(record) =>
               EntityVersionedMutationSupport
-                .revisionState(record, bind.revisionField)
+                .revision(record, bind.revisionField)
                 .flatMap { actual =>
                   if (actual == bind.expectedRevision)
                     Consequence.success(initial -> record)

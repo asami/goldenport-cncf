@@ -40,7 +40,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConcurrencyTokenSpec
@@ -52,19 +52,24 @@ final class EntityConcurrencyTokenSpec
     afterWord(
       "in spec:entity-conflict-and-conditional-transition, example:E1, rules:R1,R2,R4, phase:49"
     )
-  private val _e2_metadata =
+  private val _se_03c_metadata =
     afterWord(
-      "in spec:entity-conflict-and-conditional-transition, example:E2, rules:R3, phase:49"
+      "in phase:50, slice:SE-03C, using the common positive EntityRevision kernel"
+    )
+  private val _er_08_metadata =
+    afterWord(
+      "in phase:50, slice:SE-03C, acceptance:ER-08, superseding phase:49 rule:R3 for the migrated EntityRevision path"
     )
 
   "Entity concurrency token" should {
-    "E1 define a non-negative token with one overflow-safe advancement" must _e1_metadata {
+    "SE-03C bridge the provisional token API to positive revision semantics" must
+      _se_03c_metadata {
       "when generated admitted values advance" in {
         Given(
-          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1,R2,R4; Example: E1; generated non-negative token values"
+          "Contract: docs/phase/phase-50.md selected direction and the Phase 50 supersession annotation; generated positive revision values"
         )
         val property = Prop.forAll(
-          Gen.chooseNum(0L, Long.MaxValue - 1L)
+          Gen.chooseNum(1L, Long.MaxValue - 1L)
         ) { number =>
           val token = EntityConcurrencyTokenSupport._create(number)
           val next  = token.flatMap(EntityConcurrencyTokenSupport._advance)
@@ -90,6 +95,8 @@ final class EntityConcurrencyTokenSpec
           a[Consequence.Failure[?]]
         EntityConcurrencyTokenSupport._create(-1L) shouldBe
           a[Consequence.Failure[?]]
+        EntityConcurrencyTokenSupport._create(0L) shouldBe
+          a[Consequence.Failure[?]]
         classOf[EntityConcurrencyToken].getConstructors shouldBe empty
         classOf[EntityConcurrencyToken].getDeclaredConstructors
           .forall(constructor =>
@@ -114,10 +121,10 @@ final class EntityConcurrencyTokenSpec
 
         cause.kind shouldBe Some(Cause.Kind.Limit)
         cause.descriptor.facets should contain(
-          Descriptor.Facet.Limit(Long.MaxValue - 1L)
+          Descriptor.Facet.Limit(Long.MaxValue)
         )
         cause.descriptor.facets should contain(
-          Descriptor.Facet.Actual(Long.MaxValue)
+          Descriptor.Facet.Actual(BigInt(Long.MaxValue) + 1)
         )
       }
     }
@@ -364,13 +371,13 @@ final class EntityConcurrencyTokenSpec
       }
     }
 
-    "E2 interpret a physically absent revision as virtual token zero" must _e2_metadata {
-      "when legacy and exact integral storage records are decoded" in {
+    "ER-08 require a physically present positive revision" must _er_08_metadata {
+      "when absent and exact integral storage records are decoded" in {
         Given(
-          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R3; Example: E2; a legacy record and generated exact integral values"
+          "Contract: docs/phase/phase-50-checklist.md ER-08 and the Phase 50 supersession annotation; an absent revision and generated positive integral values"
         )
         val property = Prop.forAll(
-          Gen.chooseNum(0L, Long.MaxValue)
+          Gen.chooseNum(1L, Long.MaxValue)
         ) { number =>
           EntityConcurrencyMetadata
             .token(Record.dataAuto("cncf_revision" -> BigInt(number)))
@@ -379,8 +386,8 @@ final class EntityConcurrencyTokenSpec
         }
 
         When("the metadata codec reads the records")
-        val legacy =
-          EntityConcurrencyMetadata.token(Record.dataAuto("name" -> "legacy"))
+        val absent =
+          EntityConcurrencyMetadata.token(Record.dataAuto("name" -> "absent"))
         val checked =
           Test.check(
             Test.Parameters.default.withMinSuccessfulTests(100),
@@ -388,17 +395,17 @@ final class EntityConcurrencyTokenSpec
           )
 
         Then(
-          "absence maps to zero without persisting a replacement and integral values remain exact"
+          "absence is rejected and physically present positive integral values remain exact"
         )
-        legacy shouldBe Consequence.success(EntityConcurrencyToken.LEGACY)
+        absent shouldBe a[Consequence.Failure[?]]
         checked.passed shouldBe true
       }
     }
 
-    "E2 reject malformed physical revision values" must _e2_metadata {
+    "ER-08 reject malformed physical revision values" must _er_08_metadata {
       "when negative fractional overflowing or duplicate values are decoded" in {
         Given(
-          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R3; Example: E2; inadmissible physical revision values"
+          "Contract: docs/phase/phase-50-checklist.md ER-08 and the Phase 50 supersession annotation; inadmissible physical revision values"
         )
         val records = Vector(
           Record.dataAuto("cncf_revision" -> -1L),
@@ -421,10 +428,11 @@ final class EntityConcurrencyTokenSpec
       }
     }
 
-    "E2 load a legacy Entity without physically backfilling its token" must _e2_metadata {
+    "ER-08 reject a stored Entity without physically backfilling its revision" must
+      _er_08_metadata {
       "when a concurrency-aware read observes a record without revision metadata" in {
         Given(
-          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R2-R4; Example: E2; one authoritative legacy storage record"
+          "Contract: docs/phase/phase-50-checklist.md ER-08 and the Phase 50 supersession annotation; one authoritative storage record without revision metadata"
         )
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
@@ -457,13 +465,9 @@ final class EntityConcurrencyTokenSpec
           _raw_record(fixture.datastorespace, id)
         )
 
-        Then(
-          "the business Entity loads, snapshot reports virtual zero, and physical storage remains absent"
-        )
-        loaded shouldBe
-          Consequence.success(Some(TestEntity(id, "legacy", None)))
-        snapshot.map(_.map(_.token)) shouldBe
-          Consequence.success(Some(EntityConcurrencyToken.LEGACY))
+        Then("both read surfaces reject admission and physical storage remains absent")
+        loaded shouldBe a[Consequence.Failure[?]]
+        snapshot shouldBe a[Consequence.Failure[?]]
         stored
           .map(_.flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))) shouldBe
           Consequence.success(None)

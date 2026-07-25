@@ -8,6 +8,7 @@ import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.testutil.EntityRevisionFixture
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, OperationAccessPolicy}
 import org.goldenport.datatype.PathName
@@ -21,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 26, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkSearchAuthorizationSpec
@@ -39,7 +40,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "owner-1"
+        principalid = "owner-1"
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -48,8 +49,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
           )
         )
       )
@@ -83,7 +84,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "manager-1",
+        principalid = "manager-1",
         capabilities = Vector(Capability("content_manager"))
       )
       given EntityPersistent[PersonEntity] = _person_persistent
@@ -93,8 +94,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
           )
         )
       )
@@ -128,8 +129,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "group-user",
-        principalAttributes = Map("group_id" -> "team-a")
+        principalid = "group-user",
+        principalattributes = Map("group_id" -> "team-a")
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -138,8 +139,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
           )
         )
       )
@@ -172,8 +173,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "priv-user",
-        principalAttributes = Map("privilege" -> "vip-access")
+        principalid = "priv-user",
+        principalattributes = Map("privilege" -> "vip-access")
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -182,8 +183,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
           )
         )
       )
@@ -216,7 +217,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "reader-1"
+        principalid = "reader-1"
       )
       given EntityPersistent[PublicEntity] = _public_persistent
 
@@ -224,7 +225,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               Record.dataAuto(
                 "id" -> p1.id,
@@ -272,7 +273,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         DataStoreSpace.default(),
         new EntityStoreSpace().addEntityStore(EntityStore.standard()),
-        principalId = "typed-owner"
+        principalid = "typed-owner"
       )
       given EntityPersistent[TypedSecurityEntity] = _typed_security_persistent
 
@@ -312,7 +313,7 @@ final class UnitOfWorkSearchAuthorizationSpec
         given ExecutionContext = _execution_context(
           datastorespace,
           entitystorespace,
-          principalId = "reader"
+          principalid = "reader"
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -321,8 +322,8 @@ final class UnitOfWorkSearchAuthorizationSpec
         val _ = datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(
-              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+              EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+              EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
             )
           )
         )
@@ -354,6 +355,7 @@ final class UnitOfWorkSearchAuthorizationSpec
     }
 
     "emit audit event when system search bypasses permission filtering" in {
+      Given("a system-mode search across entities owned by different principals")
       val backend = new MemoryBackend
       LogBackendHolder.reset()
       LogBackendHolder.install(backend)
@@ -363,7 +365,7 @@ final class UnitOfWorkSearchAuthorizationSpec
         given ExecutionContext = _execution_context(
           datastorespace,
           entitystorespace,
-          principalId = "system-principal"
+          principalid = "system-principal"
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -372,13 +374,14 @@ final class UnitOfWorkSearchAuthorizationSpec
         val _ = datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(
-              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+              EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+              EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
             )
           )
         )
         val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
 
+        When("the system principal searches with permission filtering bypassed")
         val result = interpreter.execute(
           UnitOfWorkOp.EntityStoreSearch(
             query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
@@ -394,6 +397,7 @@ final class UnitOfWorkSearchAuthorizationSpec
           )
         )
 
+        Then("all entities are returned and the bypass is audited")
         result.data.map(_.id) shouldBe Vector(p1.id, p2.id)
         backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
       } finally {
@@ -408,8 +412,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "customer-user",
-        principalAttributes = Map(
+        principalid = "customer-user",
+        principalattributes = Map(
           "customer_id" -> "customer-a",
           "account_id" -> "account-a"
         )
@@ -422,9 +426,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
           )
         )
       )
@@ -462,8 +466,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "customer-user",
-        principalAttributes = Map("customer_id" -> "customer-a")
+        principalid = "customer-user",
+        principalattributes = Map("customer_id" -> "customer-a")
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -471,7 +475,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord())
           )
         )
       )
@@ -506,7 +510,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "principal-owner"
+        principalid = "principal-owner"
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -515,8 +519,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
           )
         )
       )
@@ -551,8 +555,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "tenant-user",
-        principalAttributes = Map(
+        principalid = "tenant-user",
+        principalattributes = Map(
           "tenant_id" -> "tenant-a",
           "organization_id" -> "org-a"
         )
@@ -565,9 +569,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
           )
         )
       )
@@ -605,7 +609,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "work-user"
+        principalid = "work-user"
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -615,9 +619,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
           )
         )
       )
@@ -655,8 +659,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalId = "boundary-user",
-        principalAttributes = Map(
+        principalid = "boundary-user",
+        principalattributes = Map(
           "tenant_id" -> "tenant-a",
           "organization_id" -> "org-a",
           "account_id" -> "account-a",
@@ -671,9 +675,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
           )
         )
       )
@@ -707,9 +711,9 @@ final class UnitOfWorkSearchAuthorizationSpec
   private def _execution_context(
     datastorespace: DataStoreSpace,
     entitystorespace: EntityStoreSpace,
-    principalId: String,
+    principalid: String,
     capabilities: Vector[Capability] = Vector.empty,
-    principalAttributes: Map[String, String] = Map.empty
+    principalattributes: Map[String, String] = Map.empty
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "runtime"),
@@ -747,8 +751,8 @@ final class UnitOfWorkSearchAuthorizationSpec
     context match {
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
-          def id: PrincipalId = PrincipalId(principalId)
-          def attributes: Map[String, String] = principalAttributes
+          def id: PrincipalId = PrincipalId(principalid)
+          def attributes: Map[String, String] = principalattributes
         }
         i.copy(
           cncfCore = i.cncfCore.copy(
@@ -921,8 +925,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       Some(SecurityAttributes.ownedBy(e.ownerId))
   }
 
-  private def _security_record(ownerId: String): Record =
-    SecurityAttributes.ownedBy(ownerId).toRecord
+  private def _security_record(ownerid: String): Record =
+    SecurityAttributes.ownedBy(ownerid).toRecord
 
   private final class MemoryBackend extends LogBackend {
     private val _lines = ListBuffer.empty[String]

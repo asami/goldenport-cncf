@@ -24,6 +24,7 @@ import org.goldenport.cncf.entity.{
 }
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.testutil.EntityRevisionFixture
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -34,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec
@@ -58,7 +59,7 @@ final class UnitOfWorkStateMachineHookSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               PersonEntity(id, "taro", 20).toRecord()
             )
@@ -71,7 +72,7 @@ final class UnitOfWorkStateMachineHookSpec
       val result = new UnitOfWorkInterpreter(uow).execute(
         UnitOfWorkOp.EntityStoreUpdate(
           entity,
-          EntityMutationExpectation(EntityConcurrencyToken.LEGACY),
+          EntityMutationExpectation(EntityConcurrencyToken.INITIAL),
           summon[EntityPersistent[PersonEntity]]
         )
       )
@@ -93,7 +94,7 @@ final class UnitOfWorkStateMachineHookSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(
+            EntityRevisionFixture.entitySeed(
               DataStore.CollectionId.EntityStore(_cid),
               PersonEntity(id, "hanako", 30).toRecord()
             )
@@ -108,7 +109,7 @@ final class UnitOfWorkStateMachineHookSpec
           cats.free.Free.liftF(
             UnitOfWorkOp.EntityStoreUpdate(
               PersonEntity(id, "hanako", 31),
-              EntityMutationExpectation(EntityConcurrencyToken.LEGACY),
+              EntityMutationExpectation(EntityConcurrencyToken.INITIAL),
               summon[EntityPersistent[PersonEntity]]
             )
           )

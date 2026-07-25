@@ -222,7 +222,7 @@ Stage Status:
   one atomic provider kernel, and one deterministic representation binding.
 
 - [ ] Replace `EntityConcurrencyToken` with common `EntityRevision`.
-- [ ] Retain and generalize the Phase 49 revision-field-independent atomic
+- [x] Retain and generalize the Phase 49 revision-field-independent atomic
   compare-and-advance provider operation.
 - [ ] Define Entity/collection revision representation metadata.
 - [x] Resolve exactly one optional revision binding before Entity collection
@@ -300,6 +300,28 @@ Evidence:
   suites, with 7 canceled, 1 ignored, and 59 pending.
 - Remaining SE-03 work after SE-03B review is replacement of the Phase 49
   token vocabulary/provider kernel with common `EntityRevision`.
+- `SE-03C Provider Revision Kernel Typing` is implemented and passed
+  independent read-only review and clean re-review.
+  `EntityVersionedMutationPlan`, `DataStoreConditionalRoot`, and
+  `DataStoreConditionalSuccessor.Bind` carry `EntityRevision`; in-memory and
+  SQL providers persist only `EntityRevision.value`.
+- The common provider decoder rejects physically absent revision with a
+  structured admission failure. The former `DataStoreRevisionState` and
+  virtual-zero progression path are removed.
+- Existing authorization, UnitOfWork, transaction, rollback, diagnostics,
+  exactly-one-winner, and no-orphan execution routes remain in use; this slice
+  adds no compatibility adapter and does not start concurrency-policy or
+  detached-carrier work.
+- Focused SE-03C provider, EntityStore, and UnitOfWork specifications passed:
+  57 tests in 9 suites, with 5 opt-in MySQL tests canceled.
+- Clean re-review expanded the focused boundary and passed 59 tests in 10
+  suites, with the same 5 opt-in MySQL tests canceled.
+- Isolated staged-slice full release validation passed 2450 tests in 350
+  suites, with 7 canceled, 1 ignored, and 59 pending.
+- `COZY_RUNTIME_DEV_DIR=/Users/asami/src/dev2025/cozy sbt --batch Test/compile`
+  passed. The development runtime is required because the published Cozy
+  0.2.25 generator predates the already-completed SimpleEntity revision
+  generation contract.
 
 ### SE-03B Modified Scala File Compliance Ledger
 
@@ -335,6 +357,34 @@ a whole file rather than only on changed lines.
 | `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/entity/EntityRevisionRepresentation.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
 | `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/entity/runtime/EntityRuntimeDescriptor.scala` | whole-file scan passed | not a spec | focused and full suites passed | this SE-03A release commit |
 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityRevisionRepresentationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 5 focused tests and full suite passed | this SE-03A release commit |
+
+### SE-03C Modified Scala File Compliance Ledger
+
+This implementation evidence passed independent read-only review and clean
+re-review. All paths are repository-relative.
+
+| Scala file | Naming | Spec style | Validation | Review |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/datastore/DataStore.scala` | whole-file scan passed | not a spec | focused suite and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/EntityConditionalTransition.scala` | whole-file scan passed | not a spec | focused suite and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/EntityVersionedMutation.scala` | whole-file scan passed | not a spec | focused suite and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/sql/SqlDataStore.scala` | whole-file scan passed; protected hook debt removed | not a spec | focused suite and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | whole-file scan passed | not a spec | focused suite and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/DataStoreConditionalTransitionSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/EntityVersionedMutationDataStoreSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/InMemoryConditionalTransitionSpec.scala` | whole-file scan passed | Given/When/Then structure, property checks, and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/SqliteConditionalTransitionSpec.scala` | whole-file scan passed; protected override debt removed | Given/When/Then structure, property checks, and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/MysqlConditionalTransitionAcceptanceSpec.scala` | whole-file scan passed; protected override debt removed | Given/When/Then structure, property checks, and matcher vocabulary passed | compiled; 5 live tests canceled by opt-in gate | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyTokenSpec.scala` | whole-file scan passed | Given/When/Then structure, property checks, and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkVersionedMutationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/testutil/EntityRevisionFixture.scala` | whole-file scan passed | not a spec; shared admitted-record fixture | 104 regression tests and `Test/compile` passed | review-fix verification passed |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallEntityAccessMetricsSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 20 regression tests and `Test/compile` passed | review-fix verification passed |
+| `src/test/scala/org/goldenport/cncf/component/ComponentFactoryAggregateViewBootstrapSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 5 regression tests and `Test/compile` passed | review-fix verification passed |
+| `src/test/scala/org/goldenport/cncf/component/ComponentFactoryDefaultAggregateCollectionSpec.scala` | whole-file naming debt removed | Given/When/Then structure and matcher vocabulary added | 4 regression tests and `Test/compile` passed | review-fix verification passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityStoreQueryRouteSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 25 regression tests and `Test/compile` passed | review-fix verification passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkSearchAuthorizationSpec.scala` | whole-file private-parameter debt removed | Given/When/Then structure and matcher vocabulary passed | 14 regression tests and `Test/compile` passed | review-fix verification passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkStateMachineHookSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 2 regression tests and `Test/compile` passed | review-fix verification passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkTargetAuthorizationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 34 regression tests and `Test/compile` passed | review-fix verification passed |
 
 ## SE-04: Embedded SimpleEntity Lifecycle and OCC
 

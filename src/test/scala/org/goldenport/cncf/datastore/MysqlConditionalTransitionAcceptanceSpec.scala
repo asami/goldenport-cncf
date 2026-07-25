@@ -19,7 +19,7 @@ import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.{BeforeAndAfterAll, GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 import org.testcontainers.mysql.MySQLContainer
 import org.testcontainers.utility.DockerImageName
 
@@ -28,7 +28,7 @@ import org.testcontainers.utility.DockerImageName
  * Normal test runs cancel this suite before contacting Docker.
  *
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MysqlConditionalTransitionAcceptanceSpec
@@ -870,7 +870,7 @@ object MysqlConditionalTransitionAcceptanceSpec {
           collections.successor,
           successorid,
           _revision_field,
-          DataStoreRevisionState.Present(revision)
+          _revision(revision)
         )
       )
     )
@@ -885,7 +885,7 @@ object MysqlConditionalTransitionAcceptanceSpec {
         collections.root,
         _root_entry,
         _revision_field,
-        Some(DataStoreRevisionState.Present(1L)),
+        Some(EntityRevision.INITIAL),
         Vector(
           DataStoreConditionalExpectedField(
             "status",
@@ -896,7 +896,7 @@ object MysqlConditionalTransitionAcceptanceSpec {
           "status" -> "closed",
           "successor_id" -> successorid.print
         ),
-        2L
+        _revision(2L)
       )
     )
 
@@ -979,6 +979,15 @@ object MysqlConditionalTransitionAcceptanceSpec {
         None
     }
 
+  private def _revision(
+    value: Long
+  ): EntityRevision =
+    EntityRevision.createC(value).toOption.getOrElse(
+      throw new IllegalArgumentException(
+        s"valid EntityRevision expected: $value"
+      )
+    )
+
   private final class TestSqlDataStore(
     datasource: MysqlDataSource,
     checkpoint: Option[DataStoreConditionalTransitionCheckpoint],
@@ -987,7 +996,7 @@ object MysqlConditionalTransitionAcceptanceSpec {
         MySqlDialectDriver,
         datasource
       ) {
-    override protected def conditional_transition_Checkpoint(
+    override protected def conditional_transition_checkpoint(
       current: DataStoreConditionalTransitionCheckpoint
     ): Consequence[Unit] =
       if (checkpoint.contains(current))
@@ -997,7 +1006,7 @@ object MysqlConditionalTransitionAcceptanceSpec {
       else
         Consequence.unit
 
-    override protected def conditional_transition_Commit(
+    override protected def conditional_transition_commit(
       connection: Connection
     ): Consequence[Unit] =
       if (failcommit)
@@ -1005,6 +1014,6 @@ object MysqlConditionalTransitionAcceptanceSpec {
           "injected conditional transition commit rejection"
         )
       else
-        super.conditional_transition_Commit(connection)
+        super.conditional_transition_commit(connection)
   }
 }

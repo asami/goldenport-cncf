@@ -11,11 +11,11 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InMemoryConditionalTransitionSpec
@@ -526,7 +526,7 @@ final class InMemoryConditionalTransitionSpec
           _successor_collection,
           successorid,
           _revision_field,
-          DataStoreRevisionState.Present(revision)
+          _revision(revision)
         )
       )
     )
@@ -540,7 +540,7 @@ final class InMemoryConditionalTransitionSpec
         _root_collection,
         _root_entry,
         _revision_field,
-        Some(DataStoreRevisionState.Present(1L)),
+        Some(EntityRevision.INITIAL),
         Vector(
           DataStoreConditionalExpectedField(
             "status",
@@ -551,7 +551,7 @@ final class InMemoryConditionalTransitionSpec
           "status" -> "closed",
           "successor_id" -> successorid.print
         ),
-        2L
+        _revision(2L)
       )
     )
 
@@ -611,6 +611,13 @@ final class InMemoryConditionalTransitionSpec
       case _: Consequence.Failure[?] => true
       case _ => false
     }
+
+  private def _revision(
+    value: Long
+  ): EntityRevision =
+    EntityRevision.createC(value).toOption.getOrElse(
+      fail(s"valid EntityRevision expected: $value")
+    )
 
   private final class FailingCheckpointDataStore(
     checkpoint: DataStoreConditionalTransitionCheckpoint

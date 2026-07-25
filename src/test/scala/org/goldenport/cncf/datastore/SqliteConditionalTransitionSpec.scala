@@ -16,12 +16,12 @@ import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 import org.sqlite.{SQLiteConfig, SQLiteDataSource}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SqliteConditionalTransitionSpec
@@ -617,7 +617,7 @@ object SqliteConditionalTransitionSpec {
           _successor_collection,
           successorid,
           _revision_field,
-          DataStoreRevisionState.Present(revision)
+          _revision(revision)
         )
       )
     )
@@ -631,7 +631,7 @@ object SqliteConditionalTransitionSpec {
         _root_collection,
         _root_entry,
         _revision_field,
-        Some(DataStoreRevisionState.Present(1L)),
+        Some(EntityRevision.INITIAL),
         Vector(
           DataStoreConditionalExpectedField(
             "status",
@@ -642,7 +642,7 @@ object SqliteConditionalTransitionSpec {
           "status" -> "closed",
           "successor_id" -> successorid.print
         ),
-        2L
+        _revision(2L)
       )
     )
 
@@ -711,6 +711,15 @@ object SqliteConditionalTransitionSpec {
       case _ => false
     }
 
+  private def _revision(
+    value: Long
+  ): EntityRevision =
+    EntityRevision.createC(value).toOption.getOrElse(
+      throw new IllegalArgumentException(
+        s"valid EntityRevision expected: $value"
+      )
+    )
+
   private final class TestSqlDataStore(
     datasource: SQLiteDataSource,
     checkpoint: Option[DataStoreConditionalTransitionCheckpoint],
@@ -719,7 +728,7 @@ object SqliteConditionalTransitionSpec {
         SqliteDialectDriver,
         datasource
       ) {
-    override protected def conditional_transition_Checkpoint(
+    override protected def conditional_transition_checkpoint(
       current: DataStoreConditionalTransitionCheckpoint
     ): Consequence[Unit] =
       if (checkpoint.contains(current))
@@ -729,7 +738,7 @@ object SqliteConditionalTransitionSpec {
       else
         Consequence.unit
 
-    override protected def conditional_transition_Commit(
+    override protected def conditional_transition_commit(
       connection: Connection
     ): Consequence[Unit] =
       if (failcommit)
@@ -737,6 +746,6 @@ object SqliteConditionalTransitionSpec {
           "injected conditional transition commit rejection"
         )
       else
-        super.conditional_transition_Commit(connection)
+        super.conditional_transition_commit(connection)
   }
 }

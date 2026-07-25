@@ -30,7 +30,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkVersionedMutationSpec
@@ -253,10 +253,15 @@ final class UnitOfWorkVersionedMutationSpec
 
       Then("the UnitOfWork boundary rejects the bypass before storage changes")
       result shouldBe a[Consequence.Failure[_]]
-      fixture.entitystorespace
-        .loadSnapshot(id, _persistent)
-        .map(_.map(_.entity.name)) shouldBe
+      _raw_record(fixture.datastorespace, id)
+        .map(_.flatMap(_.getString("name"))) shouldBe
         Consequence.success(Some("before"))
+      _raw_record(fixture.datastorespace, id)
+        .map(
+          _.flatMap(
+            _.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME)
+          )
+        ) shouldBe Consequence.success(None)
     }
   }
 
@@ -341,6 +346,20 @@ final class UnitOfWorkVersionedMutationSpec
     val _ = context
     Fixture(datastorespace, entitystorespace, collection, component, context)
   }
+
+  private def _raw_record(
+    datastorespace: DataStoreSpace,
+    id: EntityId
+  )(using ExecutionContext): Consequence[Option[Record]] =
+    for {
+      datastore <- datastorespace.dataStore(
+        DataStore.CollectionId.EntityStore(id.collection)
+      )
+      record <- datastore.load(
+        DataStore.CollectionId.EntityStore(id.collection),
+        DataStore.EntryId(id)
+      )
+    } yield record
 
   private final case class VersionedPerson(
       id: EntityId,

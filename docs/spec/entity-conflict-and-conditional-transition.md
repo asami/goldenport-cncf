@@ -15,6 +15,15 @@ Required executable evidence is assigned in the evidence matrix below. A named
 specification is evidence only after that file exists and its relevant
 examples pass.
 
+> **Phase 50 supersession annotation (2026-07-25):** R1's provisional
+> non-negative token range, R3's virtual token `0`, and R4's detached snapshot
+> describe the Phase 49 API. They do not govern a provider path after that path
+> is migrated to the Phase 50 `EntityRevision` kernel. For a migrated path,
+> revision starts at `1`, a physically missing revision is an admission failure
+> under Phase 50 acceptance item ER-08, and no virtual-zero compatibility is
+> synthesized. The historical text remains below for Phase 49 traceability
+> until Phase 50 SE-09 replaces the complete provisional token contract.
+
 ## Concurrency Token (R1)
 
 Every newly persisted Entity MUST have one framework-owned

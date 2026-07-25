@@ -6,12 +6,12 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.Identifier
 import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class DataStoreComponentOwner private (
@@ -278,10 +278,10 @@ final case class DataStoreConditionalRoot private (
   collection: DataStore.CollectionId,
   entryId: DataStore.EntryId,
   revisionField: String,
-  expectedRevision: DataStoreRevisionState,
+  expectedRevision: EntityRevision,
   expectedFields: Vector[DataStoreConditionalExpectedField],
   changes: Record,
-  nextRevision: Long
+  nextRevision: EntityRevision
 )
 
 object DataStoreConditionalRoot {
@@ -290,10 +290,10 @@ object DataStoreConditionalRoot {
     collection: DataStore.CollectionId,
     entryId: DataStore.EntryId,
     revisionField: String,
-    expectedRevision: Option[DataStoreRevisionState],
+    expectedRevision: Option[EntityRevision],
     expectedFields: Vector[DataStoreConditionalExpectedField],
     changes: Record,
-    nextRevision: Long
+    nextRevision: EntityRevision
   ): Consequence[DataStoreConditionalRoot] = {
     Option(expectedRevision).flatten match {
       case Some(revision) =>
@@ -336,7 +336,7 @@ object DataStoreConditionalSuccessor {
     collection: DataStore.CollectionId,
     entryId: DataStore.EntryId,
     revisionField: String,
-    expectedRevision: DataStoreRevisionState
+    expectedRevision: EntityRevision
   ) extends DataStoreConditionalSuccessor
 }
 
@@ -556,7 +556,7 @@ private[datastore] object EntityConditionalTransitionSupport {
     root: DataStoreConditionalRoot
   ): Consequence[Boolean] =
     EntityVersionedMutationSupport
-      .revisionState(record, root.revisionField)
+      .revision(record, root.revisionField)
       .flatMap { actualrevision =>
         if (actualrevision != root.expectedRevision)
           Consequence.success(false)
@@ -583,7 +583,7 @@ private[datastore] object EntityConditionalTransitionSupport {
           effectivechanges
       )
     Record(changed.fields.filterNot(_.key == root.revisionField)) ++
-      Record.dataAuto(root.revisionField -> root.nextRevision)
+      Record.dataAuto(root.revisionField -> root.nextRevision.value)
   }
 
   private def _validate_expected_fields(
@@ -702,14 +702,14 @@ private[datastore] object EntityConditionalTransitionSupport {
                   allowsetnull = false
                 )
                 _ <- EntityVersionedMutationSupport
-                  .revisionState(create.record, create.revisionField)
+                  .revision(create.record, create.revisionField)
                   .flatMap {
-                    case DataStoreRevisionState.Present(1L) =>
+                    case EntityRevision.INITIAL =>
                       Consequence.unit
                     case actual =>
                       Consequence.argumentExpectedActualMismatch(
                         "successorRevision",
-                        DataStoreRevisionState.Present(1L),
+                        EntityRevision.INITIAL,
                         actual
                       )
                   }
@@ -835,48 +835,31 @@ private[datastore] object EntityConditionalTransitionSupport {
       } yield ()
 
   private def _validate_revision_progression(
-    expected: DataStoreRevisionState,
-    next: Long
-  ): Consequence[Unit] = {
-    val expectednext = expected match {
-      case DataStoreRevisionState.Absent => Some(1L)
-      case DataStoreRevisionState.Present(value)
-          if value >= 0L && value < Long.MaxValue =>
-        Some(value + 1L)
-      case _ => None
-    }
-    expectednext match {
-      case Some(value) if value == next => Consequence.unit
-      case Some(value) =>
-        Consequence.argumentExpectedActualMismatch(
-          "nextRevision",
-          value,
-          next
-        )
+    expected: EntityRevision,
+    next: EntityRevision
+  ): Consequence[Unit] =
+    Option(expected) match {
       case None =>
-        Consequence.argumentLimitExceeded(
-          "expectedRevision",
-          Long.MaxValue - 1L,
-          expected,
-          "entity-conditional-transition.advance"
-        )
+        Consequence.argumentMissing("expectedRevision")
+      case Some(revision) =>
+        revision.nextC.flatMap { expectednext =>
+          if (expectednext == next)
+            Consequence.unit
+          else
+            Consequence.argumentExpectedActualMismatch(
+              "nextRevision",
+              expectednext,
+              next
+            )
+        }
     }
-  }
 
   private def _validate_revision(
-    revision: DataStoreRevisionState
+    revision: EntityRevision
   ): Consequence[Unit] =
-    revision match {
-      case DataStoreRevisionState.Absent => Consequence.unit
-      case DataStoreRevisionState.Present(value) if value >= 0L =>
-        Consequence.unit
-      case _ =>
-        Consequence.argumentInvalid(
-          "expectedRevision",
-          "physical absence or a non-negative revision",
-          revision
-        )
-    }
+    Option(revision)
+      .map(_ => Consequence.unit)
+      .getOrElse(Consequence.argumentMissing("expectedRevision"))
 
   private def _validate_name(
     parameter: String,

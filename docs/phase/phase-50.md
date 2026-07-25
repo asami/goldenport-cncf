@@ -204,7 +204,7 @@ implementation assets.
 | --- | --- | --- | --- |
 | SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | done |
 | SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; generated Entity outputs consume it as managed metadata while application input variants omit it. | done |
-| SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. Registration-time binding passed clean re-review and full release validation; common-kernel migration remains. | in progress |
+| SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. Registration-time binding and provider-kernel typing passed clean re-review and isolated full release validation. | in progress |
 | SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. | planned |
 | SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual representation, or implicit fallback. | planned |
 | SE-06 | Conditional Transition integration | Both admitted representations use the common revision kernel and retain Phase 49 exactly-one-winner semantics. | planned |
@@ -367,6 +367,17 @@ consequence-aware bootstrap boundary rather than reflecting a private helper.
 The isolated staged-slice full suite passed 2450 tests in 350 suites with 7
 canceled, 1 ignored, and 59 pending.
 
-Continue SE-03 by generalizing the retained Phase 49 provider-native atomic
-mutation around `EntityRevision` while preserving the authorization,
-UnitOfWork, transaction, diagnostics, and observability chokepoints.
+SE-03C provider revision kernel typing is implemented and passed independent
+read-only review and clean re-review. The versioned mutation and Conditional
+Transition provider plans now carry `EntityRevision` directly, provider records
+persist only its scalar value, and physically absent revision is a structured
+admission failure rather than virtual revision zero. The clean re-review
+focused provider/EntityStore/UnitOfWork run passed 59 tests in 10 suites with
+5 opt-in MySQL tests canceled. The isolated staged-slice full release
+validation passed 2450 tests in 350 suites, with 7 canceled, 1 ignored, and 59
+pending. The earlier implementation run and `Test/compile` also passed with the
+development Cozy runtime selected explicitly.
+
+Commit SE-03C, then finish replacement of the upper `EntityConcurrencyToken`
+API while preserving authorization, UnitOfWork, transaction, diagnostics, and
+observability chokepoints.

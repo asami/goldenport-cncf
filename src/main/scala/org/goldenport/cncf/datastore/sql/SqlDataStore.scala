@@ -47,7 +47,7 @@ import org.goldenport.observation.Descriptor
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -202,12 +202,12 @@ class SqlDataStore(
   def abort(tx: TransactionContext): Unit =
     record_abort(recorder)
 
-  protected def conditional_transition_Checkpoint(
+  protected def conditional_transition_checkpoint(
     checkpoint: DataStoreConditionalTransitionCheckpoint
   ): Consequence[Unit] =
     Consequence.unit
 
-  protected def conditional_transition_Commit(
+  protected def conditional_transition_commit(
     connection: Connection
   ): Consequence[Unit] =
     try {
@@ -239,7 +239,7 @@ class SqlDataStore(
             }
           result match {
             case success: Consequence.Success[A] =>
-              conditional_transition_Commit(connection) match {
+              conditional_transition_commit(connection) match {
                 case _: Consequence.Success[?] =>
                   success
                 case Consequence.Failure(conclusion) =>
@@ -363,7 +363,7 @@ class SqlDataStore(
   ): Vector[(String, Any)] =
     _record_columns(
       root.changes ++
-        Record.dataAuto(root.revisionField -> root.nextRevision)
+        Record.dataAuto(root.revisionField -> root.nextRevision.value)
     )
 
   private def _conditional_transition(
@@ -402,22 +402,22 @@ class SqlDataStore(
     plan: DataStoreConditionalTransitionPlan
   ): Consequence[DataStoreConditionalTransitionResult] =
     for {
-      _ <- conditional_transition_Checkpoint(
+      _ <- conditional_transition_checkpoint(
         DataStoreConditionalTransitionCheckpoint.GuardAdmitted
       )
       _ <- _prepare_conditional_successor(connection, plan.successor)
-      _ <- conditional_transition_Checkpoint(
+      _ <- conditional_transition_checkpoint(
         DataStoreConditionalTransitionCheckpoint.SuccessorPrepared
       )
       _ <- _update_root_record(
         connection,
         plan.root
       )
-      _ <- conditional_transition_Checkpoint(
+      _ <- conditional_transition_checkpoint(
         DataStoreConditionalTransitionCheckpoint.RootPrepared
       )
       _ <- _apply_conditional_side_effects(connection, plan.sideEffects)
-      _ <- conditional_transition_Checkpoint(
+      _ <- conditional_transition_checkpoint(
         DataStoreConditionalTransitionCheckpoint.BeforePublish
       )
       authoritativeroot <-
@@ -476,7 +476,7 @@ class SqlDataStore(
             Consequence.DataStoreNotFound(bind.entryId.print)
           case Some(record) =>
             EntityVersionedMutationSupport
-              .revisionState(record, bind.revisionField)
+              .revision(record, bind.revisionField)
               .flatMap { actual =>
                 if (actual == bind.expectedRevision)
                   Consequence.unit

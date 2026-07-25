@@ -1,6 +1,7 @@
 /*
  * @since   Mar. 30, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 25, 2026
+ * @author  ASAMI, Tomoharu
  */
 package org.goldenport.cncf.component
 
@@ -20,13 +21,17 @@ import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.entity.aggregate.{AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.http.FakeHttpDriver
-import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.testutil.{EntityRevisionFixture, TestComponentFactory}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.EntityId
 
-final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec with Matchers {
+final class ComponentFactoryDefaultAggregateCollectionSpec
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
   import org.goldenport.cncf.component.entity.{Customer => CustomerEntity, Order => OrderEntity, OrderLine => OrderLineEntity}
   import org.goldenport.cncf.component.entity.aggregate.Order as OrderAggregate
 
@@ -36,62 +41,76 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
 
   "ComponentFactory default aggregate collection" should {
     "build aggregate with plural composition member and singular aggregation member" in {
+      Given("a generated aggregate whose members use composition and aggregation")
       val component = _component_with_default_aggregate()
       val factory = new ComponentFactory()
       _invoke_bootstrap_aggregates(factory, component)
 
       given ExecutionContext = _execution_context(_seed_records())
+
+      When("the aggregate is resolved from its persisted root")
       val aggregate = component.aggregateSpace.resolve_with_context[OrderAggregate](_order_id).TAKE
 
+      Then("plural composition and singular aggregation members are assembled")
       aggregate.id shouldBe _order_id
       aggregate.lines.map(_.id) shouldBe Vector(_line_id)
       aggregate.customer.map(_.id) shouldBe Some(_customer_id)
     }
 
     "keep promoted aggregate members out of the parent entity storage record" in {
+      Given("an aggregate whose members are stored in their own Entity collections")
       val component = _component_with_default_aggregate()
       val factory = new ComponentFactory()
       _invoke_bootstrap_aggregates(factory, component)
 
       given ExecutionContext = _execution_context(_seed_records())
-      val orderRecord = _load_store_record(OrderEntity.collectionId, _order_id)
-      val lineRecord = _load_store_record(OrderLineEntity.collectionId, _line_id)
-      val customerRecord = _load_store_record(CustomerEntity.collectionId, _customer_id)
+      val orderrecord = _load_store_record(OrderEntity.collectionId, _order_id)
+      val linerecord = _load_store_record(OrderLineEntity.collectionId, _line_id)
+      val customerrecord = _load_store_record(CustomerEntity.collectionId, _customer_id)
+
+      When("the aggregate and its physical Entity records are loaded")
       val aggregate = component.aggregateSpace.resolve_with_context[OrderAggregate](_order_id).TAKE
 
-      orderRecord.getString("name") shouldBe Some("Alpha")
-      orderRecord.getAny("lines") shouldBe None
-      orderRecord.getAny("customer") shouldBe None
-      orderRecord.getAny("order_line") shouldBe None
-      lineRecord.getString("orderId").orElse(lineRecord.getString("order_id")) shouldBe Some(_order_id.value)
-      customerRecord.getString("orderId").orElse(customerRecord.getString("order_id")) shouldBe Some(_order_id.value)
+      Then("the parent record omits promoted members while their own records retain the join")
+      orderrecord.getString("name") shouldBe Some("Alpha")
+      orderrecord.getAny("lines") shouldBe None
+      orderrecord.getAny("customer") shouldBe None
+      orderrecord.getAny("order_line") shouldBe None
+      linerecord.getString("orderId").orElse(linerecord.getString("order_id")) shouldBe
+        Some(_order_id.value)
+      customerrecord.getString("orderId").orElse(customerrecord.getString("order_id")) shouldBe
+        Some(_order_id.value)
       aggregate.lines.map(_.id) shouldBe Vector(_line_id)
       aggregate.customer.map(_.id) shouldBe Some(_customer_id)
     }
 
     "use aggregate-internal visibility while direct entity search still hides draft entities" in {
+      Given("a draft aggregate root and its persisted members")
       val component = _component_with_default_aggregate()
       val factory = new ComponentFactory()
       _invoke_bootstrap_aggregates(factory, component)
 
-      val directOrders = {
+      When("the same root is read directly and through the aggregate boundary")
+      val directorders = {
         given ExecutionContext = _execution_context(_seed_records())
         EntityStore.standard().search[org.goldenport.cncf.component.entity.Order](
           EntityQuery(OrderEntity.collectionId, Query(Record.data("name" -> "Alpha")))
         ).TAKE
       }
-      directOrders.data shouldBe Vector.empty
-
       val aggregate = {
         given ExecutionContext = _execution_context(_seed_records())
         component.aggregateSpace.resolve_with_context[OrderAggregate](_order_id).TAKE
       }
+
+      Then("public Entity search hides the draft while aggregate-internal resolution retains it")
+      directorders.data shouldBe Vector.empty
       aggregate.id shouldBe _order_id
       aggregate.lines.map(_.id) shouldBe Vector(_line_id)
       aggregate.customer.map(_.id) shouldBe Some(_customer_id)
     }
 
     "persist aggregate command output through the ActionCall execution context" in {
+      Given("a generated aggregate command and an empty EntityStore")
       val component = new ComponentFactory().bootstrap(_component_with_default_aggregate())
       given ExecutionContext = _execution_context(Vector.empty)
       val aggregate = OrderAggregate(
@@ -107,7 +126,10 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
       )
       val call = action.createCall(ActionCall.Core(action, summon[ExecutionContext], Some(component), None))
 
+      When("the aggregate command is executed")
       val result = call.execute()
+
+      Then("the aggregate root is persisted without embedding promoted members")
       withClue(result) {
         result.isSuccess shouldBe true
       }
@@ -184,8 +206,8 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
     protocol: Protocol,
     component: Component
   ): Component = {
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
+    val componentid = ComponentId(name)
+    val instanceid = ComponentInstanceId.default(componentid)
     val factory = new Component.SinglePrimaryBundleFactory {
       override protected def create_Component(params: ComponentCreate): Component =
         component
@@ -194,10 +216,10 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
-        Component.Core.create(name, componentId, instanceId, protocol, this)
+        Component.Core.create(name, componentid, instanceid, protocol, this)
     }
 
-    val core = Component.Core.create(name, componentId, instanceId, protocol, factory)
+    val core = Component.Core.create(name, componentid, instanceid, protocol, factory)
     val params = ComponentInit(
       subsystem = TestComponentFactory.emptySubsystem("aggregate_default_spec"),
       core = core,
@@ -250,7 +272,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
     val _ = datastorespace.inject(
       DataStoreSpace.Seed(
         seed.map { case (cid, record) =>
-          DataStoreSpace.SeedEntry(
+          EntityRevisionFixture.entitySeed(
             DataStore.CollectionId.EntityStore(cid),
             record
           )

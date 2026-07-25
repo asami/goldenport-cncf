@@ -38,7 +38,7 @@ import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
-import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.testutil.{EntityRevisionFixture, TestComponentFactory}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
@@ -52,7 +52,7 @@ import org.simplemodeling.model.directive.Condition
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 26, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -266,7 +266,7 @@ final class ActionCallEntityAccessMetricsSpec
           val stalestore = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 stalestore.toRecord()
               ))
@@ -310,7 +310,7 @@ final class ActionCallEntityAccessMetricsSpec
             TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 stalestore.toRecord()
               ))
@@ -347,7 +347,7 @@ final class ActionCallEntityAccessMetricsSpec
           val entity             = TestPerson.privateOwnedBy(id, "hanako", 30, "test-principal")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 entity.toRecord()
               ))
@@ -392,8 +392,8 @@ final class ActionCallEntityAccessMetricsSpec
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
               Vector(
-                DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()),
-                DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p2.toRecord())
+                EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(cid), p1.toRecord()),
+                EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(cid), p2.toRecord())
               )
             )
           )
@@ -437,7 +437,7 @@ final class ActionCallEntityAccessMetricsSpec
           val entity             = TestPerson.privateOwnedBy(id, "private-load", 31, "other-owner")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 entity.toRecord()
               ))
@@ -477,7 +477,7 @@ final class ActionCallEntityAccessMetricsSpec
           )
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 p1.toRecord()
               ))
@@ -525,7 +525,7 @@ final class ActionCallEntityAccessMetricsSpec
           )
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 stored.toRecord()
               ))
@@ -583,7 +583,7 @@ final class ActionCallEntityAccessMetricsSpec
           )
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 stored.toRecord()
               ))
@@ -644,7 +644,7 @@ final class ActionCallEntityAccessMetricsSpec
           )
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 stored.toRecord()
               ))
@@ -695,7 +695,7 @@ final class ActionCallEntityAccessMetricsSpec
           val stored = TestPerson.privateOwnedBy(id, "disabled-load-auth", 30, "other-owner")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
-              Vector(DataStoreSpace.SeedEntry(
+              Vector(EntityRevisionFixture.entitySeed(
                 DataStore.CollectionId.EntityStore(cid),
                 stored.toRecord()
               ))
