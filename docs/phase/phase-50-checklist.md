@@ -1,6 +1,6 @@
 # Phase 50 Checklist - SimpleEntity Revision and OCC Simplification
 
-status=closed
+status=in-progress
 phase=[Phase 50 - SimpleEntity Revision and OCC Simplification](phase-50.md)
 
 This checklist is the authoritative Phase 50 state ledger after Phase 50
@@ -944,31 +944,31 @@ Stage Status:
   distinct provider contracts, direct-path evidence, coherent cache behavior,
   and full provider validation.
 
-- [ ] Record current `EntityStore` and provider call/statement sequences for
+- [x] Record current `EntityStore` and provider call/statement sequences for
   ordinary `None + AlwaysWrite`, explicit `Optimistic`, `WriteIfChanged`,
   strict observed-revision, and Conditional Transition mutations.
-- [ ] Add failing-first recording-provider and SQLite SQL-trace Executable
+- [x] Add failing-first recording-provider and SQLite SQL-trace Executable
   Specifications for the required call/statement counts.
-- [ ] Define provider capability and mutation-result contracts for direct
+- [x] Define provider capability, mutation-result, and path-selection contracts for direct
   ordinary update, compare-and-set, optional authoritative readback, and
   unsupported capability fallback.
-- [ ] Make ordinary `None + AlwaysWrite` avoid target-record pre-read,
+- [x] Make ordinary `None + AlwaysWrite` avoid target-record pre-read,
   lock-read, and mandatory post-update readback on capable providers.
-- [ ] Keep managed revision advancement atomic in the provider update even
+- [x] Keep managed revision advancement atomic in the provider update even
   when ordinary OCC is disabled.
-- [ ] Implement explicit `Optimistic` as provider-native compare-and-set and
+- [x] Implement explicit `Optimistic` as provider-native compare-and-set and
   map zero-row application to the canonical stale-revision conflict.
-- [ ] Keep `WriteIfChanged`, strict observed revision, side-effect-bearing
+- [x] Keep `WriteIfChanged`, strict observed revision, side-effect-bearing
   mutation, and unsupported providers on explicitly safe paths.
-- [ ] Invalidate or reconcile EntitySpace, Working Set, and View state without
+- [x] Invalidate or reconcile EntitySpace, Working Set, and View state without
   forcing an unconditional datastore reload.
-- [ ] Prove in-memory, SQLite, and MySQL revision advancement, stale-writer,
+- [x] Prove in-memory, SQLite, and MySQL revision advancement, stale-writer,
   and cache-coherence behavior.
-- [ ] Preserve Conditional Transition rollback and exactly-one-winner
+- [x] Preserve Conditional Transition rollback and exactly-one-winner
   semantics without routing it through the plain-mutation fast path.
-- [ ] Record stable statement-count and representative throughput/latency
+- [x] Record stable statement-count and representative throughput/latency
   evidence without wall-clock assertions.
-- [ ] Update canonical design/specification and the Component developer guide
+- [x] Update canonical design/specification and the Component developer guide
   from verified behavior.
 - [ ] Complete focused tests, full CNCF validation with a 4 GB heap,
   downstream validation, naming/spec review, and clean re-review.
@@ -977,3 +977,157 @@ Stage Status:
 Planning reference:
 - Strategy item `9.47 SimpleEntity Plain Mutation Fast Path` is owned by this
   Phase 50 correction stage; it is not a separate future phase.
+
+PC-02A implementation evidence:
+- `docs/notes/simpleentity-plain-mutation-fast-path-implementation.md` records
+  the policy-specific EntityStore, in-memory, SQL, and Conditional Transition
+  sequences and separates policy-required authorization/transition loads from
+  managed-attribute provider reads.
+- `EntityMutationProviderContractSpec` fixes provider features, readback
+  requirements, acknowledgment/result shape, safe guarded fallback, composed
+  strong-semantics rejection, native-CAS declaration isolation, and
+  DataStoreSpace capability projection.
+
+PC-02B implementation evidence:
+- `EntityDirectMutationPlan` and `EntityCompareAndSetMutationPlan` are separate
+  provider contracts; neither can carry comparison or side-effect semantics.
+- In-memory and SQL providers declare and implement direct always-write and
+  compare-and-set capabilities while retaining the guarded provider operation.
+- Direct and compare-and-set providers advance revision atomically, reject
+  exhaustion without mutation, and distinguish acknowledgment from requested
+  authoritative readback.
+- `DataStoreSpace` dispatches native operations only to providers that declare
+  the matching capability; the recording provider proves no generic load or
+  guarded mutation is invoked.
+- `SqliteEntityMutationStatementTraceSpec` proves direct acknowledgment and
+  successful compare-and-set each use one target `UPDATE` and no target
+  `SELECT`, requested authoritative readback adds one `SELECT`, stale
+  compare-and-set adds one diagnostic `SELECT`, missing or invalid managed
+  revision never mutates or repairs storage, normalized revision aliases are
+  rejected before SQL, and guarded mutation retains its
+  `SELECT`/`UPDATE`/`SELECT` sequence.
+- Review found that authoritative readback capability was admitted after
+  provider mutation and that SQL native mutation could repair a missing
+  revision column or advance invalid revision values. Review-fix now admits
+  the complete capability set before provider invocation and enforces managed
+  revision schema/value validity before publication.
+- The pre-review PC-02B focused provider run passed 30 tests across four
+  suites, and
+  `Test/compile` passed with a 4 GB maximum heap.
+- The PC-02B review-fix run passed 56 tests across seven native,
+  guarded-mutation, and Conditional Transition suites; the subsequent
+  `Test/compile` passed with a 4 GB maximum heap.
+- Clean re-review found two remaining parity gaps: MySQL admitted fractional
+  revision values and normalized SQL readback did not preserve the production
+  detached `cncf_revision` field. The second review-fix adds dialect-specific
+  positive-integer guards, one shared SQL result mapper that preserves the
+  reserved managed field, production-shaped normalized SQLite coverage, and
+  live MySQL native acceptance.
+- The opt-in MySQL 8.4 Testcontainers native acceptance passed direct,
+  compare-and-set, stale, fractional-revision, and missing-revision behavior
+  with no canceled test.
+- The second PC-02B review-fix regression run passed 57 tests across eight
+  native, guarded-mutation, Conditional Transition, and opt-in-gated MySQL
+  suites; seven unrelated live MySQL cases were canceled by their normal
+  opt-in gate. The subsequent `Test/compile` passed with a 4 GB maximum heap.
+- EntityStore/UoW native-path routing and cache/Working Set reconciliation are
+  implemented by PC-02C.
+
+PC-02C implementation evidence:
+- EntityStore routes ordinary managed patches to direct provider mutation and
+  explicit optimistic/observed patches to provider-native compare-and-set.
+- `WriteIfChanged`, content-bearing patches, and unsupported providers retain
+  guarded provider execution.
+- UnitOfWork performs a target pre-read only for user-permission authorization
+  or a non-noop transition-validation hook.
+- Record/snapshot routes install provider-authoritative readback directly into
+  resident Entity state without a post-success datastore reload.
+- The internal unversioned patch route requests acknowledgment-only native
+  execution and therefore performs no mandatory authoritative readback.
+- Native provider exclusion guards reject logically deleted roots without
+  reviving them; stale compare-and-set evicts resident state and unsuccessful
+  mutations do not invalidate View state.
+- Conditional Transition remains on its existing atomic guarded provider
+  contract.
+- The PC-02C focused validation passed 93 tests across seven suites and
+  `Test/compile` passed with a 4 GB maximum heap before review.
+- The accumulated PC-02C implementation passed clean re-review before PC-02D
+  added provider/performance closure evidence.
+
+PC-02D implementation evidence:
+- `UnitOfWorkPlainMutationProviderParitySpec` executes the same direct,
+  observed compare-and-set, stale rejection, resident reconciliation/eviction,
+  and committed-state scenario against in-memory, file-backed SQLite, and
+  opt-in live MySQL providers.
+- Direct mutation advances revision from one to two, observed
+  compare-and-set advances revision from two to three, stale revision two is
+  rejected and evicts resident state, and committed provider state remains the
+  successful value at revision three.
+- `SqliteEntityMutationStatementTraceSpec` executes 64 representative writes
+  per path and fixes a deterministic target-statement budget: 64 direct
+  `UPDATE` statements with no target `SELECT`, versus 64 guarded `UPDATE`
+  statements and 128 guarded target `SELECT` statements.
+- Elapsed time, latency, and throughput are printed as informational evidence
+  only; no wall-clock threshold or relative-speed assertion is part of the
+  contract.
+- The accumulated provider-focused run passed in-memory, SQLite, live MySQL,
+  Conditional Transition, Entity/cache coherence, and UnitOfWork mutation
+  coverage with a 4 GB maximum heap. The PC-02D parity spec passed all three
+  providers without cancellation.
+- Canonical specification, design, strategy, phase status, implementation
+  note, and Component developer guidance now reflect the verified native,
+  guarded, cache, and readback behavior.
+- PC-02D implementation is complete. Read-only review, any review-fix,
+  clean re-review, final full/downstream validation, and release/closure remain
+  pending.
+- Accumulated read-only review found that managed optimistic patches were still
+  forced through guarded fallback, provider mutation-target not-found left
+  stale resident Entity state, and three large Executable Specifications lacked
+  semantic `which` grouping.
+- Review-fix routes `Optimistic + Managed` through one authoritative revision
+  load and provider-native compare-and-set, adds structured
+  `entity-mutation-target-not-found` reconciliation without false View
+  invalidation, and organizes provider contract, SQLite statement, and
+  UnitOfWork mutation specs by behavior.
+- Failing-first `UnitOfWorkVersionedMutationSpec` exposed both behavioral
+  defects. The corrected suite passed 17 tests, and the grouped provider,
+  SQLite, and UnitOfWork review-fix run passed 39 tests with a 4 GB maximum
+  heap. The broader provider/parity/Conditional Transition regression run
+  passed 69 tests across ten suites; eight live MySQL cases were canceled by
+  their normal opt-in gate. `Test/compile` passed with a 4 GB maximum heap.
+- Clean re-review then found that authorization/transition validation could
+  resolve base state A while EntityStore reloaded base state B for managed
+  compare-and-set. It also exposed that `Option[Record]` could not distinguish
+  an unresolved base from an authoritative missing base.
+- The second review-fix introduces `ManagedMutationBase` with unresolved and
+  resolved present-or-missing states. Failing-first coverage fixes both a
+  concurrent revision change after authorization load and a concurrent create
+  after transition validation observed a missing target. The corrected
+  `UnitOfWorkVersionedMutationSpec` passed all 19 tests with a 4 GB maximum
+  heap, and `Test/compile` passed with the same heap limit.
+- The second clean read-only re-review found no remaining actionable PC-02
+  finding.
+- Final CNCF validation with a 4 GB maximum heap passed 2574 tests in 367
+  completed suites with no failures, 10 canceled, 1 ignored, and 59 pending.
+  Downstream validation and Phase 50 closure remain pending.
+
+### PC-02 Accumulator Modified Scala File Compliance Ledger
+
+| Scala file | Naming | Spec style | Validation | Review/commit |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/datastore/DataStore.scala` | whole-file implementation scan passed | not a spec | 56-test PC-02B review-fix run and `Test/compile` passed | accumulated PC-02C clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/DataStoreSpace.scala` | whole-file implementation scan passed | not a spec | 56-test PC-02B review-fix run and `Test/compile` passed | accumulated PC-02C clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/EntityVersionedMutation.scala` | whole-file implementation scan passed | not a spec | 56-test PC-02B review-fix run and `Test/compile` passed | accumulated PC-02C clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/sql/SqlDialectDriver.scala` | pre-existing public method naming debt removed; whole-file scan passed | not a spec | 56-test PC-02B review-fix run and `Test/compile` passed | accumulated PC-02C clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/sql/SqliteDialectDriver.scala` | pre-existing public method naming debt removed; whole-file scan passed | not a spec | SQLite statement trace and `Test/compile` passed | accumulated PC-02C clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/sql/MySqlDialectDriver.scala` | pre-existing public method naming debt removed; whole-file scan passed | not a spec | live MySQL native acceptance passed | accumulated PC-02C clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/sql/SqlDataStore.scala` | whole-file implementation scan passed | not a spec | 56-test PC-02B review-fix run and `Test/compile` passed | accumulated PC-02C clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/EntityMutationProviderContractSpec.scala` | whole-file implementation scan passed | Given/When/Then and property checks passed | 10 focused tests passed | accumulated PC-02C clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/EntityNativeMutationProviderSpec.scala` | whole-file implementation scan passed | Given/When/Then and property checks passed | 7 focused tests passed | accumulated PC-02C clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/SqliteEntityMutationStatementTraceSpec.scala` | whole-file implementation scan passed | Given/When/Then structure passed | 12 focused tests passed including representative statement budget | second clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/MysqlConditionalTransitionAcceptanceSpec.scala` | whole-file implementation scan passed | Given/When/Then and property checks passed | native MySQL 8.4 Testcontainers acceptance passed | accumulated PC-02C clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | whole-file implementation scan passed | not a spec | 19-test managed-base review-fix run and `Test/compile` passed | second clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | whole-file implementation scan passed | not a spec | 19-test managed-base review-fix run and `Test/compile` passed | second clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | method-local helper debt removed; whole-file implementation scan passed | not a spec | 19-test managed-base review-fix run and `Test/compile` passed | second clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkVersionedMutationSpec.scala` | whole-file implementation scan passed | Given/When/Then structure passed | 19 tests and `Test/compile` passed including both managed-base races | second clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkPlainMutationProviderParitySpec.scala` | whole-file implementation scan passed | Given/When/Then provider-parity structure passed | in-memory, SQLite, and opt-in live MySQL passed | second clean re-review passed |

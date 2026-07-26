@@ -9,7 +9,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 
@@ -139,6 +139,27 @@ object EntityConcurrencyMetadata {
       ),
       Some(previous)
     )
+
+  private[cncf] def mutationTargetFailure[A](
+    previous: Conclusion
+  ): Consequence.Failure[A] = {
+    val symptom = previous.observation.taxonomy.symptom
+    if (
+      symptom == org.goldenport.observation.Taxonomy.Symptom.NotFound ||
+      previous.status.webCode.code == 404
+    ) {
+      val cause = previous.observation.cause
+        .addFacet(Descriptor.Facet.Reason("entity-mutation-target-not-found"))
+        .addFacet(Descriptor.Facet.Policy("entity.versioned-mutation"))
+      Consequence.Failure(
+        previous.copy(
+          observation = previous.observation.copy(cause = cause)
+        )
+      )
+    } else {
+      Consequence.Failure(previous)
+    }
+  }
 
   def withoutManagedField(record: Record): Record =
     SimpleEntityStorageShapePolicy.withoutConcurrencyRevisionField(record)

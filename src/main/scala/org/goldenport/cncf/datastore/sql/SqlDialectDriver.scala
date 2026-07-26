@@ -3,44 +3,48 @@ package org.goldenport.cncf.datastore.sql
 /*
  * @since   Mar. 12, 2026
  *  version Apr.  3, 2026
- * @version Jul. 15, 2026
+ *  version Jul. 15, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait SqlDialectDriver {
   def name: String
 
-  def quote_identifier(identifier: String): String
+  def quoteIdentifier(identifier: String): String
 
-  def table_exists_sql(table: String): String
-  def table_columns_sql(table: String): String
-  def table_columns_name_column: String
+  def tableExistsSql(table: String): String
+  def tableColumnsSql(table: String): String
+  def tableColumnsNameColumn: String
 
-  def create_table_sql(
+  def createTableSql(
     table: String,
     columns: Vector[(String, Any)]
   ): String
 
-  def add_column_sql(
+  def addColumnSql(
     table: String,
     column: (String, Any)
   ): String
 
-  def insert_sql(
+  def insertSql(
     table: String,
     columns: Vector[String]
   ): String
 
-  def upsert_sql(
+  def upsertSql(
     table: String,
     columns: Vector[String]
   ): String
 
-  def update_sql(
+  def updateSql(
     table: String,
     columns: Vector[String]
   ): String
 
-  def delete_sql(table: String): String
+  def entityRevisionGuardSql(column: String): String
+  def absentValueSql(column: String): String
 
-  def select_by_id_sql(table: String): String
+  def deleteSql(table: String): String
+
+  def selectByIdSql(table: String): String
 }

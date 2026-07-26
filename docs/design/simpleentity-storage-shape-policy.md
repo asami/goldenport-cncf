@@ -144,14 +144,39 @@ no-op. It changes neither application state nor `updatedAt`, `updatedBy`,
 trace/correlation metadata, or `revision`. Failed, rejected, stale, and
 rolled-back mutations likewise publish no management-field change.
 
-Managed-field maintenance is independent of persistence-path selection. The
-current representation-neutral managed-save path may pre-read and read back
-the authoritative record so Embedded, Detached, and unmanaged Entity codecs
-share one safe projection contract. Future strategy item 9.47 owns the
-optimized `None + AlwaysWrite` direct provider path without a target-record
-pre-read, `SELECT FOR UPDATE`, or mandatory authoritative readback. Explicit
-optimistic and conditional operations continue to select their stronger
-provider contracts separately.
+Managed-field maintenance is independent of persistence-path selection.
+Phase 50 PC-02 separates the provider paths:
+
+- ordinary `None + AlwaysWrite` uses direct provider mutation when supported;
+- explicit optimistic mutation uses provider-native compare-and-set when
+  supported;
+- managed optimistic mutation obtains the authoritative current revision once
+  when no transport observation is present, then supplies that revision to the
+  provider-native compare-and-set;
+- authorization or transition validation that already resolves the current
+  target passes a typed present-or-missing managed base to EntityStore; this
+  prevents a later reload from changing the state against which the mutation
+  was admitted;
+- `WriteIfChanged`, content-bearing mutation, side-effect-bearing mutation,
+  and unsupported providers retain the guarded provider contract; and
+- Conditional Transition retains its dedicated multi-record atomic provider
+  contract.
+
+The native provider advances managed revision in the same mutation as the
+business change. Acknowledgment-only execution does not require target
+pre-read, lock-read, or post-success readback. Record/snapshot execution
+requests provider-authoritative readback and installs that result directly
+into resident Entity state. Stale compare-and-set evicts resident state so a
+subsequent read cannot reuse the rejected snapshot. A provider-reported missing
+or logically deleted mutation target also evicts resident Entity state. Failed
+mutation does not invalidate View state as if it had committed.
+
+UnitOfWork may still load the current Entity when user-permission
+authorization or a non-noop transition-validation hook requires authoritative
+object state. Such a load is policy work and establishes the managed mutation
+base for that attempt, including an authoritative missing result. EntityStore
+reuses it rather than reloading a newer target state. A load performed only
+because the base remains unresolved is the sole managed optimistic pre-read.
 
 ## Permission Storage
 

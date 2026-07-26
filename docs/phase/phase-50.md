@@ -503,7 +503,7 @@ are tracked in the appended `PC-01` section of
 
 ## PC-02 Plain Mutation Fast Path
 
-Status: in progress
+Status: implementation complete; final verification pending
 
 The SimpleEntity plain-mutation fast path remains part of Phase 50 as the
 second post-close correction stage. It does not rewrite the historical
@@ -523,3 +523,9 @@ mutation contract:
 The authoritative work and closure ledger is the appended `PC-02` section of
 `docs/phase/phase-50-checklist.md`. Phase 51 remains planned and does not start
 until PC-02 returns Phase 50 to CLOSED.
+
+Provider-native direct and compare-and-set execution, EntityStore/UnitOfWork
+routing, cache reconciliation, in-memory/SQLite/live-MySQL parity, and stable
+SQLite statement-budget evidence are implemented. Remaining work is the
+downstream validation and exact Phase 50 closure record. The final CNCF
+read-only review/review-fix cycle is clean, and the 4 GB full suite passes.

@@ -17,7 +17,7 @@ import org.goldenport.record.io.RecordEncoder
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -120,6 +120,102 @@ class DataStoreSpace {
         m.totalCountCapability(cid)
       case _ =>
         TotalCountCapability.Unsupported
+    }
+
+  def entityMutationProviderCapabilities(
+    cid: DataStore.CollectionId
+  ): Consequence[EntityMutationProviderCapabilities] =
+    dataStore(cid).map {
+      case provider: EntityVersionedMutationDataStore =>
+        provider.entityMutationProviderCapabilities
+      case _ =>
+        EntityMutationProviderCapabilities.empty
+    }
+
+  def selectEntityMutationPath(
+    cid: DataStore.CollectionId,
+    request: EntityMutationPathRequest
+  ): Consequence[EntityMutationExecutionPath] =
+    entityMutationProviderCapabilities(cid).flatMap(
+      EntityMutationPathPlanner.selectC(_, request)
+    )
+
+  def mutateEntityDirect(
+    plan: EntityDirectMutationPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityMutationProviderResult] =
+    _with_calltree_c(
+      "space:datastore:entity-direct-mutation",
+      _datastore_space_attributes(
+        "entity-direct-mutation",
+        plan.collection
+      ),
+      "space"
+    ) {
+      for {
+        datastore <- dataStore(plan.collection)
+        result <- datastore match {
+          case provider: EntityVersionedMutationDataStore =>
+            EntityNativeMutationSupport
+              .requireCapabilities(
+                provider.entityMutationProviderCapabilities,
+                "entity-direct-mutation",
+                EntityMutationProviderFeature.DirectAlwaysWrite,
+                plan.readbackRequirement
+              )
+              .flatMap(_ => provider.mutateEntityDirect(plan))
+          case _ =>
+            EntityNativeMutationSupport.unsupported(
+              "entity-direct-mutation",
+              EntityMutationProviderFeature.DirectAlwaysWrite
+            )
+        }
+        admitted <-
+          EntityMutationProviderResult.validateReadbackC(
+            result,
+            plan.readbackRequirement
+          )
+      } yield admitted
+    }
+
+  def compareAndSetEntity(
+    plan: EntityCompareAndSetMutationPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityMutationProviderResult] =
+    _with_calltree_c(
+      "space:datastore:entity-compare-and-set-mutation",
+      _datastore_space_attributes(
+        "entity-compare-and-set-mutation",
+        plan.collection
+      ),
+      "space"
+    ) {
+      for {
+        datastore <- dataStore(plan.collection)
+        result <- datastore match {
+          case provider: EntityVersionedMutationDataStore =>
+            EntityNativeMutationSupport
+              .requireCapabilities(
+                provider.entityMutationProviderCapabilities,
+                "entity-compare-and-set-mutation",
+                EntityMutationProviderFeature.OptimisticCompareAndSet,
+                plan.readbackRequirement
+              )
+              .flatMap(_ => provider.compareAndSetEntity(plan))
+          case _ =>
+            EntityNativeMutationSupport.unsupported(
+              "entity-compare-and-set-mutation",
+              EntityMutationProviderFeature.OptimisticCompareAndSet
+            )
+        }
+        admitted <-
+          EntityMutationProviderResult.validateReadbackC(
+            result,
+            plan.readbackRequirement
+          )
+      } yield admitted
     }
 
   def mutateVersionedEntity(

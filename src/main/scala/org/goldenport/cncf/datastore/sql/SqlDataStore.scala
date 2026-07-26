@@ -24,6 +24,15 @@ import org.goldenport.cncf.datastore.{
   DataStoreConditionalTransitionResult,
   EntityConditionalTransitionDataStore,
   EntityConditionalTransitionSupport,
+  EntityCompareAndSetMutationPlan,
+  EntityDirectMutationPlan,
+  EntityMutationExclusionGuard,
+  EntityMutationProviderCapabilities,
+  EntityMutationProviderFeature,
+  EntityMutationProviderReadback,
+  EntityMutationProviderResult,
+  EntityMutationReadbackRequirement,
+  EntityNativeMutationSupport,
   EntityVersionedMutationCheckpoint,
   EntityVersionedMutationDataStore,
   EntityVersionedMutationFailure,
@@ -45,7 +54,8 @@ import org.goldenport.cncf.datastore.{
 import org.goldenport.cncf.entity.{
   EntityConcurrencyPolicy,
   EntityWritePolicy,
-  RevisionPreconditionPolicy
+  RevisionPreconditionPolicy,
+  SimpleEntityStorageShapePolicy
 }
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
@@ -58,7 +68,7 @@ import org.simplemodeling.model.datatype.EntityRevision
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -74,6 +84,17 @@ class SqlDataStore(
   private val _record_decoder = new RecordDecoder()
 
   def isAccept(cid: CollectionId): Boolean = true
+
+  override def entityMutationProviderCapabilities
+      : EntityMutationProviderCapabilities =
+    EntityMutationProviderCapabilities.guardedBaseline.copy(
+      features =
+        EntityMutationProviderCapabilities.guardedBaseline.features ++
+          Set(
+            EntityMutationProviderFeature.DirectAlwaysWrite,
+            EntityMutationProviderFeature.OptimisticCompareAndSet
+          )
+    )
 
   def create(
     collection: CollectionId,
@@ -174,6 +195,68 @@ class SqlDataStore(
   override def totalCountCapability(collection: CollectionId): TotalCountCapability =
     TotalCountCapability.Supported
 
+  override def mutateEntityDirect(
+    plan: EntityDirectMutationPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityMutationProviderResult] =
+    EntityNativeMutationSupport
+      .validate(plan)
+      .flatMap(_ =>
+        _validate_native_mutation_columns(
+          plan.revisionField,
+          plan.changes
+        )
+      )
+      .flatMap { _ =>
+        (for {
+          _ <- _prepare_native_mutation_schema(
+            plan.collection,
+            plan.entryId,
+            plan.revisionField,
+            plan.changes,
+            plan.exclusionGuards
+          )
+          result <-
+            _with_versioned_mutation { connection =>
+              _mutate_entity_direct(connection, plan)
+            }
+        } yield result).recoverWith(
+          EntityVersionedMutationFailure.normalizeProvider
+        )
+      }
+
+  override def compareAndSetEntity(
+    plan: EntityCompareAndSetMutationPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityMutationProviderResult] =
+    EntityNativeMutationSupport
+      .validate(plan)
+      .flatMap(_ =>
+        _validate_native_mutation_columns(
+          plan.revisionField,
+          plan.changes
+        )
+      )
+      .flatMap { _ =>
+        (for {
+          _ <- _prepare_native_mutation_schema(
+            plan.collection,
+            plan.entryId,
+            plan.revisionField,
+            plan.changes,
+            plan.exclusionGuards
+          )
+          result <-
+            _with_versioned_mutation { connection =>
+              _compare_and_set_entity(connection, plan)
+            }
+        } yield result).recoverWith(
+          EntityVersionedMutationFailure.normalizeProvider
+        )
+      }
+
   def mutateVersionedEntity(
     plan: EntityVersionedMutationPlan
   )(using
@@ -242,6 +325,10 @@ class SqlDataStore(
     checkpoint: EntityVersionedMutationCheckpoint
   ): Consequence[Unit] =
     Consequence.unit
+
+  protected def sql_statement(
+    sql: String
+  ): Unit = ()
 
   protected def versioned_mutation_commit(
     connection: Connection
@@ -502,6 +589,72 @@ class SqlDataStore(
     else
       Consequence.unit
 
+  private def _prepare_native_mutation_schema(
+    collection: CollectionId,
+    entryid: EntryId,
+    revisionfield: String,
+    changes: Record,
+    exclusionguards: Vector[EntityMutationExclusionGuard]
+  ): Consequence[Unit] =
+    _with_connection { connection =>
+      _table_exists(connection, collection).flatMap { exists =>
+        if (exists)
+          _existing_columns(connection, collection).flatMap { columns =>
+            val revisioncolumn = _column_name(revisionfield)
+            if (columns.contains(revisioncolumn))
+              _ensure_columns(
+                connection,
+                collection,
+                _record_columns(changes) ++
+                  _native_mutation_guard_columns(exclusionguards)
+              )
+            else
+              Consequence.operationInvalid(
+                "entity-native-mutation-schema",
+                Vector(
+                  Descriptor.Facet.Reason(
+                    "missing-managed-revision-column"
+                  ),
+                  Descriptor.Facet.FieldPath(revisionfield),
+                  Descriptor.Facet.Policy(
+                    EntityVersionedMutationFailure.POLICY
+                  )
+                )
+              )
+          }
+        else
+          Consequence.DataStoreNotFound(entryid.print)
+      }
+    }
+
+  private def _validate_native_mutation_columns(
+    revisionfield: String,
+    changes: Record
+  ): Consequence[Unit] = {
+    val revisioncolumn = _column_name(revisionfield)
+    val collision =
+      _record_columns(changes).exists(_._1 == revisioncolumn)
+    if (collision)
+      Consequence.argumentPolicyViolation(
+        "changes",
+        "framework-managed-revision",
+        s"record without normalized revision column $revisioncolumn",
+        revisioncolumn
+      )
+    else
+      Consequence.unit
+  }
+
+  private def _native_mutation_guard_columns(
+    guards: Vector[EntityMutationExclusionGuard]
+  ): Vector[(String, Any)] =
+    guards.map {
+      case EntityMutationExclusionGuard.EqualTo(fieldname, value) =>
+        _column_name(fieldname) -> _column_value(value)
+      case EntityMutationExclusionGuard.Present(fieldname) =>
+        _column_name(fieldname) -> ""
+    }
+
   private def _requires_conditional_schema_preparation: Boolean =
     dialect.name == MySqlDialectDriver.name
 
@@ -613,6 +766,131 @@ class SqlDataStore(
             )
           }
     } yield result
+
+  private def _mutate_entity_direct(
+    connection: Connection,
+    plan: EntityDirectMutationPlan
+  ): Consequence[EntityMutationProviderResult] =
+    for {
+      updated <-
+        _native_mutation_update_count(
+          connection,
+          plan.collection,
+          plan.entryId,
+          plan.revisionField,
+          plan.changes,
+          None,
+          plan.exclusionGuards
+        )
+      result <-
+        if (updated == 1)
+          _native_mutation_applied(
+            connection,
+            plan.collection,
+            plan.entryId,
+            plan.readbackRequirement
+          )
+        else
+          _diagnose_direct_mutation_failure(connection, plan)
+    } yield result
+
+  private def _compare_and_set_entity(
+    connection: Connection,
+    plan: EntityCompareAndSetMutationPlan
+  ): Consequence[EntityMutationProviderResult] =
+    for {
+      updated <-
+        _native_mutation_update_count(
+          connection,
+          plan.collection,
+          plan.entryId,
+          plan.revisionField,
+          plan.changes,
+          Some(plan.expectedRevision),
+          plan.exclusionGuards
+        )
+      result <-
+        if (updated == 1)
+          _native_mutation_applied(
+            connection,
+            plan.collection,
+            plan.entryId,
+            plan.readbackRequirement
+          )
+        else
+          _diagnose_compare_and_set_failure(connection, plan)
+    } yield result
+
+  private def _native_mutation_applied(
+    connection: Connection,
+    collection: CollectionId,
+    entryid: EntryId,
+    requirement: EntityMutationReadbackRequirement
+  ): Consequence[EntityMutationProviderResult] =
+    requirement match {
+      case EntityMutationReadbackRequirement.None =>
+        Consequence.success(
+          EntityMutationProviderResult.Applied(
+            EntityMutationProviderReadback.Omitted
+          )
+        )
+      case EntityMutationReadbackRequirement.AuthoritativeRecord =>
+        _required_record(connection, collection, entryid).map(record =>
+          EntityMutationProviderResult.Applied(
+            EntityMutationProviderReadback.Authoritative(record)
+          )
+        )
+    }
+
+  private def _diagnose_direct_mutation_failure(
+    connection: Connection,
+    plan: EntityDirectMutationPlan
+  ): Consequence[EntityMutationProviderResult] =
+    _required_record(connection, plan.collection, plan.entryId).flatMap {
+      record =>
+        EntityNativeMutationSupport
+          .admitExisting(plan.entryId, record, plan.exclusionGuards)
+          .flatMap(_ =>
+            EntityVersionedMutationSupport
+              .revision(record, plan.revisionField)
+              .flatMap { revision =>
+                revision.nextC.flatMap(_ =>
+                  EntityVersionedMutationFailure.providerFailure(
+                    "Direct Entity mutation affected no row"
+                  )
+                )
+              }
+          )
+    }
+
+  private def _diagnose_compare_and_set_failure(
+    connection: Connection,
+    plan: EntityCompareAndSetMutationPlan
+  ): Consequence[EntityMutationProviderResult] =
+    _required_record(connection, plan.collection, plan.entryId).flatMap {
+      record =>
+        EntityNativeMutationSupport
+          .admitExisting(plan.entryId, record, plan.exclusionGuards)
+          .flatMap(_ =>
+            EntityVersionedMutationSupport
+              .revision(record, plan.revisionField)
+              .flatMap { actual =>
+                if (actual != plan.expectedRevision)
+                  Consequence.success(
+                    EntityMutationProviderResult.Stale(
+                      plan.expectedRevision,
+                      actual
+                    )
+                  )
+                else
+                  actual.nextC.flatMap(_ =>
+                    EntityVersionedMutationFailure.providerFailure(
+                      "Compare-and-set Entity mutation affected no row"
+                    )
+                  )
+              }
+          )
+    }
 
   private def _apply_versioned_mutation(
     connection: Connection,
@@ -870,7 +1148,7 @@ class SqlDataStore(
     _table_exists(connection, collection).flatMap { exists =>
       if (exists) {
         val basesql =
-          dialect.select_by_id_sql(_table_name(collection))
+          dialect.selectByIdSql(_table_name(collection))
         val sql =
           if (dialect.name == MySqlDialectDriver.name)
             s"$basesql FOR UPDATE"
@@ -893,6 +1171,14 @@ class SqlDataStore(
         conn.close()
       }
     }.flatMap(identity)
+
+  private def _prepare_statement(
+    connection: Connection,
+    sql: String
+  ): PreparedStatement = {
+    sql_statement(sql)
+    connection.prepareStatement(sql)
+  }
 
   private def _table_name(collection: CollectionId): String =
     collection.collectionName
@@ -1003,7 +1289,7 @@ class SqlDataStore(
     collection: CollectionId
   ): Consequence[Boolean] =
     Consequence {
-      val sql = dialect.table_exists_sql(_table_name(collection))
+      val sql = dialect.tableExistsSql(_table_name(collection))
       val stmt = conn.createStatement()
       try {
         val rs = stmt.executeQuery(sql)
@@ -1019,14 +1305,14 @@ class SqlDataStore(
     collection: CollectionId
   ): Consequence[Set[String]] =
     Consequence {
-      val sql = dialect.table_columns_sql(_table_name(collection))
+      val sql = dialect.tableColumnsSql(_table_name(collection))
       val stmt = conn.createStatement()
       try {
         val rs = stmt.executeQuery(sql)
         val buf = scala.collection.mutable.Set.empty[String]
         try {
           while (rs.next()) {
-            buf += rs.getString(dialect.table_columns_name_column)
+            buf += rs.getString(dialect.tableColumnsNameColumn)
           }
         } finally {
           rs.close()
@@ -1055,7 +1341,7 @@ class SqlDataStore(
     columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     Consequence {
-      val sql = dialect.create_table_sql(_table_name(collection), columns)
+      val sql = dialect.createTableSql(_table_name(collection), columns)
       val stmt = conn.createStatement()
       try {
         stmt.execute(sql)
@@ -1082,7 +1368,7 @@ class SqlDataStore(
     column: (String, Any)
   ): Consequence[Unit] =
     Consequence {
-      val sql = dialect.add_column_sql(_table_name(collection), column)
+      val sql = dialect.addColumnSql(_table_name(collection), column)
       val stmt = conn.createStatement()
       try {
         stmt.execute(sql)
@@ -1107,8 +1393,8 @@ class SqlDataStore(
     id: EntryId
   ): Consequence[Boolean] =
     Consequence {
-      val sql = dialect.select_by_id_sql(_table_name(collection))
-      val stmt = conn.prepareStatement(sql)
+      val sql = dialect.selectByIdSql(_table_name(collection))
+      val stmt = _prepare_statement(conn, sql)
       try {
         stmt.setString(1, id.print)
         val rs = stmt.executeQuery()
@@ -1126,8 +1412,8 @@ class SqlDataStore(
     columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     Consequence {
-      val sql = dialect.insert_sql(_table_name(collection), columns.map(_._1))
-      val stmt = conn.prepareStatement(sql)
+      val sql = dialect.insertSql(_table_name(collection), columns.map(_._1))
+      val stmt = _prepare_statement(conn, sql)
       try {
         stmt.setString(1, id.print)
         columns.zipWithIndex.foreach { case ((_, v), i) =>
@@ -1146,8 +1432,8 @@ class SqlDataStore(
     columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     Consequence {
-      val sql = dialect.upsert_sql(_table_name(collection), columns.map(_._1))
-      val stmt = conn.prepareStatement(sql)
+      val sql = dialect.upsertSql(_table_name(collection), columns.map(_._1))
+      val stmt = _prepare_statement(conn, sql)
       try {
         stmt.setString(1, id.print)
         columns.zipWithIndex.foreach { case ((_, value), index) =>
@@ -1170,8 +1456,8 @@ class SqlDataStore(
       Consequence.unit
     else
       Consequence {
-        val sql = dialect.update_sql(_table_name(collection), columns.map(_._1))
-        val stmt = conn.prepareStatement(sql)
+        val sql = dialect.updateSql(_table_name(collection), columns.map(_._1))
+        val stmt = _prepare_statement(conn, sql)
         try {
           columns.zipWithIndex.foreach { case ((_, v), i) =>
             stmt.setObject(i + 1, v)
@@ -1194,11 +1480,11 @@ class SqlDataStore(
     else
       Consequence {
         val sql =
-          dialect.update_sql(
+          dialect.updateSql(
             _table_name(collection),
             columns.map(_._1)
           )
-        val stmt = conn.prepareStatement(sql)
+        val stmt = _prepare_statement(conn, sql)
         try {
           columns.zipWithIndex.foreach { case ((_, value), index) =>
             stmt.setObject(index + 1, value)
@@ -1210,14 +1496,96 @@ class SqlDataStore(
         }
       }
 
+  private def _native_mutation_update_count(
+    connection: Connection,
+    collection: CollectionId,
+    entryid: EntryId,
+    revisionfield: String,
+    changes: Record,
+    expectedrevision: Option[EntityRevision],
+    exclusionguards: Vector[EntityMutationExclusionGuard]
+  ): Consequence[Int] =
+    Consequence {
+      val columns = _record_columns(changes)
+      val revisioncolumn = _column_name(revisionfield)
+      val assignments =
+        columns
+          .map { case (name, _) =>
+            s"${dialect.quoteIdentifier(name)} = ?"
+          }
+          .appended(
+            s"${dialect.quoteIdentifier(revisioncolumn)} = ${dialect.quoteIdentifier(revisioncolumn)} + 1"
+          )
+          .mkString(", ")
+      val expectedclause =
+        expectedrevision
+          .map(_ =>
+            s" AND ${dialect.quoteIdentifier(revisioncolumn)} = ?"
+          )
+          .getOrElse("")
+      val exclusionclause =
+        exclusionguards
+          .map { guard =>
+            guard match {
+              case EntityMutationExclusionGuard.EqualTo(fieldname, _) =>
+                val column =
+                  dialect.quoteIdentifier(_column_name(fieldname))
+                s" AND ($column IS NULL OR $column <> ?)"
+              case EntityMutationExclusionGuard.Present(fieldname) =>
+                s" AND ${dialect.absentValueSql(_column_name(fieldname))}"
+            }
+          }
+          .mkString
+      val equalityguards =
+        exclusionguards.collect {
+          case guard: EntityMutationExclusionGuard.EqualTo => guard
+        }
+      val sql =
+        s"UPDATE ${dialect.quoteIdentifier(_table_name(collection))} SET $assignments WHERE ${dialect.quoteIdentifier("id")} = ?$expectedclause$exclusionclause AND ${dialect.entityRevisionGuardSql(revisioncolumn)}"
+      val statement = _prepare_statement(connection, sql)
+      try {
+        columns.zipWithIndex.foreach { case ((_, value), index) =>
+          statement.setObject(index + 1, value)
+        }
+        val idindex = columns.length + 1
+        statement.setString(idindex, entryid.print)
+        expectedrevision match {
+          case Some(expected) =>
+            statement.setLong(idindex + 1, expected.value)
+            equalityguards.zipWithIndex.foreach { case (guard, index) =>
+              statement.setObject(
+                idindex + 2 + index,
+                _column_value(guard.value)
+              )
+            }
+            val guardoffset = idindex + 2 + equalityguards.size
+            statement.setLong(guardoffset, EntityRevision.INITIAL.value)
+            statement.setLong(guardoffset + 1, Long.MaxValue)
+          case None =>
+            equalityguards.zipWithIndex.foreach { case (guard, index) =>
+              statement.setObject(
+                idindex + 1 + index,
+                _column_value(guard.value)
+              )
+            }
+            val guardoffset = idindex + 1 + equalityguards.size
+            statement.setLong(guardoffset, EntityRevision.INITIAL.value)
+            statement.setLong(guardoffset + 1, Long.MaxValue)
+        }
+        statement.executeUpdate()
+      } finally {
+        statement.close()
+      }
+    }
+
   private def _delete(
     conn: Connection,
     collection: CollectionId,
     id: EntryId
   ): Consequence[Unit] =
     Consequence {
-      val sql = dialect.delete_sql(_table_name(collection))
-      val stmt = conn.prepareStatement(sql)
+      val sql = dialect.deleteSql(_table_name(collection))
+      val stmt = _prepare_statement(conn, sql)
       try {
         stmt.setString(1, id.print)
         stmt.executeUpdate()
@@ -1231,7 +1599,7 @@ class SqlDataStore(
     collection: CollectionId,
     id: EntryId
   ): Consequence[Option[Record]] = {
-    val sql = dialect.select_by_id_sql(_table_name(collection))
+    val sql = dialect.selectByIdSql(_table_name(collection))
     _select_with_sql(conn, collection, id, sql)
   }
 
@@ -1242,24 +1610,15 @@ class SqlDataStore(
     sql: String
   ): Consequence[Option[Record]] =
     Consequence {
-      val stmt = conn.prepareStatement(sql)
+      val stmt = _prepare_statement(conn, sql)
       try {
         stmt.setString(1, id.print)
         val rs = stmt.executeQuery()
         try {
-          if (rs.next()) {
-            val md = rs.getMetaData
-            val count = md.getColumnCount
-            val values = (1 to count).toVector.map { i =>
-              val rawname = md.getColumnLabel(i)
-              val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
-              val value = _decode_column_value(rs.getObject(i))
-              name -> value
-            }
-            Some(Record.create(values))
-          } else {
+          if (rs.next())
+            Some(_record_from_result_set(rs))
+          else
             None
-          }
         } finally {
           rs.close()
         }
@@ -1277,7 +1636,7 @@ class SqlDataStore(
       _ <- _ensure_query_columns(conn, collection, directive.query)
       r <- Consequence {
       val sql = _search_sql(collection, directive)
-      val stmt = conn.prepareStatement(sql.sql)
+      val stmt = _prepare_statement(conn, sql.sql)
       try {
         _bind(stmt, sql.params)
         val rs = stmt.executeQuery()
@@ -1312,15 +1671,15 @@ class SqlDataStore(
         "*"
       case QueryProjection.Fields(names) =>
         val normalized = names.map(_column_name).distinct
-        ("id" +: normalized.filterNot(_ == "id")).map(dialect.quote_identifier).mkString(", ")
+        ("id" +: normalized.filterNot(_ == "id")).map(dialect.quoteIdentifier).mkString(", ")
     }
     val order = directive.order match {
       case QueryOrder.None =>
         ""
       case QueryOrder.By(field, OrderDirection.Asc) =>
-        s" ORDER BY ${dialect.quote_identifier(_column_name(field))} ASC"
+        s" ORDER BY ${dialect.quoteIdentifier(_column_name(field))} ASC"
       case QueryOrder.By(field, OrderDirection.Desc) =>
-        s" ORDER BY ${dialect.quote_identifier(_column_name(field))} DESC"
+        s" ORDER BY ${dialect.quoteIdentifier(_column_name(field))} DESC"
     }
     val limit = directive.limit match {
       case QueryLimit.Unbounded =>
@@ -1337,7 +1696,7 @@ class SqlDataStore(
         s" LIMIT -1 OFFSET ${directive.offset}"
     val where = _where_sql(directive.query)
     SqlDataStore.SqlStatement(
-      s"SELECT $select FROM ${dialect.quote_identifier(_table_name(collection))}${where.sql}$order$limit$offset",
+      s"SELECT $select FROM ${dialect.quoteIdentifier(_table_name(collection))}${where.sql}$order$limit$offset",
       where.params
     )
   }
@@ -1351,7 +1710,7 @@ class SqlDataStore(
       _ <- _ensure_query_columns(conn, collection, directive.query)
       r <- Consequence {
       val sql = _count_sql(collection, directive)
-      val stmt = conn.prepareStatement(sql.sql)
+      val stmt = _prepare_statement(conn, sql.sql)
       try {
         _bind(stmt, sql.params)
         val rs = stmt.executeQuery()
@@ -1419,7 +1778,7 @@ class SqlDataStore(
   ): SqlDataStore.SqlStatement = {
     val where = _where_sql(directive.query)
     SqlDataStore.SqlStatement(
-      s"SELECT COUNT(*) FROM ${dialect.quote_identifier(_table_name(collection))}${where.sql}",
+      s"SELECT COUNT(*) FROM ${dialect.quoteIdentifier(_table_name(collection))}${where.sql}",
       where.params
     )
   }
@@ -1500,7 +1859,7 @@ class SqlDataStore(
       SqlDataStore.SqlStatement(s"${_column_ref(path)} LIKE ?", Vector(pattern))
 
   private def _column_ref(path: String): String =
-    dialect.quote_identifier(_column_name(path))
+    dialect.quoteIdentifier(_column_name(path))
 
   private def _bind(stmt: PreparedStatement, params: Vector[Any]): Unit =
     params.zipWithIndex.foreach { case (value, index) =>
@@ -1514,7 +1873,16 @@ class SqlDataStore(
     val count = md.getColumnCount
     val values = (1 to count).toVector.map { i =>
       val rawname = md.getColumnLabel(i)
-      val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
+      val name =
+        if (
+          SimpleEntityStorageShapePolicy
+            .isConcurrencyRevisionStorageField(rawname)
+        )
+          rawname
+        else if (config.normalizeColumnNames)
+          _to_property_name(rawname)
+        else
+          rawname
       val value = _decode_column_value(rs.getObject(i))
       name -> value
     }

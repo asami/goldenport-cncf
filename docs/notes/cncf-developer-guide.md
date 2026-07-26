@@ -1016,6 +1016,20 @@ Component code should use the protected DSL rather than constructing an
 `EntityStoreSave`, `EntityStoreUpdate`, or `EntityStoreUpdateById` operation
 directly.
 
+For a managed `SimpleEntity`, ordinary `None + AlwaysWrite` DSL mutation may
+use the provider-native direct path. Explicit optimistic/observed mutation may
+use provider-native compare-and-set. `WriteIfChanged`, content-bearing
+mutation, atomic side effects, and providers without the required native
+capability remain on the guarded path. These are framework execution choices;
+component code must not call `mutateEntityDirect` or `compareAndSetEntity`
+directly.
+
+The direct path does not bypass authorization, transition validation,
+framework-managed revision advancement, or structured stale handling.
+Record/snapshot-returning DSL routes request authoritative provider readback
+when needed. A stale optimistic attempt evicts resident state before returning
+failure.
+
 When reusable domain behavior lives outside the concrete `ActionCall`, model it
 as an `ActionBehavior` and pass the originating `ActionCall.Core` into that
 behavior. The behavior can then use `entity_update` or

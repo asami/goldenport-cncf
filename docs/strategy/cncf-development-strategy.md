@@ -3249,14 +3249,15 @@ Planned for Phase 54 after Phase 53 closes.
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
 
 ### 9.47 SimpleEntity Plain Mutation Fast Path
-Active as Phase 50 post-close correction stage PC-02 after the PC-01
-mutation-contract correction.
+Implemented as Phase 50 post-close correction stage PC-02 after the PC-01
+mutation-contract correction; final Phase 50 verification and closure remain
+pending.
 
 - Historical basis:
   - Phase 50 makes `EntityConcurrencyPolicy.None` the ordinary default while
     retaining framework-managed revision lifecycle;
-  - the current managed-revision implementation still loads the target record
-    before provider mutation and reads the authoritative record after update;
+  - the pre-PC-02 managed-revision implementation loaded the target record
+    before provider mutation and read the authoritative record after update;
     and
   - this follow-up was first identified during the Phase 50 PC-01 correction
     and is retained as Phase 50 PC-02 so the managed-revision implementation
@@ -3307,6 +3308,15 @@ mutation-contract correction.
   - cache and Working Set behavior remains coherent; and
   - focused provider tests, full CNCF validation, downstream validation,
     naming/spec review, and canonical design/specification updates pass.
+- Implementation status:
+  - separate direct and compare-and-set provider contracts are implemented for
+    in-memory and SQL providers;
+  - EntityStore/UnitOfWork select native, guarded, and Conditional Transition
+    paths without weakening requested semantics;
+  - in-memory, SQLite, and opt-in live MySQL provider/cache parity passed;
+  - deterministic SQLite statement-budget evidence passed;
+  - final review and full CNCF validation passed; and
+  - downstream validation and Phase 50 closure remain pending.
 - Historical reference:
   - `docs/phase/phase-50.md`;
   - `docs/phase/phase-50-checklist.md`.

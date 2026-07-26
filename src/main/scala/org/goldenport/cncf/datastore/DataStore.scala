@@ -16,7 +16,7 @@ import scala.util.control.NonFatal
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version May.  2, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -209,6 +209,17 @@ object DataStore {
 
     private var _collections: VectorMap[String, InMemoryDataStore.Collection] = VectorMap.empty
 
+    override def entityMutationProviderCapabilities
+        : EntityMutationProviderCapabilities =
+      EntityMutationProviderCapabilities.guardedBaseline.copy(
+        features =
+          EntityMutationProviderCapabilities.guardedBaseline.features ++
+            Set(
+              EntityMutationProviderFeature.DirectAlwaysWrite,
+              EntityMutationProviderFeature.OptimisticCompareAndSet
+            )
+      )
+
     protected final def collection_key(collection: CollectionId): String =
       collection match {
         case CollectionId.Instance(name) =>
@@ -279,6 +290,106 @@ object DataStore {
     )(using ctx: ExecutionContext): Consequence[Unit] =
       synchronized {
         take_collection(collection).flatMap(_.delete(id))
+      }
+
+    override def mutateEntityDirect(
+      plan: EntityDirectMutationPlan
+    )(using
+      ctx: ExecutionContext
+    ): Consequence[EntityMutationProviderResult] =
+      synchronized {
+        for {
+          _ <- EntityNativeMutationSupport.validate(plan)
+          rootcollection <- take_collection(plan.collection)
+          rootkey <- rootcollection._entry_key(plan.entryId)
+          existing <- rootcollection
+            ._entries_snapshot
+            .get(rootkey)
+            .map(Consequence.success)
+            .getOrElse(Consequence.DataStoreNotFound(plan.entryId.print))
+          _ <- EntityNativeMutationSupport.admitExisting(
+            plan.entryId,
+            existing,
+            plan.exclusionGuards
+          )
+          actual <-
+            EntityVersionedMutationSupport.revision(
+              existing,
+              plan.revisionField
+            )
+          nextrevision <- actual.nextC
+          updated =
+            EntityNativeMutationSupport.updatedRecord(
+              existing,
+              plan.revisionField,
+              plan.changes,
+              nextrevision
+            )
+        } yield {
+          rootcollection._replace_entries(
+            rootcollection._entries_snapshot.updated(rootkey, updated)
+          )
+          EntityNativeMutationSupport.applied(
+            updated,
+            plan.readbackRequirement
+          )
+        }
+      }
+
+    override def compareAndSetEntity(
+      plan: EntityCompareAndSetMutationPlan
+    )(using
+      ctx: ExecutionContext
+    ): Consequence[EntityMutationProviderResult] =
+      synchronized {
+        for {
+          _ <- EntityNativeMutationSupport.validate(plan)
+          rootcollection <- take_collection(plan.collection)
+          rootkey <- rootcollection._entry_key(plan.entryId)
+          existing <- rootcollection
+            ._entries_snapshot
+            .get(rootkey)
+            .map(Consequence.success)
+            .getOrElse(Consequence.DataStoreNotFound(plan.entryId.print))
+          _ <- EntityNativeMutationSupport.admitExisting(
+            plan.entryId,
+            existing,
+            plan.exclusionGuards
+          )
+          actual <-
+            EntityVersionedMutationSupport.revision(
+              existing,
+              plan.revisionField
+            )
+          result <-
+            if (actual != plan.expectedRevision)
+              Consequence.success(
+                EntityMutationProviderResult.Stale(
+                  plan.expectedRevision,
+                  actual
+                )
+              )
+            else
+              actual.nextC.map { nextrevision =>
+                val updated =
+                  EntityNativeMutationSupport.updatedRecord(
+                    existing,
+                    plan.revisionField,
+                    plan.changes,
+                    nextrevision
+                  )
+                rootcollection._replace_entries(
+                  rootcollection._entries_snapshot.updated(
+                    rootkey,
+                    updated
+                  )
+                )
+                EntityNativeMutationSupport.applied(
+                  updated,
+                  plan.readbackRequirement
+                )
+              }
+        } yield result
       }
 
     def mutateVersionedEntity(

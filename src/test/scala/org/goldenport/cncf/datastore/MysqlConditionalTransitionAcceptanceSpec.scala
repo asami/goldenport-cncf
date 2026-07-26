@@ -33,7 +33,8 @@ import org.testcontainers.utility.DockerImageName
  * Normal test runs cancel this suite before contacting Docker.
  *
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MysqlConditionalTransitionAcceptanceSpec
@@ -655,6 +656,141 @@ final class MysqlConditionalTransitionAcceptanceSpec
           Some(Long.MaxValue)
       }
     }
+
+    "preserve native direct compare-and-set and invalid-revision admission" in {
+      _with_live_mysql { database =>
+        Given(
+          "one valid native root plus separate fractional and missing-revision roots"
+        )
+        val store = _store(database)
+        val context = _context(store)
+        val validcollection =
+          _collection("mysql_native_revision_provider")
+        val invalidcollection =
+          _collection("mysql_native_invalid_revision")
+        val missingcollection =
+          _collection("mysql_native_missing_revision")
+        val validentry = DataStore.StringEntryId("valid")
+        val invalidentry = DataStore.StringEntryId("fractional")
+        val missingentry = DataStore.StringEntryId("missing")
+        val setup =
+          store
+            .create(
+              validcollection,
+              validentry,
+              _versioned_record(validentry, "before", 1L)
+            )(using context)
+            .flatMap(_ =>
+              store.create(
+                invalidcollection,
+                invalidentry,
+                Record.dataAuto(
+                  "id" -> invalidentry.print,
+                  "name" -> "fractional",
+                  _revision_field -> 1.5d
+                )
+              )(using context)
+            )
+            .flatMap(_ =>
+              store.create(
+                missingcollection,
+                missingentry,
+                Record.dataAuto(
+                  "id" -> missingentry.print,
+                  "name" -> "missing"
+                )
+              )(using context)
+            )
+
+        When("native direct and compare-and-set operations execute")
+        val direct =
+          setup.flatMap(_ =>
+            store.mutateEntityDirect(
+              _direct_plan(validcollection, validentry, "direct")
+            )(using context)
+          )
+        val applied =
+          direct.flatMap(_ =>
+            store.compareAndSetEntity(
+              _compare_and_set_plan(
+                validcollection,
+                validentry,
+                _revision(2L),
+                "cas"
+              )
+            )(using context)
+          )
+        val stale =
+          applied.flatMap(_ =>
+            store.compareAndSetEntity(
+              _compare_and_set_plan(
+                validcollection,
+                validentry,
+                _revision(2L),
+                "stale"
+              )
+            )(using context)
+          )
+        val invalid =
+          setup.flatMap(_ =>
+            store.mutateEntityDirect(
+              _direct_plan(
+                invalidcollection,
+                invalidentry,
+                "changed"
+              )
+            )(using context)
+          )
+        val missing =
+          setup.flatMap(_ =>
+            store.mutateEntityDirect(
+              _direct_plan(
+                missingcollection,
+                missingentry,
+                "changed"
+              )
+            )(using context)
+          )
+
+        Then("valid revisions advance and invalid storage remains unchanged")
+        direct shouldBe Consequence.success(
+          EntityMutationProviderResult.Applied(
+            EntityMutationProviderReadback.Omitted
+          )
+        )
+        applied shouldBe Consequence.success(
+          EntityMutationProviderResult.Applied(
+            EntityMutationProviderReadback.Omitted
+          )
+        )
+        stale shouldBe Consequence.success(
+          EntityMutationProviderResult.Stale(
+            _revision(2L),
+            _revision(3L)
+          )
+        )
+        invalid shouldBe a[Consequence.Failure[?]]
+        missing shouldBe a[Consequence.Failure[?]]
+        store
+          .load(validcollection, validentry)(using context)
+          .map(_.map(record =>
+            record.getString("name") -> record.getAny(_revision_field)
+          )) shouldBe
+          Consequence.success(Some(Some("cas") -> Some(3L)))
+        store
+          .load(invalidcollection, invalidentry)(using context)
+          .map(_.map(record =>
+            record.getString("name") -> record.getAny(_revision_field)
+          )) shouldBe
+          Consequence.success(Some(Some("fractional") -> Some(1.5d)))
+        store
+          .load(missingcollection, missingentry)(using context)
+          .map(_.map(record =>
+            record.getString("name") -> record.getAny(_revision_field)
+          )) shouldBe
+          Consequence.success(Some(Some("missing") -> None))
+      }
+    }
   }
 
   private def _with_live_mysql[A](
@@ -706,6 +842,32 @@ final class MysqlConditionalTransitionAcceptanceSpec
       "id" -> entry.print,
       "name" -> name,
       _revision_field -> revision
+    )
+
+  private def _direct_plan(
+    collection: DataStore.CollectionId,
+    entry: DataStore.EntryId,
+    name: String
+  ): EntityDirectMutationPlan =
+    EntityDirectMutationPlan(
+      collection,
+      entry,
+      _revision_field,
+      Record.dataAuto("name" -> name)
+    )
+
+  private def _compare_and_set_plan(
+    collection: DataStore.CollectionId,
+    entry: DataStore.EntryId,
+    expectedrevision: EntityRevision,
+    name: String
+  ): EntityCompareAndSetMutationPlan =
+    EntityCompareAndSetMutationPlan(
+      collection,
+      entry,
+      _revision_field,
+      expectedrevision,
+      Record.dataAuto("name" -> name)
     )
 }
 

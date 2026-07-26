@@ -490,6 +490,32 @@ class EntityStoreSpace {
     }
   }
 
+  private[cncf] def updateByIdManagedAuthoritative[P](
+    op: EntityStoreUpdateById[P],
+    managedMutationBase: EntityStore.ManagedMutationBase
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityStore.ManagedRecordMutationResult] = {
+    given EntityPersistentUpdate[P] = op.tc
+    _with_calltree(
+      "space:entitystore:update-by-id-authoritative",
+      _entitystore_space_attributes(
+        "update-by-id-authoritative",
+        op.id.collection
+      ) + ("entity_id" -> op.id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(op.id.collection)
+        result <- entitystore.updateByIdManagedAuthoritative(
+          op.id,
+          op.patch,
+          op.executionPolicy,
+          managedMutationBase
+        )
+      } yield result
+    }
+  }
+
   def updateByIdObserved[P](
     op: EntityStoreUpdateByIdObserved[P]
   )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] =

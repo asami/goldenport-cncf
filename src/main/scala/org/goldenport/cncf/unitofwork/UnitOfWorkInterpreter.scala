@@ -504,35 +504,25 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _entity_calltree_attributes(id, "entity-store", realio = true)
       ) {
         for {
-          current <- _load_record(op.id)
-          _ <- _authorize(op.authorization, Some(() => Consequence.success(current)))
-          _ <- current match {
-            case Some(record) =>
-              val changes = Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
-              val proposed = _overlay_record(record, changes)
-              _transition_validation_hook.beforeUpdateById[t](
-                op.id,
-                op.patch,
-                op.tc,
-                record,
-                proposed
-              )
-            case None =>
-              _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc)
-          }
-          record <- _entity_store_space.updateById(op)
-          _ = _entity_space_evict(op.id)
-          _ <- (for {
-            persisted <- _load_record(op.id).flatMap(
-              Consequence.successOrEntityNotFound(_)(op.id)
-            )
-            _ <- _entity_space_put_persisted_record(op.id, Some(persisted))
-          } yield ()).recoverWith(
-            EntityConcurrencyMetadata.committedProjectionFailure
+          managedbase <- _authorize_and_validate_patch(
+            op.id,
+            op.patch,
+            op.tc,
+            op.authorization
           )
+          mutation <-
+            _entity_store_space.updateByIdManagedAuthoritative(
+              op,
+              managedbase
+            )
+          _ = _entity_space_evict(op.id)
+          _ <- _entity_space_put_persisted_record(
+            op.id,
+            Some(mutation.authoritativeRecord)
+          ).recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
         } yield {
           _view_space_invalidate_all()
-          record
+          mutation.record
         }
       }
       _reconcile_versioned_failure(id, result)
@@ -545,22 +535,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _entity_calltree_attributes(id, "entity-store", realio = true)
       ) {
         for {
-          current <- _load_record(op.id)
-          _ <- _authorize(op.authorization, Some(() => Consequence.success(current)))
-          _ <- current match {
-            case Some(record) =>
-              val changes = Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
-              val proposed = _overlay_record(record, changes)
-              _transition_validation_hook.beforeUpdateById[t](
-                op.id,
-                op.patch,
-                op.tc,
-                record,
-                proposed
-              )
-            case None =>
-              _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc)
-          }
+          _ <- _authorize_and_validate_patch(
+            op.id,
+            op.patch,
+            op.tc,
+            op.authorization
+          )
           snapshot <- _entity_store_space.updateByIdObserved(op)
           _ = _entity_space_evict(op.id)
           _ <- _entity_space_put_persisted_record(op.id, Some(snapshot.record))
@@ -579,30 +559,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _entity_calltree_attributes(id, "entity-store", realio = true)
       ) {
         for {
-          current <- _load_record(op.id)
-          _ <- _authorize(
-            op.authorization,
-            Some(() => Consequence.success(current))
+          _ <- _authorize_and_validate_patch(
+            op.id,
+            op.patch,
+            op.tc,
+            op.authorization
           )
-          _ <- current match {
-            case Some(record) =>
-              val changes =
-                Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
-              val proposed = _overlay_record(record, changes)
-              _transition_validation_hook.beforeUpdateById[t](
-                op.id,
-                op.patch,
-                op.tc,
-                record,
-                proposed
-              )
-            case None =>
-              _transition_validation_hook.beforeUpdateById[t](
-                op.id,
-                op.patch,
-                op.tc
-              )
-          }
           carrier <- _entity_store_space.updateByIdDetached(op)
           _ = _entity_space_evict(op.id)
           _ <- _entity_space_put_domain_record(op.id, Some(carrier.entity))
@@ -1394,6 +1356,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           case Some("committed-entity-projection-failure") =>
             _entity_space_evict(id)
             _view_space_invalidate_all()
+          case Some("entity-mutation-target-not-found") =>
+            _entity_space_evict(id)
           case _ =>
             ()
         }
@@ -1419,6 +1383,53 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           Consequence.Failure(conclusion)
     }
 
+  private def _authorize_and_validate_patch[P](
+    id: EntityId,
+    patch: P,
+    persistent: EntityPersistentUpdate[P],
+    authorization: Option[UnitOfWorkAuthorization]
+  ): Consequence[EntityStore.ManagedMutationBase] =
+    if (_patch_validation_requires_current(authorization))
+      for {
+        current <- _load_record(id)
+        _ <- _authorize(
+          authorization,
+          Some(() => Consequence.success(current))
+        )
+        _ <- current match {
+          case Some(record) =>
+            val changes =
+              Update.toChangesRecord(persistent.toStoreRecord(patch))
+            val proposed = _overlay_record(record, changes)
+            _transition_validation_hook.beforeUpdateById(
+              id,
+              patch,
+              persistent,
+              record,
+              proposed
+            )
+          case None =>
+            _transition_validation_hook.beforeUpdateById(
+              id,
+              patch,
+              persistent
+            )
+        }
+      } yield EntityStore.ManagedMutationBase.Resolved(current)
+    else
+      for {
+        _ <- _authorize(authorization)
+        _ <- _transition_validation_hook.beforeUpdateById(id, patch, persistent)
+      } yield EntityStore.ManagedMutationBase.Unresolved
+
+  private def _patch_validation_requires_current(
+    authorization: Option[UnitOfWorkAuthorization]
+  ): Boolean =
+    authorization.exists(
+      _.accessMode == EntityAccessMode.UserPermission
+    ) ||
+      (_transition_validation_hook ne TransitionValidationHook.noop)
+
   private def _overlay_record(base: Record, changes: Record): Record =
     changes.fields.foldLeft(base) { (z, field) =>
       z.upsertSingle(field.key, field.value.single)
@@ -1440,16 +1451,16 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _component_option: Option[Component] = {
     @annotation.tailrec
-    def go(scope: org.goldenport.cncf.context.ScopeContext): Option[Component] =
+    def _go_(scope: org.goldenport.cncf.context.ScopeContext): Option[Component] =
       scope match {
         case m: Component.Context => Some(m.component)
         case _ =>
           scope.parent match {
-            case Some(p) => go(p)
+            case Some(p) => _go_(p)
             case None => None
           }
       }
-    go(uow.executionContext.cncfCore.scope)
+    _go_(uow.executionContext.cncfCore.scope)
   }
 
   private def _component_required: Consequence[Component] =

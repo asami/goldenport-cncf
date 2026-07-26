@@ -143,6 +143,34 @@ readback merely to maintain managed attributes. The provider MUST apply the
 application change, update audit/context metadata, and advance revision in the
 same direct mutation.
 
+The framework MUST select the mutation path according to the requested
+semantics and provider capabilities:
+
+- ordinary `None + AlwaysWrite` MUST use direct provider mutation when the
+  provider declares that capability;
+- explicit `Optimistic` mutation MUST use provider-native compare-and-set when
+  the provider declares that capability;
+- `Managed` optimistic mutation without a transport observation MUST obtain
+  the authoritative current revision once and supply it to the provider-native
+  compare-and-set contract;
+- when UnitOfWork authorization or transition validation has already resolved
+  the current target, that resolved present-or-missing base MUST remain the
+  mutation attempt base and MUST NOT be replaced by a later EntityStore load;
+- `WriteIfChanged`, content-bearing mutation, atomic side effects, and an
+  unsupported native capability MUST retain the guarded provider contract;
+- a caller that requires an authoritative Entity result MUST request provider
+  readback explicitly; and
+- an acknowledgment-only success MUST NOT cause a mandatory datastore
+  readback.
+
+Native success MUST reconcile resident Entity state from provider-authoritative
+readback where that result is requested. A stale compare-and-set MUST evict
+resident state before returning its structured stale-revision failure.
+Provider rejection because the mutation target is missing or logically deleted
+MUST likewise evict resident Entity state.
+Unsuccessful mutation MUST NOT publish View invalidation as if a mutation had
+committed.
+
 Managed attributes therefore MUST NOT make the OCC execution path an implicit
 default.
 
@@ -164,12 +192,28 @@ Current behavioral evidence includes:
 - `src/test/scala/org/goldenport/cncf/entity/SimpleEntityStorageShapePolicySpec.scala`;
 - `src/test/scala/org/goldenport/cncf/entity/EntityManagedMutationSpec.scala`;
 - `src/test/scala/org/goldenport/cncf/entity/EntityRevisionRepresentationSpec.scala`;
-- `src/test/scala/org/goldenport/cncf/datastore/EntityRevisionProviderParitySpec.scala`; and
+- `src/test/scala/org/goldenport/cncf/datastore/EntityRevisionProviderParitySpec.scala`;
+- `src/test/scala/org/goldenport/cncf/datastore/EntityMutationProviderContractSpec.scala`;
+- `src/test/scala/org/goldenport/cncf/datastore/EntityNativeMutationProviderSpec.scala`;
+- `src/test/scala/org/goldenport/cncf/datastore/SqliteEntityMutationStatementTraceSpec.scala`;
+- `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkPlainMutationProviderParitySpec.scala`;
+- `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkVersionedMutationSpec.scala`; and
 - `src/test/scala/org/goldenport/cncf/projection/EntityRevisionProjectionSpec.scala`.
 
-Phase 50 PC-02 MUST add executable provider-path and statement-trace evidence
-for the ordinary direct-update and optimistic compare-and-set requirements
-before claiming those performance-visible clauses implemented.
+Phase 50 PC-02 executable evidence fixes:
+
+- in-memory, SQLite, and opt-in live MySQL direct/CAS revision, stale-writer,
+  committed-state, and resident-cache parity;
+- one successful target `UPDATE` and no target `SELECT` for direct
+  acknowledgment;
+- one revision-qualified target `UPDATE` and no target `SELECT` for successful
+  compare-and-set acknowledgment;
+- diagnostic target read only after a zero-row native mutation; and
+- the retained guarded SQLite `SELECT` / `UPDATE` / `SELECT` sequence.
+
+Representative elapsed-time samples are informational evidence only. The
+specification does not define a wall-clock threshold or promise that one local
+sample is faster than another.
 
 ## References
 
