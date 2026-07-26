@@ -31,6 +31,17 @@ CAR projects.
 - Pin and validate the Cozy generator selected by CNCF `build.sbt`.
 - Pass and validate the exact CNCF generation target and runtime descriptor.
 - Align Cozy `project.yaml` build, compile, and runtime compatibility metadata.
+- Replace the current-release logical-name-only collection validation with an
+  exact generated/runtime Collection Identity contract.
+- Add a CNCF-owned persisted-value projection contract that restores physical
+  datastore values to declared Entity attribute types before ordinary
+  `fromRecord` decoding.
+- Make Cozy/SimpleModeler-generated `EntityPersistent.fromStoreRecord` code use
+  that CNCF contract, including nominal String values whose JSON object text is
+  returned by a datastore as a `Record`.
+- Remove the current-release generator compatibility fallback after the CNCF
+  persisted-value projection is available and downstream generated code has
+  migrated.
 - Record deterministic generation provenance and content digests.
 - Reject missing, contradictory, unsupported, and mutable release inputs early.
 - Validate development SNAPSHOT and immutable release workflows.
@@ -45,6 +56,8 @@ CAR projects.
 - Redesigning CML semantics or unrelated generator output.
 - Introducing a second version source beside existing build and project
   metadata.
+- Treating arbitrary business/API `Record` values as persisted scalar strings
+  in the ordinary `ValueReader` or `fromRecord` path.
 
 ## Work Stack
 
@@ -57,6 +70,8 @@ CAR projects.
 | CV-05 | Generation provenance | Generated output records stable version, source, backend, and digest evidence. | planned |
 | CV-06 | CAR metadata consistency | Cozy scaffold, build, packaging, review, and publication agree on build-time and runtime version meanings. | planned |
 | CV-07 | Development and release acceptance | SNAPSHOT workflows remain explicit while releases use immutable compatible coordinates and deterministic diagnostics. | planned |
+| CI-01 | Exact Collection Identity contract | Generated, custom, and raw persistence adapters preserve or receive the exact owning collection without name-only inference, runtime type exceptions, or a second decode. | planned |
+| SP-01 | Persisted scalar store projection | CNCF owns store-value restoration, generated `fromStoreRecord` uses it, and the current-release nominal String compatibility fallback is removed. | planned |
 | CV-08 | Downstream validation and closure | Representative generated projects pass, mismatches fail early, and canonical documentation records the verified contract. | planned |
 
 ## Acceptance
@@ -74,6 +89,17 @@ CAR projects.
   usage is explicit and diagnosable.
 - CAR runtime activation validates CNCF runtime/ABI compatibility and does not
   require Cozy to be installed.
+- Multiple collections with the same logical name are either resolved by exact
+  identity or rejected deterministically; logical-name equality is not the
+  final ownership contract.
+- Persisted nominal String values round-trip when a datastore exposes JSON
+  object text as a `Record`, without changing ordinary `ValueReader` semantics
+  or introducing application-local Base64/prefix encodings.
+- Generated `EntityPersistent.fromStoreRecord` uses the CNCF persisted-value
+  projection API, while `fromRecord` remains the ordinary business/API Record
+  decoder.
+- The temporary SimpleModeler nominal String `Record` fallback used to close
+  the preceding release is removed after representative generated CARs migrate.
 - Full CNCF, Cozy, and representative downstream validation passes.
 
 ## Planning References
@@ -81,5 +107,6 @@ CAR projects.
 - [CNCF build](../../build.sbt)
 - [Phase 50 - SimpleEntity Revision and OCC Simplification](phase-50.md)
 - [Phase 53 - Information CML Runtime Canonicalization](phase-53.md)
+- [ArtScene Collection Identity Contract Handoff](../journal/2026/07/2026-07-26-artscene-collection-identity-contract-handoff.md)
 - [Cozy CAR project metadata ownership](../../../cozy/docs/design/car-project-metadata-ownership.md)
 - [Cozy CAR project scaffold](../../../cozy/docs/spec/car-project-scaffold.md)

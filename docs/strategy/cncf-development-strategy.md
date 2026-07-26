@@ -3135,6 +3135,12 @@ Planned for Phase 51 after Phase 50 closure.
 - Goal:
   - make the CNCF target and Cozy generator used for CML generation explicit,
     reproducible, and verified;
+  - replace Phase 50's current-release logical-name-only collection validation
+    with an exact Collection Identity contract shared by generated code and the
+    CNCF Entity runtime;
+  - establish a CNCF-owned persisted-value projection used by generated
+    `EntityPersistent.fromStoreRecord`, including nominal String values whose
+    JSON object text is exposed by a datastore as a `Record`;
   - align CNCF build and Cozy project metadata without conflating build-time
     generation compatibility with runtime compatibility;
   - reject unsupported or contradictory build inputs at their owning boundary;
@@ -3143,6 +3149,17 @@ Planned for Phase 51 after Phase 50 closure.
 - Selected direction:
   - each generation resolves one exact CNCF target and one exact Cozy
     generator coordinate;
+  - generated Entity, custom codec, and raw `Record` persistence paths must
+    receive or preserve exact collection ownership without runtime type
+    exceptions, second-decode repair, or same-name inference;
+  - ordinary `fromRecord`/`ValueReader` decoding remains separate from
+    persistence-specific `fromStoreRecord` projection;
+  - Cozy/SimpleModeler generation calls the CNCF persisted-value projection
+    rather than embedding datastore normalization policy in each generated
+    value reader;
+  - the preceding release may use a narrowly scoped nominal String
+    compatibility fallback, but Phase 51 removes it after the CNCF API and
+    generated migration are verified;
   - supported generation compatibility is an explicit tested pair or bounded
     set and is never inferred from numeric version equality;
   - CNCF build passes its target version and matching runtime descriptor
@@ -3164,6 +3181,10 @@ Planned for Phase 51 after Phase 50 closure.
   - define compatibility authority, precedence, lifecycle, and diagnostics;
   - integrate exact Cozy and CNCF target selection into CNCF CML generation;
   - complete target/descriptor and supported-pair validation in Cozy;
+  - implement and specify persisted scalar store projection in CNCF and migrate
+    generated `EntityPersistent.fromStoreRecord` code to it;
+  - validate ArtScene notification metadata JSON round-trip and post-commit
+    EntitySpace projection without application-local encoding workarounds;
   - emit deterministic version and digest provenance;
   - reconcile CAR build, compile, and runtime compatibility metadata;
   - validate SNAPSHOT and release workflows; and
@@ -3176,7 +3197,9 @@ Planned for Phase 51 after Phase 50 closure.
   - generator compatibility does not replace CNCF runtime/ABI compatibility;
   - Information canonicalization remains Phase 53 work;
   - CML semantic redesign and unrelated generator output remain outside Phase
-    51; and
+    51;
+  - arbitrary business/API Records are not reinterpreted as persisted scalar
+    strings by the ordinary `ValueReader` path; and
   - existing build and project metadata is extended or reconciled rather than
     duplicated by a competing version source.
 - Acceptance:
@@ -3190,6 +3213,9 @@ Planned for Phase 51 after Phase 50 closure.
     version contracts consistently;
   - a compatible CAR runs without Cozy installed and an incompatible CNCF
     runtime fails independently of Cozy provenance; and
+  - persisted nominal String JSON-object values round-trip through the
+    CNCF-owned store projection, generated code uses that API, and the temporary
+    generator fallback is removed; and
   - final design/specification and Executable Specifications identify one
     authoritative generation-version contract.
 - Planning references:

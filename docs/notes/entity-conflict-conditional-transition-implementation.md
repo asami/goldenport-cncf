@@ -663,12 +663,12 @@ Add two behavior-oriented executable specifications:
 Focused EC-04 validation is:
 
 ```text
-sbt -J-Xmx4G --batch "testOnly
+sbt --batch "testOnly
   org.goldenport.cncf.datastore.DataStoreConditionalTransitionSpec
   org.goldenport.cncf.datastore.InMemoryConditionalTransitionSpec
   org.goldenport.cncf.datastore.EntityVersionedMutationDataStoreSpec
   org.goldenport.cncf.entity.ContentBodyVersionedMutationSpec"
-sbt -J-Xmx4G --batch Test/compile
+sbt --batch Test/compile
 git diff --check
 ```
 

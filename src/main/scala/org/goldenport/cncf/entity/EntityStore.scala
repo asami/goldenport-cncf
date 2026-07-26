@@ -734,7 +734,11 @@ class StandardEntityStore(
         EntityRevisionRepresentation.Embedded
       )
       record <- _load_record(id)
-      snapshot <- record.traverse(binding.snapshot(_)(tc.fromStoreRecord))
+      snapshot <- record.traverse(
+        binding.snapshot(_)(
+          EntityPersistent._decode_store_record(tc, id.collection, _)
+        )
+      )
     } yield snapshot
 
   override def loadDetached[T](
@@ -750,7 +754,9 @@ class StandardEntityStore(
       )
       record <- _load_record(id)
       carrier <- record.traverse(
-        binding.detachedCarrier(_)(tc.fromStoreRecord)
+        binding.detachedCarrier(_)(
+          EntityPersistent._decode_store_record(tc, id.collection, _)
+        )
       )
     } yield carrier
 
@@ -2880,14 +2886,24 @@ class StandardEntityStore(
             rootbinding,
             hydratedroot
           )(
-            request.rootPersistent.fromStoreRecord
+            EntityPersistent._decode_store_record(
+              request.rootPersistent,
+              request.rootId.collection,
+              _
+            )
           )
           hydratedsuccessor <-
             ContentBodyStoragePolicy.hydrate(successorid, successorrecord)
           successorvalue <- _conditional_transition_value(
             successorbinding,
             hydratedsuccessor
-          )(request.successor.persisted.fromStoreRecord)
+          )(
+            EntityPersistent._decode_store_record(
+              request.successor.persisted,
+              successorid.collection,
+              _
+            )
+          )
         } yield EntityConditionalTransitionExecutionResult.Transitioned(
           EntityConditionalTransitionResult.Transitioned(
             rootvalue,
@@ -2904,7 +2920,11 @@ class StandardEntityStore(
             rootbinding,
             hydratedroot
           )(
-            request.rootPersistent.fromStoreRecord
+            EntityPersistent._decode_store_record(
+              request.rootPersistent,
+              request.rootId.collection,
+              _
+            )
           )
         } yield EntityConditionalTransitionExecutionResult.NotMatched(
           EntityConditionalTransitionResult.NotMatched(rootvalue),
@@ -3045,9 +3065,11 @@ class StandardEntityStore(
   ): Consequence[T] =
     _revision_binding_option(collection) match {
       case Some(binding) =>
-        binding.decodeEntity(record)(persistent.fromStoreRecord)
+        binding.decodeEntity(record)(
+          EntityPersistent._decode_store_record(persistent, collection, _)
+        )
       case None =>
-        persistent.fromStoreRecord(record)
+        EntityPersistent._decode_store_record(persistent, collection, record)
     }
 
   private def _concurrency_policy(
@@ -3183,12 +3205,28 @@ class StandardEntityStore(
       case EntityVersionedMutationResult.Applied(record) =>
         ContentBodyStoragePolicy
           .hydrate(id, record)
-          .flatMap(revisionbinding.snapshot(_)(persistent.fromStoreRecord))
+          .flatMap(
+            revisionbinding.snapshot(_)(
+              EntityPersistent._decode_store_record(
+                persistent,
+                id.collection,
+                _
+              )
+            )
+          )
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
         ContentBodyStoragePolicy
           .hydrate(id, record)
-          .flatMap(revisionbinding.snapshot(_)(persistent.fromStoreRecord))
+          .flatMap(
+            revisionbinding.snapshot(_)(
+              EntityPersistent._decode_store_record(
+                persistent,
+                id.collection,
+                _
+              )
+            )
+          )
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }
@@ -3206,14 +3244,26 @@ class StandardEntityStore(
         ContentBodyStoragePolicy
           .hydrate(id, record)
           .flatMap(
-            revisionbinding.detachedCarrier(_)(persistent.fromStoreRecord)
+            revisionbinding.detachedCarrier(_)(
+              EntityPersistent._decode_store_record(
+                persistent,
+                id.collection,
+                _
+              )
+            )
           )
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
         ContentBodyStoragePolicy
           .hydrate(id, record)
           .flatMap(
-            revisionbinding.detachedCarrier(_)(persistent.fromStoreRecord)
+            revisionbinding.detachedCarrier(_)(
+              EntityPersistent._decode_store_record(
+                persistent,
+                id.collection,
+                _
+              )
+            )
           )
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)

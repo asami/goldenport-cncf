@@ -222,6 +222,16 @@ nested values.
 ## Boundary Rules
 
 - `EntityPersistent.toStoreRecord` / `fromStoreRecord` own the DB storage shape.
+- The current persistence boundary decodes a stored value exactly once and
+  validates its logical collection name against the requested collection.
+  Different logical collection names are rejected.
+- The current release assumes that one runtime does not install multiple
+  collections with the same logical name. Complete collection identity
+  restoration and same-name ambiguity handling are deferred to Phase 51.
+- CNCF does not rewrite a physical Record or invoke a custom codec a second
+  time to compensate for scalar `EntityId` namespace loss.
+- Aggregate create canonicalizes either a typed `EntityId` or its scalar form
+  to the selected runtime collection before persistence.
 - `toViewRecord` and admin/manual projections must not drive DB shape.
 - Logic that needs permission must use typed security access. It must not depend
   on expanded permission record paths.

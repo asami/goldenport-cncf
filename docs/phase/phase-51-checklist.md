@@ -193,12 +193,78 @@ Stage Status:
 Evidence:
 - Pending.
 
+## CI-01: Exact Collection Identity Contract
+
+Stage Status:
+- Current status: PLANNED
+- Owner: CNCF Entity runtime, SimpleModeler generation, Cozy integration, and
+  representative CAR maintainers
+- Entry rule: CV-07 is DONE.
+- Completion rule: Exact collection ownership survives generation, storage,
+  decoding, and runtime projection without the current-release same-name
+  assumption.
+
+- [ ] Specify which boundary owns the complete `EntityCollectionId`.
+- [ ] Specify a storage/decoder context contract that does not rewrite a custom
+  codec's physical input or invoke it a second time.
+- [ ] Specify generated Entity, custom typed codec, and raw `Record` adapter
+  behavior without runtime `isInstanceOf` policy inference.
+- [ ] Define deterministic behavior when multiple collections share one
+  logical name.
+- [ ] Define compatibility and migration behavior for older generated
+  artifacts and persisted scalar `EntityId` values.
+- [ ] Add failing-first executable coverage for exact identity preservation,
+  same-name ambiguity, cross-collection rejection, and custom scalar codecs.
+- [ ] Validate representative generated CARs, including ArtScene, without
+  application-local identity repair.
+- [ ] Remove the Phase 50 current-release logical-name-only closure assumption.
+- [ ] Promote the verified contract to design and specification documents.
+
+Evidence:
+- Pending.
+
+## SP-01: Persisted Scalar Store Projection
+
+Stage Status:
+- Current status: PLANNED
+- Owner: CNCF Entity runtime, SimpleModeler generation, Cozy integration, and
+  representative CAR maintainers
+- Entry rule: CI-01 is DONE.
+- Completion rule: Physical datastore values are restored through one
+  CNCF-owned projection before generated Entity decoding, and no ordinary
+  `ValueReader` or application-local encoding workaround owns that policy.
+
+- [ ] Specify the boundary between ordinary `fromRecord` decoding and
+  persistence-specific `fromStoreRecord` decoding.
+- [ ] Add a CNCF persisted-value projection API driven by the declared Entity
+  attribute/storage metadata.
+- [ ] Preserve scalar String identity when JSON object text is returned by a
+  datastore as a `Record`.
+- [ ] Keep `{ value: ... }` wrapper decoding in the ordinary generated
+  `ValueReader` contract without treating every arbitrary `Record` as a
+  persisted scalar.
+- [ ] Make Cozy/SimpleModeler-generated `EntityPersistent.fromStoreRecord`
+  implementations call the CNCF projection API.
+- [ ] Add failing-first executable coverage for nominal String JSON-object
+  round-trip, wrapper decoding, non-JSON scalar values, optional values, and
+  malformed persisted representations.
+- [ ] Validate the ArtScene `NotificationIntentMetadataJson` update and
+  post-commit EntitySpace projection path without Base64, prefix, or
+  application-local repair.
+- [ ] Remove the current-release SimpleModeler nominal String `Record`
+  compatibility fallback after generated downstream code has migrated.
+- [ ] Promote the verified persisted-value projection contract to CNCF design
+  and specification documents.
+
+Evidence:
+- Pending.
+
 ## CV-08: Downstream Validation and Closure
 
 Stage Status:
 - Current status: PLANNED
 - Owner: CNCF, Cozy, representative CAR, and downstream maintainers
-- Entry rule: CV-07 is DONE.
+- Entry rule: SP-01 is DONE.
 - Completion rule: Compatible builds and runtime combinations pass,
   incompatible inputs fail at their owning boundary, and canonical
   documentation matches verified behavior.

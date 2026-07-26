@@ -7,6 +7,7 @@ import org.goldenport.record.Record
 import org.goldenport.record.RecordEncoder
 import org.goldenport.record.RecordCodex
 import org.goldenport.record.RecordPresentable
+import org.goldenport.observation.Descriptor
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.model.value.SecurityAttributes
@@ -16,7 +17,7 @@ import org.simplemodeling.model.value.SecurityAttributes
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
  *  version Apr. 26, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
@@ -64,6 +65,33 @@ trait EntityPersistent[E] extends RecordCodex[E]
 }
 
 object EntityPersistent {
+  private[cncf] def _decode_store_record[E](
+    persistent: EntityPersistent[E],
+    collectionid: EntityCollectionId,
+    record: Record
+  ): Consequence[E] =
+    persistent.fromStoreRecord(record).flatMap { entity =>
+      val actual = persistent.id(entity).collection
+      if (actual.name == collectionid.name)
+        Consequence.success(entity)
+      else
+        _collection_mismatch(actual, collectionid)
+    }
+
+  private[cncf] def _collection_mismatch[E](
+    actual: EntityCollectionId,
+    expected: EntityCollectionId
+  ): Consequence[E] =
+    Consequence.stateInvalid(
+      "Entity codec collection does not match the requested collection",
+      Vector(
+        Descriptor.Facet.Policy("entity.persistence.collection"),
+        Descriptor.Facet.Reason("entity-codec-collection-mismatch"),
+        Descriptor.Facet.Expected(expected.print),
+        Descriptor.Facet.Actual(actual.print)
+      )
+    )
+
   def withoutSecurityAttributes(record: Record): Record =
     SimpleEntityStorageShapePolicy.withoutSecurityFields(record)
 

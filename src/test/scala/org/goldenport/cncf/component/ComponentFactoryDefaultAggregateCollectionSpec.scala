@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 package org.goldenport.cncf.component
@@ -138,6 +138,52 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
       stored.getString("name") shouldBe Some("Created through aggregate")
       stored.getAny("lines") shouldBe None
       stored.getAny("customer") shouldBe None
+    }
+
+    "bind a typed aggregate root id to the runtime collection before persistence" in {
+      Given("a generated aggregate whose typed id still uses its model placeholder collection")
+      val component = new ComponentFactory().bootstrap(_component_with_default_aggregate())
+      given ExecutionContext = _execution_context(Vector.empty)
+      val placeholdercollection =
+        org.simplemodeling.model.datatype.EntityCollectionId("major", "minor", "order")
+      val placeholderid = EntityId(
+        "m",
+        "placeholder",
+        placeholdercollection,
+        timestamp = Some(java.time.Instant.parse("2026-07-26T00:00:00Z")),
+        entropy = Some("2cigmZWq3CNMnw8zLaNpg")
+      )
+      val aggregate = OrderAggregate(
+        id = placeholderid,
+        name = "Canonical runtime collection",
+        status = "Active",
+        customer = None,
+        lines = Vector.empty
+      )
+      val action = _AggregatePersistenceAction(
+        Request.ofService("order", "createOrder"),
+        aggregate
+      )
+      val call = action.createCall(ActionCall.Core(action, summon[ExecutionContext], Some(component), None))
+
+      When("the aggregate command persists the generated aggregate")
+      val result = call.execute()
+
+      Then("the storage boundary selects the runtime collection without changing business identity")
+      withClue(result) {
+        result.isSuccess shouldBe true
+      }
+      val canonicalid =
+        EntityId(
+          placeholderid.major,
+          placeholderid.minor,
+          OrderEntity.collectionId,
+          placeholderid.timestamp,
+          placeholderid.entropy
+        )
+      val stored = _load_store_record(OrderEntity.collectionId, canonicalid)
+      stored.getAs[EntityId]("id").map(_.collection.name) shouldBe Some(OrderEntity.collectionId.name)
+      stored.getString("name") shouldBe Some("Canonical runtime collection")
     }
   }
 

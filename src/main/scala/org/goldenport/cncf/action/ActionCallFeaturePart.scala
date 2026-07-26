@@ -1438,8 +1438,12 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
     record: Record
   ): Record =
-    record.getString("id")
-      .flatMap(value => EntityId.parse(value).toOption)
+    record.getAny("id")
+      .flatMap {
+        case id: EntityId => Some(id)
+        case value: String => EntityId.parse(value).toOption
+        case _ => None
+      }
       .map { id =>
         val canonicalid = _canonical_aggregate_entity_id(collection, id)
         record.upsertSingle("id", canonicalid)

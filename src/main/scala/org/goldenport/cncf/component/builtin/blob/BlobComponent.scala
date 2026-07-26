@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 26, 2026
  *  version Jun.  5, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -1241,7 +1241,13 @@ object BlobComponent {
       result.record match {
         case Some(record) =>
           recover_with(
-            exec_from(summon[EntityPersistent[Blob]].fromStoreRecord(record))
+            exec_from(
+              EntityPersistent._decode_store_record(
+                summon[EntityPersistent[Blob]],
+                result.id.collection,
+                record
+              )
+            )
           ) { conclusion =>
             _cleanup_created_blob_after_decode_failure(result.id, managedPayload, conclusion)
           }
@@ -1931,14 +1937,14 @@ object BlobComponent {
         "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
       ))
 
-  private def _blob_store_status_record(status: BlobStoreStatus, maxByteSize: Long): Record =
+  private def _blob_store_status_record(status: BlobStoreStatus, maxbytesize: Long): Record =
     Record.dataAuto(
       "backend" -> status.backend,
       "available" -> status.available,
       "container" -> status.container,
       "location" -> status.location,
       "message" -> status.message,
-      "maxByteSize" -> maxByteSize,
+      "maxByteSize" -> maxbytesize,
       "mimeKindPolicy" -> _blob_mime_kind_policy_record,
       "contentRouteCachePolicy" -> "private, max-age=60",
       "blobMetrics" -> _blob_metrics_record,

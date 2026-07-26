@@ -1214,12 +1214,26 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         if (persistedrecord)
           collection.descriptor.revisionBinding match {
             case Some(binding) =>
-              binding.decodeEntity(r)(persistent.fromStoreRecord)
+              binding.decodeEntity(r)(
+                EntityPersistent._decode_store_record(
+                  persistent,
+                  collection.descriptor.collectionId,
+                  _
+                )
+              )
             case None =>
-              persistent.fromStoreRecord(r)
+              EntityPersistent._decode_store_record(
+                persistent,
+                collection.descriptor.collectionId,
+                r
+              )
           }
         else
-          persistent.fromStoreRecord(r)
+          EntityPersistent._decode_store_record(
+            persistent,
+            collection.descriptor.collectionId,
+            r
+          )
       decoded
       .map(collection.putScoped(_)(using uow.executionContext))
       .recoverWith {

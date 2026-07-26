@@ -180,6 +180,24 @@ default.
 conversion. View, admin, request, and diagnostic records MUST NOT define the
 storage shape.
 
+An ordinary scalar `EntityId` retains the logical collection name but may not
+retain the complete collection namespace expected by the runtime collection.
+For the current release, the CNCF persistence boundary MUST decode the physical
+Record exactly once and MUST validate that the decoded and requested logical
+collection names are equal. A different logical collection name MUST fail as a
+structured collection-contract error. CNCF MUST NOT rewrite a custom codec's
+physical input and invoke `fromStoreRecord` a second time.
+
+The current release assumes that a runtime does not install multiple Entity
+collections with the same logical name. Exact collection identity restoration,
+same-name ambiguity handling, and compatibility policy for generated and
+custom codecs are Phase 51 work.
+
+Aggregate create MUST canonicalize a typed `EntityId` and a scalar `EntityId`
+to the selected runtime collection before persistence. This prevents generated
+model placeholder collection namespaces from becoming the stored collection
+identity without adding load-time inference or application-specific fallback.
+
 Managed attributes MAY be projected read-only where the surface contract
 requires them. Application mutation inputs MUST omit or reject managed values.
 Authorization MUST use typed security access rather than depending on
@@ -191,6 +209,7 @@ Current behavioral evidence includes:
 
 - `src/test/scala/org/goldenport/cncf/entity/SimpleEntityStorageShapePolicySpec.scala`;
 - `src/test/scala/org/goldenport/cncf/entity/EntityManagedMutationSpec.scala`;
+- `src/test/scala/org/goldenport/cncf/entity/EntityPersistentCollectionIdentitySpec.scala`;
 - `src/test/scala/org/goldenport/cncf/entity/EntityRevisionRepresentationSpec.scala`;
 - `src/test/scala/org/goldenport/cncf/datastore/EntityRevisionProviderParitySpec.scala`;
 - `src/test/scala/org/goldenport/cncf/datastore/EntityMutationProviderContractSpec.scala`;

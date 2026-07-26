@@ -35,11 +35,13 @@ import org.goldenport.cncf.entity.runtime.{
   PartitionStrategy,
   PartitionedMemoryRealm
 }
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.unitofwork.{
   UnitOfWork,
   UnitOfWorkInterpreter,
   UnitOfWorkOp
 }
+import org.goldenport.observation.Descriptor
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -546,9 +548,18 @@ final class EntityDetachedRevisionSpec
       )
 
       Then("the typed load fails before a foreign Entity can cross the storage boundary")
-      result shouldBe a[Consequence.Failure[?]]
-      result.asInstanceOf[Consequence.Failure[?]]
-        .conclusion.display should include("codec produced collection")
+      result match {
+        case Consequence.Failure(conclusion) =>
+          val diagnostic = ConclusionDiagnostics.classify(conclusion)
+          val facets = conclusion.observation.cause.descriptor.facets
+          diagnostic.causeKind shouldBe Some("inconsistency")
+          diagnostic.policy shouldBe Some("entity.persistence.collection")
+          diagnostic.reason shouldBe Some("entity-codec-collection-mismatch")
+          facets should contain(Descriptor.Facet.Expected(id.collection.print))
+          facets should contain(Descriptor.Facet.Actual(foreigncollection.print))
+        case Consequence.Success(_) =>
+          fail("A foreign Entity identity must not cross the storage boundary")
+      }
     }
 
     "accept a typed codec storage-owner alias for the requested Entity type" in {
