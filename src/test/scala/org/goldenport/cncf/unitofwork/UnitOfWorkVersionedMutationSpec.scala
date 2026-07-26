@@ -27,10 +27,11 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
+import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkVersionedMutationSpec
@@ -66,6 +67,43 @@ final class UnitOfWorkVersionedMutationSpec
         Consequence.success(Some(1L))
       fixture.collection.resolve(id) shouldBe
         Consequence.success(VersionedPerson(id, "created"))
+    }
+
+    "reload an authoritative embedded patch result before installing it in the working set" in {
+      Given(
+        "an Embedded Entity collection whose ordinary patch result omits the managed revision"
+      )
+      val fixture            = _fixture()
+      given ExecutionContext = fixture.context
+      val id                 = EntityId("test", "embedded_patch", _collectionid)
+      val interpreter =
+        new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
+      val created = interpreter.interpret(
+        UnitOfWorkOp.EntityStoreCreate(
+          VersionedPersonCreate(id, "before"),
+          _create_persistent
+        )
+      )
+
+      When("the ordinary patch route updates the revision-managed Entity")
+      val updated = created.flatMap(_ =>
+        interpreter.interpret(
+          UnitOfWorkOp.EntityStoreUpdateById(
+            id,
+            VersionedPersonPatch(Update.set("after")),
+            _patch_persistent
+          )
+        )
+      )
+
+      Then(
+        "the domain result stays revision-free while the authoritative resident Entity is decoded from persisted storage"
+      )
+      updated.map(_.getAny("revision")) shouldBe
+        Consequence.success(None)
+      fixture.collection.resolve(id).map(value =>
+        value.name -> value.revision.value
+      ) shouldBe Consequence.success("after" -> 2L)
     }
 
     "return and install the authoritative snapshot only after provider success" in {
@@ -244,6 +282,151 @@ final class UnitOfWorkVersionedMutationSpec
         Consequence.success(Some("committed"))
     }
 
+    "preserve managed-save write and assembled concurrency policies" in {
+      Given("one optimistic Entity and a stale copy admitted before any managed save")
+      val fixture = _fixture()
+      given ExecutionContext = fixture.context
+      val id = EntityId("test", "managed_policy", _collectionid)
+      val initial = VersionedPerson(id, "before")
+      val interpreter =
+        new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
+      val created = interpreter.interpret(
+        UnitOfWorkOp.EntityStoreCreate(
+          VersionedPersonCreate(id, "before"),
+          _create_persistent
+        )
+      )
+      val writeifchanged = EntityMutationExecutionPolicy(
+        writePolicy = EntityWritePolicy.WriteIfChanged
+      )
+
+      When("an equal managed save is deduplicated and the stale copy is later reused")
+      val unchanged = created.flatMap { _ =>
+        interpreter.interpret(
+          UnitOfWorkOp.EntityStoreSaveManaged(
+            initial,
+            _persistent,
+            executionPolicy = writeifchanged
+          )
+        )
+      }
+      val first = unchanged.flatMap(_ =>
+        interpreter.interpret(
+          UnitOfWorkOp.EntityStoreSaveManaged(
+            initial.copy(name = "first"),
+            _persistent
+          )
+        )
+      )
+      val stale = first.flatMap(_ =>
+        interpreter.interpret(
+          UnitOfWorkOp.EntityStoreSaveManaged(
+            initial.copy(name = "stale"),
+            _persistent
+          )
+        )
+      )
+
+      Then("the no-op keeps revision one and assembled Optimistic rejects the stale save")
+      unchanged.map(_.revision.value) shouldBe Consequence.success(1L)
+      first.map(_.revision.value) shouldBe Consequence.success(2L)
+      stale shouldBe a[Consequence.Failure[?]]
+      fixture.entitystorespace
+        .loadSnapshot(id, _persistent)
+        .map(_.map(value => value.entity.name -> value.revision.value)) shouldBe
+        Consequence.success(Some("first" -> 2L))
+    }
+
+    "classify managed-save decoding failure after provider commit" in {
+      Given("a managed save whose authoritative decoder fails after datastore success")
+      val fixture = _fixture()
+      given ExecutionContext = fixture.context
+      val id = EntityId("test", "managed_projection_failure", _collectionid)
+      val initial = VersionedPerson(id, "before")
+      val _ = fixture.datastorespace.inject(
+        DataStore.CollectionId.EntityStore(_collectionid),
+        _persistent.toStoreRecord(initial)
+      )
+      fixture.collection.put(initial)
+      val interpreter =
+        new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
+      val failingpersistent = new EntityPersistent[VersionedPerson] {
+        def id(entity: VersionedPerson): EntityId = entity.id
+        def toRecord(entity: VersionedPerson): Record =
+          _persistent.toRecord(entity)
+        override def toStoreRecord(entity: VersionedPerson): Record =
+          _persistent.toStoreRecord(entity)
+        def fromRecord(record: Record): Consequence[VersionedPerson] =
+          Consequence.operationInvalid("managed projection decoder failed")
+      }
+
+      When("the managed mutation commits before authoritative readback fails")
+      val result = interpreter.interpret(
+        UnitOfWorkOp.EntityStoreSaveManaged(
+          initial.copy(name = "committed"),
+          failingpersistent
+        )
+      )
+
+      Then("the failure is marked as committed and resident state is evicted")
+      result shouldBe a[Consequence.Failure[?]]
+      result match {
+        case Consequence.Failure(conclusion) =>
+          ConclusionDiagnostics.classify(conclusion).reason shouldBe
+            Some("committed-entity-projection-failure")
+        case _ =>
+          fail("expected committed managed projection failure")
+      }
+      fixture.collection.resolve(id) shouldBe a[Consequence.Failure[?]]
+
+      And("the committed datastore value remains authoritative")
+      fixture.entitystorespace
+        .loadSnapshot(id, _persistent)
+        .map(_.map(value => value.entity.name -> value.revision.value)) shouldBe
+        Consequence.success(Some("committed" -> 2L))
+    }
+
+    "preserve explicit optimistic policy through a None-policy collection" in {
+      Given(
+        "a None-policy collection and two UnitOfWork saves carrying the same explicit revision"
+      )
+      val fixture = _fixture(EntityConcurrencyPolicy.None)
+      given ExecutionContext = fixture.context
+      val id = EntityId("test", "explicit_optimistic", _collectionid)
+      val initial = VersionedPerson(id, "before")
+      val _ = fixture.datastorespace.inject(
+        DataStore.CollectionId.EntityStore(_collectionid),
+        _persistent.toStoreRecord(initial)
+      )
+      val interpreter =
+        new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
+      val revision = EntityRevision.INITIAL
+
+      When("the first save commits and the second save reuses its stale explicit revision")
+      val first = interpreter.interpret(
+        UnitOfWorkOp.EntityStoreSave(
+          VersionedPerson(id, "first"),
+          revision,
+          _persistent
+        )
+      )
+      val stale = interpreter.interpret(
+        UnitOfWorkOp.EntityStoreSave(
+          VersionedPerson(id, "stale"),
+          revision,
+          _persistent
+        )
+      )
+
+      Then("the explicit overload remains optimistic at the provider boundary")
+      first shouldBe a[Consequence.Success[?]]
+      stale shouldBe a[Consequence.Failure[?]]
+      fixture.entitystorespace
+        .loadSnapshot(id, _persistent)
+        .map(_.map(_.entity.name)) shouldBe
+        Consequence.success(Some("first"))
+    }
+
     "reject an unversioned framework mutation without System admission" in {
       Given("an explicitly classified framework-bootstrap save")
       val fixture            = _fixture()
@@ -296,7 +479,10 @@ final class UnitOfWorkVersionedMutationSpec
       context: ExecutionContext
   )
 
-  private def _fixture(): Fixture = {
+  private def _fixture(
+    concurrencypolicy: EntityConcurrencyPolicy =
+      EntityConcurrencyPolicy.Optimistic
+  ): Fixture = {
     val datastorespace = DataStoreSpace.default()
     val entitystorespace =
       new EntityStoreSpace().addEntityStore(EntityStore.standard())
@@ -320,7 +506,8 @@ final class UnitOfWorkVersionedMutationSpec
           workingSet = None,
           partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
           maxPartitions = 4,
-          maxEntitiesPerPartition = 16
+          maxEntitiesPerPartition = 16,
+          concurrencyPolicy = concurrencypolicy
         ),
         _persistent,
         revisionBinding = Some(
@@ -398,6 +585,10 @@ final class UnitOfWorkVersionedMutationSpec
     name: String
   )
 
+  private final case class VersionedPersonPatch(
+    name: Update[String]
+  )
+
   private val _create_persistent: EntityPersistentCreate[VersionedPersonCreate] =
     new EntityPersistentCreate[VersionedPersonCreate] {
       def id(entity: VersionedPersonCreate): Option[EntityId] =
@@ -408,6 +599,22 @@ final class UnitOfWorkVersionedMutationSpec
         Record.dataAuto(
           "id" -> entity.id,
           "name" -> entity.name
+        )
+    }
+
+  private val _patch_persistent: EntityPersistentUpdate[VersionedPersonPatch] =
+    new EntityPersistentUpdate[VersionedPersonPatch] {
+      def collection(entity: VersionedPersonPatch): EntityCollectionId = {
+        val _ = entity
+        _collectionid
+      }
+
+      def toRecord(entity: VersionedPersonPatch): Record =
+        Record.dataAuto("name" -> entity.name)
+
+      def fromRecord(record: Record): Consequence[VersionedPersonPatch] =
+        Consequence.argumentInvalid(
+          "VersionedPersonPatch decoding is not used"
         )
     }
 

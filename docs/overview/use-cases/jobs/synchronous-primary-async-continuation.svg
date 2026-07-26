@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Synchronous primary with asynchronous continuation</title>
+  <desc id="desc">JobSyncWithAsyncCont returns the primary result and Job id synchronously, then executes residual work as same-Job continuation Tasks with new transactions and one tracking root.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="greenArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#218A55"/></marker>
+    <marker id="blueArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#2367D1"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 21px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 13px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#218A55"/><path d="M59 60h24v18H59zM83 69h15M91 61l7 8-7 8" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="128" y="61" class="h1">Synchronous Primary + Async Continuation</text><text x="130" y="91" class="sub">One Job tracks the synchronous UX result and all residual continuation Tasks</text>
+  <rect x="1248" y="35" width="154" height="32" rx="16" fill="#DFF7EB"/><circle cx="1269" cy="51" r="6" fill="#218A55"/><text x="1283" y="56" class="badge" fill="#17663F">AVAILABLE</text>
+  <text x="1435" y="50" class="meta">Updated</text><text x="1435" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="179" class="label">ONE JOB · TWO EXECUTION PHASES</text><line x1="380" y1="174" x2="1530" y2="174" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="220" width="1460" height="372" rx="18" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="98" y="260" class="title">Tracking root</text><rect x="238" y="235" width="260" height="42" rx="21" fill="#DDEAFF"/><text x="368" y="261" text-anchor="middle" class="mono">JobId — primary + residual</text>
+
+  <text x="98" y="319" class="label">PRIMARY PHASE — SYNCHRONOUS</text>
+  <rect x="98" y="342" width="190" height="92" rx="12" fill="#EAF8F1"/><text x="193" y="379" text-anchor="middle" class="mono">Command request</text><text x="193" y="405" text-anchor="middle" class="small">caller waits</text>
+  <line x1="304" y1="388" x2="352" y2="388" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="366" y="342" width="230" height="92" rx="12" fill="#DDEAFF"/><text x="481" y="379" text-anchor="middle" class="mono">Primary Task</text><text x="481" y="405" text-anchor="middle" class="small">JoinCaller by default</text>
+  <line x1="612" y1="388" x2="660" y2="388" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="674" y="342" width="246" height="92" rx="12" fill="#EAF8F1"/><text x="797" y="379" text-anchor="middle" class="mono">Primary result + JobId</text><text x="797" y="405" text-anchor="middle" class="small">returned synchronously</text>
+
+  <text x="98" y="487" class="label">RESIDUAL PHASE — ASYNCHRONOUS</text>
+  <rect x="98" y="510" width="190" height="54" rx="10" fill="#EEF4FF"/><text x="193" y="542" text-anchor="middle" class="small">Event reception / policy</text>
+  <line x1="304" y1="537" x2="352" y2="537" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+  <rect x="366" y="510" width="230" height="54" rx="10" fill="#DDEAFF"/><text x="481" y="542" text-anchor="middle" class="mono">enqueueTaskInJob</text>
+  <line x1="612" y1="537" x2="660" y2="537" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+  <rect x="674" y="510" width="246" height="54" rx="10" fill="#EEF4FF"/><text x="797" y="542" text-anchor="middle" class="small">Continuation Task · new TX</text>
+  <line x1="936" y1="537" x2="984" y2="537" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+  <rect x="998" y="510" width="244" height="54" rx="10" fill="#EAF8F1"/><text x="1120" y="542" text-anchor="middle" class="small">Same Job settles when ready</text>
+  <path d="M1120 496v-88h-184" fill="none" stroke="#2367D1" stroke-width="2" stroke-dasharray="6 5"/><text x="1144" y="460" class="muted">primary result remains distinct</text>
+
+  <text x="70" y="640" class="label">INVARIANTS</text><line x1="180" y1="635" x2="1530" y2="635" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="664" width="450" height="116" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="98" y="702" class="title">One tracking identity</text><text x="98" y="735" class="body">Primary and continuation appear in one Task tree</text><text x="98" y="760" class="small">No untraceable child Job boundary</text>
+
+  <g filter="url(#shadow)"><rect x="550" y="664" width="450" height="116" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="578" y="702" class="title">Explicit transaction split</text><text x="578" y="735" class="body">Primary may join caller; continuation owns new TX</text><text x="578" y="760" class="small">Async + same transaction is invalid</text>
+
+  <g filter="url(#shadow)"><rect x="1030" y="664" width="500" height="116" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1058" y="702" class="title">No fire-and-forget</text><text x="1058" y="735" class="body">Residual work always enters the JobEngine scheduler</text><text x="1058" y="760" class="small">Lifecycle, result and failure stay inspectable</text>
+
+  <rect x="70" y="808" width="1460" height="42" rx="10" fill="#DFF7EB"/><text x="800" y="834" text-anchor="middle" class="chip" fill="#17663F">PRIMARY RESPONSE NOW · RESIDUAL WORK LATER · ONE JOB RECORD THROUGHOUT</text>
+  <text x="70" y="883" class="foot">Mechanisms: ../../mechanisms/jobs/job-engine-runtime.svg · ../../mechanisms/jobs/job-control-inspection.svg</text><text x="1530" y="883" text-anchor="end" class="foot">Status: available</text>
+</svg>

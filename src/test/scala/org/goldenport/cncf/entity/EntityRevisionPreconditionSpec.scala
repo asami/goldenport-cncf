@@ -7,7 +7,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityRevisionPreconditionSpec
@@ -129,6 +129,28 @@ final class EntityRevisionPreconditionSpec
       admitted.map(_.observedRevision).toOption shouldBe
         Some(Some(observed))
       missing.toOption shouldBe None
+    }
+
+    "select optimistic concurrency only for an observed adapter attempt" in {
+      Given(
+        "an ordinary None-policy collection and managed plus observed adapter preconditions"
+      )
+
+      When("each adapter resolves the concurrency policy for its mutation attempt")
+      val managed =
+        EntityMutationAdapterDefaults.effectiveConcurrencyPolicy(
+          EntityConcurrencyPolicy.None,
+          RevisionPreconditionPolicy.Managed
+        )
+      val observed =
+        EntityMutationAdapterDefaults.effectiveConcurrencyPolicy(
+          EntityConcurrencyPolicy.None,
+          RevisionPreconditionPolicy.ObservedRequired
+        )
+
+      Then("ordinary managed mutation stays None while strict observed mutation opts into OCC")
+      managed shouldBe EntityConcurrencyPolicy.None
+      observed shouldBe EntityConcurrencyPolicy.Optimistic
     }
 
     "parse the canonical precondition vocabulary" in {

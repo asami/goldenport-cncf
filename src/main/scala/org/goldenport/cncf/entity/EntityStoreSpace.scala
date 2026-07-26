@@ -24,7 +24,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -186,7 +186,8 @@ class EntityStoreSpace {
       for {
         entitystore <- _by_collection(op.id.collection)
         r <- entitystore.load(op.id)
-      } yield r
+        validated <- _validate_loaded_collection(op.id, r, op.tc)
+      } yield validated
     }
   }
 
@@ -203,7 +204,13 @@ class EntityStoreSpace {
       for {
         entitystore <- _by_collection(id.collection)
         snapshot <- entitystore.loadSnapshot(id)
-      } yield snapshot
+        validated <- _validate_loaded_collection(
+          id,
+          snapshot,
+          tc,
+          (value: EntitySnapshot[T]) => value.entity
+        )
+      } yield validated
     }
   }
 
@@ -220,9 +227,43 @@ class EntityStoreSpace {
       for {
         entitystore <- _by_collection(id.collection)
         carrier <- entitystore.loadDetached(id)
-      } yield carrier
+        validated <- _validate_loaded_collection(
+          id,
+          carrier,
+          tc,
+          (value: EntityRevisionCarrier[T]) => value.entity
+        )
+      } yield validated
     }
   }
+
+  private def _validate_loaded_collection[T](
+    requestedid: EntityId,
+    entity: Option[T],
+    persistent: EntityPersistent[T]
+  ): Consequence[Option[T]] =
+    _validate_loaded_collection(requestedid, entity, persistent, identity[T])
+
+  private def _validate_loaded_collection[T, A](
+    requestedid: EntityId,
+    value: Option[A],
+    persistent: EntityPersistent[T],
+    entity: A => T
+  ): Consequence[Option[A]] =
+    value match {
+      case Some(candidate) =>
+        val producedcollection =
+          persistent.id(entity(candidate)).collection
+        if (producedcollection.name != requestedid.collection.name)
+          Consequence.operationInvalid(
+            "entity-persistent-collection",
+            s"Entity codec produced collection '${producedcollection.print}' for requested collection '${requestedid.collection.print}'"
+          )
+        else
+          Consequence.success(value)
+      case _ =>
+        Consequence.success(value)
+    }
 
   def save[T](
       op: EntityStoreSave[T]
@@ -233,6 +274,31 @@ class EntityStoreSpace {
       op.expectedRevision,
       op.executionPolicy
     )
+
+  private[cncf] def saveManaged[T](
+    entity: T,
+    persistent: EntityPersistent[T],
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
+  )(using ctx: ExecutionContext): Consequence[T] = {
+    given EntityPersistent[T] = persistent
+    val id = persistent.id(entity)
+    _with_calltree(
+      "space:entitystore:save-managed",
+      _entitystore_space_attributes("save-managed", id.collection) +
+        ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        _ <- entitystore.saveManaged(entity, executionPolicy)
+        authoritative <- entitystore
+          .load(id)
+          .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
+        saved <- Consequence.successOrEntityNotFound(authoritative)(id)
+          .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
+      } yield saved
+    }
+  }
 
   private[cncf] def saveUnversioned[T](
       op: EntityStoreSaveUnversioned[T]
@@ -404,12 +470,34 @@ class EntityStoreSpace {
 
   def updateById[P](
       op: EntityStoreUpdateById[P]
+  )(using ctx: ExecutionContext): Consequence[Record] = {
+    given EntityPersistentUpdate[P] = op.tc
+    _with_calltree(
+      "space:entitystore:update-by-id",
+      _entitystore_space_attributes(
+        "update-by-id",
+        op.id.collection
+      ) + ("entity_id" -> op.id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(op.id.collection)
+        record <- entitystore.updateByIdManaged(
+          op.id,
+          op.patch,
+          op.executionPolicy
+        )
+      } yield record
+    }
+  }
+
+  def updateByIdObserved[P](
+    op: EntityStoreUpdateByIdObserved[P]
   )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] =
     updateByIdVersioned(
       op.id,
       op.patch,
       op.tc,
-      op.expectedRevision,
+      Some(op.expectedRevision),
       op.executionPolicy
     )
 

@@ -1,8 +1,11 @@
 package org.goldenport.cncf.action
 
 import cats.~>
+import cats.data.State
+import cats.effect.Ref
 import cats.syntax.all.*
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.{
   DataStoreContext,
   EntityStoreContext,
@@ -15,11 +18,23 @@ import org.goldenport.cncf.context.{
 }
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
   EntityPersistent,
   EntityPersistentUpdate,
   EntityRevisionCarrier,
   EntityStore,
   EntityStoreSpace
+}
+import org.goldenport.cncf.entity.runtime.{
+  EntityCollection,
+  EntityDescriptor,
+  EntityLoader,
+  EntityMemoryPolicy,
+  EntityRealm,
+  EntityRealmState,
+  EntityRuntimePlan,
+  EntityStorage,
+  PartitionStrategy
 }
 import org.goldenport.cncf.unitofwork.{
   ExecUowM,
@@ -41,7 +56,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallDetachedRevisionDslSpec
@@ -72,6 +87,25 @@ final class ActionCallDetachedRevisionDslSpec
       )
       capture.expectedRevisions.map(_.map(_.value)) shouldBe
         Vector(None, Some(1L), Some(2L), Some(3L))
+    }
+
+    "preserve the caller codec for managed save" in {
+      Given(
+        "a caller codec and a different runtime collection codec for the same Entity collection"
+      )
+      val capture = new OperationCapture
+      val component = _runtime_component()
+      val call =
+        new ManagedSaveCall(_core(capture, Some(component)))
+
+      When("the caller builds and executes a managed save program")
+      val result = call.execute()
+
+      Then(
+        "the UnitOfWork operation retains the caller codec instead of substituting the runtime codec"
+      )
+      result shouldBe a[Consequence.Success[?]]
+      capture.managedSavePersistent shouldBe Some(_persistent)
     }
   }
 
@@ -152,17 +186,32 @@ final class ActionCallDetachedRevisionDslSpec
       } yield OperationResponse.Void()
   }
 
+  private final class ManagedSaveCall(
+    val core: ActionCall.Core
+  ) extends FunctionalActionCall
+      with ActionCall.Core.Holder {
+    protected def build_Program: ExecUowM[OperationResponse] =
+      entity_save_managed(
+        DetachedEntity(_id, "managed")
+      )(using _persistent).map(_ => OperationResponse.Void())
+  }
+
   private final class OperationCapture {
     private var _operations: Vector[String] =
       Vector.empty
     private var _expected_revisions: Vector[Option[EntityRevision]] =
       Vector.empty
+    private var _managed_save_persistent: Option[EntityPersistent[?]] =
+      None
 
     def operations: Vector[String] =
       _operations
 
     def expectedRevisions: Vector[Option[EntityRevision]] =
       _expected_revisions
+
+    def managedSavePersistent: Option[EntityPersistent[?]] =
+      _managed_save_persistent
 
     def interpreter: UnitOfWorkOp ~> Consequence =
       new (UnitOfWorkOp ~> Consequence) {
@@ -202,6 +251,9 @@ final class ActionCallDetachedRevisionDslSpec
                   _revision(4L)
                 )
               )
+            case value: UnitOfWorkOp.EntityStoreSaveManaged[?] =>
+              _managed_save_persistent = Some(value.tc)
+              Consequence.success(value.entity)
             case other =>
               Consequence.operationInvalid(
                 s"unexpected UnitOfWork operation: ${other.getClass.getName}"
@@ -221,7 +273,8 @@ final class ActionCallDetachedRevisionDslSpec
   }
 
   private def _core(
-    capture: OperationCapture
+    capture: OperationCapture,
+    component: Option[Component] = None
   ): ActionCall.Core = {
     val datastorespace = DataStoreSpace.default()
     val entitystorespace =
@@ -264,7 +317,47 @@ final class ActionCallDetachedRevisionDslSpec
           properties = Nil
         )
     }
-    ActionCall.Core(action, context, None, None)
+    ActionCall.Core(action, context, component, None)
+  }
+
+  private def _runtime_component(): Component = {
+    val component = new Component() {}
+    val runtimepersistent = new EntityPersistent[DetachedEntity] {
+      def id(entity: DetachedEntity): EntityId =
+        throw new IllegalStateException(
+          s"runtime codec must not inspect caller Entity: ${entity.name}"
+        )
+
+      def toRecord(entity: DetachedEntity): Record =
+        _persistent.toRecord(entity)
+
+      def fromRecord(record: Record): Consequence[DetachedEntity] =
+        _persistent.fromRecord(record)
+    }
+    given EntityPersistent[DetachedEntity] = runtimepersistent
+    val realm = new EntityRealm[DetachedEntity](
+      entityName = _collection_id.name,
+      loader = EntityLoader[DetachedEntity](_ => None),
+      state = new IdRef(EntityRealmState(Map.empty))
+    )
+    val collection = new EntityCollection[DetachedEntity](
+      EntityDescriptor(
+        _collection_id,
+        EntityRuntimePlan(
+          entityName = _collection_id.name,
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          workingSet = None,
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 1,
+          maxEntitiesPerPartition = 1,
+          concurrencyPolicy = EntityConcurrencyPolicy.None
+        ),
+        runtimepersistent
+      ),
+      EntityStorage(realm)
+    )
+    component.entitySpace.registerEntity(_collection_id.name, collection)
+    component
   }
 
   private def _revision(
@@ -278,4 +371,63 @@ final class ActionCallDetachedRevisionDslSpec
           s"invalid test Entity revision: $value"
         )
       )
+
+  private final class IdRef[A](
+    initial: A
+  ) extends Ref[cats.Id, A] {
+    private var _value: A = initial
+
+    def get: A = synchronized(_value)
+
+    def set(value: A): Unit = synchronized {
+      _value = value
+    }
+
+    override def getAndSet(value: A): A = synchronized {
+      val previous = _value
+      _value = value
+      previous
+    }
+
+    def access: (A, A => Boolean) = synchronized {
+      val snapshot = _value
+      val setter: A => Boolean = (next: A) =>
+        synchronized {
+          if (_value == snapshot) {
+            _value = next
+            true
+          } else {
+            false
+          }
+        }
+      snapshot -> setter
+    }
+
+    def tryUpdate(f: A => A): Boolean = synchronized {
+      _value = f(_value)
+      true
+    }
+
+    def tryModify[B](f: A => (A, B)): Option[B] = synchronized {
+      val (next, result) = f(_value)
+      _value = next
+      Some(result)
+    }
+
+    def update(f: A => A): Unit = synchronized {
+      _value = f(_value)
+    }
+
+    def modify[B](f: A => (A, B)): B = synchronized {
+      val (next, result) = f(_value)
+      _value = next
+      result
+    }
+
+    def tryModifyState[B](state: State[A, B]): Option[B] =
+      tryModify(value => state.run(value).value)
+
+    def modifyState[B](state: State[A, B]): B =
+      modify(value => state.run(value).value)
+  }
 }

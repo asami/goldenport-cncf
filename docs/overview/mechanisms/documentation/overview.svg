@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Phase 52 documentation management mechanism overview</title>
+  <desc id="desc">Planned documentation management architecture separating Component-specific knowledge from shared framework knowledge, projecting both through versioned manifests and publication metadata, and serving humans and AI through Help, Textus CBD Support, and Textus BoK while preserving directive and Skill authority boundaries.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#0B1F33"/>
+      <stop offset="1" stop-color="#153B5B"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#17324D" flood-opacity=".10"/>
+    </filter>
+    <marker id="blueArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5 0 10z" fill="#2367D1"/>
+    </marker>
+    <marker id="greenArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5 0 10z" fill="#218A55"/>
+    </marker>
+    <style>
+      .bg{fill:#F7F9FC}
+      .h1{font:700 36px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}
+      .sub{font:400 17px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}
+      .badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}
+      .meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}
+      .label{font:700 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}
+      .title{font:700 20px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}
+      .subtitle{font:700 15px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}
+      .body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}
+      .small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}
+      .muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}
+      .mono{font:600 12px "SFMono-Regular",Consolas,monospace;fill:#243B53}
+      .chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}
+      .foot{font:400 11px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+      .line{fill:none;stroke:#2367D1;stroke-width:3;marker-end:url(#blueArrow)}
+      .line-green{fill:none;stroke:#218A55;stroke-width:3;marker-end:url(#greenArrow)}
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="1000"/>
+  <rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="76" cy="69" r="31" fill="#2367D1"/>
+  <path d="M58 49h27l11 11v28H58z" fill="none" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M84 49v12h12M66 70h22M66 79h22" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="126" y="59" class="h1">Phase 52 — Documentation Management</text>
+  <text x="128" y="90" class="sub">Two ownership paths, one attributable knowledge space for humans and AI</text>
+  <rect x="1180" y="35" width="205" height="32" rx="16" fill="#FFF3D6"/>
+  <circle cx="1202" cy="51" r="6" fill="#D99000"/>
+  <text x="1216" y="56" class="badge" fill="#855800">PHASE 51 · PLANNED</text>
+  <text x="1410" y="49" class="meta">Updated</text>
+  <text x="1410" y="70" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="174" class="label">1 · OWNERSHIP AND AUTHORITATIVE SOURCES</text>
+  <line x1="430" y1="169" x2="1530" y2="169" stroke="#D9E2EC"/>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="194" width="710" height="190" rx="16" fill="#FFFFFF" stroke="#AFCBFA" stroke-width="1.5"/>
+  </g>
+  <rect x="70" y="194" width="8" height="190" rx="4" fill="#2367D1"/>
+  <text x="100" y="228" class="title">Component-specific knowledge</text>
+  <text x="100" y="252" class="muted">Owned and versioned by each Component — current ownership remains unchanged</text>
+  <rect x="100" y="273" width="142" height="38" rx="8" fill="#EEF4FF"/>
+  <text x="171" y="296" text-anchor="middle" class="small">User Guide</text>
+  <rect x="252" y="273" width="142" height="38" rx="8" fill="#EEF4FF"/>
+  <text x="323" y="296" text-anchor="middle" class="small">Reference</text>
+  <rect x="404" y="273" width="142" height="38" rx="8" fill="#EEF4FF"/>
+  <text x="475" y="296" text-anchor="middle" class="small">Scaladoc</text>
+  <rect x="556" y="273" width="194" height="38" rx="8" fill="#EEF4FF"/>
+  <text x="653" y="296" text-anchor="middle" class="small">Source · schema · examples</text>
+  <text x="100" y="342" class="body">SmartDox is canonical; admitted Markdown is parsed through SmartDox.</text>
+  <rect x="615" y="326" width="135" height="27" rx="13.5" fill="#EAF0F5"/>
+  <text x="682" y="344" text-anchor="middle" class="chip" fill="#334E68">COMPONENT OWNED</text>
+
+  <g filter="url(#shadow)">
+    <rect x="820" y="194" width="710" height="190" rx="16" fill="#FFFFFF" stroke="#A9DCCF" stroke-width="1.5"/>
+  </g>
+  <rect x="820" y="194" width="8" height="190" rx="4" fill="#218A55"/>
+  <text x="850" y="228" class="title">Shared framework and AI knowledge</text>
+  <text x="850" y="252" class="muted">Owned by CNCF, CML, Cozy, SmartDox, ai-directive, and Skill-owning CARs</text>
+  <rect x="850" y="273" width="208" height="38" rx="8" fill="#EAF8F1"/>
+  <text x="954" y="296" text-anchor="middle" class="small">Framework documentation</text>
+  <rect x="1068" y="273" width="206" height="38" rx="8" fill="#EAF8F1"/>
+  <text x="1171" y="296" text-anchor="middle" class="small">Public directive projection</text>
+  <rect x="1284" y="273" width="216" height="38" rx="8" fill="#EAF8F1"/>
+  <text x="1392" y="296" text-anchor="middle" class="small">Public Skill metadata</text>
+  <text x="850" y="342" class="body">Only explicitly visible, disclosure-admitted material enters publication.</text>
+  <rect x="1340" y="326" width="160" height="27" rx="13.5" fill="#EAF0F5"/>
+  <text x="1420" y="344" text-anchor="middle" class="chip" fill="#334E68">FRAMEWORK / CAR OWNED</text>
+
+  <path d="M425 384v42" class="line"/>
+  <path d="M1175 384v42" class="line-green"/>
+
+  <text x="70" y="430" class="label">2 · VERSIONED PROJECTION AND DISTRIBUTION</text>
+  <line x1="470" y1="425" x2="1530" y2="425" stroke="#D9E2EC"/>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="450" width="710" height="200" rx="16" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/>
+  </g>
+  <text x="100" y="486" class="title">Resolved Component knowledge model</text>
+  <rect x="100" y="506" width="650" height="44" rx="9" fill="#DDEAFF"/>
+  <text x="425" y="526" text-anchor="middle" class="mono">ComponentKnowledgeManifest</text>
+  <text x="425" y="543" text-anchor="middle" class="muted">identity · version · authority · provenance · visibility · digest</text>
+  <rect x="100" y="567" width="306" height="50" rx="9" fill="#FFFFFF" stroke="#AFCBFA"/>
+  <text x="253" y="588" text-anchor="middle" class="subtitle">Execution Component</text>
+  <text x="253" y="606" text-anchor="middle" class="small">embedded knowledge — default</text>
+  <rect x="424" y="567" width="326" height="50" rx="9" fill="#FFFFFF" stroke="#AFCBFA"/>
+  <text x="587" y="588" text-anchor="middle" class="subtitle">Documentation Component</text>
+  <text x="587" y="606" text-anchor="middle" class="small">large/split resources — same logical space</text>
+  <text x="100" y="637" class="small">Exact installed manifest remains authoritative for Component execution decisions.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="820" y="450" width="710" height="200" rx="16" fill="#EAF8F1" stroke="#A9DCCF" stroke-width="1.5"/>
+  </g>
+  <text x="850" y="486" class="title">Framework publication generation</text>
+  <rect x="850" y="506" width="650" height="44" rx="9" fill="#DDF3E8"/>
+  <text x="1175" y="526" text-anchor="middle" class="mono">PublicationKnowledge</text>
+  <text x="1175" y="543" text-anchor="middle" class="muted">stable product/version/document/section identity · digest · canonical URL</text>
+  <rect x="850" y="567" width="196" height="50" rx="9" fill="#FFFFFF" stroke="#A9DCCF"/>
+  <text x="948" y="588" text-anchor="middle" class="subtitle">SimpleModeling.org</text>
+  <text x="948" y="606" text-anchor="middle" class="small">primary public surface</text>
+  <rect x="1060" y="567" width="242" height="50" rx="9" fill="#FFFFFF" stroke="#A9DCCF"/>
+  <text x="1181" y="588" text-anchor="middle" class="subtitle">Framework Doc Component</text>
+  <text x="1181" y="606" text-anchor="middle" class="small">installed / closed network</text>
+  <rect x="1316" y="567" width="184" height="50" rx="9" fill="#FFFFFF" stroke="#A9DCCF"/>
+  <text x="1408" y="588" text-anchor="middle" class="subtitle">Offline Hub SAR</text>
+  <text x="1408" y="606" text-anchor="middle" class="small">composed snapshot</text>
+  <text x="850" y="637" class="small">The public guide and Skill Catalog are information projections, not runtime contracts.</text>
+
+  <path d="M260 650v32h2v16" class="line"/>
+  <path d="M425 650v20h350v28" class="line"/>
+  <path d="M587 650v32h498v16" class="line"/>
+  <path d="M948 650v20H775v28" class="line-green"/>
+  <path d="M1175 650v20h-90v28" class="line-green"/>
+  <path d="M1408 650v32h-323v16" class="line-green"/>
+
+  <text x="70" y="702" class="label">3 · HUMAN AND AI ACCESS ROUTES</text>
+  <line x1="365" y1="697" x2="1530" y2="697" stroke="#D9E2EC"/>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="720" width="430" height="154" rx="16" fill="#FFFFFF" stroke="#D9E2EC" stroke-width="1.5"/>
+  </g>
+  <text x="98" y="754" class="title">Help + direct retrieval</text>
+  <text x="98" y="782" class="body">Component: /help · /man · JSON manifest</text>
+  <text x="98" y="807" class="body">Framework: /help/system · /man/system</text>
+  <text x="98" y="834" class="small">Shows installed vs online state and exact versioned links.</text>
+  <rect x="98" y="846" width="146" height="20" rx="10" fill="#FFF3D6"/>
+  <text x="171" y="860" text-anchor="middle" class="chip" fill="#855800">PLANNED · DOC-05</text>
+
+  <g filter="url(#shadow)">
+    <rect x="535" y="720" width="490" height="154" rx="16" fill="#FFFFFF" stroke="#AFCBFA" stroke-width="1.5"/>
+  </g>
+  <text x="563" y="754" class="title">Textus CBD Support — exact Component route</text>
+  <text x="563" y="782" class="body">Discovery · detail · dependency · usage · comparison</text>
+  <text x="563" y="807" class="body">Evidence-bearing MCP assistance · CAR Review</text>
+  <text x="563" y="834" class="small">Preserves exact Component identity, version, resource, and authority.</text>
+  <rect x="563" y="846" width="146" height="20" rx="10" fill="#FFF3D6"/>
+  <text x="636" y="860" text-anchor="middle" class="chip" fill="#855800">PLANNED · DOC-06</text>
+
+  <g filter="url(#shadow)">
+    <rect x="1060" y="720" width="470" height="154" rx="16" fill="#FFFFFF" stroke="#A9DCCF" stroke-width="1.5"/>
+  </g>
+  <text x="1088" y="754" class="title">Textus BoK — semantic knowledge route</text>
+  <text x="1088" y="782" class="body">Terms · cross-Component RAG · framework guidance</text>
+  <text x="1088" y="807" class="body">Public AI guidance · Skill metadata · exact CBD handoff</text>
+  <text x="1088" y="834" class="small">Read-only, attributable evidence with stale-snapshot detection.</text>
+  <rect x="1088" y="846" width="146" height="20" rx="10" fill="#FFF3D6"/>
+  <text x="1161" y="860" text-anchor="middle" class="chip" fill="#855800">PLANNED · DOC-07</text>
+
+  <rect x="70" y="900" width="1460" height="62" rx="10" fill="#EAF0F5"/>
+  <text x="96" y="925" class="label">AUTHORITY BOUNDARIES</text>
+  <circle cx="282" cy="921" r="5" fill="#2367D1"/>
+  <text x="296" y="926" class="small">Exact Component manifest wins</text>
+  <circle cx="530" cy="921" r="5" fill="#218A55"/>
+  <text x="544" y="926" class="small">Mounted ai-directive remains active</text>
+  <circle cx="831" cy="921" r="5" fill="#D99000"/>
+  <text x="845" y="926" class="small">Public guide cannot override it</text>
+  <circle cx="1098" cy="921" r="5" fill="#D99000"/>
+  <text x="1112" y="926" class="small">Skill Catalog cannot install or execute</text>
+  <text x="96" y="949" class="small">Knowledge metadata grants no Operation authority, MCP readiness, provider configuration, dependency activation, or approval.</text>
+
+  <text x="70" y="987" class="foot">Overview status: planned architecture; implementation evidence will replace planning evidence at Phase 52 closure.</text>
+  <text x="1530" y="987" text-anchor="end" class="foot">Evidence: Phase 52 · Phase 52 Checklist · implementation note · 2026-07-25 journal</text>
+</svg>

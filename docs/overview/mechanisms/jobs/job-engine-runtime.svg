@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">CNCF JobEngine runtime</title>
+  <desc id="desc">Detailed JobEngine runtime path from validated submission through synchronous or queued execution, Task transactions, retry and compensation, and immutable terminal recording.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#2367D1"/></marker>
+    <marker id="amberArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#D99000"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 21px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 13px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#2367D1"/><path d="M58 69h40M78 49v40M65 56l26 26" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="128" y="61" class="h1">JobEngine Runtime</text><text x="130" y="91" class="sub">Admission, scheduling, Task execution, retry, compensation and terminal settlement</text>
+  <rect x="1248" y="35" width="154" height="32" rx="16" fill="#DFF7EB"/><circle cx="1269" cy="51" r="6" fill="#218A55"/><text x="1283" y="56" class="badge" fill="#17663F">AVAILABLE</text>
+  <text x="1435" y="50" class="meta">Updated</text><text x="1435" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="179" class="label">PRIMARY RUNTIME FLOW</text><line x1="270" y1="174" x2="1530" y2="174" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="207" width="230" height="254" rx="16" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="98" y="245" class="title">1 · Validate</text><text x="98" y="275" class="body">Tasks + context + option</text><text x="98" y="307" class="small">scheduled start ≤ 15 min</text><text x="98" y="335" class="small">persistence / priority / mode</text>
+  <rect x="98" y="366" width="174" height="46" rx="9" fill="#F0F5FA"/><text x="185" y="394" text-anchor="middle" class="mono">JobSubmitOption</text><text x="98" y="437" class="muted">Invalid → admission failure</text>
+  <line x1="316" y1="334" x2="350" y2="334" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="364" y="207" width="250" height="254" rx="16" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="392" y="245" class="title">2 · Record</text><text x="392" y="275" class="body">Create JobId + cancel scope</text><text x="392" y="307" class="small">status = Submitted</text><text x="392" y="335" class="small">timeline: job.submitted</text>
+  <rect x="392" y="366" width="194" height="46" rx="9" fill="#DDEAFF"/><text x="489" y="394" text-anchor="middle" class="mono">JobRecord</text><text x="392" y="437" class="muted">Lifecycle Event is emitted</text>
+  <line x1="630" y1="334" x2="664" y2="334" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="678" y="207" width="274" height="254" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="706" y="245" class="title">3 · Start</text>
+  <rect x="706" y="274" width="104" height="50" rx="9" fill="#EAF8F1"/><text x="758" y="297" text-anchor="middle" class="mono">Sync</text><text x="758" y="316" text-anchor="middle" class="small">immediate</text>
+  <rect x="822" y="274" width="102" height="50" rx="9" fill="#EAF8F1"/><text x="873" y="297" text-anchor="middle" class="mono">Async</text><text x="873" y="316" text-anchor="middle" class="small">queue</text>
+  <text x="706" y="360" class="small">priority ascending, FIFO</text><text x="706" y="388" class="small">bounded worker concurrency</text><text x="706" y="416" class="small">delayed start / retry rejoins queue</text>
+  <line x1="968" y1="334" x2="1002" y2="334" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1016" y="207" width="260" height="254" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1044" y="245" class="title">4 · Run Tasks</text><text x="1044" y="275" class="body">Submitted → Running</text><text x="1044" y="307" class="small">JobContext + TaskId</text><text x="1044" y="335" class="small">transaction outcome</text><text x="1044" y="363" class="small">timeline + task tree</text>
+  <rect x="1044" y="390" width="204" height="42" rx="9" fill="#EAF8F1"/><text x="1146" y="416" text-anchor="middle" class="small">ActionTask / Aggregate Task</text>
+  <line x1="1292" y1="334" x2="1326" y2="334" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1340" y="207" width="190" height="254" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1368" y="245" class="title">5 · Settle</text><text x="1368" y="279" class="small">Succeeded</text><text x="1368" y="309" class="small">Failed</text><text x="1368" y="339" class="small">Cancelled</text>
+  <rect x="1368" y="366" width="134" height="46" rx="9" fill="#DFF7EB"/><text x="1435" y="394" text-anchor="middle" class="mono">JobResult</text><text x="1368" y="437" class="muted">Terminal is monotonic</text>
+
+  <text x="70" y="520" class="label">FAILURE, RECOVERY AND CONTINUATION</text><line x1="390" y1="515" x2="1530" y2="515" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="548" width="350" height="224" rx="16" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="98" y="586" class="title">Retry</text><text x="98" y="618" class="body">Immediate or delayed operational retry</text><text x="98" y="650" class="small">attempt count · due time · exhaustion</text><text x="98" y="678" class="small">dead-letter / poison / recovery-required</text>
+  <line x1="330" y1="716" x2="170" y2="716" stroke="#D99000" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#amberArrow)"/><text x="250" y="744" text-anchor="middle" class="chip" fill="#855800">REJOINS SHARED QUEUE</text>
+
+  <g filter="url(#shadow)"><rect x="444" y="548" width="350" height="224" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="472" y="586" class="title">Explicit compensation</text><text x="472" y="618" class="body">Committed Tasks unwind in reverse order</text><text x="472" y="650" class="small">Only named compensation Actions run</text><text x="472" y="678" class="small">No inferred business undo</text>
+  <rect x="472" y="711" width="252" height="30" rx="15" fill="#EAF8F1"/><text x="598" y="731" text-anchor="middle" class="chip" fill="#17663F">TASK TRANSACTION DIAGNOSTICS</text>
+
+  <g filter="url(#shadow)"><rect x="818" y="548" width="350" height="224" rx="16" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="846" y="586" class="title">Recovery required</text><text x="846" y="618" class="body">Missing or failed compensation is visible</text><text x="846" y="650" class="small">preserve original and recovery failure</text><text x="846" y="678" class="small">emit job.recovery-required Event</text>
+  <rect x="846" y="711" width="224" height="30" rx="15" fill="#FFF3D6"/><text x="958" y="731" text-anchor="middle" class="chip" fill="#855800">HUMAN RECOVERY SIGNAL</text>
+
+  <g filter="url(#shadow)"><rect x="1192" y="548" width="338" height="224" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1220" y="586" class="title">Same-Job continuation</text><text x="1220" y="618" class="body">Sync or queued additional Task</text><text x="1220" y="650" class="small">preserves one tracking root</text><text x="1220" y="678" class="small">new Task transaction when async</text>
+  <rect x="1220" y="711" width="224" height="30" rx="15" fill="#DFF7EB"/><text x="1332" y="731" text-anchor="middle" class="chip" fill="#17663F">NO FIRE-AND-FORGET</text>
+
+  <rect x="70" y="808" width="1460" height="42" rx="10" fill="#EAF0F5"/><text x="100" y="834" class="chip" fill="#334E68">SCHEDULER: OPERATIONAL, BOUNDED, JOB-CENTRIC</text><text x="645" y="834" class="chip" fill="#334E68">NOT CRON · NOT BUSINESS CALENDAR · NOT WORKFLOW TIMERS</text><text x="1250" y="834" class="chip" fill="#334E68">AVAILABLE</text>
+  <text x="70" y="883" class="foot">Overview: overview.svg</text><text x="1530" y="883" text-anchor="end" class="foot">Evidence: job-management.md · timer-scheduling-boundary.md · InMemoryJobEngine specs</text>
+</svg>

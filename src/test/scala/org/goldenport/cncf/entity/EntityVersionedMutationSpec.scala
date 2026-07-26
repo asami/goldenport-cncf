@@ -13,7 +13,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityVersionedMutationSpec
@@ -28,6 +28,10 @@ final class EntityVersionedMutationSpec
   private val _e4_metadata =
     afterWord(
       "in spec:entity-conflict-and-conditional-transition, example:E4, rules:R5,R11-R14,R17,R19, phase:49"
+    )
+  private val _optimistic_policy =
+    EntityMutationExecutionPolicy(
+      concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
     )
 
   "EntityStore versioned mutation" should {
@@ -52,7 +56,7 @@ final class EntityVersionedMutationSpec
             fixture.entitystore.saveDetached(
               snapshot.entity.copy(name = "saved"),
               Some(snapshot.revision),
-              EntityMutationExecutionPolicy.default
+              _optimistic_policy
             )
           case None =>
             Consequence.entityNotFound(id.print)
@@ -61,7 +65,7 @@ final class EntityVersionedMutationSpec
           fixture.entitystore.updateDetached(
             snapshot.entity.copy(name = "updated"),
             Some(snapshot.revision),
-            EntityMutationExecutionPolicy.default
+            _optimistic_policy
           )
         }
 
@@ -97,7 +101,7 @@ final class EntityVersionedMutationSpec
               id,
               TestPatch(Update.set("patched")),
               Some(snapshot.revision),
-              EntityMutationExecutionPolicy.default
+              _optimistic_policy
             )
           case None =>
             Consequence.entityNotFound(id.print)
@@ -135,7 +139,7 @@ final class EntityVersionedMutationSpec
         val first = fixture.entitystore.saveDetached(
           TestEntity(id, "winner"),
           Some(expectation),
-          EntityMutationExecutionPolicy.default
+          _optimistic_policy
         )
 
         When("the stale candidate reaches the provider boundary")
@@ -143,7 +147,7 @@ final class EntityVersionedMutationSpec
           fixture.entitystore.saveDetached(
             TestEntity(id, "stale-candidate"),
             Some(expectation),
-            EntityMutationExecutionPolicy.default
+            _optimistic_policy
           )
         )
         val authoritative = fixture.entitystore.loadDetached[TestEntity](id)
@@ -223,7 +227,8 @@ final class EntityVersionedMutationSpec
       context,
       _collection_id,
       summon[EntityPersistent[TestEntity]],
-      EntityRevisionRepresentation.Detached
+      EntityRevisionRepresentation.Detached,
+      EntityConcurrencyPolicy.Optimistic
     )
     Fixture(datastore, EntityStore.standard(), context)
   }

@@ -9,6 +9,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
   EntityConcurrencyMetadata,
   EntityPersistent,
   EntityRevisionBinding,
@@ -41,6 +42,7 @@ import org.goldenport.cncf.observability.{
   DslChokepointPhase
 }
 import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition}
+import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -51,7 +53,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
  *  version Apr. 15, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallAggregateResolveSpec
@@ -340,8 +342,7 @@ final class ActionCallAggregateResolveSpec
             UpdateNoticeProbeAggregateCall(
               core,
               id,
-              NoticeProbeAggregate(id, "updated"),
-              EntityRevision.INITIAL
+              NoticeProbeAggregate(id, "updated")
             )
           }
           val result = call.execute()
@@ -382,8 +383,7 @@ final class ActionCallAggregateResolveSpec
           UpdateNoticeProbeAggregateCall(
             core,
             id,
-            NoticeProbeAggregate(id, "updated"),
-            EntityRevision.INITIAL
+            NoticeProbeAggregate(id, "updated")
           )
         }
         val result = call.execute()
@@ -391,6 +391,159 @@ final class ActionCallAggregateResolveSpec
         Then("authorization is enforced by aggregate_update before the update action runs")
         result shouldBe a[Consequence.Failure[_]]
         call.asInstanceOf[UpdateNoticeProbeAggregateCall].actionRan shouldBe false
+      }
+
+      "persist an ordinary aggregate update without revision metadata" in {
+        Given("a non-Simple aggregate with no managed revision representation")
+        given EntityPersistent[NoticeProbeAggregate] =
+          NoticeProbeAggregate.persistent
+        val cid =
+          org.simplemodeling.model.datatype.EntityCollectionId(
+            "test",
+            "a",
+            "notice"
+          )
+        val id = EntityId("test", "ordinary_notice", cid)
+        val current = NoticeProbeAggregate.publicWritable(id, "before")
+        val component = new Component() {
+          override def operationDefinitions: Vector[CmlOperationDefinition] =
+            Vector(
+              CmlOperationDefinition(
+                name = "updateNotice",
+                kind = "command",
+                inputType = "Notice",
+                outputType = "Notice",
+                inputValueKind = "record",
+                access = Some(CmlOperationAccess("public"))
+              )
+            )
+        }
+        component.entitySpace.registerEntity(
+          "notice",
+          NoticeProbeAggregate.collection(
+            cid,
+            current,
+            revisionBinding = None
+          )
+        )
+        val pair = ActionCallSupport.componentPair(component)
+        pair.executioncontext.dataStoreSpace.inject(
+          DataStore.CollectionId.EntityStore(cid),
+          NoticeProbeAggregate.persistent.toStoreRecord(current)
+        )(using pair.executioncontext).TAKE
+
+        When("aggregate_update receives an already constructed replacement")
+        val call = action_call("ordinary-update-notice", pair) { core =>
+          UpdateNoticeProbeAggregateCall(
+            core,
+            id,
+            current.copy(name = "after")
+          )
+        }
+        val result = call.execute()
+
+        Then("the update succeeds without a revision business parameter")
+        result shouldBe a[Consequence.Success[_]]
+        pair.executioncontext.entityStoreSpace
+          .load(
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              NoticeProbeAggregate.persistent
+            )
+          )(using pair.executioncontext)
+          .map(_.map(_.name)) shouldBe Consequence.success(Some("after"))
+      }
+
+      "enforce a caller-observed revision only through the observed update API" in {
+        Given("a revision-managed aggregate and one previously observed revision")
+        given EntityPersistent[NoticeProbeAggregate] =
+          NoticeProbeAggregate.persistent
+        val cid =
+          org.simplemodeling.model.datatype.EntityCollectionId(
+            "test",
+            "a",
+            "notice"
+          )
+        val id = EntityId("test", "observed_notice", cid)
+        val current =
+          NoticeProbeAggregate.privateOwnedBy(id, "before", "reviewer")
+        val component = new Component() {
+          override def operationDefinitions: Vector[CmlOperationDefinition] =
+            Vector(
+              CmlOperationDefinition(
+                name = "updateNotice",
+                kind = "command",
+                inputType = "Notice",
+                outputType = "Notice",
+                inputValueKind = "record",
+                access = Some(CmlOperationAccess("public"))
+              )
+            )
+        }
+        component.entitySpace.registerEntity(
+          "notice",
+          NoticeProbeAggregate.collection(
+            cid,
+            current,
+            concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
+          )
+        )
+        val base = ActionCallSupport.componentPair(component)
+        EntityRevisionSpecSupport.registerRevisionBinding(
+          base.executioncontext,
+          cid,
+          NoticeProbeAggregate.persistent,
+          EntityRevisionRepresentation.Detached,
+          EntityConcurrencyPolicy.Optimistic
+        )
+        base.executioncontext.dataStoreSpace.inject(
+          DataStore.CollectionId.EntityStore(cid),
+          EntityConcurrencyMetadata.initializeForCreate(
+            NoticeProbeAggregate.persistent.toStoreRecord(current)
+          )
+        )(using base.executioncontext).TAKE
+        val authenticated = ExecutionContext.withSecurityContext(
+          base.executioncontext,
+          org.goldenport.cncf.context.SecurityContext(
+            principal = new org.goldenport.cncf.context.Principal {
+              def id =
+                org.goldenport.cncf.context.PrincipalId("reviewer")
+              def attributes =
+                Map("access_token" -> "reviewer-token")
+            },
+            capabilities = Set.empty,
+            level = org.goldenport.cncf.context.SecurityLevel("user")
+          )
+        )
+        val pair = ActionCallSupport.pair(base.component, authenticated)
+
+        When("two updates reuse the same observed revision")
+        val first = action_call("observed-update-first", pair) { core =>
+          ObservedUpdateNoticeProbeAggregateCall(
+            core,
+            id,
+            current.copy(name = "first"),
+            EntityRevision.INITIAL
+          )
+        }.execute()
+        val stale = action_call("observed-update-stale", pair) { core =>
+          ObservedUpdateNoticeProbeAggregateCall(
+            core,
+            id,
+            current.copy(name = "stale"),
+            EntityRevision.INITIAL
+          )
+        }.execute()
+
+        Then("the first succeeds and the reused revision fails structurally")
+        first shouldBe a[Consequence.Success[_]]
+        stale shouldBe a[Consequence.Failure[_]]
+        pair.executioncontext.entityStoreSpace
+          .loadDetached(id, NoticeProbeAggregate.persistent)(
+            using pair.executioncontext
+          )
+          .map(_.map(_.entity.name)) shouldBe
+          Consequence.success(Some("first"))
       }
 
       "run an authenticated command against a shared aggregate without a separate read grant" in {
@@ -754,8 +907,7 @@ private final case class ResolveAndDiffUpdateAggregateCall(
 private final case class UpdateNoticeProbeAggregateCall(
     core: ActionCall.Core,
     targetid: EntityId,
-    updated: NoticeProbeAggregate,
-    expectedrevision: EntityRevision
+    updated: NoticeProbeAggregate
 ) extends ProcedureActionCall {
   private var _actionran: Boolean = false
 
@@ -765,8 +917,7 @@ private final case class UpdateNoticeProbeAggregateCall(
     aggregate_update_c(
       "notice",
       targetid,
-      "updateNotice",
-      expectedrevision, {
+      "updateNotice", {
         _actionran = true
         Consequence.success(updated)
       }
@@ -788,6 +939,22 @@ private final case class CreateNoticeProbeAggregateCall(
         _actionran = true
         Consequence.success(created)
       }
+    ).map(x => OperationResponse.RecordResponse(x.toRecord()))
+}
+
+private final case class ObservedUpdateNoticeProbeAggregateCall(
+    core: ActionCall.Core,
+    targetid: EntityId,
+    updated: NoticeProbeAggregate,
+    observedrevision: EntityRevision
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] =
+    aggregate_update_observed_c(
+      "notice",
+      targetid,
+      "updateNotice",
+      observedrevision,
+      Consequence.success(updated)
     ).map(x => OperationResponse.RecordResponse(x.toRecord()))
 }
 
@@ -831,6 +998,34 @@ private final case class NoticeProbeAggregate(
 }
 
 private object NoticeProbeAggregate {
+  def publicWritable(
+    id: EntityId,
+    name: String
+  ): NoticeProbeAggregate =
+    NoticeProbeAggregate(
+      id,
+      name,
+      Some(Record.dataAuto(
+        "rights" -> Record.dataAuto(
+          "owner" -> Record.dataAuto(
+            "read" -> true,
+            "write" -> true,
+            "execute" -> false
+          ),
+          "group" -> Record.dataAuto(
+            "read" -> true,
+            "write" -> true,
+            "execute" -> false
+          ),
+          "other" -> Record.dataAuto(
+            "read" -> true,
+            "write" -> true,
+            "execute" -> false
+          )
+        )
+      ))
+    )
+
   def privateOwnedBy(
       id: EntityId,
       name: String,
@@ -853,7 +1048,12 @@ private object NoticeProbeAggregate {
 
   def collection(
       cid: org.simplemodeling.model.datatype.EntityCollectionId,
-      entity: NoticeProbeAggregate
+      entity: NoticeProbeAggregate,
+      revisionBinding: Option[EntityRevisionBinding] = Some(
+        EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+      ),
+      concurrencyPolicy: EntityConcurrencyPolicy =
+        EntityConcurrencyPolicy.default
   )(using EntityPersistent[NoticeProbeAggregate]): EntityCollection[NoticeProbeAggregate] = {
     val storerealm = new EntityRealm[NoticeProbeAggregate](
       entityName = cid.name,
@@ -869,12 +1069,11 @@ private object NoticeProbeAggregate {
         workingSet = None,
         partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
         maxPartitions = 4,
-        maxEntitiesPerPartition = 16
+        maxEntitiesPerPartition = 16,
+        concurrencyPolicy = concurrencyPolicy
       ),
       persistent = summon[EntityPersistent[NoticeProbeAggregate]],
-      revisionBinding = Some(
-        EntityRevisionBinding(EntityRevisionRepresentation.Detached)
-      )
+      revisionBinding = revisionBinding
     )
     new EntityCollection[NoticeProbeAggregate](
       descriptor = descriptor,

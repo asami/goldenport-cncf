@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">CNCF Rules use-case overview</title>
+  <desc id="desc">At-a-glance comparison of explicit application evaluation, lifecycle-bound constraints, and monitored condition to Event use cases, including activation, family, outcome, admission, and implementation status.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="greenArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#218A55"/></marker>
+    <marker id="amberArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#D99000"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 23px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.subtitle{font:700 17px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 13px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#0F8F82"/><path d="M58 69h40M68 57l-10 12 10 12M88 57l10 12-10 12" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="128" y="61" class="h1">CNCF Rules — Use-case Overview</text><text x="130" y="91" class="sub">Three activation patterns compared by family, outcome, admission and readiness</text>
+  <rect x="1172" y="35" width="126" height="32" rx="16" fill="#FFF3D6"/><circle cx="1193" cy="51" r="6" fill="#D99000"/><text x="1207" y="56" class="badge" fill="#855800">PARTIAL</text>
+  <text x="1435" y="50" class="meta">Updated</text><text x="1435" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="177" class="label">CURRENT RULE USE-CASE COVERAGE</text><line x1="365" y1="172" x2="1530" y2="172" stroke="#D9E2EC"/>
+
+  <!-- Explicit -->
+  <g filter="url(#shadow)"><rect x="70" y="204" width="460" height="592" rx="18" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <rect x="70" y="204" width="460" height="9" rx="4.5" fill="#218A55"/>
+  <text x="104" y="246" class="title">Explicit application</text><text x="104" y="272" class="title">evaluation</text><text x="104" y="296" class="muted">Completed primary path</text>
+  <rect x="364" y="234" width="134" height="27" rx="13.5" fill="#DFF7EB"/><text x="431" y="252" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+  <text x="104" y="320" class="muted">ACTIVATION</text><text x="220" y="320" class="body">Explicit</text>
+  <text x="104" y="350" class="muted">RULE FAMILY</text><text x="220" y="350" class="body">Any typed family</text>
+  <text x="104" y="380" class="muted">OUTCOME</text><text x="220" y="380" class="body">Return / Report / Reject / Derive / Plan</text>
+  <text x="104" y="410" class="muted">ADMISSION</text><text x="220" y="410" class="body">None by default</text>
+  <line x1="104" y1="435" x2="496" y2="435" stroke="#D9E2EC"/>
+  <rect x="104" y="462" width="104" height="64" rx="10" fill="#EAF8F1"/><text x="156" y="489" text-anchor="middle" class="mono">App</text><text x="156" y="511" text-anchor="middle" class="small">logic</text>
+  <line x1="220" y1="494" x2="252" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="266" y="462" width="120" height="64" rx="10" fill="#DDEAFF"/><text x="326" y="489" text-anchor="middle" class="mono">RuleEngine</text><text x="326" y="511" text-anchor="middle" class="small">evaluate</text>
+  <line x1="398" y1="494" x2="430" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="444" y="462" width="52" height="64" rx="10" fill="#EAF8F1"/><text x="470" y="499" text-anchor="middle" class="chip" fill="#17663F">RESULT</text>
+  <text x="104" y="568" class="subtitle">What works now</text>
+  <circle cx="110" cy="600" r="5" fill="#218A55"/><text x="127" y="605" class="body">Application selects rules and projects Facts</text>
+  <circle cx="110" cy="633" r="5" fill="#218A55"/><text x="127" y="638" class="body">SPI evaluation + tracing</text>
+  <circle cx="110" cy="666" r="5" fill="#218A55"/><text x="127" y="671" class="body">Application consumes immutable result</text>
+  <rect x="104" y="709" width="392" height="42" rx="21" fill="#DFF7EB"/><text x="300" y="735" text-anchor="middle" class="chip" fill="#17663F">NORMAL PATH ENDS AT RESULT · NO FIRE REQUIRED</text>
+
+  <!-- Lifecycle -->
+  <g filter="url(#shadow)"><rect x="570" y="204" width="460" height="592" rx="18" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <rect x="570" y="204" width="460" height="9" rx="4.5" fill="#D99000"/>
+  <text x="604" y="246" class="title">Lifecycle-bound</text><text x="604" y="272" class="title">constraint</text><text x="604" y="296" class="muted">Evaluator ready; automatic binding missing</text>
+  <rect x="864" y="234" width="134" height="27" rx="13.5" fill="#FFF3D6"/><text x="931" y="252" text-anchor="middle" class="chip" fill="#855800">PARTIAL</text>
+  <text x="604" y="320" class="muted">ACTIVATION</text><text x="720" y="320" class="body">Operation / Entity lifecycle</text>
+  <text x="604" y="350" class="muted">RULE FAMILY</text><text x="720" y="350" class="body">Constraint</text>
+  <text x="604" y="380" class="muted">OUTCOME</text><text x="720" y="380" class="body">Report / Reject</text>
+  <text x="604" y="410" class="muted">ADMISSION</text><text x="720" y="410" class="body">None</text>
+  <line x1="604" y1="435" x2="996" y2="435" stroke="#D9E2EC"/>
+  <rect x="604" y="462" width="104" height="64" rx="10" fill="#FFF7E3"/><text x="656" y="489" text-anchor="middle" class="mono">Lifecycle</text><text x="656" y="511" text-anchor="middle" class="small">planned</text>
+  <line x1="720" y1="494" x2="752" y2="494" stroke="#D99000" stroke-width="3" stroke-dasharray="6 5" marker-end="url(#amberArrow)"/>
+  <rect x="766" y="462" width="104" height="64" rx="10" fill="#DDEAFF"/><text x="818" y="489" text-anchor="middle" class="mono">Constraint</text><text x="818" y="511" text-anchor="middle" class="small">available</text>
+  <line x1="882" y1="494" x2="914" y2="494" stroke="#D99000" stroke-width="3" stroke-dasharray="6 5" marker-end="url(#amberArrow)"/>
+  <rect x="928" y="462" width="68" height="64" rx="10" fill="#FFF7E3"/><text x="962" y="489" text-anchor="middle" class="chip" fill="#855800">REPORT</text><text x="962" y="511" text-anchor="middle" class="chip" fill="#855800">REJECT</text>
+  <text x="604" y="568" class="subtitle">Missing integration</text>
+  <circle cx="610" cy="600" r="5" fill="#D99000"/><text x="627" y="605" class="body">Lifecycle RuleSet / RuleProgram selection</text>
+  <circle cx="610" cy="633" r="5" fill="#D99000"/><text x="627" y="638" class="body">Automatic runtime-value-to-Fact projection</text>
+  <circle cx="610" cy="666" r="5" fill="#D99000"/><text x="627" y="671" class="body">Framework Report / Reject enforcement</text>
+  <rect x="604" y="709" width="392" height="42" rx="21" fill="#FFF3D6"/><text x="800" y="735" text-anchor="middle" class="chip" fill="#855800">GENERATED VALIDATION IS SEPARATE TODAY</text>
+
+  <!-- Reactive -->
+  <g filter="url(#shadow)"><rect x="1070" y="204" width="460" height="592" rx="18" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <rect x="1070" y="204" width="460" height="9" rx="4.5" fill="#D99000"/>
+  <text x="1104" y="246" class="title">Monitored condition</text><text x="1104" y="272" class="title">→ Event</text><text x="1104" y="296" class="muted">Planning/admission ready; activation missing</text>
+  <rect x="1364" y="234" width="134" height="27" rx="13.5" fill="#FFF3D6"/><text x="1431" y="252" text-anchor="middle" class="chip" fill="#855800">PARTIAL</text>
+  <text x="1104" y="320" class="muted">ACTIVATION</text><text x="1220" y="320" class="body">Monitor / Event / Timer</text>
+  <text x="1104" y="350" class="muted">RULE FAMILY</text><text x="1220" y="350" class="body">Production</text>
+  <text x="1104" y="380" class="muted">OUTCOME</text><text x="1220" y="380" class="body">Event ActionPlan</text>
+  <text x="1104" y="410" class="muted">ADMISSION</text><text x="1220" y="410" class="body">Explicit authorized Event publish</text>
+  <line x1="1104" y1="435" x2="1496" y2="435" stroke="#D9E2EC"/>
+  <rect x="1104" y="462" width="86" height="64" rx="10" fill="#FFF7E3"/><text x="1147" y="489" text-anchor="middle" class="mono">Observe</text><text x="1147" y="511" text-anchor="middle" class="small">planned</text>
+  <line x1="1202" y1="494" x2="1230" y2="494" stroke="#D99000" stroke-width="3" stroke-dasharray="6 5" marker-end="url(#amberArrow)"/>
+  <rect x="1244" y="462" width="90" height="64" rx="10" fill="#DDEAFF"/><text x="1289" y="489" text-anchor="middle" class="mono">Rule</text><text x="1289" y="511" text-anchor="middle" class="small">available</text>
+  <line x1="1346" y1="494" x2="1374" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="1388" y="462" width="108" height="64" rx="10" fill="#EAF8F1"/><text x="1442" y="489" text-anchor="middle" class="mono">Event plan</text><text x="1442" y="511" text-anchor="middle" class="small">+ admission</text>
+  <text x="1104" y="568" class="subtitle">Missing integration</text>
+  <circle cx="1110" cy="600" r="5" fill="#D99000"/><text x="1127" y="605" class="body">Monitor / scheduler / Event activation</text>
+  <circle cx="1110" cy="633" r="5" fill="#D99000"/><text x="1127" y="638" class="body">Observation-to-Fact projection</text>
+  <circle cx="1110" cy="666" r="5" fill="#D99000"/><text x="1127" y="671" class="body">Temporal window / dedup / cooldown policy</text>
+  <rect x="1104" y="709" width="392" height="42" rx="21" fill="#FFF3D6"/><text x="1300" y="735" text-anchor="middle" class="chip" fill="#855800">RULE ENGINE DOES NOT MONITOR</text>
+
+  <rect x="70" y="817" width="1460" height="40" rx="10" fill="#EAF0F5"/><circle cx="105" cy="837" r="6" fill="#218A55"/><text x="121" y="842" class="chip" fill="#334E68">AVAILABLE PATH</text><circle cx="270" cy="837" r="6" fill="#D99000"/><text x="286" y="842" class="chip" fill="#334E68">PARTIAL PATH</text><text x="550" y="842" class="chip" fill="#334E68">STATUS APPLIES TO THE COMPLETE USE CASE</text><text x="1090" y="842" class="chip" fill="#334E68">DETAIL SVGs ARE OPTIONAL</text>
+  <text x="70" y="883" class="foot">Details: application-rule-evaluation.svg · lifecycle-rule-constraint.svg · monitored-condition-event.svg</text><text x="1530" y="883" text-anchor="end" class="foot">Mechanisms: ../../mechanisms/rules/overview.svg</text>
+</svg>

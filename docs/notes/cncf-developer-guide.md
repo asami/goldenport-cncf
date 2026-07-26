@@ -982,6 +982,48 @@ test-only configuration. It does not add a production runtime mode. The test
 home overlay can inherit runtime configuration and repositories while keeping
 local component datastores under the test home by default.
 
+## Aggregate Mutation and OCC
+
+Use the Aggregate DSL according to where the replacement Aggregate is built:
+
+```scala
+aggregate_update(
+  "person",
+  id,
+  "updatePerson",
+  Consequence.success(updated)
+)
+
+aggregate_command[Person]("person", id, "renamePerson") { current =>
+  Consequence.success(current.rename(name))
+}
+```
+
+`aggregate_update` is for CRUD/Form/REST-style replacement values.
+`aggregate_command` is for domain behavior that must run against the
+authoritative Aggregate loaded by CNCF. Ordinary application logic does not
+pass a revision to either method.
+
+OCC is opt-in through an explicit `Optimistic` Entity or collection concurrency
+policy. Use `aggregate_update_observed` or `aggregate_command_observed` only at
+a strict transport boundary that already has a caller-observed revision. Do not
+add that revision to a domain command parameter.
+
+Generated Web Form updates and REST requests with a strong `If-Match` validator
+are framework ingress adapters. They select `Optimistic` for that strict
+mutation attempt while leaving the Entity's ordinary `None` default unchanged.
+Component code should use the protected DSL rather than constructing an
+`EntityStoreSave`, `EntityStoreUpdate`, or `EntityStoreUpdateById` operation
+directly.
+
+When reusable domain behavior lives outside the concrete `ActionCall`, model it
+as an `ActionBehavior` and pass the originating `ActionCall.Core` into that
+behavior. The behavior can then use `entity_update` or
+`entity_update_internal` while preserving the caller's component, execution,
+correlation, authorization, UnitOfWork, and observability context. Do not make
+shared helper methods construct `UnitOfWorkOp` directly, and do not reconstruct
+`UnitOfWorkAuthorization` in application code.
+
 ## Tests
 
 For every handwritten operation:

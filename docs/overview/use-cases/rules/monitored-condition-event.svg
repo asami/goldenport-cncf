@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Monitored condition to Event use case</title>
+  <desc id="desc">Focused partial Rule use case in which a monitor, scheduler, incoming event, or job completion activates a production rule that returns an Event ActionPlan for explicit authorized admission.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="arrowPlan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10z" fill="#D99000"/></marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10z" fill="#218A55"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.6px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 21px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 15px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 14px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 11px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.35px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#D99000"/><path d="M57 77c6-18 36-18 42 0M78 52v10M64 57l6 8M92 57l-6 8" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="128" y="61" class="h1">Monitored Condition → Event</text><text x="130" y="91" class="sub">Reactive activation outside the engine, Production planning inside it</text>
+  <rect x="1210" y="35" width="126" height="32" rx="16" fill="#FFF3D6"/><circle cx="1231" cy="51" r="6" fill="#D99000"/><text x="1245" y="56" class="badge" fill="#855800">PARTIAL</text>
+  <text x="1435" y="50" class="meta">Updated</text><text x="1435" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="177" class="label">USE-CASE PROFILE</text><line x1="220" y1="172" x2="1530" y2="172" stroke="#D9E2EC"/>
+  <rect x="70" y="197" width="1460" height="92" rx="14" fill="#fff" stroke="#D9E2EC"/>
+  <text x="105" y="226" class="muted">ACTIVATION</text><text x="105" y="257" class="title">Reactive</text>
+  <line x1="350" y1="214" x2="350" y2="272" stroke="#D9E2EC"/>
+  <text x="385" y="226" class="muted">RULE FAMILY</text><text x="385" y="257" class="title">Production</text>
+  <line x1="680" y1="214" x2="680" y2="272" stroke="#D9E2EC"/>
+  <text x="715" y="226" class="muted">OUTCOME</text><text x="715" y="257" class="title">Event ActionPlan</text>
+  <line x1="1050" y1="214" x2="1050" y2="272" stroke="#D9E2EC"/>
+  <text x="1085" y="226" class="muted">ADMISSION</text><text x="1085" y="257" class="body">Explicit authorized Event publish</text>
+
+  <text x="70" y="336" class="label">TARGET REACTIVE PATH</text><line x1="270" y1="331" x2="1530" y2="331" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="55" y="365" width="260" height="300" rx="18" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="85" y="409" class="title">Observation source</text><text x="85" y="437" class="muted">Owned outside Rule Engine</text>
+  <rect x="85" y="464" width="200" height="38" rx="8" fill="#FFF7E3"/><text x="103" y="488" class="body">Monitor / polling</text>
+  <rect x="85" y="512" width="200" height="38" rx="8" fill="#FFF7E3"/><text x="103" y="536" class="body">Timer / Scheduler</text>
+  <rect x="85" y="560" width="200" height="38" rx="8" fill="#FFF7E3"/><text x="103" y="584" class="body">Event / Job completion</text>
+  <rect x="85" y="617" width="128" height="26" rx="13" fill="#FFF3D6"/><text x="149" y="635" text-anchor="middle" class="chip" fill="#855800">PLANNED</text>
+  <line x1="331" y1="515" x2="373" y2="515" stroke="#D99000" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowPlan)"/>
+
+  <g filter="url(#shadow)"><rect x="387" y="365" width="260" height="300" rx="18" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="417" y="409" class="title">Reactive binding</text><text x="417" y="437" class="muted">Trigger + Fact projection</text>
+  <circle cx="423" cy="480" r="5" fill="#D99000"/><text x="440" y="485" class="body">Select production Rule</text>
+  <circle cx="423" cy="520" r="5" fill="#D99000"/><text x="440" y="525" class="body">Observation → Facts</text>
+  <circle cx="423" cy="560" r="5" fill="#D99000"/><text x="440" y="565" class="body">Dedup / cooldown policy</text>
+  <rect x="417" y="617" width="128" height="26" rx="13" fill="#FFF3D6"/><text x="481" y="635" text-anchor="middle" class="chip" fill="#855800">PLANNED</text>
+  <line x1="663" y1="515" x2="705" y2="515" stroke="#218A55" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <g filter="url(#shadow)"><rect x="719" y="365" width="260" height="300" rx="18" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="749" y="409" class="title">Production rule</text><text x="749" y="437" class="muted">Pure Rule Engine evaluation</text>
+  <rect x="749" y="478" width="200" height="70" rx="12" fill="#DDEAFF"/><text x="849" y="507" text-anchor="middle" class="mono">predicate</text><text x="849" y="532" text-anchor="middle" class="small">true → Event plan</text>
+  <rect x="749" y="592" width="150" height="28" rx="14" fill="#DFF7EB"/><text x="824" y="611" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+  <line x1="995" y1="515" x2="1037" y2="515" stroke="#218A55" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <g filter="url(#shadow)"><rect x="1051" y="365" width="220" height="300" rx="18" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1081" y="409" class="title">Event plan</text><text x="1081" y="437" class="muted">Immutable result value</text>
+  <rect x="1081" y="478" width="160" height="70" rx="12" fill="#EAF8F1"/><text x="1161" y="507" text-anchor="middle" class="mono">Event</text><text x="1161" y="532" text-anchor="middle" class="small">name · kind · payload</text>
+  <rect x="1081" y="592" width="150" height="28" rx="14" fill="#DFF7EB"/><text x="1156" y="611" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+  <line x1="1287" y1="515" x2="1329" y2="515" stroke="#218A55" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowGreen)"/>
+
+  <g filter="url(#shadow)"><rect x="1343" y="365" width="202" height="300" rx="18" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1373" y="409" class="title">Admission</text><text x="1373" y="437" class="muted">Explicit fire only</text>
+  <rect x="1373" y="478" width="142" height="70" rx="12" fill="#EAF8F1"/><text x="1444" y="507" text-anchor="middle" class="mono">EventBus</text><text x="1444" y="532" text-anchor="middle" class="small">publishAuthorized</text>
+  <rect x="1373" y="592" width="142" height="28" rx="14" fill="#DFF7EB"/><text x="1444" y="611" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+
+  <rect x="70" y="703" width="1460" height="104" rx="15" fill="#fff" stroke="#D9E2EC"/>
+  <text x="100" y="740" class="title">Responsibility boundary</text>
+  <text x="100" y="772" class="body">The Rule Engine evaluates supplied Facts. It does not poll, schedule, retain temporal windows, or continuously watch external state.</text>
+  <rect x="1210" y="732" width="288" height="42" rx="21" fill="#FFF3D6"/><text x="1354" y="758" text-anchor="middle" class="chip" fill="#855800">REACTIVE ACTIVATION IS MISSING</text>
+  <text x="70" y="873" class="foot">Mechanisms: ../../mechanisms/rules/rule-engine.svg · ../../mechanisms/rules/component-rule-integration.svg · EventBus</text><text x="1530" y="873" text-anchor="end" class="foot">Status: partial — planning and admission exist; monitoring binding does not</text>
+</svg>

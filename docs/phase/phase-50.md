@@ -1,6 +1,6 @@
 # Phase 50 - SimpleEntity Revision and OCC Simplification
 
-status=closed
+status=in-progress
 planned_at=2026-07-24
 started_at=2026-07-25
 depends_on=[Phase 49](phase-49.md)
@@ -448,3 +448,78 @@ profile, downstream `simplemodeling-lib`, `simplemodeling-model`,
 found no remaining actionable implementation, naming, or executable
 specification finding. Force, merge, repair, and conflict-resolution UI remain
 visible as future strategy item 9.40.
+
+## Post-Close Specification Correction
+
+Correction identified: 2026-07-26
+
+Status: implementation in progress
+
+The ArtScene development-toolchain compile exposed a Phase 50 specification
+bug in the application-facing Aggregate mutation boundary. Phase 50 correctly
+made revision lifecycle framework-managed, but its final contract also made
+the existing ordinary `aggregate_update` method require an
+application-supplied revision and retained `Optimistic` as the ordinary
+concurrency default.
+
+The corrected direction is:
+
+- retain `aggregate_update` and `aggregate_command` as separate mutation
+  semantics;
+- keep both ordinary methods revision-transparent;
+- make `EntityConcurrencyPolicy.None` the ordinary default and
+  `Optimistic` an explicit application opt-in;
+- keep revision initialization and advancement framework-managed under both
+  policies;
+- expose observed revision only through an explicitly named strict route; and
+- retain unconditional authoritative revision comparison for Conditional
+  Transition.
+
+This is a correction to the Phase 50 specification, not an ArtScene
+compatibility overload. The original Phase 50 execution and closure record
+above remains historical evidence and is not rewritten.
+
+The correction is complete only after:
+
+- CNCF Executable Specifications establish the update/command and OCC policy
+  matrix;
+- CNCF protected DSL and admission behavior implement the corrected contract;
+- Cozy generation selects update or command from operation semantics without
+  revision business parameters;
+- ArtScene regenerates, compiles, and passes the selected smoke boundary
+  against one aligned CNCF/Cozy toolchain;
+- canonical design/specification and the Component developer guide reflect the
+  verified behavior; and
+- the correction ledger in `phase-50-checklist.md` records exact evidence.
+
+Planning and investigation record:
+
+- `docs/journal/2026/07/2026-07-26-artscene-managed-revision-api-boundary-handoff.md`
+
+Verified implementation evidence and the remaining managed-behavior boundary
+are tracked in the appended `PC-01` section of
+`docs/phase/phase-50-checklist.md`.
+
+
+## PC-02 Plain Mutation Fast Path
+
+Status: in progress
+
+The SimpleEntity plain-mutation fast path remains part of Phase 50 as the
+second post-close correction stage. It does not rewrite the historical
+SE-01 through SE-10 closure ledger.
+
+PC-02 separates provider execution paths after PC-01 corrected the public
+mutation contract:
+
+- ordinary `None + AlwaysWrite` should use a direct provider update without
+  target-record pre-read or mandatory authoritative readback;
+- explicit `Optimistic` should use provider-native compare-and-set;
+- `WriteIfChanged`, strict observed revision, and unsupported provider
+  capabilities remain on explicitly safe paths;
+- managed revision still advances atomically; and
+- Conditional Transition remains the multi-record transactional path.
+
+The authoritative work and closure ledger is the appended `PC-02` section of
+`docs/phase/phase-50-checklist.md`. Phase 51 remains planned and does not start
+until PC-02 returns Phase 50 to CLOSED.

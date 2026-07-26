@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">CNCF Rule Engine core capability overview</title>
+  <desc id="desc">Focused Rule field detail showing the implemented Phase 32 flow from immutable inputs through pure deterministic evaluation to an explainable result. Evaluation ends at the result and does not execute action plans.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <linearGradient id="engine" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#EAF2FF"/><stop offset="1" stop-color="#F5F8FF"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10z" fill="#2367D1"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.6px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 24px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.smalltitle{font:700 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 16px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 14px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.2px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/>
+  <rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#2367D1"/><path d="M61 69h34M78 52v34M66 57l24 24M90 57L66 81" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="128" y="61" class="h1">Rule Engine Core</text>
+  <text x="130" y="91" class="sub">Provider-neutral, pure and explainable rule evaluation</text>
+  <rect x="1125" y="35" width="142" height="32" rx="16" fill="#DFF7EB"/><circle cx="1146" cy="51" r="6" fill="#218A55"/><text x="1160" y="56" class="badge" fill="#17663F">AVAILABLE</text>
+  <rect x="1279" y="35" width="176" height="32" rx="16" fill="#E7F0FF"/><text x="1298" y="56" class="badge" fill="#1F5AB6">PHASE 32 CLOSED</text>
+  <text x="1470" y="50" class="meta">Updated</text><text x="1470" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="177" class="label">PURE EVALUATION — COMPLETE AT THE RESULT</text><line x1="430" y1="172" x2="1530" y2="172" stroke="#D9E2EC"/>
+
+  <g filter="url(#shadow)"><rect x="70" y="210" width="330" height="315" rx="18" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="102" y="251" class="title">Immutable inputs</text><text x="102" y="279" class="muted">CNCF-owned request values</text>
+  <rect x="102" y="304" width="266" height="55" rx="10" fill="#F0F5FA"/><text x="122" y="328" class="mono">RuleSet</text><text x="122" y="347" class="muted">identity · version · ordered Rules</text>
+  <rect x="102" y="372" width="266" height="55" rx="10" fill="#F0F5FA"/><text x="122" y="396" class="mono">RuleProgram</text><text x="122" y="415" class="muted">typed executable instructions</text>
+  <rect x="102" y="440" width="266" height="55" rx="10" fill="#F0F5FA"/><text x="122" y="464" class="mono">WorkingMemory</text><text x="122" y="483" class="muted">Facts · type · attributes · provenance</text>
+  <line x1="416" y1="367" x2="462" y2="367" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="476" y="210" width="530" height="315" rx="18" fill="url(#engine)" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="510" y="251" class="title">RuleEngine.evaluate</text><text x="510" y="279" class="muted">RuleEngine SPI · InferenceEngine SPI · Built-in baseline</text>
+  <rect x="510" y="306" width="102" height="30" rx="15" fill="#E4EDFF"/><text x="561" y="326" text-anchor="middle" class="chip" fill="#1F5AB6">CONSTRAINT</text>
+  <rect x="622" y="306" width="113" height="30" rx="15" fill="#E4F7F3"/><text x="678.5" y="326" text-anchor="middle" class="chip" fill="#08796D">CALCULATION</text>
+  <rect x="745" y="306" width="126" height="30" rx="15" fill="#F0E9FF"/><text x="808" y="326" text-anchor="middle" class="chip" fill="#7048A8">DECISION TABLE</text>
+  <rect x="881" y="306" width="93" height="30" rx="15" fill="#FFF3D6"/><text x="927.5" y="326" text-anchor="middle" class="chip" fill="#9A6500">DERIVATION</text>
+  <rect x="632" y="349" width="102" height="30" rx="15" fill="#FFE9E5"/><text x="683" y="369" text-anchor="middle" class="chip" fill="#A34A36">PRODUCTION</text>
+  <line x1="510" y1="402" x2="974" y2="402" stroke="#C3D5EA"/>
+  <circle cx="525" cy="429" r="5" fill="#2367D1"/><text x="542" y="434" class="body">Canonical priority + Rule identifier order</text>
+  <circle cx="525" cy="463" r="5" fill="#2367D1"/><text x="542" y="468" class="body">Exact decimal; no floating-point or text coercion</text>
+  <circle cx="525" cy="497" r="5" fill="#2367D1"/><text x="542" y="502" class="body">No store, I/O, provider call or runtime action</text>
+  <line x1="1022" y1="367" x2="1068" y2="367" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1082" y="210" width="448" height="315" rx="18" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1115" y="251" class="title">RuleEvaluationResult</text><text x="1115" y="279" class="muted">Immutable, normalized and structurally explainable</text>
+  <circle cx="1120" cy="315" r="5" fill="#0F8F82"/><text x="1137" y="320" class="body">Calculation values · decision results</text>
+  <circle cx="1120" cy="350" r="5" fill="#0F8F82"/><text x="1137" y="355" class="body">Constraint violations</text>
+  <circle cx="1120" cy="385" r="5" fill="#0F8F82"/><text x="1137" y="390" class="body">Derived Facts + provenance</text>
+  <circle cx="1120" cy="420" r="5" fill="#0F8F82"/><text x="1137" y="425" class="body">ActionPlans — values only, never executed</text>
+  <circle cx="1120" cy="455" r="5" fill="#0F8F82"/><text x="1137" y="460" class="body">Agenda + structural explanations</text>
+  <rect x="1115" y="480" width="382" height="28" rx="14" fill="#DFF7EB"/><text x="1306" y="499" text-anchor="middle" class="chip" fill="#17663F">EVALUATION IS COMPLETE HERE</text>
+
+  <text x="70" y="577" class="label">RULE FAMILY → RESULT</text><line x1="260" y1="572" x2="1530" y2="572" stroke="#D9E2EC"/>
+  <g>
+    <rect x="70" y="603" width="280" height="145" rx="15" fill="#fff" stroke="#C9D8E7"/><rect x="70" y="603" width="280" height="8" rx="4" fill="#2367D1"/><text x="94" y="645" class="smalltitle">Constraint</text><text x="94" y="674" class="small">Report violations or</text><text x="94" y="697" class="small">return structured rejection</text>
+    <rect x="365" y="603" width="280" height="145" rx="15" fill="#fff" stroke="#C9D8E7"/><rect x="365" y="603" width="280" height="8" rx="4" fill="#0F8F82"/><text x="389" y="645" class="smalltitle">Calculation</text><text x="389" y="674" class="small">Return exact scalar or</text><text x="389" y="697" class="small">Record-shaped values</text>
+    <rect x="660" y="603" width="280" height="145" rx="15" fill="#fff" stroke="#C9D8E7"/><rect x="660" y="603" width="280" height="8" rx="4" fill="#7048A8"/><text x="684" y="645" class="smalltitle">Decision Table</text><text x="684" y="674" class="small">Return selected row, output</text><text x="684" y="697" class="small">and canonical candidates</text>
+    <rect x="955" y="603" width="280" height="145" rx="15" fill="#fff" stroke="#C9D8E7"/><rect x="955" y="603" width="280" height="8" rx="4" fill="#D99000"/><text x="979" y="645" class="smalltitle">Derivation</text><text x="979" y="674" class="small">Return new immutable Facts</text><text x="979" y="697" class="small">after bounded fixed point</text>
+    <rect x="1250" y="603" width="280" height="145" rx="15" fill="#fff" stroke="#C9D8E7"/><rect x="1250" y="603" width="280" height="8" rx="4" fill="#C45A42"/><text x="1274" y="645" class="smalltitle">Production</text><text x="1274" y="674" class="small">Return immutable ActionPlans</text><text x="1274" y="697" class="small">for optional later admission</text>
+  </g>
+
+  <rect x="70" y="779" width="1460" height="54" rx="12" fill="#EAF0F5"/>
+  <text x="105" y="812" class="chip" fill="#334E68">DETERMINISTIC</text><circle cx="250" cy="806" r="3" fill="#829AB1"/>
+  <text x="275" y="812" class="chip" fill="#334E68">IMMUTABLE</text><circle cx="388" cy="806" r="3" fill="#829AB1"/>
+  <text x="413" y="812" class="chip" fill="#334E68">EXACT DECIMAL</text><circle cx="560" cy="806" r="3" fill="#829AB1"/>
+  <text x="585" y="812" class="chip" fill="#334E68">PROVIDER-NEUTRAL SPI</text><circle cx="800" cy="806" r="3" fill="#829AB1"/>
+  <text x="825" y="812" class="chip" fill="#334E68">PAYLOAD-SAFE</text><circle cx="964" cy="806" r="3" fill="#829AB1"/>
+  <text x="989" y="812" class="chip" fill="#334E68">NO AMBIENT LOOKUP</text><circle cx="1184" cy="806" r="3" fill="#829AB1"/>
+  <text x="1209" y="812" class="chip" fill="#334E68">NO ACTION EXECUTION</text>
+  <text x="70" y="873" class="foot">Evidence: docs/spec/rule-engine-inference-runtime.md · docs/design/rule-engine-inference-runtime.md · docs/phase/phase-32.md</text>
+  <text x="1530" y="873" text-anchor="end" class="foot">Developer overview · explanatory, non-normative</text>
+</svg>

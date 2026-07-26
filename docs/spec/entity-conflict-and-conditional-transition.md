@@ -119,7 +119,46 @@ MUST take precedence over equality.
 MUST use `WriteIfChanged + ObservedRequired`; idempotent REST PUT MUST use
 `WriteIfChanged + Managed`; strong `If-Match: "revision-N"` MUST select
 `ObservedRequired`. Revision transport MUST NOT become a business operation
-parameter. Create MUST NOT require an observed revision.
+parameter. Create MUST NOT require an observed revision. A Web Form or strict
+REST adapter that selects `ObservedRequired` MUST select `Optimistic` for that
+mutation attempt, and the provider MUST NOT replace that explicit effective
+policy with the collection's ordinary concurrency default. Effective
+concurrency MUST retain `Optimistic` when either the assembled collection
+policy or the admitted mutation-attempt policy selects it. A request MUST NOT
+weaken an assembled `Optimistic` policy to `None`.
+
+## Aggregate Mutation API (R5A)
+
+`aggregate_update` and `aggregate_command` MUST remain separate operation
+semantics:
+
+- `aggregate_update` accepts an already constructed replacement Aggregate and
+  is the canonical CRUD, Form, and REST-style mutation route.
+- `aggregate_command` loads the authoritative Aggregate inside CNCF and applies
+  domain command logic to that value.
+
+Neither ordinary API MUST accept revision as a business parameter.
+`EntityConcurrencyPolicy.None` is the ordinary default. An Entity or collection
+MUST explicitly select `Optimistic` concurrency, and that selection MUST fail
+assembly unless a managed Embedded or Detached revision representation exists.
+Both policies MUST retain CNCF-managed revision lifecycle when a revision
+representation exists.
+
+A low-level mutation overload that explicitly accepts `expectedRevision` MUST
+select optimistic comparison even when the ordinary concurrency default is
+`None`. It MUST NOT silently accept and ignore the supplied revision.
+
+An Aggregate route that carries a revision observed by its caller MUST select
+an explicitly named strict API on an Entity or collection that explicitly
+selects `Optimistic`:
+
+- `aggregate_update_observed`; or
+- `aggregate_command_observed`.
+
+The observed revision MUST remain framework/transport metadata and MUST NOT be
+added to the ordinary domain command contract. Reusing a stale observed
+revision MUST fail structurally without overwriting the authoritative
+Aggregate.
 
 ## Transition Field Admission (R6)
 

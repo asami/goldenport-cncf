@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">CNCF Job management mechanism overview</title>
+  <desc id="desc">At-a-glance overview of Job submission, synchronous or scheduled execution, Task lifecycle, terminal records, operational control and inspection, and the boundary around planned executable JCL.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="blueArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#2367D1"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 20px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 13px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#2367D1"/><rect x="59" y="54" width="38" height="30" rx="5" fill="none" stroke="#fff" stroke-width="4"/><path d="M69 54v-7h18v7M68 68h20" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="128" y="61" class="h1">CNCF Job Management — Mechanism Overview</text><text x="130" y="91" class="sub">Managed execution that is observable, controllable and recoverable</text>
+  <rect x="1080" y="35" width="164" height="32" rx="16" fill="#DFF7EB"/><circle cx="1101" cy="51" r="6" fill="#218A55"/><text x="1115" y="56" class="badge" fill="#17663F">CORE AVAILABLE</text>
+  <rect x="1256" y="35" width="190" height="32" rx="16" fill="#FFF3D6"/><circle cx="1277" cy="51" r="6" fill="#D99000"/><text x="1291" y="56" class="badge" fill="#855800">JCL EXECUTION PLANNED</text>
+  <text x="1464" y="49" class="meta">Updated</text><text x="1464" y="70" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="176" class="label">1 · MANAGED EXECUTION PATH — AVAILABLE</text><line x1="430" y1="171" x2="1530" y2="171" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="198" width="260" height="292" rx="16" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="98" y="235" class="title">Submission</text>
+  <rect x="98" y="258" width="204" height="40" rx="8" fill="#F0F5FA"/><text x="116" y="283" class="mono">JobTask(s)</text>
+  <rect x="98" y="307" width="204" height="40" rx="8" fill="#F0F5FA"/><text x="116" y="332" class="mono">ExecutionContext</text>
+  <rect x="98" y="356" width="204" height="40" rx="8" fill="#F0F5FA"/><text x="116" y="381" class="mono">JobSubmitOption</text>
+  <text x="98" y="425" class="small">Optional definition/profile snapshot</text><text x="98" y="450" class="small">Persistent or ephemeral record</text>
+  <line x1="346" y1="344" x2="380" y2="344" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="394" y="198" width="278" height="292" rx="16" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="422" y="235" class="title">JobEngine admission</text><text x="422" y="260" class="muted">Creates identity and lifecycle record</text>
+  <rect x="422" y="284" width="222" height="50" rx="9" fill="#DDEAFF"/><text x="533" y="307" text-anchor="middle" class="mono">JobStatus.Submitted</text><text x="533" y="325" text-anchor="middle" class="small">timeline + lifecycle Event</text>
+  <rect x="422" y="350" width="104" height="42" rx="8" fill="#EAF8F1"/><text x="474" y="376" text-anchor="middle" class="mono">Sync</text>
+  <rect x="540" y="350" width="104" height="42" rx="8" fill="#EAF8F1"/><text x="592" y="376" text-anchor="middle" class="mono">Async</text>
+  <text x="422" y="425" class="small">Priority · delayed start · run mode</text><text x="422" y="450" class="small">Validation failures never enter execution</text>
+  <line x1="688" y1="344" x2="722" y2="344" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="736" y="198" width="292" height="292" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="764" y="235" class="title">Scheduling + Tasks</text><text x="764" y="260" class="muted">One shared Job-owned scheduler</text>
+  <rect x="764" y="282" width="236" height="46" rx="8" fill="#EAF8F1"/><text x="882" y="310" text-anchor="middle" class="small">Sync immediate · Async queue</text>
+  <rect x="764" y="338" width="236" height="46" rx="8" fill="#EAF8F1"/><text x="882" y="366" text-anchor="middle" class="small">priority ascending · FIFO</text>
+  <rect x="764" y="394" width="236" height="46" rx="8" fill="#EAF8F1"/><text x="882" y="422" text-anchor="middle" class="small">bounded workers · delayed retry</text>
+  <text x="764" y="467" class="small">Task context · cancellation · transaction</text>
+  <line x1="1044" y1="344" x2="1078" y2="344" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1092" y="198" width="438" height="292" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1120" y="235" class="title">Outcome + operational record</text><text x="1120" y="260" class="muted">Terminal state never resumes</text>
+  <rect x="1120" y="282" width="116" height="28" rx="14" fill="#DFF7EB"/><text x="1178" y="301" text-anchor="middle" class="chip" fill="#17663F">SUCCEEDED</text>
+  <rect x="1248" y="282" width="100" height="28" rx="14" fill="#FFE9E5"/><text x="1298" y="301" text-anchor="middle" class="chip" fill="#A34A36">FAILED</text>
+  <rect x="1360" y="282" width="112" height="28" rx="14" fill="#FFF3D6"/><text x="1416" y="301" text-anchor="middle" class="chip" fill="#855800">CANCELLED</text>
+  <circle cx="1126" cy="342" r="5" fill="#218A55"/><text x="1143" y="347" class="body">Result / primary result / retry state</text>
+  <circle cx="1126" cy="377" r="5" fill="#218A55"/><text x="1143" y="382" class="body">Task tree / timeline / task-local calltree</text>
+  <circle cx="1126" cy="412" r="5" fill="#218A55"/><text x="1143" y="417" class="body">Job Entity management projection</text>
+  <circle cx="1126" cy="447" r="5" fill="#218A55"/><text x="1143" y="452" class="body">Lifecycle / recovery Events</text>
+
+  <text x="70" y="540" class="label">2 · OPERATIONAL SURFACES AND BOUNDARIES</text><line x1="430" y1="535" x2="1530" y2="535" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="564" width="330" height="218" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="98" y="600" class="title">Authorized control</text><text x="98" y="628" class="body">Cancel · Retry · Suspend · Resume</text>
+  <text x="98" y="663" class="small">Async or awaited control response</text><text x="98" y="691" class="small">CancellationScope reaches active work</text>
+  <rect x="98" y="724" width="160" height="27" rx="13.5" fill="#DFF7EB"/><text x="178" y="742" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+
+  <g filter="url(#shadow)"><rect x="422" y="564" width="366" height="218" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="450" y="600" class="title">Inspection + observability</text><text x="450" y="628" class="body">Await · query · list · status · result</text>
+  <text x="450" y="661" class="body">Tasks · timeline · trace tree · metrics</text><text x="450" y="694" class="small">Owner/capability query authorization</text>
+  <rect x="450" y="724" width="160" height="27" rx="13.5" fill="#DFF7EB"/><text x="530" y="742" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+
+  <g filter="url(#shadow)"><rect x="810" y="564" width="350" height="218" rx="16" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="838" y="600" class="title">Definition + JCL</text><text x="838" y="628" class="body">JobDefinition version/hash snapshot</text>
+  <text x="838" y="661" class="body">Declared vs observed profile</text><text x="838" y="694" class="small">Executable flow/events/onEvent not implemented</text>
+  <rect x="838" y="724" width="184" height="27" rx="13.5" fill="#FFF3D6"/><text x="930" y="742" text-anchor="middle" class="chip" fill="#855800">PARTIAL SURFACE</text>
+
+  <g filter="url(#shadow)"><rect x="1182" y="564" width="348" height="218" rx="16" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="1210" y="600" class="title">Deliberate boundary</text><text x="1210" y="628" class="body">No cron or business calendar</text>
+  <text x="1210" y="661" class="body">No distributed Saga coordination</text><text x="1210" y="694" class="small">User notification is Event forwarding</text>
+  <rect x="1210" y="724" width="216" height="27" rx="13.5" fill="#EAF0F5"/><text x="1318" y="742" text-anchor="middle" class="chip" fill="#334E68">OUTSIDE JOB ENGINE</text>
+
+  <rect x="70" y="808" width="1460" height="42" rx="10" fill="#EAF0F5"/><circle cx="105" cy="829" r="6" fill="#218A55"/><text x="121" y="834" class="chip" fill="#334E68">AVAILABLE</text><circle cx="247" cy="829" r="6" fill="#D99000"/><text x="263" y="834" class="chip" fill="#334E68">PARTIAL / PLANNED</text><text x="565" y="834" class="chip" fill="#334E68">JOB ≠ DOMAIN ENTITY ≠ TRANSACTION ≠ WORKFLOW</text><text x="1110" y="834" class="chip" fill="#334E68">TASK IS THE OBSERVABLE EXECUTION STEP</text>
+  <text x="70" y="883" class="foot">Details: job-engine-runtime.svg · job-control-inspection.svg</text><text x="1530" y="883" text-anchor="end" class="foot">Evidence: Job Management design · Phase 22 · Job Executable Specifications</text>
+</svg>

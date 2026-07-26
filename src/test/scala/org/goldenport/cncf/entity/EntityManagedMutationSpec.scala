@@ -53,7 +53,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityManagedMutationSpec
@@ -64,7 +64,7 @@ final class EntityManagedMutationSpec
   "Embedded SimpleEntity managed revision" should {
     "initialize, return, advance, delete, and restore one authoritative value" in {
       Given(
-        "Phase 50 ER-07; one Embedded Entity registered with the default Optimistic policy"
+        "Phase 50 ER-07; one Embedded Entity registered with an explicit Optimistic policy"
       )
       val fixture = _fixture(EntityConcurrencyPolicy.Optimistic)
       given ExecutionContext = fixture.context

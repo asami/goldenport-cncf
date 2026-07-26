@@ -860,7 +860,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 47: closed (`docs/phase/phase-47.md`)
 - Phase 48: closed (`docs/phase/phase-48.md`)
 - Phase 49: closed (`docs/phase/phase-49.md`)
-- Phase 50: closed (`docs/phase/phase-50.md`)
+- Phase 50: in progress, post-close correction PC-02
+  (`docs/phase/phase-50.md`)
+- Phase 51: planned (`docs/phase/phase-51.md`)
 
 ## 8. Completed Development Item History
 
@@ -1623,6 +1625,14 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
+Phase 51, `CNCF-Cozy CML Generation Version Alignment`, is planned immediately
+after Phase 50 closure. It makes the CNCF target and Cozy generator used by CML
+generation an explicit, reproducible build contract before later
+generated-model work.
+
+- Planned dashboard: `docs/phase/phase-51.md`
+- Planned checklist: `docs/phase/phase-51-checklist.md`
+
 Other 9.x items remain future development candidates until explicitly
 selected.
 
@@ -1640,6 +1650,7 @@ independent 9.x items below rather than adding broad bullets back into 9.1.
 - `9.24 Application Notification UX`
 - `9.25 Structured Web/API Error Presentation`
 - `9.26 Web UI Multi-locale Message Control`
+- `9.46 Web Session CSRF Unification`
 
 ### 9.2 Event Mechanism Follow-ups
 Future event/runtime development item.
@@ -2842,6 +2853,114 @@ after 9.12 and 9.39 move to completed history.
   - use one operator-facing application as the first driver rather than
     inventing a generic merge UI without evidence.
 
+### 9.42 Component Documentation and AI Knowledge Integration
+Planned for Phase 52 after Phase 51 closes.
+
+- Goal:
+  - make each physical Component a one-stop, self-describing execution and
+    knowledge package for humans and AI;
+  - allow large documentation, Scaladoc, source, and media to move to a
+    versioned Documentation Component without changing the logical Component
+    information space;
+  - provide direct Help/manifest retrieval, primary Textus CBD Support
+    detail/usage/review integration, and complementary Textus BoK RAG/MCP
+    discovery and retrieval; and
+  - publish shared CNCF/CML/Cozy/SmartDox framework knowledge primarily
+    through SimpleModeling.org, with optional physical distribution as
+    framework Documentation Components.
+- Selected direction:
+  - User Guide and Reference Manual are the standard hand-written manual axes;
+  - SmartDox is the canonical hand-written documentation model and admitted
+    Markdown is parsed through SmartDox;
+  - Scaladoc is included in the Component distribution;
+  - source is embedded, moved to a Documentation Component, or explicitly
+    omitted according to disclosure policy;
+  - Help advertises one JSON Component knowledge manifest;
+  - CBD Support uses attributable Component knowledge for exact detail, usage,
+    MCP assistance, comparison, and CAR Review;
+  - Textus BoK indexes and retrieves attributable semantic Component knowledge
+    and hands exact identity/evidence to CBD Support;
+  - the exact Component manifest remains authoritative;
+  - Component-specific information ownership remains unchanged by the
+    framework documentation distribution design;
+  - SimpleModeling.org is the basic public information surface for shared
+    framework/toolchain documentation;
+  - framework Documentation Components are versioned publication snapshots
+    for installed or closed-network use, not Component-specific documentation
+    owners;
+  - public AI Development Guidance is an explicitly public projection of the
+    authoritative `ai-directive`, never its replacement; and
+  - public Skill Catalog metadata supports discovery while actual installable
+    Skills remain CAR-owned `SkillBundleManifest` resources.
+- Initial scope:
+  - Component knowledge manifest/resource schema, codec, paths, identity,
+    authority, provenance, integrity, license, and disclosure;
+  - manual authoring/lint and HTML/PDF projection decisions;
+  - Scaladoc generation/package and structured symbol/search index;
+  - source filtering and commercial omission;
+  - Documentation Component relationship, resolution, compatibility,
+    precedence, and diagnostics;
+  - unified Help, direct AI manifest/resource access, authorization, and
+    production visibility;
+  - Textus CBD Support manifest/resource admission, exact detail/usage MCP,
+    documentation quality review, and source-aware evidence;
+  - Textus BoK admission, semantic evidence model, indexing, RAG, read-only
+    MCP, stale detection, disclosure enforcement, and CBD handoff;
+  - embedded, split-documentation, and source-omitted end-to-end acceptance;
+  - stable framework product/version/document/section identities shared by
+    SimpleModeling.org, Help links, MCP/RAG evidence, and optional framework
+    Documentation Components;
+  - `/help/system` and `/man/system` framework-documentation resolution plus
+    explicit CML/Cozy developer/toolchain navigation;
+  - online-only, installed framework Documentation Component, and offline
+    Documentation Hub acceptance;
+  - public Directive rule identity, version, authority, visibility, source
+    digest, redaction, and general-public guide projection;
+  - public Skill metadata/catalog identity, owner, trigger, requirements,
+    permissions, side effects, installation reference, visibility, and digest;
+    and
+  - Help plus Textus BoK read-only discovery for public AI guidance and Skill
+    metadata.
+- Boundary:
+  - no Maven documentation classifier is the primary Component documentation
+    contract;
+  - documentation metadata grants no Operation authority or MCP readiness;
+  - CBD Support remains independently usable without BoK and does not replace
+    exact evidence with semantic similarity;
+  - Textus BoK does not publish mutation/execution Operations through the
+    retrieval surface, replace CBD detail/usage ownership, or invent
+    unsupported capability/compatibility claims;
+  - proprietary source is not indexed or returned without authorization;
+  - runtime Help requires no compiler, renderer, PDF, or embedding toolchain;
+  - framework Documentation Component absence never blocks Component startup
+    or changes Component-specific Help/manual resolution;
+  - framework RAG uses structured publication knowledge when available rather
+    than HTML scraping, and never uses `latest` as evidence identity;
+  - public guidance cannot override the mounted directive, and Skill metadata
+    cannot install, activate, execute, configure, or grant authority to a
+    Skill;
+  - raw restricted Directive/Skill content, credentials, approvals, and
+    provider configuration are not published;
+  - Skill installation remains under `SkillBundleManifest`, Cozy, Launcher,
+    and Codex ownership; and
+  - current verified design/specification overrides working notes at phase
+    closure.
+- Documentation closure rule:
+  - working decisions live in notes only during implementation;
+  - verified architecture and normative behavior are promoted to
+    `docs/design` and `docs/spec`;
+  - the implementation note is marked historical and explicitly overridden by
+    final design/specification;
+  - journal remains chronological history; and
+  - Phase 52 cannot close while the latest contract exists only in notes,
+    journal, phase documents, implementation, or tests.
+- Planning references:
+  - `docs/phase/phase-52.md`;
+  - `docs/phase/phase-52-checklist.md`;
+  - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`;
+    and
+  - `docs/notes/component-documentation-knowledge-package-implementation.md`.
+
 ### 9.43 REST and Web Form Transport Idempotency
 Future development item after Phase 50 establishes the Entity revision and
 OCC foundation.
@@ -2910,3 +3029,313 @@ OCC foundation.
   - promote verified behavior to design/specification before declaring either
     transport binding complete; and
   - schedule this item as an independent phase rather than expanding Phase 50.
+
+### 9.44 Information CML Runtime Canonicalization
+Planned for Phase 53 after Phase 52 closes.
+
+- Historical basis:
+  - Phase 27 added `src/main/cozy/information.cml` and adopted selected
+    generated powertypes and values, but InformationSpace continued to use a
+    parallel hand-written Information case class and duplicated value shapes;
+  - Phase 50 proved the generated Information `SimpleEntity` output/input
+    revision contract but did not move the operational runtime to that
+    generated Entity; and
+  - Phase 53 completes that runtime cutover rather than moving CNCF
+    Information into `simplemodeling-model`.
+- Goal:
+  - make the Information CML generated Entity/value/lifecycle family the one
+    canonical CNCF Information runtime model;
+  - preserve InformationSpace as the component-owned editable curation and
+    authorization boundary;
+  - use the standard CNCF Entity repository, UnitOfWork, managed revision, and
+    OCC mechanisms for Information persistence; and
+  - remove the hand-written/generated model split without changing
+    InformationSpace/KnowledgeSpace responsibilities.
+- Selected direction:
+  - `src/main/cozy/information.cml` remains the canonical CNCF model source;
+  - generated `org.goldenport.cncf.information.entity.Information` becomes the
+    operational and persistence representation;
+  - generated CML values and powertypes replace duplicated hand-written
+    shapes;
+  - CML lifecycle declarations provide executable transition evidence, with
+    simple-modeler/Cozy generation completed where current output is
+    insufficient;
+  - bounded compatibility aliases/adapters may exist during migration but do
+    not define a second canonical model;
+  - Information-specific capabilities remain the public authorization
+    boundary while Entity revision/permissions enforce storage/runtime
+    behavior; and
+  - `simplemodeling-model` retains only generic Entity and common-value
+    responsibilities.
+- Initial scope:
+  - complete inventory and failing-first acceptance for every hand-written and
+    generated type and downstream reference;
+  - canonical CML/generated Entity, nested value, powertype, input, view,
+    schema, codec, and lifecycle contracts;
+  - InformationSpace migration to generated types and standard Entity
+    repository/OCC behavior;
+  - validation, resolution, confirmation, rejection, publication, conflict,
+    Tag, and Knowledge materialization parity;
+  - protected Behavior DSL, CallTree, Help, HTTP/Web, schema, OpenAPI, MCP, and
+    editor projection migration;
+  - persisted-state migration with deterministic incompatibility diagnostics;
+  - Textus Knowledge Editor, Textus SIE, and representative domain acceptance;
+    and
+  - removal of hand-written duplicates followed by full regression and
+    canonical design/specification closure.
+- Boundary:
+  - no CNCF Information, Knowledge, Job, provider, or runtime dependency moves
+    into `simplemodeling-model`;
+  - KnowledgeSpace remains non-editable and distinct from InformationSpace;
+  - Information, Entity, RDF, external, Tag, and Knowledge identities remain
+    distinct;
+  - application inputs cannot set managed revision;
+  - provider payloads remain behind provider/SPI boundaries;
+  - no parallel Information persistence kernel is retained beside the
+    standard Entity repository;
+  - no two public canonical Information models remain after compatibility
+    closure; and
+  - unrelated CML Entity or generator redesign remains outside Phase 53.
+- Acceptance:
+  - InformationSpace and every operational/projection/downstream path use the
+    generated canonical Information Entity;
+  - every effective mutation advances revision and stale mutation fails
+    atomically without partial curation, Tag, publication, or Knowledge
+    effects;
+  - lifecycle transitions match the CML contract;
+  - Phase 26/27 behavior, authorization, evidence, provenance, and provider
+    boundaries remain compatible;
+  - supported persisted Information is migrated or rejected explicitly
+    without silent loss; and
+  - final design/specification and Executable Specifications identify exactly
+    one canonical runtime model.
+- Planning references:
+  - `docs/phase/phase-53.md`;
+  - `docs/phase/phase-53-checklist.md`;
+  - `docs/phase/phase-27-checklist.md`;
+  - `docs/phase/phase-50.md`;
+  - `src/main/cozy/information.cml`; and
+  - `docs/journal/2026/05/knowledge-import-information-space-working-model.md`.
+
+### 9.45 CNCF-Cozy CML Generation Version Alignment
+Planned for Phase 51 after Phase 50 closure.
+
+- Historical basis:
+  - CNCF `build.sbt` selects a CNCF artifact version and a Cozy generator
+    version independently for Information CML generation;
+  - Cozy already models exact `build.cozyVersion`, exact CNCF compile
+    dependency, independent `packaging.car.runtime.cncf` compatibility, and
+    CNCF runtime-descriptor validation; and
+  - these mechanisms are not yet one explicit end-to-end generation contract,
+    so a CNCF build can select versions without published compatibility
+    evidence or complete provenance.
+- Goal:
+  - make the CNCF target and Cozy generator used for CML generation explicit,
+    reproducible, and verified;
+  - align CNCF build and Cozy project metadata without conflating build-time
+    generation compatibility with runtime compatibility;
+  - reject unsupported or contradictory build inputs at their owning boundary;
+    and
+  - preserve enough provenance to reproduce and audit generated artifacts.
+- Selected direction:
+  - each generation resolves one exact CNCF target and one exact Cozy
+    generator coordinate;
+  - supported generation compatibility is an explicit tested pair or bounded
+    set and is never inferred from numeric version equality;
+  - CNCF build passes its target version and matching runtime descriptor
+    through Cozy's existing CLI/bridge contract;
+  - `build.cozyVersion` remains the exact build-time generator coordinate;
+  - the CAR CNCF compile dependency remains the exact target used by generated
+    source;
+  - `packaging.car.runtime.cncf` remains the independent runtime compatibility
+    range and tested set;
+  - generation provenance records CNCF target, descriptor digest, Cozy and
+    backend versions, CML digest, and generated-output digest;
+  - development SNAPSHOT coordinates require explicit admission and
+    diagnostics; released builds use immutable released coordinates; and
+  - runtime activation validates CNCF runtime/ABI compatibility without
+    requiring Cozy or treating generator provenance as a runtime dependency.
+- Initial scope:
+  - inventory every version source in CNCF build, Cozy CLI/bridge, scaffold,
+    CAR metadata, packaging, review, publication, and runtime admission;
+  - define compatibility authority, precedence, lifecycle, and diagnostics;
+  - integrate exact Cozy and CNCF target selection into CNCF CML generation;
+  - complete target/descriptor and supported-pair validation in Cozy;
+  - emit deterministic version and digest provenance;
+  - reconcile CAR build, compile, and runtime compatibility metadata;
+  - validate SNAPSHOT and release workflows; and
+  - close through full CNCF, Cozy, representative CAR, and downstream
+    validation plus canonical design/specification.
+- Boundary:
+  - CNCF and Cozy retain independent version sequences;
+  - equal numeric versions neither are required nor prove compatibility;
+  - Cozy remains a build-time generator and is not a CAR runtime dependency;
+  - generator compatibility does not replace CNCF runtime/ABI compatibility;
+  - Information canonicalization remains Phase 53 work;
+  - CML semantic redesign and unrelated generator output remain outside Phase
+    51; and
+  - existing build and project metadata is extended or reconciled rather than
+    duplicated by a competing version source.
+- Acceptance:
+  - clean and incremental generation resolve the same exact CNCF target and
+    Cozy generator without ambient selection;
+  - missing, unsupported, contradictory, descriptor-mismatched, and tampered
+    inputs fail deterministically before compilation or packaging;
+  - generated and packaged output contains reproducible version and digest
+    provenance;
+  - CAR build, review, publication, and runtime admission apply their distinct
+    version contracts consistently;
+  - a compatible CAR runs without Cozy installed and an incompatible CNCF
+    runtime fails independently of Cozy provenance; and
+  - final design/specification and Executable Specifications identify one
+    authoritative generation-version contract.
+- Planning references:
+  - `docs/phase/phase-51.md`;
+  - `docs/phase/phase-51-checklist.md`;
+  - `build.sbt`;
+  - `../cozy/docs/design/car-project-metadata-ownership.md`; and
+  - `../cozy/docs/spec/car-project-scaffold.md`.
+
+### 9.46 Web Session CSRF Unification
+Planned for Phase 54 after Phase 53 closes.
+
+- Historical basis:
+  - CNCF already protects normal Form and `/form-api` POST execution with a
+    stateless session-bound CSRF token;
+  - component JavaScript can call `/form-api` or Web-facing REST directly but
+    lacks one canonical framework helper and token-header contract; and
+  - REST serves two security audiences: browser Web clients using automatic
+    session cookies and external clients using explicit non-cookie identity.
+- Goal:
+  - apply one CNCF-owned CSRF mechanism to every unsafe Web-session request;
+  - align `/form-api`, Web-facing REST, Static Web/SPA JavaScript, diagnostics,
+    and component developer guidance; and
+  - keep external REST authentication and gateway policy distinct without
+    weakening ordinary Operation authorization.
+- Selected direction:
+  - CSRF policy follows the effective ingress authentication profile rather
+    than the route family;
+  - unsafe requests authenticated by a CNCF Web session require a token;
+  - safe requests remain token-free;
+  - HTML forms retain the admitted `csrf` field while JavaScript uses one
+    canonical CNCF token header and framework-owned helper;
+  - explicit Bearer/OAuth/service-account/mTLS external REST does not require
+    CSRF, but mixed credentials cannot silently downgrade to a weaker profile;
+  - token verification precedes Operation dispatch and never replaces
+    authentication, authorization, validation, idempotency, CORS, CSP, XSS,
+    quota, or replay controls; and
+  - token values never enter logs, CallTree, metrics, audit payloads, URLs,
+    errors, or demo manifests.
+- Initial scope:
+  - inventory and failing-first ingress/security acceptance;
+  - explicit Web-session/external/internal security profile resolution;
+  - common issue/projection/extraction/verification/failure mechanism;
+  - `/form-api` and Web REST adoption;
+  - CNCF-owned browser fetch/token helper;
+  - representative ArtScene or equivalent real HTTP acceptance;
+  - structured diagnostics, audit, and non-leakage evidence; and
+  - post-verification promotion of exact parameter and behavior contracts to
+    `docs/spec` and `docs/design`.
+- Deferred scope:
+  - full OAuth/OIDC, mTLS, API gateway, developer portal, or broad CORS
+    productization;
+  - replacing authorization, idempotency, rate limiting, CSP, or XSS defenses;
+    and
+  - application-owned token generation or verification.
+- Planning references:
+  - `docs/phase/phase-54.md`;
+  - `docs/phase/phase-54-checklist.md`;
+  - `docs/notes/web-session-csrf-unification-implementation.md`; and
+  - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
+
+### 9.47 SimpleEntity Plain Mutation Fast Path
+Active as Phase 50 post-close correction stage PC-02 after the PC-01
+mutation-contract correction.
+
+- Historical basis:
+  - Phase 50 makes `EntityConcurrencyPolicy.None` the ordinary default while
+    retaining framework-managed revision lifecycle;
+  - the current managed-revision implementation still loads the target record
+    before provider mutation and reads the authoritative record after update;
+    and
+  - this follow-up was first identified during the Phase 50 PC-01 correction
+    and is retained as Phase 50 PC-02 so the managed-revision implementation
+    is not closed with its known provider-path debt deferred elsewhere.
+- Goal:
+  - give ordinary `None + AlwaysWrite` mutation a direct provider update path
+    without target-record pre-read, lock-read, or mandatory authoritative
+    readback in the steady state;
+  - implement explicit `Optimistic` mutation as provider-native compare and
+    set; and
+  - preserve Conditional Transition as the multi-record transactional path.
+- Selected direction:
+  - ordinary, optimistic, and conditional mutations remain separate semantic
+    paths;
+  - managed revision advances atomically in the same provider update even when
+    ordinary OCC is disabled;
+  - callers request authoritative readback explicitly rather than paying for
+    it on every ordinary update;
+  - `WriteIfChanged`, strict observed revision, side-effect-bearing mutation,
+    and unsupported provider capabilities are classified explicitly; and
+  - EntitySpace and Working Set state is invalidated or reconciled without
+    forcing an unconditional datastore reload.
+- Initial scope:
+  - record current EntityStore and provider call/statement sequences;
+  - define provider capability and mutation-result contracts;
+  - add recording-provider and SQLite SQL-trace Executable Specifications;
+  - add MySQL acceptance for direct update and compare-and-set behavior;
+  - prove in-memory, SQLite, and MySQL revision advancement and stale-writer
+    semantics;
+  - preserve Conditional Transition rollback and exactly-one-winner behavior;
+    and
+  - record statement-count and representative throughput/latency evidence
+    without unstable wall-clock assertions.
+- Boundary:
+  - the item does not change Phase 50's ordinary API, managed revision,
+    explicit OCC opt-in, or Conditional Transition contract;
+  - it does not rewrite the historical Phase 50 SE-01 through SE-10 closure
+    ledger;
+  - it does not weaken `WriteIfChanged` or strict observed-revision semantics;
+    and
+  - Phase 50 PC-02 owns implementation and closure evidence.
+- Acceptance:
+  - ordinary `None + AlwaysWrite` performs no target-record load before its
+    provider update and no mandatory post-update readback;
+  - explicit `Optimistic` reports zero-row compare-and-set as the canonical
+    stale-revision conflict;
+  - managed revision advances atomically on supported providers;
+  - cache and Working Set behavior remains coherent; and
+  - focused provider tests, full CNCF validation, downstream validation,
+    naming/spec review, and canonical design/specification updates pass.
+- Historical reference:
+  - `docs/phase/phase-50.md`;
+  - `docs/phase/phase-50-checklist.md`.
+
+### 9.48 Supervisor SPI and Managed Lifecycle Provider Integration
+CNCF contract baseline implemented; provider and consumer adoption remains
+related-project work.
+
+- Goal:
+  - provide one provider-neutral managed lifecycle authority boundary for
+    Control Center and other CNCF components without exposing process,
+    filesystem, shell, credential, port, or PID details.
+- CNCF baseline:
+  - `Supervisor`, `SupervisorRequest`, and `SupervisorResult` define durable
+    request correlation, idempotency, opaque target/deployment identity,
+    lifecycle intent, authenticated operator identity, deadline, and safe
+    result state;
+  - `SupervisorSocket` and `SupervisorSocketSet` use standard CNCF SPI
+    selection and installation;
+  - missing provider access has a structured `Consequence` path; and
+  - Executable Specification fixes the safe contract and socket behavior.
+- Provider boundary:
+  - `textus-supervisor` is the first provider component;
+  - local, Compose, and Kubernetes execution remain provider-private drivers;
+    and
+  - provider adoption and deployment verification are completed in their
+    owning related repositories rather than claimed by the CNCF baseline.
+- References:
+  - `docs/design/supervisor-spi.md`;
+  - `docs/spec/supervisor-spi.md`;
+  - `src/test/scala/org/goldenport/cncf/spi/supervisor/SupervisorSpiSpec.scala`.
+  - `docs/phase/phase-50-checklist.md`.

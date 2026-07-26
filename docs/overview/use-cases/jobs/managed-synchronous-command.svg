@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Managed synchronous Command with JobSync</title>
+  <desc id="desc">JobSync executes a Command under Job management in the synchronous request flow, returns the final response, and retains the Job lifecycle and Task diagnostics.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#218A55"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 21px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 13px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#218A55"/><path d="M61 70l11 11 24-27" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="128" y="61" class="h1">Managed Synchronous Command — JobSync</text><text x="130" y="91" class="sub">Return the final result now while retaining a complete operational Job record</text>
+  <rect x="1248" y="35" width="154" height="32" rx="16" fill="#DFF7EB"/><circle cx="1269" cy="51" r="6" fill="#218A55"/><text x="1283" y="56" class="badge" fill="#17663F">AVAILABLE</text>
+  <text x="1435" y="50" class="meta">Updated</text><text x="1435" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="179" class="label">REQUEST AND EXECUTION FLOW</text><line x1="320" y1="174" x2="1530" y2="174" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="222" width="250" height="258" rx="16" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="98" y="260" class="title">1 · Command request</text><text x="98" y="297" class="body">Execution policy resolves</text><rect x="98" y="322" width="194" height="50" rx="9" fill="#EAF8F1"/><text x="195" y="352" text-anchor="middle" class="mono">JobSync</text><text x="98" y="405" class="small">Caller waits for completion</text><text x="98" y="434" class="small">HTTP/CLI contract remains sync</text>
+  <line x1="336" y1="350" x2="378" y2="350" stroke="#218A55" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="392" y="222" width="280" height="258" rx="16" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="420" y="260" class="title">2 · Create primary Job</text><text x="420" y="297" class="body">Submitted lifecycle record</text><text x="420" y="329" class="small">JobId · submitter · target · profile</text><text x="420" y="357" class="small">Persistent by Command default</text><rect x="420" y="390" width="224" height="48" rx="9" fill="#DDEAFF"/><text x="532" y="419" text-anchor="middle" class="mono">JobEngine.submit</text>
+  <line x1="688" y1="350" x2="730" y2="350" stroke="#218A55" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="744" y="222" width="318" height="258" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="772" y="260" class="title">3 · Run primary Tasks</text><text x="772" y="297" class="body">Immediate — no async queue</text><text x="772" y="329" class="small">JoinCaller transaction by default</text><text x="772" y="357" class="small">PerTask Job scope by default</text><text x="772" y="385" class="small">timeline + transaction outcome</text><rect x="772" y="415" width="262" height="34" rx="17" fill="#EAF8F1"/><text x="903" y="437" text-anchor="middle" class="chip" fill="#17663F">TASK IS OBSERVABLE</text>
+  <line x1="1078" y1="350" x2="1120" y2="350" stroke="#218A55" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1134" y="222" width="396" height="258" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1162" y="260" class="title">4 · Return + retain</text><text x="1162" y="297" class="body">Final OperationResponse to caller</text><text x="1162" y="329" class="small">Job becomes Succeeded / Failed / Cancelled</text><text x="1162" y="357" class="small">result · timeline · Task tree remain inspectable</text><rect x="1162" y="390" width="326" height="48" rx="9" fill="#DFF7EB"/><text x="1325" y="419" text-anchor="middle" class="mono">response + X-Textus-Job-Id</text>
+
+  <text x="70" y="540" class="label">WHY USE JOBSYNC INSTEAD OF PLAIN SYNC?</text><line x1="450" y1="535" x2="1530" y2="535" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="568" width="450" height="210" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="98" y="606" class="title">Observable</text><circle cx="104" cy="640" r="5" fill="#218A55"/><text x="121" y="645" class="body">Stable Job identity and timestamps</text><circle cx="104" cy="675" r="5" fill="#218A55"/><text x="121" y="680" class="body">Task-level transaction diagnostics</text><circle cx="104" cy="710" r="5" fill="#218A55"/><text x="121" y="715" class="body">Job-specific calltree when policy selects it</text>
+
+  <g filter="url(#shadow)"><rect x="550" y="568" width="450" height="210" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="578" y="606" class="title">Controllable + auditable</text><circle cx="584" cy="640" r="5" fill="#218A55"/><text x="601" y="645" class="body">Lifecycle and result can be queried later</text><circle cx="584" cy="675" r="5" fill="#218A55"/><text x="601" y="680" class="body">Control policy applies while active</text><circle cx="584" cy="710" r="5" fill="#218A55"/><text x="601" y="715" class="body">Definition/profile snapshot supports audit</text>
+
+  <g filter="url(#shadow)"><rect x="1030" y="568" width="500" height="210" rx="16" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="1058" y="606" class="title">Boundary</text><circle cx="1064" cy="640" r="5" fill="#52697D"/><text x="1081" y="645" class="body">Plain Sync creates no Job record</text><circle cx="1064" cy="675" r="5" fill="#52697D"/><text x="1081" y="680" class="body">JobSync does not imply queued execution</text><circle cx="1064" cy="710" r="5" fill="#52697D"/><text x="1081" y="715" class="body">Task does not equal transaction</text>
+
+  <rect x="70" y="808" width="1460" height="42" rx="10" fill="#DFF7EB"/><text x="800" y="834" text-anchor="middle" class="chip" fill="#17663F">SYNCHRONOUS INTERFACE + MANAGED EXECUTION + PERSISTENT OPERATIONAL EVIDENCE</text>
+  <text x="70" y="883" class="foot">Mechanisms: ../../mechanisms/jobs/job-engine-runtime.svg · ../../mechanisms/jobs/job-control-inspection.svg</text><text x="1530" y="883" text-anchor="end" class="foot">Status: available</text>
+</svg>

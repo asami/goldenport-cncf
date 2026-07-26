@@ -7,6 +7,7 @@ import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityPersistable
+import org.goldenport.cncf.entity.aggregate.AggregateDefinition
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimePlan, PartitionStrategy, WorkingSetDefinition}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiSelection}
@@ -21,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 24, 2026
  *  version May.  3, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -52,6 +53,34 @@ final class ComponentFactoryRuntimePlanActivationSpec
       collection.descriptor.plan.maxEntitiesPerPartition shouldBe 1
       collection.storage.storeRealm.values.size shouldBe 2
       _eventually_int(memory.cachedEntityCount, 1)
+    }
+
+    "canonicalize generated runtime-plan entity names against aggregate metadata" in {
+      Given("a generated-style runtime plan and aggregate definition that differ only by naming form")
+      val component = _component_with_case_variant_runtime_plan()
+      val factory = new ComponentFactory()
+
+      When("the component collections are bootstrapped")
+      val bootstrapped = factory.bootstrap(component)
+
+      Then("the aggregate entity name is the canonical EntitySpace key")
+      bootstrapped.entitySpace.entityOption[Any]("facility") should not be empty
+      bootstrapped.entitySpace.entityOption[Any]("Facility") shouldBe empty
+      bootstrapped.entity[Any]("facility").descriptor.plan.entityName shouldBe "facility"
+    }
+
+    "reject an ambiguous normalized runtime-plan entity name" in {
+      Given("two Aggregate roots whose Entity names normalize to the same segment")
+      val component = _component_with_ambiguous_runtime_plan()
+      val factory = new ComponentFactory()
+
+      When("a runtime plan uses only the shared normalized spelling")
+      val result = factory.bootstrapC(component)
+
+      Then("assembly fails instead of selecting the first Aggregate by declaration order")
+      result shouldBe a[Consequence.Failure[?]]
+      result.asInstanceOf[Consequence.Failure[?]]
+        .conclusion.display should include("ambiguously matches collections")
     }
 
     "bootstrap direct-added components when a subsystem receives an unbootstrapped instance" in {
@@ -206,6 +235,75 @@ final class ComponentFactoryRuntimePlanActivationSpec
     )
     val params = ComponentInit(
       subsystem = TestComponentFactory.emptySubsystem("runtime_plan_activation_spec"),
+      core = core,
+      origin = ComponentOrigin.Builtin
+    )
+    component.initialize(params)
+  }
+
+  private def _component_with_case_variant_runtime_plan(): Component = {
+    val component = new Component() with EntityRuntimePlanProvider {
+      override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
+        Vector(
+          EntityRuntimePlan[Any](
+            entityName = "Facility",
+            memoryPolicy = EntityMemoryPolicy.StoreOnly,
+            workingSet = None,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 64,
+            maxEntitiesPerPartition = 10000
+          )
+        )
+
+      override def aggregateDefinitions: Vector[AggregateDefinition] =
+        Vector(AggregateDefinition(name = "facility", entityName = "facility"))
+    }
+    val componentid = ComponentId("runtime_plan_canonical_name_spec")
+    val core = Component.Core.create(
+      name = "runtime_plan_canonical_name_spec",
+      componentid = componentid,
+      instanceid = ComponentInstanceId.default(componentid),
+      protocol = Protocol.empty
+    )
+    val params = ComponentInit(
+      subsystem = TestComponentFactory.emptySubsystem("runtime_plan_canonical_name_spec"),
+      core = core,
+      origin = ComponentOrigin.Builtin
+    )
+    component.initialize(params)
+  }
+
+  private def _component_with_ambiguous_runtime_plan(): Component = {
+    val component = new Component() with EntityRuntimePlanProvider {
+      override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
+        Vector(
+          EntityRuntimePlan[Any](
+            entityName = "FACILITY",
+            memoryPolicy = EntityMemoryPolicy.StoreOnly,
+            workingSet = None,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 64,
+            maxEntitiesPerPartition = 10000
+          )
+        )
+
+      override def aggregateDefinitions: Vector[AggregateDefinition] =
+        Vector(
+          AggregateDefinition(name = "facility-lower", entityName = "facility"),
+          AggregateDefinition(name = "facility-title", entityName = "Facility")
+        )
+    }
+    val componentid = ComponentId("runtime_plan_ambiguous_name_spec")
+    val core = Component.Core.create(
+      name = "runtime_plan_ambiguous_name_spec",
+      componentid = componentid,
+      instanceid = ComponentInstanceId.default(componentid),
+      protocol = Protocol.empty
+    )
+    val params = ComponentInit(
+      subsystem = TestComponentFactory.emptySubsystem(
+        "runtime_plan_ambiguous_name_spec"
+      ),
       core = core,
       origin = ComponentOrigin.Builtin
     )

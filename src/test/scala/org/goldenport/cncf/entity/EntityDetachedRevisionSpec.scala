@@ -53,13 +53,17 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityDetachedRevisionSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
+  private val _optimistic_policy =
+    EntityMutationExecutionPolicy(
+      concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
+    )
 
   "Explicit detached non-SimpleEntity revision" should {
     "manage one external revision while preserving the domain revision field" in {
@@ -149,6 +153,51 @@ final class EntityDetachedRevisionSpec
         Consequence.success(Some(5L))
     }
 
+    "reload an authoritative detached patch result before installing it in the working set" in {
+      Given(
+        "a Detached Entity collection whose ordinary patch result omits cncf_revision"
+      )
+      val fixture = _fixture(
+        Some(EntityRevisionRepresentation.Detached),
+        EntityConcurrencyPolicy.Optimistic
+      )
+      given ExecutionContext = fixture.context
+      val id = _id("detached-ordinary-patch")
+      val interpreter =
+        new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
+      val created =
+        fixture.store.create(
+          DetachedEntity(id, "before", "domain-r1")
+        )
+
+      When("the ordinary patch route updates the revision-managed Entity")
+      val updated = created.flatMap(_ =>
+        interpreter.interpret(
+          UnitOfWorkOp.EntityStoreUpdateById(
+            id,
+            DetachedPatch(
+              Update.set("after"),
+              Update.set("domain-r2")
+            ),
+            _patch_persistent
+          )
+        )
+      )
+
+      Then(
+        "the domain result stays managed-field-free and the resident Entity is refreshed from persisted storage"
+      )
+      updated.map(_.getAny("cncf_revision")) shouldBe
+        Consequence.success(None)
+      fixture.collection.resolve(id) shouldBe
+        Consequence.success(
+          DetachedEntity(id, "after", "domain-r2")
+        )
+      _raw_record(fixture, id)
+        .flatMap(_required_managed_revision)
+        .map(_.value) shouldBe Consequence.success(2L)
+    }
+
     "enforce stale conflicts only through detached-aware APIs" in {
       Given(
         "Phase 50 SE-05; one optimistic Detached Entity and its initial carrier"
@@ -171,7 +220,7 @@ final class EntityDetachedRevisionSpec
         fixture.store.updateDetached(
           carrier.entity.copy(name = "first"),
           Some(carrier.revision),
-          EntityMutationExecutionPolicy.default
+          _optimistic_policy
         )
       }
 
@@ -182,7 +231,7 @@ final class EntityDetachedRevisionSpec
         fixture.store.updateDetached(
           carrier.entity.copy(name = "stale"),
           Some(carrier.revision),
-          EntityMutationExecutionPolicy.default
+          _optimistic_policy
         )
       }
       val standardsnapshot =
@@ -191,7 +240,7 @@ final class EntityDetachedRevisionSpec
         fixture.store.update(
           carrier.entity.copy(name = "wrong-api"),
           Some(carrier.revision),
-          EntityMutationExecutionPolicy.default
+          _optimistic_policy
         )
       }
       val managedpatch = first.flatMap { carrier =>
@@ -199,7 +248,7 @@ final class EntityDetachedRevisionSpec
           id,
           Record.dataAuto("cncf_revision" -> 99L),
           Some(carrier.revision),
-          EntityMutationExecutionPolicy.default
+          _optimistic_policy
         )(using _record_patch_persistent, fixture.context)
       }
 
@@ -218,11 +267,48 @@ final class EntityDetachedRevisionSpec
         .map(_.value) shouldBe Consequence.success(2L)
     }
 
+    "derive optimistic preconditions for detached full-Entity mutations" in {
+      Given(
+        "an optimistic Detached Entity whose application does not carry the managed revision"
+      )
+      val fixture = _fixture(
+        Some(EntityRevisionRepresentation.Detached),
+        EntityConcurrencyPolicy.Optimistic
+      )
+      given ExecutionContext = fixture.context
+      val id = _id("detached-derived-precondition")
+      val created =
+        fixture.store.create(
+          DetachedEntity(id, "created", "domain-r1")
+        )
+
+      When("full save and update omit an application-supplied expected revision")
+      val saved = created.flatMap(_ =>
+        fixture.store.saveDetached(
+          DetachedEntity(id, "saved", "domain-r2"),
+          None,
+          _optimistic_policy
+        )
+      )
+      val updated = saved.flatMap(_ =>
+        fixture.store.updateDetached(
+          DetachedEntity(id, "updated", "domain-r3"),
+          None,
+          _optimistic_policy
+        )
+      )
+
+      Then("the store derives each precondition from authoritative persisted metadata")
+      saved.map(_.revision.value) shouldBe Consequence.success(2L)
+      updated.map(value => value.entity.name -> value.revision.value) shouldBe
+        Consequence.success("updated" -> 3L)
+    }
+
     "leave undeclared non-SimpleEntity collections unmanaged" in {
       Given(
         "Phase 50 SE-05; the same non-SimpleEntity model without an explicit revision binding"
       )
-      val fixture = _fixture(None, EntityConcurrencyPolicy.Optimistic)
+      val fixture = _fixture(None, EntityConcurrencyPolicy.None)
       given ExecutionContext = fixture.context
       val id = _id("unmanaged")
       val interpreter =
@@ -240,9 +326,24 @@ final class EntityDetachedRevisionSpec
       When(
         "ordinary internal mutation and detached-aware routes target the collection"
       )
-      val updated = created.flatMap(_ =>
-        fixture.store.update(
-          DetachedEntity(id, "updated", "application-r2")
+      val saved = created.flatMap(_ =>
+        interpreter.interpret(
+          UnitOfWorkOp.EntityStoreSaveManaged(
+            DetachedEntity(id, "saved", "application-r2"),
+            _persistent
+          )
+        )
+      )
+      val updated = saved.flatMap(_ =>
+        interpreter.interpret(
+          UnitOfWorkOp.EntityStoreUpdateById(
+            id,
+            DetachedPatch(
+              Update.set("updated"),
+              Update.set("application-r3")
+            ),
+            _patch_persistent
+          )
         )
       )
       val loaded = updated.flatMap(_ =>
@@ -261,7 +362,11 @@ final class EntityDetachedRevisionSpec
       )
       loaded shouldBe
         Consequence.success(
-          Some(DetachedEntity(id, "updated", "application-r2"))
+          Some(DetachedEntity(id, "updated", "application-r3"))
+        )
+      saved shouldBe
+        Consequence.success(
+          DetachedEntity(id, "saved", "application-r2")
         )
       residentaftercreate shouldBe
         Consequence.success(
@@ -344,7 +449,7 @@ final class EntityDetachedRevisionSpec
         fixture.store.updateDetached(
           value.entity.copy(name = "must-not-publish"),
           Some(value.revision),
-          EntityMutationExecutionPolicy.default
+          _optimistic_policy
         )
       }
       val restarted = _fixture(
@@ -407,6 +512,81 @@ final class EntityDetachedRevisionSpec
       first.map(_.revision.value) shouldBe Consequence.success(2L)
       second.map(value => value.entity.name -> value.revision.value) shouldBe
         Consequence.success("second" -> 3L)
+    }
+
+    "reject a typed codec that decodes an Entity into another collection" in {
+      Given("one persisted Entity and a caller codec that returns a foreign Entity identity")
+      val fixture = _fixture(
+        representation = None,
+        policy = EntityConcurrencyPolicy.None
+      )
+      given ExecutionContext = fixture.context
+      val id = _id("typed-codec-boundary")
+      fixture.store.create(DetachedEntity(id, "stored", "domain")).TAKE
+      val foreigncollection =
+        EntityCollectionId("test", "detached", "foreign")
+      val foreignpersistent = new EntityPersistent[DetachedEntity] {
+        def id(entity: DetachedEntity): EntityId =
+          entity.id
+
+        def toRecord(entity: DetachedEntity): Record =
+          _persistent.toRecord(entity)
+
+        def fromRecord(record: Record): Consequence[DetachedEntity] =
+          _persistent.fromRecord(record).map(entity =>
+            entity.copy(
+              id = entity.id.copy(collection = foreigncollection)
+            )
+          )
+      }
+
+      When("the EntityStoreSpace decodes the requested record through that caller codec")
+      val result = fixture.context.entityStoreSpace.load(
+        UnitOfWorkOp.EntityStoreLoad(id, foreignpersistent)
+      )
+
+      Then("the typed load fails before a foreign Entity can cross the storage boundary")
+      result shouldBe a[Consequence.Failure[?]]
+      result.asInstanceOf[Consequence.Failure[?]]
+        .conclusion.display should include("codec produced collection")
+    }
+
+    "accept a typed codec storage-owner alias for the requested Entity type" in {
+      Given(
+        "one persisted Entity and a caller codec whose collection owner differs but Entity type name matches"
+      )
+      val fixture = _fixture(
+        representation = None,
+        policy = EntityConcurrencyPolicy.None
+      )
+      given ExecutionContext = fixture.context
+      val id = _id("typed-codec-owner-alias")
+      fixture.store.create(DetachedEntity(id, "stored", "domain")).TAKE
+      val aliascollection =
+        EntityCollectionId("provider", "alias", _collection_id.name)
+      val aliaspersistent = new EntityPersistent[DetachedEntity] {
+        def id(entity: DetachedEntity): EntityId =
+          entity.id
+
+        def toRecord(entity: DetachedEntity): Record =
+          _persistent.toRecord(entity)
+
+        def fromRecord(record: Record): Consequence[DetachedEntity] =
+          _persistent.fromRecord(record).map(entity =>
+            entity.copy(
+              id = entity.id.copy(collection = aliascollection)
+            )
+          )
+      }
+
+      When("the EntityStoreSpace decodes the requested record through the owner-alias codec")
+      val result = fixture.context.entityStoreSpace.load(
+        UnitOfWorkOp.EntityStoreLoad(id, aliaspersistent)
+      )
+
+      Then("the typed load accepts the alias while retaining the caller codec representation")
+      result.map(_.map(_.id.collection)) shouldBe
+        Consequence.success(Some(aliascollection))
     }
   }
 

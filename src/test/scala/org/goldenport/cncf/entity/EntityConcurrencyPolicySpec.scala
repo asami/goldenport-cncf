@@ -28,7 +28,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConcurrencyPolicySpec
@@ -84,7 +84,7 @@ final class EntityConcurrencyPolicySpec
       val defaultresult =
         new ComponentFactory().bootstrapC(defaultcomponent)
 
-      Then("collection wins over Entity, Entity wins over the Optimistic default")
+      Then("collection wins over Entity and the undeclared default is no OCC")
       overrideresult.toOption shouldBe Some(overridecomponent)
       entityresult.toOption shouldBe Some(entitycomponent)
       defaultresult.toOption shouldBe Some(defaultcomponent)
@@ -93,7 +93,7 @@ final class EntityConcurrencyPolicySpec
       _effective_policy(entitycomponent) shouldBe
         EntityConcurrencyPolicy.None
       _effective_policy(defaultcomponent) shouldBe
-        EntityConcurrencyPolicy.Optimistic
+        EntityConcurrencyPolicy.None
     }
 
     "reject conflicting declarations at one precedence level" in {
@@ -140,12 +140,71 @@ final class EntityConcurrencyPolicySpec
 
       Then("None remains explicit and unknown policy fails structurally")
       EntityConcurrencyPolicy.default shouldBe
-        EntityConcurrencyPolicy.Optimistic
+        EntityConcurrencyPolicy.None
       none.toOption shouldBe Some(EntityConcurrencyPolicy.None)
       optimistic.toOption shouldBe Some(
         EntityConcurrencyPolicy.Optimistic
       )
       invalid.toOption shouldBe None
+    }
+
+    "retain the strictest assembled and mutation-attempt policy" in {
+      Given(
+        "assembled and per-attempt concurrency policies in every strictness combination"
+      )
+
+      When("the provider derives the effective mutation policy")
+      val none = EntityConcurrencyPolicy.effectivePolicy(
+        EntityConcurrencyPolicy.None,
+        EntityConcurrencyPolicy.None
+      )
+      val assembledoptimistic = EntityConcurrencyPolicy.effectivePolicy(
+        EntityConcurrencyPolicy.Optimistic,
+        EntityConcurrencyPolicy.None
+      )
+      val attemptoptimistic = EntityConcurrencyPolicy.effectivePolicy(
+        EntityConcurrencyPolicy.None,
+        EntityConcurrencyPolicy.Optimistic
+      )
+
+      Then("an attempt may strengthen but never weaken the assembled policy")
+      none shouldBe EntityConcurrencyPolicy.None
+      assembledoptimistic shouldBe EntityConcurrencyPolicy.Optimistic
+      attemptoptimistic shouldBe EntityConcurrencyPolicy.Optimistic
+    }
+
+    "require revision representation only for explicit optimistic concurrency" in {
+      Given(
+        "a non-Simple Entity without revision representation and two concurrency declarations"
+      )
+      val ordinary = _component(
+        "ordinary_non_simple",
+        Vector(
+          _descriptor(
+            "person",
+            None,
+            Some(EntityConcurrencyPolicy.None)
+          )
+        )
+      )
+      val optimistic = _component(
+        "optimistic_non_simple",
+        Vector(
+          _descriptor(
+            "person",
+            None,
+            Some(EntityConcurrencyPolicy.Optimistic)
+          )
+        )
+      )
+
+      When("ComponentFactory admits each runtime contract")
+      val ordinaryresult = new ComponentFactory().bootstrapC(ordinary)
+      val optimisticresult = new ComponentFactory().bootstrapC(optimistic)
+
+      Then("ordinary mutation is admitted and explicit OCC fails deterministically")
+      ordinaryresult.toOption shouldBe Some(ordinary)
+      optimisticresult.toOption shouldBe None
     }
   }
 

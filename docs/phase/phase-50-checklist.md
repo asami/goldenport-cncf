@@ -844,3 +844,136 @@ Evidence:
 - Clean read-only re-review found no remaining actionable finding.
 - Strategy completed history records Phase 50 and retains force, merge, repair,
   and conflict-resolution UX in future item 9.40.
+
+## PC-01: Post-Close Aggregate Mutation and OCC Specification Correction
+
+Correction Status:
+- Current status: DONE
+- Identified: 2026-07-26
+- Classification: Phase 50 specification bug
+- Historical rule: SE-01 through SE-10 remain the original closed execution
+  ledger. This correction section appends evidence and does not rewrite those
+  completed stages.
+- Completion rule: CNCF, Cozy, and ArtScene prove the corrected application API
+  boundary and canonical design/specification reflects the verified behavior.
+
+- [x] Add failing-first CNCF Executable Specifications for separate ordinary
+  `aggregate_update` and `aggregate_command` semantics.
+- [x] Prove that neither ordinary Aggregate mutation method accepts an
+  application revision parameter.
+- [x] Make `EntityConcurrencyPolicy.None` the deterministic ordinary default
+  and retain explicit `Optimistic` opt-in.
+- [x] Prove revision initialization and advancement under both concurrency
+  policies.
+- [x] Add explicitly named observed-revision Aggregate routes only for strict
+  `ObservedRequired` adapters.
+- [x] Preserve Conditional Transition's unconditional authoritative revision
+  comparison and exactly-one-winner behavior.
+- [x] Confirm `entity_update(id, patch)` replaces application-side direct
+  `EntityStoreUpdateById` construction.
+- [x] Reject declared revision semantics without a valid Embedded or Detached
+  representation during generation/assembly admission.
+- [x] Update Cozy generation so CRUD-style update uses `aggregate_update` and
+  domain command uses `aggregate_command`.
+- [x] Verify generated ordinary requests contain no `expectedRevision`,
+  `cncfRevision`, or replacement business parameter.
+- [x] Regenerate and compile ArtScene against one aligned CNCF/Cozy development
+  toolchain.
+- [x] Replace handwritten ArtScene UnitOfWork primitive construction with an
+  authorization-preserving managed behavior boundary.
+- [x] Run the selected ArtScene smoke boundary.
+- [x] Add/update canonical mutation API design and static specification.
+- [x] Update the Entity conflict design/specification where the Phase 50
+  `Optimistic` default is superseded.
+- [x] Update the Component developer guide and annotate historical Aggregate
+  implementation notes.
+- [x] Run CNCF focused and full tests with a 4 GB heap, required Cozy tests, and
+  ArtScene compile/smoke validation.
+- [x] Complete read-only review, review-fix, and clean re-review.
+- [x] Record exact correction evidence here and mark PC-01 DONE.
+
+Planning evidence:
+- `docs/journal/2026/07/2026-07-26-artscene-managed-revision-api-boundary-handoff.md`
+
+Implementation evidence recorded before final correction review:
+- CNCF focused Entity/OCC/Web regression passed 361 tests in 7 suites.
+- CNCF full validation with a 4 GB maximum heap passed 2523 tests in 363
+  completed suites with no failures.
+- An ordinary patch-by-id UnitOfWork mutation succeeds for a non-`SimpleEntity`
+  collection with no revision binding and does not create `cncf_revision`.
+- Explicit expected-revision UnitOfWork mutation remains optimistic through a
+  collection whose ordinary concurrency policy is `None`.
+- Cozy focused generator validation passed 30 tests and published
+  `cozy_2.12:0.3.0-SNAPSHOT` locally.
+- Cozy full validation passed 662 tests in 59 suites with no failures.
+- CNCF published `goldenport-cncf_3:0.5.1-SNAPSHOT` locally.
+- Regenerated ArtScene compiled 167 Scala sources against the aligned
+  development toolchain.
+- The ArtScene focused correction boundary passed all 60 tests in
+  `ArtSceneManualExhibitionSpec`, `ArtSceneCandidateFilteringSpec`,
+  `ArtSceneFacilityMasterDataSpec`, and `ArtSceneUpdateFetchSpec`.
+- CNCF canonicalizes generated runtime-plan Entity names against Aggregate
+  metadata, so ArtScene's generated `Facility` descriptor resolves the
+  canonical `facility` collection without an application alias.
+- ArtScene handwritten shared helpers use `ActionBehavior` with the originating
+  `ActionCall.Core` and call `entity_update_internal`. No helper constructs
+  `EntityStoreUpdateById` directly or reconstructs authorization metadata.
+- ArtScene test fixtures use an explicitly system-authorized
+  `EntityStoreSaveUnversioned` with `SeedImport`; fixture setup no longer
+  exercises the ordinary versioned-save contract for unmanaged Entities.
+- Read-only review identified collection-alias admission and caller-codec
+  fallback observability gaps. Review-fix added deterministic collection
+  identity validation, preserved safe aliases, and recorded both bypass and
+  fallback metrics.
+- Focused correction validation passed 52 tests in 7 suites after review-fix.
+- Final CNCF full validation with a 4 GB maximum heap passed 2533 tests in
+  363 completed suites with no failures, 8 canceled, 1 ignored, and 59
+  pending.
+- Whole-file naming, Executable Specification structure, and
+  `git diff --check` validation passed.
+- Clean re-review found no remaining actionable PC-01 finding.
+
+## PC-02: SimpleEntity Plain Mutation Fast Path
+
+Stage Status:
+- Current status: IN PROGRESS
+- Owner: CNCF EntityStore, UnitOfWork, datastore provider, and cache/Working Set
+  maintainers
+- Entry rule: PC-01 is DONE.
+- Completion rule: ordinary, optimistic, and conditional mutation paths have
+  distinct provider contracts, direct-path evidence, coherent cache behavior,
+  and full provider validation.
+
+- [ ] Record current `EntityStore` and provider call/statement sequences for
+  ordinary `None + AlwaysWrite`, explicit `Optimistic`, `WriteIfChanged`,
+  strict observed-revision, and Conditional Transition mutations.
+- [ ] Add failing-first recording-provider and SQLite SQL-trace Executable
+  Specifications for the required call/statement counts.
+- [ ] Define provider capability and mutation-result contracts for direct
+  ordinary update, compare-and-set, optional authoritative readback, and
+  unsupported capability fallback.
+- [ ] Make ordinary `None + AlwaysWrite` avoid target-record pre-read,
+  lock-read, and mandatory post-update readback on capable providers.
+- [ ] Keep managed revision advancement atomic in the provider update even
+  when ordinary OCC is disabled.
+- [ ] Implement explicit `Optimistic` as provider-native compare-and-set and
+  map zero-row application to the canonical stale-revision conflict.
+- [ ] Keep `WriteIfChanged`, strict observed revision, side-effect-bearing
+  mutation, and unsupported providers on explicitly safe paths.
+- [ ] Invalidate or reconcile EntitySpace, Working Set, and View state without
+  forcing an unconditional datastore reload.
+- [ ] Prove in-memory, SQLite, and MySQL revision advancement, stale-writer,
+  and cache-coherence behavior.
+- [ ] Preserve Conditional Transition rollback and exactly-one-winner
+  semantics without routing it through the plain-mutation fast path.
+- [ ] Record stable statement-count and representative throughput/latency
+  evidence without wall-clock assertions.
+- [ ] Update canonical design/specification and the Component developer guide
+  from verified behavior.
+- [ ] Complete focused tests, full CNCF validation with a 4 GB heap,
+  downstream validation, naming/spec review, and clean re-review.
+- [ ] Record exact PC-02 closure evidence and return Phase 50 to CLOSED.
+
+Planning reference:
+- Strategy item `9.47 SimpleEntity Plain Mutation Fast Path` is owned by this
+  Phase 50 correction stage; it is not a separate future phase.

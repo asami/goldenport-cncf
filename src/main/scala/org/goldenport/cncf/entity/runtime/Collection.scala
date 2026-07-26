@@ -27,7 +27,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
  *  version May. 10, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -199,6 +199,34 @@ final class EntityCollection[E](
         )
           evict(entityid)
         Consequence.Failure(conclusion)
+      }
+    }
+  }
+
+  def saveRecordManaged(
+    record: Record,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    val evaluationinstant = ctx.clock.instant()
+    descriptor.persistent.fromRecord(record).flatMap { entity =>
+      val entityid = descriptor.persistent.id(entity)
+      (
+        for {
+          saved <- ctx.entityStoreSpace.saveManaged(
+            entity,
+            descriptor.persistent,
+            executionPolicy
+          )
+        } yield {
+          _put(saved, evaluationinstant)
+          ()
+        }
+      ).recoverWith { conclusion =>
+          val reason = ConclusionDiagnostics.classify(conclusion).reason
+          if (reason.contains("committed-entity-projection-failure"))
+            evict(entityid)
+          Consequence.Failure(conclusion)
       }
     }
   }

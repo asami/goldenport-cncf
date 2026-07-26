@@ -114,7 +114,7 @@ import org.simplemodeling.model.datatype.{
  *  version Feb. 19, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {}
@@ -2030,6 +2030,7 @@ object AdminComponent {
         core
       ))
       policyselection <- _admin_entity_policy_selection(
+        operation,
         collection,
         args
       )
@@ -2171,16 +2172,29 @@ object AdminComponent {
       }
 
   private def _admin_entity_policy_selection(
+    operation: String,
     collection: EntityCollection[?],
     args: Map[String, Any]
   ): Consequence[EntityMutationPolicySelection] = {
     val profile = args
       .get(EntityMutationAdapterDefaults.profilePropertyName)
       .map(_.toString)
+    val adapterdefault =
+      if (operation == "create")
+        EntityMutationAdapterDefaults.core
+      else
+        EntityMutationAdapterDefaults.forProfile(profile)
+    val preconditionpolicy = adapterdefault.preconditionPolicy
+      .getOrElse(RevisionPreconditionPolicy.default)
+    val concurrencypolicy =
+      EntityMutationAdapterDefaults.effectiveConcurrencyPolicy(
+        collection.descriptor.plan.concurrencyPolicy,
+        preconditionpolicy
+      )
     EntityMutationPolicyResolver
       .resolveC(
-        collection.descriptor.plan.concurrencyPolicy,
-        adapterDefault = EntityMutationAdapterDefaults.forProfile(profile)
+        concurrencypolicy,
+        adapterDefault = adapterdefault
       )
   }
 
@@ -2197,8 +2211,13 @@ object AdminComponent {
         )
       else
         selection
+    val concurrencypolicy =
+      EntityMutationAdapterDefaults.effectiveConcurrencyPolicy(
+        collection.descriptor.plan.concurrencyPolicy,
+        effective.preconditionPolicy
+      )
     effective.executionPolicyC(
-      collection.descriptor.plan.concurrencyPolicy,
+      concurrencypolicy,
       expectedrevision
     )
   }

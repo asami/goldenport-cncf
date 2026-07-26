@@ -11,7 +11,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentBodyVersionedMutationSpec
@@ -26,6 +26,10 @@ final class ContentBodyVersionedMutationSpec
   private val _e3_metadata =
     afterWord(
       "in spec:entity-conflict-and-conditional-transition, example:E3, rules:R5,R11-R14,R21, phase:49"
+    )
+  private val _optimistic_policy =
+    EntityMutationExecutionPolicy(
+      concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
     )
 
   "ContentBody versioned mutation" should {
@@ -42,7 +46,8 @@ final class ContentBodyVersionedMutationSpec
           context,
           _collection_id,
           summon[EntityPersistent[TestEntity]],
-          EntityRevisionRepresentation.Detached
+          EntityRevisionRepresentation.Detached,
+          EntityConcurrencyPolicy.Optimistic
         )
         val entitystore = EntityStore.standard()
         val id = _id("stale-overflow")
@@ -61,13 +66,13 @@ final class ContentBodyVersionedMutationSpec
         val winner = entitystore.saveDetached(
           TestEntity(id, winnercontent),
           Some(expectation),
-          EntityMutationExecutionPolicy.default
+          _optimistic_policy
         )
         val stale = winner.flatMap(_ =>
           entitystore.saveDetached(
             TestEntity(id, stalecontent),
             Some(expectation),
-            EntityMutationExecutionPolicy.default
+            _optimistic_policy
           )
         )
         val loaded = entitystore.loadDetached[TestEntity](id)

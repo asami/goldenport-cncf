@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -129,14 +129,22 @@ final class ComponentFactory(
     val entityspace = component.entitySpace
     val aggregatespace = component.aggregateSpace
     val viewspace = component.viewSpace
-    val plans = _default_entity_runtime_plans(component)
+    val rawplans = _uncanonicalized_entity_runtime_plans(component)
+    val plans =
+      _canonicalize_entity_runtime_plan_names(component, rawplans)
     val entitynames =
       if (plans.nonEmpty) plans.map(_.entityName)
       else _entity_collection_names(component)
     for {
+      _ <- _validate_entity_runtime_plan_names_c(component, rawplans)
       revisionbindings <- _resolve_revision_bindings_c(component, entitynames)
       concurrencypolicies <-
         _resolve_concurrency_policies_c(component, entitynames)
+      _ <- _validate_concurrency_bindings_c(
+        entitynames,
+        revisionbindings,
+        concurrencypolicies
+      )
     } yield {
       val effectiveplans = plans.map { plan =>
         plan.copy(
@@ -254,6 +262,31 @@ final class ComponentFactory(
       }
     }
   }
+
+  private def _validate_concurrency_bindings_c(
+    entitynames: Vector[String],
+    revisionbindings: Map[String, Option[EntityRevisionBinding]],
+    concurrencypolicies: Map[String, EntityConcurrencyPolicy]
+  ): Consequence[Unit] =
+    entitynames.distinct.foldLeft(Consequence.unit) { (result, entityname) =>
+      result.flatMap { _ =>
+        val normalized = _normalize_entity_name(entityname)
+        val concurrency =
+          concurrencypolicies.getOrElse(
+            normalized,
+            EntityConcurrencyPolicy.default
+          )
+        if (
+          concurrency == EntityConcurrencyPolicy.Optimistic &&
+          revisionbindings.getOrElse(normalized, None).isEmpty
+        )
+          Consequence.configurationInvalid(
+            s"Optimistic concurrency for '$entityname' requires a managed revision representation"
+          )
+        else
+          Consequence.unit
+      }
+    }
 
   private def _resolve_revision_binding_c(
     entityname: String,
@@ -1637,17 +1670,71 @@ final class ComponentFactory(
 
   private def _default_entity_runtime_plans(
     component: Component
+  ): Vector[EntityRuntimePlan[Any]] =
+    _canonicalize_entity_runtime_plan_names(
+      component,
+      _uncanonicalized_entity_runtime_plans(component)
+    )
+
+  private def _uncanonicalized_entity_runtime_plans(
+    component: Component
   ): Vector[EntityRuntimePlan[Any]] = {
     val declarative = _runtime_descriptors_for(component).map(_.toPlan)
     val config = _config_entity_runtime_plans(component, declarative)
     val code = _programmatic_entity_runtime_plans(component)
     val merged = _merge_entity_runtime_plans(_merge_entity_runtime_plans(declarative, config), code)
-    if (merged.nonEmpty)
-      merged
-    else if (component.aggregateDefinitions.nonEmpty || component.viewDefinitions.nonEmpty)
-      _entity_collection_names(component).map(_legacy_memory_plan)
-    else
-      Vector.empty
+    val plans =
+      if (merged.nonEmpty)
+        merged
+      else if (component.aggregateDefinitions.nonEmpty || component.viewDefinitions.nonEmpty)
+        _entity_collection_names(component).map(_legacy_memory_plan)
+      else
+        Vector.empty
+    plans
+  }
+
+  private def _canonicalize_entity_runtime_plan_names(
+    component: Component,
+    plans: Vector[EntityRuntimePlan[Any]]
+  ): Vector[EntityRuntimePlan[Any]] = {
+    val collectionnames = _entity_collection_names(component)
+    plans.map { plan =>
+      collectionnames.find(_ == plan.entityName).orElse(
+        collectionnames
+          .filter(
+            _normalize_entity_name(_) ==
+              _normalize_entity_name(plan.entityName)
+          )
+          .headOption
+      )
+        .filterNot(_ == plan.entityName)
+        .map(name => plan.copy(entityName = name))
+        .getOrElse(plan)
+    }
+  }
+
+  private def _validate_entity_runtime_plan_names_c(
+    component: Component,
+    plans: Vector[EntityRuntimePlan[Any]]
+  ): Consequence[Unit] = {
+    val collectionnames = _entity_collection_names(component)
+    plans.foldLeft(Consequence.unit) { (result, plan) =>
+      result.flatMap { _ =>
+        val matches = collectionnames.filter(
+          _normalize_entity_name(_) ==
+            _normalize_entity_name(plan.entityName)
+        )
+        if (
+          collectionnames.contains(plan.entityName) ||
+          matches.size <= 1
+        )
+          Consequence.unit
+        else
+          Consequence.configurationInvalid(
+            s"Entity runtime plan '${plan.entityName}' ambiguously matches collections: ${matches.mkString(", ")}"
+          )
+      }
+    }
   }
 
   private def _programmatic_entity_runtime_plans(

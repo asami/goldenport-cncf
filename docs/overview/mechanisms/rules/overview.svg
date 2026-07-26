@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">CNCF Rules mechanism overview</title>
+  <desc id="desc">At-a-glance overview of the available Rule Engine core and the partially implemented Component Framework integration, including activation, binding, outcomes, and optional action admission.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="blueArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#2367D1"/></marker>
+    <marker id="amberArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#D99000"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 21px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 13px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#2367D1"/><path d="M61 69h34M78 52v34M66 57l24 24M90 57L66 81" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="128" y="61" class="h1">CNCF Rules — Mechanism Overview</text><text x="130" y="91" class="sub">Rule Engine core plus Component Framework activation and outcome integration</text>
+  <rect x="1070" y="35" width="188" height="32" rx="16" fill="#DFF7EB"/><circle cx="1091" cy="51" r="6" fill="#218A55"/><text x="1105" y="56" class="badge" fill="#17663F">ENGINE AVAILABLE</text>
+  <rect x="1270" y="35" width="178" height="32" rx="16" fill="#FFF3D6"/><circle cx="1291" cy="51" r="6" fill="#D99000"/><text x="1305" y="56" class="badge" fill="#855800">INTEGRATION PARTIAL</text>
+  <text x="1464" y="49" class="meta">Updated</text><text x="1464" y="70" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="176" class="label">1 · RULE ENGINE CORE — AVAILABLE</text><line x1="350" y1="171" x2="1530" y2="171" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="197" width="340" height="268" rx="16" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="100" y="235" class="title">Immutable inputs</text>
+  <rect x="100" y="261" width="280" height="43" rx="8" fill="#F0F5FA"/><text x="118" y="287" class="mono">RuleSet</text>
+  <rect x="100" y="314" width="280" height="43" rx="8" fill="#F0F5FA"/><text x="118" y="340" class="mono">RuleProgram</text>
+  <rect x="100" y="367" width="280" height="43" rx="8" fill="#F0F5FA"/><text x="118" y="393" class="mono">WorkingMemory</text>
+  <text x="100" y="439" class="muted">Facts carry identity, value and provenance</text>
+  <line x1="426" y1="331" x2="470" y2="331" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="484" y="197" width="546" height="268" rx="16" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="514" y="235" class="title">Pure RuleEngine.evaluate</text><text x="514" y="260" class="muted">Provider-neutral SPI · deterministic built-in baseline</text>
+  <rect x="514" y="282" width="96" height="27" rx="13.5" fill="#E4EDFF"/><text x="562" y="300" text-anchor="middle" class="chip" fill="#1F5AB6">CONSTRAINT</text>
+  <rect x="620" y="282" width="106" height="27" rx="13.5" fill="#E4F7F3"/><text x="673" y="300" text-anchor="middle" class="chip" fill="#08796D">CALCULATION</text>
+  <rect x="736" y="282" width="120" height="27" rx="13.5" fill="#F0E9FF"/><text x="796" y="300" text-anchor="middle" class="chip" fill="#7048A8">DECISION TABLE</text>
+  <rect x="866" y="282" width="98" height="27" rx="13.5" fill="#FFF3D6"/><text x="915" y="300" text-anchor="middle" class="chip" fill="#9A6500">DERIVATION</text>
+  <rect x="672" y="321" width="100" height="27" rx="13.5" fill="#FFE9E5"/><text x="722" y="339" text-anchor="middle" class="chip" fill="#A34A36">PRODUCTION</text>
+  <circle cx="520" cy="379" r="5" fill="#2367D1"/><text x="537" y="384" class="body">Exact decimal · immutable Facts · canonical ordering</text>
+  <circle cx="520" cy="415" r="5" fill="#2367D1"/><text x="537" y="420" class="body">No store, I/O, provider call or runtime action</text>
+  <line x1="1046" y1="331" x2="1090" y2="331" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1104" y="197" width="426" height="268" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1134" y="235" class="title">RuleEvaluationResult</text><text x="1134" y="260" class="muted">Evaluation terminates at an immutable result</text>
+  <circle cx="1140" cy="294" r="5" fill="#0F8F82"/><text x="1157" y="299" class="body">Values · decisions · violations</text>
+  <circle cx="1140" cy="329" r="5" fill="#0F8F82"/><text x="1157" y="334" class="body">Derived Facts + provenance</text>
+  <circle cx="1140" cy="364" r="5" fill="#0F8F82"/><text x="1157" y="369" class="body">ActionPlans — never executed here</text>
+  <circle cx="1140" cy="399" r="5" fill="#0F8F82"/><text x="1157" y="404" class="body">Agenda + structural explanations</text>
+  <rect x="1134" y="423" width="362" height="27" rx="13.5" fill="#DFF7EB"/><text x="1315" y="442" text-anchor="middle" class="chip" fill="#17663F">EVALUATION COMPLETE</text>
+
+  <text x="70" y="515" class="label">2 · COMPONENT FRAMEWORK CONNECTION — PARTIAL</text><line x1="470" y1="510" x2="1530" y2="510" stroke="#D9E2EC"/>
+  <g filter="url(#shadow)"><rect x="70" y="539" width="290" height="232" rx="16" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="98" y="575" class="title">Activation</text>
+  <rect x="98" y="598" width="234" height="38" rx="8" fill="#EAF8F1"/><circle cx="116" cy="617" r="5" fill="#218A55"/><text x="131" y="622" class="body">Application logic</text>
+  <rect x="98" y="646" width="234" height="38" rx="8" fill="#FFF7E3"/><circle cx="116" cy="665" r="5" fill="#D99000"/><text x="131" y="670" class="small">Lifecycle / Event / Job</text>
+  <rect x="98" y="694" width="234" height="38" rx="8" fill="#FFF7E3"/><circle cx="116" cy="713" r="5" fill="#D99000"/><text x="131" y="718" class="small">Timer / Monitor</text>
+  <line x1="376" y1="655" x2="410" y2="655" stroke="#D99000" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#amberArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="424" y="539" width="290" height="232" rx="16" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="452" y="575" class="title">Rule binding</text><text x="452" y="602" class="muted">Manual in the explicit path</text>
+  <text x="452" y="638" class="body">RuleSet / RuleProgram selection</text><text x="452" y="671" class="body">Runtime values → Facts</text><text x="452" y="704" class="body">Lifecycle outcome policy</text>
+  <rect x="452" y="724" width="136" height="25" rx="12.5" fill="#FFF3D6"/><text x="520" y="741" text-anchor="middle" class="chip" fill="#855800">BINDINGS PLANNED</text>
+  <line x1="730" y1="655" x2="764" y2="655" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="778" y="539" width="230" height="232" rx="16" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="806" y="575" class="title">Rule Engine</text><text x="806" y="602" class="muted">Available core</text>
+  <rect x="806" y="628" width="174" height="64" rx="10" fill="#DDEAFF"/><text x="893" y="655" text-anchor="middle" class="mono">evaluate</text><text x="893" y="678" text-anchor="middle" class="small">pure decision</text>
+  <rect x="806" y="714" width="132" height="25" rx="12.5" fill="#DFF7EB"/><text x="872" y="731" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+  <line x1="1024" y1="655" x2="1058" y2="655" stroke="#2367D1" stroke-width="3" marker-end="url(#blueArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1072" y="539" width="238" height="232" rx="16" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="1100" y="575" class="title">Outcome</text>
+  <text x="1100" y="616" class="body">Return / Report / Reject</text><text x="1100" y="651" class="body">Derive / Plan</text>
+  <rect x="1100" y="681" width="182" height="42" rx="9" fill="#EAF8F1"/><text x="1191" y="707" text-anchor="middle" class="small">Result available now</text>
+  <text x="1100" y="745" class="muted">Auto lifecycle use is planned</text>
+  <line x1="1326" y1="655" x2="1360" y2="655" stroke="#D99000" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#amberArrow)"/>
+
+  <g filter="url(#shadow)"><rect x="1374" y="539" width="156" height="232" rx="16" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g>
+  <text x="1398" y="575" class="title">Admission</text><text x="1398" y="602" class="muted">Optional</text>
+  <text x="1398" y="638" class="small">Operation</text><text x="1398" y="667" class="small">Event</text><text x="1398" y="696" class="small">Job</text><text x="1398" y="725" class="small">Advice</text>
+  <rect x="1398" y="738" width="108" height="24" rx="12" fill="#DFF7EB"/><text x="1452" y="754" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+
+  <rect x="70" y="802" width="1460" height="44" rx="10" fill="#EAF0F5"/><circle cx="105" cy="824" r="6" fill="#218A55"/><text x="121" y="829" class="chip" fill="#334E68">AVAILABLE</text><circle cx="247" cy="824" r="6" fill="#D99000"/><text x="263" y="829" class="chip" fill="#334E68">PARTIAL / PLANNED</text><text x="555" y="829" class="chip" fill="#334E68">ACTIVATION × RULE FAMILY × OUTCOME</text><text x="1050" y="829" class="chip" fill="#334E68">ACTION ADMISSION IS OPTIONAL</text>
+  <text x="70" y="883" class="foot">Details: rule-engine.svg · component-rule-integration.svg</text><text x="1530" y="883" text-anchor="end" class="foot">Evidence: Phase 32 Rule Engine and current framework bindings</text>
+</svg>

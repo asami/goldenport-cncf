@@ -38,7 +38,7 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
  *  version Mar. 24, 2026
  *  version Apr. 29, 2026
  *  version May.  4, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -165,7 +165,8 @@ object UnitOfWorkOp {
     id: EntityId,
     tc: EntityPersistent[T],
     authorization: Option[UnitOfWorkAuthorization] = None,
-    visibilityScope: Option[EntityVisibilityScope] = None
+    visibilityScope: Option[EntityVisibilityScope] = None,
+    useEntitySpace: Boolean = true
   ) extends UnitOfWorkOp[Option[T]]
 
   final case class EntityStoreLoadSnapshot[T](
@@ -203,7 +204,10 @@ object UnitOfWorkOp {
       new EntityStoreSave(
         entity,
         Some(expectedRevision),
-        tc
+        tc,
+        executionPolicy = EntityMutationExecutionPolicy(
+          concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
+        )
       )
 
     def apply[T](
@@ -216,7 +220,10 @@ object UnitOfWorkOp {
         entity,
         Some(expectedRevision),
         tc,
-        authorization
+        authorization,
+        EntityMutationExecutionPolicy(
+          concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
+        )
       )
   }
 
@@ -228,6 +235,14 @@ object UnitOfWorkOp {
     executionPolicy: EntityMutationExecutionPolicy =
       EntityMutationExecutionPolicy.default
   ) extends UnitOfWorkOp[EntityRevisionCarrier[T]]
+
+  final case class EntityStoreSaveManaged[T](
+    entity: T,
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
+  ) extends UnitOfWorkOp[T]
 
   final case class EntityStoreSaveUnversioned[T](
       entity: T,
@@ -263,7 +278,10 @@ object UnitOfWorkOp {
       new EntityStoreUpdate(
         entity,
         Some(expectedRevision),
-        tc
+        tc,
+        executionPolicy = EntityMutationExecutionPolicy(
+          concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
+        )
       )
 
     def apply[T](
@@ -276,7 +294,10 @@ object UnitOfWorkOp {
         entity,
         Some(expectedRevision),
         tc,
-        authorization
+        authorization,
+        EntityMutationExecutionPolicy(
+          concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
+        )
       )
   }
 
@@ -293,41 +314,23 @@ object UnitOfWorkOp {
   final case class EntityStoreUpdateById[P](
     id: EntityId,
     patch: P,
-    expectedRevision: Option[EntityRevision],
     tc: EntityPersistentUpdate[P],
     authorization: Option[UnitOfWorkAuthorization] = None,
     executionPolicy: EntityMutationExecutionPolicy =
       EntityMutationExecutionPolicy.default
-  ) extends UnitOfWorkOp[EntityRecordSnapshot]
-  object EntityStoreUpdateById {
-    def apply[P](
-      id: EntityId,
-      patch: P,
-      expectedRevision: EntityRevision,
-      tc: EntityPersistentUpdate[P]
-    ): EntityStoreUpdateById[P] =
-      new EntityStoreUpdateById(
-        id,
-        patch,
-        Some(expectedRevision),
-        tc
-      )
+  ) extends UnitOfWorkOp[Record]
 
-    def apply[P](
-      id: EntityId,
-      patch: P,
-      expectedRevision: EntityRevision,
-      tc: EntityPersistentUpdate[P],
-      authorization: Option[UnitOfWorkAuthorization]
-    ): EntityStoreUpdateById[P] =
-      new EntityStoreUpdateById(
-        id,
-        patch,
-        Some(expectedRevision),
-        tc,
-        authorization
+  final case class EntityStoreUpdateByIdObserved[P](
+    id: EntityId,
+    patch: P,
+    expectedRevision: EntityRevision,
+    tc: EntityPersistentUpdate[P],
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy(
+        concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
       )
-  }
+  ) extends UnitOfWorkOp[EntityRecordSnapshot]
 
   final case class EntityStoreUpdateByIdDetached[P](
     id: EntityId,

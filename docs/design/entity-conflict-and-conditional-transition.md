@@ -139,7 +139,13 @@ Generated Web Form adapters use `WriteIfChanged + ObservedRequired`. Idempotent
 REST PUT uses `WriteIfChanged + Managed`; a strong `If-Match:
 "revision-N"` selects `ObservedRequired`. Revision transport is framework
 metadata, not a business operation parameter. Create never requires an
-observed revision.
+observed revision. An adapter that selects `ObservedRequired` also selects
+`Optimistic` for that mutation attempt, even when the collection's ordinary
+default is `None`. The provider boundary preserves this explicit effective
+policy rather than replacing it with the collection default. Effective
+concurrency is the stricter of the assembled collection policy and the
+per-attempt policy: an adapter may strengthen `None` to `Optimistic`, but a
+request cannot weaken an assembled `Optimistic` policy.
 
 Read, search, View, and Aggregate projection expose Embedded `revision` as a
 read-only field. Detached domain records remain revision-free; an explicitly
@@ -159,6 +165,44 @@ explicitly named unversioned operations. Those operations carry a closed
 purpose value, require System admission at the UnitOfWork interpreter, and
 are not exposed by the protected application Entity DSL. Stable identity
 coordination uses claim-or-load rather than overwrite-style upsert.
+
+### Aggregate update and command boundary
+
+Aggregate mutation separates how the replacement value is obtained from
+whether OCC is enabled:
+
+```text
+aggregate_update
+  caller constructs replacement Aggregate
+  -> CNCF authorizes and persists it
+
+aggregate_command
+  CNCF loads authoritative Aggregate
+  -> domain command derives replacement
+  -> CNCF persists it
+```
+
+The ordinary concurrency default is `None`. This avoids making revision reads
+part of normal application logic while still advancing a CNCF-managed revision
+when the Entity model has one. `Optimistic` is an explicit Entity or collection
+decision and therefore requires a managed revision representation at component
+assembly.
+
+Strict ingress routes are separate from these ordinary methods.
+`aggregate_update_observed` and `aggregate_command_observed` carry a previously
+observed revision as framework metadata and select `ObservedRequired` within
+an explicitly configured `Optimistic` policy. This naming makes strict
+stale-write rejection visible at the adapter boundary without leaking revision
+into ordinary domain commands.
+
+Low-level mutation overloads that explicitly receive an expected revision are
+strict primitives rather than ordinary-default adapters. They therefore select
+optimistic comparison explicitly and never inherit `None` in a way that would
+discard the supplied revision.
+
+The Web Form and strict REST adapters make the same selection per mutation
+attempt. This adapter-local strictness does not change the Entity or
+collection's ordinary `None` default.
 
 ## Ordinary Version-Aware Mutation
 

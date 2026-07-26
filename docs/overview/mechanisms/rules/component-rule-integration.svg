@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">CNCF Component Framework rule integration overview</title>
+  <desc id="desc">Focused Rule field detail showing current and planned paths from Component Framework activation through rule binding, Rule Engine evaluation, outcome handling, and optional ActionPlan admission.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10z" fill="#2367D1"/></marker>
+    <marker id="arrowPlan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10z" fill="#D99000"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.6px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 22px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 15px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 14px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 11px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.35px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#0F8F82"/><path d="M61 57h15v12h12v12h17M76 69h-15M88 69h17" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="128" y="61" class="h1">Component → Rule Integration</text>
+  <text x="130" y="91" class="sub">How the framework activates rules, binds outcomes and admits optional actions</text>
+  <rect x="1172" y="35" width="126" height="32" rx="16" fill="#FFF3D6"/><circle cx="1193" cy="51" r="6" fill="#D99000"/><text x="1207" y="56" class="badge" fill="#855800">PARTIAL</text>
+  <text x="1435" y="50" class="meta">Updated</text><text x="1435" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="177" class="label">FRAMEWORK CONNECTION PATH</text><line x1="310" y1="172" x2="1530" y2="172" stroke="#D9E2EC"/>
+
+  <!-- Activation -->
+  <g filter="url(#shadow)"><rect x="70" y="207" width="300" height="390" rx="18" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="102" y="247" class="title">1 · Activation</text><text x="102" y="275" class="muted">When evaluation starts</text>
+  <rect x="102" y="301" width="236" height="48" rx="9" fill="#EAF8F1"/><circle cx="122" cy="325" r="6" fill="#218A55"/><text x="139" y="330" class="body">Application logic</text>
+  <rect x="102" y="360" width="236" height="43" rx="9" fill="#FFF7E3"/><circle cx="122" cy="381.5" r="6" fill="#D99000"/><text x="139" y="386" class="small">Operation / Entity lifecycle</text>
+  <rect x="102" y="414" width="236" height="43" rx="9" fill="#FFF7E3"/><circle cx="122" cy="435.5" r="6" fill="#D99000"/><text x="139" y="440" class="small">Event reception / Job completion</text>
+  <rect x="102" y="468" width="236" height="43" rx="9" fill="#FFF7E3"/><circle cx="122" cy="489.5" r="6" fill="#D99000"/><text x="139" y="494" class="small">Timer / Scheduler</text>
+  <rect x="102" y="522" width="236" height="43" rx="9" fill="#FFF7E3"/><circle cx="122" cy="543.5" r="6" fill="#D99000"/><text x="139" y="548" class="small">Monitor / external observation</text>
+  <text x="320" y="585" text-anchor="end" class="chip" fill="#855800">PLANNED BINDINGS</text>
+  <line x1="386" y1="400" x2="428" y2="400" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Binding -->
+  <g filter="url(#shadow)"><rect x="442" y="207" width="300" height="390" rx="18" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/></g>
+  <text x="474" y="247" class="title">2 · Rule binding</text><text x="474" y="275" class="muted">Framework-to-engine adaptation</text>
+  <rect x="474" y="302" width="236" height="58" rx="10" fill="#F0F5FA"/><text x="493" y="327" class="mono">RuleSet selection</text><text x="493" y="347" class="muted">which version applies?</text>
+  <rect x="474" y="374" width="236" height="58" rx="10" fill="#F0F5FA"/><text x="493" y="399" class="mono">RuleProgram selection</text><text x="493" y="419" class="muted">which typed program?</text>
+  <rect x="474" y="446" width="236" height="58" rx="10" fill="#F0F5FA"/><text x="493" y="471" class="mono">Fact projection</text><text x="493" y="491" class="muted">runtime values → Facts</text>
+  <rect x="474" y="527" width="236" height="38" rx="19" fill="#FFF3D6"/><text x="592" y="551" text-anchor="middle" class="chip" fill="#855800">MANUAL IN EXPLICIT PATH</text>
+  <line x1="758" y1="400" x2="800" y2="400" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Engine -->
+  <g filter="url(#shadow)"><rect x="814" y="207" width="300" height="390" rx="18" fill="#EEF4FF" stroke="#AFCBFA" stroke-width="1.5"/></g>
+  <text x="846" y="247" class="title">3 · Rule Engine</text><text x="846" y="275" class="muted">Pure evaluation mechanism</text>
+  <rect x="846" y="303" width="236" height="74" rx="12" fill="#DDEAFF"/><text x="964" y="333" text-anchor="middle" class="mono">RuleEngineSocket</text><text x="964" y="356" text-anchor="middle" class="small">evaluate(request)</text>
+  <text x="846" y="414" class="small">Constraint · Calculation</text><text x="846" y="442" class="small">DecisionTable · Derivation</text><text x="846" y="470" class="small">Production</text>
+  <rect x="846" y="508" width="236" height="38" rx="19" fill="#DFF7EB"/><text x="964" y="532" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE · PHASE 32</text>
+  <line x1="1130" y1="400" x2="1172" y2="400" stroke="#2367D1" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Outcome -->
+  <g filter="url(#shadow)"><rect x="1186" y="207" width="344" height="390" rx="18" fill="#fff" stroke="#D9E2EC" stroke-width="1.5"/></g>
+  <text x="1218" y="247" class="title">4 · Outcome binding</text><text x="1218" y="275" class="muted">How the framework consumes the result</text>
+  <rect x="1218" y="301" width="280" height="46" rx="9" fill="#EAF8F1"/><circle cx="1238" cy="324" r="5" fill="#218A55"/><text x="1253" y="329" class="body">Return values / decisions</text>
+  <rect x="1218" y="358" width="280" height="46" rx="9" fill="#FFF7E3"/><circle cx="1238" cy="381" r="5" fill="#D99000"/><text x="1253" y="386" class="body">Lifecycle Report / Reject</text>
+  <rect x="1218" y="415" width="280" height="46" rx="9" fill="#EAF8F1"/><circle cx="1238" cy="438" r="5" fill="#218A55"/><text x="1253" y="443" class="body">Return derived Facts</text>
+  <rect x="1218" y="472" width="280" height="46" rx="9" fill="#EAF8F1"/><circle cx="1238" cy="495" r="5" fill="#218A55"/><text x="1253" y="500" class="body">Return ActionPlans</text>
+  <text x="1218" y="550" class="small">Green: result exists now</text><text x="1218" y="574" class="small">Amber: automatic binding planned</text>
+
+  <!-- Optional admission -->
+  <text x="70" y="647" class="label">OPTIONAL POST-EVALUATION ADMISSION — PRODUCTION ACTIONPLANS ONLY</text><line x1="620" y1="642" x2="1530" y2="642" stroke="#D9E2EC"/>
+  <rect x="350" y="675" width="900" height="112" rx="16" fill="#fff" stroke="#E3C66E" stroke-width="1.5"/>
+  <text x="385" y="714" class="title">RuleActionAdmission</text><text x="385" y="744" class="muted">Explicit after evaluation; never required</text>
+  <line x1="665" y1="731" x2="720" y2="731" stroke="#D99000" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowPlan)"/>
+  <rect x="738" y="697" width="112" height="66" rx="10" fill="#EAF8F1"/><text x="794" y="724" text-anchor="middle" class="chip" fill="#17663F">OPERATION</text><text x="794" y="747" text-anchor="middle" class="small">ActionCall</text>
+  <rect x="862" y="697" width="112" height="66" rx="10" fill="#EAF8F1"/><text x="918" y="724" text-anchor="middle" class="chip" fill="#17663F">EVENT</text><text x="918" y="747" text-anchor="middle" class="small">Authorized bus</text>
+  <rect x="986" y="697" width="112" height="66" rx="10" fill="#EAF8F1"/><text x="1042" y="724" text-anchor="middle" class="chip" fill="#17663F">JOB</text><text x="1042" y="747" text-anchor="middle" class="small">ActionTask</text>
+  <rect x="1110" y="697" width="112" height="66" rx="10" fill="#EAF8F1"/><text x="1166" y="724" text-anchor="middle" class="chip" fill="#17663F">ADVICE</text><text x="1166" y="747" text-anchor="middle" class="small">No side effect</text>
+
+  <rect x="70" y="815" width="1460" height="42" rx="10" fill="#EAF0F5"/>
+  <circle cx="106" cy="836" r="6" fill="#218A55"/><text x="122" y="841" class="chip" fill="#334E68">AVAILABLE</text>
+  <circle cx="251" cy="836" r="6" fill="#D99000"/><text x="267" y="841" class="chip" fill="#334E68">PARTIAL / PLANNED BINDING</text>
+  <text x="560" y="841" class="chip" fill="#334E68">ACTIVATION ≠ RULE FAMILY ≠ OUTCOME</text>
+  <text x="1045" y="841" class="chip" fill="#334E68">ADMISSION IS OPTIONAL</text>
+  <text x="70" y="883" class="foot">Mechanisms: rule-engine.svg · ActionCall · EventBus · JobEngine</text>
+  <text x="1530" y="883" text-anchor="end" class="foot">Evidence: Phase 32 + current framework integration</text>
+</svg>

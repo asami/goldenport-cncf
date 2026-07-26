@@ -60,36 +60,98 @@ for unsupported scalar types. `Instant`, identifiers, date/time values, and
 other typed scalars must be supported as typed scalar storage or fail
 deterministically. They must not silently degrade to `String`.
 
-## Built-In Expanded Fields
+## CNCF-Managed SimpleEntity Attribute Catalog
 
-The initial built-in management expansion set is:
+CNCF-managed attributes are standard Entity metadata whose authoritative
+storage value is initialized, complemented, advanced, or protected by CNCF.
+They are not ordinary component-owned patch fields. Management does not mean
+that every field changes on every mutation.
 
-| Group | Logical fields | Target storage names |
-| --- | --- | --- |
-| identity | `id`, `shortId` | `id`, `short_id` |
-| lifecycle/audit | `createdAt`, `updatedAt`, `createdBy`, `updatedBy` | `created_at`, `updated_at`, `created_by`, `updated_by` |
-| concurrency | `revision` | `revision` |
-| logical state | `aliveness`, `postStatus`, `deletedAt`, `deletedBy` | `aliveness`, `post_status`, `deleted_at`, `deleted_by` |
-| security identity | `ownerId`, `groupId`, `privilegeId` | `owner_id`, `group_id`, `privilege_id` |
+The built-in expanded set is:
 
-These fields stay queryable because CNCF runtime behavior, admin surfaces, and
-operational diagnostics need them without decoding unrelated domain payloads.
+| Concern | Logical fields | Target storage names | Management rule |
+| --- | --- | --- | --- |
+| identity | `id`, `shortId` | `id`, `short_id` | Admitted or generated at create; stable afterward |
+| creation audit | `createdAt`, `createdBy` | `created_at`, `created_by` | Set at create and preserved |
+| update audit | `updatedAt`, `updatedBy` | `updated_at`, `updated_by` | Replaced on an admitted persistent mutation |
+| logical lifecycle | `aliveness`, `postStatus` | `aliveness`, `post_status` | Initialized at create and changed by admitted lifecycle operations |
+| deletion lifecycle | `deletedAt`, `deletedBy` | `deleted_at`, `deleted_by` | Set by soft delete and cleared by restore |
+| publication lifecycle | `publishAt`, `publicAt`, `publishedBy` | `publish_at`, `public_at`, `published_by` | Set by an admitted publication profile or operation |
+| tenancy scope | `tenantId`, `organizationId` | `tenant_id`, `organization_id` | Supplied by the admitted execution/storage scope |
+| observability | `traceId`, `correlationId` | `trace_id`, `correlation_id` | Captures the admitted mutation context when available |
+| persistence generation | `revision` | `revision` | Initialized to `1` and advanced once per successful persistent mutation |
+| security identity | `ownerId`, `groupId`, `privilegeId` | `owner_id`, `group_id`, `privilege_id` | Initialized from admitted security context and changed only through an authorized security route |
+| permission policy | typed rights | `permission` | Stored as compact owner/group/other JSON |
 
-`revision` is the standard `SimpleEntity` optimistic-concurrency value. It is
-an `EntityRevision` initialized to `1`, advanced atomically with an admitted
-mutation, and exposed read-only on Entity/search/View/Aggregate projections.
-Application create/update inputs and patches cannot write or clear it.
+These fields stay queryable because CNCF runtime behavior, authorization,
+admin surfaces, lifecycle processing, diagnostics, and concurrency handling
+need them without decoding unrelated domain payloads.
+
+`revision` is framework-managed persistence-generation metadata. OCC may use
+it, but maintaining revision does not by itself enable OCC. An ordinary
+`EntityConcurrencyPolicy.None` mutation still advances revision without an
+expected-revision comparison. An explicit `Optimistic` mutation uses revision
+as a compare-and-set guard. Conditional Transition retains its stronger atomic
+comparison contract.
+
+Application create/update records and patches cannot directly write or clear
+CNCF-managed fields. The application may provide intent through an admitted
+operation, such as create identity, publish, soft delete, restore, security
+change, or strict revision observation; CNCF derives the stored management
+values from that intent and the `ExecutionContext`.
 
 An explicitly admitted non-`SimpleEntity` model may instead use Detached
 revision storage in `cncf_revision`. Detached representation is an extension
-surface, not a fallback SimpleEntity shape. Missing managed revision, dual
-managed representation, and implicit Detached admission fail deterministically.
-An application-owned `revision` field on a Detached domain model remains
-ordinary data and is not interpreted as Embedded revision.
+surface, not a `SimpleEntity` attribute or fallback shape. Missing managed
+revision, dual managed representation, and implicit Detached admission fail
+deterministically. An application-owned `revision` field on a Detached domain
+model remains ordinary data and is not interpreted as Embedded revision.
 
-This list is intentionally limited. Domain-specific classification fields are
-ordinary scalar attributes unless the component declares a more specific storage
-policy.
+Generated ordinary CRUD uses the representation-neutral typed boundaries
+`entity_load` and `entity_save_managed`. The latter returns the authoritative
+saved Entity after CNCF applies the admitted revision policy. The same contract
+therefore works for Embedded `SimpleEntity`, explicitly Detached
+non-`SimpleEntity`, and unmanaged non-`SimpleEntity` collections without
+requiring application logic to transport revision metadata. Snapshot and
+Detached-carrier APIs remain explicit extension surfaces for workflows that
+must observe a revision.
+
+Domain-specific classification fields remain ordinary scalar attributes unless
+the component declares a more specific storage policy. Other
+`simplemodeling-model` value attributes, such as resource activation or
+publication scheduling values not listed above, are not automatically
+CNCF-managed merely because `SimpleObject` exposes their value objects.
+
+## Managed Mutation Effects
+
+Create initializes identity, creation/update audit, logical lifecycle,
+security, revision, and available observability metadata. A publication create
+profile also initializes its publication fields.
+
+An admitted `AlwaysWrite` update changes the application state and, in the same
+persistent mutation:
+
+- replaces `updatedAt` and `updatedBy`;
+- records the available trace/correlation context; and
+- advances `revision` exactly once.
+
+`createdAt` and `createdBy` remain unchanged. Logical, deletion, publication,
+tenancy, and security attributes change only when the admitted operation owns
+that concern.
+
+An admitted `WriteIfChanged` whose normalized business state is equal is a
+no-op. It changes neither application state nor `updatedAt`, `updatedBy`,
+trace/correlation metadata, or `revision`. Failed, rejected, stale, and
+rolled-back mutations likewise publish no management-field change.
+
+Managed-field maintenance is independent of persistence-path selection. The
+current representation-neutral managed-save path may pre-read and read back
+the authoritative record so Embedded, Detached, and unmanaged Entity codecs
+share one safe projection contract. Future strategy item 9.47 owns the
+optimized `None + AlwaysWrite` direct provider path without a target-record
+pre-read, `SELECT FOR UPDATE`, or mandatory authoritative readback. Explicit
+optimistic and conditional operations continue to select their stronger
+provider contracts separately.
 
 ## Permission Storage
 
@@ -164,7 +226,9 @@ explicitly authorizes a breaking generated-code migration.
 
 ## References
 
+- `docs/spec/simpleentity-storage-shape-policy.md`
 - `docs/design/record-purpose-taxonomy.md`
 - `docs/phase/phase-17.md`
 - `docs/phase/phase-17-checklist.md`
 - `docs/journal/2026/04/simpleentity-db-storage-shape-note.md`
+- `docs/journal/2026/07/2026-07-26-simpleentity-managed-attribute-catalog.md`

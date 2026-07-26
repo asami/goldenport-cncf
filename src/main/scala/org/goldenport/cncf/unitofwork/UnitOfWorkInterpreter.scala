@@ -52,7 +52,7 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -237,7 +237,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       ) {
         _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap { _ =>
           val loaded =
-            if (_working_set_enabled)
+            if (
+              _working_set_enabled &&
+              op.useEntitySpace &&
+              _entity_space_persistent_matches(op.id.collection, op.tc)
+            )
               _entity_space_load(op)
             else
               _entity_store_space.load(op)
@@ -344,6 +348,40 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
                 carrier
               }
           )
+        _reconcile_versioned_failure(id, result)
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreSaveManaged[t] @unchecked) =>
+      val id = m.tc.id(m.entity)
+      _with_calltree(
+        "uow:entitystore:save-managed",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        val loadrecord = () =>
+          _load_record(id).map { existing =>
+            Some(
+              existing
+                .map(record => m.tc.authorizationRecord(m.entity, record))
+                .getOrElse(m.tc.authorizationRecord(m.entity))
+            )
+          }
+        val result = _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
+          _transition_validation_hook
+            .beforeSave[t](m.entity, m.tc)
+            .flatMap(_ =>
+              _entity_store_space.saveManaged(
+                m.entity,
+                m.tc,
+                m.executionPolicy
+              )
+            )
+            .map { saved =>
+              _entity_space_evict(id)
+              _entity_space_put(saved, m.tc)
+              _view_space_invalidate_all()
+              saved
+            }
+        )
         _reconcile_versioned_failure(id, result)
       }
 
@@ -462,7 +500,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       val id = _canonical_entity_id(m.id)
       val op = m.copy(id = id)
       val result = _with_calltree(
-        "uow:entitystore:update-versioned:patch",
+        "uow:entitystore:update:patch",
         _entity_calltree_attributes(id, "entity-store", realio = true)
       ) {
         for {
@@ -482,12 +520,53 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             case None =>
               _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc)
           }
-          r <- _entity_store_space.updateById(op)
+          record <- _entity_store_space.updateById(op)
           _ = _entity_space_evict(op.id)
-          _ <- _entity_space_put_persisted_record(op.id, Some(r.record))
+          _ <- (for {
+            persisted <- _load_record(op.id).flatMap(
+              Consequence.successOrEntityNotFound(_)(op.id)
+            )
+            _ <- _entity_space_put_persisted_record(op.id, Some(persisted))
+          } yield ()).recoverWith(
+            EntityConcurrencyMetadata.committedProjectionFailure
+          )
         } yield {
           _view_space_invalidate_all()
-          r
+          record
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
+    case m: (UnitOfWorkOp.EntityStoreUpdateByIdObserved[t] @unchecked) =>
+      val id = _canonical_entity_id(m.id)
+      val op = m.copy(id = id)
+      val result = _with_calltree(
+        "uow:entitystore:update-observed:patch",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        for {
+          current <- _load_record(op.id)
+          _ <- _authorize(op.authorization, Some(() => Consequence.success(current)))
+          _ <- current match {
+            case Some(record) =>
+              val changes = Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
+              val proposed = _overlay_record(record, changes)
+              _transition_validation_hook.beforeUpdateById[t](
+                op.id,
+                op.patch,
+                op.tc,
+                record,
+                proposed
+              )
+            case None =>
+              _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc)
+          }
+          snapshot <- _entity_store_space.updateByIdObserved(op)
+          _ = _entity_space_evict(op.id)
+          _ <- _entity_space_put_persisted_record(op.id, Some(snapshot.record))
+        } yield {
+          _view_space_invalidate_all()
+          snapshot
         }
       }
       _reconcile_versioned_failure(id, result)
@@ -1116,14 +1195,28 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     val name = id.collection.name
     _component_option
       .flatMap { component =>
-        component.entitySpace.entityOption[T](name).orElse(
-          component.entitySpace.entityOption(id.collection).map(
-            _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]]
-          )
+        component.entitySpace.entityOption[Any](name).orElse(
+          component.entitySpace.entityOption(id.collection)
+        ).filter(collection =>
+          collection.descriptor.persistent.asInstanceOf[AnyRef] eq
+            tc.asInstanceOf[AnyRef]
+        ).map(
+          _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]]
         )
       }
       .foreach(_.putScoped(entity)(using uow.executionContext))
   }
+
+  private def _entity_space_persistent_matches[T](
+    collectionid: org.simplemodeling.model.datatype.EntityCollectionId,
+    persistent: org.goldenport.cncf.entity.EntityPersistent[T]
+  ): Boolean =
+    _component_option
+      .flatMap(_.entitySpace.entityOption(collectionid))
+      .exists(collection =>
+        collection.descriptor.persistent.asInstanceOf[AnyRef] eq
+          persistent.asInstanceOf[AnyRef]
+      )
 
   private def _entity_space_put_persisted_record(
     id: EntityId,

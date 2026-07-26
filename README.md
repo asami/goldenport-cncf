@@ -63,6 +63,7 @@ Cloud Native Component Framework provides:
 - Job-managed execution for observability and recovery
 - Clear separation between domain logic and infrastructure
 - Compatibility with AI-assisted and knowledge-driven workflows
+- Developer capability overview: `docs/overview/README.md`
 - Design and rules index: `docs/rules/README.md`
 - Phase / Stage process overview: `docs/strategy/cncf-development-strategy.md`
 

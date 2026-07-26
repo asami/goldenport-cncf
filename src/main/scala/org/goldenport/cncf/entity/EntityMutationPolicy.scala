@@ -8,7 +8,7 @@ import org.simplemodeling.model.datatype.EntityRevision
  * Declarative ordinary Entity mutation policy.
  *
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 enum EntityConcurrencyPolicy(val label: String) {
@@ -18,7 +18,19 @@ enum EntityConcurrencyPolicy(val label: String) {
 
 object EntityConcurrencyPolicy {
   val default: EntityConcurrencyPolicy =
-    EntityConcurrencyPolicy.Optimistic
+    EntityConcurrencyPolicy.None
+
+  def effectivePolicy(
+    assembledPolicy: EntityConcurrencyPolicy,
+    attemptPolicy: EntityConcurrencyPolicy
+  ): EntityConcurrencyPolicy =
+    if (
+      assembledPolicy == EntityConcurrencyPolicy.Optimistic ||
+      attemptPolicy == EntityConcurrencyPolicy.Optimistic
+    )
+      EntityConcurrencyPolicy.Optimistic
+    else
+      EntityConcurrencyPolicy.None
 
   def parseC(text: String): Consequence[EntityConcurrencyPolicy] =
     Option(text)
@@ -211,6 +223,17 @@ object EntityMutationAdapterDefaults {
         strictRestUpdate
       case _ =>
         core
+    }
+
+  def effectiveConcurrencyPolicy(
+    collectionPolicy: EntityConcurrencyPolicy,
+    preconditionPolicy: RevisionPreconditionPolicy
+  ): EntityConcurrencyPolicy =
+    preconditionPolicy match {
+      case RevisionPreconditionPolicy.ObservedRequired =>
+        EntityConcurrencyPolicy.Optimistic
+      case RevisionPreconditionPolicy.Managed =>
+        collectionPolicy
     }
 }
 

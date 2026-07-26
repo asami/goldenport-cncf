@@ -47,7 +47,7 @@ import org.simplemodeling.model.value.NominalScalar
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
  *  version May. 17, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -130,6 +130,11 @@ abstract class EntityStore {
 
   private[cncf] def save[T](
     entity: T
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
+
+  private[cncf] def saveManaged[T](
+    entity: T,
+    executionPolicy: EntityMutationExecutionPolicy
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
 
   def save[T](
@@ -224,6 +229,15 @@ abstract class EntityStore {
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot]
+
+  private[cncf] def updateByIdManaged[P](
+    id: EntityId,
+    patch: P,
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[Record]
 
   def updateByIdDetached[P](
     id: EntityId,
@@ -419,6 +433,13 @@ class NoopEntityStore() extends EntityStore {
       tc: EntityPersistent[T],
       ctx: ExecutionContext
   ): Consequence[Unit] = ???
+  private[cncf] def saveManaged[T](
+    entity: T,
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[Unit] = ???
   override def save[T](entity: T, expectedRevision: EntityRevision)(using
       tc: EntityPersistent[T],
       ctx: ExecutionContext
@@ -460,6 +481,14 @@ class NoopEntityStore() extends EntityStore {
       tc: EntityPersistentUpdate[P],
       ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot] = ???
+  private[cncf] def updateByIdManaged[P](
+    id: EntityId,
+    patch: P,
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+      tc: EntityPersistentUpdate[P],
+      ctx: ExecutionContext
+  ): Consequence[Record] = ???
   private[cncf] def updateByIdUnversioned[P](
     id: EntityId,
     patch: P
@@ -717,6 +746,12 @@ class StandardEntityStore(
 
   private[cncf] def save[T](
     entity: T
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] =
+    saveManaged(entity, EntityMutationExecutionPolicy.default)
+
+  private[cncf] def saveManaged[T](
+    entity: T,
+    executionPolicy: EntityMutationExecutionPolicy
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
     val id = tc.id(entity)
     val revisionbinding = _revision_binding_option(id.collection)
@@ -733,9 +768,9 @@ class StandardEntityStore(
                 entity,
                 binding,
                 None,
-                EntityMutationExecutionPolicy.default,
-                Some(EntityConcurrencyPolicy.None)
-              ).map(_ => ())
+                executionPolicy,
+                None
+              ).flatMap(_managed_save_result)
             case None =>
               _save_plain(entity, id, cid, dsid, existing)
           }
@@ -855,7 +890,12 @@ class StandardEntityStore(
     val policy =
       executionpolicy.copy(
         concurrencyPolicy =
-          concurrencyoverride.getOrElse(_concurrency_policy(id.collection))
+          concurrencyoverride.getOrElse(
+            EntityConcurrencyPolicy.effectivePolicy(
+              _concurrency_policy(id.collection),
+              executionpolicy.concurrencyPolicy
+            )
+          )
       )
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
@@ -868,7 +908,12 @@ class StandardEntityStore(
         tc.toStoreRecord(entity),
         expectedrevision
       )
-      effectiveexpected = expectedrevision.orElse(admitted._2)
+      effectiveexpected <- _effective_expected_revision(
+        revisionbinding,
+        base,
+        expectedrevision.orElse(admitted._2),
+        policy
+      )
       candidate =
         _complement_save_record(
           admitted._1,
@@ -887,6 +932,18 @@ class StandardEntityStore(
       )
     } yield result
   }
+
+  private def _managed_save_result(
+    result: EntityVersionedMutationResult
+  ): Consequence[Unit] =
+    result match {
+      case _: EntityVersionedMutationResult.Applied =>
+        Consequence.unit
+      case _: EntityVersionedMutationResult.NoOp =>
+        Consequence.unit
+      case EntityVersionedMutationResult.Stale(expected, actual) =>
+        _stale_mutation(expected, actual)
+    }
 
   private[cncf] def update[T](
     changes: T
@@ -989,7 +1046,12 @@ class StandardEntityStore(
     val policy =
       executionpolicy.copy(
         concurrencyPolicy =
-          concurrencyoverride.getOrElse(_concurrency_policy(id.collection))
+          concurrencyoverride.getOrElse(
+            EntityConcurrencyPolicy.effectivePolicy(
+              _concurrency_policy(id.collection),
+              executionpolicy.concurrencyPolicy
+            )
+          )
       )
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
@@ -1002,7 +1064,12 @@ class StandardEntityStore(
         tc.toStoreRecord(changes),
         expectedrevision
       )
-      effectiveexpected = expectedrevision.orElse(admitted._2)
+      effectiveexpected <- _effective_expected_revision(
+        revisionbinding,
+        base,
+        expectedrevision.orElse(admitted._2),
+        policy
+      )
       candidate <- _merge_versioned_update_record(
         base,
         _complement_update_record(
@@ -1043,6 +1110,28 @@ class StandardEntityStore(
       executionPolicy,
       None
     )
+
+  private[cncf] def updateByIdManaged[P](
+    id: EntityId,
+    patch: P,
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[Record] =
+    _revision_binding_option(id.collection) match {
+      case Some(binding) =>
+        _update_by_id_managed_result(
+          id,
+          patch,
+          binding,
+          None,
+          executionPolicy,
+          None
+        ).flatMap(_record_mutation_result(id, _, binding))
+      case None =>
+        _update_by_id_plain_record(id, patch)
+    }
 
   override def updateByIdDetached[P](
     id: EntityId,
@@ -1131,7 +1220,12 @@ class StandardEntityStore(
     val policy =
       executionpolicy.copy(
         concurrencyPolicy =
-          concurrencyoverride.getOrElse(_concurrency_policy(id.collection))
+          concurrencyoverride.getOrElse(
+            EntityConcurrencyPolicy.effectivePolicy(
+              _concurrency_policy(id.collection),
+              executionpolicy.concurrencyPolicy
+            )
+          )
       )
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
@@ -1169,6 +1263,22 @@ class StandardEntityStore(
       )
     } yield result
   }
+
+  private def _update_by_id_plain_record[P](
+    id: EntityId,
+    patch: P
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[Record] =
+    for {
+      _ <- _update_by_id_plain(id, patch)
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      stored <- _raw_record(cid, dsid)
+      record <- _required_record(dsid, stored)
+      hydrated <- ContentBodyStoragePolicy.hydrate(id, record)
+    } yield hydrated
 
   private[cncf] override def conditionalTransition[R, P, S](
     command: EntityConditionalTransitionCommand[R, P, S]
@@ -2787,6 +2897,27 @@ class StandardEntityStore(
         ContentBodyStoragePolicy
           .hydrate(id, record)
           .flatMap(revisionbinding.recordSnapshot)
+      case EntityVersionedMutationResult.Stale(expected, actual) =>
+        _stale_mutation(expected, actual)
+    }
+
+  private def _record_mutation_result(
+    id: EntityId,
+    result: EntityVersionedMutationResult,
+    revisionbinding: EntityRevisionBinding
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[Record] =
+    result match {
+      case EntityVersionedMutationResult.Applied(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .map(revisionbinding.withoutManagedRevision)
+          .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
+      case EntityVersionedMutationResult.NoOp(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .map(revisionbinding.withoutManagedRevision)
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">CNCF Job management use-case overview</title>
+  <desc id="desc">Comparison of JobSync, JobAsync, and JobSyncWithAsyncCont Command execution, including interface result timing, scheduling, transaction boundary, Job tracking, and implementation status.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0B1F33"/><stop offset="1" stop-color="#153B5B"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324D" flood-opacity=".10"/></filter>
+    <marker id="greenArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10z" fill="#218A55"/></marker>
+    <style>
+      .bg{fill:#F7F9FC}.h1{font:700 38px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}.sub{font:400 18px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.badge{font:700 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.5px}.meta{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#CFE0F0}.label{font:700 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:1px;fill:#52697D}.title{font:700 23px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.subtitle{font:700 17px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#102A43}.body{font:500 14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#243B53}.small{font:500 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334E68}.muted{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#627D98}.mono{font:600 13px "SFMono-Regular",Consolas,monospace;fill:#243B53}.chip{font:700 10px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.3px}.foot{font:400 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#829AB1}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/><rect width="1600" height="138" fill="url(#header)"/>
+  <circle cx="78" cy="69" r="31" fill="#0F8F82"/><rect x="59" y="54" width="38" height="30" rx="5" fill="none" stroke="#fff" stroke-width="4"/><path d="M69 54v-7h18v7M68 68h20" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="128" y="61" class="h1">CNCF Job Management — Use-case Overview</text><text x="130" y="91" class="sub">Three managed Command modes compared by return timing, scheduling and tracking</text>
+  <rect x="1172" y="35" width="154" height="32" rx="16" fill="#DFF7EB"/><circle cx="1193" cy="51" r="6" fill="#218A55"/><text x="1207" y="56" class="badge" fill="#17663F">AVAILABLE</text>
+  <text x="1435" y="50" class="meta">Updated</text><text x="1435" y="72" class="badge" fill="#fff">2026-07-25</text>
+
+  <text x="70" y="177" class="label">CANONICAL MANAGED COMMAND EXECUTION MODES</text><line x1="470" y1="172" x2="1530" y2="172" stroke="#D9E2EC"/>
+
+  <g filter="url(#shadow)"><rect x="70" y="204" width="460" height="592" rx="18" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g><rect x="70" y="204" width="460" height="9" rx="4.5" fill="#218A55"/>
+  <text x="104" y="252" class="title">JobSync</text><text x="104" y="280" class="muted">Tracked execution with synchronous result</text>
+  <rect x="364" y="234" width="134" height="27" rx="13.5" fill="#DFF7EB"/><text x="431" y="252" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+  <text x="104" y="320" class="muted">INTERFACE</text><text x="220" y="320" class="body">Final result</text>
+  <text x="104" y="350" class="muted">START</text><text x="220" y="350" class="body">Immediate in request flow</text>
+  <text x="104" y="380" class="muted">CALLER TX</text><text x="220" y="380" class="body">JoinCaller by default</text>
+  <text x="104" y="410" class="muted">TRACKING</text><text x="220" y="410" class="body">Persistent primary Job</text>
+  <line x1="104" y1="435" x2="496" y2="435" stroke="#D9E2EC"/>
+  <rect x="104" y="462" width="88" height="64" rx="10" fill="#EAF8F1"/><text x="148" y="489" text-anchor="middle" class="mono">Request</text><text x="148" y="511" text-anchor="middle" class="small">waits</text>
+  <line x1="204" y1="494" x2="234" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="248" y="462" width="112" height="64" rx="10" fill="#DDEAFF"/><text x="304" y="489" text-anchor="middle" class="mono">JobEngine</text><text x="304" y="511" text-anchor="middle" class="small">run sync</text>
+  <line x1="372" y1="494" x2="402" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="416" y="462" width="80" height="64" rx="10" fill="#EAF8F1"/><text x="456" y="489" text-anchor="middle" class="mono">Result</text><text x="456" y="511" text-anchor="middle" class="small">+ Job</text>
+  <text x="104" y="568" class="subtitle">Use when</text>
+  <circle cx="110" cy="600" r="5" fill="#218A55"/><text x="127" y="605" class="body">Caller needs the final response now</text>
+  <circle cx="110" cy="633" r="5" fill="#218A55"/><text x="127" y="638" class="body">Execution still needs audit and control</text>
+  <circle cx="110" cy="666" r="5" fill="#218A55"/><text x="127" y="671" class="body">Task transaction diagnostics matter</text>
+  <rect x="104" y="709" width="392" height="42" rx="21" fill="#DFF7EB"/><text x="300" y="735" text-anchor="middle" class="chip" fill="#17663F">SYNCHRONOUS RESULT · MANAGED LIFECYCLE</text>
+
+  <g filter="url(#shadow)"><rect x="570" y="204" width="460" height="592" rx="18" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g><rect x="570" y="204" width="460" height="9" rx="4.5" fill="#218A55"/>
+  <text x="604" y="252" class="title">JobAsync</text><text x="604" y="280" class="muted">Scheduled execution with accepted Job id</text>
+  <rect x="864" y="234" width="134" height="27" rx="13.5" fill="#DFF7EB"/><text x="931" y="252" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+  <text x="604" y="320" class="muted">INTERFACE</text><text x="720" y="320" class="body">JobId / accepted</text>
+  <text x="604" y="350" class="muted">START</text><text x="720" y="350" class="body">Shared priority/FIFO queue</text>
+  <text x="604" y="380" class="muted">CALLER TX</text><text x="720" y="380" class="body">Detached; worker owns Task TX</text>
+  <text x="604" y="410" class="muted">TRACKING</text><text x="720" y="410" class="body">Persistent primary Job</text>
+  <line x1="604" y1="435" x2="996" y2="435" stroke="#D9E2EC"/>
+  <rect x="604" y="462" width="90" height="64" rx="10" fill="#EAF8F1"/><text x="649" y="489" text-anchor="middle" class="mono">Submit</text><text x="649" y="511" text-anchor="middle" class="small">JobId</text>
+  <line x1="706" y1="494" x2="736" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="750" y="462" width="96" height="64" rx="10" fill="#DDEAFF"/><text x="798" y="489" text-anchor="middle" class="mono">Queue</text><text x="798" y="511" text-anchor="middle" class="small">bounded</text>
+  <line x1="858" y1="494" x2="888" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="902" y="462" width="94" height="64" rx="10" fill="#EAF8F1"/><text x="949" y="489" text-anchor="middle" class="mono">Worker</text><text x="949" y="511" text-anchor="middle" class="small">terminal</text>
+  <text x="604" y="568" class="subtitle">Use when</text>
+  <circle cx="610" cy="600" r="5" fill="#218A55"/><text x="627" y="605" class="body">Work may outlive the request</text>
+  <circle cx="610" cy="633" r="5" fill="#218A55"/><text x="627" y="638" class="body">Load flattening or delayed retry is needed</text>
+  <circle cx="610" cy="666" r="5" fill="#218A55"/><text x="627" y="671" class="body">Caller can query, await or control later</text>
+  <rect x="604" y="709" width="392" height="42" rx="21" fill="#DFF7EB"/><text x="800" y="735" text-anchor="middle" class="chip" fill="#17663F">EARLY JOB ID · SCHEDULED EXECUTION</text>
+
+  <g filter="url(#shadow)"><rect x="1070" y="204" width="460" height="592" rx="18" fill="#fff" stroke="#A9DCCF" stroke-width="1.5"/></g><rect x="1070" y="204" width="460" height="9" rx="4.5" fill="#218A55"/>
+  <text x="1104" y="246" class="title">JobSyncWith</text><text x="1104" y="272" class="title">AsyncCont</text><text x="1104" y="296" class="muted">Synchronous primary plus residual same-Job Tasks</text>
+  <rect x="1364" y="234" width="134" height="27" rx="13.5" fill="#DFF7EB"/><text x="1431" y="252" text-anchor="middle" class="chip" fill="#17663F">AVAILABLE</text>
+  <text x="1104" y="320" class="muted">INTERFACE</text><text x="1220" y="320" class="body">Primary result + JobId</text>
+  <text x="1104" y="350" class="muted">START</text><text x="1220" y="350" class="body">Primary now; residual queued</text>
+  <text x="1104" y="380" class="muted">CALLER TX</text><text x="1220" y="380" class="body">Primary joins; continuation new TX</text>
+  <text x="1104" y="410" class="muted">TRACKING</text><text x="1220" y="410" class="body">One Job, primary + continuation</text>
+  <line x1="1104" y1="435" x2="1496" y2="435" stroke="#D9E2EC"/>
+  <rect x="1104" y="462" width="96" height="64" rx="10" fill="#EAF8F1"/><text x="1152" y="489" text-anchor="middle" class="mono">Primary</text><text x="1152" y="511" text-anchor="middle" class="small">returns</text>
+  <line x1="1212" y1="494" x2="1242" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="1256" y="462" width="96" height="64" rx="10" fill="#DDEAFF"/><text x="1304" y="489" text-anchor="middle" class="mono">Same Job</text><text x="1304" y="511" text-anchor="middle" class="small">enqueue</text>
+  <line x1="1364" y1="494" x2="1394" y2="494" stroke="#218A55" stroke-width="3" marker-end="url(#greenArrow)"/>
+  <rect x="1408" y="462" width="88" height="64" rx="10" fill="#EAF8F1"/><text x="1452" y="489" text-anchor="middle" class="mono">Residual</text><text x="1452" y="511" text-anchor="middle" class="small">settles</text>
+  <text x="1104" y="568" class="subtitle">Use when</text>
+  <circle cx="1110" cy="600" r="5" fill="#218A55"/><text x="1127" y="605" class="body">Primary UX must complete synchronously</text>
+  <circle cx="1110" cy="633" r="5" fill="#218A55"/><text x="1127" y="638" class="body">Residual Event work may continue</text>
+  <circle cx="1110" cy="666" r="5" fill="#218A55"/><text x="1127" y="671" class="body">One tracking root must cover both</text>
+  <rect x="1104" y="709" width="392" height="42" rx="21" fill="#DFF7EB"/><text x="1300" y="735" text-anchor="middle" class="chip" fill="#17663F">NO FIRE-AND-FORGET · NO CHILD JOB REQUIRED</text>
+
+  <rect x="70" y="817" width="1460" height="40" rx="10" fill="#EAF0F5"/><circle cx="105" cy="837" r="6" fill="#218A55"/><text x="121" y="842" class="chip" fill="#334E68">ALL THREE PATHS AVAILABLE</text><text x="420" y="842" class="chip" fill="#334E68">PLAIN SYNC: DIRECT RESULT · NO JOB RECORD</text><text x="880" y="842" class="chip" fill="#334E68">EVENT RECEPTION MAY CREATE OR CONTINUE A JOB BY POLICY</text>
+  <text x="70" y="883" class="foot">Details: managed-synchronous-command.svg · managed-asynchronous-command.svg · synchronous-primary-async-continuation.svg</text><text x="1530" y="883" text-anchor="end" class="foot">Mechanisms: ../../mechanisms/jobs/overview.svg</text>
+</svg>
