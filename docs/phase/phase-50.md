@@ -1,6 +1,6 @@
 # Phase 50 - SimpleEntity Revision and OCC Simplification
 
-status=in-progress
+status=closed
 planned_at=2026-07-24
 started_at=2026-07-25
 depends_on=[Phase 49](phase-49.md)
@@ -453,7 +453,7 @@ visible as future strategy item 9.40.
 
 Correction identified: 2026-07-26
 
-Status: implementation in progress
+Status: corrected and closed
 
 The ArtScene development-toolchain compile exposed a Phase 50 specification
 bug in the application-facing Aggregate mutation boundary. Phase 50 correctly
@@ -503,7 +503,7 @@ are tracked in the appended `PC-01` section of
 
 ## PC-02 Plain Mutation Fast Path
 
-Status: implementation complete; final verification pending
+Status: closed
 
 The SimpleEntity plain-mutation fast path remains part of Phase 50 as the
 second post-close correction stage. It does not rewrite the historical
@@ -521,11 +521,14 @@ mutation contract:
 - Conditional Transition remains the multi-record transactional path.
 
 The authoritative work and closure ledger is the appended `PC-02` section of
-`docs/phase/phase-50-checklist.md`. Phase 51 remains planned and does not start
-until PC-02 returns Phase 50 to CLOSED.
+`docs/phase/phase-50-checklist.md`. PC-02 returned Phase 50 to CLOSED; Phase 51
+remains the planned successor.
 
 Provider-native direct and compare-and-set execution, EntityStore/UnitOfWork
 routing, cache reconciliation, in-memory/SQLite/live-MySQL parity, and stable
-SQLite statement-budget evidence are implemented. Remaining work is the
-downstream validation and exact Phase 50 closure record. The final CNCF
-read-only review/review-fix cycle is clean, and the 4 GB full suite passes.
+SQLite statement-budget evidence are implemented. The final CNCF
+read-only review/review-fix cycle is clean, and the 4 GB full suite passed
+2574 tests in 367 completed suites with no failures. Downstream full suites
+passed 388 `simplemodeling-lib` tests, 56 `simplemodeling-model` tests,
+42 `simple-modeler` tests, and 662 Cozy tests with no failures. This evidence
+closes PC-02 and returns Phase 50 to CLOSED.

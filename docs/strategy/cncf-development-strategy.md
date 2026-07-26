@@ -860,7 +860,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 47: closed (`docs/phase/phase-47.md`)
 - Phase 48: closed (`docs/phase/phase-48.md`)
 - Phase 49: closed (`docs/phase/phase-49.md`)
-- Phase 50: in progress, post-close correction PC-02
+- Phase 50: closed
   (`docs/phase/phase-50.md`)
 - Phase 51: planned (`docs/phase/phase-51.md`)
 
@@ -1613,6 +1613,9 @@ Completed in Phase 50.
     `AlwaysWrite` and `WriteIfChanged` behavior;
   - revision-aware EntityStore, UnitOfWork, internal DSL, Conditional
     Transition, Form, REST, View, Aggregate, and administration surfaces;
+  - provider-native direct ordinary mutation and compare-and-set fast paths
+    with explicit guarded fallbacks, coherent cache reconciliation, and stable
+    statement-budget evidence;
   - equivalent in-memory, SQLite, and live MySQL provider behavior; and
   - removal of the provisional token/snapshot compatibility API.
 - Deferred force, merge, repair, overwrite policy, and conflict-resolution UX
@@ -3247,79 +3250,6 @@ Planned for Phase 54 after Phase 53 closes.
   - `docs/phase/phase-54-checklist.md`;
   - `docs/notes/web-session-csrf-unification-implementation.md`; and
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
-
-### 9.47 SimpleEntity Plain Mutation Fast Path
-Implemented as Phase 50 post-close correction stage PC-02 after the PC-01
-mutation-contract correction; final Phase 50 verification and closure remain
-pending.
-
-- Historical basis:
-  - Phase 50 makes `EntityConcurrencyPolicy.None` the ordinary default while
-    retaining framework-managed revision lifecycle;
-  - the pre-PC-02 managed-revision implementation loaded the target record
-    before provider mutation and read the authoritative record after update;
-    and
-  - this follow-up was first identified during the Phase 50 PC-01 correction
-    and is retained as Phase 50 PC-02 so the managed-revision implementation
-    is not closed with its known provider-path debt deferred elsewhere.
-- Goal:
-  - give ordinary `None + AlwaysWrite` mutation a direct provider update path
-    without target-record pre-read, lock-read, or mandatory authoritative
-    readback in the steady state;
-  - implement explicit `Optimistic` mutation as provider-native compare and
-    set; and
-  - preserve Conditional Transition as the multi-record transactional path.
-- Selected direction:
-  - ordinary, optimistic, and conditional mutations remain separate semantic
-    paths;
-  - managed revision advances atomically in the same provider update even when
-    ordinary OCC is disabled;
-  - callers request authoritative readback explicitly rather than paying for
-    it on every ordinary update;
-  - `WriteIfChanged`, strict observed revision, side-effect-bearing mutation,
-    and unsupported provider capabilities are classified explicitly; and
-  - EntitySpace and Working Set state is invalidated or reconciled without
-    forcing an unconditional datastore reload.
-- Initial scope:
-  - record current EntityStore and provider call/statement sequences;
-  - define provider capability and mutation-result contracts;
-  - add recording-provider and SQLite SQL-trace Executable Specifications;
-  - add MySQL acceptance for direct update and compare-and-set behavior;
-  - prove in-memory, SQLite, and MySQL revision advancement and stale-writer
-    semantics;
-  - preserve Conditional Transition rollback and exactly-one-winner behavior;
-    and
-  - record statement-count and representative throughput/latency evidence
-    without unstable wall-clock assertions.
-- Boundary:
-  - the item does not change Phase 50's ordinary API, managed revision,
-    explicit OCC opt-in, or Conditional Transition contract;
-  - it does not rewrite the historical Phase 50 SE-01 through SE-10 closure
-    ledger;
-  - it does not weaken `WriteIfChanged` or strict observed-revision semantics;
-    and
-  - Phase 50 PC-02 owns implementation and closure evidence.
-- Acceptance:
-  - ordinary `None + AlwaysWrite` performs no target-record load before its
-    provider update and no mandatory post-update readback;
-  - explicit `Optimistic` reports zero-row compare-and-set as the canonical
-    stale-revision conflict;
-  - managed revision advances atomically on supported providers;
-  - cache and Working Set behavior remains coherent; and
-  - focused provider tests, full CNCF validation, downstream validation,
-    naming/spec review, and canonical design/specification updates pass.
-- Implementation status:
-  - separate direct and compare-and-set provider contracts are implemented for
-    in-memory and SQL providers;
-  - EntityStore/UnitOfWork select native, guarded, and Conditional Transition
-    paths without weakening requested semantics;
-  - in-memory, SQLite, and opt-in live MySQL provider/cache parity passed;
-  - deterministic SQLite statement-budget evidence passed;
-  - final review and full CNCF validation passed; and
-  - downstream validation and Phase 50 closure remain pending.
-- Historical reference:
-  - `docs/phase/phase-50.md`;
-  - `docs/phase/phase-50-checklist.md`.
 
 ### 9.48 Supervisor SPI and Managed Lifecycle Provider Integration
 CNCF contract baseline implemented; provider and consumer adoption remains

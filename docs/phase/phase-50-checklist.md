@@ -1,6 +1,6 @@
 # Phase 50 Checklist - SimpleEntity Revision and OCC Simplification
 
-status=in-progress
+status=closed
 phase=[Phase 50 - SimpleEntity Revision and OCC Simplification](phase-50.md)
 
 This checklist is the authoritative Phase 50 state ledger after Phase 50
@@ -936,7 +936,7 @@ Implementation evidence recorded before final correction review:
 ## PC-02: SimpleEntity Plain Mutation Fast Path
 
 Stage Status:
-- Current status: IN PROGRESS
+- Current status: DONE
 - Owner: CNCF EntityStore, UnitOfWork, datastore provider, and cache/Working Set
   maintainers
 - Entry rule: PC-01 is DONE.
@@ -970,13 +970,14 @@ Stage Status:
   evidence without wall-clock assertions.
 - [x] Update canonical design/specification and the Component developer guide
   from verified behavior.
-- [ ] Complete focused tests, full CNCF validation with a 4 GB heap,
+- [x] Complete focused tests, full CNCF validation with a 4 GB heap,
   downstream validation, naming/spec review, and clean re-review.
-- [ ] Record exact PC-02 closure evidence and return Phase 50 to CLOSED.
+- [x] Record exact PC-02 closure evidence and return Phase 50 to CLOSED.
 
 Planning reference:
-- Strategy item `9.47 SimpleEntity Plain Mutation Fast Path` is owned by this
-  Phase 50 correction stage; it is not a separate future phase.
+- Former strategy item `9.47 SimpleEntity Plain Mutation Fast Path` is owned
+  and completed by this Phase 50 correction stage; its completion is recorded
+  in strategy history item `8.29`.
 
 PC-02A implementation evidence:
 - `docs/notes/simpleentity-plain-mutation-fast-path-implementation.md` records
@@ -1109,7 +1110,11 @@ PC-02D implementation evidence:
   finding.
 - Final CNCF validation with a 4 GB maximum heap passed 2574 tests in 367
   completed suites with no failures, 10 canceled, 1 ignored, and 59 pending.
-  Downstream validation and Phase 50 closure remain pending.
+- Final downstream validation passed 388 `simplemodeling-lib` tests,
+  56 `simplemodeling-model` tests, 42 `simple-modeler` tests, and 662 Cozy
+  tests with no failures. The Cozy suite had two canceled tests.
+- PC-02 closure documentation passed clean review and diff validation. PC-02
+  is DONE and Phase 50 is CLOSED.
 
 ### PC-02 Accumulator Modified Scala File Compliance Ledger
 
