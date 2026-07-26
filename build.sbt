@@ -2,7 +2,7 @@ import sbt.TestFrameworks
 import sbt.Tests
 
 val scala3version = "3.3.8"
-val cozyGeneratorVersion = "0.3.0-SNAPSHOT"
+val cozyGeneratorVersion = "0.3.0"
 
 Compile / javacOptions ++= Seq("--release", "8")
 Test / javacOptions := Seq("--release", "14")
@@ -328,7 +328,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.5.1-SNAPSHOT",
+    version := "0.5.1",
 
     scalaVersion := scala3version,
 
@@ -367,8 +367,8 @@ lazy val root = project
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 
-      "org.goldenport" %% "goldenport-core" % "0.4.1-SNAPSHOT",
-      "org.simplemodeling" %% "simplemodeling-model" % "0.2.0-SNAPSHOT",
+      "org.goldenport" %% "goldenport-core" % "0.4.1",
+      "org.simplemodeling" %% "simplemodeling-model" % "0.2.0",
       "org.goldenport" % "cncf-collaborator-api" % "0.1.0",
 
       // Testing
