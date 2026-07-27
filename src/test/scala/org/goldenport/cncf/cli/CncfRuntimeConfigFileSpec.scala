@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -144,6 +144,41 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
 
       And("a packaged target keeps search repositories non-active")
       packaged shouldBe empty
+    }
+
+    "include development CAR assembly dependencies in API preflight" in {
+      Given("an active development CAR whose assembly declares the Scraper provider")
+      val root = Files.createTempDirectory("cncf-development-assembly-preflight")
+      val cardir = root.resolve("src").resolve("main").resolve("car")
+      Files.createDirectories(cardir)
+      Files.writeString(
+        cardir.resolve("component-descriptor.json"),
+        """{"name":"textus-art-scene","version":"0.1.1","component":"textus-art-scene"}"""
+      )
+      Files.writeString(
+        cardir.resolve("assembly-descriptor.yaml"),
+        """subsystem: textus-art-scene
+          |version: 0.1.1
+          |components:
+          |  - name: textus-art-scene
+          |    version: 0.1.1
+          |  - name: textus-scraper
+          |    version: 0.1.1
+          |""".stripMargin
+      )
+      val dev = ComponentRepository.ComponentDevDirRepository.Specification(root)
+
+      When("the API preflight descriptors are assembled")
+      val descriptors = ComponentRepository.assemblyPreflightDescriptors(Vector(dev), Vector.empty)
+
+      Then("the dependent Scraper CAR is available to repository API inspection")
+      descriptors.flatMap(_.componentName) shouldBe Vector("textus-art-scene", "textus-scraper")
+      descriptors.flatMap(_.version) shouldBe Vector("0.1.1", "0.1.1")
+
+      And("only the dependency remains unresolved for the search repository")
+      val searchdescriptors =
+        ComponentRepository.unresolvedDescriptorsForSearch(Vector(dev), descriptors)
+      searchdescriptors.flatMap(_.componentName) shouldBe Vector("textus-scraper")
     }
 
     "resolve an explicit YAML config file passed as a Textus CLI framework option" in {

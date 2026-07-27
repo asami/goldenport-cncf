@@ -1,8 +1,9 @@
 import sbt.TestFrameworks
 import sbt.Tests
+import org.goldenport.cncf.phase51.build.{CncfGenerationBuildContract, CncfGenerationInputs}
 
 val scala3version = "3.3.8"
-val cozyGeneratorVersion = "0.3.0"
+val cozyGeneratorVersion = "0.3.1-SNAPSHOT"
 
 Compile / javacOptions ++= Seq("--release", "8")
 Test / javacOptions := Seq("--release", "14")
@@ -10,7 +11,9 @@ Test / javacOptions := Seq("--release", "14")
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
 lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime self descriptor for the runtime jar.")
+lazy val resolveInformationCmlGenerationInputs = taskKey[CncfGenerationInputs]("Resolve the exact Cozy generator, CNCF target, and runtime descriptor for Information CML generation.")
 lazy val generateInformationCmlModel = taskKey[Seq[File]]("Generate CNCF Information vocabulary model from CML.")
+lazy val verifyInformationCmlGenerationDeterminism = taskKey[Unit]("Verify repeated Information CML generation emits the same Scala file set and bytes.")
 lazy val copyTextusRuntimeCatalog = taskKey[File]("Copy the checked-in Textus runtime catalog into the warehouse repository.")
 lazy val publishTextusRuntimeCatalog = taskKey[File]("Publish Textus runtime catalog metadata into the warehouse repository.")
 
@@ -208,6 +211,46 @@ def cncfRuntimeDescriptorText(
      |""".stripMargin
 }
 
+def runInformationCmlGeneration(
+  inputs: CncfGenerationInputs,
+  outputDirectory: File,
+  baseDirectory: File,
+  log: sbt.util.Logger
+): Seq[File] = {
+  IO.delete(outputDirectory)
+  IO.createDirectory(outputDirectory)
+  val command = CncfGenerationBuildContract.command(
+    inputs,
+    outputDirectory
+  ).fold(
+    errors => sys.error(errors.mkString("CNCF generation command preparation failed: ", " ", "")),
+    identity
+  )
+  log.info(
+    s"Generating ${inputs.sourceIdentity}@${inputs.sourceSha256} with Cozy ${inputs.cozyGeneratorVersion} for CNCF ${inputs.cncfTargetVersion} using ${inputs.runtimeDescriptor.getAbsolutePath}"
+  )
+  val exitcode = scala.sys.process.Process(command, baseDirectory).!(log)
+  if (exitcode != 0)
+    sys.error(CncfGenerationBuildContract.generationFailure(inputs, exitcode))
+  val files =
+    ((outputDirectory / "target") ** "*.scala").get
+      .sortBy(_.getAbsolutePath)
+  if (files.isEmpty)
+    sys.error(s"no CNCF Information CML sources generated from: ${inputs.source.getAbsolutePath}")
+  val validationcommand =
+    CncfGenerationBuildContract.validationCommand(inputs, outputDirectory).fold(
+      errors => sys.error(errors.mkString("CNCF generation provenance validation preparation failed: ", " ", "")),
+      identity
+    )
+  val validationexitcode =
+    scala.sys.process.Process(validationcommand, baseDirectory).!(log)
+  if (validationexitcode != 0)
+    sys.error(
+      s"failed to validate CNCF Information generation provenance: ${CncfGenerationBuildContract.provenanceFile(outputDirectory).getAbsolutePath}"
+    )
+  files
+}
+
 def textusWriteRuntimeCatalog(
   sourcefile: File,
   targetfile: File,
@@ -328,9 +371,11 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.5.1",
+    version := "0.5.2-SNAPSHOT",
 
     scalaVersion := scala3version,
+
+    Test / unmanagedSources += baseDirectory.value / "project" / "CncfGenerationBuildContract.scala",
 
     resolvers ++= Seq(
       Resolver.defaultLocal,
@@ -430,28 +475,53 @@ lazy val root = project
       file
     },
 
-    generateInformationCmlModel := {
-      val input = baseDirectory.value / "src/main/cozy/information.cml"
-      val outputdir = target.value / "cncf-information-cml"
-      IO.delete(outputdir)
-      IO.createDirectory(outputdir)
-      val command = Seq(
-        "cozy",
-        "--runtime",
+    resolveInformationCmlGenerationInputs := {
+      CncfGenerationBuildContract.resolve(
         cozyGeneratorVersion,
-        "modeler-scala-value",
-        input.getAbsolutePath,
-        s"--save=${outputdir.getAbsolutePath}"
+        version.value,
+        generateCncfRuntimeDescriptor.value,
+        baseDirectory.value,
+        baseDirectory.value / "src/main/cozy/information.cml"
+      ).fold(
+        errors => sys.error(errors.mkString("CNCF generation input resolution failed: ", " ", "")),
+        identity
       )
-      val exitcode = scala.sys.process.Process(command, baseDirectory.value).!(streams.value.log)
-      if (exitcode != 0)
-        sys.error(s"failed to generate CNCF Information model from CML: ${input.getAbsolutePath}")
-      val files =
-        ((outputdir / "target") ** "*.scala").get
-          .sortBy(_.getAbsolutePath)
-      if (files.isEmpty)
-        sys.error(s"no CNCF Information CML sources generated from: ${input.getAbsolutePath}")
-      files
+    },
+
+    generateInformationCmlModel := {
+      val outputdir = target.value / "cncf-information-cml"
+      val generationinputs = resolveInformationCmlGenerationInputs.value
+      runInformationCmlGeneration(
+        generationinputs,
+        outputdir,
+        baseDirectory.value,
+        streams.value.log
+      )
+    },
+
+    verifyInformationCmlGenerationDeterminism := {
+      val outputdir = target.value / "cncf-information-cml-determinism"
+      val generationinputs = resolveInformationCmlGenerationInputs.value
+      val log = streams.value.log
+      runInformationCmlGeneration(generationinputs, outputdir, baseDirectory.value, log)
+      val coldsnapshot =
+        CncfGenerationBuildContract.snapshot(outputdir).fold(
+          errors => sys.error(errors.mkString("Cold Information CML snapshot failed: ", " ", "")),
+          identity
+        )
+      runInformationCmlGeneration(generationinputs, outputdir, baseDirectory.value, log)
+      val repeatedsnapshot =
+        CncfGenerationBuildContract.snapshot(outputdir).fold(
+          errors => sys.error(errors.mkString("Repeated Information CML snapshot failed: ", " ", "")),
+          identity
+        )
+      if (repeatedsnapshot != coldsnapshot)
+        sys.error(
+          s"Information CML generation is not deterministic. Cold=$coldsnapshot repeated=$repeatedsnapshot"
+        )
+      log.info(
+        s"Information CML generation determinism verified for ${coldsnapshot.scalaArtifacts.size} Scala files and provenance ${coldsnapshot.provenanceSha256}."
+      )
     },
 
     Compile / resourceGenerators += Def.task {
@@ -463,6 +533,8 @@ lazy val root = project
     }.taskValue,
 
     Compile / sourceGenerators += generateInformationCmlModel.taskValue,
+
+    Test / test := (Test / test).dependsOn(verifyInformationCmlGenerationDeterminism).value,
 
     exportTextusRuntimeCatalog := {
       val source = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"

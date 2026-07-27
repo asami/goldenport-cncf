@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -590,6 +590,15 @@ object ComponentRepository extends GlobalObservable {
   }
 
   object ComponentDevDirRepository {
+    private val _assembly_descriptor_names = Vector(
+      "assembly-descriptor.yaml",
+      "assembly-descriptor.yml",
+      "assembly-descriptor.json",
+      "assembly-descriptor.conf",
+      "assembly-descriptor.hocon",
+      "assembly-descriptor.xml"
+    )
+
     final case class Specification(
       baseDir: Path
     ) extends ComponentRepository.Specification {
@@ -727,6 +736,19 @@ object ComponentRepository extends GlobalObservable {
           case Consequence.Success(xs) => xs
           case Consequence.Failure(_) => Vector.empty
         }
+      }
+
+    def devAssemblyComponentDescriptors(base: Path): Vector[ComponentDescriptor] =
+      Vector(
+        base.resolve("car.d"),
+        base.resolve("src").resolve("main").resolve("car")
+      ).flatMap { dir =>
+        _assembly_descriptor_names
+          .map(dir.resolve(_).normalize)
+          .find(Files.isRegularFile(_))
+          .flatMap(GenericSubsystemDescriptor.load(_).toOption)
+          .toVector
+          .flatMap(_.toComponentDescriptors)
       }
   }
 
@@ -935,6 +957,27 @@ object ComponentRepository extends GlobalObservable {
     componentName: String
   ): Option[Path] =
     specs.iterator.flatMap(_.resolveComponentArchivePath(componentName)).toSeq.headOption
+
+  private[cncf] def assemblyPreflightDescriptors(
+    specs: Seq[Specification],
+    descriptors: Vector[ComponentDescriptor]
+  ): Vector[ComponentDescriptor] = {
+    val assemblydescriptors = specs.flatMap {
+      case ComponentDevDirRepository.Specification(baseDir) =>
+        ComponentDevDirRepository.devAssemblyComponentDescriptors(baseDir)
+      case SubsystemDevDirRepository.Specification(baseDir) =>
+        ComponentDevDirRepository.devAssemblyComponentDescriptors(baseDir.resolve("component").normalize)
+      case _ =>
+        Vector.empty
+    }
+    assemblydescriptors.foldLeft(descriptors) { (z, descriptor) =>
+      val names = _component_descriptor_names(descriptor).map(NamingConventions.toComparisonKey).toSet
+      val exists = z.exists { candidate =>
+        _component_descriptor_names(candidate).exists(name => names.contains(NamingConventions.toComparisonKey(name)))
+      }
+      if (exists) z else z :+ descriptor
+    }
+  }
 
   private[cncf] def descriptorsForSpecification(
     spec: Specification,

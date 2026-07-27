@@ -22,6 +22,7 @@ import org.goldenport.cncf.component.repository.fixture.spi.{
   PlainAiRunnerProviderComponent
 }
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
+import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.protocol.Protocol
@@ -35,7 +36,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -533,13 +534,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     target: Path,
     entries: Seq[(String, Path)]
   ): Unit =
-    Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zos =>
-      entries.foreach { case (name, file) =>
-        zos.putNextEntry(new ZipEntry(name))
-        Files.copy(file, zos)
-        zos.closeEntry()
-      }
-    }
+    CarArchiveFixture.write(target, entries)
 
   private def _create_fake_component_jar(target: Path): Path = {
     val factoryclassentry =

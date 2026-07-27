@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1422,7 +1422,8 @@ object CncfRuntime extends GlobalObservable {
     assemblysearchspecs: Seq[ComponentRepository.Specification]
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => {
-      val descriptors = subsystem.descriptor.map(_.toComponentDescriptors).getOrElse(Vector.empty)
+      val declareddescriptors = subsystem.descriptor.map(_.toComponentDescriptors).getOrElse(Vector.empty)
+      val descriptors = ComponentRepository.assemblyPreflightDescriptors(specs, declareddescriptors)
       val allspecs = specs ++ assemblysearchspecs
       val repositories = allspecs.zipWithIndex.map { case (spec, index) =>
         val origin = _origin_for_spec(spec)

@@ -862,7 +862,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 49: closed (`docs/phase/phase-49.md`)
 - Phase 50: closed
   (`docs/phase/phase-50.md`)
-- Phase 51: planned (`docs/phase/phase-51.md`)
+- Phase 51: in-progress (`docs/phase/phase-51.md`)
 
 ## 8. Completed Development Item History
 
@@ -1628,13 +1628,134 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Phase 51, `CNCF-Cozy CML Generation Version Alignment`, is planned immediately
-after Phase 50 closure. It makes the CNCF target and Cozy generator used by CML
+Phase 51, `CNCF-Cozy CML Generation Version Alignment`, is in progress after
+Phase 50 closure. It makes the CNCF target and Cozy generator used by CML
 generation an explicit, reproducible build contract before later
-generated-model work.
+generated-model work. Explicit project, owning-build bridge, and CLI version
+sources must agree; project > bridge > CLI selects provenance, and the
+published default is used only when no explicit source exists. Contradictions
+are typed CV-02 diagnostics rather than precedence overrides.
 
-- Planned dashboard: `docs/phase/phase-51.md`
-- Planned checklist: `docs/phase/phase-51-checklist.md`
+Within Phase 51, CV-01 (version-source inventory and failing-first acceptance)
+and CV-02 (compatibility and ownership contract) are CLOSED after clean
+independent read-only RE_REVIEW gates. Cozy owns typed exact-pair admission,
+validated machine-readable evidence, and deterministic diagnostics, while CNCF
+compile targets and CAR runtime ranges remain independent. CV-03 is closed:
+CNCF resolves one pinned Cozy generator, its effective
+`version.value`, and its generated runtime descriptor before invoking Cozy,
+and cold/repeated generation is byte-stable; its independent RE_REVIEW gate
+passed cleanly. CV-04 is closed after a clean independent RE_REVIEW: Cozy CLI
+and bridge preflight validate
+the descriptor root schema, runtime identity, exact target, predefined Result
+schema, and owning-build SHA-256 before source emission, and reject
+contradictory project, bridge, or request descriptor-contract values instead of
+applying override precedence. Ambient global Cozy defaults are excluded from
+generation source resolution. CV-05A now implements Cozy's deterministic
+`cozy.generation-provenance.v1` producer/validator with target, generator,
+backend, source, output, and evidence digests plus tamper rejection. Generation
+consumes one captured CML byte snapshot, and a validated provenance replacement
+is published atomically only after stale evidence is cleared. CV-05B now pins
+development Cozy `0.3.1-SNAPSHOT`, captures the project-relative source and
+pre-launch digest as CNCF build inputs, invokes Cozy's authoritative provenance
+validator before accepting output, and compares generated Scala plus provenance
+bytes across cold/repeated generation. The independent CV-05 REVIEW correction
+and clean RE_REVIEW/PASS gate are complete, so CV-05 is closed. Phase 51 stays
+in progress. CV-06A now makes unmerged CAR `project.yaml` the package-gate
+authority for the exact Cozy generator, unique CNCF compile coordinate, and
+runtime range; packaging additionally proves that the resolved CNCF JAR
+descriptor equals that compile target and rejects project/default replacement
+or range contradictions with typed diagnostics. Its focused implementation
+review found and REVIEW_FIX closed six issues: JAR runtime/module identity,
+packaging-kind classification, merged-default re-resolution, negative archive
+gate coverage, specification placement/responsibility, and premature checklist
+closure. Serialized review-fix validation passed 50 tests across the split
+compatibility, archive, packager, and scaffold suites. The following RE_REVIEW
+found two residual contract issues: legacy inference of an absent root
+descriptor version and artificial phase-only packages in the accumulated
+specifications. The second REVIEW_FIX requires the root descriptor version,
+adds evaluator/archive rejection evidence, relocates all affected specs to
+production responsibility packages, and passes focused compilation and tests
+in Cozy, CNCF, and simple-modeler. The subsequent accumulated-change review
+also required large-surface grouping for the ten-scenario Cozy CV-05
+provenance spec and corrected the CV-01 ledger from five specs to six spec
+files across five repositories; focused validation and `Test/compile` passed
+after both fixes. The next fresh review required Cozy's canonical
+CAR ownership/scaffold documents to state the implemented package-gate contract
+and required current `@version` markers across every modified header-bearing
+Cozy Scala file. Those fixes now pass all 51 focused CV-06A tests and
+`Test/compile`, and clean independent CV-06A re-review closed that slice.
+CV-06B now shares the project-only compatibility decision across package,
+integrated lint/Review, and publication. Its independent review found an
+unattributed ArtScene generator, missing active PBT and misplaced Given
+boundaries in two accumulated Cozy specs, and premature compliance-ledger
+claims. REVIEW_FIX pins ArtScene to the project-owned Cozy
+`0.3.1-SNAPSHOT` through sbt-cozy's versioned Coursier delegate, adds two
+50-case production-path properties, repairs all identified Given boundaries,
+and corrects the phase ledger. Focused Cozy and ArtScene validation plus
+normal CAR lint pass. A fresh clean CV-06B re-review accepted the accumulated
+code, executable specifications, whole-file compliance ledger, and CAR lint,
+closing CV-06B. CV-06C1 now revalidates generated source/artifact/digest
+evidence and accepted CNCF/Cozy coordinates before preserving
+`generation-provenance.json` in the CAR. Its scaffold-to-package positive
+round trip and contradictory-target rejection pass with the existing
+provenance and scaffold suites. Independent review found that normal sbt-cozy
+generation did not install final-output evidence, generic CAR sources could
+inject the reserved entry, and immutable package snapshots leaked temporary
+files. REVIEW_FIX now delegates final project rebinding back to Cozy, requires
+the installed side output for incremental reuse, rejects singular-v1
+multi-source ambiguity and source-managed injection, and cleans snapshots on
+all exits. Serialized focused validation passes 17 Cozy and 17 sbt-cozy tests
+plus `Test/compile` in both repositories. The next re-review found that the
+sbt-cozy lifecycle proof still used a fake delegate, exact selected-path
+validation and canonical Cozy lifecycle documentation were incomplete, the
+large sbt-cozy behavior surface lacked grouping, and its headers/compliance
+inventory were stale. The second REVIEW_FIX validates the selected delegated
+manifest itself, documents the complete rebind/package lifecycle and
+singular-v1 constraints, groups the specification, and normalizes headers.
+An actual current-Cozy cross-repository integration now generates, validates,
+rebinds, packages, byte-compares CAR provenance, and proves delegate cleanup
+through production sbt-cozy. Serialized validation passes 18 Cozy and 18
+sbt-cozy tests with the relevant package/compile gates; all 35 modified Scala
+files pass whole-file naming, raw-assert, and header scans. A subsequent
+re-review found that the production rebind action was missing from the
+canonical `sbt-bridge v1` contract and fixtures. REVIEW_FIX registers the
+action, adds its exact three-path request fixture and real-parser assertions,
+and updates older publication fixtures to the current CV-06 project contract;
+the focused bridge suite and `Test/compile` pass with all 13 tests. The next
+fresh re-review found that the canonical README omitted the already-supported
+`publish-video` action. REVIEW_FIX restores the action in the documentation
+and adds an executable contract-to-README parity guard; the improved
+serialized SBT launch path passes the focused bridge suite and `Test/compile`
+with all 13 tests and no persistent generated side effects. The following
+re-review found incomplete whole-file naming evidence in modified Cozy and
+sbt-cozy sources. REVIEW_FIX normalizes private parameters, ordinary locals,
+local constants, method-local helpers, and truly private model fields while
+preserving public/package APIs and machine-facing labels. Serialized validation
+passes 17 Cozy lint tests and 35 affected sbt-cozy tests plus `Test/compile` in
+both repositories, with no persistent generated side effects. CV-06C2 retains
+CNCF runtime-range/ABI/archive-integrity activation and packaged-CAR
+runtime-round-trip closure. Its final documentation correction and clean
+independent re-review are accepted, closing CV-06. CV-07 planning now fixes the
+development/release boundary: explicit proven mutable pairs are development
+opt-ins, published defaults must be proven immutable pairs, executing Cozy
+identity must equal the selected coordinate, and release output requires
+immutable pair evidence plus generated provenance. CV-07 IMPLEMENT now carries
+that decision through Cozy CLI/bridge/package admission, sbt-cozy
+project-owned delegate and cache state, and the CNCF production generation
+command. Focused Cozy, sbt-cozy, and CNCF specifications pass; normal ArtScene
+CAR lint accepts its explicit development pair. The independent REVIEW found
+publication-lifecycle bypasses, missing exact CAR/SAR generation authorities,
+source-project coupling in the representative ArtScene test, absent package
+matrix/recovery coverage, and local naming debt. REVIEW_FIX closes those
+findings: Cozy derives actual CAR lifecycle from project metadata and requires
+publication-version agreement; sbt-cozy requires the project-owned Cozy/CNCF
+pair and reports exact generator recovery; ArtScene consumes the released
+Textus Scraper CAR without loading its source project; and the focused
+package/delegate matrix passes. CV-07 remains in progress pending independent
+RE_REVIEW and the final release gates.
+
+- Current dashboard: `docs/phase/phase-51.md`
+- Current checklist: `docs/phase/phase-51-checklist.md`
 
 Other 9.x items remain future development candidates until explicitly
 selected.
@@ -3121,7 +3242,7 @@ Planned for Phase 53 after Phase 52 closes.
   - `docs/journal/2026/05/knowledge-import-information-space-working-model.md`.
 
 ### 9.45 CNCF-Cozy CML Generation Version Alignment
-Planned for Phase 51 after Phase 50 closure.
+In progress in Phase 51 after Phase 50 closure.
 
 - Historical basis:
   - CNCF `build.sbt` selects a CNCF artifact version and a Cozy generator
@@ -3169,6 +3290,9 @@ Planned for Phase 51 after Phase 50 closure.
     source;
   - `packaging.car.runtime.cncf` remains the independent runtime compatibility
     range and tested set;
+  - package, integrated CAR lint/Review, and publication reuse one unmerged
+    project-only compatibility decision, while resolved-JAR identity remains
+    package-only evidence;
   - generation provenance records CNCF target, descriptor digest, Cozy and
     backend versions, CML digest, and generated-output digest;
   - development SNAPSHOT coordinates require explicit admission and
@@ -3205,8 +3329,9 @@ Planned for Phase 51 after Phase 50 closure.
 - Acceptance:
   - clean and incremental generation resolve the same exact CNCF target and
     Cozy generator without ambient selection;
-  - missing, unsupported, contradictory, descriptor-mismatched, and tampered
-    inputs fail deterministically before compilation or packaging;
+  - missing, unsupported, contradictory, descriptor identity-mismatched, and
+    descriptor byte/digest-tampered inputs fail deterministically at their
+    owning later stage before compilation or packaging;
   - generated and packaged output contains reproducible version and digest
     provenance;
   - CAR build, review, publication, and runtime admission apply their distinct

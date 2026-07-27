@@ -1,6 +1,6 @@
 # Phase 51 - CNCF-Cozy CML Generation Version Alignment
 
-status=planned
+status=in-progress
 planned_at=2026-07-26
 depends_on=[Phase 50](phase-50.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -63,13 +63,13 @@ CAR projects.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| CV-01 | Version-source inventory and failing-first acceptance | Existing CNCF, Cozy, CML, CAR, and runtime version sources and contradictory paths are fixed as executable acceptance. | planned |
-| CV-02 | Compatibility and ownership contract | Exact generation pairs, runtime ranges, authority, and precedence are defined without numeric-equality inference. | planned |
-| CV-03 | CNCF build integration | CNCF `build.sbt` selects and validates one Cozy generator and one CNCF target deterministically. | planned |
-| CV-04 | Cozy target validation | Cozy validates the requested CNCF target and runtime descriptor before generation. | planned |
-| CV-05 | Generation provenance | Generated output records stable version, source, backend, and digest evidence. | planned |
-| CV-06 | CAR metadata consistency | Cozy scaffold, build, packaging, review, and publication agree on build-time and runtime version meanings. | planned |
-| CV-07 | Development and release acceptance | SNAPSHOT workflows remain explicit while releases use immutable compatible coordinates and deterministic diagnostics. | planned |
+| CV-01 | Version-source inventory and failing-first acceptance | Existing CNCF, Cozy, CML, CAR, and runtime version sources and contradictory paths are fixed as executable acceptance. | closed |
+| CV-02 | Compatibility and ownership contract | Exact generation pairs, runtime ranges, authority, and precedence are defined without numeric-equality inference. | closed |
+| CV-03 | CNCF build integration | CNCF `build.sbt` selects and validates one Cozy generator and one CNCF target deterministically. | closed |
+| CV-04 | Cozy target validation | Cozy validates the requested CNCF target and runtime descriptor before generation. | closed |
+| CV-05 | Generation provenance | Generated output records stable version, source, backend, and digest evidence. | closed |
+| CV-06 | CAR metadata consistency | Cozy scaffold, build, packaging, review, and publication agree on build-time and runtime version meanings. | closed |
+| CV-07 | Development and release acceptance | SNAPSHOT workflows remain explicit while releases use immutable compatible coordinates and deterministic diagnostics. | in progress (REVIEW_FIX complete; RE_REVIEW pending) |
 | CI-01 | Exact Collection Identity contract | Generated, custom, and raw persistence adapters preserve or receive the exact owning collection without name-only inference, runtime type exceptions, or a second decode. | planned |
 | SP-01 | Persisted scalar store projection | CNCF owns store-value restoration, generated `fromStoreRecord` uses it, and the current-release nominal String compatibility fallback is removed. | planned |
 | CV-08 | Downstream validation and closure | Representative generated projects pass, mismatches fail early, and canonical documentation records the verified contract. | planned |
@@ -82,8 +82,15 @@ CAR projects.
   number similarity has no semantic meaning.
 - `build.cozyVersion`, the exact CNCF compile dependency, and
   `packaging.car.runtime.cncf` retain distinct, consistent meanings.
-- Generation rejects a missing or incompatible target/descriptor before
-  compilation or packaging.
+- The CV-02 production admission API rejects missing, unsupported, and
+  unproven/incompatible generation inputs with typed diagnostics. Its explicit
+  source resolver requires project, owning-build bridge, and CLI values to
+  agree, selects provenance in that order, and uses published default only as
+  a no-explicit-source fallback. Enforcement
+  at the actual CNCF/Cozy generation invocation remains CV-03. CV-03 rejects
+  absent or contradictory invocation sources before generation. CV-04 owns
+  runtime descriptor target/schema/digest validation only; CV-05 owns
+  provenance and provenance/digest tampering.
 - Generated artifacts expose reproducible version and digest provenance.
 - Released builds use immutable released coordinates; development SNAPSHOT
   usage is explicit and diagnosable.
@@ -108,5 +115,6 @@ CAR projects.
 - [Phase 50 - SimpleEntity Revision and OCC Simplification](phase-50.md)
 - [Phase 53 - Information CML Runtime Canonicalization](phase-53.md)
 - [ArtScene Collection Identity Contract Handoff](../journal/2026/07/2026-07-26-artscene-collection-identity-contract-handoff.md)
+- [CV-07 Development and Release Acceptance](../notes/phase-51-cv07-development-release-acceptance.md)
 - [Cozy CAR project metadata ownership](../../../cozy/docs/design/car-project-metadata-ownership.md)
 - [Cozy CAR project scaffold](../../../cozy/docs/spec/car-project-scaffold.md)

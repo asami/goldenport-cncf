@@ -14,7 +14,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
  * @since   Feb.  3, 2026
  *  version Mar. 22, 2026
  *  version Apr.  8, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
@@ -46,6 +46,7 @@ object CarExtractor {
       for {
         _ <- _unzip(car, tmproot)
         extracted <- _resolve_structure(tmproot, car)
+        _ <- CarRuntimeAdmission.validate(extracted)
         result <- use(extracted)
       } yield result
     }
