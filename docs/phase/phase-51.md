@@ -72,7 +72,7 @@ CAR projects.
 | CV-07 | Development and release acceptance | SNAPSHOT workflows remain explicit while releases use immutable compatible coordinates and deterministic diagnostics. | closed |
 | CI-01 | Exact Collection Identity contract | Generated, custom, and raw persistence adapters preserve or receive the exact owning collection without name-only inference, runtime type exceptions, or a second decode. | closed |
 | SP-01 | Persisted scalar store projection | CNCF owns store-value restoration, generated `fromStoreRecord` uses it, and the current-release nominal String compatibility fallback is removed. | closed |
-| CV-08 | Downstream validation and closure | Representative generated projects pass, mismatches fail early, and canonical documentation records the verified contract. | in progress |
+| CV-08 | Downstream validation and closure | Representative generated projects pass, mismatches fail early, and canonical documentation records the verified contract. | closed |
 
 ## CV-08 Implementation Evidence
 
