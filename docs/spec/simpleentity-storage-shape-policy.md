@@ -180,18 +180,41 @@ default.
 conversion. View, admin, request, and diagnostic records MUST NOT define the
 storage shape.
 
-An ordinary scalar `EntityId` retains the logical collection name but may not
-retain the complete collection namespace expected by the runtime collection.
-For the current release, the CNCF persistence boundary MUST decode the physical
-Record exactly once and MUST validate that the decoded and requested logical
-collection names are equal. A different logical collection name MUST fail as a
-structured collection-contract error. CNCF MUST NOT rewrite a custom codec's
-physical input and invoke `fromStoreRecord` a second time.
+Generated Entity persistence code MUST declare `EntityStoreAttribute` metadata
+for every field whose physical scalar representation requires restoration.
+The metadata MUST bind the logical attribute name, physical storage name, and
+declared physical value kind. CNCF
+`EntityStoreRecordProjection.project` MUST run before generated
+`fromStoreRecord` Entity construction.
 
-The current release assumes that a runtime does not install multiple Entity
-collections with the same logical name. Exact collection identity restoration,
-same-name ambiguity handling, and compatibility policy for generated and
-custom codecs are Phase 51 work.
+When a field is declared as scalar String storage and a datastore returns its
+JSON object text as a `Record`, projection MUST encode that Record as compact
+JSON text and MUST expose the restored value under the metadata's logical
+attribute name before Entity construction. When logical and physical names
+differ, the original physical field MUST remain available. Projection MUST
+preserve an existing String's exact value, MUST leave an absent optional value
+absent, and MUST NOT rewrite a structured Record whose field lacks scalar
+String metadata. A projection encoding failure MUST remain a failed
+`Consequence`; it MUST NOT become error-shaped sentinel text.
+
+`EntityPersistent.fromRecord` and generated `ValueReader` instances MUST remain
+ordinary business/API decoders. A generated single-value reader MUST continue
+to admit its declared `{ value: ... }` wrapper. It MUST reject an arbitrary
+Record rather than treating it as persisted scalar text. Application-local
+Base64, prefix, or repair encodings MUST NOT replace the CNCF projection.
+
+An ordinary scalar `EntityId` cannot prove the complete collection namespace
+expected by the runtime collection. The CNCF persistence boundary MUST supply
+the exact owning `EntityCollectionId`, decode the original physical Record
+exactly once, and require the returned Entity to carry that exact owner. CNCF
+MUST NOT rewrite a custom codec's physical input or invoke
+`fromStoreRecord` a second time.
+
+`EntitySpace` MUST index collections by exact identity. Logical-name
+compatibility MUST succeed only for one match and MUST fail deterministically
+when same-name collections are ambiguous. Generated, built-in, custom, raw,
+and legacy adapter requirements are normative in
+[Entity Collection Identity](entity-collection-identity.md).
 
 Aggregate create MUST canonicalize a typed `EntityId` and a scalar `EntityId`
 to the selected runtime collection before persistence. This prevents generated
@@ -207,6 +230,7 @@ presentation or legacy record paths.
 
 Current behavioral evidence includes:
 
+- `src/test/scala/org/goldenport/cncf/entity/EntityStoreRecordProjectionSpec.scala`;
 - `src/test/scala/org/goldenport/cncf/entity/SimpleEntityStorageShapePolicySpec.scala`;
 - `src/test/scala/org/goldenport/cncf/entity/EntityManagedMutationSpec.scala`;
 - `src/test/scala/org/goldenport/cncf/entity/EntityPersistentCollectionIdentitySpec.scala`;

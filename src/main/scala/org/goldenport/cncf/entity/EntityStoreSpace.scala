@@ -24,7 +24,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -254,7 +254,7 @@ class EntityStoreSpace {
       case Some(candidate) =>
         val producedcollection =
           persistent.id(entity(candidate)).collection
-        if (producedcollection.name != requestedid.collection.name)
+        if (producedcollection != requestedid.collection)
           Consequence.operationInvalid(
             "entity-persistent-collection",
             s"Entity codec produced collection '${producedcollection.print}' for requested collection '${requestedid.collection.print}'"

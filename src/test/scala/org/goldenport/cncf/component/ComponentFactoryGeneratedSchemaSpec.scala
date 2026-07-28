@@ -1,7 +1,10 @@
 package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.entity.{
+  EntityPersistent,
+  EntityStoreDecodeContext
+}
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
 import org.goldenport.cncf.component.repository.fixture.impl._ImplBackedComponent
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -15,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 16, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -102,6 +106,18 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
       persistent.toRecord(entity).getString("postedAt") shouldBe Some("2026-04-26T00:00:00Z")
       persistent.toStoreRecord(entity).getString("posted_at") shouldBe Some("2026-04-26T00:00:00Z")
       persistent.fromStoreRecord(persistent.toStoreRecord(entity)).map(_.asInstanceOf[_GeneratedStyleEntity].postedAt) shouldBe Consequence.success("2026-04-26T00:00:00Z")
+
+      And("the reflective bridge forwards exact storage ownership to the context-aware ABI")
+      val owningcollection =
+        EntityCollectionId("production", "artscene", "generated_style")
+      persistent
+        .fromStoreRecord(
+          EntityStoreDecodeContext(owningcollection),
+          persistent.toStoreRecord(entity)
+        )
+        .map(
+          _.asInstanceOf[_GeneratedStyleEntity].id.collection
+        ) shouldBe Consequence.success(owningcollection)
     }
 
     "preserve generated CML-derived storage shape separately from view records" in {
@@ -203,6 +219,17 @@ private object _GeneratedStyleStorePersistentModule {
         Consequence.argumentInvalid("invalid generated style store record")
     }
   }
+  def fromStoreRecord(
+    context: EntityStoreDecodeContext,
+    r: Record
+  ): Consequence[_GeneratedStyleEntity] =
+    fromStoreRecord(r).map { entity =>
+      entity.copy(
+        id = entity.id.copy(
+          collection = context.owningCollectionId
+        )
+      )
+    }
 }
 
 private final case class _GeneratedStyleAccount(

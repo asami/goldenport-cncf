@@ -219,17 +219,50 @@ values must be supported by the model/storage layer or fail deterministically;
 they must not silently degrade to `String` because storage policy chose JSON for
 nested values.
 
+## Persisted Scalar Restoration
+
+Physical datastore drivers may materialize JSON object text as a `Record`.
+That physical representation does not change the declared Entity attribute
+type. CNCF therefore owns a store-record projection that runs before generated
+Entity decoding.
+
+Generated persistence metadata declares the logical attribute name, physical
+storage name, and the physical scalar kind that the Entity model writes.
+Projection uses the physical storage name. When and only when a field is
+declared as a scalar String and its physical value is a `Record`, CNCF renders
+that value back to compact JSON text and exposes it under the declared logical
+name for Entity construction. Existing String values retain their exact
+identity, absent optional values remain absent, and unrelated structured
+Records remain unchanged. The original physical field remains available for
+storage diagnostics.
+
+The projected Record then enters the generated Entity decoder once.
+`EntityPersistent.fromRecord` and generated `ValueReader` instances remain
+ordinary business/API decoders. A `{ value: ... }` Record is an admitted
+ordinary wrapper for a single-value class, but an arbitrary Record is not an
+ordinary scalar String. Applications must not compensate with Base64, prefixes,
+or other local encodings.
+
 ## Boundary Rules
 
 - `EntityPersistent.toStoreRecord` / `fromStoreRecord` own the DB storage shape.
-- The current persistence boundary decodes a stored value exactly once and
-  validates its logical collection name against the requested collection.
-  Different logical collection names are rejected.
-- The current release assumes that one runtime does not install multiple
-  collections with the same logical name. Complete collection identity
-  restoration and same-name ambiguity handling are deferred to Phase 51.
+- `EntityStoreRecordProjection` restores declared physical scalar values before
+  generated `fromStoreRecord` decoding.
+- Store projection is driven by `EntityStoreAttribute` metadata and physical
+  storage names, not field-name guessing or runtime result-type inference.
+- Ordinary `fromRecord` and `ValueReader` decoding do not restore persisted
+  scalar representations.
+- The persistence boundary receives the complete owning `EntityCollectionId`,
+  decodes the original stored value exactly once, and validates that the
+  returned Entity carries that exact owner.
+- `EntitySpace` indexes exact collection identities. Logical-name
+  compatibility succeeds only for one match and fails deterministically when
+  same-name collections are ambiguous.
 - CNCF does not rewrite a physical Record or invoke a custom codec a second
   time to compensate for scalar `EntityId` namespace loss.
+- Generated, built-in, custom, raw, and legacy adapter responsibilities are
+  defined by
+  [Entity Collection Identity](entity-collection-identity.md).
 - Aggregate create canonicalizes either a typed `EntityId` or its scalar form
   to the selected runtime collection before persistence.
 - `toViewRecord` and admin/manual projections must not drive DB shape.

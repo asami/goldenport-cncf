@@ -92,6 +92,24 @@ final class CarRuntimeAdmissionSpec
     }
 
     "reject contradictory runtime evidence" which {
+      "rejects an explicit packaged CAR without a runtime manifest" in {
+        _with_temp_dir { root =>
+          Given("an explicit CAR with a descriptor and ABI evidence but no runtime manifest")
+          val content = root.resolve("content")
+          _prepare_root(content, abicomponent = "sample")
+          val archive = _zip(content, root.resolve("missing-runtime-manifest.car"))
+          val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+
+          When("CNCF extracts the explicit packaged CAR")
+          val rejected = CarExtractor.withExtracted(archive, workarea) { _ =>
+            Consequence.success(())
+          }
+
+          Then("packaged admission still rejects the missing runtime manifest")
+          _failure_message(rejected) should include("CAR runtime manifest is missing")
+        }
+      }
+
       "rejects incompatible CNCF range before component loading" in {
         _with_temp_dir { root =>
           Given("a structurally valid CAR whose minimum runtime is above the executing CNCF")

@@ -4,6 +4,7 @@ import java.time.Instant
 import java.nio.file.{Files, Paths}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor}
+import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, GenericSubsystemFactory}
 import org.scalatest.GivenWhenThen
@@ -18,6 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "CncfRuntime" should {
+    "assembly and development repository resolution" which {
     "apply assembly descriptor config while preserving test and command-line precedence" in {
       Given("an assembly descriptor with runtime config and a test descriptor override")
       val cwd = Files.createTempDirectory("cncf-assembly-runtime-config")
@@ -146,6 +148,32 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       packaged shouldBe empty
     }
 
+    "collect development claims from active and assembly search repositories" in {
+      Given("active and search development repositories with distinct component identities")
+      val root = Files.createTempDirectory("cncf-development-claims")
+      val activedir = root.resolve("active")
+      val searchdir = root.resolve("search")
+      Files.createDirectories(activedir.resolve("src").resolve("main").resolve("car"))
+      Files.createDirectories(searchdir.resolve("src").resolve("main").resolve("car"))
+      Files.writeString(
+        activedir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.json"),
+        """{"name":"active","version":"0.2.0-SNAPSHOT","component":"active"}"""
+      )
+      Files.writeString(
+        searchdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.json"),
+        """{"name":"dependency","version":"0.2.0-SNAPSHOT","component":"dependency"}"""
+      )
+      val active = ComponentRepository.ComponentDevDirRepository.Specification(activedir)
+      val search = ComponentRepository.ComponentDevDirRepository.Specification(searchdir)
+
+      When("the runtime prepares claims for its complete repository sequence")
+      val claims = CncfRuntime.developmentComponentClaims(Vector(active), Vector(search))
+
+      Then("both development repositories claim their components before descriptor routing")
+      claims(active) shouldBe Set("active")
+      claims(search) shouldBe Set("dependency")
+    }
+
     "include development CAR assembly dependencies in API preflight" in {
       Given("an active development CAR whose assembly declares the Scraper provider")
       val root = Files.createTempDirectory("cncf-development-assembly-preflight")
@@ -153,7 +181,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       Files.createDirectories(cardir)
       Files.writeString(
         cardir.resolve("component-descriptor.json"),
-        """{"name":"textus-art-scene","version":"0.1.1","component":"textus-art-scene"}"""
+        """{"name":"ArtScene","version":"0.1.2-SNAPSHOT","component":"ArtScene"}"""
       )
       Files.writeString(
         cardir.resolve("assembly-descriptor.yaml"),
@@ -168,19 +196,53 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
       val dev = ComponentRepository.ComponentDevDirRepository.Specification(root)
 
-      When("the API preflight descriptors are assembled")
+      When("the API preflight descriptors and development claims are assembled")
       val descriptors = ComponentRepository.assemblyPreflightDescriptors(Vector(dev), Vector.empty)
+      val claims = ComponentRepository.developmentComponentClaims(Vector(dev))
+      val devdescriptors =
+        ComponentRepository.descriptorsForSpecification(dev, Vector.empty, descriptors, claims)
 
-      Then("the dependent Scraper CAR is available to repository API inspection")
+      Then("the stale assembly version and textus-prefixed alias are still claimed by the development component")
       descriptors.flatMap(_.componentName) shouldBe Vector("textus-art-scene", "textus-scraper")
       descriptors.flatMap(_.version) shouldBe Vector("0.1.1", "0.1.1")
+      devdescriptors.flatMap(_.componentName) shouldBe Vector("textus-art-scene")
 
       And("only the dependency remains unresolved for the search repository")
       val searchdescriptors =
-        ComponentRepository.unresolvedDescriptorsForSearch(Vector(dev), descriptors)
+        ComponentRepository.unresolvedDescriptorsForSearch(Vector(dev), descriptors, claims)
       searchdescriptors.flatMap(_.componentName) shouldBe Vector("textus-scraper")
     }
 
+    "claim textus-prefixed development identities symmetrically" in {
+      Given("a textus-prefixed development descriptor and an unprefixed stale assembly identity")
+      val reversedroot = Files.createTempDirectory("cncf-development-assembly-reversed-alias")
+      val reversedcardir = reversedroot.resolve("src").resolve("main").resolve("car")
+      Files.createDirectories(reversedcardir)
+      Files.writeString(
+        reversedcardir.resolve("component-descriptor.json"),
+        """{"name":"textus-art-scene","version":"0.1.2-SNAPSHOT","component":"textus-art-scene"}"""
+      )
+      val reverseddev = ComponentRepository.ComponentDevDirRepository.Specification(reversedroot)
+      val reversedclaims = ComponentRepository.developmentComponentClaims(Vector(reverseddev))
+      val reverseddescriptors = Vector(
+        ComponentDescriptor(
+          name = Some("ArtScene"),
+          version = Some("0.1.1"),
+          componentName = Some("ArtScene")
+        )
+      )
+
+      When("the assembly descriptor is routed to the development repository")
+      val claimed = ComponentRepository
+        .descriptorsForSpecification(reverseddev, Vector.empty, reverseddescriptors, reversedclaims)
+
+      Then("the textus prefix direction does not change component identity")
+      claimed.flatMap(_.componentName) shouldBe Vector("ArtScene")
+    }
+
+    }
+
+    "configuration source precedence" which {
     "resolve an explicit YAML config file passed as a Textus CLI framework option" in {
       Given("an explicit YAML configuration file")
       val cwd = Files.createTempDirectory("textus-runtime-config")
@@ -585,6 +647,9 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/from-xml.yaml")
     }
 
+    }
+
+    "component and subsystem startup resolution" which {
     "detect a component CAR from a component project directory for plain server startup" in {
       Given("a component project with one generated CAR")
       val cwd = Files.createTempDirectory("textus-component-only-server")
@@ -701,6 +766,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the repository SAR is appended as the subsystem file")
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.SubsystemFileKey}=${sar}")
+    }
     }
   }
 

@@ -31,6 +31,7 @@ import org.goldenport.cncf.entity.{
   EntityRevisionSpecSupport,
   EntitySearchScope,
   EntityStore,
+  EntityStoreDecodeContext,
   EntityStoreSpace,
   SimpleEntityStorageShapePolicy
 }
@@ -52,7 +53,7 @@ import org.simplemodeling.model.directive.Condition
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 26, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -1142,6 +1143,13 @@ final class ActionCallEntityAccessMetricsSpec
     new EntityPersistent[TestPerson] {
       def id(e: TestPerson): EntityId     = e.id
       def toRecord(e: TestPerson): Record = e.toRecord()
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[TestPerson] =
+        fromRecord(record).map(person =>
+          person.copy(id = person.id.copy(collection = context.owningCollectionId))
+        )
       def fromRecord(r: Record): Consequence[TestPerson] = {
         val m = r.asMap
         val pid = m.get("id") match {
@@ -1251,7 +1259,7 @@ private final case class TestPerson(
   def toRecord(): Record =
     securityAttributes.map { security =>
       Record.dataAuto(
-        "id"           -> id,
+        "id"           -> id.value,
         "name"         -> name,
         "age"          -> age,
         "postStatus"   -> postStatus,
@@ -1265,7 +1273,7 @@ private final case class TestPerson(
         "rights"       -> security.getRecord("rights")
       )
     }.getOrElse(Record.dataAuto(
-      "id"                 -> id,
+      "id"                 -> id.value,
       "name"               -> name,
       "age"                -> age,
       "postStatus"         -> postStatus,

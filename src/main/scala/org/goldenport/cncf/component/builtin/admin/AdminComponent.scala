@@ -114,7 +114,7 @@ import org.simplemodeling.model.datatype.{
  *  version Feb. 19, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {}
@@ -3251,21 +3251,21 @@ object AdminComponent {
   ): Boolean = {
     val idvalue = id.value
     subsystem.components.exists { component =>
-      val names = targetkind match {
+      val collections = targetkind match {
         case Some(kind) =>
-          component.entitySpace.entityNames.filter(NamingConventions.equivalentByNormalized(
-            _,
-            kind
-          ))
+          component.entitySpace.entityCollections.filter(collection =>
+            NamingConventions.equivalentByNormalized(
+              collection.descriptor.collectionId.name,
+              kind
+            )
+          )
         case None =>
-          component.entitySpace.entityNames
+          component.entitySpace.entityCollections
       }
-      names.exists { name =>
-        component.entitySpace.entityOption[Any](name).exists { collection =>
-          collection.storage.storeRealm.values.exists { entity =>
-            val entityid = collection.descriptor.persistent.id(entity)
-            entityid.value == idvalue || entityid.print == idvalue
-          }
+      collections.exists { collection =>
+        collection.storage.storeRealm.values.exists { entity =>
+          val entityid = collection.descriptor.persistent.id(entity)
+          entityid.value == idvalue || entityid.print == idvalue
         }
       }
     }

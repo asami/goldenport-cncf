@@ -11,6 +11,7 @@ import org.goldenport.cncf.entity.{
   EntityIdentityScope,
   EntityLifecycleRecordPolicy,
   EntityMutationExecutionPolicy,
+  EntityPersistent,
   EntityPersistentCreate,
   EntityQuery,
   EntityRecordSnapshot,
@@ -27,7 +28,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
  *  version May. 10, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -155,10 +156,41 @@ final class EntityCollection[E](
         def collection(value: E) =
           descriptor.persistent.id(value).collection
       }
-      _ <- ctx.entityStoreSpace.create(
+      created <- ctx.entityStoreSpace.create(
         UnitOfWorkOp.EntityStoreCreate(entity, create)
       )
-      _ = _put(entity, evaluationinstant)
+      persisted <- (
+        created.record match {
+          case Some(record) =>
+            descriptor.revisionBinding match {
+              case Some(binding) =>
+                binding.decodeEntity(record)(
+                  EntityPersistent._decode_store_record(
+                    descriptor.persistent,
+                    descriptor.collectionId,
+                    _
+                  )
+                )
+              case None =>
+                EntityPersistent._decode_store_record(
+                  descriptor.persistent,
+                  descriptor.collectionId,
+                  record
+                )
+            }
+          case None =>
+            EntityPersistent._require_exact_collection(
+              entity,
+              descriptor.persistent.id(entity),
+              descriptor.collectionId
+            )
+        }
+      ).recoverWith { conclusion =>
+        ctx.entityStoreSpace
+          .deleteHard(UnitOfWorkOp.EntityStoreDeleteHard(created.id))
+          .flatMap(_ => Consequence.Failure[E](conclusion))
+      }
+      _ = _put(persisted, evaluationinstant)
     } yield ()
   }
 
@@ -378,10 +410,14 @@ final class EntityCollection[E](
   private def _canonical_entity_id(
       idorshortid: String
   ): Option[EntityId] =
-    EntityId.parse(idorshortid).toOption.filter { id =>
-      id.collection.major == descriptor.collectionId.major &&
-        id.collection.name == descriptor.collectionId.name
-    }
+    EntityId.parse(idorshortid).toOption
+      .filter(_.collection.name == descriptor.collectionId.name)
+      .map { id =>
+        if (id.collection == descriptor.collectionId)
+          id
+        else
+          id.copy(collection = descriptor.collectionId)
+      }
 
   private def _entity_id_by_shortid(
     shortid: String

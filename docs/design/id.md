@@ -88,6 +88,30 @@ not parse `EntityId.major` or `EntityId.minor` to recover component structure.
 
 ---
 
+## EntityId Physical Key and Collection Identity
+
+`EntityId.value` is the canonical physical datastore entry key. Complete
+in-memory Entity identity is that physical value together with the owning
+`EntityCollectionId`.
+
+A scalar ID cannot prove the complete owning collection because its serialized
+form does not retain the independent collection namespace. Runtime storage
+operations therefore restore collection ownership from the exact selected
+`EntityCollection` context and validate it before resident projection.
+Logical-name equality is not the final ownership contract.
+
+Parsed/materialized and newly constructed IDs compare equal after the same
+exact owner is restored. The same physical key in two different collections
+remains two different Entity identities. Identity-sensitive map use must occur
+after collection canonicalization.
+
+Registration, lookup, persistence-adapter, ambiguity, compatibility, and
+migration boundaries are defined by
+[Entity Collection Identity](entity-collection-identity.md) and its
+[normative specification](../spec/entity-collection-identity.md).
+
+---
+
 ## Anti-Patterns: Semantic ID / Smart ID
 
 ### Semantic ID (informal term)

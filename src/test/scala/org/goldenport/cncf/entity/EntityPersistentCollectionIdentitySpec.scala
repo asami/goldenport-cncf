@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 26, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityPersistentCollectionIdentitySpec
@@ -47,12 +47,48 @@ final class EntityPersistentCollectionIdentitySpec
             record
           )
 
-        Then("the decoded Entity retains its scalar identity representation")
+        Then("the decoded Entity receives the exact owning collection")
         decoded.map(_.id.collection) shouldBe
-          Consequence.success(runtimecollection)
+          Consequence.success(canonicalcollection)
 
-        And("business data survives logical collection validation")
+        And("business data survives exact collection validation")
         decoded.map(_.value) shouldBe Consequence.success(value)
+      }
+    }
+
+    "reject a legacy codec that can recover only the logical collection name" in {
+      Given("a legacy codec and a scalar id whose collection namespace was lost")
+      val requestedcollection =
+        EntityCollectionId("major", "minor", "facility")
+      val runtimecollection =
+        EntityCollectionId("single", "global", "facility")
+      val record = Record.dataAuto(
+        "id" -> EntityId("single", "global", runtimecollection).value,
+        "value" -> "museum"
+      )
+
+      When("the legacy codec crosses the exact store boundary")
+      val decoded =
+        EntityPersistent._decode_store_record(
+          _legacy_persistent,
+          requestedcollection,
+          record
+        )
+
+      Then("the legacy codec receives the regeneration-required diagnostic")
+      decoded shouldBe a[Consequence.Failure[?]]
+      decoded match {
+        case Consequence.Failure(conclusion) =>
+          val diagnostic = ConclusionDiagnostics.classify(conclusion)
+          val facets = conclusion.observation.cause.descriptor.facets
+          diagnostic.policy shouldBe Some("entity.persistence.collection")
+          diagnostic.reason shouldBe Some(
+            "entity-persistence-exact-collection-required"
+          )
+          facets should contain(Descriptor.Facet.Expected(requestedcollection.print))
+          facets should contain(Descriptor.Facet.Actual(runtimecollection.print))
+        case Consequence.Success(_) =>
+          fail("A legacy logical-name match must not satisfy exact ownership")
       }
     }
 
@@ -102,6 +138,7 @@ final class EntityPersistentCollectionIdentitySpec
         "value" -> "museum"
       )
       var decodecount = 0
+      var observedrecord = Option.empty[Record]
       val persistent = new EntityPersistent[FixtureEntity] {
         def id(e: FixtureEntity): EntityId =
           e.id
@@ -114,6 +151,7 @@ final class EntityPersistentCollectionIdentitySpec
 
         def fromRecord(r: Record): Consequence[FixtureEntity] = {
           decodecount += 1
+          observedrecord = Some(r)
           r.getAny("id") match {
             case Some(_: String) =>
               _decode_fixture(r)
@@ -123,6 +161,18 @@ final class EntityPersistentCollectionIdentitySpec
               )
           }
         }
+
+        override def fromStoreRecord(
+          context: EntityStoreDecodeContext,
+          r: Record
+        ): Consequence[FixtureEntity] =
+          fromStoreRecord(r).flatMap { entity =>
+            EntityPersistent.restoreCollectionIdentity(
+              entity,
+              entity.id,
+              context.owningCollectionId
+            )(id => entity.copy(id = id))
+          }
       }
 
       When("the codec decodes a record under the owning logical collection")
@@ -133,9 +183,11 @@ final class EntityPersistentCollectionIdentitySpec
           record
         )
 
-      Then("CNCF accepts the logical collection without a second decode")
+      Then("CNCF accepts the exact collection without a second decode or input rewrite")
       decoded shouldBe a[Consequence.Success[?]]
+      decoded.map(_.id.collection) shouldBe Consequence.success(requestedcollection)
       decodecount shouldBe 1
+      observedrecord shouldBe Some(record)
     }
 
     "preserve a raw storage Record while validating its logical collection" in {
@@ -144,8 +196,10 @@ final class EntityPersistentCollectionIdentitySpec
         EntityCollectionId("major", "minor", "facility")
       val runtimecollection =
         EntityCollectionId("single", "global", "facility")
+      val runtimeid =
+        EntityId("single", "global", runtimecollection)
       val record = Record.dataAuto(
-        "id" -> EntityId("single", "global", runtimecollection).value,
+        "id" -> runtimeid.value,
         "value" -> "museum"
       )
       def _required_id_(source: Record): EntityId =
@@ -163,6 +217,18 @@ final class EntityPersistentCollectionIdentitySpec
 
         def fromRecord(r: Record): Consequence[Record] =
           Consequence.success(r)
+
+        override def fromStoreRecord(
+          context: EntityStoreDecodeContext,
+          r: Record
+        ): Consequence[Record] =
+          EntityId.createC(r).flatMap { id =>
+            EntityPersistent.restoreCollectionIdentity(
+              r,
+              id,
+              context.owningCollectionId
+            )(canonicalid => r.upsertSingle("id", canonicalid))
+          }
       }
 
       When("the raw adapter crosses the store decoding boundary")
@@ -173,9 +239,13 @@ final class EntityPersistentCollectionIdentitySpec
           record
         )
 
-      Then("logical collection validation does not rewrite raw fields")
-      decoded shouldBe Consequence.success(record)
-      decoded.toOption.flatMap(_.getString("id")) shouldBe record.getString("id")
+      Then("the returned domain Record carries exact ownership")
+      decoded.map(_required_id_).map(_.collection) shouldBe
+        Consequence.success(requestedcollection)
+
+      And("the physical Record remains unchanged")
+      record.getString("id") shouldBe
+        Some(runtimeid.value)
     }
   }
 
@@ -193,6 +263,32 @@ final class EntityPersistentCollectionIdentitySpec
       def fromRecord(r: Record): Consequence[FixtureEntity] =
         _decode_fixture(r)
 
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        r: Record
+      ): Consequence[FixtureEntity] =
+        fromStoreRecord(r).flatMap { entity =>
+          EntityPersistent.restoreCollectionIdentity(
+            entity,
+            entity.id,
+            context.owningCollectionId
+          )(id => entity.copy(id = id))
+        }
+    }
+
+  private val _legacy_persistent: EntityPersistent[FixtureEntity] =
+    new EntityPersistent[FixtureEntity] {
+      def id(e: FixtureEntity): EntityId =
+        e.id
+
+      def toRecord(e: FixtureEntity): Record =
+        Record.dataAuto(
+          "id" -> e.id.value,
+          "value" -> e.value
+        )
+
+      def fromRecord(r: Record): Consequence[FixtureEntity] =
+        _decode_fixture(r)
     }
 
   private def _decode_fixture(

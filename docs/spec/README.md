@@ -12,6 +12,8 @@ Current Web/widget specs:
 
 Current runtime/I18N specs:
 
+- `entity-collection-identity.md`
+- `generation-compatibility-contract.md`
 - `i18n-text-normalization.md`
 - `operation-evaluation-capture.md`
 - `rule-engine-inference-runtime.md`

@@ -17,9 +17,13 @@ import org.simplemodeling.model.value.SecurityAttributes
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
  *  version Apr. 26, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
+final case class EntityStoreDecodeContext(
+  owningCollectionId: EntityCollectionId
+)
+
 trait EntityPersistent[E] extends RecordCodex[E]
     with Identified[E, EntityId] {
   def toStoreRecord(e: E): Record =
@@ -27,6 +31,18 @@ trait EntityPersistent[E] extends RecordCodex[E]
 
   def fromStoreRecord(r: Record): Consequence[E] =
     fromRecord(r)
+
+  def fromStoreRecord(
+    context: EntityStoreDecodeContext,
+    record: Record
+  ): Consequence[E] =
+    fromStoreRecord(record).flatMap { entity =>
+      EntityPersistent._require_exact_collection(
+        entity,
+        id(entity),
+        context.owningCollectionId
+      )
+    }
 
   def storeFieldName(logicalName: String): String =
     logicalName
@@ -65,18 +81,54 @@ trait EntityPersistent[E] extends RecordCodex[E]
 }
 
 object EntityPersistent {
+  def restoreCollectionIdentity[E](
+    entity: E,
+    id: EntityId,
+    owningCollectionId: EntityCollectionId
+  )(
+    replace: EntityId => E
+  ): Consequence[E] =
+    if (id.collection.name == owningCollectionId.name)
+      Consequence.success(
+        replace(id.copy(collection = owningCollectionId))
+      )
+    else
+      _collection_mismatch(id.collection, owningCollectionId)
+
   private[cncf] def _decode_store_record[E](
     persistent: EntityPersistent[E],
     collectionid: EntityCollectionId,
     record: Record
   ): Consequence[E] =
-    persistent.fromStoreRecord(record).flatMap { entity =>
-      val actual = persistent.id(entity).collection
-      if (actual.name == collectionid.name)
-        Consequence.success(entity)
-      else
-        _collection_mismatch(actual, collectionid)
-    }
+    persistent
+      .fromStoreRecord(EntityStoreDecodeContext(collectionid), record)
+      .flatMap { entity =>
+        val actual = persistent.id(entity).collection
+        if (actual == collectionid)
+          Consequence.success(entity)
+        else
+          _collection_mismatch(actual, collectionid)
+      }
+
+  private[cncf] def _require_exact_collection[E](
+    entity: E,
+    id: EntityId,
+    expected: EntityCollectionId
+  ): Consequence[E] =
+    if (id.collection == expected)
+      Consequence.success(entity)
+    else
+      Consequence.stateInvalid(
+        "Entity codec requires regeneration for exact collection identity",
+        Vector(
+          Descriptor.Facet.Policy("entity.persistence.collection"),
+          Descriptor.Facet.Reason(
+            "entity-persistence-exact-collection-required"
+          ),
+          Descriptor.Facet.Expected(expected.print),
+          Descriptor.Facet.Actual(id.collection.print)
+        )
+      )
 
   private[cncf] def _collection_mismatch[E](
     actual: EntityCollectionId,

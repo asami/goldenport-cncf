@@ -20,10 +20,12 @@ Current Web/admin design:
 
 Current Entity/Blob usage design:
 
+- `entity-collection-identity.md`
 - `entity-image-binding-usage-contract.md`
 
 Current component composition design:
 
+- `generation-compatibility-contract.md`
 - `typed-component-api-and-multi-instance-spi.md`
 
 Current operation contract design:

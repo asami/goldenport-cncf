@@ -17,7 +17,7 @@ import org.goldenport.cncf.http.{HttpDriver, RuntimeDashboardMetrics}
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedDataStoreRunner}
 import org.goldenport.cncf.entity.*
-import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.observability.{
   CallTreeContext,
@@ -52,7 +52,7 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -103,7 +103,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   def interpret[A](op: UnitOfWorkOp[A]): Consequence[A] =
     _execute(op)
 
-  private def _execute[A](op: UnitOfWorkOp[A]): Consequence[A] = op match {
+  private def _execute[A](
+    op: UnitOfWorkOp[A]
+  ): Consequence[A] =
+    _validate_entity_collection_resolution(op)
+      .flatMap(_ => _execute_validated(op))
+
+  private def _execute_validated[A](
+    op: UnitOfWorkOp[A]
+  ): Consequence[A] = op match {
     case UnitOfWorkOp.Authorize(authorization) =>
       _with_calltree("uow:authorize") {
         _authorize(Some(authorization))
@@ -397,13 +405,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpsertUnversioned[t] @unchecked) =>
+      val id = _canonical_entity_id(m.id)
+      val op = m.copy(id = id)
       _with_calltree("uow:entitystore:upsert-unversioned") {
         _authorize_unversioned_pair(
-          m.createAuthorization,
-          m.updateAuthorization,
-          m.purpose
+          op.createAuthorization,
+          op.updateAuthorization,
+          op.purpose
         ).flatMap { _ =>
-        _entity_store_space.upsert(m)(
+        _entity_store_space.upsert(op)(
             authorize = _ => Consequence.unit,
           onsaved = { result =>
             _entity_space_put_persisted_record(
@@ -747,52 +757,76 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
+      val query: EntityQuery[t] =
+        m.query.copy(collection = _canonical_collection_id(m.query.collection))
+      val op: UnitOfWorkOp.EntityStoreSearch[t] =
+        m.copy(query = query)
       _with_calltree(
         "uow:entityspace:search",
-        _entity_search_calltree_attributes(m.query, "entity-space", realio = !_working_set_enabled)
+        _entity_search_calltree_attributes(op.query, "entity-space", realio = !_working_set_enabled)
       ) {
-        _authorize(m.authorization).flatMap { _ =>
+        _authorize(op.authorization).flatMap { _ =>
           if (_working_set_enabled)
-            _entity_space_search(m)
+            _entity_space_search(op)
           else
-            _entity_store_space.search(m).flatMap(_filter_search_result(m, _))
+            _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
         }
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
+      val query: EntityQuery[t] =
+        m.query.copy(collection = _canonical_collection_id(m.query.collection))
+      val op: UnitOfWorkOp.EntityStoreSearch[t] =
+        UnitOfWorkOp.EntityStoreSearch(query, m.tc, m.authorization)
       _with_calltree(
         "uow:entitystore:search:direct",
-        _entity_search_calltree_attributes(m.query, "entity-store", realio = true)
+        _entity_search_calltree_attributes(op.query, "entity-store", realio = true)
       ) {
-        val op = UnitOfWorkOp.EntityStoreSearch(m.query, m.tc, m.authorization)
-        _authorize(m.authorization).flatMap { _ =>
-          _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc)).flatMap(
+        _authorize(op.authorization).flatMap { _ =>
+          _entity_store_space.search(op).flatMap(
             _filter_search_result(op, _)
           )
         }
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchInternal[t] @unchecked) =>
+      val query: EntityQuery[t] =
+        m.query.copy(collection = _canonical_collection_id(m.query.collection))
+      val op: UnitOfWorkOp.EntityStoreSearchInternal[t] =
+        m.copy(query = query)
       _with_calltree(
         "uow:entitystore:search:internal",
-        _entity_search_calltree_attributes(m.query, "entity-store", realio = true)
+        _entity_search_calltree_attributes(op.query, "entity-store", realio = true)
       ) {
-        _entity_store_space.searchInternal(m)
+        _entity_store_space.searchInternal(op)
       }
 
     case m: (UnitOfWorkOp.EntityStoreUniqueValueExists[t] @unchecked) =>
+      val op: UnitOfWorkOp.EntityStoreUniqueValueExists[t] =
+        m.copy(
+          collection = _canonical_collection_id(m.collection),
+          excludeId = m.excludeId.map(_canonical_entity_id)
+        )
       _with_calltree("uow:entitystore:unique-value-exists") {
-        _entity_space_unique_value_exists(m).flatMap {
+        _entity_space_unique_value_exists(op).flatMap {
           case true => Consequence.success(true)
-          case false => _entity_store_space.uniqueValueExists(m)
+          case false => _entity_store_space.uniqueValueExists(op)
         }
       }
 
     case m: (UnitOfWorkOp.EntityStoreResolveIdentity[t] @unchecked) =>
+      val op: UnitOfWorkOp.EntityStoreResolveIdentity[t] =
+        m.copy(collection = _canonical_collection_id(m.collection))
       _with_calltree("uow:entitystore:resolve-identity") {
-        _entity_space_resolve_identity(m).flatMap {
-          case Some(id) => Consequence.success(Some(id))
-          case None => _entity_store_space.resolveIdentity(m)
+        _entity_space_resolve_identity(op).flatMap {
+          case Some(id) =>
+            Consequence.success(
+              Some(id.copy(collection = op.collection))
+            )
+          case None =>
+            _entity_store_space
+              .resolveIdentity(op)
+              .map(_.map(_.copy(collection = op.collection)))
         }
       }
 
@@ -971,29 +1005,109 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     op: UnitOfWorkOp.EntityStoreLoad[T]
   ): UnitOfWorkOp.EntityStoreLoad[T] = {
     val id = _canonical_entity_id(op.id)
-    if (id == op.id) op else op.copy(id = id)
+    if (id.collection == op.id.collection) op else op.copy(id = id)
   }
 
   private def _canonical_entity_id(
     id: EntityId
   ): EntityId =
     _component_option
-      .flatMap(_.entitySpace.entityOption[Any](id.collection.name))
-      .map { collection =>
-        val cid = collection.descriptor.collectionId
-        if (id.collection == cid)
-          id
-        else
-          EntityId(id.major, id.minor, cid, id.timestamp, id.entropy)
-      }
+      .flatMap(_.entitySpace.canonicalEntityIdC(id).toOption)
       .getOrElse(id)
+
+  private def _canonical_collection_id(
+    id: EntityCollectionId
+  ): EntityCollectionId =
+    _component_option
+      .flatMap(_.entitySpace.canonicalCollectionIdC(id).toOption)
+      .getOrElse(id)
+
+  private def _validate_entity_collection_resolution[A](
+    op: UnitOfWorkOp[A]
+  ): Consequence[Unit] =
+    _component_option match {
+      case Some(component) =>
+        _entity_collection_ids(op).foldLeft(Consequence.unit) {
+          case (result, collectionid) =>
+            result.flatMap { _ =>
+              component.entitySpace
+                .canonicalCollectionIdC(collectionid)
+                .map(_ => ())
+                .recoverWith { conclusion =>
+                  if (_is_entity_not_found(conclusion))
+                    Consequence.unit
+                  else
+                    Consequence.Failure(conclusion)
+                }
+            }
+        }
+      case None =>
+        Consequence.unit
+    }
+
+  private def _entity_collection_ids[A](
+    op: UnitOfWorkOp[A]
+  ): Vector[EntityCollectionId] =
+    op match {
+      case m: UnitOfWorkOp.EntityStoreLoad[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreLoadSnapshot[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreLoadDetached[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreLoadDirect[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreUpsertUnversioned[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreUpdateById[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreUpdateByIdObserved[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreUpdateByIdDetached[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?] =>
+        val successorids =
+          m.request.successor match {
+            case bind: EntitySuccessorIntent.Bind[?] =>
+              Vector(bind.id.collection)
+            case _: EntitySuccessorIntent.Create[?, ?] =>
+              Vector.empty
+          }
+        m.request.rootId.collection +: successorids
+      case m: UnitOfWorkOp.EntityStoreUpdateByIdUnversioned[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreDelete =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreRestore =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreDeleteHard =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreSearch[?] =>
+        Vector(m.query.collection)
+      case m: UnitOfWorkOp.EntityStoreSearchDirect[?] =>
+        Vector(m.query.collection)
+      case m: UnitOfWorkOp.EntityStoreSearchInternal[?] =>
+        Vector(m.query.collection)
+      case m: UnitOfWorkOp.EntityStoreUniqueValueExists[?] =>
+        m.collection +: m.excludeId.map(_.collection).toVector
+      case m: UnitOfWorkOp.EntityStoreResolveIdentity[?] =>
+        Vector(m.collection)
+      case _ =>
+        Vector.empty
+    }
 
   private def _entity_space_load[T](
     op: UnitOfWorkOp.EntityStoreLoad[T]
   ): Consequence[Option[T]] = {
     val name = op.id.collection.name
     _component_option
-      .flatMap(_.entitySpace.entityOption[T](name)) match {
+      .flatMap { component =>
+        component.entitySpace.entityOption(op.id.collection).map(
+          _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]]
+        ).orElse(
+          component.entitySpace.entityOption[T](name)
+        )
+      } match {
       case Some(collection) =>
         collection.resolveScoped(op.id) match {
           case Consequence.Success(entity) =>
@@ -1016,7 +1130,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Consequence[SearchResult[T]] = {
     val name = op.query.collection.name
     _component_option
-      .flatMap(_.entitySpace.entityOption[T](name)) match {
+      .flatMap { component =>
+        component.entitySpace.entityOption(op.query.collection).map(
+          _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]]
+        ).orElse(
+          component.entitySpace.entityOption[T](name)
+        )
+      } match {
       case Some(collection) =>
         if (
           op.query.scope == EntitySearchScope.WorkingSet && !collection.hasEffectiveWorkingSetPolicy
@@ -1140,9 +1260,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         .map(_.entitySpace)
         .getOrElse(uow.executionContext.entitySpace)
     entityspace
-      .entityOption[Any](name)
+      .entityOption(id.collection)
+      .map(
+        _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
+      )
       .orElse(
-        entityspace.entityOption(id.collection).map(
+        entityspace.entityOption(name).map(
           _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
         )
       )
@@ -1157,8 +1280,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     val name = id.collection.name
     _component_option
       .flatMap { component =>
-        component.entitySpace.entityOption[Any](name).orElse(
-          component.entitySpace.entityOption(id.collection)
+        component.entitySpace.entityOption(id.collection).map(
+          _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
+        ).orElse(
+          component.entitySpace.entityOption(name)
         ).filter(collection =>
           collection.descriptor.persistent.asInstanceOf[AnyRef] eq
             tc.asInstanceOf[AnyRef]
@@ -1201,8 +1326,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     (for {
       r <- record
       collection <- _component_option.flatMap { component =>
-        component.entitySpace.entityOption[Any](name).orElse(
-          component.entitySpace.entityOption(id.collection).map(
+        component.entitySpace.entityOption(id.collection).map(
+          _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
+        ).orElse(
+          component.entitySpace.entityOption(name).map(
             _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
           )
         )
@@ -1510,6 +1637,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Map[String, String] =
     Map(
       "entity" -> id.collection.name,
+      "collection_id" -> id.collection.print,
       "id" -> id.value,
       "cache_layer" -> layer,
       "real_io" -> realio.toString,
@@ -1523,6 +1651,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Map[String, String] =
     Map(
       "entity" -> query.collection.name,
+      "collection_id" -> query.collection.print,
       "cache_layer" -> layer,
       "real_io" -> realio.toString,
       "working_set_enabled" -> _working_set_enabled.toString,

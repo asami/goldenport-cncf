@@ -38,7 +38,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 16, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -1648,6 +1648,13 @@ private def _owned_value_persistent: EntityPersistent[OwnedValueEntity] =
         case None         => Consequence.argumentInvalid("invalid owned value storage record")
       }
     }
+    override def fromStoreRecord(
+      context: EntityStoreDecodeContext,
+      record: Record
+    ): Consequence[OwnedValueEntity] =
+      fromStoreRecord(record).map(entity =>
+        entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
+      )
   }
 
 private def _owned_address(record: Record): Option[OwnedAddress] =

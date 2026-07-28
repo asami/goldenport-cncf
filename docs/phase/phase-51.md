@@ -1,6 +1,6 @@
 # Phase 51 - CNCF-Cozy CML Generation Version Alignment
 
-status=in-progress
+status=closed
 planned_at=2026-07-26
 depends_on=[Phase 50](phase-50.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -69,10 +69,120 @@ CAR projects.
 | CV-04 | Cozy target validation | Cozy validates the requested CNCF target and runtime descriptor before generation. | closed |
 | CV-05 | Generation provenance | Generated output records stable version, source, backend, and digest evidence. | closed |
 | CV-06 | CAR metadata consistency | Cozy scaffold, build, packaging, review, and publication agree on build-time and runtime version meanings. | closed |
-| CV-07 | Development and release acceptance | SNAPSHOT workflows remain explicit while releases use immutable compatible coordinates and deterministic diagnostics. | in progress (REVIEW_FIX complete; RE_REVIEW pending) |
-| CI-01 | Exact Collection Identity contract | Generated, custom, and raw persistence adapters preserve or receive the exact owning collection without name-only inference, runtime type exceptions, or a second decode. | planned |
-| SP-01 | Persisted scalar store projection | CNCF owns store-value restoration, generated `fromStoreRecord` uses it, and the current-release nominal String compatibility fallback is removed. | planned |
-| CV-08 | Downstream validation and closure | Representative generated projects pass, mismatches fail early, and canonical documentation records the verified contract. | planned |
+| CV-07 | Development and release acceptance | SNAPSHOT workflows remain explicit while releases use immutable compatible coordinates and deterministic diagnostics. | closed |
+| CI-01 | Exact Collection Identity contract | Generated, custom, and raw persistence adapters preserve or receive the exact owning collection without name-only inference, runtime type exceptions, or a second decode. | closed |
+| SP-01 | Persisted scalar store projection | CNCF owns store-value restoration, generated `fromStoreRecord` uses it, and the current-release nominal String compatibility fallback is removed. | closed |
+| CV-08 | Downstream validation and closure | Representative generated projects pass, mismatches fail early, and canonical documentation records the verified contract. | in progress |
+
+## CV-08 Implementation Evidence
+
+- CNCF cold/repeated Information generation is byte-stable for 25 Scala files
+  and its provenance. The build and runtime-admission gate passed all 14
+  focused scenarios.
+- Cozy passed 76 compatibility, descriptor, lifecycle, package,
+  runtime-manifest, publication, and scaffold scenarios. A shared-temporary
+  directory assertion found by the aggregate run now checks only snapshots
+  created by the operation under test.
+- sbt-cozy's selected CAR publication and review-evidence scripted projects
+  pass with the exact development Cozy/CNCF coordinates declared by their CAR
+  fixture.
+- ArtScene regenerated 155 Scala files, built and locally published
+  `textus-art-scene-0.1.2-SNAPSHOT.car`, and passed all 15 representative
+  identity, persisted-value, lifecycle, and assembly scenarios.
+- CNCF continues to reject independently released pre-manifest CARs. CV-08
+  records that boundary and does not weaken runtime admission or rewrite those
+  immutable dependencies.
+- Clean temporary builds supplied strict-manifest AI runtime, scraper, and
+  toolchain CARs to ArtScene. The isolated maintained packaged-smoke mode
+  supplied all four CARs explicitly and passed real standalone description,
+  seed, definition, review-persistence, registration, and update-report
+  behavior without project/default repository fallback.
+- The following RE_REVIEW found that isolation also replaced normal discovery
+  without an explicit provider-CAR directory. REVIEW_FIX confines isolation to
+  that explicit mode, requires the provider directory for smoke-only
+  execution, and restores normal CNCF discovery. The four-CAR smoke and
+  configuration guard pass; normal discovery reaches the intentional
+  pre-manifest-CAR rejection rather than failing with a missing provider API.
+- The next RE_REVIEW found an unsafe cleanup acceptance regression and a
+  `user.home` documentation contradiction. REVIEW_FIX restores explicit
+  `dry_run=true`, documents the isolated child-JVM exception, and repairs raw
+  exact-ID decoding exposed by the complete path. Five focused ArtScene
+  scenarios pass, and the rebuilt four-CAR assembly passes cleanup preview,
+  restart, Web/REST, backup export, and clean restore end to end.
+- The fresh accumulator RE_REVIEW found that malformed raw identity could
+  still reach a synthetic fallback, scalar normalization could discard an
+  existing canonical owner, the exact-ID specification mixed two behavior
+  boundaries, and the CI-01 note contradicted the owned raw-adapter contract.
+  REVIEW_FIX now preserves canonical IDs, parses only scalar ingress, rejects
+  malformed context-aware decode, separates the behavior steps, and clarifies
+  the persistence-adapter boundary. Six focused scenarios, `Test/compile`, CAR
+  lint, and the rebuilt complete four-CAR standalone path pass.
+- A later fresh accumulator RE_REVIEW found that ArtScene's raw Record adapter
+  could still rebind a typed same-name foreign owner, three specifications
+  lacked complete action or responsibility boundaries, two current-task
+  headers were stale, and the path-level compliance ledger omitted four of the
+  current 82 Scala paths. That REVIEW_FIX preserved exact typed owners, added
+  direct adapter regression evidence, repaired the specification structure and
+  headers, completed the 82-file ledger, and passed 14 focused scenarios.
+- The following RE_REVIEW found that three ArtScene ledger rows and the
+  canonical phase/strategy summaries still described that older evidence, and
+  that exact-owner restoration, service scalar ingress, automatic delivery,
+  physical scalar projection, and repeat dispatch were not yet isolated as one
+  semantic contract per executable example. REVIEW_FIX now separates those
+  contracts, reconciles every canonical status source, and passes the expanded
+  17-scenario identity/lifecycle/assembly gate plus `Test/compile`; normal CAR
+  lint remains failure-free with only the recorded development warnings.
+- The next RE_REVIEW found that the UnitOfWork example still executed
+  EntitySpace canonicalization before its declared action, that SP-01's
+  completed checklist and closed evidence contradicted its reopened status, and
+  that the Stage Status blocks did not use the repository's mandatory stable
+  status/update-rule schema. REVIEW_FIX now leaves only the UnitOfWork action in
+  that example, restores SP-01 to `CLOSED`, adds all ten update rules, moves
+  workflow detail to CV-08's `Current step`, and passes the stable 17-scenario
+  gate plus `Test/compile`; normal CAR lint remains failure-free with only the
+  recorded development warnings.
+- The clean accumulator RE_REVIEW entered the final release gate.
+  `simplemodeling-model` passed its full suite and `publishLocal`, while
+  `simple-modeler` exposed one stale pre-projection expectation in
+  `EntityCustomTypeResolutionSpec`. PHASE_TEST_FIX updated only that
+  expectation and its executable-contract wording; the targeted suite passed
+  all 7 scenarios plus `Test/compile`, and the scoped REVIEW, REVIEW_FIX, and
+  clean RE_REVIEW accepted the correction. The next full-gate attempt passed
+  the complete `simple-modeler` suite and `publishLocal`, then Cozy exposed two
+  stale `BridgeContractSpec` publication fixtures after 737 of 739 tests
+  succeeded. PHASE_TEST_FIX changed only those fixtures to build valid
+  SNAPSHOT CARs with canonical project metadata, ABI evidence, and the current
+  proven development generation pair, while preserving the rule that
+  SNAPSHOT publication does not create a release catalog. The bridge suite
+  passed all 13 scenarios plus `Test/compile`; its scoped REVIEW and clean
+  RE_REVIEW passed. The following final-gate attempt passed and locally
+  published `simplemodeling-model` and `simple-modeler`, then CNCF's
+  deterministic 25-file generation gate passed but its full suite failed 23 of
+  2,611 tests across ten action/entity/UnitOfWork/blob/component suites.
+  CNCF was not locally published. Independent Cozy and sbt-cozy full suites
+  passed 739 and 123 tests respectively and were locally published; ArtScene
+  remained unrun because it requires the failed CNCF publication. No commit
+  was created. CNCF PHASE_TEST_FIX, scoped REVIEW, and clean RE_REVIEW are now
+  complete. Fresh all-required full validation, final release evidence, and
+  release commits remain required before CV-08 and Phase 51 can close.
+- The next fresh final gate passed and locally published all five upstream
+  repositories. ArtScene CAR lint remained free of `FAIL`, and its CAR built,
+  but its full suite passed 388 of 389 tests before
+  `ArtSceneFacilitySubscriptionSpec` failed at line 55. ArtScene
+  `publishLocal` did not run and no commit was created. The next
+  PHASE_TEST_FIX and review are limited to that latest ArtScene failure.
+- The ArtScene-only correction now canonicalizes the raw subscription lookup
+  id and passes the resolved aggregate's authoritative id into the generated
+  update command. Its focused 5-scenario suite and `Test/compile` passed,
+  followed by scoped REVIEW and clean RE_REVIEW. The fresh ArtScene full gate,
+  final evidence, and release commits remain.
+- The final affected-repository gate built and locally published the ArtScene
+  CAR and passed all 389 tests across 41 suites. The unchanged upstream
+  validated trees retain passing full suites and local publications:
+  `simplemodeling-model` 58 tests, `simple-modeler` 44, CNCF 2,613, Cozy 739,
+  and sbt-cozy 123. All compatibility, provenance, generation, runtime,
+  downstream, review, documentation, and release-commit gates pass. CV-08 and
+  Phase 51 are closed.
 
 ## Acceptance
 
@@ -116,5 +226,8 @@ CAR projects.
 - [Phase 53 - Information CML Runtime Canonicalization](phase-53.md)
 - [ArtScene Collection Identity Contract Handoff](../journal/2026/07/2026-07-26-artscene-collection-identity-contract-handoff.md)
 - [CV-07 Development and Release Acceptance](../notes/phase-51-cv07-development-release-acceptance.md)
+- [CI-01 Exact Collection Identity Contract](../notes/phase-51-ci01-exact-collection-identity-contract.md)
+- [Entity Collection Identity Design](../design/entity-collection-identity.md)
+- [Entity Collection Identity Specification](../spec/entity-collection-identity.md)
 - [Cozy CAR project metadata ownership](../../../cozy/docs/design/car-project-metadata-ownership.md)
 - [Cozy CAR project scaffold](../../../cozy/docs/spec/car-project-scaffold.md)

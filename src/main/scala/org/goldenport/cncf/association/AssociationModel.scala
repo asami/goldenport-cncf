@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityVisibilityScope}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreDecodeContext, EntityVisibilityScope}
 import org.goldenport.record.Record
 import org.goldenport.text.Presentable
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Generic entity-to-entity association runtime foundation.
  *
  * @since   Apr. 27, 2026
- * @version May.  5, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationDomain(value: String) extends Presentable {
@@ -119,6 +119,17 @@ object AssociationRepository {
     override def toStoreRecord(e: Association): Record = AssociationRecordCodec.toStoreRecord(e)
     def fromRecord(r: Record): Consequence[Association] = AssociationRecordCodec.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[Association] = AssociationRecordCodec.fromStoreRecord(r)
+    override def fromStoreRecord(
+      context: EntityStoreDecodeContext,
+      r: Record
+    ): Consequence[Association] =
+      AssociationRecordCodec.fromStoreRecord(r).flatMap { entity =>
+        EntityPersistent.restoreCollectionIdentity(
+          entity,
+          entity.id,
+          context.owningCollectionId
+        )(id => entity.copy(id = id))
+      }
   }
 
   given EntityPersistentCreate[AssociationCreate] with {

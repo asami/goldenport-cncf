@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreDecodeContext}
 import org.goldenport.datatype.ContentType
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -14,7 +14,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 27, 2026
  *  version Apr. 28, 2026
- * @version May. 11, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BlobRepository {
@@ -43,6 +43,17 @@ object BlobRepository {
     override def toStoreRecord(e: Blob): Record = BlobRecordCodec.toStoreRecord(e)
     def fromRecord(r: Record): Consequence[Blob] = BlobRecordCodec.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[Blob] = BlobRecordCodec.fromStoreRecord(r)
+    override def fromStoreRecord(
+      context: EntityStoreDecodeContext,
+      r: Record
+    ): Consequence[Blob] =
+      BlobRecordCodec.fromStoreRecord(r).flatMap { entity =>
+        EntityPersistent.restoreCollectionIdentity(
+          entity,
+          entity.id,
+          context.owningCollectionId
+        )(id => entity.copy(id = id))
+      }
   }
 
   given EntityPersistentCreate[BlobCreate] with {

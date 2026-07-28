@@ -46,6 +46,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
   }
 
   "GenericSubsystemFactory" should {
+    "descriptor materialization and development selection" which {
     "materialize multiple named instances from one descriptor component type" in {
       Given("one discovered component and two descriptor instance declarations")
       val subsystem = TestComponentFactory.emptySubsystem("named-instance-materialization")
@@ -200,6 +201,53 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
+    "prefer a claimed development component over a stale packaged CAR" in {
+      Given("a development component and an older same-name CAR selected by the assembly")
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("devdirsample")
+        val classdir = componentdir.resolve("target").resolve("scala-3.3.8").resolve("classes")
+        _copy_devdir_sample_classes(classdir)
+        _write_runtime_classpath(componentdir, classdir)
+        val packagedir = Files.createDirectories(root.resolve("packaged"))
+        val packagedjar = _create_fake_component_jar(root.resolve("assets").resolve("packaged-main.jar"))
+        val packageddescriptor = root.resolve("packaged-descriptor.json")
+        Files.writeString(
+          packageddescriptor,
+          """{"name":"devdirsample","version":"0.0.1","component":"devdirsample"}"""
+        )
+        _create_unadmitted_car(
+          packagedir.resolve("devdirsample-0.0.1.car"),
+          Seq(
+            "component/main.jar" -> packagedjar,
+            "component-descriptor.json" -> packageddescriptor
+          )
+        )
+        val descriptor = GenericSubsystemDescriptor(
+          path = root.resolve("assembly-descriptor.yaml"),
+          subsystemName = "devdirsample",
+          version = Some("0.0.1"),
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding("devdirsample", version = Some("0.0.1"))
+          )
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.ComponentCarDirKey -> ConfigurationValue.StringValue(packagedir.toString),
+            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("GenericSubsystemFactory resolves the competing repositories")
+        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
+        val components = subsystem.components.filter(_.name == "devdirsample")
+
+        Then("the development class is activated exactly once without admitting the stale CAR")
+        components should have size 1
+        components.head.getClass.getName shouldBe classOf[devdirsample.DevDirSamplePrimaryComponent].getName
+      }
+    }
+
     "isolate assembly descriptors across explicit component CARs" in {
       Given("two explicit CARs and one assembly descriptor binding each component")
       _with_temp_dir { root =>
@@ -278,6 +326,9 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
+    }
+
+    "runtime resolution and security wiring" which {
     "make descriptor-bound component operations visible through the subsystem resolver" in {
       Given("a repository component with generated specification operations")
       _with_temp_dir { componentdir =>
@@ -469,6 +520,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
+    }
   }
 
   private object _named_instance_factory extends Component.PrimaryComponentFactory {
@@ -535,6 +587,50 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     entries: Seq[(String, Path)]
   ): Unit =
     CarArchiveFixture.write(target, entries)
+
+  private def _create_unadmitted_car(
+    target: Path,
+    entries: Seq[(String, Path)]
+  ): Unit =
+    Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zip =>
+      entries.foreach { case (name, file) =>
+        zip.putNextEntry(new ZipEntry(name))
+        Files.copy(file, zip)
+        zip.closeEntry()
+      }
+    }
+
+  private def _write_runtime_classpath(
+    componentdir: Path,
+    classdir: Path
+  ): Unit = {
+    val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+    Files.createDirectories(file.getParent)
+    Files.writeString(file, classdir.toString)
+  }
+
+  private def _copy_devdir_sample_classes(target: Path): Unit = {
+    val testclasses = Path.of(
+      classOf[devdirsample.DevDirSampleComponent]
+        .getProtectionDomain
+        .getCodeSource
+        .getLocation
+        .toURI
+    )
+    val source = testclasses.resolve("devdirsample")
+    Files.createDirectories(target.resolve("devdirsample"))
+    Using.resource(Files.list(source)) { stream =>
+      stream.iterator().asScala
+        .filter(path => Files.isRegularFile(path) && path.getFileName.toString.endsWith(".class"))
+        .foreach { path =>
+          Files.copy(
+            path,
+            target.resolve("devdirsample").resolve(path.getFileName),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+          )
+        }
+    }
+  }
 
   private def _create_fake_component_jar(target: Path): Path = {
     val factoryclassentry =

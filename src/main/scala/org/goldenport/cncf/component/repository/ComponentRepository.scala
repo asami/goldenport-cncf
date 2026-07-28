@@ -578,15 +578,8 @@ object ComponentRepository extends GlobalObservable {
     private def _matches_dev_component_name(
       descriptorname: String,
       runtimename: String
-    ): Boolean = {
-      val normalized = descriptorname.trim
-      val withouttextus =
-        if (normalized.startsWith("textus-")) normalized.stripPrefix("textus-")
-        else if (normalized.startsWith("textus_")) normalized.stripPrefix("textus_")
-        else normalized
-      NamingConventions.equivalentByNormalized(normalized, runtimename) ||
-        NamingConventions.equivalentByNormalized(withouttextus, runtimename)
-    }
+    ): Boolean =
+      _matches_development_component_name(descriptorname, runtimename)
   }
 
   object ComponentDevDirRepository {
@@ -979,25 +972,89 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
+  private[cncf] def developmentComponentClaims(
+    specs: Seq[Specification]
+  ): Map[Specification, Set[String]] =
+    specs.flatMap { spec =>
+      val descriptors = spec match {
+        case ComponentDevDirRepository.Specification(baseDir) =>
+          ComponentDevDirRepository.devComponentDescriptors(baseDir) ++
+            ComponentDevDirRepository.inferComponentDescriptors(baseDir)
+        case SubsystemDevDirRepository.Specification(baseDir) =>
+          val componentdir = baseDir.resolve("component").normalize
+          ComponentDevDirRepository.devComponentDescriptors(componentdir) ++
+            ComponentDevDirRepository.inferComponentDescriptors(componentdir)
+        case _ =>
+          Vector.empty
+      }
+      val claims = descriptors
+        .flatMap(_component_descriptor_names)
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .toSet
+      if (claims.nonEmpty) Some(spec -> claims) else None
+    }.toMap
+
   private[cncf] def descriptorsForSpecification(
     spec: Specification,
     previousspecs: Seq[Specification],
-    descriptors: Vector[ComponentDescriptor]
+    descriptors: Vector[ComponentDescriptor],
+    developmentclaims: Map[Specification, Set[String]] = Map.empty
   ): Vector[ComponentDescriptor] = {
-    val unresolved = descriptors.filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
-    spec match {
-      case _: ComponentFileRepository.Specification =>
-        unresolved.filter(_is_descriptor_satisfied_by_specs(_, Seq(spec)))
-      case _ =>
-        unresolved
+    developmentclaims.get(spec) match {
+      case Some(claims) =>
+        descriptors.filter(_is_descriptor_claimed(_, claims))
+      case None =>
+        val claimed = developmentclaims.values.flatten.toSet
+        val eligible = descriptors.filterNot(_is_descriptor_claimed(_, claimed))
+        val unresolved = eligible.filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
+        spec match {
+          case _: ComponentFileRepository.Specification =>
+            unresolved.filter(_is_descriptor_satisfied_by_specs(_, Seq(spec)))
+          case _ =>
+            unresolved
+        }
     }
   }
 
   private[cncf] def unresolvedDescriptorsForSearch(
     previousspecs: Seq[Specification],
-    descriptors: Vector[ComponentDescriptor]
+    descriptors: Vector[ComponentDescriptor],
+    developmentclaims: Map[Specification, Set[String]] = Map.empty
   ): Vector[ComponentDescriptor] =
-    descriptors.filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
+    descriptors
+      .filterNot(_is_descriptor_claimed(_, developmentclaims.values.flatten.toSet))
+      .filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
+
+  private def _is_descriptor_claimed(
+    descriptor: ComponentDescriptor,
+    claims: Set[String]
+  ): Boolean =
+    _component_descriptor_names(descriptor)
+      .exists(descriptorname =>
+        claims.exists(claim => _matches_development_component_name(descriptorname, claim))
+      )
+
+  private def _matches_development_component_name(
+    descriptorname: String,
+    runtimename: String
+  ): Boolean =
+    _development_component_name_aliases(descriptorname).exists { descriptoralias =>
+      _development_component_name_aliases(runtimename).exists { runtimealias =>
+        NamingConventions.equivalentByNormalized(descriptoralias, runtimealias)
+      }
+    }
+
+  private def _development_component_name_aliases(
+    name: String
+  ): Set[String] = {
+    val normalized = name.trim
+    val withouttextus =
+      if (normalized.startsWith("textus-")) normalized.stripPrefix("textus-")
+      else if (normalized.startsWith("textus_")) normalized.stripPrefix("textus_")
+      else normalized
+    Set(normalized, withouttextus)
+  }
 
   private def _is_descriptor_satisfied_by_specs(
     descriptor: ComponentDescriptor,
@@ -1842,8 +1899,8 @@ object ComponentRepository extends GlobalObservable {
     } else {
       extracted.collaboratorClasspath match {
         case Some(paths) if paths.nonEmpty =>
-          Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
-            CollaboratorFactory.create(collaboratorLoader, paths) match {
+          Using.resource(CollaboratorClassLoader(paths)) { collaboratorloader =>
+            CollaboratorFactory.create(collaboratorloader, paths) match {
               case Consequence.Success(collaborator) =>
                 collaboratorcomponents.foreach(_.setCollaborator(collaborator))
                 Consequence.success(components)

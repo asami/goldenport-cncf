@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 28, 2026
  */
 package org.goldenport.cncf.component.entity.aggregate
 
@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.aggregate.AggregateAssembler
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.model.datatype.EntityId
 
 object Order extends AggregateAssembler[Order] {
@@ -19,7 +20,11 @@ object Order extends AggregateAssembler[Order] {
   def createC(r: Record): Consequence[Order] =
     Consequence.success(
       Order(
-        id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
+        id = _entity_id(
+          r,
+          "id",
+          org.goldenport.cncf.component.entity.Order.collectionId
+        ),
         name = r.getString("name").getOrElse(sys.error("name missing")),
         status = r.getString("status").getOrElse(sys.error("status missing")),
         customer = None,
@@ -74,8 +79,16 @@ object OrderLine extends AggregateAssembler[OrderLine] {
   def createC(r: Record): Consequence[OrderLine] =
     Consequence.success(
       OrderLine(
-        id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
-        orderId = EntityId.parse(r.getString("orderId").getOrElse(sys.error("orderId missing"))).TAKE,
+        id = _entity_id(
+          r,
+          "id",
+          org.goldenport.cncf.component.entity.OrderLine.collectionId
+        ),
+        orderId = _entity_id(
+          r,
+          "orderId",
+          org.goldenport.cncf.component.entity.Order.collectionId
+        ),
         name = r.getString("name").getOrElse(sys.error("name missing")),
         quantity = r.getInt("quantity").getOrElse(sys.error("quantity missing")),
         sortOrder = r.getInt("sortOrder")
@@ -119,8 +132,16 @@ object Customer extends AggregateAssembler[Customer] {
   def createC(r: Record): Consequence[Customer] =
     Consequence.success(
       Customer(
-        id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
-        orderId = EntityId.parse(r.getString("orderId").getOrElse(sys.error("orderId missing"))).TAKE,
+        id = _entity_id(
+          r,
+          "id",
+          org.goldenport.cncf.component.entity.Customer.collectionId
+        ),
+        orderId = _entity_id(
+          r,
+          "orderId",
+          org.goldenport.cncf.component.entity.Order.collectionId
+        ),
         name = r.getString("name").getOrElse(sys.error("name missing"))
       )
     )
@@ -148,3 +169,13 @@ final case class Customer(
       "name" -> name
     )
 }
+
+private def _entity_id(
+  record: Record,
+  fieldname: String,
+  collectionid: EntityCollectionId
+): EntityId =
+  EntityId
+    .parse(record.getString(fieldname).getOrElse(sys.error(s"$fieldname missing")))
+    .TAKE
+    .copy(collection = collectionid)

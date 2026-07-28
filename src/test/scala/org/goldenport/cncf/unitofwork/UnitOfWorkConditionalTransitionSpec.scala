@@ -42,7 +42,7 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkConditionalTransitionSpec
@@ -1000,6 +1000,13 @@ final class UnitOfWorkConditionalTransitionSpec
           "status" -> entity.status,
           "successor_id" -> entity.successorid
         )
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[Root] =
+        fromRecord(record).map(entity =>
+          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
+        )
       def fromRecord(record: Record): Consequence[Root] =
         (record.getAs[EntityId]("id"), record.getString("status")) match {
           case (Some(id), Some(status)) =>
@@ -1059,6 +1066,13 @@ final class UnitOfWorkConditionalTransitionSpec
         Record.dataAuto(
           "id" -> entity.id,
           "label" -> entity.label
+        )
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[Successor] =
+        fromRecord(record).map(entity =>
+          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
         )
       def fromRecord(record: Record): Consequence[Successor] =
         (record.getAs[EntityId]("id"), record.getString("label")) match {

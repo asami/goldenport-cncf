@@ -862,7 +862,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 49: closed (`docs/phase/phase-49.md`)
 - Phase 50: closed
   (`docs/phase/phase-50.md`)
-- Phase 51: in-progress (`docs/phase/phase-51.md`)
+- Phase 51: closed (`docs/phase/phase-51.md`)
 
 ## 8. Completed Development Item History
 
@@ -1621,6 +1621,25 @@ Completed in Phase 50.
 - Deferred force, merge, repair, overwrite policy, and conflict-resolution UX
   remain future item `9.40 Entity Conflict Resolution and Repair`.
 
+### 8.30 CNCF-Cozy CML Generation Version Alignment
+Completed in Phase 51.
+
+- Closed dashboard: `docs/phase/phase-51.md`
+- Closed checklist: `docs/phase/phase-51-checklist.md`
+- Closure evidence:
+  `docs/notes/phase-51-cv08-downstream-validation-and-closure.md`
+- Completed scope:
+  - explicit CNCF target, Cozy generator, build-source, compatibility, and
+    provenance contracts;
+  - exact CAR compile/runtime/package/publication admission and deterministic
+    generation evidence;
+  - exact Entity collection identity and persisted scalar restoration across
+    generated and runtime paths;
+  - representative ArtScene CAR generation, runtime, and downstream
+    acceptance; and
+  - clean review gates plus full validated release commits across the six
+    repository dependency chain.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1628,7 +1647,7 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Phase 51, `CNCF-Cozy CML Generation Version Alignment`, is in progress after
+Phase 51, `CNCF-Cozy CML Generation Version Alignment`, is closed after
 Phase 50 closure. It makes the CNCF target and Cozy generator used by CML
 generation an explicit, reproducible build contract before later
 generated-model work. Explicit project, owning-build bridge, and CLI version
@@ -1659,8 +1678,8 @@ development Cozy `0.3.1-SNAPSHOT`, captures the project-relative source and
 pre-launch digest as CNCF build inputs, invokes Cozy's authoritative provenance
 validator before accepting output, and compares generated Scala plus provenance
 bytes across cold/repeated generation. The independent CV-05 REVIEW correction
-and clean RE_REVIEW/PASS gate are complete, so CV-05 is closed. Phase 51 stays
-in progress. CV-06A now makes unmerged CAR `project.yaml` the package-gate
+and clean RE_REVIEW/PASS gate are complete, so CV-05 is closed. Phase 51
+remained in progress at that point. CV-06A now makes unmerged CAR `project.yaml` the package-gate
 authority for the exact Cozy generator, unique CNCF compile coordinate, and
 runtime range; packaging additionally proves that the resolved CNCF JAR
 descriptor equals that compile target and rejects project/default replacement
@@ -1751,11 +1770,12 @@ findings: Cozy derives actual CAR lifecycle from project metadata and requires
 publication-version agreement; sbt-cozy requires the project-owned Cozy/CNCF
 pair and reports exact generator recovery; ArtScene consumes the released
 Textus Scraper CAR without loading its source project; and the focused
-package/delegate matrix passes. CV-07 remains in progress pending independent
-RE_REVIEW and the final release gates.
+package/delegate matrix passes. CV-07, CV-08, and Phase 51 subsequently passed
+their independent review, downstream, full-suite, evidence, and release-commit
+gates and are closed.
 
-- Current dashboard: `docs/phase/phase-51.md`
-- Current checklist: `docs/phase/phase-51-checklist.md`
+- Closed dashboard: `docs/phase/phase-51.md`
+- Closed checklist: `docs/phase/phase-51-checklist.md`
 
 Other 9.x items remain future development candidates until explicitly
 selected.
@@ -3242,7 +3262,8 @@ Planned for Phase 53 after Phase 52 closes.
   - `docs/journal/2026/05/knowledge-import-information-space-working-model.md`.
 
 ### 9.45 CNCF-Cozy CML Generation Version Alignment
-In progress in Phase 51 after Phase 50 closure.
+Completed in Phase 51 after Phase 50 closure. The canonical completion record
+is section 8.30; this item retains the detailed historical acceptance evidence.
 
 - Historical basis:
   - CNCF `build.sbt` selects a CNCF artifact version and a Cozy generator
@@ -3343,6 +3364,81 @@ In progress in Phase 51 after Phase 50 closure.
     generator fallback is removed; and
   - final design/specification and Executable Specifications identify one
     authoritative generation-version contract.
+- CV-08 implementation evidence:
+  - cold CNCF Information generation is stable across 25 generated Scala files
+    and provenance;
+  - focused CNCF and Cozy gates pass 14 and 76 scenarios respectively;
+  - sbt-cozy scripted CAR publication and review evidence pass from a fixture
+    with exact development coordinates;
+  - ArtScene regenerates, packages, locally publishes, and passes 15 focused
+    downstream scenarios; and
+  - pre-manifest dependency CARs remain rejected until their owning projects
+    publish new runtime evidence rather than receiving a Phase 51 bypass; and
+  - an isolated maintained ArtScene smoke explicitly activates four
+    strict-manifest Phase 51 CARs and passes real standalone seed, definition,
+    review-persistence, registration, and update-report behavior; and
+  - the subsequent review fix confines packaged isolation to explicit
+    provider-CAR mode, restores ordinary repository discovery otherwise, and
+    rejects smoke-only configuration that omits its provider directory; and
+  - the final review fix restores explicit non-destructive cleanup preview,
+    clarifies the isolated child-JVM home exception, preserves exact owner
+    identity through ArtScene raw persistence, and passes the complete
+    four-CAR cleanup/restart/Web/REST/export/restore path; and
+  - the latest accumulator review fix rejects missing or malformed raw
+    physical IDs before restoration, preserves an already-canonical
+    `EntityId`, limits scalar parsing to the owned persistence adapter,
+    separates the executable behavior boundaries, and passes 6 focused
+    scenarios plus `Test/compile`, CAR lint, and the rebuilt complete four-CAR
+    path; and
+  - the following correction preserves typed same-name foreign owners, repairs
+    missing action and responsibility boundaries, and completes the 82-file
+    compliance ledger with a stable 14-scenario gate; and
+  - the latest review fix reconciles the ArtScene ledger and canonical phase
+    summaries with that correction, isolates UnitOfWork restoration, service
+    scalar ingress, automatic delivery, physical scalar projection, and repeat
+    dispatch as separate executable contracts, and passes the expanded
+    17-scenario identity/lifecycle/assembly gate plus `Test/compile`; normal CAR
+    lint remains failure-free with only the recorded development warnings; and
+  - the latest correction removes EntitySpace canonicalization from the
+    UnitOfWork action example, restores SP-01's checklist-derived `CLOSED`
+    state, normalizes all ten Stage Status blocks to the mandatory stable
+    status/update-rule schema, and passes the same 17-scenario gate plus
+    `Test/compile`; normal CAR lint remains failure-free with only the recorded
+    development warnings; and
+  - the clean accumulator RE_REVIEW entered the final release gate.
+    `simplemodeling-model` passed its full suite and local development
+    publication; a stale SimpleModeler pre-projection expectation then failed,
+    was corrected in its owning specification only, passed all 7 scenarios
+    plus `Test/compile`, and completed its scoped REVIEW, REVIEW_FIX, and clean
+    RE_REVIEW. The following full-gate attempt passed `simple-modeler` and
+    `publishLocal`, then Cozy exposed two stale bridge publication fixtures
+    after 737 of 739 tests succeeded. The fixtures now build admitted
+    development CARs and assert the SNAPSHOT archive/no-release-catalog
+    contract; all 13 bridge scenarios plus `Test/compile` passed, followed by
+    scoped REVIEW and clean RE_REVIEW. The next final-gate attempt passed and
+    locally published the model/modeler upstreams, then CNCF's deterministic
+    generation passed but its full suite failed 23 of 2,611 tests across ten
+    suites. Independent Cozy and sbt-cozy full suites passed 739 and 123 tests
+    and were locally published; ArtScene remained gated on CNCF, and no commit
+    was created. CNCF PHASE_TEST_FIX and its scoped clean RE_REVIEW are now
+    complete; fresh preserved-tree validation and release commits remain the
+    Phase 51 closure gate.
+  - The next fresh gate passed and locally published all five upstream
+    repositories with unchanged staged identities. ArtScene normal CAR lint
+    had no `FAIL` and its CAR built, but its full suite passed 388 of 389
+    tests before `ArtSceneFacilitySubscriptionSpec` failed at line 55.
+    ArtScene publication and all release commits were withheld. The next
+    correction and review scope is only that latest ArtScene failure.
+  - The ArtScene-only correction now canonicalizes the raw subscription lookup
+    id and supplies the resolved aggregate's authoritative id to the generated
+    update command. Its focused 5-scenario suite and `Test/compile` passed,
+    followed by scoped REVIEW and clean RE_REVIEW. The fresh ArtScene full
+    gate and final release evidence/commits remain.
+  - The final affected-repository gate built and locally published the ArtScene
+    CAR and passed all 389 tests across 41 suites. Together with the unchanged
+    upstream full-suite and local-publication evidence, every Phase 51
+    generation, compatibility, provenance, runtime, downstream, review,
+    documentation, and release-commit gate passes.
 - Planning references:
   - `docs/phase/phase-51.md`;
   - `docs/phase/phase-51-checklist.md`;

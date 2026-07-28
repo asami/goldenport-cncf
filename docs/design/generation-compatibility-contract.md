@@ -164,3 +164,25 @@ after complete validation confirms that the original source still contains the
 captured bytes. Replacement, removal, unreadability, or failed final validation
 therefore cannot associate output with another source revision or leave a new
 manifest visible.
+
+## Downstream Validation Boundary
+
+Closure validation follows the same ownership boundaries as production.
+CNCF's build verifies cold and repeated Information generation. Cozy verifies
+exact-pair admission, descriptor identity, package metadata, provenance,
+runtime-manifest construction, review evidence, and publication. sbt-cozy
+verifies the scaffold-to-build bridge, while a representative CAR verifies
+generated-source compilation, packaging, local development publication, and
+domain runtime behavior.
+
+These gates are complementary. A focused fixture cannot replace the owning
+production gate, and a downstream success cannot excuse an earlier typed
+diagnostic. In particular, runtime activation evidence is established by CNCF
+without loading Cozy, while generation and publication evidence remains
+build-time data.
+
+An archive created before `cncf.car-runtime-manifest.v1` is not silently
+upgraded or admitted as compatible. Its owning project must create a new
+artifact with current package evidence. Downstream validation may distinguish
+that independently owned migration from the current CAR under test, but it
+must record the rejection rather than bypassing the runtime admission gate.

@@ -39,7 +39,7 @@ import org.simplemodeling.model.datatype.{
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionRevisionSpec
@@ -594,7 +594,7 @@ final class EntityConditionalTransitionRevisionSpec
     root.flatMap(_.getLong(revisionfield)).contains(2L) &&
     root
       .flatMap(_.getAs[EntityId]("successor_id"))
-      .contains(winners.head)
+      .exists(_.value == winners.head.value)
   }
 
   private def _root_id(
@@ -681,10 +681,18 @@ final class EntityConditionalTransitionRevisionSpec
 
       def toRecord(entity: EmbeddedRoot): Record =
         Record.dataAuto(
-          "id" -> entity.id,
+          "id" -> entity.id.value,
           "status" -> entity.status,
           "successor_id" -> entity.successorid,
           "revision" -> entity.revision.value
+        )
+
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[EmbeddedRoot] =
+        fromRecord(record).map(entity =>
+          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
         )
 
       def fromRecord(record: Record): Consequence[EmbeddedRoot] =
@@ -719,9 +727,17 @@ final class EntityConditionalTransitionRevisionSpec
 
       def toRecord(entity: EmbeddedSuccessor): Record =
         Record.dataAuto(
-          "id" -> entity.id,
+          "id" -> entity.id.value,
           "label" -> entity.label,
           "revision" -> entity.revision.value
+        )
+
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[EmbeddedSuccessor] =
+        fromRecord(record).map(entity =>
+          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
         )
 
       def fromRecord(record: Record): Consequence[EmbeddedSuccessor] =
@@ -750,9 +766,17 @@ final class EntityConditionalTransitionRevisionSpec
 
       def toRecord(entity: DetachedRoot): Record =
         Record.dataAuto(
-          "id" -> entity.id,
+          "id" -> entity.id.value,
           "status" -> entity.status,
           "successor_id" -> entity.successorid
+        )
+
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[DetachedRoot] =
+        fromRecord(record).map(entity =>
+          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
         )
 
       def fromRecord(record: Record): Consequence[DetachedRoot] =
@@ -782,8 +806,16 @@ final class EntityConditionalTransitionRevisionSpec
 
       def toRecord(entity: DetachedSuccessor): Record =
         Record.dataAuto(
-          "id" -> entity.id,
+          "id" -> entity.id.value,
           "label" -> entity.label
+        )
+
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[DetachedSuccessor] =
+        fromRecord(record).map(entity =>
+          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
         )
 
       def fromRecord(record: Record): Consequence[DetachedSuccessor] =

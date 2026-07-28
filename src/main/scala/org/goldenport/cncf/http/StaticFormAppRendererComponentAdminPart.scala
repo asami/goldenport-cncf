@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -52,23 +52,23 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(componentName)
       Page(simple_page(
         title = s"${escape(component.name)} Web Descriptor",
         subtitle = "Component Management Console descriptor view",
         body =
           s"""${admin_nav_card(Vector(
-               "Component admin" -> s"/web/${componentPath}/admin",
+               "Component admin" -> s"/web/${componentpath}/admin",
                "System descriptor" -> "/web/system/admin/descriptor"
              ))}
              |${web_descriptor_section_nav}
-             |${web_descriptor_control_tables(webDescriptor, Some(componentPath))}
-             |${web_descriptor_asset_composition_table(webDescriptor, Some(componentPath))}
+             |${web_descriptor_control_tables(webDescriptor, Some(componentpath))}
+             |${web_descriptor_asset_composition_table(webDescriptor, Some(componentpath))}
              |${web_descriptor_json_panel(
                "completed-descriptor",
                "Completed Descriptor JSON",
                "The completed view applies framework defaults and resolves component route placeholders for this component.",
-               web_descriptor_json(webDescriptor, completed = true, componentSegment = Some(componentPath))
+               web_descriptor_json(webDescriptor, completed = true, componentSegment = Some(componentpath))
              )}
              |${web_descriptor_json_panel(
                "configured-descriptor",
@@ -116,13 +116,13 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor()
   ): Page = {
     val runtime = RuntimeConfig.from(subsystem.configuration)
-    val appComponents = subsystem.components.filterNot(_.origin == ComponentOrigin.Builtin)
-    val effectiveComponents =
-      if (appComponents.nonEmpty) appComponents
+    val appcomponents = subsystem.components.filterNot(_.origin == ComponentOrigin.Builtin)
+    val effectivecomponents =
+      if (appcomponents.nonEmpty) appcomponents
       else subsystem.components
-    val componentLinks = effectiveComponents.map { component =>
+    val componentlinks = effectivecomponents.map { component =>
       val path = NamingConventions.toNormalizedSegment(component.name)
-      val appLinks = webDescriptor.routeAppsForComponent(component.name) match {
+      val applinks = webDescriptor.routeAppsForComponent(component.name) match {
         case Vector() =>
           Vector("App" -> s"/web/${escape(path)}")
         case Vector(app) =>
@@ -133,7 +133,7 @@ trait StaticFormAppRendererComponentAdminPart {
       s"""<div class="list-group-item">
          |  <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
          |    <strong>${escape(component.name)}</strong>
-         |    ${admin_action_row(appLinks ++ Vector(
+         |    ${admin_action_row(applinks ++ Vector(
            "Admin" -> s"/web/${escape(path)}/admin",
            "Manual" -> s"/man/${escape(path)}"
          ), primary = false)}
@@ -141,7 +141,7 @@ trait StaticFormAppRendererComponentAdminPart {
          |</div>""".stripMargin
     }.mkString("\n")
     val recommendations =
-      if (componentLinks.isEmpty)
+      if (componentlinks.isEmpty)
         admin_card(
           "Recommended Links",
           admin_link_list_group(Vector(
@@ -163,7 +163,7 @@ trait StaticFormAppRendererComponentAdminPart {
                "Performance" -> "/web/system/performance"
              ))}
              |<h3 class="h6 mt-3">Components</h3>
-             |<div class="list-group">${componentLinks}</div>""".stripMargin
+             |<div class="list-group">${componentlinks}</div>""".stripMargin
         )
     Page(simple_page(
       title = "CNCF Runtime Help",
@@ -175,7 +175,7 @@ trait StaticFormAppRendererComponentAdminPart {
                   None,
                   s"""<tr><th>Subsystem</th><td>${escape(subsystem.name)}</td></tr>
                      |<tr><th>Operation mode</th><td>${escape(runtime.operationMode.name)}</td></tr>
-                     |<tr><th>Components</th><td>${effectiveComponents.size}</td></tr>""".stripMargin,
+                     |<tr><th>Components</th><td>${effectivecomponents.size}</td></tr>""".stripMargin,
                   tableClass = "table table-sm align-middle mb-0"
                 )}
                 |<p class="mt-3 mb-0">This page is shown only outside production when no explicit root or <code>/web</code> route is configured.</p>""".stripMargin
@@ -207,10 +207,10 @@ trait StaticFormAppRendererComponentAdminPart {
     for {
       component <- find_component(subsystem, componentName)
     } yield {
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(componentName)
       val generated =
         Vector(
-          "Generated Help" -> s"/help/${escape(componentPath)}",
+          "Generated Help" -> s"/help/${escape(componentpath)}",
           "OpenAPI JSON" -> "/openapi.json",
           "MCP endpoint" -> "/mcp"
         )
@@ -278,18 +278,18 @@ trait StaticFormAppRendererComponentAdminPart {
     componentName: String
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(componentName)
       val rows = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).map { descriptor =>
-        val entityPath = NamingConventions.toNormalizedSegment(descriptor.entityName)
+        val entitypath = NamingConventions.toNormalizedSegment(descriptor.entityName)
         val workingsetpolicy = descriptor.effectiveWorkingSetPolicy.map(_.label).getOrElse("none")
         val policysource = descriptor.effectiveWorkingSetPolicySource.map(_.toString.toLowerCase).getOrElse("none")
-        val collection = component.entitySpace.entityOption[Any](descriptor.collectionId.name)
-        val workingSetStatus = collection.map(_.workingSetStatus)
-        val workingSetState = workingSetStatus.map(_.state.label).getOrElse("unknown")
-        val residentCount = collection.map(_.residentCount).getOrElse(0)
-        val workingSetError = workingSetStatus.flatMap(_.error).getOrElse("")
+        val collection = component.entitySpace.entityOption(descriptor.collectionId)
+        val workingsetstatus = collection.map(_.workingSetStatus)
+        val workingsetstate = workingsetstatus.map(_.state.label).getOrElse("unknown")
+        val residentcount = collection.map(_.residentCount).getOrElse(0)
+        val workingseterror = workingsetstatus.flatMap(_.error).getOrElse("")
         s"""<tr>
-           |  <td><a href="/web/${componentPath}/admin/entities/${entityPath}">${escape(descriptor.entityName)}</a></td>
+           |  <td><a href="/web/${componentpath}/admin/entities/${entitypath}">${escape(descriptor.entityName)}</a></td>
            |  <td><code>${escape(descriptor.collectionId.name)}</code></td>
            |  <td>${escape(descriptor.entityKind.toString)}</td>
            |  <td>${escape(descriptor.usageKind.toString)}</td>
@@ -298,9 +298,9 @@ trait StaticFormAppRendererComponentAdminPart {
            |  <td>${descriptor.workingSet.map(_.entityIds.size.toString).getOrElse("none")}</td>
            |  <td><code>${escape(workingsetpolicy)}</code></td>
            |  <td>${escape(policysource)}</td>
-           |  <td><code>${escape(workingSetState)}</code></td>
-           |  <td>${residentCount}</td>
-           |  <td>${escape(workingSetError)}</td>
+           |  <td><code>${escape(workingsetstate)}</code></td>
+           |  <td>${residentcount}</td>
+           |  <td>${escape(workingseterror)}</td>
            |</tr>""".stripMargin
       }.mkString("\n")
       val body =
@@ -313,8 +313,8 @@ trait StaticFormAppRendererComponentAdminPart {
              |</table></div>""".stripMargin
         }
       val nav = admin_nav_card(Vector(
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Operation forms" -> s"/form/${componentPath}"
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
       Page(simple_page(
         title = s"${escape(component.name)} Entity Administration",
@@ -335,102 +335,102 @@ trait StaticFormAppRendererComponentAdminPart {
     pageContext: Map[String, String] = Map.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
-      val entityPath = NamingConventions.toNormalizedSegment(entityName)
-      val entityLabel = title_label(entityPath)
-      val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val effectivePageRequest = pageRequest.withTotalCountPolicy(
-        webDescriptor.adminTotalCountPolicy(componentPath, "entity", entityPath)
+      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val entitypath = NamingConventions.toNormalizedSegment(entityName)
+      val entitylabel = title_label(entitypath)
+      val basepath = s"/web/${componentpath}/admin/entities/${entitypath}"
+      val effectivepagerequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentpath, "entity", entitypath)
       )
-      val webSchema = WebSchemaResolver.resolveEntity(
+      val webschema = WebSchemaResolver.resolveEntity(
         component,
-        componentPath,
-        entityPath,
+        componentpath,
+        entitypath,
         webDescriptor,
-        admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
+        admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
       )
-      val displayFields = admin_entity_display_fields(
+      val displayfields = admin_entity_display_fields(
         component,
-        entityPath,
+        entitypath,
         WebTableColumnResolver.defaultViewName,
-        webSchema.fieldNames
+        webschema.fieldNames
       )
-      val searchContext =
-        if (effectivePageRequest.effectiveIncludeTotal)
+      val searchcontext =
+        if (effectivepagerequest.effectiveIncludeTotal)
           pageContext + ("includeTotal" -> "true")
         else
           pageContext
-      val searchFields = admin_entity_searchable_fields(component, entityPath, WebTableColumnResolver.defaultViewName)
-      val filterFields = displayFields
-      val searchProfile = SearchPlanningProfile(
-        searchableFields = searchFields,
-        filterFields = filterFields,
-        sortableFields = displayFields
+      val searchfields = admin_entity_searchable_fields(component, entitypath, WebTableColumnResolver.defaultViewName)
+      val filterfields = displayfields
+      val searchprofile = SearchPlanningProfile(
+        searchableFields = searchfields,
+        filterFields = filterfields,
+        sortableFields = displayfields
       )
-      val semanticUnsupported = admin_search_mode(searchContext).exists(_ != SearchMode.FullText)
-      val searchValues =
-        if (semanticUnsupported)
+      val semanticunsupported = admin_search_mode(searchcontext).exists(_ != SearchMode.FullText)
+      val searchvalues =
+        if (semanticunsupported)
           Map.empty[String, String]
         else
-          admin_search_values(searchContext, searchProfile)
+          admin_search_values(searchcontext, searchprofile)
       val result =
-        if (semanticUnsupported)
-          AdminListResult(Vector.empty, 1, effectivePageRequest.pageSize, false, Some(0), Vector.empty)
+        if (semanticunsupported)
+          AdminListResult(Vector.empty, 1, effectivepagerequest.pageSize, false, Some(0), Vector.empty)
         else
-          admin_entity_list(subsystem, componentPath, entityPath, effectivePageRequest, searchValues)
-      val warningHtml = admin_warnings(result.warnings)
-      val searchFeedback =
-        if (semanticUnsupported)
+          admin_entity_list(subsystem, componentpath, entitypath, effectivepagerequest, searchvalues)
+      val warninghtml = admin_warnings(result.warnings)
+      val searchfeedback =
+        if (semanticunsupported)
           """<div class="alert alert-warning admin-search-feedback" role="alert">Semantic or hybrid search is not configured for this Static Form page.</div>"""
         else
           ""
-      val searchHref = admin_search_href(basePath, searchContext, searchProfile)
-      val searchControls = admin_search_card(
-        basePath,
-        searchContext,
-        searchProfile,
-        filterFields,
-        displayFields,
+      val searchhref = admin_search_href(basepath, searchcontext, searchprofile)
+      val searchcontrols = admin_search_card(
+        basepath,
+        searchcontext,
+        searchprofile,
+        filterfields,
+        displayfields,
         result.total,
         result.items.size
       )
       val table = admin_read_result_list_table(
         result.items,
-        displayFields,
-        basePath,
+        displayfields,
+        basepath,
         "No records are currently available for this entity.",
         includeEdit = true,
-        linkContext = searchContext ++ Map(
+        linkContext = searchcontext ++ Map(
           "paging.page" -> result.page.toString,
           "paging.pageSize" -> result.pageSize.toString
         )
       )
       val nav = admin_nav_card(Vector(
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Entity types" -> s"/web/${componentPath}/admin/entities",
-        "Operation forms" -> s"/form/${componentPath}"
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Entity types" -> s"/web/${componentpath}/admin/entities",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(entityLabel)} Administration",
+        title = s"${escape(component.name)} ${escape(entitylabel)} Administration",
         subtitle = "Entity record list baseline",
         body =
           s"""${nav}
-             |${admin_storage_shape_section(component, Some(entityPath), detailed = true)}
-             |${searchControls}
-             |${searchFeedback}
+             |${admin_storage_shape_section(component, Some(entitypath), detailed = true)}
+             |${searchcontrols}
+             |${searchfeedback}
              |<article class="card admin-card">
              |  <div class="card-body">
              |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
              |      <div>
-             |        <h2 class="card-title mb-1">${escape(entityLabel)} records</h2>
+             |        <h2 class="card-title mb-1">${escape(entitylabel)} records</h2>
              |        <p class="card-text text-body-secondary">List with paging${result.total.map(t => s" · total ${escape(t.toString)}").getOrElse("")}</p>
              |      </div>
-             |      <a class="btn btn-primary" href="${escape(basePath)}/new">New ${escape(entityLabel)}</a>
+             |      <a class="btn btn-primary" href="${escape(basepath)}/new">New ${escape(entitylabel)}</a>
              |    </div>
-             |    ${warningHtml}
+             |    ${warninghtml}
              |    ${table}
-             |    ${paging_nav(result.page, result.pageSize, result.total, searchHref, Some(result.hasNext))}
+             |    ${paging_nav(result.page, result.pageSize, result.total, searchhref, Some(result.hasNext))}
              |  </div>
              |</article>""".stripMargin
       ))
@@ -448,8 +448,8 @@ trait StaticFormAppRendererComponentAdminPart {
     if (entities.isEmpty)
       entityName.map(_ => admin_card("Storage shape", admin_empty_state("No storage-shape metadata is registered for this entity."))).getOrElse("")
     else {
-      val summaryRows = entities.map(admin_storage_shape_summary_row).mkString("\n")
-      val detailHtml =
+      val summaryrows = entities.map(admin_storage_shape_summary_row).mkString("\n")
+      val detailhtml =
         if (detailed)
           entities.map(admin_storage_shape_field_table).mkString("\n")
         else
@@ -461,11 +461,11 @@ trait StaticFormAppRendererComponentAdminPart {
            |  <table class="table table-sm table-hover align-middle">
            |    <thead><tr><th>Entity</th><th>Collection</th><th>Memory policy</th><th>Working-set policy</th><th>Storage policy</th><th>Fields</th></tr></thead>
            |    <tbody>
-           |      ${summaryRows}
+           |      ${summaryrows}
            |    </tbody>
            |  </table>
            |</div>
-           |${detailHtml}""".stripMargin
+           |${detailhtml}""".stripMargin
       )
     }
   }
@@ -475,7 +475,7 @@ trait StaticFormAppRendererComponentAdminPart {
   ): String = {
     val shape = manual_record_values(record.asMap.get("storageShape"))
     val fields = manual_record_seq(shape.get("fields"))
-    val fieldSummary =
+    val fieldsummary =
       if (fields.isEmpty)
         "none"
       else
@@ -488,14 +488,14 @@ trait StaticFormAppRendererComponentAdminPart {
        |  <td><code>${escape(record.getString("memoryPolicy").getOrElse(""))}</code></td>
        |  <td><code>${escape(record.getString("workingSetPolicy").getOrElse("-"))}</code></td>
        |  <td><code>${escape(shape.get("policy").flatMap(manual_scalar).getOrElse(""))}</code></td>
-       |  <td>${escape(fieldSummary)}</td>
+       |  <td>${escape(fieldsummary)}</td>
        |</tr>""".stripMargin
   }
 
   protected def admin_storage_shape_field_table(
     record: Record
   ): String = {
-    val entityName = record.getString("entityName").getOrElse("")
+    val entityname = record.getString("entityName").getOrElse("")
     val shape = manual_record_values(record.asMap.get("storageShape"))
     val fields = manual_record_seq(shape.get("fields"))
     if (fields.isEmpty)
@@ -512,7 +512,7 @@ trait StaticFormAppRendererComponentAdminPart {
            |</tr>""".stripMargin
       }.mkString("\n")
       s"""<section class="mt-3">
-         |  <h3 class="h6">${escape(entityName)} storage fields</h3>
+         |  <h3 class="h6">${escape(entityname)} storage fields</h3>
          |  <div class="table-responsive">
          |    <table class="table table-sm table-hover align-middle admin-storage-shape-fields">
          |      <thead><tr><th>Logical name</th><th>Storage name</th><th>Classification</th><th>Storage kind</th><th>Data type</th><th>Source</th></tr></thead>
@@ -534,31 +534,31 @@ trait StaticFormAppRendererComponentAdminPart {
     values: Map[String, String] = Map.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
-      val entityPath = NamingConventions.toNormalizedSegment(entityName)
-      val entityLabel = title_label(entityPath)
-      val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val routeId = entity_route_id(id)
-      val querySuffix = hidden_form_context_query_suffix(values)
-      val readRecord = admin_entity_read_record(subsystem, componentPath, entityPath, id)
-      val body = admin_entity_record_table_from_record(subsystem, component, componentPath, entityPath, id, readRecord, webDescriptor)
-      val images = admin_entity_images_section(readRecord, id)
-      val tags = admin_entity_tags_section(subsystem, readRecord, id, values)
-      val associations = admin_entity_associations_section(subsystem, component, entityPath, readRecord, id)
+      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val entitypath = NamingConventions.toNormalizedSegment(entityName)
+      val entitylabel = title_label(entitypath)
+      val basepath = s"/web/${componentpath}/admin/entities/${entitypath}"
+      val routeid = entity_route_id(id)
+      val querysuffix = hidden_form_context_query_suffix(values)
+      val readrecord = admin_entity_read_record(subsystem, componentpath, entitypath, id)
+      val body = admin_entity_record_table_from_record(subsystem, component, componentpath, entitypath, id, readrecord, webDescriptor)
+      val images = admin_entity_images_section(readrecord, id)
+      val tags = admin_entity_tags_section(subsystem, readrecord, id, values)
+      val associations = admin_entity_associations_section(subsystem, component, entitypath, readrecord, id)
       val nav = admin_nav_card(Vector(
-        s"Back to ${entityLabel} records" -> s"${basePath}${querySuffix}",
-        "Entity types" -> s"/web/${componentPath}/admin/entities"
+        s"Back to ${entitylabel} records" -> s"${basepath}${querysuffix}",
+        "Entity types" -> s"/web/${componentpath}/admin/entities"
       ))
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(entityLabel)} Detail",
+        title = s"${escape(component.name)} ${escape(entitylabel)} Detail",
         subtitle = "Entity record detail baseline",
         body =
           s"""${nav}
              |<article class="card admin-card">
              |  <div class="card-body">
              |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
-             |      <h2 class="card-title mb-0">${escape(entityLabel)} detail</h2>
-             |      <a class="btn btn-primary" href="${escape(basePath + "/" + escape_path_segment(routeId) + "/edit" + querySuffix)}">Edit</a>
+             |      <h2 class="card-title mb-0">${escape(entitylabel)} detail</h2>
+             |      <a class="btn btn-primary" href="${escape(basepath + "/" + escape_path_segment(routeid) + "/edit" + querysuffix)}">Edit</a>
              |    </div>
              |    ${body}
              |  </div>
@@ -580,72 +580,72 @@ trait StaticFormAppRendererComponentAdminPart {
     submittedVersion: Option[String] = None
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
-      val entityPath = NamingConventions.toNormalizedSegment(entityName)
-      val entityLabel = title_label(entityPath)
-      val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val routeId = entity_route_id(id)
-      val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${routeId}/update"
-      val webSchema = WebSchemaResolver.resolveEntity(
+      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val entitypath = NamingConventions.toNormalizedSegment(entityName)
+      val entitylabel = title_label(entitypath)
+      val webbasepath = s"/web/${componentpath}/admin/entities/${entitypath}"
+      val routeid = entity_route_id(id)
+      val actionpath = s"/form/${componentpath}/admin/entities/${entitypath}/${routeid}/update"
+      val webschema = WebSchemaResolver.resolveEntity(
         component,
-        componentPath,
-        entityPath,
+        componentpath,
+        entitypath,
         webDescriptor,
-        admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
+        admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val displayFields = admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
-      val displaySchema = webSchema.copy(fields = admin_display_web_fields(webSchema.fields, displayFields))
-      val effectiveValidation = validation.filter(_.webSchema.selector == displaySchema.selector)
-      val readRecord = admin_entity_read_record(
+      val displayfields = admin_entity_display_fields(component, entitypath, "detail", webschema.fieldNames)
+      val displayschema = webschema.copy(fields = admin_display_web_fields(webschema.fields, displayfields))
+      val effectivevalidation = validation.filter(_.webSchema.selector == displayschema.selector)
+      val readrecord = admin_entity_read_record(
         subsystem,
-        componentPath,
-        entityPath,
+        componentpath,
+        entitypath,
         id
       )
       val version = submittedVersion
         .map(_.trim)
         .filter(_.nonEmpty)
         .orElse(
-          readRecord
+          readrecord
             .flatMap(EntityRevisionProjection.responseRevision)
             .map(_.value.toString)
         )
-      val effectiveValues =
+      val effectivevalues =
         values.removed("version") ++ version.map("version" -> _)
-      val hiddenContext = hidden_form_context_inputs(effectiveValues)
+      val hiddencontext = hidden_form_context_inputs(effectivevalues)
       val controls = admin_record_controls(
-        displaySchema.fields,
-        readRecord
+        displayschema.fields,
+        readrecord
           .flatMap(_.getString("fields"))
           .map(field_lines)
           .getOrElse(Vector("id" -> id)),
-        effectiveValues,
+        effectivevalues,
         "field",
-        effectiveValidation,
+        effectivevalidation,
         includeExtensionFields = false
       )
-      val imageAttachments = admin_entity_image_attachment_controls("imageAttachments")
+      val imageattachments = admin_entity_image_attachment_controls("imageAttachments")
       val nav = admin_nav_card(Vector(
-        "Detail" -> s"${webBasePath}/${routeId}",
-        s"Back to ${entityLabel} records" -> webBasePath
+        "Detail" -> s"${webbasepath}/${routeid}",
+        s"Back to ${entitylabel} records" -> webbasepath
       ))
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(entityLabel)} Edit",
+        title = s"${escape(component.name)} ${escape(entitylabel)} Edit",
         subtitle = "Entity record edit baseline",
         body =
           s"""${nav}
              |<article class="card admin-card">
              |  <div class="card-body">
-             |    <h2 class="card-title">Edit ${escape(entityLabel)}</h2>
-             |    ${form_error_panel(values)}${form_validation_panel(effectiveValidation)}
-             |    <form method="post" action="${escape(actionPath)}" class="admin-form" enctype="multipart/form-data">
+             |    <h2 class="card-title">Edit ${escape(entitylabel)}</h2>
+             |    ${form_error_panel(values)}${form_validation_panel(effectivevalidation)}
+             |    <form method="post" action="${escape(actionpath)}" class="admin-form" enctype="multipart/form-data">
              |      ${controls}
-             |      ${imageAttachments}
-             |      ${hiddenContext}
+             |      ${imageattachments}
+             |      ${hiddencontext}
              |      <div class="d-flex flex-wrap gap-2">
              |        <button type="submit" class="btn btn-primary">Update</button>
-             |        <a class="btn btn-outline-secondary" href="${escape(webBasePath)}/${escape(routeId)}">Cancel</a>
+             |        <a class="btn btn-outline-secondary" href="${escape(webbasepath)}/${escape(routeid)}">Cancel</a>
              |      </div>
              |    </form>
              |  </div>
@@ -662,44 +662,44 @@ trait StaticFormAppRendererComponentAdminPart {
     validation: Option[FormValidationResult] = None
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
-      val entityPath = NamingConventions.toNormalizedSegment(entityName)
-      val entityLabel = title_label(entityPath)
-      val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/create"
-      val webSchema = WebSchemaResolver.resolveEntity(
+      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val entitypath = NamingConventions.toNormalizedSegment(entityName)
+      val entitylabel = title_label(entitypath)
+      val webbasepath = s"/web/${componentpath}/admin/entities/${entitypath}"
+      val actionpath = s"/form/${componentpath}/admin/entities/${entitypath}/create"
+      val webschema = WebSchemaResolver.resolveEntity(
         component,
-        componentPath,
-        entityPath,
+        componentpath,
+        entitypath,
         webDescriptor,
-        admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
+        admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val displaySchema = admin_entity_create_schema(component, entityPath, webSchema)
-      val effectiveValidation = validation.filter(_.webSchema.selector == displaySchema.selector)
-      val hiddenContext = hidden_form_context_inputs(values)
-      val controls = admin_new_controls(displaySchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectiveValidation)
-      val imageAttachments = admin_entity_image_attachment_controls("newImageAttachments")
+      val displayschema = admin_entity_create_schema(component, entitypath, webschema)
+      val effectivevalidation = validation.filter(_.webSchema.selector == displayschema.selector)
+      val hiddencontext = hidden_form_context_inputs(values)
+      val controls = admin_new_controls(displayschema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectivevalidation)
+      val imageattachments = admin_entity_image_attachment_controls("newImageAttachments")
       val nav = admin_nav_card(Vector(
-        s"Back to ${entityLabel} records" -> webBasePath,
-        "Entity types" -> s"/web/${componentPath}/admin/entities"
+        s"Back to ${entitylabel} records" -> webbasepath,
+        "Entity types" -> s"/web/${componentpath}/admin/entities"
       ))
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(entityLabel)} New",
+        title = s"${escape(component.name)} ${escape(entitylabel)} New",
         subtitle = "Entity record create baseline",
         body =
           s"""${nav}
              |<article class="card admin-card">
              |  <div class="card-body">
-             |    <h2 class="card-title">New ${escape(entityLabel)}</h2>
-             |    ${form_error_panel(values)}${form_validation_panel(effectiveValidation)}
-             |    <form method="post" action="${escape(actionPath)}" class="admin-form" enctype="multipart/form-data">
+             |    <h2 class="card-title">New ${escape(entitylabel)}</h2>
+             |    ${form_error_panel(values)}${form_validation_panel(effectivevalidation)}
+             |    <form method="post" action="${escape(actionpath)}" class="admin-form" enctype="multipart/form-data">
              |      ${controls}
-             |      ${imageAttachments}
-             |      ${hiddenContext}
+             |      ${imageattachments}
+             |      ${hiddencontext}
              |      <div class="d-flex flex-wrap gap-2">
              |        <button type="submit" class="btn btn-primary">Create</button>
-             |        <a class="btn btn-outline-secondary" href="${escape(webBasePath)}">Cancel</a>
+             |        <a class="btn btn-outline-secondary" href="${escape(webbasepath)}">Cancel</a>
              |      </div>
              |    </form>
              |  </div>
@@ -747,19 +747,19 @@ trait StaticFormAppRendererComponentAdminPart {
     message: String = "Entity update execution is not enabled in this baseline.",
     resultStatus: Int = 200
   ): Page = {
-    val componentPath = NamingConventions.toNormalizedSegment(componentName)
-    val entityPath = NamingConventions.toNormalizedSegment(entityName)
-    val entityLabel = title_label(entityPath)
-    val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+    val componentpath = NamingConventions.toNormalizedSegment(componentName)
+    val entitypath = NamingConventions.toNormalizedSegment(entityName)
+    val entitylabel = title_label(entitypath)
+    val webbasepath = s"/web/${componentpath}/admin/entities/${entitypath}"
     val rows = submitted_fields_rows(values)
     Page(simple_page(
-      title = s"${escape(componentName)} ${escape(entityLabel)} Update Result",
+      title = s"${escape(componentName)} ${escape(entitylabel)} Update Result",
       subtitle = "Entity record update submission baseline",
       body =
         s"""${admin_nav_card(Vector(
-             "Detail" -> s"${webBasePath}/${id}",
-             s"Back to ${entityLabel} records" -> webBasePath,
-             "Edit again" -> s"${webBasePath}/${id}/edit"
+             "Detail" -> s"${webbasepath}/${id}",
+             s"Back to ${entitylabel} records" -> webbasepath,
+             "Edit again" -> s"${webbasepath}/${id}/edit"
            ))}
            |${admin_card(
              "Update submitted",
@@ -777,18 +777,18 @@ trait StaticFormAppRendererComponentAdminPart {
     message: String = "Entity create execution is not enabled in this baseline.",
     resultStatus: Int = 200
   ): Page = {
-    val componentPath = NamingConventions.toNormalizedSegment(componentName)
-    val entityPath = NamingConventions.toNormalizedSegment(entityName)
-    val entityLabel = title_label(entityPath)
-    val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+    val componentpath = NamingConventions.toNormalizedSegment(componentName)
+    val entitypath = NamingConventions.toNormalizedSegment(entityName)
+    val entitylabel = title_label(entitypath)
+    val webbasepath = s"/web/${componentpath}/admin/entities/${entitypath}"
     val rows = submitted_fields_rows(values)
     Page(simple_page(
-      title = s"${escape(componentName)} ${escape(entityLabel)} Create Result",
+      title = s"${escape(componentName)} ${escape(entitylabel)} Create Result",
       subtitle = "Entity record create submission baseline",
       body =
         s"""${admin_nav_card(Vector(
-             s"Back to ${entityLabel} records" -> webBasePath,
-             "Create another" -> s"${webBasePath}/new"
+             s"Back to ${entitylabel} records" -> webbasepath,
+             "Create another" -> s"${webbasepath}/new"
            ))}
            |${admin_card(
              "Create submitted",
@@ -840,10 +840,10 @@ trait StaticFormAppRendererComponentAdminPart {
     values: Map[String, String],
     profile: SearchPlanningProfile
   ): Map[String, String] = {
-    val knownFilters = profile.filterFields.map(x => NamingConventions.toNormalizedSegment(x).replace("-", "") -> x).toMap
+    val knownfilters = profile.filterFields.map(x => NamingConventions.toNormalizedSegment(x).replace("-", "") -> x).toMap
     values.collect {
       case (key, value) if admin_search_control_key(key) && value.trim.nonEmpty => key -> value
-      case (key, value) if value.trim.nonEmpty && knownFilters.contains(NamingConventions.toNormalizedSegment(key).replace("-", "")) => key -> value
+      case (key, value) if value.trim.nonEmpty && knownfilters.contains(NamingConventions.toNormalizedSegment(key).replace("-", "")) => key -> value
     }
   }
 
@@ -860,9 +860,9 @@ trait StaticFormAppRendererComponentAdminPart {
     fetched: Int
   ): String = {
     val q = values.get("q").orElse(values.get("text")).getOrElse("")
-    val selectedMode = admin_search_mode(values).getOrElse(SearchMode.FullText)
-    val selectedSort = values.get("sort").orElse(values.get("sortBy")).orElse(values.get("sort_by")).getOrElse("")
-    val selectedDirection = values.get("direction").orElse(values.get("order")).getOrElse("asc")
+    val selectedmode = admin_search_mode(values).getOrElse(SearchMode.FullText)
+    val selectedsort = values.get("sort").orElse(values.get("sortBy")).orElse(values.get("sort_by")).getOrElse("")
+    val selecteddirection = values.get("direction").orElse(values.get("order")).getOrElse("asc")
     val filtercontrols = filterFields.filterNot(x => x == "id").take(renderer_config.adminFilterFieldLimit).map { field =>
       val value = values.get(field).getOrElse("")
       s"""<div class="col-12 col-md-4 col-xl-2">
@@ -870,9 +870,9 @@ trait StaticFormAppRendererComponentAdminPart {
          |  <input class="form-control" id="adminSearchFilter${escape(field)}" name="${escape(field)}" value="${escape(value)}">
          |</div>""".stripMargin
     }.mkString("\n")
-    val sortOptions = ("", "Default") +: sortFields.map(x => x -> title_label(x))
-    val sortHtml = sortOptions.map { case (value, label) =>
-      val selected = if (value == selectedSort) " selected" else ""
+    val sortoptions = ("", "Default") +: sortFields.map(x => x -> title_label(x))
+    val sorthtml = sortoptions.map { case (value, label) =>
+      val selected = if (value == selectedsort) " selected" else ""
       s"""<option value="${escape(value)}"${selected}>${escape(label)}</option>"""
     }.mkString("\n")
     val chips = admin_search_chips(values, profile, action)
@@ -896,20 +896,20 @@ trait StaticFormAppRendererComponentAdminPart {
        |      <div class="col-12 col-md-2">
        |        <label class="form-label" for="adminSearchMode">Mode</label>
        |        <select class="form-select" id="adminSearchMode" name="searchMode">
-       |          ${search_mode_option(SearchMode.FullText, selectedMode)}
-       |          ${search_mode_option(SearchMode.Semantic, selectedMode)}
-       |          ${search_mode_option(SearchMode.Hybrid, selectedMode)}
+       |          ${search_mode_option(SearchMode.FullText, selectedmode)}
+       |          ${search_mode_option(SearchMode.Semantic, selectedmode)}
+       |          ${search_mode_option(SearchMode.Hybrid, selectedmode)}
        |        </select>
        |      </div>
        |      <div class="col-12 col-md-3">
        |        <label class="form-label" for="adminSearchSort">Sort</label>
-       |        <select class="form-select" id="adminSearchSort" name="sort">${sortHtml}</select>
+       |        <select class="form-select" id="adminSearchSort" name="sort">${sorthtml}</select>
        |      </div>
        |      <div class="col-12 col-md-2">
        |        <label class="form-label" for="adminSearchDirection">Order</label>
        |        <select class="form-select" id="adminSearchDirection" name="direction">
-       |          <option value="asc"${if (selectedDirection != "desc") " selected" else ""}>Ascending</option>
-       |          <option value="desc"${if (selectedDirection == "desc") " selected" else ""}>Descending</option>
+       |          <option value="asc"${if (selecteddirection != "desc") " selected" else ""}>Ascending</option>
+       |          <option value="desc"${if (selecteddirection == "desc") " selected" else ""}>Descending</option>
        |        </select>
        |      </div>
        |      ${filtercontrols}
@@ -926,8 +926,8 @@ trait StaticFormAppRendererComponentAdminPart {
     mode: SearchMode,
     selected: SearchMode
   ): String = {
-    val selectedAttr = if (mode == selected) " selected" else ""
-    s"""<option value="${escape(mode.name)}"${selectedAttr}>${escape(title_label(mode.name))}</option>"""
+    val selectedattr = if (mode == selected) " selected" else ""
+    s"""<option value="${escape(mode.name)}"${selectedattr}>${escape(title_label(mode.name))}</option>"""
   }
 
   protected def admin_search_chips(
@@ -935,8 +935,8 @@ trait StaticFormAppRendererComponentAdminPart {
     profile: SearchPlanningProfile,
     clearHref: String
   ): String = {
-    val searchValues = admin_search_values(values, profile)
-    val chips = searchValues.toVector.sortBy(_._1).map { case (key, value) =>
+    val searchvalues = admin_search_values(values, profile)
+    val chips = searchvalues.toVector.sortBy(_._1).map { case (key, value) =>
       s"""<span class="badge rounded-pill text-bg-light border">${escape(key)}: ${escape(value)}</span>"""
     }
     if (chips.isEmpty)
@@ -967,7 +967,7 @@ trait StaticFormAppRendererComponentAdminPart {
     id: String,
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): String = {
-    val webSchema = WebSchemaResolver.resolveEntity(
+    val webschema = WebSchemaResolver.resolveEntity(
       component,
       componentPath,
       entityPath,
@@ -975,9 +975,9 @@ trait StaticFormAppRendererComponentAdminPart {
       admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
       fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
     )
-    val displayFields = admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
+    val displayfields = admin_entity_display_fields(component, entityPath, "detail", webschema.fieldNames)
     admin_record_table(
-      displayFields,
+      displayfields,
       admin_entity_record_fields(subsystem, componentPath, entityPath, id, "detail"),
       s"""No record is currently available for id <code>${escape(id)}</code>."""
     )
@@ -992,7 +992,7 @@ trait StaticFormAppRendererComponentAdminPart {
     record: Option[Record],
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): String = {
-    val webSchema = WebSchemaResolver.resolveEntity(
+    val webschema = WebSchemaResolver.resolveEntity(
       component,
       componentPath,
       entityPath,
@@ -1000,10 +1000,10 @@ trait StaticFormAppRendererComponentAdminPart {
       admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
       fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
     )
-    val displayFields = admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
+    val displayfields = admin_entity_display_fields(component, entityPath, "detail", webschema.fieldNames)
     val fields = record.flatMap(_.getString("fields")).map(field_lines)
     admin_record_table(
-      displayFields,
+      displayfields,
       fields,
       s"""No record is currently available for id <code>${escape(id)}</code>."""
     )
@@ -1071,8 +1071,8 @@ trait StaticFormAppRendererComponentAdminPart {
     entityPath: String,
     webSchema: WebSchemaResolver.ResolvedWebSchema
   ): WebSchemaResolver.ResolvedWebSchema = {
-    val displayFields = admin_entity_create_fields(component, entityPath, webSchema.fieldNames)
-    webSchema.copy(fields = admin_display_web_fields(webSchema.fields, displayFields))
+    val displayfields = admin_entity_create_fields(component, entityPath, webSchema.fieldNames)
+    webSchema.copy(fields = admin_display_web_fields(webSchema.fields, displayfields))
   }
 
   protected def admin_entity_create_fields(
@@ -1284,8 +1284,8 @@ trait StaticFormAppRendererComponentAdminPart {
     body: String,
     id: Option[String] = None
   ): String = {
-    val idAttr = id.map(x => s""" id="${escape(x)}"""").getOrElse("")
-    s"""<article${idAttr} class="card admin-card">
+    val idattr = id.map(x => s""" id="${escape(x)}"""").getOrElse("")
+    s"""<article${idattr} class="card admin-card">
        |  <div class="card-body">
        |    <h2 class="card-title">${escape(title)}</h2>
        |    ${body}
@@ -1300,7 +1300,7 @@ trait StaticFormAppRendererComponentAdminPart {
     id: String,
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): String = {
-    val webSchema = WebSchemaResolver.resolveData(
+    val webschema = WebSchemaResolver.resolveData(
       componentPath,
       dataPath,
       webDescriptor,
@@ -1308,7 +1308,7 @@ trait StaticFormAppRendererComponentAdminPart {
       fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
     )
     admin_record_table(
-      webSchema.fieldNames,
+      webschema.fieldNames,
       admin_data_record_fields(subsystem, componentPath, dataPath, id),
       s"""No data record is currently available for id <code>${escape(id)}</code>."""
     )
@@ -1461,11 +1461,11 @@ trait StaticFormAppRendererComponentAdminPart {
     emptyMessage: String,
     webFields: Vector[WebSchemaResolver.ResolvedWebField]
   ): String = {
-    val schemaFields = webFields.map(_.name)
+    val schemafields = webFields.map(_.name)
     val labels = web_field_labels(webFields)
     admin_operation_value_lines(subsystem, path, form)
       .filter(_.nonEmpty)
-      .map(lines => field_table(admin_schema_ordered_fields(schemaFields, field_lines(lines.mkString("\n"))), labels))
+      .map(lines => field_table(admin_schema_ordered_fields(schemafields, field_lines(lines.mkString("\n"))), labels))
       .getOrElse(admin_empty_state(emptyMessage))
   }
 
@@ -1483,14 +1483,14 @@ trait StaticFormAppRendererComponentAdminPart {
         val items = admin_record_items(record)
         val warnings = admin_warnings(admin_record_warnings(record))
         val page = record.getInt("page").getOrElse(pageRequest.page)
-        val pageSize = record.getInt("pageSize").getOrElse(pageRequest.pageSize)
+        val pagesize = record.getInt("pageSize").getOrElse(pageRequest.pageSize)
         val total = record.getInt("total")
-        val hasNext = record.getBoolean("hasNext")
+        val hasnext = record.getBoolean("hasNext")
         val table = admin_read_result_list_table(items, schemaFields, basePath, emptyMessage)
         s"""<p>List with paging${total.map(t => s" · total ${escape(t.toString)}").getOrElse("")}</p>
            |${warnings}
            |${table}
-           |${paging_nav(page, pageSize, total, pageRequest.href(basePath), hasNext)}""".stripMargin
+           |${paging_nav(page, pagesize, total, pageRequest.href(basePath), hasnext)}""".stripMargin
       case None =>
         admin_empty_state(emptyMessage)
     }
@@ -1506,19 +1506,19 @@ trait StaticFormAppRendererComponentAdminPart {
   ): String =
     admin_operation_record(subsystem, path, form) match {
       case Some(record) =>
-        val schemaFields = webFields.map(_.name)
+        val schemafields = webFields.map(_.name)
         val labels = web_field_labels(webFields)
         val items = admin_record_items(record)
         val warnings = admin_warnings(admin_record_warnings(record))
         val page = record.getInt("page").getOrElse(pageRequest.page)
-        val pageSize = record.getInt("pageSize").getOrElse(pageRequest.pageSize)
+        val pagesize = record.getInt("pageSize").getOrElse(pageRequest.pageSize)
         val total = record.getInt("total")
-        val hasNext = record.getBoolean("hasNext")
-        val table = admin_read_result_list_table_labeled(items, schemaFields, labels, basePath, emptyMessage)
+        val hasnext = record.getBoolean("hasNext")
+        val table = admin_read_result_list_table_labeled(items, schemafields, labels, basePath, emptyMessage)
         s"""<p>List with paging${total.map(t => s" · total ${escape(t.toString)}").getOrElse("")}</p>
            |${warnings}
            |${table}
-           |${paging_nav(page, pageSize, total, pageRequest.href(basePath), hasNext)}""".stripMargin
+           |${paging_nav(page, pagesize, total, pageRequest.href(basePath), hasnext)}""".stripMargin
       case None =>
         admin_empty_state(emptyMessage)
     }
@@ -1608,8 +1608,8 @@ trait StaticFormAppRendererComponentAdminPart {
     includeEdit: Boolean
   ): String =
     if (includeEdit) {
-      val editHref = append_path_before_query(href, "/edit")
-      s"""<div class="btn-group btn-group-sm" role="group" aria-label="Record actions"><a class="btn btn-outline-primary" href="${escape(href)}">Detail</a><a class="btn btn-outline-secondary" href="${escape(editHref)}">Edit</a></div>"""
+      val edithref = append_path_before_query(href, "/edit")
+      s"""<div class="btn-group btn-group-sm" role="group" aria-label="Record actions"><a class="btn btn-outline-primary" href="${escape(href)}">Detail</a><a class="btn btn-outline-secondary" href="${escape(edithref)}">Edit</a></div>"""
     }
     else
       s"""<a class="btn btn-outline-primary btn-sm" href="${escape(href)}">Detail</a>"""
@@ -1665,14 +1665,14 @@ trait StaticFormAppRendererComponentAdminPart {
         val fields = record.asMap.view.mapValues(_.toString).toMap
         val id = fields.getOrElse("id", "")
         val label = fields.getOrElse("label", id)
-        val itemValue = fields.getOrElse("value", field_map_text(fields).getOrElse(label))
-        Option.when(id.nonEmpty)(AdminReadListItem(id, label, itemValue, fields))
+        val itemvalue = fields.getOrElse("value", field_map_text(fields).getOrElse(label))
+        Option.when(id.nonEmpty)(AdminReadListItem(id, label, itemvalue, fields))
       case map: scala.collection.Map[?, ?] =>
-        val fields = map.toVector.map { case (key, itemValue) => key.toString -> itemValue.toString }.toMap
+        val fields = map.toVector.map { case (key, itemvalue) => key.toString -> itemvalue.toString }.toMap
         val id = fields.getOrElse("id", "")
         val label = fields.getOrElse("label", id)
-        val itemValue = fields.getOrElse("value", field_map_text(fields).getOrElse(label))
-        Option.when(id.nonEmpty)(AdminReadListItem(id, label, itemValue, fields))
+        val itemvalue = fields.getOrElse("value", field_map_text(fields).getOrElse(label))
+        Option.when(id.nonEmpty)(AdminReadListItem(id, label, itemvalue, fields))
       case x =>
         val text = x.toString
         Option.when(text.nonEmpty)(AdminReadListItem(text, text, text))
@@ -1823,7 +1823,7 @@ trait StaticFormAppRendererComponentAdminPart {
     component: Component,
     aggregateName: String
   ): String = {
-    val componentPath = NamingConventions.toNormalizedSegment(component.name)
+    val componentpath = NamingConventions.toNormalizedSegment(component.name)
     val bindings = aggregate_operation_bindings(component, aggregateName)
     if (bindings.isEmpty) {
       admin_empty_state("No aggregate operations are currently exposed.")
@@ -1838,7 +1838,7 @@ trait StaticFormAppRendererComponentAdminPart {
         s"""<li><strong>${escape(kind)}</strong>: ${count} ${escape(text)}</li>"""
       }.mkString("\n")
       val rows = bindings.map { binding =>
-        val path = form_operation_path(componentPath, binding.service, binding.operation)
+        val path = form_operation_path(componentpath, binding.service, binding.operation)
         val style = if (binding.kind == "create") "btn-primary" else if (binding.kind == "update") "btn-warning" else "btn-outline-secondary"
         val label = aggregate_operation_action_label(binding.kind)
         s"""<tr><td>${escape(binding.kind)}</td><td>${escape(binding.service)}</td><td>${escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${escape(path)}">${escape(label)}</a></td></tr>"""
@@ -1856,15 +1856,15 @@ trait StaticFormAppRendererComponentAdminPart {
     aggregateName: String,
     id: String
   ): String = {
-    val componentPath = NamingConventions.toNormalizedSegment(component.name)
+    val componentpath = NamingConventions.toNormalizedSegment(component.name)
     val bindings = aggregate_operation_bindings(component, aggregateName)
       .filter(x => x.kind == "read" || x.kind == "update")
     if (bindings.isEmpty) {
       admin_empty_state("No aggregate instance operations are currently exposed.")
     } else {
       val rows = bindings.map { binding =>
-        val detailPath = s"/web/${componentPath}/admin/aggregates/${NamingConventions.toNormalizedSegment(aggregateName)}/${escape_path_segment(id)}"
-        val path = form_operation_path(componentPath, binding.service, binding.operation, admin_operation_context("id" -> id, "crud.success.href" -> detailPath))
+        val detailpath = s"/web/${componentpath}/admin/aggregates/${NamingConventions.toNormalizedSegment(aggregateName)}/${escape_path_segment(id)}"
+        val path = form_operation_path(componentpath, binding.service, binding.operation, admin_operation_context("id" -> id, "crud.success.href" -> detailpath))
         val style = if (binding.kind == "update") "btn-warning" else "btn-outline-secondary"
         val label = aggregate_operation_action_label(binding.kind)
         s"""<tr><td>${escape(binding.kind)}</td><td>${escape(binding.service)}</td><td>${escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${escape(path)}">${escape(label)}</a></td></tr>"""
@@ -1916,16 +1916,16 @@ trait StaticFormAppRendererComponentAdminPart {
     aggregateName: String
   ): Vector[AggregateOperationBinding] = {
     val definition = aggregate_definition(component, aggregateName)
-    val commandNames = definition.map(_.commands.map(_.name)).getOrElse(Vector.empty)
-    val readNames = Vector(s"read-${aggregateName}", s"get-${aggregateName}", s"load-${aggregateName}", s"search-${aggregateName}")
-    val createNames =
+    val commandnames = definition.map(_.commands.map(_.name)).getOrElse(Vector.empty)
+    val readnames = Vector(s"read-${aggregateName}", s"get-${aggregateName}", s"load-${aggregateName}", s"search-${aggregateName}")
+    val createnames =
       definition.map(_.creates.map(_.name)).filter(_.nonEmpty)
         .getOrElse(Vector(s"create-${aggregateName}", s"new-${aggregateName}"))
-    val updateNames = Vector(s"update-${aggregateName}") ++ commandNames
+    val updatenames = Vector(s"update-${aggregateName}") ++ commandnames
     val candidates =
-      operation_bindings(component, readNames, "read") ++
-        operation_bindings(component, createNames, "create") ++
-        operation_bindings(component, updateNames, "update")
+      operation_bindings(component, readnames, "read") ++
+        operation_bindings(component, createnames, "create") ++
+        operation_bindings(component, updatenames, "update")
     candidates
       .groupBy(x => (x.kind, NamingConventions.toNormalizedSegment(x.operation)))
       .values
@@ -1966,24 +1966,24 @@ trait StaticFormAppRendererComponentAdminPart {
     componentName: String
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
       val rows = component.viewDefinitions.map { definition =>
-        val viewPath = NamingConventions.toNormalizedSegment(definition.name)
-        val viewNames =
+        val viewpath = NamingConventions.toNormalizedSegment(definition.name)
+        val viewnames =
           if (definition.viewNames.isEmpty) "default"
           else definition.viewNames.map(escape).mkString(", ")
         val queries =
           if (definition.queries.isEmpty) "none"
           else definition.queries.map(q => escape(q.name)).mkString(", ")
-        val sourceEvents =
+        val sourceevents =
           if (definition.sourceEvents.isEmpty) "none"
           else definition.sourceEvents.map(escape).mkString(", ")
         s"""<tr>
-           |  <td><a href="/web/${componentPath}/admin/views/${viewPath}">${escape(definition.name)}</a></td>
+           |  <td><a href="/web/${componentpath}/admin/views/${viewpath}">${escape(definition.name)}</a></td>
            |  <td>${escape(definition.entityName)}</td>
-           |  <td>${viewNames}</td>
+           |  <td>${viewnames}</td>
            |  <td>${queries}</td>
-           |  <td>${sourceEvents}</td>
+           |  <td>${sourceevents}</td>
            |  <td>${definition.rebuildable.map(_.toString).getOrElse("unspecified")}</td>
            |</tr>""".stripMargin
       }.mkString("\n")
@@ -1997,8 +1997,8 @@ trait StaticFormAppRendererComponentAdminPart {
              |</table></div>""".stripMargin
         }
       val nav = admin_nav_card(Vector(
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Operation forms" -> s"/form/${componentPath}"
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
       Page(simple_page(
         title = s"${escape(component.name)} View Administration",
@@ -2018,21 +2018,21 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val viewPath = NamingConventions.toNormalizedSegment(viewName)
-      val basePath = s"/web/${componentPath}/admin/views/${viewPath}"
-      val effectivePageRequest = pageRequest.withTotalCountPolicy(
-        webDescriptor.adminTotalCountPolicy(componentPath, "view", viewPath)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val viewpath = NamingConventions.toNormalizedSegment(viewName)
+      val basepath = s"/web/${componentpath}/admin/views/${viewpath}"
+      val effectivepagerequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentpath, "view", viewpath)
       )
       val definition = view_definition(component, viewName)
-      val entityName = definition.map(_.entityName).getOrElse(strip_surface_suffix(viewPath, "view").getOrElse(viewPath))
-      val webSchema = WebSchemaResolver.resolveView(
+      val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(viewpath, "view").getOrElse(viewpath))
+      val webschema = WebSchemaResolver.resolveView(
         component,
-        componentPath,
-        viewPath,
-        Some(entityName),
+        componentpath,
+        viewpath,
+        Some(entityname),
         webDescriptor,
-        viewFields = definition.flatMap(_.fieldsFor("summary")).orElse(admin_entity_view_fields(component, entityName, "summary")),
+        viewFields = definition.flatMap(_.fieldsFor("summary")).orElse(admin_entity_view_fields(component, entityname, "summary")),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
       )
       val metadata = definition match {
@@ -2051,26 +2051,26 @@ trait StaticFormAppRendererComponentAdminPart {
           admin_empty_state(s"No view definition is registered for ${viewName}.")
       }
       val nav = admin_nav_card(Vector(
-        "View definitions" -> s"/web/${componentPath}/admin/views",
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Operation forms" -> s"/form/${componentPath}"
+        "View definitions" -> s"/web/${componentpath}/admin/views",
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
-      val readResult = admin_read_result_list_web_schema(
+      val readresult = admin_read_result_list_web_schema(
         subsystem,
         "/admin/view/read",
-        Record.create(Vector("component" -> componentPath, "view" -> viewPath) ++ effectivePageRequest.toPairs),
-        basePath,
+        Record.create(Vector("component" -> componentpath, "view" -> viewpath) ++ effectivepagerequest.toPairs),
+        basepath,
         s"No view records are currently available for ${viewName}.",
-        effectivePageRequest,
-        webSchema.fields
+        effectivepagerequest,
+        webschema.fields
       )
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(viewPath))} View",
+        title = s"${escape(component.name)} ${escape(title_label(viewpath))} View",
         subtitle = "View read baseline",
         body =
           s"""${nav}
-             |${admin_card(s"${title_label(viewPath)} metadata", metadata)}
-             |${admin_card("Read result", readResult)}""".stripMargin
+             |${admin_card(s"${title_label(viewpath)} metadata", metadata)}
+             |${admin_card("Read result", readresult)}""".stripMargin
       ))
     }
 
@@ -2082,34 +2082,34 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val viewPath = NamingConventions.toNormalizedSegment(viewName)
-      val basePath = s"/web/${componentPath}/admin/views/${viewPath}"
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val viewpath = NamingConventions.toNormalizedSegment(viewName)
+      val basepath = s"/web/${componentpath}/admin/views/${viewpath}"
       val definition = view_definition(component, viewName)
-      val entityName = definition.map(_.entityName).getOrElse(strip_surface_suffix(viewPath, "view").getOrElse(viewPath))
-      val webSchema = WebSchemaResolver.resolveView(
+      val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(viewpath, "view").getOrElse(viewpath))
+      val webschema = WebSchemaResolver.resolveView(
         component,
-        componentPath,
-        viewPath,
-        Some(entityName),
+        componentpath,
+        viewpath,
+        Some(entityname),
         webDescriptor,
-        viewFields = definition.flatMap(_.fieldsFor("detail")).orElse(admin_entity_view_fields(component, entityName, "detail")),
+        viewFields = definition.flatMap(_.fieldsFor("detail")).orElse(admin_entity_view_fields(component, entityname, "detail")),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       val nav = admin_nav_card(Vector(
-        s"Back to ${title_label(viewPath)} view" -> basePath,
-        "View definitions" -> s"/web/${componentPath}/admin/views",
-        "Component admin" -> s"/web/${componentPath}/admin"
+        s"Back to ${title_label(viewpath)} view" -> basepath,
+        "View definitions" -> s"/web/${componentpath}/admin/views",
+        "Component admin" -> s"/web/${componentpath}/admin"
       ))
       val body = admin_read_result_table_web_schema(
         subsystem,
         "/admin/view/read",
-        Record.data("component" -> componentPath, "view" -> viewPath, "id" -> id),
+        Record.data("component" -> componentpath, "view" -> viewpath, "id" -> id),
         s"No view record is currently available for ${id}.",
-        webSchema.fields
+        webschema.fields
       )
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(viewPath))} View Detail",
+        title = s"${escape(component.name)} ${escape(title_label(viewpath))} View Detail",
         subtitle = "View instance read baseline",
         body =
           s"""${nav}
@@ -2122,9 +2122,9 @@ trait StaticFormAppRendererComponentAdminPart {
     componentName: String
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
       val rows = component.aggregateDefinitions.map { definition =>
-        val aggregatePath = NamingConventions.toNormalizedSegment(definition.name)
+        val aggregatepath = NamingConventions.toNormalizedSegment(definition.name)
         val members =
           if (definition.members.isEmpty) "none"
           else definition.members.map(m => escape(s"${m.name}:${m.entityName}")).mkString(", ")
@@ -2141,7 +2141,7 @@ trait StaticFormAppRendererComponentAdminPart {
           if (definition.invariants.isEmpty) "none"
           else definition.invariants.map(i => escape(i.name)).mkString(", ")
         s"""<tr>
-           |  <td><a href="/web/${componentPath}/admin/aggregates/${aggregatePath}">${escape(definition.name)}</a></td>
+           |  <td><a href="/web/${componentpath}/admin/aggregates/${aggregatepath}">${escape(definition.name)}</a></td>
            |  <td>${escape(definition.entityName)}</td>
            |  <td>${members}</td>
            |  <td>${creates}</td>
@@ -2160,8 +2160,8 @@ trait StaticFormAppRendererComponentAdminPart {
              |</table></div>""".stripMargin
         }
       val nav = admin_nav_card(Vector(
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Operation forms" -> s"/form/${componentPath}"
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
       Page(simple_page(
         title = s"${escape(component.name)} Aggregate Administration",
@@ -2181,21 +2181,21 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
-      val basePath = s"/web/${componentPath}/admin/aggregates/${aggregatePath}"
-      val effectivePageRequest = pageRequest.withTotalCountPolicy(
-        webDescriptor.adminTotalCountPolicy(componentPath, "aggregate", aggregatePath)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val aggregatepath = NamingConventions.toNormalizedSegment(aggregateName)
+      val basepath = s"/web/${componentpath}/admin/aggregates/${aggregatepath}"
+      val effectivepagerequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentpath, "aggregate", aggregatepath)
       )
       val definition = aggregate_definition(component, aggregateName)
-      val entityName = definition.map(_.entityName).getOrElse(strip_surface_suffix(aggregatePath, "aggregate").getOrElse(aggregatePath))
-      val webSchema = WebSchemaResolver.resolveAggregate(
+      val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(aggregatepath, "aggregate").getOrElse(aggregatepath))
+      val webschema = WebSchemaResolver.resolveAggregate(
         component,
-        componentPath,
-        aggregatePath,
-        Some(entityName),
+        componentpath,
+        aggregatepath,
+        Some(entityname),
         webDescriptor,
-        viewFields = admin_entity_view_fields(component, entityName, "summary"),
+        viewFields = admin_entity_view_fields(component, entityname, "summary"),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
       )
       val metadata = definition match {
@@ -2215,27 +2215,27 @@ trait StaticFormAppRendererComponentAdminPart {
           admin_empty_state(s"No aggregate definition is registered for ${aggregateName}.")
       }
       val nav = admin_nav_card(Vector(
-        "Aggregate definitions" -> s"/web/${componentPath}/admin/aggregates",
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Operation forms" -> s"/form/${componentPath}"
+        "Aggregate definitions" -> s"/web/${componentpath}/admin/aggregates",
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
-      val readResult = admin_read_result_list_web_schema(
+      val readresult = admin_read_result_list_web_schema(
         subsystem,
         "/admin/aggregate/read",
-        Record.create(Vector("component" -> componentPath, "aggregate" -> aggregatePath) ++ effectivePageRequest.toPairs),
-        basePath,
+        Record.create(Vector("component" -> componentpath, "aggregate" -> aggregatepath) ++ effectivepagerequest.toPairs),
+        basepath,
         s"No aggregate records are currently available for ${aggregateName}.",
-        effectivePageRequest,
-        webSchema.fields
+        effectivepagerequest,
+        webschema.fields
       )
       val operations = aggregate_operation_actions(component, aggregateName)
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(aggregatePath))} Aggregate",
+        title = s"${escape(component.name)} ${escape(title_label(aggregatepath))} Aggregate",
         subtitle = "Aggregate read baseline",
         body =
           s"""${nav}
-             |${admin_card(s"${title_label(aggregatePath)} metadata", metadata)}
-             |${admin_card("Read result", readResult)}
+             |${admin_card(s"${title_label(aggregatepath)} metadata", metadata)}
+             |${admin_card("Read result", readresult)}
              |${admin_card("Operations", operations)}""".stripMargin
       ))
     }
@@ -2248,35 +2248,35 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
-      val basePath = s"/web/${componentPath}/admin/aggregates/${aggregatePath}"
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val aggregatepath = NamingConventions.toNormalizedSegment(aggregateName)
+      val basepath = s"/web/${componentpath}/admin/aggregates/${aggregatepath}"
       val definition = aggregate_definition(component, aggregateName)
-      val entityName = definition.map(_.entityName).getOrElse(strip_surface_suffix(aggregatePath, "aggregate").getOrElse(aggregatePath))
-      val webSchema = WebSchemaResolver.resolveAggregate(
+      val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(aggregatepath, "aggregate").getOrElse(aggregatepath))
+      val webschema = WebSchemaResolver.resolveAggregate(
         component,
-        componentPath,
-        aggregatePath,
-        Some(entityName),
+        componentpath,
+        aggregatepath,
+        Some(entityname),
         webDescriptor,
-        viewFields = admin_entity_view_fields(component, entityName, "detail"),
+        viewFields = admin_entity_view_fields(component, entityname, "detail"),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       val nav = admin_nav_card(Vector(
-        s"Back to ${title_label(aggregatePath)} aggregate" -> basePath,
-        "Aggregate definitions" -> s"/web/${componentPath}/admin/aggregates",
-        "Component admin" -> s"/web/${componentPath}/admin"
+        s"Back to ${title_label(aggregatepath)} aggregate" -> basepath,
+        "Aggregate definitions" -> s"/web/${componentpath}/admin/aggregates",
+        "Component admin" -> s"/web/${componentpath}/admin"
       ))
       val body = admin_read_result_table_web_schema(
         subsystem,
         "/admin/aggregate/read",
-        Record.data("component" -> componentPath, "aggregate" -> aggregatePath, "id" -> id),
+        Record.data("component" -> componentpath, "aggregate" -> aggregatepath, "id" -> id),
         s"No aggregate record is currently available for ${id}.",
-        webSchema.fields
+        webschema.fields
       )
       val operations = aggregate_instance_operation_actions(component, aggregateName, id)
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(aggregatePath))} Aggregate Detail",
+        title = s"${escape(component.name)} ${escape(title_label(aggregatepath))} Aggregate Detail",
         subtitle = "Aggregate instance read baseline",
         body =
           s"""${nav}
@@ -2290,11 +2290,11 @@ trait StaticFormAppRendererComponentAdminPart {
     componentName: String
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
       val nav = admin_nav_card(Vector(
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Descriptor" -> s"/web/${componentPath}/admin/descriptor",
-        "Operation forms" -> s"/form/${componentPath}"
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Descriptor" -> s"/web/${componentpath}/admin/descriptor",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
       Page(simple_page(
         title = s"${escape(component.name)} Data Administration",
@@ -2314,35 +2314,35 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val dataPath = NamingConventions.toNormalizedSegment(dataName)
-      val basePath = s"/web/${componentPath}/admin/data/${dataPath}"
-      val effectivePageRequest = pageRequest.withTotalCountPolicy(
-        webDescriptor.adminTotalCountPolicy(componentPath, "data", dataPath)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val datapath = NamingConventions.toNormalizedSegment(dataName)
+      val basepath = s"/web/${componentpath}/admin/data/${datapath}"
+      val effectivepagerequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentpath, "data", datapath)
       )
-      val webSchema = WebSchemaResolver.resolveData(
-        componentPath,
-        dataPath,
+      val webschema = WebSchemaResolver.resolveData(
+        componentpath,
+        datapath,
         webDescriptor,
-        admin_data_schema_fields(subsystem, componentPath, dataPath),
+        admin_data_schema_fields(subsystem, componentpath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
       )
-      val result = admin_data_list(subsystem, componentPath, dataPath, effectivePageRequest)
-      val warningHtml = admin_warnings(result.warnings)
+      val result = admin_data_list(subsystem, componentpath, datapath, effectivepagerequest)
+      val warninghtml = admin_warnings(result.warnings)
       val table = admin_read_result_list_table(
         result.items,
-        webSchema.fieldNames,
-        basePath,
+        webschema.fieldNames,
+        basepath,
         "No records are currently available for this data collection.",
         includeEdit = true
       )
       val nav = admin_nav_card(Vector(
-        "Component admin" -> s"/web/${componentPath}/admin",
-        "Data CRUD" -> s"/web/${componentPath}/admin/data",
-        "Operation forms" -> s"/form/${componentPath}"
+        "Component admin" -> s"/web/${componentpath}/admin",
+        "Data CRUD" -> s"/web/${componentpath}/admin/data",
+        "Operation forms" -> s"/form/${componentpath}"
       ))
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(dataPath))} Data Administration",
+        title = s"${escape(component.name)} ${escape(title_label(datapath))} Data Administration",
         subtitle = "Data record list baseline",
         body =
           s"""${nav}
@@ -2350,14 +2350,14 @@ trait StaticFormAppRendererComponentAdminPart {
              |  <div class="card-body">
              |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
              |      <div>
-             |        <h2 class="card-title mb-1">${escape(title_label(dataPath))} records</h2>
+             |        <h2 class="card-title mb-1">${escape(title_label(datapath))} records</h2>
              |        <p class="card-text text-body-secondary">List with paging${result.total.map(t => s" · total ${escape(t.toString)}").getOrElse("")}</p>
              |      </div>
-             |      <a class="btn btn-primary" href="${escape(basePath)}/new">New ${escape(title_label(dataPath))}</a>
+             |      <a class="btn btn-primary" href="${escape(basepath)}/new">New ${escape(title_label(datapath))}</a>
              |    </div>
-             |    ${warningHtml}
+             |    ${warninghtml}
              |    ${table}
-             |    ${paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
+             |    ${paging_nav(result.page, result.pageSize, result.total, effectivepagerequest.href(basepath), Some(result.hasNext))}
              |  </div>
              |</article>""".stripMargin
       ))
@@ -2371,23 +2371,23 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val dataPath = NamingConventions.toNormalizedSegment(dataName)
-      val basePath = s"/web/${componentPath}/admin/data/${dataPath}"
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val datapath = NamingConventions.toNormalizedSegment(dataName)
+      val basepath = s"/web/${componentpath}/admin/data/${datapath}"
       val nav = admin_nav_card(Vector(
-        s"Back to ${title_label(dataPath)} records" -> basePath
+        s"Back to ${title_label(datapath)} records" -> basepath
       ))
-      val body = admin_data_record_table(subsystem, componentPath, dataPath, id, webDescriptor)
+      val body = admin_data_record_table(subsystem, componentpath, datapath, id, webDescriptor)
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(dataPath))} Data Detail",
+        title = s"${escape(component.name)} ${escape(title_label(datapath))} Data Detail",
         subtitle = "Data record detail baseline",
         body =
           s"""${nav}
              |<article class="card admin-card">
              |  <div class="card-body">
              |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
-             |      <h2 class="card-title mb-0">${escape(title_label(dataPath))} detail</h2>
-             |      <a class="btn btn-primary" href="${escape(basePath)}/${escape(id)}/edit">Edit</a>
+             |      <h2 class="card-title mb-0">${escape(title_label(datapath))} detail</h2>
+             |      <a class="btn btn-primary" href="${escape(basepath)}/${escape(id)}/edit">Edit</a>
              |    </div>
              |    ${body}
              |  </div>
@@ -2405,45 +2405,45 @@ trait StaticFormAppRendererComponentAdminPart {
     validation: Option[FormValidationResult] = None
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val dataPath = NamingConventions.toNormalizedSegment(dataName)
-      val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
-      val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update"
-      val webSchema = WebSchemaResolver.resolveData(
-        componentPath,
-        dataPath,
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val datapath = NamingConventions.toNormalizedSegment(dataName)
+      val webbasepath = s"/web/${componentpath}/admin/data/${datapath}"
+      val actionpath = s"/form/${componentpath}/admin/data/${datapath}/${id}/update"
+      val webschema = WebSchemaResolver.resolveData(
+        componentpath,
+        datapath,
         webDescriptor,
-        admin_data_schema_fields(subsystem, componentPath, dataPath),
+        admin_data_schema_fields(subsystem, componentpath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
-      val hiddenContext = hidden_form_context_inputs(values)
+      val effectivevalidation = validation.filter(_.webSchema.selector == webschema.selector)
+      val hiddencontext = hidden_form_context_inputs(values)
       val controls = admin_record_controls(
-        webSchema.fields,
-        admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id)),
+        webschema.fields,
+        admin_data_record_fields(subsystem, componentpath, datapath, id).getOrElse(Vector("id" -> id)),
         values,
         "data-field",
-        effectiveValidation
+        effectivevalidation
       )
       val nav = admin_nav_card(Vector(
-        "Detail" -> s"${webBasePath}/${id}",
-        s"Back to ${title_label(dataPath)} records" -> webBasePath
+        "Detail" -> s"${webbasepath}/${id}",
+        s"Back to ${title_label(datapath)} records" -> webbasepath
       ))
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(dataPath))} Data Edit",
+        title = s"${escape(component.name)} ${escape(title_label(datapath))} Data Edit",
         subtitle = "Data record edit baseline",
         body =
           s"""${nav}
              |<article class="card admin-card">
              |  <div class="card-body">
-             |    <h2 class="card-title">Edit ${escape(title_label(dataPath))}</h2>
-             |    ${form_error_panel(values)}${form_validation_panel(effectiveValidation)}
-             |    <form method="post" action="${escape(actionPath)}" class="admin-form">
+             |    <h2 class="card-title">Edit ${escape(title_label(datapath))}</h2>
+             |    ${form_error_panel(values)}${form_validation_panel(effectivevalidation)}
+             |    <form method="post" action="${escape(actionpath)}" class="admin-form">
              |      ${controls}
-             |      ${hiddenContext}
+             |      ${hiddencontext}
              |      <div class="d-flex flex-wrap gap-2">
              |        <button type="submit" class="btn btn-primary">Update</button>
-             |        <a class="btn btn-outline-secondary" href="${escape(webBasePath)}/${escape(id)}">Cancel</a>
+             |        <a class="btn btn-outline-secondary" href="${escape(webbasepath)}/${escape(id)}">Cancel</a>
              |      </div>
              |    </form>
              |  </div>
@@ -2460,39 +2460,39 @@ trait StaticFormAppRendererComponentAdminPart {
     validation: Option[FormValidationResult] = None
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val dataPath = NamingConventions.toNormalizedSegment(dataName)
-      val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
-      val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/create"
-      val webSchema = WebSchemaResolver.resolveData(
-        componentPath,
-        dataPath,
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val datapath = NamingConventions.toNormalizedSegment(dataName)
+      val webbasepath = s"/web/${componentpath}/admin/data/${datapath}"
+      val actionpath = s"/form/${componentpath}/admin/data/${datapath}/create"
+      val webschema = WebSchemaResolver.resolveData(
+        componentpath,
+        datapath,
         webDescriptor,
-        admin_data_schema_fields(subsystem, componentPath, dataPath),
+        admin_data_schema_fields(subsystem, componentpath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
-      val hiddenContext = hidden_form_context_inputs(values)
-      val controls = admin_new_controls(webSchema.fields, values, "dataFields", "id=record-1&#10;status=draft", effectiveValidation)
+      val effectivevalidation = validation.filter(_.webSchema.selector == webschema.selector)
+      val hiddencontext = hidden_form_context_inputs(values)
+      val controls = admin_new_controls(webschema.fields, values, "dataFields", "id=record-1&#10;status=draft", effectivevalidation)
       val nav = admin_nav_card(Vector(
-        s"Back to ${title_label(dataPath)} records" -> webBasePath,
-        "Data CRUD" -> s"/web/${componentPath}/admin/data"
+        s"Back to ${title_label(datapath)} records" -> webbasepath,
+        "Data CRUD" -> s"/web/${componentpath}/admin/data"
       ))
       Page(simple_page(
-        title = s"${escape(component.name)} ${escape(title_label(dataPath))} Data New",
+        title = s"${escape(component.name)} ${escape(title_label(datapath))} Data New",
         subtitle = "Data record create baseline",
         body =
           s"""${nav}
              |<article class="card admin-card">
              |  <div class="card-body">
-             |    <h2 class="card-title">New ${escape(title_label(dataPath))}</h2>
-             |    ${form_error_panel(values)}${form_validation_panel(effectiveValidation)}
-             |    <form method="post" action="${escape(actionPath)}" class="admin-form">
+             |    <h2 class="card-title">New ${escape(title_label(datapath))}</h2>
+             |    ${form_error_panel(values)}${form_validation_panel(effectivevalidation)}
+             |    <form method="post" action="${escape(actionpath)}" class="admin-form">
              |      ${controls}
-             |      ${hiddenContext}
+             |      ${hiddencontext}
              |      <div class="d-flex flex-wrap gap-2">
              |        <button type="submit" class="btn btn-primary">Create</button>
-             |        <a class="btn btn-outline-secondary" href="${escape(webBasePath)}">Cancel</a>
+             |        <a class="btn btn-outline-secondary" href="${escape(webbasepath)}">Cancel</a>
              |      </div>
              |    </form>
              |  </div>
@@ -2509,17 +2509,17 @@ trait StaticFormAppRendererComponentAdminPart {
     message: String,
     resultStatus: Int = 200
   ): Page = {
-    val componentPath = NamingConventions.toNormalizedSegment(componentName)
-    val dataPath = NamingConventions.toNormalizedSegment(dataName)
-    val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
+    val componentpath = NamingConventions.toNormalizedSegment(componentName)
+    val datapath = NamingConventions.toNormalizedSegment(dataName)
+    val webbasepath = s"/web/${componentpath}/admin/data/${datapath}"
     Page(simple_page(
-      title = s"${escape(componentName)} ${escape(title_label(dataPath))} Data Update Result",
+      title = s"${escape(componentName)} ${escape(title_label(datapath))} Data Update Result",
       subtitle = "Data record update submission baseline",
       body =
         s"""${admin_nav_card(Vector(
-             "Detail" -> s"${webBasePath}/${id}",
-             s"Back to ${title_label(dataPath)} records" -> webBasePath,
-             "Edit again" -> s"${webBasePath}/${id}/edit"
+             "Detail" -> s"${webbasepath}/${id}",
+             s"Back to ${title_label(datapath)} records" -> webbasepath,
+             "Edit again" -> s"${webbasepath}/${id}/edit"
            ))}
            |${admin_card(
              "Update submitted",
@@ -2537,16 +2537,16 @@ trait StaticFormAppRendererComponentAdminPart {
     message: String,
     resultStatus: Int = 200
   ): Page = {
-    val componentPath = NamingConventions.toNormalizedSegment(componentName)
-    val dataPath = NamingConventions.toNormalizedSegment(dataName)
-    val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
+    val componentpath = NamingConventions.toNormalizedSegment(componentName)
+    val datapath = NamingConventions.toNormalizedSegment(dataName)
+    val webbasepath = s"/web/${componentpath}/admin/data/${datapath}"
     Page(simple_page(
-      title = s"${escape(componentName)} ${escape(title_label(dataPath))} Data Create Result",
+      title = s"${escape(componentName)} ${escape(title_label(datapath))} Data Create Result",
       subtitle = "Data record create submission baseline",
       body =
         s"""${admin_nav_card(Vector(
-             s"Back to ${title_label(dataPath)} records" -> webBasePath,
-             "Create another" -> s"${webBasePath}/new"
+             s"Back to ${title_label(datapath)} records" -> webbasepath,
+             "Create another" -> s"${webbasepath}/new"
            ))}
            |${admin_card(
              "Create submitted",

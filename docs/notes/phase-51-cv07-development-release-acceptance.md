@@ -1,7 +1,6 @@
 # Phase 51 CV-07 Development and Release Acceptance
 
-Status: review fixes implemented and focused validation complete; independent
-RE_REVIEW pending.
+Status: CLOSED after clean independent RE_REVIEW.
 
 ## Purpose
 
@@ -299,7 +298,7 @@ boundary:
 
 Serialized focused validation completed:
 
-- Cozy prebuilt-admission/provenance focused set: 26 passed;
+- Cozy prebuilt-admission/provenance focused set: 27 passed;
 - sbt-cozy dependency/resolver focused set: 28 passed;
 - CNCF generation build and provenance: 8 passed; and
 - ArtScene release-CAR assembly acceptance: 8 passed with zero failures or
@@ -335,3 +334,39 @@ and nominal-string-wrapper warnings remain visible. It also reports the
 deliberate `sbt-cozy 0.1.16-SNAPSHOT` development selection as a warning; the
 explicit mutable coordinate is the CV-07 development opt-in, not a release
 claim.
+
+The second independent RE_REVIEW found three remaining boundary defects. The
+CAR+SAR scaffold generated a fixed `0.0.1-SNAPSHOT` subsystem coordinate even
+when the component metadata selected another version, the package spec did not
+independently reach the primary-component version rejection, and ArtScene's
+Codex AI runtime acceptance script still expected a SNAPSHOT dependency after
+the source assembly moved to the immutable `0.2.1` release.
+
+REVIEW_FIX now derives both the generated subsystem and primary-component
+versions from `CarScaffoldConfig.version`, independently exercises the root and
+primary-component assembly rejection boundaries, and aligns the ArtScene
+acceptance script with the source-managed release dependency. The serialized
+Cozy package/scaffold validation passed 46 scenarios with zero failures or
+cancellations and `Test/compile` passed. The ArtScene Codex AI runtime contract
+script also passed.
+
+The following independent RE_REVIEW proved that the acceptance script's
+separate line checks could still accept a wrong AI runtime version when another
+component used the expected version. Exact assembly-coordinate validation now
+runs in `ArtSceneLauncherAssemblySpec` through CNCF's canonical
+`GenericSubsystemDescriptor`. It requires exactly one
+`textus-ai-runtime` component and compares that entry's version.
+
+The next independent RE_REVIEW found that a shell-level Ruby/Psych parser
+introduced a nonessential prerequisite and duplicated CNCF descriptor parsing.
+The shell acceptance now retains only configuration and invocation-boundary
+checks. It does not parse YAML or require Ruby; the ArtScene executable
+specification owns structural assembly validation.
+
+The following clean independent RE_REVIEW found no actionable issue. It
+confirmed that the structural check uses CNCF's production parser, the shell
+acceptance adds no YAML parser dependency, all 51 modified Scala files satisfy
+the naming/executable-specification gate, ArtScene CAR lint has only the
+recorded readiness warnings, and all five repository diffs pass
+`git diff --check`. Full accumulated suites remain the Phase 51 final release
+gate.

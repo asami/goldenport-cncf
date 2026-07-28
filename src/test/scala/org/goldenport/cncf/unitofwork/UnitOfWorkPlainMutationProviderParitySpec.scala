@@ -43,7 +43,7 @@ import org.testcontainers.utility.DockerImageName
 
 /*
  * @since   Jul. 26, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkPlainMutationProviderParitySpec
@@ -427,7 +427,7 @@ object UnitOfWorkPlainMutationProviderParitySpec {
 
       def toRecord(entity: PlainMutationCreate): Record =
         Record.dataAuto(
-          "id" -> entity.id,
+          "id" -> entity.id.value,
           "name" -> entity.name
         )
     }
@@ -441,6 +441,14 @@ object UnitOfWorkPlainMutationProviderParitySpec {
           "id" -> entity.id,
           "name" -> entity.name,
           "revision" -> entity.revision.value
+        )
+
+      override def fromStoreRecord(
+        context: EntityStoreDecodeContext,
+        record: Record
+      ): Consequence[PlainMutationEntity] =
+        fromRecord(record).map(entity =>
+          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
         )
 
       def fromRecord(record: Record): Consequence[PlainMutationEntity] =

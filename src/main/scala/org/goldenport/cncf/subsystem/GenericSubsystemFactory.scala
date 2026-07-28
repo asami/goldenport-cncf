@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -370,10 +370,16 @@ object GenericSubsystemFactory {
       componentdescriptors
     )
     val repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
+    val developmentclaims = ComponentRepository.developmentComponentClaims(repositoryspecs)
     val repositories =
       repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
         val activedescriptors =
-          ComponentRepository.descriptorsForSpecification(spec, repositoryspecs.take(index), componentdescriptors)
+          ComponentRepository.descriptorsForSpecification(
+            spec,
+            repositoryspecs.take(index),
+            componentdescriptors,
+            developmentclaims
+          )
         descriptor.componentBindings.zip(componentdescriptors).collect {
           case (binding, componentdescriptor) if activedescriptors.contains(componentdescriptor) =>
             spec.build(

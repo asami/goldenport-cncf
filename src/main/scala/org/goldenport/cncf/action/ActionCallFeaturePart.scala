@@ -149,7 +149,7 @@ import org.goldenport.cncf.processexecution.{
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -2575,7 +2575,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId
   ): EntityId =
     component
-      .flatMap(_.entitySpace.entityOption[Any](id.collection.name))
+      .flatMap { component =>
+        component.entitySpace.entityOption(id.collection).orElse(
+          component.entitySpace.entityOption[Any](id.collection.name)
+        )
+      }
       .map { collection =>
         val cid = collection.descriptor.collectionId
         if (id.collection == cid)

@@ -19,7 +19,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -96,16 +96,22 @@ object ComponentRepositorySpace {
     specs: Seq[ComponentRepository.Specification],
     componentdescriptors: Vector[ComponentDescriptor]
   ): Seq[Slot] = {
-    specs.zipWithIndex.map { case (spec, index) =>
+    val developmentclaims = ComponentRepository.developmentComponentClaims(specs)
+    specs.zipWithIndex.flatMap { case (spec, index) =>
       val origin = _origin_for_spec(spec)
       val descriptors = ComponentRepository.descriptorsForSpecification(
         spec,
         specs.take(index),
-        componentdescriptors
+        componentdescriptors,
+        developmentclaims
       )
-      val params = ComponentCreate(subsystem, origin, descriptors)
-      val repo = spec.build(params)
-      Slot(repo, origin)
+      if (componentdescriptors.nonEmpty && descriptors.isEmpty) {
+        None
+      } else {
+        val params = ComponentCreate(subsystem, origin, descriptors)
+        val repo = spec.build(params)
+        Some(Slot(repo, origin))
+      }
     }
   }
 
@@ -159,12 +165,12 @@ object ComponentRepositorySpace {
             }
           }
         }
-        val specsResult =
+        val specsresult =
           error match {
             case Some(err) => Left(err)
             case None => Right(parsed.result())
           }
-        specsResult
+        specsresult
     }
 
   // CncfRuntime
@@ -177,12 +183,12 @@ object ComponentRepositorySpace {
     val search = Vector.newBuilder[String]
     search ++= _config_search_repository_specs(configuration)
     active ++= _config_active_repository_specs(configuration)
-    var noDefault = false
+    var nodefault = false
     var i = 0
     while (i < args.length) {
       val arg = args(i)
       if (arg == _no_default_components_flag) {
-        noDefault = true
+        nodefault = true
         i += 1
       } else if (arg.startsWith("--repository-dir=")) {
         val value = arg.stripPrefix("--repository-dir=")
@@ -190,7 +196,7 @@ object ComponentRepositorySpace {
         i += 1
       } else if (arg == "--repository-dir") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Left("--repository-dir requires a value"), Right(Vector.empty), args, noDefault)
+          return ExtractedArgs(Left("--repository-dir requires a value"), Right(Vector.empty), args, nodefault)
         }
         search += (if (_is_url(args(i + 1))) args(i + 1) else s"component-dir:${args(i + 1)}")
         i += 2
@@ -244,55 +250,55 @@ object ComponentRepositorySpace {
         i += 1
       } else if (arg == "--component-dir") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left("--component-dir requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left("--component-dir requires a value"), args, nodefault)
         }
         active += s"component-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--component-dev-dir" || arg == s"--${RuntimeConfig.ComponentDevDirKey}") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"component-dev-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--component-car-dir" || arg == s"--${RuntimeConfig.ComponentCarDirKey}") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"component-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--subsystem-sar-dir" || arg == s"--${RuntimeConfig.SubsystemSarDirKey}") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"component-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--subsystem-dev-dir" || arg == s"--${RuntimeConfig.SubsystemDevDirKey}") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"subsystem-dev-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--cncf.component.dev.dir") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"component-dev-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--cncf.component.car.dir") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"component-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--cncf.subsystem.sar.dir") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"component-dir:${args(i + 1)}"
         i += 2
       } else if (arg == "--cncf.subsystem.dev.dir") {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"subsystem-dev-dir:${args(i + 1)}"
         i += 2
@@ -302,7 +308,7 @@ object ComponentRepositorySpace {
           arg == s"--${RuntimeConfig.RuntimeComponentFileKey}"
       ) {
         if (i + 1 >= args.length) {
-          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, nodefault)
         }
         active += s"component-file:${args(i + 1)}"
         i += 2
@@ -315,7 +321,7 @@ object ComponentRepositorySpace {
       active = Right(active.result()),
       search = Right(search.result()),
       residual = residual.result().toArray,
-      noDefault = noDefault
+      noDefault = nodefault
     )
   }
 
@@ -342,12 +348,12 @@ object ComponentRepositorySpace {
           .toVector
       case _ => Vector.empty
     }
-    val componentDevRepositories =
+    val componentdevrepositories =
       _config_values(configuration, Vector(
         RuntimeConfig.RepositoryComponentDevDirKey,
         "cncf.repository.component.dev.dir"
       )).map(_component_dev_repository_spec)
-    (repositories ++ componentDevRepositories).distinct
+    (repositories ++ componentdevrepositories).distinct
   }
 
   private def _component_dev_repository_spec(value: String): String =
@@ -368,18 +374,18 @@ object ComponentRepositorySpace {
           .toVector
       case _ => Vector.empty
     }
-    val devDirs = _config_values(configuration, Vector(RuntimeConfig.ComponentDevDirKey, "cncf.component.dev.dir"))
+    val devdirs = _config_values(configuration, Vector(RuntimeConfig.ComponentDevDirKey, "cncf.component.dev.dir"))
       .map(_component_dev_repository_spec)
-    val carDirs = _config_values(configuration, Vector(RuntimeConfig.ComponentCarDirKey, "cncf.component.car.dir"))
+    val cardirs = _config_values(configuration, Vector(RuntimeConfig.ComponentCarDirKey, "cncf.component.car.dir"))
       .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
-    val sarDirs = _config_values(configuration, Vector(
+    val sardirs = _config_values(configuration, Vector(
       RuntimeConfig.SubsystemSarDirKey,
       RuntimeConfig.RuntimeSubsystemSarDirKey,
       "cncf.subsystem.sar.dir",
       "cncf.runtime.subsystem.sar.dir"
     ))
       .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
-    val subsystemDevDirs = _config_values(configuration, Vector(
+    val subsystemdevdirs = _config_values(configuration, Vector(
       RuntimeConfig.SubsystemDevDirKey,
       RuntimeConfig.RuntimeSubsystemDevDirKey,
       "cncf.subsystem.dev.dir",
@@ -399,7 +405,7 @@ object ComponentRepositorySpace {
           case _ => Vector.empty
         }
       }.distinct
-    (dirs ++ devDirs ++ carDirs ++ sarDirs ++ subsystemDevDirs ++ files).distinct
+    (dirs ++ devdirs ++ cardirs ++ sardirs ++ subsystemdevdirs ++ files).distinct
   }
 
   private def _config_values(
@@ -490,17 +496,17 @@ object ComponentRepositorySpace {
 
   private def _append_default_standard_repository(
     specs: Vector[ComponentRepository.Specification],
-    existingSearchDir: Option[Path]
+    existingsearchdir: Option[Path]
   ): Either[String, Vector[ComponentRepository.Specification]] = {
-    val withSearch =
-      existingSearchDir match {
+    val withsearch =
+      existingsearchdir match {
         case Some(dir) =>
           _append_spec_if_missing(specs, ComponentRepository.ComponentDirRepository.Specification(dir))
         case None =>
           specs
       }
     val withlocal =
-      _default_local_repository_dirs().foldLeft(withSearch) { (z, dir) =>
+      _default_local_repository_dirs().foldLeft(withsearch) { (z, dir) =>
         _append_spec_if_missing(z, ComponentRepository.ComponentDirRepository.Specification(dir))
       }
     val withstandard =

@@ -40,46 +40,62 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   }
 
   "ComponentDirRepository" should {
+    "standard and local repository selection" which {
     "exclude Scala 3 package implementation classes from component discovery" in {
-      ComponentRepository._is_discoverable_component_class(
-        "org.example.ArtSceneScalarDatatypes$package"
-      ) shouldBe false
-      ComponentRepository._is_discoverable_component_class(
-        "org.example.ArtSceneScalarDatatypes$package$"
-      ) shouldBe false
-      ComponentRepository._is_discoverable_component_class(
-        "org.example.ArtSceneScalarDatatypes$package$$anon$1"
-      ) shouldBe false
-      ComponentRepository._is_discoverable_component_class(
-        "org.example.ArtSceneComponent$BundleFactory"
-      ) shouldBe true
-      ComponentRepository._is_discoverable_component_class(
+      Given("Scala 3 package implementation and ordinary component class names")
+      val classnames = Vector(
+        "org.example.ArtSceneScalarDatatypes$package",
+        "org.example.ArtSceneScalarDatatypes$package$",
+        "org.example.ArtSceneScalarDatatypes$package$$anon$1",
+        "org.example.ArtSceneComponent$BundleFactory",
         "org.example.PackageFactory"
-      ) shouldBe true
+      )
+
+      When("component discovery classifies each name")
+      val discovered =
+        classnames.map(ComponentRepository._is_discoverable_component_class)
+
+      Then("package implementation classes are excluded and component classes remain")
+      discovered shouldBe Vector(false, false, false, true, true)
     }
 
     "expose SimpleModeling CAR and SAR standard repository URLs" in {
-      ComponentRepository.standardComponentRepositoryUrl() shouldBe
-        "https://www.simplemodeling.org/repository/car"
-      ComponentRepository.standardSubsystemRepositoryUrl() shouldBe
-        "https://www.simplemodeling.org/repository/sar"
+      Given("the framework-owned standard repository policy")
+
+      When("the CAR and SAR repository URLs are requested")
+      val carurl = ComponentRepository.standardComponentRepositoryUrl()
+      val sarurl = ComponentRepository.standardSubsystemRepositoryUrl()
+
+      Then("the SimpleModeling repository endpoints are returned")
+      carurl shouldBe "https://www.simplemodeling.org/repository/car"
+      sarurl shouldBe "https://www.simplemodeling.org/repository/sar"
     }
 
     "parse SimpleModeling CAR and SAR URLs as standard search repository specs" in {
+      Given("the framework-owned CAR and SAR URLs and one cache root")
       _with_temp_dir { root =>
-        ComponentRepository.parseSpecs(
-          ComponentRepository.standardComponentRepositoryUrl(),
-          root
-        ).toOption.get shouldBe Vector(ComponentRepository.standardComponentRepositorySpec())
-        ComponentRepository.parseSpecs(
-          ComponentRepository.standardSubsystemRepositoryUrl(),
-          root
-        ).toOption.get shouldBe Vector(ComponentRepository.standardSubsystemRepositorySpec())
+        When("the URLs are parsed as repository specifications")
+        val carspecs =
+          ComponentRepository.parseSpecs(
+            ComponentRepository.standardComponentRepositoryUrl(),
+            root
+          ).toOption.get
+        val sarspecs =
+          ComponentRepository.parseSpecs(
+            ComponentRepository.standardSubsystemRepositoryUrl(),
+            root
+          ).toOption.get
+
+        Then("each URL resolves to its standard repository specification")
+        carspecs shouldBe Vector(ComponentRepository.standardComponentRepositorySpec())
+        sarspecs shouldBe Vector(ComponentRepository.standardSubsystemRepositorySpec())
       }
     }
 
     "append SimpleModeling standard URL repositories to the default search set" in {
+      Given("an empty explicit repository set with default search enabled")
       _with_temp_dir { cwd =>
+        When("default search repositories are appended")
         val resolved = ComponentRepositorySpace.appendDefaultSearchRepositories(
           Right(Vector.empty),
           active = Vector.empty,
@@ -87,19 +103,25 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           noDefault = false
         ).toOption.get
 
+        Then("the standard CAR and SAR repositories are present")
         resolved should contain (ComponentRepository.standardComponentRepositorySpec())
         resolved should contain (ComponentRepository.standardSubsystemRepositorySpec())
       }
     }
 
     "use cache as the default standard repository root" in {
+      Given("the framework default repository policy")
+
+      When("the standard repository root is resolved")
       val root = ComponentRepository.defaultStandardRepositoryDir()
 
+      Then("the root is located in the CNCF cache")
       root.toString should include (".cncf")
       root.toString should include ("cache")
     }
 
     "append existing local CNCF repository dirs before standard repositories" in {
+      Given("an existing local CAR repository under the CNCF user home")
       _with_temp_dir { home =>
         val oldhome = System.getProperty("user.home")
         try {
@@ -107,6 +129,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           val car = ComponentRepository.defaultLocalComponentRepositoryDir()
           Files.createDirectories(car)
 
+          When("default search repositories are appended")
           val resolved = ComponentRepositorySpace.appendDefaultSearchRepositories(
             Right(Vector.empty),
             active = Vector.empty,
@@ -114,6 +137,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             noDefault = false
           ).toOption.get
 
+          Then("the local repository precedes the standard repository")
           resolved should contain (ComponentRepository.ComponentDirRepository.Specification(car))
           resolved.indexOf(ComponentRepository.ComponentDirRepository.Specification(car)) should be <
             resolved.indexOf(ComponentRepository.standardComponentRepositorySpec())
@@ -125,6 +149,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "not append cache as a plain component directory" in {
+      Given("the standard cache directory exists under the CNCF user home")
       _with_temp_dir { home =>
         val oldhome = System.getProperty("user.home")
         try {
@@ -132,6 +157,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           val cache = ComponentRepository.defaultStandardRepositoryDir()
           Files.createDirectories(cache)
 
+          When("default search repositories are appended")
           val resolved = ComponentRepositorySpace.appendDefaultSearchRepositories(
             Right(Vector.empty),
             active = Vector.empty,
@@ -139,6 +165,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             noDefault = false
           ).toOption.get
 
+          Then("the cache remains a standard repository rather than a component directory")
           resolved should not contain ComponentRepository.ComponentDirRepository.Specification(cache)
           resolved should contain (ComponentRepository.standardComponentRepositorySpec())
         } finally {
@@ -149,6 +176,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "not resolve snapshots from the standard cache repository" in {
+      Given("a SNAPSHOT CAR stored under the standard repository cache")
       _with_temp_dir { cache =>
         val snapshotdir = cache.resolve("car").resolve("sample-component").resolve("0.1.1-SNAPSHOT")
         Files.createDirectories(snapshotdir)
@@ -159,11 +187,20 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           cache
         )
 
-        spec.resolveComponentArchivePath("sample-component", Some("0.1.1-SNAPSHOT")) shouldBe None
+        When("the standard repository resolves that SNAPSHOT coordinate")
+        val resolved =
+          spec.resolveComponentArchivePath(
+            "sample-component",
+            Some("0.1.1-SNAPSHOT")
+          )
+
+        Then("mutable snapshots are not admitted from the standard cache")
+        resolved shouldBe None
       }
     }
 
     "not discover requested snapshots from the standard cache repository" in {
+      Given("a requested SNAPSHOT CAR stored under the standard repository cache")
       val subsystem = new Subsystem(
         name = "test-standard-repo-snapshot",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -197,11 +234,19 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
 
-        repository.discover().flatMap(_.componentDescriptors.flatMap(_.componentName)) should not contain "sample-component"
+        When("component discovery scans the standard repository")
+        val discovered =
+          repository
+            .discover()
+            .flatMap(_.componentDescriptors.flatMap(_.componentName))
+
+        Then("the requested mutable component is not discovered")
+        discovered should not contain "sample-component"
       }
     }
 
     "not let the standard repository block a requested local snapshot component" in {
+      Given("a local SNAPSHOT CAR before an empty standard repository")
       val subsystem = new Subsystem(
         name = "test-local-snapshot-standard-fallback",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -240,13 +285,16 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           descriptors
         )
 
+        When("component discovery traverses the ordered repositories")
         val components = space.discover()
 
+        Then("the local mutable component is discovered")
         components.flatMap(_.componentDescriptors.flatMap(_.componentName)) should contain ("sample-component")
       }
     }
 
     "resolve top-level component invocation by explicit component version" in {
+      Given("two released CAR versions and an explicit older component version")
       _with_temp_dir { repositoryroot =>
         val currentdir = repositoryroot.resolve("car").resolve("blog-component").resolve("0.0.2")
         val olddir = repositoryroot.resolve("car").resolve("blog-component").resolve("0.0.1")
@@ -278,6 +326,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           componentVersion = Some("0.0.1")
         )
 
+        When("the top-level component invocation is resolved")
         val resolved = org.goldenport.cncf.cli.CncfRuntime.resolveComponentInvocation(
           invocation,
           Vector(ComponentRepository.StandardRepository.Specification(
@@ -287,6 +336,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ))
         )
 
+        Then("the explicitly requested CAR becomes the component file")
         resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.ComponentFileKey}=${olddir.resolve("blog-component-0.0.1.car")}")
       }
     }
@@ -358,23 +408,33 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    }
+
+    "development and expanded repository routes" which {
     "parse explicit development and expanded CAR directory routes" in {
+      Given("explicit component development and expanded CAR directory arguments")
+
+      When("repository arguments are extracted")
       val extracted = ComponentRepositorySpace.extractRepositoryArgs(
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
         Array("--component-dev-dir", "/tmp/dev-component", "--component-car-dir=/tmp/debug.car.d", "command")
       )
 
+      Then("both repository routes are active and the command remains residual")
       extracted.active shouldBe Right(Vector("component-dev-dir:/tmp/dev-component", "component-dir:/tmp/debug.car.d"))
       extracted.residual.toVector shouldBe Vector("command")
     }
 
     "reject explicit component development directory without runtime classpath" in {
+      Given("a component development directory without its runtime classpath file")
       _with_temp_dir { root =>
         val componentdir = root.resolve("component")
         Files.createDirectories(componentdir.resolve("target"))
 
+        When("the component development route is parsed")
         val parsed = ComponentRepository.parseSpecs(s"component-dev-dir:${componentdir}", root)
 
+        Then("the missing runtime classpath fails without packaged-CAR fallback")
         parsed.left.toOption.get should include ("runtime classpath file is missing or empty")
         parsed.left.toOption.get should include (componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt").toString)
         parsed.left.toOption.get should include ("will not fall back to a packaged CAR")
@@ -382,6 +442,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "fail repository space creation when configured component development directory is invalid" in {
+      Given("runtime configuration naming an invalid component development directory")
       _with_temp_dir { root =>
         val componentdir = root.resolve("component")
         Files.createDirectories(componentdir)
@@ -392,16 +453,19 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ConfigurationTrace.empty
         )
 
+        When("repository space creation consumes that configuration")
         val thrown = intercept[IllegalStateException] {
           ComponentRepositorySpace.create(TestComponentFactory.emptySubsystem("dev-dir-fail-fast"), root, configuration)
         }
 
+        Then("creation fails with the runtime-classpath and no-fallback contract")
         thrown.getMessage should include ("runtime classpath file is missing or empty")
         thrown.getMessage should include ("will not fall back to a packaged CAR")
       }
     }
 
     "reject CAR schemes in component development directory configuration" in {
+      Given("a packaged-CAR scheme supplied as a component development directory")
       _with_temp_dir { root =>
         val configuration = ResolvedConfiguration(
           Configuration(Map(
@@ -410,14 +474,17 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ConfigurationTrace.empty
         )
 
+        When("the configured development repository is resolved")
         val extracted = ComponentRepositorySpace.extractRepositoryArgs(configuration, Array("server"))
         val parsed = ComponentRepositorySpace.resolveSpecifications(extracted.search, root, noDefault = true)
 
+        Then("the development-only configuration rejects the packaged route")
         parsed.left.toOption.get should include ("component development directory configuration must be a plain path or component-dev-dir:path")
       }
     }
 
     "treat repository component development directories as direct dev-dir repositories" in {
+      Given("a configured component development directory with a runtime classpath")
       _with_temp_dir { root =>
         val componentdir = root.resolve("textus-user-account")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
@@ -430,24 +497,31 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ConfigurationTrace.empty
         )
 
+        When("the repository configuration is resolved")
         val extracted = ComponentRepositorySpace.extractRepositoryArgs(configuration, Array("server"))
         val specs = ComponentRepositorySpace.resolveSpecifications(extracted.search, root, noDefault = true).toOption.get
 
+        Then("the directory becomes one direct development repository")
         specs shouldBe Vector(ComponentRepository.ComponentDevDirRepository.Specification(componentdir))
       }
     }
 
     "parse explicit expanded SAR directory routes" in {
+      Given("explicit subsystem development and expanded SAR directory arguments")
+
+      When("repository arguments are extracted")
       val extracted = ComponentRepositorySpace.extractRepositoryArgs(
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
         Array("--subsystem-dev-dir", "/tmp/app", "--subsystem-sar-dir", "/tmp/debug.sar.d", "--textus.subsystem.sar.dir=/tmp/configured.sar.d", "command")
       )
 
+      Then("every subsystem route is active and the command remains residual")
       extracted.active shouldBe Right(Vector("subsystem-dev-dir:/tmp/app", "component-dir:/tmp/debug.sar.d", "component-dir:/tmp/configured.sar.d"))
       extracted.residual.toVector shouldBe Vector("command")
     }
 
     "activate subsystem development directory from runtime config alias" in {
+      Given("the runtime subsystem development-directory alias")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
           "textus.runtime.subsystem.dev.dir" -> ConfigurationValue.StringValue("/tmp/app")
@@ -455,13 +529,16 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         ConfigurationTrace.empty
       )
 
+      When("repository arguments are extracted")
       val extracted = ComponentRepositorySpace.extractRepositoryArgs(configuration, Array("command"))
 
+      Then("the aliased directory becomes an active development route")
       extracted.active shouldBe Right(Vector("subsystem-dev-dir:/tmp/app"))
       extracted.residual.toVector shouldBe Vector("command")
     }
 
     "resolve subsystem descriptor from a subsystem development directory" in {
+      Given("a subsystem development directory containing one descriptor")
       _with_temp_dir { root =>
         Files.createDirectories(root.resolve("subsystem"))
         Files.writeString(
@@ -475,11 +552,16 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         val spec = ComponentRepository.SubsystemDevDirRepository.Specification(root)
 
-        spec.resolveSubsystemDescriptor("cwitter").map(_.subsystemName) shouldBe Some("cwitter")
+        When("the named subsystem descriptor is resolved")
+        val resolved = spec.resolveSubsystemDescriptor("cwitter")
+
+        Then("the development descriptor is returned")
+        resolved.map(_.subsystemName) shouldBe Some("cwitter")
       }
     }
 
     "infer subsystem name from explicit subsystem development directory" in {
+      Given("an explicit subsystem development directory with one descriptor")
       _with_temp_dir { root =>
         Files.createDirectories(root.resolve("subsystem"))
         Files.writeString(
@@ -495,13 +577,17 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           root,
           Array("--subsystem-dev-dir", root.toString, "server")
         )
+
+        When("the runtime resolves its subsystem descriptor")
         val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(bootstrap.configuration)
 
+        Then("the descriptor supplies the subsystem name")
         descriptor.map(_.subsystemName) shouldBe Some("cwitter")
       }
     }
 
     "infer subsystem name from explicit component CAR directory" in {
+      Given("an expanded component CAR directory with one component descriptor")
       _with_temp_dir { root =>
         val cardir = root.resolve("app.car.d")
         Files.createDirectories(cardir.resolve("component"))
@@ -517,14 +603,18 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           root,
           Array("--component-car-dir", cardir.toString, "server")
         )
+
+        When("the runtime resolves its synthesized subsystem descriptor")
         val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(bootstrap.configuration)
 
+        Then("the component identity supplies the subsystem and binding names")
         descriptor.map(_.subsystemName) shouldBe Some("cwitter")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("cwitter")
       }
     }
 
     "infer subsystem name from explicit component development directory" in {
+      Given("a component development directory with runtime classes and a descriptor")
       _with_temp_dir { root =>
         val componentdir = root.resolve("component")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
@@ -543,14 +633,18 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           root,
           Array("--component-dev-dir", componentdir.toString, "server")
         )
+
+        When("the runtime resolves its synthesized subsystem descriptor")
         val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(bootstrap.configuration)
 
+        Then("the development component supplies the subsystem and binding names")
         descriptor.map(_.subsystemName) shouldBe Some("cwitter")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("cwitter")
       }
     }
 
     "not auto-append a packaged CAR when component development directory is explicit" in {
+      Given("an explicit component development directory beside a packaged CAR")
       _with_temp_dir { root =>
         val componentdir = root.resolve("component")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
@@ -583,8 +677,11 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           root,
           Array("--component-dev-dir", componentdir.toString, "server")
         )
+
+        When("the runtime resolves the explicit development source")
         val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(bootstrap.configuration)
 
+        Then("the packaged CAR is not appended and development identity wins")
         RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.ComponentFileKey) shouldBe empty
         descriptor.map(_.subsystemName) shouldBe Some("dev-cwitter")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("dev-cwitter")
@@ -592,6 +689,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "infer component development directory identity from discovered component metadata" in {
+      Given("a component development directory whose compiled metadata names its component")
       _with_temp_dir { root =>
         val componentdir = root.resolve("01-minimal")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
@@ -604,6 +702,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ConfigurationTrace.empty
         )
 
+        When("identity inference, descriptor resolution, and runtime initialization complete")
         val inferred = ComponentRepository.ComponentDevDirRepository.inferComponentNames(componentdir)
         val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(configuration)
         val initialized = new org.goldenport.cncf.cli.CncfRuntime().initializeForEmbedding(
@@ -615,6 +714,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
         ).TAKE
 
+        Then("every boundary retains one inferred development component identity")
         inferred shouldBe Vector("devdirsample")
         descriptor.map(_.subsystemName) shouldBe Some("devdirsample")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("devdirsample")
@@ -626,6 +726,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "treat runtime subsystem source aliases as explicit activation during name resolution" in {
+      Given("a component repository and an explicit runtime subsystem source alias")
       _with_temp_dir { componentdir =>
         val carpath = componentdir.resolve("testcomp.car")
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
@@ -647,16 +748,19 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           componentName = Some("testcomp")
         )
 
+        When("the component invocation is resolved")
         val resolved = org.goldenport.cncf.cli.CncfRuntime.resolveComponentInvocation(
           invocation,
           Vector(ComponentRepository.ComponentDirRepository.Specification(componentdir))
         )
 
+        Then("the explicit activation prevents repository file injection")
         resolved.actualArgs.toVector shouldBe invocation.actualArgs.toVector
       }
     }
 
     "treat expanded SAR directory route as explicit activation during name resolution" in {
+      Given("a component repository and an explicit expanded SAR route")
       _with_temp_dir { componentdir =>
         val carpath = componentdir.resolve("testcomp.car")
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
@@ -678,25 +782,30 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           componentName = Some("testcomp")
         )
 
+        When("the component invocation is resolved")
         val resolved = org.goldenport.cncf.cli.CncfRuntime.resolveComponentInvocation(
           invocation,
           Vector(ComponentRepository.ComponentDirRepository.Specification(componentdir))
         )
 
+        Then("the expanded route prevents repository file injection")
         resolved.actualArgs.toVector shouldBe invocation.actualArgs.toVector
       }
     }
 
     "not auto-activate cwd sar.d as a default active repository" in {
+      Given("a current working directory containing sar.d")
       _with_temp_dir { cwd =>
         Files.createDirectories(cwd.resolve("sar.d"))
 
+        When("default active repositories are appended")
         val resolved = ComponentRepositorySpace.appendDefaultActiveRepositories(
           Right(Vector.empty),
           cwd,
           noDefault = false
         ).toOption.get
 
+        Then("sar.d is not activated implicitly")
         resolved should not contain ComponentRepository.ComponentDirRepository.Specification(cwd.resolve("sar.d").normalize)
       }
     }
@@ -719,22 +828,26 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "not append default component target when an explicit component development directory is active" in {
+      Given("an explicit component development repository in the current project")
       _with_temp_dir { cwd =>
         val devdir = cwd.resolve("component")
         Files.createDirectories(devdir)
         Files.createDirectories(cwd.resolve("component").resolve("target"))
 
+        When("default active repositories are appended")
         val resolved = ComponentRepositorySpace.appendDefaultActiveRepositories(
           Right(Vector(ComponentRepository.ComponentDevDirRepository.Specification(devdir))),
           cwd,
           noDefault = false
         ).toOption.get
 
+        Then("the explicit development repository remains the only active target")
         resolved shouldBe Vector(ComponentRepository.ComponentDevDirRepository.Specification(devdir))
       }
     }
 
     "treat equals-form expanded CAR route as an explicit activation during name resolution" in {
+      Given("a component repository and an equals-form expanded CAR route")
       _with_temp_dir { componentdir =>
         val carpath = componentdir.resolve("testcomp.car")
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
@@ -756,16 +869,19 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           componentName = Some("testcomp")
         )
 
+        When("the component invocation is resolved")
         val resolved = org.goldenport.cncf.cli.CncfRuntime.resolveComponentInvocation(
           invocation,
           Vector(ComponentRepository.ComponentDirRepository.Specification(componentdir))
         )
 
+        Then("the expanded route prevents repository file injection")
         resolved.actualArgs.toVector shouldBe invocation.actualArgs.toVector
       }
     }
 
     "resolve descriptor by componentlet name from a car directory" in {
+      Given("an expanded CAR directory with one primary component and two componentlets")
       _with_temp_dir { componentdir =>
         _create_fake_component_jar(componentdir.resolve("component").resolve("main.jar"))
         val descriptorpath = componentdir.resolve("component-descriptor.json")
@@ -790,16 +906,19 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             |    }
             |  ]
             |}""".stripMargin
-        )
+          )
 
+        When("the descriptor is resolved through one componentlet name")
         val descriptor = ComponentRepository.resolveComponentDescriptorFromComponentDir(componentdir, "public-notice")
 
+        Then("the primary component and complete componentlet set are retained")
         descriptor.map(_.componentName) shouldBe Some(Some("sample-component"))
         descriptor.toVector.flatMap(_.componentlets.map(_.name)) shouldBe Vector("public-notice", "notice-admin")
       }
     }
 
     "discover the component wrapped in a car" in {
+      Given("a CAR containing one component implementation and descriptor")
       val subsystem = new Subsystem(
         name = "test",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -821,7 +940,11 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
         val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+
+        When("the component directory repository discovers the CAR")
         val components = repository.discover()
+
+        Then("the packaged component and descriptor metadata are exposed")
         components should not be empty
         val head = components.head
         head.origin.label should include("component-dir:car:demo-component:0.1.0")
@@ -831,6 +954,9 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    }
+
+    "packaged CAR and SAR discovery" which {
     "not discover unrelated CARs when an explicitly requested component is absent" in {
       Given("a component repository containing an unrelated CAR and an explicit missing component request")
       val subsystem = TestComponentFactory.emptySubsystem("explicit-component-selection")
@@ -1173,6 +1299,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "treat component-file CAR as one component and ignore embedded component.d contents" in {
+      Given("an application CAR containing another CAR below component.d")
       val subsystem = new Subsystem(
         name = "test-component-file-embedded",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1210,9 +1337,11 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         )
 
         val repository = new ComponentRepository.ComponentFileRepository(appcar, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        When("the application CAR is discovered as a component file")
         val components = repository.discover()
         val componentnames = components.flatMap(_.artifactMetadata).flatMap(_.component).toSet
 
+        Then("only the application component is activated")
         componentnames should contain ("app")
         componentnames should not contain ("textus-user-account")
       }
@@ -1364,6 +1493,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "skip an invalid car containing zero component jars" in {
+      Given("a CAR with a descriptor and library but no component implementation JAR")
       val subsystem = new Subsystem(
         name = "test-skip",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1380,7 +1510,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
           _create_car(carpath, Seq("component/lib/dummy.jar" -> dummyjar, "component-descriptor.json" -> descriptor))
           val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+          When("the repository discovers the invalid CAR")
           val components = repository.discover()
+
+          Then("the invalid CAR is skipped")
           components shouldBe empty
         } finally {
           Files.deleteIfExists(dummyjar)
@@ -1389,6 +1522,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "skip an invalid car containing incomplete descriptor" in {
+      Given("a CAR whose descriptor omits its component identity")
       val subsystem = new Subsystem(
         name = "test-invalid-manifest",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1410,11 +1544,16 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
         val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
-        repository.discover() shouldBe empty
+        When("the repository discovers the invalid CAR")
+        val components = repository.discover()
+
+        Then("the invalid CAR is skipped")
+        components shouldBe empty
       }
     }
 
     "apply SAR > CAR precedence for extension/config when loading sar containing car" in {
+      Given("a SAR and embedded CAR defining overlapping extensions and configuration")
       val subsystem = new Subsystem(
         name = "test-sar",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1449,7 +1588,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
         val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        When("the repository discovers the SAR")
         val components = repository.discover()
+
+        Then("SAR values override CAR values while non-overlapping values are retained")
         components should not be empty
         val comp = components.head
         val metadata = comp.artifactMetadata.getOrElse(fail("missing artifact metadata"))
@@ -1464,6 +1606,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "discover a requested component from the standard CAR repository layout" in {
+      Given("a requested component stored in the standard CAR repository layout")
       val subsystem = new Subsystem(
         name = "test-standard-repo",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1496,14 +1639,17 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             Vector(ComponentDescriptor(name = Some("textus-user-account"), version = Some("0.1.0"), componentName = Some("textus-user-account")))
           )
         )
+        When("the standard repository is discovered")
         val components = repository.discover()
 
+        Then("the requested component is loaded")
         components.map(_.name) should contain ("spec")
         components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
       }
     }
 
     "fetch requested component CARs from a standard repository before discovery" in {
+      Given("two requested component CARs in a remote standard repository")
       val subsystem = new Subsystem(
         name = "test-standard-repo-fetch",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1556,8 +1702,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
 
+        When("the standard repository is discovered")
         val components = repository.discover()
 
+        Then("both CARs are cached and each component keeps its own descriptors")
         cache.resolve("car").resolve("textus-user-account").resolve("0.1.1").resolve("textus-user-account-0.1.1.car").toFile should exist
         cache.resolve("car").resolve("textus-blog").resolve("0.0.2").resolve("textus-blog-0.0.2.car").toFile should exist
         components.map(_.name) should contain ("spec")
@@ -1569,6 +1717,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "fail fast when requested component CAR is not available in a standard repository" in {
+      Given("a requested component absent from the standard repository")
       val subsystem = new Subsystem(
         name = "test-standard-repo-fetch-missing",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1587,7 +1736,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
 
+        When("the repository tries to discover the missing component")
         val thrown = the [ConsequenceException] thrownBy repository.discover()
+
+        Then("discovery reports a structured resource-not-found failure")
         thrown.getMessage should include ("requested component CAR not found")
         val conclusion = thrown.consequence match {
           case Consequence.Failure(conclusion) => conclusion
@@ -1601,6 +1753,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "not look up a requested main target CAR when component-dev-dir satisfies it" in {
+      Given("a development directory satisfying a stale requested main target coordinate")
       val subsystem = new Subsystem(
         name = "test-standard-repo-dev-main-target",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1631,16 +1784,21 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ),
           Vector(ComponentDescriptor(
             name = Some("TextusKnowledgeEditor"),
-            version = Some("0.1.0-SNAPSHOT"),
+            version = Some("0.0.1"),
             componentName = Some("TextusKnowledgeEditor")
           ))
         )
 
-        noException should be thrownBy space.discover()
+        When("the repository space is discovered")
+        val result = space.discover()
+
+        Then("the development target prevents a standard CAR lookup")
+        result should not be null
       }
     }
 
     "not look up a requested main target CAR when component-dev-dir infers it" in {
+      Given("a development directory whose component identity can be inferred")
       val subsystem = new Subsystem(
         name = "test-standard-repo-dev-main-target-inferred",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1663,16 +1821,76 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ),
           Vector(ComponentDescriptor(
             name = Some("devdirsample"),
-            version = Some("0.1.0-SNAPSHOT"),
+            version = Some("0.0.1"),
             componentName = Some("devdirsample")
           ))
         )
 
-        noException should be thrownBy space.discover()
+        When("the repository space resolves a stale assembly coordinate")
+        val components = space.discover()
+
+        Then("the development implementation is activated exactly once without a CAR lookup")
+        components.count(_.name == "devdirsample") shouldBe 1
+        components.find(_.name == "devdirsample").map(_.getClass.getName) shouldBe
+          Some(classOf[devdirsample.DevDirSamplePrimaryComponent].getName)
+      }
+    }
+
+    "continue admitting unclaimed assembly dependencies as packaged CARs" in {
+      Given("a claimed development target and an unclaimed dependency CAR without runtime evidence")
+      val subsystem = TestComponentFactory.emptySubsystem("development-claim-dependency-admission")
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("app")
+        val cardir = componentdir.resolve("src").resolve("main").resolve("car")
+        Files.createDirectories(cardir)
+        Files.writeString(
+          cardir.resolve("component-descriptor.json"),
+          """{"name":"app","version":"0.2.0-SNAPSHOT","component":"app"}"""
+        )
+        val classdir = Files.createDirectories(componentdir.resolve("target").resolve("scala-3.3.8").resolve("classes"))
+        _write_runtime_classpath(componentdir, classdir)
+        val dependencydir = Files.createDirectories(root.resolve("dependencies"))
+        val dependencyjar = _create_fake_component_jar(root.resolve("assets").resolve("dependency.jar"))
+        val dependencydescriptor = root.resolve("dependency-descriptor.json")
+        Files.writeString(
+          dependencydescriptor,
+          """{"name":"dependency","version":"0.1.0","component":"dependency"}"""
+        )
+        _create_zip(
+          dependencydir.resolve("dependency-0.1.0.car"),
+          Seq(
+            "component/main.jar" -> dependencyjar,
+            "component-descriptor.json" -> dependencydescriptor
+          )
+        )
+        val dev = ComponentRepository.ComponentDevDirRepository.Specification(componentdir)
+        val dependencies = ComponentRepository.ComponentDirRepository.Specification(dependencydir)
+        val descriptors = Vector(
+          ComponentDescriptor(name = Some("app"), version = Some("0.1.0"), componentName = Some("app")),
+          ComponentDescriptor(name = Some("dependency"), version = Some("0.1.0"), componentName = Some("dependency"))
+        )
+        val claims = ComponentRepository.developmentComponentClaims(Vector(dev, dependencies))
+        val dependencydescriptors =
+          ComponentRepository.descriptorsForSpecification(dependencies, Vector(dev), descriptors, claims)
+        val repository = dependencies.build(
+          ComponentCreate(
+            subsystem,
+            ComponentOrigin.Repository("component-dir"),
+            dependencydescriptors
+          )
+        )
+
+        When("the unclaimed dependency is loaded")
+        val thrown = the [Exception] thrownBy repository.discover()
+
+        Then("packaged CAR admission remains mandatory for the dependency")
+        dependencydescriptors.flatMap(_.componentName) shouldBe Vector("dependency")
+        thrown.getMessage should include ("CAR runtime manifest is missing")
       }
     }
 
     "resolve a subsystem descriptor from the standard SAR repository layout" in {
+      Given("a subsystem descriptor stored in the standard SAR repository layout")
       _with_temp_dir { repositoryroot =>
         val artifactdir = repositoryroot.resolve("sar").resolve("cwitter").resolve("0.1.0")
         Files.createDirectories(artifactdir)
@@ -1692,6 +1910,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
 
+        When("the standard repository resolves the subsystem descriptor")
         val loaded = ComponentRepository.resolveSubsystemDescriptor(
           Vector(ComponentRepository.StandardRepository.Specification(
             ComponentRepository.StandardRepositoryKind.Sar,
@@ -1701,12 +1920,14 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           "cwitter"
         )
 
+        Then("the subsystem name and version are restored")
         loaded.map(_.subsystemName) shouldBe Some("cwitter")
         loaded.flatMap(_.version) shouldBe Some("0.1.0")
       }
     }
 
     "keep compatibility with the legacy Maven-style standard repository layout" in {
+      Given("a requested CAR stored in the legacy Maven-style layout")
       val subsystem = new Subsystem(
         name = "test-legacy-standard-repo",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1737,14 +1958,17 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ),
           ComponentRepository.resolvePackagePrefixes()
         )
+        When("the component repository is discovered")
         val components = repository.discover()
 
+        Then("the legacy component remains available")
         components.map(_.name) should contain ("spec")
         components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
       }
     }
 
     "skip an invalid sar containing incomplete descriptor" in {
+      Given("a SAR whose subsystem descriptor omits its identity")
       val subsystem = new Subsystem(
         name = "test-invalid-sar",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -1764,11 +1988,16 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
         val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
-        repository.discover() shouldBe empty
+        When("the repository discovers the invalid SAR")
+        val components = repository.discover()
+
+        Then("the invalid SAR is skipped")
+        components shouldBe empty
       }
     }
 
     "reject a SAR file passed to the component archive descriptor loader" in {
+      Given("a SAR passed to the CAR descriptor loader")
       _with_temp_dir { componentdir =>
         val descriptorpath = componentdir.resolve("component-descriptor.json")
         Files.writeString(descriptorpath, """{"component":{"name":"wrong-kind"},"version":"0.1.0"}""")
@@ -1780,7 +2009,11 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
 
-        ComponentDescriptorLoader.loadArchive(sarpath).toOption shouldBe empty
+        When("the loader inspects the archive")
+        val descriptor = ComponentDescriptorLoader.loadArchive(sarpath)
+
+        Then("the wrong archive kind is rejected")
+        descriptor.toOption shouldBe empty
       }
     }
 
@@ -1813,7 +2046,12 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    }
+
+    "component API and shared classloader boundaries" which {
     "parse scoped component dependency manifest" in {
+      Given("a component dependency manifest with provided, shared, and local scopes")
+      When("the manifest is parsed")
       val manifest = ComponentDependencyManifest.parse(
         Vector(
           "dependencies:",
@@ -1829,6 +2067,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         )
       ).toOption.get
 
+      Then("each dependency and repository stays in its declared scope")
       manifest.provided shouldBe Vector("org.goldenport:goldenport-cncf_3:0.4.8-SNAPSHOT")
       manifest.shared shouldBe Vector("org.postgresql:postgresql:42.7.3")
       manifest.local shouldBe Vector("com.example:legacy-driver:1.2.0")
@@ -1836,6 +2075,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "extract CAR root lib jars as embedded component libraries" in {
+      Given("an extracted CAR directory with a main JAR and root library JAR")
       _with_temp_dir { root =>
         val mainjar = _create_fake_component_jar(root.resolve("component").resolve("main.jar"))
         val depjar = _create_fake_component_jar(root.resolve("lib").resolve("dep.jar"))
@@ -1844,8 +2084,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           """{"name":"sample-component","version":"0.1.0","component":"sample-component"}"""
         )
 
+        When("the CAR directory is resolved")
         val extracted = CarExtractor.resolveDirectory(root).toOption.get
 
+        Then("the root library is exposed as a component library")
         extracted.componentMain shouldBe mainjar
         extracted.componentLibs.map(_.getFileName.toString) should contain ("dep.jar")
         extracted.componentLibs should contain (depjar)
@@ -1853,6 +2095,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }
 
     "expose CAR component API jars separately from component implementation libraries" in {
+      Given("an extracted CAR directory containing an API JAR")
       _with_temp_dir { root =>
         val mainjar = _create_fake_component_jar(root.resolve("component").resolve("main.jar"))
         val apijar = _create_fake_component_jar(root.resolve("spi").resolve("sample-api.jar"))
@@ -1861,8 +2104,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           """{"name":"sample-component","version":"0.1.0","component":"sample-component"}"""
         )
 
+        When("the CAR directory is resolved")
         val extracted = CarExtractor.resolveDirectory(root).toOption.get
 
+        Then("the API JAR is separated from implementation libraries")
         extracted.componentMain shouldBe mainjar
         extracted.componentApiJars shouldBe Vector(apijar)
         extracted.componentLibs should not contain apijar
@@ -1964,33 +2209,49 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     "share runtime ABI packages without sharing generated component implementations" in {
       Given("runtime ABI types and generated component implementation types")
 
+      When("classloader parent-first policy is evaluated")
+      val runtimeabi = ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.model.Entity")
+
       Then("runtime ABI types are parent-first while component implementations stay local-first")
-      ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.model.Entity") shouldBe true
+      runtimeabi shouldBe true
       ComponentLocalFirstClassLoader.isParentFirst("cats.Monad") shouldBe true
       ComponentLocalFirstClassLoader.isParentFirst("io.circe.Json") shouldBe true
       ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.textus.useraccount.ComponentFactory") shouldBe false
     }
 
     "share generated component API contracts across CAR classloaders" in {
-      ComponentLocalFirstClassLoader.isParentFirst(
+      Given("generated API and implementation class names")
+      When("classloader parent-first policy is evaluated")
+      val api = ComponentLocalFirstClassLoader.isParentFirst(
         "org.simplemodeling.textus.scraper.api.TextusScraperApi"
-      ) shouldBe true
-      ComponentLocalFirstClassLoader.isParentFirst(
+      )
+      val implementation = ComponentLocalFirstClassLoader.isParentFirst(
         "org.simplemodeling.textus.scraper.impl.ComponentFactory"
-      ) shouldBe false
+      )
+
+      Then("the API is shared while the implementation remains local")
+      api shouldBe true
+      implementation shouldBe false
     }
 
     "detect resolved shared dependency module conflicts" in {
+      Given("resolved modules containing two versions of one coordinate")
       val modules = Vector(
         CoursierComponentDependencyResolver.ResolvedModule("com.example", "driver", "1.0.0"),
         CoursierComponentDependencyResolver.ResolvedModule("com.example", "driver", "2.0.0"),
         CoursierComponentDependencyResolver.ResolvedModule("com.example", "other", "1.0.0")
       )
 
-      ComponentDependencyPool.moduleConflicts(modules) shouldBe Vector("com.example:driver resolved=1.0.0,2.0.0")
+      When("module conflicts are detected")
+      val conflicts = ComponentDependencyPool.moduleConflicts(modules)
+
+      Then("the conflicting coordinate and versions are reported deterministically")
+      conflicts shouldBe Vector("com.example:driver resolved=1.0.0,2.0.0")
     }
 
     "parse coursier resolved modules deterministically" in {
+      Given("coursier output containing coordinates, configuration suffixes, and ignored lines")
+      When("resolved modules are parsed")
       val modules = CoursierComponentDependencyResolver.parseResolvedModules(
         """com.example:driver:1.0.0
           |com.example:other:2.0.0:default
@@ -1999,10 +2260,12 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           |""".stripMargin
       )
 
+      Then("the normalized modules preserve deterministic order")
       modules shouldBe Vector(
         CoursierComponentDependencyResolver.ResolvedModule("com.example", "driver", "1.0.0"),
         CoursierComponentDependencyResolver.ResolvedModule("com.example", "other", "2.0.0")
       )
+    }
     }
   }
 

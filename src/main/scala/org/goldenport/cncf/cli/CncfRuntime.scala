@@ -1425,18 +1425,33 @@ object CncfRuntime extends GlobalObservable {
       val declareddescriptors = subsystem.descriptor.map(_.toComponentDescriptors).getOrElse(Vector.empty)
       val descriptors = ComponentRepository.assemblyPreflightDescriptors(specs, declareddescriptors)
       val allspecs = specs ++ assemblysearchspecs
-      val repositories = allspecs.zipWithIndex.map { case (spec, index) =>
+      val developmentclaims = developmentComponentClaims(specs, assemblysearchspecs)
+      val repositoryentries = allspecs.zipWithIndex.flatMap { case (spec, index) =>
         val origin = _origin_for_spec(spec)
         val activedescriptors =
           if (index < specs.size)
-            ComponentRepository.descriptorsForSpecification(spec, allspecs.take(index), descriptors)
+            ComponentRepository.descriptorsForSpecification(spec, allspecs.take(index), descriptors, developmentclaims)
           else
-            ComponentRepository.unresolvedDescriptorsForSearch(allspecs.take(index), descriptors)
-        val params = ComponentCreate(subsystem, origin, activedescriptors)
-        spec.build(params.withOrigin(origin))
+            ComponentRepository.unresolvedDescriptorsForSearch(allspecs.take(index), descriptors, developmentclaims)
+        if (descriptors.nonEmpty && activedescriptors.isEmpty) {
+          None
+        } else {
+          val params = ComponentCreate(subsystem, origin, activedescriptors)
+          Some(spec.build(params.withOrigin(origin)) -> (index < specs.size))
+        }
       }.toVector
-      ComponentRepository.discoverAssembly(repositories, repositories.take(specs.size))
+      val repositories = repositoryentries.map(_._1)
+      val discoveryrepositories = repositoryentries.collect {
+        case (repository, true) => repository
+      }
+      ComponentRepository.discoverAssembly(repositories, discoveryrepositories)
     }
+
+  private[cncf] def developmentComponentClaims(
+    activeSpecifications: Seq[ComponentRepository.Specification],
+    searchSpecifications: Seq[ComponentRepository.Specification]
+  ): Map[ComponentRepository.Specification, Set[String]] =
+    ComponentRepository.developmentComponentClaims(activeSpecifications ++ searchSpecifications)
 
   private def _origin_for_spec(
     spec: ComponentRepository.Specification
@@ -3307,23 +3322,23 @@ class CncfRuntime() extends GlobalObservable {
       args = config.args,
       modeHint = config.modeHint,
       extraComponents = config.extraComponents
-    ).map { initializedSubsystem =>
+    ).map { initializedsubsystem =>
       new CncfHandle {
         @volatile private var _is_closed: Boolean = false
 
-        def subsystem: Subsystem = initializedSubsystem
+        def subsystem: Subsystem = initializedsubsystem
 
         def executeCommand(args: Array[String]): Consequence[Response] =
           if (_is_closed)
             Consequence.stateConflict("CncfHandle is already closed")
           else
-            executeCommandResponse(initializedSubsystem, args)
+            executeCommandResponse(initializedsubsystem, args)
 
         def executeAction(action: org.goldenport.cncf.action.Action): Consequence[OperationResponse] =
           if (_is_closed)
             Consequence.stateConflict("CncfHandle is already closed")
           else
-            executeActionResponse(initializedSubsystem, action)
+            executeActionResponse(initializedsubsystem, action)
 
         def close(): Unit =
           if (!_is_closed) {
@@ -4085,10 +4100,10 @@ class CncfRuntime() extends GlobalObservable {
     req: Request
   ): Consequence[org.goldenport.protocol.spec.OperationDefinition] =
     (for {
-      componentName <- req.component
-      serviceName <- req.service
-      component <- subsystem.components.find(_.name == componentName)
-      service <- component.protocol.services.services.find(_.name == serviceName)
+      componentname <- req.component
+      servicename <- req.service
+      component <- subsystem.components.find(_.name == componentname)
+      service <- component.protocol.services.services.find(_.name == servicename)
       operation <- service.operations.operations.find(_.name == req.operation)
     } yield operation) match {
       case Some(op) => Consequence.success(op)

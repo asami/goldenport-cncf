@@ -413,7 +413,7 @@ lazy val root = project
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 
       "org.goldenport" %% "goldenport-core" % "0.4.1",
-      "org.simplemodeling" %% "simplemodeling-model" % "0.2.0",
+      "org.simplemodeling" %% "simplemodeling-model" % "0.2.1-SNAPSHOT",
       "org.goldenport" % "cncf-collaborator-api" % "0.1.0",
 
       // Testing

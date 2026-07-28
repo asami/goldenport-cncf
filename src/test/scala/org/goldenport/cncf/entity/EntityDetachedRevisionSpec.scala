@@ -55,7 +55,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityDetachedRevisionSpec
@@ -68,6 +68,7 @@ final class EntityDetachedRevisionSpec
     )
 
   "Explicit detached non-SimpleEntity revision" should {
+    "revision lifecycle and conflict handling" which {
     "manage one external revision while preserving the domain revision field" in {
       Given(
         "Phase 50 SE-05; an explicitly Detached non-SimpleEntity collection with an application-owned revision attribute"
@@ -381,6 +382,9 @@ final class EntityDetachedRevisionSpec
       detachedupdate shouldBe a[Consequence.Failure[?]]
     }
 
+    }
+
+    "read and provider boundary behavior" which {
     "reject malformed detached revision metadata on every ordinary read route" in {
       Given(
         "Phase 50 SE-05; a persisted Detached record whose cncf_revision is fractional"
@@ -540,6 +544,18 @@ final class EntityDetachedRevisionSpec
               id = entity.id.copy(collection = foreigncollection)
             )
           )
+
+        override def fromStoreRecord(
+          context: EntityStoreDecodeContext,
+          record: Record
+        ): Consequence[DetachedEntity] =
+          fromStoreRecord(record).flatMap { entity =>
+            EntityPersistent.restoreCollectionIdentity(
+              entity,
+              entity.id,
+              context.owningCollectionId
+            )(id => entity.copy(id = id))
+          }
       }
 
       When("the EntityStoreSpace decodes the requested record through that caller codec")
@@ -562,42 +578,48 @@ final class EntityDetachedRevisionSpec
       }
     }
 
-    "accept a typed codec storage-owner alias for the requested Entity type" in {
+    "reject a custom store result owned by another same-name namespace" in {
       Given(
-        "one persisted Entity and a caller codec whose collection owner differs but Entity type name matches"
+        "a custom EntityStore that returns the requested Entity type under a different exact owner"
       )
-      val fixture = _fixture(
-        representation = None,
-        policy = EntityConcurrencyPolicy.None
-      )
-      given ExecutionContext = fixture.context
-      val id = _id("typed-codec-owner-alias")
-      fixture.store.create(DetachedEntity(id, "stored", "domain")).TAKE
-      val aliascollection =
+      val requestedid = _id("typed-store-owner-alias")
+      val foreigncollection =
         EntityCollectionId("provider", "alias", _collection_id.name)
-      val aliaspersistent = new EntityPersistent[DetachedEntity] {
-        def id(entity: DetachedEntity): EntityId =
-          entity.id
-
-        def toRecord(entity: DetachedEntity): Record =
-          _persistent.toRecord(entity)
-
-        def fromRecord(record: Record): Consequence[DetachedEntity] =
-          _persistent.fromRecord(record).map(entity =>
-            entity.copy(
-              id = entity.id.copy(collection = aliascollection)
-            )
+      val foreignentity =
+        DetachedEntity(
+          requestedid.copy(collection = foreigncollection),
+          "foreign",
+          "domain"
+        )
+      val store = new NoopEntityStore() {
+        override def load[T](
+          id: EntityId
+        )(using
+          tc: EntityPersistent[T],
+          ctx: ExecutionContext
+        ): Consequence[Option[T]] =
+          Consequence.success(
+            Some(foreignentity.asInstanceOf[T])
           )
       }
+      val storespace =
+        new EntityStoreSpace().addEntityStore(store)
+      given ExecutionContext = ExecutionContext.create()
 
-      When("the EntityStoreSpace decodes the requested record through the owner-alias codec")
-      val result = fixture.context.entityStoreSpace.load(
-        UnitOfWorkOp.EntityStoreLoad(id, aliaspersistent)
+      When("the custom provider result crosses the EntityStoreSpace load boundary")
+      val result = storespace.load(
+        UnitOfWorkOp.EntityStoreLoad(requestedid, _persistent)
       )
 
-      Then("the typed load accepts the alias while retaining the caller codec representation")
-      result.map(_.map(_.id.collection)) shouldBe
-        Consequence.success(Some(aliascollection))
+      Then("the same logical name does not satisfy exact collection ownership")
+      result match {
+        case Consequence.Failure(conclusion) =>
+          conclusion.display should include(requestedid.collection.print)
+          conclusion.display should include(foreigncollection.print)
+        case Consequence.Success(_) =>
+          fail("A custom store result from another exact owner must be rejected")
+      }
+    }
     }
   }
 

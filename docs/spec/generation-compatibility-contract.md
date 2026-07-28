@@ -153,3 +153,28 @@ a replacement only after complete validation confirms that the original source
 still resolves to those bytes. Replacement, removal, unreadability, or failed
 final validation must therefore leave no newly committed provenance and cannot
 associate output with a later source revision.
+
+## Closure Validation Requirements
+
+Phase closure MUST execute the following ownership-preserving evidence:
+
+- CNCF cold and repeated Information generation through `build.sbt`;
+- Cozy exact-pair, descriptor, package, provenance, runtime-manifest, scaffold,
+  review-evidence, and publication specifications;
+- sbt-cozy scripted CAR publication and review-evidence projects;
+- representative generated CAR compilation, packaging, development
+  publication, CAR lint, and focused runtime behavior; and
+- final full accumulated suites after independent review is clean.
+
+The representative CAR's exact CNCF compile coordinate MUST be included in
+its non-empty `packaging.car.runtime.cncf.tested` evidence. An unsupported
+CNCF-Cozy generation pair MUST fail before generated source compilation or
+packaging. An unsupported CNCF runtime MUST fail packaged-CAR activation
+without interpreting Cozy provenance. A compatible packaged-CAR admission
+MUST be executable without Cozy classes.
+
+Missing `car-runtime-manifest.json` is not a legacy compatibility fallback.
+An independently released pre-manifest CAR MUST remain rejected until its
+owner publishes a newly evidenced artifact. Validation MUST NOT rewrite an
+immutable dependency archive, synthesize compatibility from its version, or
+weaken CNCF admission to make an older downstream assembly pass.

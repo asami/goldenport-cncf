@@ -18,6 +18,7 @@ import org.goldenport.cncf.entity.{
   EntityMutationExecutionPolicy,
   EntityPersistent,
   EntityPersistentCreate,
+  EntityStoreDecodeContext,
   EntityQuery,
   EntityRevisionCarrier,
   EntitySearchScope,
@@ -35,7 +36,7 @@ import org.simplemodeling.model.datatype.{
  * Built-in hierarchical Tag master and Entity-to-Tag association workflow.
  *
  * @since   May.  5, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TagUsageKind(val value: String) {
@@ -131,6 +132,17 @@ object TagRepository {
     override def toStoreRecord(e: Tag): Record = TagRecordCodec.toStoreRecord(e)
     def fromRecord(r: Record): Consequence[Tag] = TagRecordCodec.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[Tag] = TagRecordCodec.fromStoreRecord(r)
+    override def fromStoreRecord(
+      context: EntityStoreDecodeContext,
+      r: Record
+    ): Consequence[Tag] =
+      TagRecordCodec.fromStoreRecord(r).flatMap { entity =>
+        EntityPersistent.restoreCollectionIdentity(
+          entity,
+          entity.id,
+          context.owningCollectionId
+        )(id => entity.copy(id = id))
+      }
   }
 
   given EntityPersistentCreate[TagCreate] with {

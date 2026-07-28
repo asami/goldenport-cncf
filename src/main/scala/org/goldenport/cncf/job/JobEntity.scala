@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
 import org.goldenport.Consequence
-import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
+import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityStoreDecodeContext}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   May.  7, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -219,6 +219,17 @@ object JobDefinitionEntity {
     override def toStoreRecord(e: JobDefinitionEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[JobDefinitionEntity] = JobDefinitionEntity.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[JobDefinitionEntity] = JobDefinitionEntity.fromRecord(r)
+    override def fromStoreRecord(
+      context: EntityStoreDecodeContext,
+      r: Record
+    ): Consequence[JobDefinitionEntity] =
+      JobDefinitionEntity.fromRecord(r).flatMap { entity =>
+        EntityPersistent.restoreCollectionIdentity(
+          entity,
+          entity.id,
+          context.owningCollectionId
+        )(id => entity.copy(id = id))
+      }
   }
 
   def entityPersistent: EntityPersistent[JobDefinitionEntity] =
@@ -406,6 +417,17 @@ object JobEntity {
     override def toStoreRecord(e: JobEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[JobEntity] = JobEntity.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[JobEntity] = JobEntity.fromRecord(r)
+    override def fromStoreRecord(
+      context: EntityStoreDecodeContext,
+      r: Record
+    ): Consequence[JobEntity] =
+      JobEntity.fromRecord(r).flatMap { entity =>
+        EntityPersistent.restoreCollectionIdentity(
+          entity,
+          entity.id,
+          context.owningCollectionId
+        )(id => entity.copy(id = id))
+      }
   }
 
   def entityPersistent: EntityPersistent[JobEntity] =

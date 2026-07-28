@@ -19,7 +19,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.simplemodeling.model.value.NominalScalar
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityConcurrencyPolicy, EntityPersistable, EntityPersistent, EntityQuery, EntityRevisionBinding, EntityRevisionModelKind, EntityRevisionModelMetadata, EntityRevisionRepresentation, EntityStore}
+import org.goldenport.cncf.entity.{EntityConcurrencyPolicy, EntityPersistable, EntityPersistent, EntityQuery, EntityRevisionBinding, EntityRevisionModelKind, EntityRevisionModelMetadata, EntityRevisionRepresentation, EntityStore, EntityStoreDecodeContext}
 import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateCount, ContextualAggregateQuery}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetDescriptor, WorkingSetInitializer, WorkingSetPolicy, WorkingSetPolicySource}
@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -675,7 +675,7 @@ final class ComponentFactory(
         storage = storage.copy(memoryRealm = Some(memoryrealm))
     }
 
-    if (entityspace.entityOption[Any](name).isEmpty) {
+    if (entityspace.entityOption(descriptor.collectionId).isEmpty) {
       val collection = new EntityCollection[Any](descriptor, storage)
       entityspace.registerEntity(name, collection)
     }
@@ -711,7 +711,7 @@ final class ComponentFactory(
       )
       storage = storage.copy(memoryRealm = Some(memoryrealm))
 
-      if (entityspace.entityOption[Any](name).isEmpty) {
+      if (entityspace.entityOption(descriptor.collectionId).isEmpty) {
         val collection = new EntityCollection[Any](descriptor, storage)
         entityspace.registerEntity(name, collection)
       }
@@ -1594,7 +1594,7 @@ final class ComponentFactory(
           _prime_store(entityspace, storesnapshot, ws.entityName, entities)
           initializer.preloadAsync(ws.copy(entities = entities))(using scala.concurrent.ExecutionContext.global)
         case None if _has_effective_working_set_policy(plan) =>
-          entityspace.entityOption[Any](plan.entityName).foreach { collection =>
+          entityspace.entityCollectionsByName(plan.entityName).foreach { collection =>
             // Policy-only working sets need a persistent-store scan before they
             // can be declared ready. Until that loader is wired, keep status
             // initializing so search uses direct store fallback.
@@ -1604,7 +1604,9 @@ final class ComponentFactory(
               collection.storage.workingSetStatus.markDisabled()
           }
         case None =>
-          entityspace.entityOption[Any](plan.entityName).foreach(_.storage.workingSetStatus.markDisabled())
+          entityspace
+            .entityCollectionsByName(plan.entityName)
+            .foreach(_.storage.workingSetStatus.markDisabled())
       }
     }
   }
@@ -1612,9 +1614,9 @@ final class ComponentFactory(
   private def _disable_working_sets(
     entityspace: EntitySpace
   ): Unit =
-    entityspace.entityNames.foreach { name =>
-      entityspace.entityOption[Any](name).foreach(_.storage.workingSetStatus.markDisabled())
-    }
+    entityspace.entityCollections.foreach(
+      _.storage.workingSetStatus.markDisabled()
+    )
 
   private def _working_set_enabled_for_runtime: Boolean =
     GlobalRuntimeContext.current.map(_.runtimeMode) match {
@@ -2263,6 +2265,27 @@ final class ComponentFactory(
               .map(_.asInstanceOf[Consequence[Any]])
               .getOrElse(fromRecord(r))
 
+          override def fromStoreRecord(
+            context: EntityStoreDecodeContext,
+            r: Record
+          ): Consequence[Any] =
+            _invoke_entity_persistent_context_option(
+              m,
+              "fromStoreRecord",
+              context,
+              r
+            )
+              .map(_.asInstanceOf[Consequence[Any]])
+              .getOrElse(
+                fromStoreRecord(r).flatMap { entity =>
+                  EntityPersistent._require_exact_collection(
+                    entity,
+                    id(entity),
+                    context.owningCollectionId
+                  )
+                }
+              )
+
           override def storeFieldName(logicalName: String): String =
             mapping.getOrElse(logicalName, logicalName)
         })
@@ -2282,6 +2305,11 @@ final class ComponentFactory(
         def fromRecord(r: Record): Consequence[Any] = bridge.fromRecord(r)
         override def toStoreRecord(e: Any): Record = bridge.toStoreRecord(e)
         override def fromStoreRecord(r: Record): Consequence[Any] = bridge.fromStoreRecord(r)
+        override def fromStoreRecord(
+          context: EntityStoreDecodeContext,
+          r: Record
+        ): Consequence[Any] =
+          bridge.fromStoreRecord(context, r)
         override def storeFieldName(logicalName: String): String =
           mapping.getOrElse(logicalName, bridge.storeFieldName(logicalName))
       }
@@ -2364,6 +2392,28 @@ final class ComponentFactory(
     raw.getClass.getMethods.toVector
       .find(m => m.getName == name && m.getParameterCount == 1)
       .map(_.invoke(raw, arg.asInstanceOf[AnyRef]))
+
+  private def _invoke_entity_persistent_context_option(
+    raw: AnyRef,
+    name: String,
+    context: EntityStoreDecodeContext,
+    record: Record
+  ): Option[Any] =
+    raw.getClass.getMethods.toVector
+      .find { method =>
+        val parameters = method.getParameterTypes
+        method.getName == name &&
+        parameters.length == 2 &&
+        parameters(0).isInstance(context) &&
+        parameters(1).isInstance(record)
+      }
+      .map(
+        _.invoke(
+          raw,
+          context.asInstanceOf[AnyRef],
+          record.asInstanceOf[AnyRef]
+        )
+      )
 
   private def _legacy_memory_plan(
     entityname: String

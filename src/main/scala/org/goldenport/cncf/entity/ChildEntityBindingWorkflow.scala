@@ -20,7 +20,7 @@ import org.simplemodeling.model.datatype.EntityId
  * operation returns or supplies the parent Entity id.
  *
  * @since   Apr. 30, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ChildEntityBindingSummary(
@@ -75,7 +75,12 @@ final class ChildEntityBindingWorkflow(
         collection <- _entity_collection(summary.entityName)
         ids <-
           summary.createdIds.foldLeft(Consequence.success(Vector.empty[EntityId])) { (z, value) =>
-          z.flatMap(xs => EntityId.parse(value).map(xs :+ _))
+          z.flatMap(xs =>
+            EntityId
+              .parse(value)
+              .flatMap(component.entitySpace.canonicalEntityIdC)
+              .map(xs :+ _)
+          )
         }
         _ <- _cleanup_children(collection, ids)
         _ <-
@@ -163,7 +168,9 @@ final class ChildEntityBindingWorkflow(
     val field = binding.childIdField.getOrElse("id")
     record.getAny(field).map(_.toString.trim).filter(_.nonEmpty) match {
       case Some(value) =>
-        EntityId.parse(value).map(id => record -> id)
+        EntityId.parse(value)
+          .flatMap(component.entitySpace.canonicalEntityIdC)
+          .map(id => record -> id)
       case None if binding.childIdField.isDefined =>
         val id = ctx.idGeneration.entityIdInCollectionNamespace(
           collection.descriptor.collectionId,
@@ -207,15 +214,15 @@ final class ChildEntityBindingWorkflow(
       sourceentityid: String
   )(using ExecutionContext): Consequence[Unit] =
     if (_should_compensate_parent(binding))
-      EntityId.parse(sourceentityid).flatMap { id =>
-        summon[ExecutionContext].entityStoreSpace.delete(UnitOfWorkOp.EntityStoreDelete(id))
-          .map { _ =>
-            component.entitySpace.entityOption(id.collection).foreach(_.evict(id))
-            component.entitySpace.entityNames.foreach { name =>
-              component.entitySpace.entityOption[Any](name).foreach(_.evict(id))
+      EntityId.parse(sourceentityid)
+        .flatMap(component.entitySpace.canonicalEntityIdC)
+        .flatMap { id =>
+          summon[ExecutionContext].entityStoreSpace.delete(UnitOfWorkOp.EntityStoreDelete(id))
+            .map { _ =>
+              component.entitySpace.entityOption(id.collection).foreach(_.evict(id))
+              component.entitySpace.entityCollections.foreach(_.evict(id))
             }
-          }
-      }
+        }
     else
       Consequence.unit
 

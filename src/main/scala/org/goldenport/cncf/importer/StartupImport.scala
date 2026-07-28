@@ -22,7 +22,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 /*
  * @since   Mar. 27, 2026
  *  version Mar. 28, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Jul. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object StartupImport {
@@ -98,8 +99,8 @@ object StartupImport {
     val default = _default_import_path(cwd, defaultDirName)
     (explicit, default) match {
       case (Some(raw), Some(dir)) =>
-        _resolve_source(cwd, raw, allowDirectory = true).flatMap { explicitPaths =>
-          _resolve_source(cwd, dir.toString, allowDirectory = true).map(defaultPaths => (explicitPaths ++ defaultPaths).distinct)
+        _resolve_source(cwd, raw, allowDirectory = true).flatMap { explicitpaths =>
+          _resolve_source(cwd, dir.toString, allowDirectory = true).map(defaultpaths => (explicitpaths ++ defaultpaths).distinct)
         }
       case (Some(raw), None) =>
         _resolve_source(cwd, raw, allowDirectory = true)
@@ -296,7 +297,7 @@ object StartupImport {
     _decode_documents(sourceName, content).flatMap { roots =>
       roots.foldLeft(Consequence.success(Vector.empty[DataStoreSeedEntry])) { (z, root) =>
         z.flatMap { xs =>
-          _asMap(root) match {
+          _as_map(root) match {
             case None =>
               Consequence.resourceInvalid(s"startup import root must be a mapping: ${sourceName}")
             case Some(map) =>
@@ -318,7 +319,7 @@ object StartupImport {
     _decode_documents(sourceName, content).flatMap { roots =>
       roots.foldLeft(Consequence.success(Vector.empty[_EntityImportEntry])) { (z, root) =>
         z.flatMap { xs =>
-          _asMap(root) match {
+          _as_map(root) match {
             case None =>
               Consequence.resourceInvalid(s"startup import root must be a mapping: ${sourceName}")
             case Some(map) =>
@@ -388,7 +389,7 @@ object StartupImport {
   private def _parse_data_section(
     value: Any
   ): Consequence[Vector[DataStoreSeedEntry]] =
-    _asSeq(value) match {
+    _as_seq(value) match {
       case None =>
         Consequence.argumentInvalid("datastore section must be a list")
       case Some(entries) =>
@@ -402,7 +403,7 @@ object StartupImport {
   private def _parse_entity_section(
     value: Any
   ): Consequence[Vector[_EntityImportEntry]] =
-    _asSeq(value) match {
+    _as_seq(value) match {
       case None =>
         Consequence.argumentInvalid("entitystore section must be a list")
       case Some(entries) =>
@@ -416,37 +417,37 @@ object StartupImport {
   private def _parse_data_section_entry(
     value: Any
   ): Consequence[Vector[DataStoreSeedEntry]] =
-    _asMap(value) match {
+    _as_map(value) match {
       case None =>
         Consequence.argumentInvalid("datastore entry must be a mapping")
       case Some(map) =>
         for {
-          collectionText <- _requiredString(map, "collection")
-          collection <- _parse_data_collection(collectionText)
-          recordsValue <- _requiredValue(map, "records")
-          records <- _parse_records(recordsValue)
+          collectiontext <- _required_string(map, "collection")
+          collection <- _parse_data_collection(collectiontext)
+          recordsvalue <- _required_value(map, "records")
+          records <- _parse_records(recordsvalue)
         } yield records.map(DataStoreSeedEntry(collection, _))
     }
 
   private def _parse_entity_section_entry(
     value: Any
   ): Consequence[Vector[_EntityImportEntry]] =
-    _asMap(value) match {
+    _as_map(value) match {
       case None =>
         Consequence.argumentInvalid("entitystore entry must be a mapping")
       case Some(map) =>
         for {
-          collectionText <- _requiredString(map, "collection")
-          collection <- _parse_entity_collection(collectionText)
-          recordsValue <- _requiredValue(map, "records")
-          records <- _parse_records(recordsValue)
+          collectiontext <- _required_string(map, "collection")
+          collection <- _parse_entity_collection(collectiontext)
+          recordsvalue <- _required_value(map, "records")
+          records <- _parse_records(recordsvalue)
         } yield records.map(_EntityImportEntry(collection, _))
     }
 
   private def _parse_records(
     value: Any
   ): Consequence[Vector[Record]] =
-    _asSeq(value) match {
+    _as_seq(value) match {
       case None =>
         Consequence.argumentInvalid("records must be a list")
       case Some(entries) =>
@@ -458,7 +459,7 @@ object StartupImport {
   private def _parse_record(
     value: Any
   ): Consequence[Record] =
-    _asMap(value) match {
+    _as_map(value) match {
       case None =>
         Consequence.argumentInvalid("record must be a mapping")
       case Some(map) =>
@@ -499,7 +500,7 @@ object StartupImport {
   ): Consequence[EntityCollectionId] =
     _parse_entity_collection(value.toString)
 
-  private def _requiredString(
+  private def _required_string(
     map: Map[String, Any],
     key: String
   ): Consequence[String] =
@@ -509,7 +510,7 @@ object StartupImport {
       case None => Consequence.argumentMissing(key)
     }
 
-  private def _requiredValue(
+  private def _required_value(
     map: Map[String, Any],
     key: String
   ): Consequence[Any] =
@@ -518,7 +519,7 @@ object StartupImport {
       case None => Consequence.argumentMissing(key)
     }
 
-  private def _asMap(
+  private def _as_map(
     value: Any
   ): Option[Map[String, Any]] =
     value match {
@@ -532,7 +533,7 @@ object StartupImport {
         None
     }
 
-  private def _asSeq(
+  private def _as_seq(
     value: Any
   ): Option[Vector[Any]] =
     value match {
@@ -596,9 +597,7 @@ object StartupImport {
     collectionId: EntityCollectionId
   ): Option[EntityCollection[?]] = {
     subsystem.components.iterator
-      .flatMap(component =>
-        component.entitySpace.entityOption(collectionId).orElse(component.entitySpace.entityOption(collectionId.name))
-      )
+      .flatMap(_.entitySpace.entityOption(collectionId))
       .toSeq
       .headOption
   }
