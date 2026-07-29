@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 import org.goldenport.Consequence
+import org.goldenport.cncf.CncfVersion
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.cncf.backend.collaborator.{
   CollaboratorFactory,
@@ -30,6 +31,7 @@ import org.goldenport.cncf.subsystem.{
   GenericSubsystemFactory
 }
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.testutil.DevelopmentRuntimeManifestFixture
 import org.goldenport.protocol.spec as spec
 import org.goldenport.observation.{Cause, Descriptor}
 import org.scalatest.GivenWhenThen
@@ -565,15 +567,19 @@ final class ComponentInitializationBootstrapSpec
   private def _with_parameter_repository[T](body: Path => T): T = {
     val repositorydir = Files.createTempDirectory("component-parameter-repository")
     val classdir = repositorydir.resolve("classes")
-    val runtimeclasspath = repositorydir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
     val factoryresource = classOf[RepositoryParameterProbeFactory].getName.replace('.', '/') + ".class"
     val factoryclass = classdir.resolve(factoryresource)
     Files.createDirectories(factoryclass.getParent)
     Using.resource(classOf[RepositoryParameterProbeFactory].getClassLoader.getResourceAsStream(factoryresource)) { in =>
       Files.copy(in, factoryclass)
     }
-    Files.createDirectories(runtimeclasspath.getParent)
-    Files.writeString(runtimeclasspath, classdir.toString, StandardCharsets.UTF_8)
+    DevelopmentRuntimeManifestFixture.write(
+      repositorydir,
+      classdir,
+      "repository-parameter-probe",
+      CncfVersion.current,
+      "repository_parameter_probe"
+    )
     try {
       body(repositorydir)
     } finally {

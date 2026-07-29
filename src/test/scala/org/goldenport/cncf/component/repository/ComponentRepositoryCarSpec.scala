@@ -1,6 +1,8 @@
 package org.goldenport.cncf.component.repository
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.security.MessageDigest
 import java.util.Comparator
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
@@ -13,6 +15,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.BeforeAndAfterAll
 
 import org.goldenport.{Consequence, ConsequenceException}
+import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.{ComponentParameterProvenance, RuntimeConfig}
@@ -30,7 +33,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -489,7 +492,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val componentdir = root.resolve("textus-user-account")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
         Files.createDirectories(classdir)
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "textus-user-account", "0.1.0-SNAPSHOT", "textus-user-account")
         val configuration = ResolvedConfiguration(
           Configuration(Map(
             RuntimeConfig.RepositoryComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
@@ -619,7 +622,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val componentdir = root.resolve("component")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
         Files.createDirectories(classdir)
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "cwitter", "0.1.0", "cwitter")
         Files.createDirectories(componentdir.resolve("src").resolve("main").resolve("car"))
         Files.writeString(
           componentdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.yaml"),
@@ -649,7 +652,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val componentdir = root.resolve("component")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
         Files.createDirectories(classdir)
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "dev-cwitter", "0.1.0", "dev-cwitter")
         Files.createDirectories(componentdir.resolve("src").resolve("main").resolve("car"))
         Files.writeString(
           componentdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.yaml"),
@@ -694,7 +697,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val componentdir = root.resolve("01-minimal")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
         _copy_devdir_sample_classes(classdir)
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample")
         val configuration = ResolvedConfiguration(
           Configuration(Map(
             RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
@@ -1762,7 +1765,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val componentdir = root.resolve("textus-knowledge-editor")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
         Files.createDirectories(classdir)
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "TextusKnowledgeEditor", "0.1.0-SNAPSHOT", "TextusKnowledgeEditor")
         Files.createDirectories(componentdir.resolve("src").resolve("main").resolve("car"))
         Files.writeString(
           componentdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.yaml"),
@@ -1807,7 +1810,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val componentdir = root.resolve("devdirsample")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
         _copy_devdir_sample_classes(classdir)
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample")
         val space = ComponentRepositorySpace.create(
           subsystem,
           ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
@@ -1848,7 +1851,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           """{"name":"app","version":"0.2.0-SNAPSHOT","component":"app"}"""
         )
         val classdir = Files.createDirectories(componentdir.resolve("target").resolve("scala-3.3.8").resolve("classes"))
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "app", "0.2.0-SNAPSHOT", "app")
         val dependencydir = Files.createDirectories(root.resolve("dependencies"))
         val dependencyjar = _create_fake_component_jar(root.resolve("assets").resolve("dependency.jar"))
         val dependencydescriptor = root.resolve("dependency-descriptor.json")
@@ -2118,7 +2121,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       _with_temp_dir { root =>
         Given("a component development directory with generated API metadata and its API JAR")
         val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
-        _write_runtime_classpath(root, classdir)
+        _write_runtime_classpath(root, classdir, "sample", "0.1.0-SNAPSHOT", "sample")
         val apidir = ComponentRepository.ComponentDevDirRepository.devComponentApiDirectory(root)
         val apijar = _create_fake_component_jar(apidir.resolve("spi").resolve("sample-api.jar"))
         Files.createDirectories(apidir)
@@ -2145,7 +2148,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       _with_temp_dir { root =>
         Given("a component development directory whose generated descriptor references an absent API JAR")
         val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
-        _write_runtime_classpath(root, classdir)
+        _write_runtime_classpath(root, classdir, "sample", "0.1.0-SNAPSHOT", "sample")
         val apidir = ComponentRepository.ComponentDevDirRepository.devComponentApiDirectory(root)
         Files.createDirectories(apidir)
         Files.writeString(
@@ -2173,7 +2176,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       _with_temp_dir { root =>
         Given("a development component requiring an API absent from the assembly")
         val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
-        _write_runtime_classpath(root, classdir)
+        _write_runtime_classpath(root, classdir, "consumer", "1.0.0", "consumer")
         val apidir = ComponentRepository.ComponentDevDirRepository.devComponentApiDirectory(root)
         Files.createDirectories(apidir)
         Files.writeString(
@@ -2202,6 +2205,59 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             fail(s"expected missing assembly API failure but discovered: ${components.map(_.name).mkString(",")}")
           case _ =>
             fail("expected assembly API validation to produce a failure")
+        }
+      }
+    }
+
+    "preserve development admission failures through discovery-only assembly resolution" in {
+      _with_temp_dir { root =>
+        Given("a development repository whose prepared manifest is removed after repository construction")
+        val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
+        _write_runtime_classpath(root, classdir, "sample", "0.1.0-SNAPSHOT", "sample")
+        val subsystem = TestComponentFactory.emptySubsystem("development-admission-consequence")
+        val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(
+          ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+        )
+        Files.delete(ComponentRepository.ComponentDevDirRepository.runtimeManifestFile(root))
+        val expected = ComponentRepository.ComponentDevDirRepository.validate(root)
+
+        When("the repository is used only on the discovery side of assembly resolution")
+        val result = ComponentRepository.discoverAssemblyC(Vector.empty, Vector(repository))
+
+        Then("the original development-admission Conclusion is retained")
+        (expected, result) match {
+          case (Consequence.Failure(expectedconclusion), Consequence.Failure(actualconclusion)) =>
+            actualconclusion.status shouldBe expectedconclusion.status
+            actualconclusion.observation.taxonomy shouldBe expectedconclusion.observation.taxonomy
+            actualconclusion.interpretation shouldBe expectedconclusion.interpretation
+            actualconclusion.disposition shouldBe expectedconclusion.disposition
+            actualconclusion.display shouldBe expectedconclusion.display
+          case _ =>
+            fail("expected discovery-only development admission to preserve a failure conclusion")
+        }
+      }
+    }
+
+    "normalize missing runtime evidence through component development repository validation" in {
+      _with_temp_dir { root =>
+        Given("a prepared component development directory whose runtime classpath disappears")
+        val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
+        _write_runtime_classpath(root, classdir, "sample", "0.1.0-SNAPSHOT", "sample")
+        val classpath = ComponentRepository.ComponentDevDirRepository.runtimeClasspathFile(root)
+        Files.delete(classpath)
+
+        When("the component development repository validates its evidence")
+        val result = ComponentRepository.ComponentDevDirRepository.validate(root)
+
+        Then("the integration boundary preserves a resource-invalid recovery consequence")
+        result match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.observation.taxonomy.category.name shouldBe "resource"
+            conclusion.observation.taxonomy.symptom.name shouldBe "invalid"
+            conclusion.display should include(classpath.toString)
+            conclusion.display should include("sbt cozyPrepareRuntime")
+          case Consequence.Success(_) =>
+            fail("missing runtime evidence must not pass repository validation")
         }
       }
     }
@@ -2277,12 +2333,50 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
   private def _write_runtime_classpath(
     componentdir: Path,
-    classdir: Path
+    classdir: Path,
+    name: String,
+    version: String,
+    component: String
   ): Unit = {
     val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+    val cardir = componentdir.resolve("src").resolve("main").resolve("car")
     Files.createDirectories(file.getParent)
-    Files.writeString(file, classdir.toString)
+    Files.createDirectories(cardir)
+    Files.writeString(file, classdir.toString, StandardCharsets.UTF_8)
+    Files.writeString(
+      cardir.resolve("component-descriptor.json"),
+      s"""{"name":"$name","version":"$version","component":"$component"}""",
+      StandardCharsets.UTF_8
+    )
+    Files.writeString(
+      cardir.resolve("abi-manifest.json"),
+      s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$name","version":"$version"},"abi":{"exports":{"components":[{"name":"$component"}]}}}""",
+      StandardCharsets.UTF_8
+    )
+    val classpathidentity = s"project:${componentdir.relativize(classdir).toString.replace('\\', '/')}"
+    val evidence = Vector(
+      ("target/cncf.d/runtime-classpath.txt", _sha256(file), Some(_sha256(classpathidentity.getBytes(StandardCharsets.UTF_8)))),
+      ("src/main/car/component-descriptor.json", _sha256(cardir.resolve("component-descriptor.json")), None),
+      ("src/main/car/abi-manifest.json", _sha256(cardir.resolve("abi-manifest.json")), None)
+    )
+    val entries = evidence.map { case (path, digest, logical) =>
+      val logicalfield = logical.map(value => s""""logicalSha256":"$value",""").getOrElse("")
+      s"""{$logicalfield"path":"$path","sha256":"$digest"}"""
+    }.mkString("[", ",", "]")
+    val evidencedigest = _sha256(evidence.map { case (path, digest, logical) =>
+      s"$path\t$digest\t${logical.getOrElse("")}"
+    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
+    Files.writeString(
+      file.getParent.resolve("car-runtime-manifest.json"),
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v1","sourceKind":"development-directory","car":{"name":"$name","version":"$version","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      StandardCharsets.UTF_8
+    )
   }
+
+  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
+
+  private def _sha256(bytes: Array[Byte]): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
   private def _create_zip(
     target: Path,

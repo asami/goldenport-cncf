@@ -227,9 +227,13 @@ EC-03B migrates the normal UnitOfWork and protected ActionCall Entity mutation
 routes to explicit expectations and authoritative snapshots. Aggregate create
 is create-only, Aggregate update requires an expectation, and Aggregate
 command uses the root snapshot admitted during resolve. Working Set state is
-installed only from provider success and evicted on stale conflict. Implicit
-upsert overwrite is removed from the protected DSL; explicitly classified
-unversioned framework operations require System admission.
+installed only from provider success and evicted on stale conflict. The legacy
+implicit upsert overwrite is removed from the protected DSL. A later
+stable-identity `entity_upsert` is permitted only through the versioned
+mutation provider: it admits a bounded retry of duplicate create and stale
+OCC results, preserves normal create/update authorization, and has no
+unversioned fallback. Explicitly classified unversioned framework operations
+still require System admission.
 
 EC-03 is complete. The focused 458-test matrix, full 2380-test CNCF suite,
 whole-file naming and executable-specification audit, review-fix, and clean

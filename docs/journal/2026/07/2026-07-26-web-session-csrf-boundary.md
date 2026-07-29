@@ -2,7 +2,7 @@
 
 date = 2026-07-26
 status = decision record
-target_phase = 54
+target_phase = 55
 
 ## Context
 
@@ -82,8 +82,8 @@ The implementation proposal is:
 
 The development ledger is:
 
-- `docs/phase/phase-54.md`
-- `docs/phase/phase-54-checklist.md`
+- `docs/phase/phase-55.md`
+- `docs/phase/phase-55-checklist.md`
 
 The note and this journal entry are not the final runtime contract. After
 implementation and executable verification, the accepted parameter, header,

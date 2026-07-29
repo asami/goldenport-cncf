@@ -2618,6 +2618,66 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  /** Creates a stable-id Entity or applies its replacement through bounded OCC
+    * retry. This is not the legacy unversioned overwrite operation.
+    */
+  protected final def entity_upsert[T](
+    entity: T,
+    policy: org.goldenport.cncf.entity.EntityUpsertPolicy =
+      org.goldenport.cncf.entity.EntityUpsertPolicy.default
+  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
+    ensure_component_application_datastore()
+    tc.id(entity) match {
+      case Some(sourceid) =>
+        val id = _canonical_entity_id(sourceid)
+        val op = UnitOfWorkOp.EntityStoreUpsert(
+          entity,
+          id,
+          policy,
+          tc,
+          _entity_create_options(Some(id.collection.name)),
+          _entity_uow_authorization(Some(id.collection.name), None, "create"),
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+        )
+        ConsequenceT.liftF(Free.liftF(op))
+      case None =>
+        exec_from(Consequence.argumentInvalid("entity_upsert requires a stable entity id"))
+    }
+  }
+
+  /** Service-internal stable-identity conditional upsert. */
+  protected final def entity_upsert_internal[T](
+    entity: T,
+    policy: org.goldenport.cncf.entity.EntityUpsertPolicy =
+      org.goldenport.cncf.entity.EntityUpsertPolicy.default
+  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
+    ensure_component_application_datastore()
+    tc.id(entity) match {
+      case Some(sourceid) =>
+        val id = _canonical_entity_id(sourceid)
+        val createauthorization =
+          _entity_uow_authorization(Some(id.collection.name), None, "create")
+            .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+        val updateauthorization =
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+            .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+        val op = UnitOfWorkOp.EntityStoreUpsert(
+          entity,
+          id,
+          policy,
+          tc,
+          _entity_create_options(Some(id.collection.name)),
+          createauthorization,
+          updateauthorization
+        )
+        ConsequenceT.liftF(Free.liftF(op))
+      case None =>
+        exec_from(
+          Consequence.argumentInvalid("entity_upsert_internal requires a stable entity id")
+        )
+    }
+  }
+
   /** Claims a stable Entity identity without overwriting an existing record. The returned branch
     * tells the caller whether it owns expensive work or must join/reuse the already persisted
     * entity.

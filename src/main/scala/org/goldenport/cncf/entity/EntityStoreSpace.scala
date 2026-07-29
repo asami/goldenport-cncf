@@ -76,6 +76,23 @@ class EntityStoreSpace {
     }
   }
 
+  private[cncf] def upsertVersioned[T](
+    op: EntityStoreUpsert[T]
+  )(
+    authorize: Option[Record] => Consequence[Unit]
+  )(using ctx: ExecutionContext): Consequence[CreateResult[T]] = {
+    given EntityPersistentCreate[T] = op.tc
+    _with_calltree(
+      "space:entitystore:upsert-versioned",
+      _entitystore_space_attributes("upsert-versioned", op.id.collection) +
+        ("entity_id" -> op.id.print)
+    ) {
+      _by_collection(op.id.collection).flatMap(
+        _.upsertVersioned(op.entity, op.id, op.options, op.policy)(authorize)
+      )
+    }
+  }
+
   private def _create_options[T](
     op: EntityStoreCreate[T]
   ): EntityCreateOptions =

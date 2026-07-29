@@ -53,6 +53,22 @@ Consequently:
 The general runtime namespace interpretation remains defined by
 [ID Design](id.md).
 
+## Phase 52 Planned Exact Serialization
+
+[Phase 52](../phase/phase-52.md) replaces scalar reconstruction and normal
+decode-context restoration with one complete canonical Entity ID String.
+
+The target `EntityId` String contains its exact `EntityCollectionId` and
+round-trips without runtime context. Datastore routing uses the collection
+carried by the parsed ID, the datastore entry key uses the same complete
+canonical String, and the stored `id` field uses that String. Primary IDs,
+EntityId-valued attributes, and Association targets follow the same rule.
+
+Phase 52 intentionally provides no old-format compatibility, legacy binding,
+data migration, read repair, or mixed-version operation. The Phase 51
+restoration design remains historical evidence after the clean replacement
+closes.
+
 ## Exact EntitySpace Registration and Resolution
 
 `EntitySpace` indexes collections by complete `EntityCollectionId`.

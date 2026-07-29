@@ -110,6 +110,32 @@ migration boundaries are defined by
 [Entity Collection Identity](entity-collection-identity.md) and its
 [normative specification](../spec/entity-collection-identity.md).
 
+### Phase 52 planned replacement
+
+[Phase 52](../phase/phase-52.md) replaces the preceding physical-key-plus-
+context model with complete canonical serialization.
+
+The target contract is:
+
+```text
+EntityId.parse(EntityId.serialize(id)) == id
+```
+
+`EntityId.value` will contain the complete exact `EntityCollectionId` and the
+Entity-local identity fields. The same complete String will be used for the
+stored Entity `id` and datastore entry key. Parsing will require no
+`EntitySpace`, selected collection, datastore, application metadata, or decode
+context.
+
+Phase 52 is a clean break. The old incomplete scalar format, synthetic
+collection construction, context rebinding, compatibility parsing, migration,
+and mixed old/new operation are not retained. CARs are corrected individually
+when an incompatibility is observed; CNCF does not preserve the old format for
+them.
+
+Until Phase 52 closes, the preceding Phase 51 section records current
+implemented behavior.
+
 ---
 
 ## Anti-Patterns: Semantic ID / Smart ID

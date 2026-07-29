@@ -1,425 +1,175 @@
-# Phase 52 Checklist - Component Documentation and AI Knowledge Integration
+# Phase 52 Checklist - Exact Entity ID Serialization and Collection Identity
 
 status=planned
-phase=[Phase 52 - Component Documentation and AI Knowledge Integration](phase-52.md)
+phase=[Phase 52 - Exact Entity ID Serialization and Collection Identity](phase-52.md)
 
 This checklist is the authoritative Phase 52 state ledger after Phase 52
-starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 51 closes.
+starts. Only one stage may be `IN_PROGRESS` at a time. Phase 52 is a clean
+break and has no old-format compatibility or migration stage.
 
-## DOC-01: Inventory and Executable Acceptance
+## EID-01: Inventory and Failing-First Contract
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF, Cozy/SmartDox, SimpleModeling.org, ai-directive, Skill/Launcher,
-  Textus CBD Support, Textus BoK, and representative Component maintainers
+- Owner: CNCF and core identity/persistence maintainers
 - Entry rule: Phase 51 is closed.
-- Completion rule: Existing contracts, conflicts, ownership boundaries, and
-  exact failing-first acceptance identities are recorded before implementation.
+- Completion rule: Lossy serialization, synthetic collection construction,
+  context repair, and every affected core path have failing-first evidence.
 
-- [ ] Inventory CNCF Help, Manual, `/man`, OpenAPI, MCP, Web, CAR resource,
-  production-visibility, and authorization contracts.
-- [ ] Inventory Cozy CAR documentation lint, source/archive projection,
-  Scaladoc, and publication behavior.
-- [ ] Inventory SmartDox/Markdown parsing and HTML/PDF projection behavior.
-- [ ] Inventory SimpleModeling.org versioned HTML, RDF/JSON-LD, ontology,
-  schema, glossary, catalog, and canonical URL publication behavior.
-- [ ] Inventory authoritative `ai-directive` core/profile/sample authority,
-  versioning, visibility, and project-local extension boundaries.
-- [ ] Inventory `SkillBundleManifest`, CAR Skill ownership, Cozy projection,
-  Launcher installation, MCP requirements, and non-activation boundaries.
-- [ ] Inventory Textus CBD Support exact retrieval, usage, MCP, CAR Review,
-  catalog, local artifact, and BoK evidence contracts.
-- [ ] Inventory Textus BoK existence-only, SIE federation, CBD handoff, RAG,
-  and MCP contracts.
-- [ ] Fix CBD Support as the primary exact Component-use integration and
-  Textus BoK as the complementary semantic route.
-- [ ] Fix SimpleModeling.org as the basic public information surface for
-  shared CNCF/CML/Cozy/SmartDox knowledge and framework Documentation
-  Components as optional versioned publication snapshots.
-- [ ] Preserve Component-specific documentation ownership while fixing
-  separate framework product, document, section, resource, canonical URL, and
-  content-hash identities.
-- [ ] Fix exact Component Help/resource authority separately from framework
-  installed-snapshot, online-publication, and RAG-snapshot authority.
-- [ ] Fix public AI guidance as a projection that cannot override the mounted
-  directive.
-- [ ] Fix public Skill metadata as discovery information that cannot install,
-  activate, execute, configure, or grant authority.
-- [ ] Fix mandatory resource/manual/projection profiles.
-- [ ] Fix Documentation Component relationship semantics.
-- [ ] Fix source disclosure and commercial omission profiles.
-- [ ] Register failing-first Executable Specification identities for every
-  Phase 52 acceptance group.
+- [ ] Inventory `EntityId`, `EntityCollectionId`, and UniversalId construction,
+  parsing, rendering, equality, and hashing.
+- [ ] Inventory every core use of `EntityId.value`, `print`, `show`,
+  `toString`, and `parts`.
+- [ ] Inventory datastore collection and entry-key construction.
+- [ ] Inventory primary-ID and EntityId-valued attribute storage.
+- [ ] Inventory generated, built-in, custom typed, and raw `Record` codecs.
+- [ ] Inventory UnitOfWork, direct store, loader, Admin, Association, Blob,
+  child-binding, cache, lock, revision, authorization, and diagnostics.
+- [ ] Prove the current scalar cannot round-trip an exact collection.
+- [ ] Prove same local identity in different exact collections currently
+  collides at the String boundary.
+- [ ] Register failing-first executable specifications for all Phase 52
+  acceptance groups.
 
 Evidence:
 - Pending.
 
-## DOC-02: Knowledge Manifest and Resource Model
+## EID-02: Canonical Exact Serialization
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Component/CAR contract maintainers
-- Entry rule: DOC-01 is DONE.
-- Completion rule: One versioned, deterministic, safe manifest/resource model
-  is implemented and validated without duplicating Component identity.
+- Owner: `simplemodeling-model` and CNCF identity maintainers
+- Entry rule: EID-01 is DONE.
+- Completion rule: One versioned lossless encoding satisfies exact round-trip,
+  non-collision, hostile-input, and transport laws.
 
-- [ ] Define the manifest schema/version and canonical source/archive path.
-- [ ] Define resource identity, kind, role, language, media type, size, and
-  digest.
-- [ ] Define contextual framework canonical publication URL, publication
-  generation, document and section identity, and local/online availability
-  metadata without replacing Component resource identity.
-- [ ] Define authority, stability, source, license, disclosure, and provenance
-  metadata.
-- [ ] Define generated-from and stale-projection detection.
-- [ ] Define Component-specific Documentation Component references.
-- [ ] Define framework Documentation Component references without making them
-  execution dependencies or independent authoring sources.
-- [ ] Define public Directive projection identity, originating
-  directive/profile/rule version, authority, visibility, source digest, and
-  redaction metadata.
-- [ ] Define public Skill Catalog metadata for Skill/bundle identity, owner,
-  purpose, trigger, requirements, permissions, side effects, MCP requirements,
-  installation reference, visibility, and digest.
-- [ ] Implement JSON codec and deterministic validation.
-- [ ] Reject unsafe paths, duplicate identities, invalid media/role
-  combinations, and digest mismatch.
-- [ ] Preserve forward-compatible unknown fields according to an explicit rule.
-- [ ] Add property-based manifest and hostile-path specifications.
+- [ ] Fix the canonical `EntityCollectionId` String encoding.
+- [ ] Fix the canonical `EntityId` String encoding.
+- [ ] Make `EntityId.value` the complete canonical identity.
+- [ ] Make `EntityId.parse` a pure inverse without external context.
+- [ ] Remove synthetic collection construction from parsed Entity-local
+  `major/minor`.
+- [ ] Define version recognition and unsupported-version failure.
+- [ ] Define unambiguous label encoding without boundary guessing.
+- [ ] Prove stable Record, JSON, HTTP, form, CLI, and datastore round-trips.
+- [ ] Reject old incomplete, malformed, truncated, overlong, and hostile input
+  deterministically.
+- [ ] Preserve opaque-ID application rules.
 
 Evidence:
 - Pending.
 
-## DOC-03: Authoring and Packaging Toolchain
+## EID-03: Model and Generated-Code Adoption
 
 Stage Status:
 - Current status: PLANNED
-- Owner: Cozy/sbt-cozy and SmartDox maintainers
-- Entry rule: DOC-02 is DONE.
-- Completion rule: Required manuals, projections, Scaladoc, and source are
-  validated and projected into a CAR through their owning toolchains.
+- Owner: `simplemodeling-model`, SimpleModeler, Cozy, and sbt-cozy maintainers
+- Entry rule: EID-02 is DONE.
+- Completion rule: Types and generated persistence store and restore only
+  complete exact Entity IDs.
 
-- [ ] Define User Guide and Reference Manual entry-point conventions.
-- [ ] Define optional manual role extension.
-- [ ] Validate SmartDox and admitted Markdown parsing.
-- [ ] Generate stable framework document/section metadata shared by Web, Help
-  references, framework Documentation Components, MCP, and RAG.
-- [ ] Generate SimpleModeling.org framework HTML and structured
-  RDF/JSON-LD/catalog projections from the same publication generation.
-- [ ] Generate a general-public AI Development Guide only from explicitly
-  admitted public Directive projections.
-- [ ] Generate a public Skill Catalog from admitted Skill metadata without
-  copying restricted raw `SKILL.md` content.
-- [ ] Decide compatibility treatment of existing Asciidoc/HTML sources.
-- [ ] Decide and implement mandatory HTML/PDF profiles.
-- [ ] Generate and package Component Scaladoc.
-- [ ] Generate and publish CNCF/Cozy/SmartDox Scaladoc with an optional
-  framework Documentation Component projection.
-- [ ] Generate the selected structured Scaladoc symbol/search index.
-- [ ] Implement public/internal Scaladoc exposure policy.
-- [ ] Implement source include/exclude/license/disclosure policy.
-- [ ] Exclude secrets, local configuration, caches, and unrelated files.
-- [ ] Generate resource digests and provenance.
-- [ ] Prove SimpleModeling.org and framework Documentation Component
-  projections retain the same publication generation, document/section
-  identities, and hashes.
-- [ ] Prove public Directive and Skill projections retain origin
-  version/identity/digest and cannot be mistaken for active contracts.
-- [ ] Prove development-source and packaged-CAR manifest/resource equivalence.
-- [ ] Extend normal and strict Cozy CAR documentation lint.
+- [ ] Update Entity ID construction to carry the exact collection.
+- [ ] Remove `entityIdInCollectionNamespace` compatibility behavior.
+- [ ] Generate complete canonical primary-ID storage.
+- [ ] Generate complete canonical EntityId-valued attribute storage.
+- [ ] Decode primary and referenced IDs with the same pure parser.
+- [ ] Keep business/API `fromRecord` separate from datastore decoding where
+  their Record purposes differ.
+- [ ] Update generated schema and examples.
+- [ ] Update Cozy generated-source assertions.
+- [ ] Update affected sbt-cozy bridge fixtures.
+- [ ] Add primary, optional reference, repeated reference, and
+  cross-collection round-trip evidence.
 
 Evidence:
 - Pending.
 
-## DOC-04: Documentation Component Composition
+## EID-04: CNCF Persistence and Routing Simplification
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Component loading, repository, and assembly maintainers
-- Entry rule: DOC-03 is DONE.
-- Completion rule: Component-specific Documentation Components resolve as one
-  Component knowledge space, while optional framework Documentation
-  Components resolve separately as exact SimpleModeling.org publication
-  snapshots.
+- Owner: CNCF EntityStore, DataStore, EntitySpace, and UnitOfWork maintainers
+- Entry rule: EID-03 is DONE.
+- Completion rule: Persistence and routing use exact parsed identity without
+  collection reconstruction, context rebinding, or name-only resolution.
 
-- [ ] Define Component-specific Documentation Component kind and target
-  relationship.
-- [ ] Define target Component identity and compatibility/version matching.
-- [ ] Define required/optional Component documentation resolution and
-  startup/access behavior.
-- [ ] Resolve development directory, expanded CAR, and repository forms.
-- [ ] Validate Component documentation digest/signature and disclosure
-  compatibility.
-- [ ] Define embedded versus Component-specific Documentation Component
-  precedence.
-- [ ] Reject duplicate/conflicting resource identities deterministically.
-- [ ] Return structured missing/incompatible/corrupt diagnostics.
-- [ ] Preserve minimal embedded Component overview and dependency diagnostics.
-- [ ] Implement `ResolvedComponentKnowledge` or the accepted equivalent.
-- [ ] Verify load/unload and multi-instance behavior.
-- [ ] Define framework Documentation Component subject/product/version and
-  publication-generation identity separately from target-Component
-  relationships.
-- [ ] Allow framework Documentation Components to carry the public AI
-  Development Guide and Skill Catalog without carrying authoritative project
-  directives or installable Skill authority.
-- [ ] Validate framework canonical URL, publication generation, resource
-  hashes, and optional installation semantics.
-- [ ] Prove absence of framework Documentation Components never prevents
-  Component startup or access to Component-specific Help/manuals.
-- [ ] Define a closed-network Documentation Hub SAR composition profile.
+- [ ] Use `id.collection` as the exact datastore collection.
+- [ ] Use complete `id.value` as the datastore entry key.
+- [ ] Require datastore collection and encoded ID collection to match.
+- [ ] Remove normal identity restoration from `EntityStoreDecodeContext`.
+- [ ] Remove synthetic and name-only Entity ID canonicalization from
+  identity-sensitive paths.
+- [ ] Make all UnitOfWork Entity operations exact-ID operations.
+- [ ] Repair direct `EntityStoreSpace` and `EntityLoader` paths.
+- [ ] Update revision, conditional transition, search, and exclusion keys.
+- [ ] Reject old incomplete scalar IDs before datastore access.
+- [ ] Add same-local-ID/different-collection provider tests.
 
 Evidence:
 - Pending.
 
-## DOC-05: Unified Help and Direct AI Access
+## EID-05: Identity Consumers and Built-Ins
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Help, HTTP, CLI, Web, and security maintainers
-- Entry rule: DOC-04 is DONE.
-- Completion rule: Humans and AI reach the same resolved Component knowledge,
-  while framework/toolchain links intentionally distinguish installed
-  snapshots from canonical online publication.
+- Owner: CNCF Component, Association, security, and observability maintainers
+- Entry rule: EID-04 is DONE.
+- Completion rule: Every core identity-sensitive consumer uses exact parsed
+  identity and no compensation logic remains.
 
-- [ ] Define the canonical Help manifest discovery route.
-- [ ] Advertise the manifest from human Help with a stable relation/media type.
-- [ ] Integrate User Guide, Reference, configuration, Operations, schemas,
-  OpenAPI, Scaladoc, source, troubleshooting, and provenance navigation.
-- [ ] Provide structured manifest/resource HTTP retrieval.
-- [ ] Provide CLI manifest/resource inspection.
-- [ ] Reconcile `/help`, `/man`, OpenAPI, Web, and compatibility routes.
-- [ ] Make `/help/system` describe the running runtime and `/man/system`
-  resolve matching CNCF documentation locally or online.
-- [ ] Put CML/Cozy documentation under explicit developer/toolchain
-  navigation rather than ordinary operator Help.
-- [ ] Show active directive version/profile/digest and its public-guide
-  reference without exposing restricted rule bodies.
-- [ ] Show Component-associated Skill metadata, availability, compatibility,
-  and installation state without installing or activating the Skill.
-- [ ] Show framework documentation installed, cached, online, unavailable, and
-  version-mismatch states without changing Component manual resolution.
-- [ ] Keep human `latest` links separate from immutable evidence URLs.
-- [ ] Apply authorization and production visibility deliberately.
-- [ ] Prevent physical Documentation Component boundaries from leaking into
-  ordinary navigation.
-- [ ] Verify exact Component/version selection under multiple loaded versions
-  or instances.
-- [ ] Add hostile content, content type, caching, and disclosure
-  specifications.
-- [ ] Verify framework documentation online failure does not prevent execution
-  or misreport remote content as local.
+- [ ] Repair Admin Entity delete and resident eviction.
+- [ ] Make Association validation return and persist the exact target ID.
+- [ ] Remove Association collection scanning and name-only target fallback.
+- [ ] Repair Blob, child binding, tag, workflow, and other scalar ingress.
+- [ ] Update resident caches and snapshots.
+- [ ] Update dirty-entity maps and aggregate locks.
+- [ ] Update authorization resources, audit, and CallTree identity.
+- [ ] Update built-in and raw `Record` persistence adapters.
+- [ ] Prove no synthetic or rebound ID reaches a datastore, cache, lock,
+  authorization, or Association side effect.
 
 Evidence:
 - Pending.
 
-## DOC-06: Textus CBD Support Primary Integration
+## EID-06: Core Validation and Canonical Closure
 
 Stage Status:
 - Current status: PLANNED
-- Owner: Textus CBD Support and CNCF Component knowledge maintainers
-- Entry rule: DOC-05 is DONE.
-- Completion rule: CBD Support uses exact Component knowledge manifests and
-  resources as the primary evidence for detail, usage, MCP, and CAR Review.
+- Owner: core Phase 52 repository maintainers
+- Entry rule: EID-05 is DONE.
+- Completion rule: Core validation passes and canonical documentation defines
+  complete String round-trip as the only Entity ID contract.
 
-- [ ] Admit manifest identity/location/digest from catalog, development
-  directory, warehouse CAR, cache, and exact Component observations.
-- [ ] Preserve catalog/source identity and require exact Component/version
-  selection before detailed retrieval.
-- [ ] Resolve embedded and Documentation Component resources safely.
-- [ ] Project configuration, Operations, schemas, manuals, examples, Scaladoc,
-  source availability, and provenance.
-- [ ] Return explicit absence when a source does not publish Component
-  knowledge.
-- [ ] Make `getUsage` cite exact contract/manual/example/source evidence and
-  distinguish inference.
-- [ ] Provide bounded read-only manifest/resource retrieval through CBD MCP.
-- [ ] Add CAR Review checks for manual completeness, manifest integrity,
-  Scaladoc, source policy, Help discovery, and BoK publication readiness.
-- [ ] Enforce origin, digest, size, license, authorization, and disclosure.
-- [ ] Keep CBD Support independently useful without Textus BoK.
-- [ ] Preserve BoK semantic evidence as a separate attributable input.
-- [ ] Update CBD design/spec/strategy/manual contracts.
+- [ ] Run full `simplemodeling-model` validation.
+- [ ] Run full `simple-modeler` validation.
+- [ ] Run full CNCF validation.
+- [ ] Run full Cozy validation.
+- [ ] Run affected sbt-cozy validation.
+- [ ] Verify no old-format compatibility, migration, dual parser, read repair,
+  or context rebinding remains.
+- [ ] Perform a clean full review and focused re-review until findings close.
+- [ ] Promote verified behavior to `docs/design` and `docs/spec`.
+- [ ] Mark the Phase 51 compensation model as historical/superseded without
+  rewriting its evidence.
+- [ ] Record known CAR incompatibilities as CAR-local follow-up work without
+  making them Phase 52 closure gates.
+- [ ] Update strategy and Phase 52 status with exact validation evidence.
+- [ ] Close Phase 52 only after all core completion rules pass.
 
 Evidence:
 - Pending.
 
-## DOC-07: Textus BoK Complementary RAG/MCP Integration
+## CAR Follow-Up Rule
 
-Stage Status:
-- Current status: PLANNED
-- Owner: Textus BoK RAG/MCP maintainers
-- Entry rule: DOC-06 is DONE.
-- Completion rule: Component semantic retrieval and shared framework knowledge
-  retrieval remain distinct, bounded, attributable, and capable of exact
-  handoff to CBD Support/direct Help.
+- CAR repositories are outside the Phase 52 required repository set.
+- Do not add compatibility logic to CNCF to keep an affected CAR working.
+- When a CAR failure is found, correct its generated or hand-written code in
+  that CAR.
+- A CAR correction adopts the canonical exact String contract and does not
+  restore the old incomplete format.
+- Track each correction in that CAR's own phase, journal, issue, or handoff as
+  appropriate.
 
-- [ ] Define the Component knowledge manifest admission resource kind.
-- [ ] Define admission resource kinds for SimpleModeling.org publication
-  metadata and equivalent framework Documentation Component snapshots without
-  changing Component-specific admission.
-- [ ] Define separate public AI-guidance and Skill-metadata admission resource
-  kinds.
-- [ ] Admit SmartDox-derived document/section metadata, RDF/JSON-LD, glossary,
-  ontology, schema, and catalog projections without requiring HTML scraping.
-- [ ] Resolve Component-local and Component-specific Documentation Component
-  resources safely.
-- [ ] Define deterministic document, section, chunk, and evidence identities.
-- [ ] Preserve Component version, manifest/resource digests, authority,
-  license, source path, and indexed-at time.
-- [ ] Preserve framework product/version, canonical URL, publication
-  generation, document/section digest, and indexed-at time separately.
-- [ ] Preserve Directive/rule/profile or Skill/bundle identity, version,
-  authority, visibility, owner, canonical URL, and digest separately.
-- [ ] Preserve SmartDox structure and schema/API resources without flattening
-  away required semantics.
-- [ ] Implement lexical and structural retrieval independent of embeddings.
-- [ ] Integrate optional embedding/vector retrieval through existing provider
-  boundaries.
-- [ ] Return exact Component/resource/section evidence with every result.
-- [ ] Return exact framework product, version, document/section identity,
-  canonical URL, source generation, and content hash with every framework
-  result.
-- [ ] Distinguish contract, manual, example, source, and context authority.
-- [ ] Detect and report stale snapshot versus current manifest digest.
-- [ ] Add read-only MCP discovery, search, manifest, resource, and section
-  operations under explicit MCP readiness.
-- [ ] Keep framework Documentation Component Operations out of MCP by default
-  and expose curated BoK retrieval Operations instead.
-- [ ] Add bounded read-only AI-guidance and Skill-metadata discovery/retrieval
-  Operations under explicit MCP readiness.
-- [ ] Prove guidance/Skill retrieval cannot override directives, mutate Codex
-  configuration, install/activate Skills, or grant MCP authority.
-- [ ] Keep mutation and execution Operations absent from the retrieval MCP
-  catalog.
-- [ ] Enforce proprietary-source and caller-authorization policy at response
-  time.
-- [ ] Return exact identity/version/resource/digest evidence for CBD Support
-  handoff.
-- [ ] Preserve CBD Support detail/usage/comparison/review ownership.
-- [ ] Update Textus BoK domain/design/spec/strategy/manual contracts.
-- [ ] Add RAG/MCP no-match, ambiguous-version, stale, forbidden, and bounded
-  result specifications.
+## Status
 
-Evidence:
-- Pending.
-
-## DOC-08: Representative Component and Framework Documentation Acceptance
-
-Stage Status:
-- Current status: PLANNED
-- Owner: CNCF samples and selected Component maintainers
-- Entry rule: DOC-07 is DONE.
-- Completion rule: Existing Component-specific profiles and separate
-  framework online/installed/offline profiles preserve their ownership while
-  providing attributable knowledge.
-
-- [ ] Provide one small Component with embedded manuals, Scaladoc, source, and
-  manifest.
-- [ ] Provide one large Component-specific profile using a Documentation
-  Component.
-- [ ] Provide one commercial-style Component profile with source omitted and
-  public Scaladoc retained.
-- [ ] Provide one online-only profile using versioned SimpleModeling.org
-  framework publication.
-- [ ] Provide one installed CNCF/CML/Cozy framework Documentation Component
-  profile.
-- [ ] Provide one closed-network Documentation Hub SAR profile.
-- [ ] Provide one public AI Development Guide generated from explicitly public
-  `ai-directive` rules.
-- [ ] Provide one public Skill Catalog linked to an actual CAR-owned
-  `SkillBundleManifest`.
-- [ ] Verify User Guide and Reference Manual navigation.
-- [ ] Verify direct Help-to-manifest AI discovery.
-- [ ] Verify exact configuration, Operation, schema, example, and Scaladoc
-  retrieval.
-- [ ] Verify admitted source improves retrieval without becoming a public
-  contract.
-- [ ] Verify CBD Support exact detail, usage, MCP, and CAR Review.
-- [ ] Verify Textus BoK ingestion and evidence-bearing RAG/MCP retrieval.
-- [ ] Verify BoK-to-CBD-to-direct-Help identity/version/hash handoff.
-- [ ] Verify offline/runtime operation without build/render/embedding tools.
-- [ ] Verify online-only, installed-framework-snapshot, and offline-Hub
-  profiles resolve the same framework document and section identities without
-  changing Component-specific resource resolution.
-- [ ] Verify the public guide cannot override the mounted directive and the
-  Skill Catalog cannot install or activate its referenced Skill.
-
-Evidence:
-- Pending.
-
-## DOC-09: Security, Regression, and Downstream Validation
-
-Stage Status:
-- Current status: PLANNED
-- Owner: all Phase 52 repository maintainers
-- Entry rule: DOC-08 is DONE.
-- Completion rule: Security, compatibility, full regression, and downstream
-  checks pass across every changed repository.
-
-- [ ] Verify traversal, symlink, oversized-resource, malformed-content, and
-  digest attacks fail safely.
-- [ ] Verify secrets and unauthorized source never enter Help, indexes,
-  diagnostics, RAG context, or MCP responses.
-- [ ] Verify manifest/Documentation Component relationships grant no Operation
-  or MCP execution authority.
-- [ ] Verify production Help/knowledge exposure follows the accepted policy.
-- [ ] Verify online-documentation timeout, unavailable, cache, version
-  mismatch, and immutable-evidence behavior.
-- [ ] Verify restricted directives, project-local rules, raw private Skill
-  content, credentials, approvals, and provider configuration never enter
-  public Help, publication, indexes, RAG context, or MCP responses.
-- [ ] Run CNCF focused and full suites.
-- [ ] Run Cozy/sbt-cozy and SmartDox focused/full suites.
-- [ ] Run SimpleModeling.org publication and structured metadata validation.
-- [ ] Run Textus BoK focused/full suites and CAR lint/build.
-- [ ] Run Textus CBD Support focused/full suites, CAR lint/build, and
-  representative MCP checks.
-- [ ] Run representative Component and subsystem integration suites.
-- [ ] Run `sbt --batch Test/compile` in every changed Scala repository.
-- [ ] Run `git diff --check` in every changed repository.
-- [ ] Complete read-only review, review-fix, and clean re-review.
-
-Evidence:
-- Pending.
-
-## DOC-10: Canonical Documentation and Closure
-
-Stage Status:
-- Current status: PLANNED
-- Owner: CNCF, SimpleModeling.org/Cozy, ai-directive, Skill/Launcher, Textus
-  CBD Support, and Textus BoK architecture maintainers
-- Entry rule: DOC-09 is DONE and implementation behavior is stable.
-- Completion rule: Design, specification, notes, strategy, phase records,
-  implementation, and executable evidence agree without a competing latest
-  contract.
-
-- [ ] Create/update
-  `docs/design/component-documentation-knowledge-package.md`.
-- [ ] Create/update
-  `docs/spec/component-documentation-knowledge-package.md`.
-- [ ] Update affected CNCF Help/Manual/CAR/Web/MCP design/spec documents.
-- [ ] Update SimpleModeling.org and Cozy publication design/specification for
-  stable versioned HTML, structured metadata, and Documentation Component
-  projection.
-- [ ] Update `ai-directive` public-projection guidance without weakening its
-  authoritative contract or sample non-authority.
-- [ ] Update Skill bundle/catalog documentation so publication metadata,
-  installation, activation, execution, and MCP authority remain separate.
-- [ ] Update Textus CBD Support and Textus BoK
-  design/spec/strategy/manual documents.
-- [ ] Record exact executable evidence in normative documents.
-- [ ] Mark
-  `docs/notes/component-documentation-knowledge-package-implementation.md`
-  historical and non-normative.
-- [ ] State in that note that final design/specification override it.
-- [ ] Retain the journal as chronological consideration history.
-- [ ] Remove or mark superseded contradictory current documentation.
-- [ ] Confirm no latest specification exists only in notes, journal, phase
-  documents, implementation, or tests.
-- [ ] Update CNCF strategy completed history and remove active Phase 52 item.
-- [ ] Close Phase 52 dashboard/checklist with exact validation evidence.
-
-Evidence:
-- Pending.
+Phase 52 is PLANNED. EID-01 has not started.

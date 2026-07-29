@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -230,9 +230,12 @@ object ComponentRepository extends GlobalObservable {
         }
       case `_component_dev_dir_type` =>
         val dir = _resolve_dir(diropt, ".", basedir)
-        ComponentDevDirRepository.validate(dir).map(_ =>
-          ComponentDevDirRepository.Specification(dir)
-        )
+        ComponentDevDirRepository.validate(dir) match {
+          case Consequence.Success(_) =>
+            Right(ComponentDevDirRepository.Specification(dir))
+          case Consequence.Failure(conclusion) =>
+            Left(conclusion.display)
+        }
       case `_invalid_component_dev_dir_type` =>
         Left("component development directory configuration must be a plain path or component-dev-dir:path; use component-dir/component-file settings for packaged CARs")
       case `_subsystem_dev_dir_type` =>
@@ -420,10 +423,10 @@ object ComponentRepository extends GlobalObservable {
         ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir, componentName)
 
       override def resolveComponentArchivePath(
-        componentname: String,
+        componentName: String,
         version: Option[String]
       ): Option[Path] =
-        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir, componentname, version)
+        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir, componentName, version)
     }
   }
 
@@ -481,12 +484,12 @@ object ComponentRepository extends GlobalObservable {
         resolveComponentDescriptor(componentName).map(_ => file)
 
       override def resolveComponentArchivePath(
-        componentname: String,
+        componentName: String,
         version: Option[String]
       ): Option[Path] =
         if (Files.isRegularFile(file))
           ComponentDescriptorLoader.loadArchive(file).toOption
-            .filter(_matches_component_descriptor(_, componentname, version))
+            .filter(_matches_component_descriptor(_, componentName, version))
             .map(_ => file)
         else
           None
@@ -499,14 +502,16 @@ object ComponentRepository extends GlobalObservable {
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
     override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] =
-      AssemblyApiClassLoader.loadDirectory(ComponentDevDirRepository.devComponentApiDirectory(baseDir))
+      ComponentDevDirRepository.validate(baseDir).flatMap { _ =>
+        AssemblyApiClassLoader.loadDirectory(ComponentDevDirRepository.devComponentApiDirectory(baseDir))
+      }
 
     def discover(): Seq[Component] = {
       val log = PersistentBootstrapLog.forClass(classOf[ComponentDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
       ComponentDevDirRepository.validate(baseDir) match {
-        case Left(message) =>
-          throw new IllegalStateException(message)
-        case Right(_) =>
+        case Consequence.Failure(conclusion) =>
+          throw new ComponentRepositoryDiscoveryFailure(conclusion)
+        case Consequence.Success(_) =>
           ()
       }
       val classpath = ComponentDevDirRepository.devRuntimeClasspath(baseDir)
@@ -616,15 +621,18 @@ object ComponentRepository extends GlobalObservable {
     def runtimeClasspathFile(base: Path): Path =
       base.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
 
+    def runtimeManifestFile(base: Path): Path =
+      base.resolve("target").resolve("cncf.d").resolve("car-runtime-manifest.json")
+
     def devComponentApiDirectory(base: Path): Path =
       base.resolve("target").resolve("cozy")
 
     def inferComponentDescriptors(base: Path): Vector[ComponentDescriptor] = {
       val log = PersistentBootstrapLog.forClass(classOf[ComponentDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
-      validate(base) match {
-        case Left(_) =>
+      validate(base).toOption match {
+        case None =>
           Vector.empty
-        case Right(_) =>
+        case Some(_) =>
           val classpath = devRuntimeClasspath(base)
           val classdirs = classpath.filter(Files.isDirectory(_))
           if (classdirs.isEmpty) {
@@ -692,33 +700,51 @@ object ComponentRepository extends GlobalObservable {
           .map(_.trim)
           .filter(_.nonEmpty)
           .map(p => Paths.get(p).toAbsolutePath.normalize)
-          .filter(Files.exists(_))
           .distinct
       }
     }
 
-    def validate(base: Path): Either[String, Unit] = {
-      val file = runtimeClasspathFile(base)
+    def validate(base: Path): Consequence[Unit] = {
       if (!Files.isDirectory(base))
-        Left(s"[component-dev-dir] component development directory not found: ${base}")
-      else if (!Files.isRegularFile(file))
-        Left(missingRuntimeClasspathMessage(base))
-      else if (Files.size(file) == 0L)
-        Left(missingRuntimeClasspathMessage(base))
+        Consequence.resourceNotFound(
+          DevelopmentCarRuntimeAdmission.recoveryMessage(base, s"component development directory not found: ${base}")
+        )
       else
-        Right(())
+        _validate_runtime_classpath_file(base).flatMap { _ =>
+          DevelopmentCarRuntimeAdmission.validate(base)
+        }
+    }
+
+    private def _validate_runtime_classpath_file(base: Path): Consequence[Unit] = {
+      val file = runtimeClasspathFile(base)
+      try {
+        if (!Files.isRegularFile(file) || Files.size(file) == 0L)
+          Consequence.resourceInvalid(
+            DevelopmentCarRuntimeAdmission.recoveryMessage(base, s"runtime classpath file is missing or empty: $file")
+          )
+        else
+          Consequence.success(())
+      } catch {
+        case NonFatal(e) =>
+          Consequence.resourceInvalid(
+            DevelopmentCarRuntimeAdmission.recoveryMessage(
+              base,
+              s"runtime classpath file cannot be inspected: $file: ${Option(e.getMessage).getOrElse(e.getClass.getName)}"
+            )
+          )
+      }
     }
 
     def missingRuntimeClasspathMessage(base: Path): String = {
-      val file = runtimeClasspathFile(base)
-      s"[component-dev-dir] runtime classpath file is missing or empty: ${file}. " +
-        s"Run '${base.resolve("scripts").resolve("update-runtime-classpath.sh")}' once for this development component, " +
-        "then restart the application server. CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+      DevelopmentCarRuntimeAdmission.recoveryMessage(
+        base,
+        s"runtime classpath file is missing or empty: ${runtimeClasspathFile(base)}"
+      )
     }
 
     def noClassDirectoryMessage(base: Path): String =
       s"[component-dev-dir] runtime classpath contains no class directories: ${runtimeClasspathFile(base)}. " +
-        s"Run 'sbt --batch compile' in ${base}, then restart the application server."
+        s"Run 'sbt cozyPrepareRuntime' in ${base}, then restart the application server."
 
     def devComponentDescriptors(base: Path): Vector[ComponentDescriptor] =
       Vector(
@@ -775,7 +801,10 @@ object ComponentRepository extends GlobalObservable {
       val componentdir = base.resolve("component").normalize
       if (!Files.isDirectory(componentdir)) {
         Vector.empty
-      } else if (Files.isRegularFile(componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt"))) {
+      } else if (
+        Files.isRegularFile(componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")) ||
+          Files.isRegularFile(componentdir.resolve("target").resolve("cncf.d").resolve("car-runtime-manifest.json"))
+      ) {
         Vector(ComponentDevDirRepository.Specification(componentdir))
       } else {
         Vector(ComponentDirRepository.Specification(componentdir))
@@ -811,10 +840,10 @@ object ComponentRepository extends GlobalObservable {
         ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir.resolve("component").normalize, componentName)
 
       override def resolveComponentArchivePath(
-        componentname: String,
+        componentName: String,
         version: Option[String]
       ): Option[Path] =
-        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir.resolve("component").normalize, componentname, version)
+        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir.resolve("component").normalize, componentName, version)
     }
   }
 

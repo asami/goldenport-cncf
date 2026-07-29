@@ -96,6 +96,18 @@ excluded. The CAR-style directory path remains a development override and does
 not claim packaged-archive integrity. Generation provenance is just another
 opaque integrity-protected entry: CNCF does not parse it or link Cozy classes.
 
+Development-directory activation is a separate runtime admission route. Cozy
+and sbt-cozy prepare `target/cncf.d/runtime-classpath.txt` together with
+`target/cncf.d/car-runtime-manifest.json`, using schema
+`cncf.car-development-runtime-manifest.v1` and source kind
+`development-directory`. The development manifest records the CAR coordinate,
+runtime range, component/ABI evidence, and digests of stable evidence files.
+It deliberately excludes mutable compiled class bytes and is not accepted as
+packaged-CAR archive evidence. CNCF validates this pair before any component
+classloading; explicit development selection fails closed with
+`sbt cozyPrepareRuntime` recovery guidance and never substitutes a packaged
+CAR.
+
 For CNCF-owned CML generation, `build.sbt` is the invocation authority. It
 resolves the pinned Cozy generator coordinate, the root project's effective
 `version.value` as the CNCF compile target, the runtime descriptor produced by

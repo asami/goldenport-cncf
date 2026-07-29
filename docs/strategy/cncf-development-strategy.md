@@ -2998,7 +2998,7 @@ after 9.12 and 9.39 move to completed history.
     inventing a generic merge UI without evidence.
 
 ### 9.42 Component Documentation and AI Knowledge Integration
-Planned for Phase 52 after Phase 51 closes.
+Planned for Phase 53 after Phase 52 closes.
 
 - Goal:
   - make each physical Component a one-stop, self-describing execution and
@@ -3096,11 +3096,11 @@ Planned for Phase 52 after Phase 51 closes.
   - the implementation note is marked historical and explicitly overridden by
     final design/specification;
   - journal remains chronological history; and
-  - Phase 52 cannot close while the latest contract exists only in notes,
+  - Phase 53 cannot close while the latest contract exists only in notes,
     journal, phase documents, implementation, or tests.
 - Planning references:
-  - `docs/phase/phase-52.md`;
-  - `docs/phase/phase-52-checklist.md`;
+  - `docs/phase/phase-53.md`;
+  - `docs/phase/phase-53-checklist.md`;
   - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`;
     and
   - `docs/notes/component-documentation-knowledge-package-implementation.md`.
@@ -3175,7 +3175,7 @@ OCC foundation.
   - schedule this item as an independent phase rather than expanding Phase 50.
 
 ### 9.44 Information CML Runtime Canonicalization
-Planned for Phase 53 after Phase 52 closes.
+Planned for Phase 54 after Phase 53 closes.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected
@@ -3184,7 +3184,7 @@ Planned for Phase 53 after Phase 52 closes.
   - Phase 50 proved the generated Information `SimpleEntity` output/input
     revision contract but did not move the operational runtime to that
     generated Entity; and
-  - Phase 53 completes that runtime cutover rather than moving CNCF
+  - Phase 54 completes that runtime cutover rather than moving CNCF
     Information into `simplemodeling-model`.
 - Goal:
   - make the Information CML generated Entity/value/lifecycle family the one
@@ -3239,7 +3239,7 @@ Planned for Phase 53 after Phase 52 closes.
     standard Entity repository;
   - no two public canonical Information models remain after compatibility
     closure; and
-  - unrelated CML Entity or generator redesign remains outside Phase 53.
+  - unrelated CML Entity or generator redesign remains outside Phase 54.
 - Acceptance:
   - InformationSpace and every operational/projection/downstream path use the
     generated canonical Information Entity;
@@ -3254,8 +3254,8 @@ Planned for Phase 53 after Phase 52 closes.
   - final design/specification and Executable Specifications identify exactly
     one canonical runtime model.
 - Planning references:
-  - `docs/phase/phase-53.md`;
-  - `docs/phase/phase-53-checklist.md`;
+  - `docs/phase/phase-54.md`;
+  - `docs/phase/phase-54-checklist.md`;
   - `docs/phase/phase-27-checklist.md`;
   - `docs/phase/phase-50.md`;
   - `src/main/cozy/information.cml`; and
@@ -3340,7 +3340,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - equal numeric versions neither are required nor prove compatibility;
   - Cozy remains a build-time generator and is not a CAR runtime dependency;
   - generator compatibility does not replace CNCF runtime/ABI compatibility;
-  - Information canonicalization remains Phase 53 work;
+  - Information canonicalization remains Phase 54 work;
   - CML semantic redesign and unrelated generator output remain outside Phase
     51;
   - arbitrary business/API Records are not reinterpreted as persisted scalar
@@ -3447,7 +3447,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - `../cozy/docs/spec/car-project-scaffold.md`.
 
 ### 9.46 Web Session CSRF Unification
-Planned for Phase 54 after Phase 53 closes.
+Planned for Phase 55 after Phase 54 closes.
 
 - Historical basis:
   - CNCF already protects normal Form and `/form-api` POST execution with a
@@ -3493,10 +3493,79 @@ Planned for Phase 54 after Phase 53 closes.
     and
   - application-owned token generation or verification.
 - Planning references:
-  - `docs/phase/phase-54.md`;
-  - `docs/phase/phase-54-checklist.md`;
+  - `docs/phase/phase-55.md`;
+  - `docs/phase/phase-55-checklist.md`;
   - `docs/notes/web-session-csrf-unification-implementation.md`; and
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
+
+### 9.47 Exact Entity ID Serialization and Collection Identity
+Planned for Phase 52 after Phase 51 closes.
+
+- Historical basis:
+  - the current `EntityId.value` is a datastore-local scalar that retains the
+    Entity operational namespace and logical collection name but omits the
+    independent exact `EntityCollectionId` namespace;
+  - `EntityId.parse` consequently constructs a synthetic collection from the
+    Entity-local `major` and `minor`;
+  - Phase 51 safely compensated by restoring the runtime-selected exact owner
+    through `EntityStoreDecodeContext`; and
+  - direct store, Admin, Association, loader, reference-attribute, cache, and
+    lock paths remain vulnerable whenever that compensation boundary is
+    bypassed or insufficient.
+- Goal:
+  - make canonical Entity ID serialization complete and independently
+    reversible;
+  - make the exact collection carried by the Entity ID authoritative for
+    routing and identity consumers;
+  - persist primary and referenced Entity IDs in the same complete canonical
+    form; and
+  - remove synthetic reconstruction, context rebinding, name-only collection
+    mapping, and other compensation logic.
+- Selected direction:
+  - `EntityCollectionId` and `EntityId` each have one deterministic, versioned,
+    lossless canonical String representation;
+  - `EntityId.parse(EntityId.serialize(id)) == id` without EntitySpace,
+    datastore, registration, application metadata, or decode context;
+  - `EntityId.value` is the complete canonical identity;
+  - datastore collection, datastore entry key, and stored `id` value all use
+    and validate the same exact Entity identity;
+  - EntityId-valued attributes and Association targets retain their exact
+    target collections in their own Strings;
+  - application code treats the encoding as opaque; and
+  - equality, hashing, UnitOfWork, caches, locks, revision, authorization, and
+    observability use exact parsed identity.
+- Clean-break policy:
+  - old incomplete scalar IDs and records are unsupported;
+  - there is no compatibility parser, legacy binding, dual-format read,
+    migration, read repair, or mixed-version operation;
+  - core CNCF/SimpleModeling repositories adopt the new contract together;
+  - CAR repositories are not Phase 52 closure gates; and
+  - when a CAR incompatibility is found, that CAR is corrected to the exact
+    canonical contract without adding CNCF compatibility behavior.
+- Initial scope:
+  - failing-first inventory of current serialization and identity consumers;
+  - exact collection and Entity ID encoding;
+  - SimpleModeling model and generator adoption;
+  - CNCF persistence, routing, UnitOfWork, direct API, and resident-state
+    simplification;
+  - Admin, Association, loader, Blob, child-binding, cache, lock, revision,
+    authorization, and diagnostic adoption;
+  - focused/full validation of `simplemodeling-model`, `simple-modeler`, CNCF,
+    Cozy, and affected sbt-cozy behavior; and
+  - canonical design/specification promotion.
+- Boundary:
+  - no old-data migration or downstream CAR compatibility layer;
+  - no collection derivation from Entity-local fields, logical name, or
+    runtime registration;
+  - no application parsing of canonical ID structure;
+  - no raw/custom codec exemption; and
+  - no redesign of unrelated identifier families.
+- Planning references:
+  - `docs/phase/phase-52.md`;
+  - `docs/phase/phase-52-checklist.md`;
+  - `docs/design/id.md`;
+  - `docs/design/entity-collection-identity.md`; and
+  - `docs/spec/entity-collection-identity.md`.
 
 ### 9.48 Supervisor SPI and Managed Lifecycle Provider Integration
 CNCF contract baseline implemented; provider and consumer adoption remains

@@ -161,6 +161,17 @@ object UnitOfWorkOp {
     loadAuthorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[EntityStore.EntityClaimResult[C, P]]
 
+  /** Stable-identity create-or-update through the versioned mutation path. */
+  final case class EntityStoreUpsert[T](
+    entity: T,
+    id: EntityId,
+    policy: EntityUpsertPolicy = EntityUpsertPolicy.default,
+    tc: EntityPersistentCreate[T],
+    options: EntityCreateOptions = EntityCreateOptions.default,
+    createAuthorization: Option[UnitOfWorkAuthorization] = None,
+    updateAuthorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[CreateResult[T]]
+
   final case class EntityStoreLoad[T](
     id: EntityId,
     tc: EntityPersistent[T],

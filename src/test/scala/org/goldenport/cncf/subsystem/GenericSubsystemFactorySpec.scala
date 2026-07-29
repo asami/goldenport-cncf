@@ -2,6 +2,7 @@ package org.goldenport.cncf.subsystem
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.security.MessageDigest
 import java.util.Comparator
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
@@ -11,6 +12,7 @@ import scala.util.Using
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId, ComponentOrigin}
@@ -36,7 +38,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -207,7 +209,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val componentdir = root.resolve("devdirsample")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.8").resolve("classes")
         _copy_devdir_sample_classes(classdir)
-        _write_runtime_classpath(componentdir, classdir)
+        _write_runtime_classpath(componentdir, classdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample")
         val packagedir = Files.createDirectories(root.resolve("packaged"))
         val packagedjar = _create_fake_component_jar(root.resolve("assets").resolve("packaged-main.jar"))
         val packageddescriptor = root.resolve("packaged-descriptor.json")
@@ -602,12 +604,50 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
   private def _write_runtime_classpath(
     componentdir: Path,
-    classdir: Path
+    classdir: Path,
+    name: String,
+    version: String,
+    component: String
   ): Unit = {
     val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+    val cardir = componentdir.resolve("src").resolve("main").resolve("car")
     Files.createDirectories(file.getParent)
-    Files.writeString(file, classdir.toString)
+    Files.createDirectories(cardir)
+    Files.writeString(file, classdir.toString, StandardCharsets.UTF_8)
+    Files.writeString(
+      cardir.resolve("component-descriptor.json"),
+      s"""{"name":"$name","version":"$version","component":"$component"}""",
+      StandardCharsets.UTF_8
+    )
+    Files.writeString(
+      cardir.resolve("abi-manifest.json"),
+      s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$name","version":"$version"},"abi":{"exports":{"components":[{"name":"$component"}]}}}""",
+      StandardCharsets.UTF_8
+    )
+    val classpathidentity = s"project:${componentdir.relativize(classdir).toString.replace('\\', '/')}"
+    val evidence = Vector(
+      ("target/cncf.d/runtime-classpath.txt", _sha256(file), Some(_sha256(classpathidentity.getBytes(StandardCharsets.UTF_8)))),
+      ("src/main/car/component-descriptor.json", _sha256(cardir.resolve("component-descriptor.json")), None),
+      ("src/main/car/abi-manifest.json", _sha256(cardir.resolve("abi-manifest.json")), None)
+    )
+    val entries = evidence.map { case (path, digest, logical) =>
+      val logicalfield = logical.map(value => s""""logicalSha256":"$value",""").getOrElse("")
+      s"""{$logicalfield"path":"$path","sha256":"$digest"}"""
+    }.mkString("[", ",", "]")
+    val evidencedigest = _sha256(evidence.map { case (path, digest, logical) =>
+      s"$path\t$digest\t${logical.getOrElse("")}"
+    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
+    Files.writeString(
+      file.getParent.resolve("car-runtime-manifest.json"),
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v1","sourceKind":"development-directory","car":{"name":"$name","version":"$version","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      StandardCharsets.UTF_8
+    )
   }
+
+  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
+
+  private def _sha256(bytes: Array[Byte]): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
   private def _copy_devdir_sample_classes(target: Path): Unit = {
     val testclasses = Path.of(

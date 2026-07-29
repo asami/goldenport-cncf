@@ -20,9 +20,13 @@ share the same version number.
 
 Phase 51 begins after Phase 50 PC-02 closes and Phase 50 returns to CLOSED.
 
-Phase 51 establishes generation-version alignment before Phase 53 Information
+Phase 51 establishes generation-version alignment before Phase 54 Information
 runtime canonicalization and applies it generally to CNCF CML and generated
 CAR projects.
+
+Phase 52 is the clean-break follow-up for lossless Entity ID serialization.
+It may supersede Phase 51's context-restoration implementation without
+requiring compatibility for old scalar IDs or existing CAR data.
 
 ## Scope
 
@@ -223,7 +227,8 @@ CAR projects.
 
 - [CNCF build](../../build.sbt)
 - [Phase 50 - SimpleEntity Revision and OCC Simplification](phase-50.md)
-- [Phase 53 - Information CML Runtime Canonicalization](phase-53.md)
+- [Phase 52 - Exact Entity ID Serialization and Collection Identity](phase-52.md)
+- [Phase 54 - Information CML Runtime Canonicalization](phase-54.md)
 - [ArtScene Collection Identity Contract Handoff](../journal/2026/07/2026-07-26-artscene-collection-identity-contract-handoff.md)
 - [CV-07 Development and Release Acceptance](../notes/phase-51-cv07-development-release-acceptance.md)
 - [CI-01 Exact Collection Identity Contract](../notes/phase-51-ci01-exact-collection-identity-contract.md)

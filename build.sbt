@@ -11,6 +11,7 @@ Test / javacOptions := Seq("--release", "14")
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
 lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime self descriptor for the runtime jar.")
+lazy val cncfRuntimeClasspathFile = taskKey[File]("Write the local CNCF runtime classpath consumed by cncf --runtime-dev-dir.")
 lazy val resolveInformationCmlGenerationInputs = taskKey[CncfGenerationInputs]("Resolve the exact Cozy generator, CNCF target, and runtime descriptor for Information CML generation.")
 lazy val generateInformationCmlModel = taskKey[Seq[File]]("Generate CNCF Information vocabulary model from CML.")
 lazy val verifyInformationCmlGenerationDeterminism = taskKey[Unit]("Verify repeated Information CML generation emits the same Scala file set and bytes.")
@@ -472,6 +473,14 @@ lazy val root = project
           IO.read(baseDirectory.value / "src" / "main" / "resources" / "META-INF" / "cncf" / "predefined-results.json")
         )
       )
+      file
+    },
+
+    cncfRuntimeClasspathFile := {
+      val file = target.value / "cncf.d" / "runtime-classpath.txt"
+      val classpath = (Runtime / fullClasspath).value.map(_.data.getAbsolutePath).mkString(java.io.File.pathSeparator)
+      IO.createDirectory(file.getParentFile)
+      IO.write(file, classpath + "\n")
       file
     },
 

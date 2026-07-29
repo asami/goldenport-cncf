@@ -442,7 +442,7 @@ visibility does not imply MCP readiness.
 
 ### Revised Decisions
 
-The follow-up fixed these directions for Phase 52 planning:
+The follow-up fixed these directions for Phase 53 planning:
 
 1. SimpleModeling.org is the basic public information surface.
 2. SmartDox source and Cozy publication knowledge generate the human and
@@ -512,7 +512,7 @@ visibility, owner, canonical URL, and source digest. Knowledge retrieval does
 not install a Skill, activate a dependency, or override the locally mounted
 directive.
 
-Phase 52 owns these information-provision and knowledge-publication surfaces.
+Phase 53 owns these information-provision and knowledge-publication surfaces.
 The Skill installation and activation mechanism remains with the separate
 `SkillBundleManifest`, Cozy projection, and Launcher implementation boundary.
 
@@ -540,13 +540,14 @@ The following items remain to be formalized:
   enforcement plus exact CBD handoff; and
 - lint and release-readiness requirements for all mandatory resources.
 
-## Phase 52 Selection
+## Phase 53 Selection
 
-The discussion was initially selected as Phase 51 and was renumbered on
-2026-07-26 as Phase 52, `Component Documentation and AI Knowledge
-Integration`.
+The discussion initially selected this work as Phase 51 and renumbered it on
+2026-07-26 to Phase 52. The 2026-07-29 insertion of Exact Entity ID
+Serialization renumbered it again to Phase 53, `Component Documentation and AI
+Knowledge Integration`.
 
-Phase 52 starts after Phase 51 closes and includes:
+Phase 53 starts after Phase 52 closes and includes:
 
 - the CNCF Component knowledge manifest and resolved knowledge surface;
 - SimpleModeling.org-first versioned publication and stable document/section
@@ -573,7 +574,7 @@ Phase 52 starts after Phase 51 closes and includes:
 The follow-up discussion clarified that CBD Support is the primary integration,
 not Textus BoK. CBD Support already owns versions, dependencies, Operations,
 artifacts, manuals, examples, detailed usage, reuse guidance, and CAR Review.
-Phase 52 makes the Component knowledge manifest and packaged resources primary
+Phase 53 makes the Component knowledge manifest and packaged resources primary
 evidence for those CBD surfaces.
 
 Textus BoK remains the complementary terminology and semantic RAG/MCP route. It
@@ -583,7 +584,7 @@ for detailed usage and review. BoK must not invent unsupported capability or
 compatibility claims from unstructured similarity. CBD Support remains usable
 when BoK is absent.
 
-The documentation lifecycle for Phase 52 is:
+The documentation lifecycle for Phase 53 is:
 
 ```text
 journal
@@ -599,18 +600,18 @@ design + spec
   -> canonical closed-phase architecture and normative contract
 ```
 
-At Phase 52 closure,
+At Phase 53 closure,
 `docs/notes/component-documentation-knowledge-package-implementation.md` must
 be marked historical and non-normative. It must state that the final design and
-specification override it. The journal remains history. Phase 52 may not close
+specification override it. The journal remains history. Phase 53 may not close
 with its latest specification present only in notes, journal, phase documents,
 source code, or tests.
 
 Planning documents:
 
 - `docs/notes/component-documentation-knowledge-package-implementation.md`
-- `docs/phase/phase-52.md`
-- `docs/phase/phase-52-checklist.md`
+- `docs/phase/phase-53.md`
+- `docs/phase/phase-53-checklist.md`
 
 ## Current References
 

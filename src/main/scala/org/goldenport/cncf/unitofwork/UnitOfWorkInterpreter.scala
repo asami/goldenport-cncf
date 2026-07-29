@@ -237,6 +237,28 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
+    case m: (UnitOfWorkOp.EntityStoreUpsert[t] @unchecked) =>
+      val id = _canonical_entity_id(m.id)
+      val admitted = m.copy(id = id)
+      val result = _with_calltree("uow:entitystore:upsert-versioned") {
+        _entity_store_space.upsertVersioned(admitted) { existing =>
+          existing match {
+            case Some(record) =>
+              val loadrecord =
+                () => Consequence.success(Some(record))
+              _authorize(admitted.updateAuthorization, Some(loadrecord))
+            case None =>
+              _authorize(admitted.createAuthorization)
+          }
+        }.flatMap { created =>
+          _entity_space_put_persisted_record(created.id, created.record).map { _ =>
+            _view_space_invalidate_all()
+            created
+          }
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
       val op = _canonical_load_op(m)
       _with_calltree(
@@ -1058,6 +1080,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       case m: UnitOfWorkOp.EntityStoreLoadDirect[?] =>
         Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreUpsertUnversioned[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreUpsert[?] =>
         Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreUpdateById[?] =>
         Vector(m.id.collection)

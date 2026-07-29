@@ -18,7 +18,7 @@ import org.goldenport.cncf.CncfVersion
  * opaque bytes; ABI and CNCF runtime compatibility are validated separately.
  *
  * @since   Jul. 28, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] object CarRuntimeAdmission {
@@ -134,7 +134,7 @@ private[component] object CarRuntimeAdmission {
         if (tested.nonEmpty) Right(())
         else Left("CAR CNCF runtime range tested must contain at least one version")
       _ <- maximum match {
-        case Some(value) if _compare_versions(minimum, value) > 0 =>
+        case Some(value) if CarRuntimeVersionOrdering.compare(minimum, value) > 0 =>
           Left(
             s"CAR CNCF runtime range is inverted: minimum=${minimum}, maximum=${value}"
           )
@@ -152,11 +152,11 @@ private[component] object CarRuntimeAdmission {
     range: RuntimeRange,
     current: String
   ): Either[String, Unit] =
-    if (_compare_versions(current, range.minimum) < 0)
+    if (CarRuntimeVersionOrdering.compare(current, range.minimum) < 0)
       Left(
         s"CNCF runtime ${current} is below CAR minimum ${range.minimum}"
       )
-    else if (range.maximum.exists(_compare_versions(current, _) > 0))
+    else if (range.maximum.exists(CarRuntimeVersionOrdering.compare(current, _) > 0))
       Left(
         s"CNCF runtime ${current} is above CAR maximum ${range.maximum.get}"
       )
@@ -404,37 +404,4 @@ private[component] object CarRuntimeAdmission {
     digest.digest().map(byte => f"${byte & 0xff}%02x").mkString
   }
 
-  private def _compare_versions(left: String, right: String): Int = {
-    def _parts_(value: String): Vector[String] =
-      value.split("[.\\-+_]").toVector.map(_.trim).filter(_.nonEmpty)
-    def _number_(value: String): Option[BigInt] =
-      if (value.forall(_.isDigit)) Some(BigInt(value)) else None
-    def _compare_part_(l: String, r: String): Int =
-      (_number_(l), _number_(r)) match {
-        case (Some(a), Some(b)) => a.compare(b)
-        case (Some(_), None) => 1
-        case (None, Some(_)) => -1
-        case (None, None) => l.compareToIgnoreCase(r)
-      }
-    def _remaining_(parts: Vector[String], index: Int): Int =
-      parts.drop(index).find(_.nonEmpty).map { value =>
-        _number_(value) match {
-          case Some(number) => number.signum
-          case None => -1
-        }
-      }.getOrElse(0)
-
-    val leftparts = _parts_(left)
-    val rightparts = _parts_(right)
-    val size = math.max(leftparts.length, rightparts.length)
-    (0 until size).foldLeft(0) {
-      case (0, index) if index >= leftparts.length =>
-        -_remaining_(rightparts, index)
-      case (0, index) if index >= rightparts.length =>
-        _remaining_(leftparts, index)
-      case (0, index) =>
-        _compare_part_(leftparts(index), rightparts(index))
-      case (result, _) => result
-    }
-  }
 }

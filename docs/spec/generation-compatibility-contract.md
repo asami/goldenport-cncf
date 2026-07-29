@@ -86,6 +86,68 @@ claim packaged archive integrity and remain outside this packaged-CAR gate.
 `generation-provenance.json`, when present, is hashed as opaque bytes and must
 not be semantically evaluated by CNCF.
 
+## Development Runtime Evidence (R1–R7)
+
+The architectural context for this development-only route is
+`docs/design/packaged-source-activation.md`; it does not alter the packaged
+CAR admission route above.
+
+### R1 Development evidence pair
+
+An explicitly selected component development directory MUST contain both
+`target/cncf.d/runtime-classpath.txt` and
+`target/cncf.d/car-runtime-manifest.json`.
+
+### R2 Development manifest identity
+
+The development manifest MUST use schema
+`cncf.car-development-runtime-manifest.v1` and source kind
+`development-directory`. A packaged manifest MUST NOT be accepted as
+development evidence.
+
+### R3 Stable contract evidence
+
+The manifest MUST match the component descriptor and ABI export evidence,
+reproduce a supported CNCF runtime range, verify each declared stable evidence
+identity and SHA-256 digest, and use a deterministic evidence digest.
+
+### R4 Mutable output exclusion
+
+Mutable compiled classes are not part of the development integrity set.
+
+### R5 Stale classpath rejection
+
+Every non-empty classpath entry referenced by the prepared classpath file MUST
+exist when the producer creates evidence and when CNCF admits it. A deleted or
+invalid entry is stale development evidence and MUST be rejected before
+classloading.
+
+### R6 Fail-closed recovery
+
+Missing, empty, malformed, contradictory, or stale development evidence MUST
+fail before component discovery or classloading, identify the failing path,
+and direct the developer to run `sbt cozyPrepareRuntime`. A development-source
+failure MUST NOT fall back to a packaged CAR.
+
+### R7 Structured admission failure
+
+The public development-admission boundary and its component-development
+repository propagation MUST preserve a structured `Consequence` failure,
+including the resource-invalid classification, failed evidence path, and
+recovery operation.
+
+### Examples
+
+- E1: mutable class recompilation preserves development admission (R3, R4).
+- E2: missing manifest rejects the pair with structured recovery (R1, R6, R7).
+- E3: a packaged manifest schema is not a development manifest (R2, R6).
+- E4: manifest and descriptor/ABI coordinate contradictions are rejected (R3, R6).
+- E5: an incompatible runtime range is rejected (R3, R6).
+- E6: missing classpath evidence is rejected (R1, R6).
+- E7: a deleted classpath entry is rejected as stale evidence (R3, R5, R6).
+- E8: an invalid classpath entry is normalized into structured recovery (R5, R6, R7).
+- E9: a descriptor changed after preparation is rejected as stale contract evidence (R3, R6).
+
 The CNCF Information CML build resolves its invocation from the pinned Cozy
 generator version, the root build's effective CNCF artifact version, the output
 of the CNCF runtime-descriptor task, the CNCF project directory, and the

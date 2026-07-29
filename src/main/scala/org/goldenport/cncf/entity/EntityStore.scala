@@ -120,6 +120,19 @@ abstract class EntityStore {
     onsaved: CreateResult[T] => Consequence[Unit]
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
 
+  /** Creates a stable-id Entity or conditionally updates it through the
+    * versioned-mutation provider. It retries only duplicate create and stale
+    * OCC results; it never falls back to an unversioned write.
+    */
+  private[cncf] def upsertVersioned[T](
+    entity: T,
+    id: EntityId,
+    options: EntityCreateOptions,
+    policy: EntityUpsertPolicy
+  )(
+    authorize: Option[Record] => Consequence[Unit]
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
+
   def load[T](
     id: EntityId
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]]
@@ -449,6 +462,14 @@ class NoopEntityStore() extends EntityStore {
       authorize: Option[Record] => Consequence[Unit],
       @deprecatedName("onSaved", "0.5.1") onsaved: CreateResult[T] => Consequence[Unit]
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
+  private[cncf] def upsertVersioned[T](
+    entity: T,
+    id: EntityId,
+    options: EntityCreateOptions,
+    policy: EntityUpsertPolicy
+  )(
+    authorize: Option[Record] => Consequence[Unit]
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
   def load[T](id: EntityId)(using
       tc: EntityPersistent[T],
       ctx: ExecutionContext
@@ -713,6 +734,109 @@ class StandardEntityStore(
         }
         result = CreateResult[T](id, Some(rec))
         _ <- onsaved(result)
+      } yield result
+    }
+
+  private[cncf] override def upsertVersioned[T](
+    entity: T,
+    id: EntityId,
+    options: EntityCreateOptions,
+    policy: EntityUpsertPolicy
+  )(
+    authorize: Option[Record] => Consequence[Unit]
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] =
+    policy.validateC.flatMap(value => _upsert_versioned(entity, id, options, value, authorize))
+
+  private def _upsert_versioned[T](
+    entity: T,
+    id: EntityId,
+    options: EntityCreateOptions,
+    policy: EntityUpsertPolicy,
+    authorize: Option[Record] => Consequence[Unit]
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] =
+    _with_upsert_lock(id) {
+      for {
+        binding <- _required_revision_binding(id.collection)
+        cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+        dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+        ds <- ctx.dataStoreSpace.dataStore(cid)
+        existing <- _with_datastore_calltree("load", cid, Some(dsid)) {
+          ds.load(cid, dsid)
+        }
+        _ <- authorize(existing)
+        _ <- _reject_logically_deleted_existing(id, existing)
+        source = tc.toStoreRecord(entity)
+        admittedsource <- binding.rejectManagedPatch(source, "entity")
+        result <- existing match {
+          case Some(current) =>
+            for {
+              expected <- binding.revision(current)
+              candidate <- _merge_versioned_update_record(
+                current,
+                _complement_update_record(
+                  SimpleEntityStorageShapePolicy.withoutManagedFields(admittedsource),
+                  id
+                ),
+                binding
+              )
+              preparation <- ContentBodyStoragePolicy.planForVersionedSave(
+                id,
+                binding.withoutManagedRevision(candidate),
+                preserveExistingOverflowOnMissingContent = true
+              )
+              mutation <- _mutate_versioned(
+                cid,
+                dsid,
+                preparation,
+                binding,
+                Some(expected),
+                EntityMutationExecutionPolicy(
+                  concurrencyPolicy = EntityConcurrencyPolicy.Optimistic
+                )
+              )
+              record <- mutation match {
+                case EntityVersionedMutationResult.Applied(_) |
+                    EntityVersionedMutationResult.NoOp(_) =>
+                  _managed_record(id, mutation, binding)
+                case EntityVersionedMutationResult.Stale(expectedrevision, actualrevision)
+                    if policy.maxAttempts > 1 =>
+                  _upsert_versioned(
+                    entity,
+                    id,
+                    options,
+                    policy.copy(maxAttempts = policy.maxAttempts - 1),
+                    authorize
+                  ).map(_.record.getOrElse(Record.empty))
+                case EntityVersionedMutationResult.Stale(expectedrevision, actualrevision) =>
+                  _stale_mutation(expectedrevision, actualrevision)
+              }
+            } yield CreateResult(id, Some(record))
+          case None =>
+            (for {
+              initialized <- binding.initializeForCreate(
+                _complement_create_record(admittedsource, id, options)
+              )
+              prepared <- ContentBodyStoragePolicy.prepareForSave(id, initialized)
+              _ <- _with_datastore_calltree("create", cid, Some(dsid)) {
+                ds.create(cid, dsid, prepared)
+              }
+            } yield CreateResult[T](id, Some(prepared))).recoverWith { conclusion =>
+              if (
+                conclusion.observation.taxonomy ==
+                  org.goldenport.observation.Taxonomy.dataStoreDuplicate &&
+                policy.maxAttempts > 1
+              )
+                _upsert_versioned(
+                  entity,
+                  id,
+                  options,
+                  policy.copy(maxAttempts = policy.maxAttempts - 1),
+                  authorize
+                )
+              else
+                Consequence.Failure(conclusion)
+            }
+        }
       } yield result
     }
 

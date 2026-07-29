@@ -12,6 +12,17 @@ persistence adapters.
 The architectural rationale is in
 [Entity Collection Identity](../design/entity-collection-identity.md).
 
+## Evolution Boundary
+
+This document specifies the implemented Phase 51 contract.
+
+[Phase 52](../phase/phase-52.md) is the planned clean replacement. It defines a
+complete canonical Entity ID String that contains the exact
+`EntityCollectionId` and round-trips without external context. Phase 52 does
+not preserve old scalar input, context rebinding, legacy adapters, stored-data
+migration, or mixed old/new operation. When Phase 52 closes, its verified
+specification supersedes the applicable requirements below.
+
 ## Collection Ownership
 
 1. `EntityCollection.descriptor.collectionId` MUST be the complete runtime

@@ -44,6 +44,7 @@ import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, As
 import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
+import org.goldenport.cncf.testutil.DevelopmentRuntimeManifestFixture
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext}
 import org.goldenport.cncf.security.AuthenticationRequest
@@ -3939,9 +3940,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.createDirectories(mainroot.resolve("src").resolve("main").resolve("web"))
       Files.createDirectories(carroot.resolve("src").resolve("main").resolve("web"))
       val classdir = Files.createDirectories(mainroot.resolve("target").resolve("scala-3.3.8").resolve("classes"))
-      val runtimeclasspath = mainroot.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
-      Files.createDirectories(runtimeclasspath.getParent)
-      Files.writeString(runtimeclasspath, classdir.toString)
+      DevelopmentRuntimeManifestFixture.write(
+        mainroot,
+        classdir,
+        "textus-knowledge-editor",
+        "0.1.0-SNAPSHOT",
+        "textus-knowledge-editor"
+      )
       val maincomponent = new org.goldenport.cncf.component.Component() {}
       val carcomponent = new org.goldenport.cncf.component.Component() {}
       _initialize_component_with_id(

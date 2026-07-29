@@ -203,9 +203,13 @@ Evidence:
   save/update/patch operations to the UnitOfWork algebra. Provider success
   installs the returned authoritative Entity and invalidates views once;
   stale conflict evicts the resident value without invalidating views.
-- The normal protected Entity DSL no longer exposes upsert overwrite.
-  Stable-identity ownership remains `entity_claim_or_load`; create-only
-  collection writes are separate from versioned saves.
+- The normal protected Entity DSL no longer exposes the legacy unversioned
+  upsert overwrite. Stable-identity `entity_upsert` is separately admitted
+  through the versioned mutation provider: it bounds retries to duplicate
+  creates and stale OCC results, preserves ordinary create/update
+  authorization, and never falls back to an unversioned write.
+  `entity_claim_or_load` remains the ownership-only operation; create-only
+  collection writes remain separate from versioned saves.
 - Aggregate create is create-only, Aggregate update requires an explicit
   expectation, and Aggregate command persists with the root snapshot admitted
   during its resolve phase.

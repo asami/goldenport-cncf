@@ -30,8 +30,18 @@ The following are development-time execution paths:
 - `--component-dev-dir <path>`
   - treats an sbt/cozy development directory as a CAR-equivalent component
     source
-  - reads the development runtime classpath from
-    `target/cncf.d/runtime-classpath.txt`
+  - admits prepared development runtime evidence before descriptor inference,
+    assembly API loading, component discovery, or component classloading
+  - requires both `target/cncf.d/runtime-classpath.txt` and
+    `target/cncf.d/car-runtime-manifest.json`
+  - the development manifest uses
+    `cncf.car-development-runtime-manifest.v1` with source kind
+    `development-directory`; it proves stable CAR contract inputs and does
+    not claim immutable compiled-class or whole-directory integrity
+  - missing, empty, contradictory, or stale evidence fails this explicitly
+    selected route closed, identifies the failing path, and instructs the
+    developer to run `sbt cozyPrepareRuntime`; it never falls back to a
+    packaged CAR
   - infers the component/subsystem name from the descriptor in `src/main/car`
     when available, so `--textus.component` is not required
   - uses `src/main/car` as the canonical CAR-root resources that will be
@@ -238,6 +248,13 @@ Component development should normally run from the development directory:
 
 ```bash
 cncf --component-dev-dir . server
+```
+
+Prepare the evidence pair after changing a runtime classpath, CAR coordinate,
+runtime compatibility range, descriptor, ABI, or its schema:
+
+```bash
+sbt cozyPrepareRuntime
 ```
 
 This path avoids building a CAR on every edit. It keeps local classpath entries
