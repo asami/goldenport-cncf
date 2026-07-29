@@ -203,13 +203,17 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
-    "prefer a claimed development component over a stale packaged CAR" in {
-      Given("a development component and an older same-name CAR selected by the assembly")
+    "E10 prefer a complete sibling development set over an older packaged CAR" in {
+      Given("two prepared prefixed development directories and an older same-name packaged CAR")
       _with_temp_dir { root =>
-        val componentdir = root.resolve("devdirsample")
-        val classdir = componentdir.resolve("target").resolve("scala-3.3.8").resolve("classes")
-        _copy_devdir_sample_classes(classdir)
-        _write_runtime_classpath(componentdir, classdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample")
+        val primarydir = root.resolve("devdirsample")
+        val primaryclassdir = primarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
+        _copy_test_package_classes(classOf[devdirsample.DevDirSampleComponent], primaryclassdir)
+        _write_runtime_classpath(primarydir, primaryclassdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample")
+        val secondarydir = root.resolve("secondarydevdirsample")
+        val secondaryclassdir = secondarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
+        _copy_test_package_classes(classOf[secondarydevdirsample.SecondaryDevDirSampleComponent], secondaryclassdir)
+        _write_runtime_classpath(secondarydir, secondaryclassdir, "secondarydevdirsample", "0.1.0-SNAPSHOT", "secondarydevdirsample")
         val packagedir = Files.createDirectories(root.resolve("packaged"))
         val packagedjar = _create_fake_component_jar(root.resolve("assets").resolve("packaged-main.jar"))
         val packageddescriptor = root.resolve("packaged-descriptor.json")
@@ -226,27 +230,35 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         )
         val descriptor = GenericSubsystemDescriptor(
           path = root.resolve("assembly-descriptor.yaml"),
-          subsystemName = "devdirsample",
+          subsystemName = "complete-development-set",
           version = Some("0.0.1"),
           componentBindings = Vector(
-            GenericSubsystemComponentBinding("devdirsample", version = Some("0.0.1"))
+            GenericSubsystemComponentBinding("devdirsample", version = Some("0.0.1")),
+            GenericSubsystemComponentBinding("secondarydevdirsample", version = Some("0.1.0-SNAPSHOT"))
           )
         )
         val configuration = ResolvedConfiguration(
           Configuration(Map(
             RuntimeConfig.ComponentCarDirKey -> ConfigurationValue.StringValue(packagedir.toString),
-            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+            RuntimeConfig.RepositoryComponentDevDirKey -> ConfigurationValue.StringValue(
+              s"component-dev-dir:$primarydir,component-dev-dir:$secondarydir"
+            )
           )),
           ConfigurationTrace.empty
         )
 
-        When("GenericSubsystemFactory resolves the competing repositories")
+        When("GenericSubsystemFactory resolves the complete explicit development repository set")
         val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
-        val components = subsystem.components.filter(_.name == "devdirsample")
+        val components = subsystem.components.filter(component =>
+          Set("devdirsample", "secondarydevdirsample").contains(component.name)
+        )
 
-        Then("the development class is activated exactly once without admitting the stale CAR")
-        components should have size 1
-        components.head.getClass.getName shouldBe classOf[devdirsample.DevDirSamplePrimaryComponent].getName
+        Then("both descriptor claims use development classes and no packaged provider is admitted")
+        components should have size 2
+        components.map(_.getClass.getName).toSet shouldBe Set(
+          classOf[devdirsample.DevDirSamplePrimaryComponent].getName,
+          classOf[secondarydevdirsample.SecondaryDevDirSampleComponent].getName
+        )
       }
     }
 
@@ -649,23 +661,25 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
   private def _sha256(bytes: Array[Byte]): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
-  private def _copy_devdir_sample_classes(target: Path): Unit = {
+  private def _copy_test_package_classes(source: Class[?], target: Path): Unit = {
     val testclasses = Path.of(
-      classOf[devdirsample.DevDirSampleComponent]
+      source
         .getProtectionDomain
         .getCodeSource
         .getLocation
         .toURI
     )
-    val source = testclasses.resolve("devdirsample")
-    Files.createDirectories(target.resolve("devdirsample"))
-    Using.resource(Files.list(source)) { stream =>
+    val packagepath = source.getPackageName.replace('.', '/')
+    val sourcepackage = testclasses.resolve(packagepath)
+    val targetpackage = target.resolve(packagepath)
+    Files.createDirectories(targetpackage)
+    Using.resource(Files.list(sourcepackage)) { stream =>
       stream.iterator().asScala
         .filter(path => Files.isRegularFile(path) && path.getFileName.toString.endsWith(".class"))
         .foreach { path =>
           Files.copy(
             path,
-            target.resolve("devdirsample").resolve(path.getFileName),
+            targetpackage.resolve(path.getFileName),
             java.nio.file.StandardCopyOption.REPLACE_EXISTING
           )
         }

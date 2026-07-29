@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -221,20 +221,20 @@ object CncfRuntime extends GlobalObservable {
   private[cli] def configure_slf4j_simple(
     configuration: ResolvedConfiguration
   ): Unit = {
-    def get(key: String): Option[String] =
+    def _get_(key: String): Option[String] =
       ConfigurationAccess.getString(configuration, key)
         .orElse(_legacy_framework_key(key).flatMap(ConfigurationAccess.getString(configuration, _)))
 
-    val logfile = get("textus.logging.slf4j.file.path")
-      .orElse(get("textus.runtime.logging.slf4j.file.path"))
-      .orElse(get("textus.logging.external.file.path"))
+    val logfile = _get_("textus.logging.slf4j.file.path")
+      .orElse(_get_("textus.runtime.logging.slf4j.file.path"))
+      .orElse(_get_("textus.logging.external.file.path"))
       .getOrElse("target/cncf.d/external.log")
-    val level = get("textus.logging.slf4j.level")
-      .orElse(get("textus.runtime.logging.slf4j.level"))
-      .orElse(get("textus.logging.level"))
+    val level = _get_("textus.logging.slf4j.level")
+      .orElse(_get_("textus.runtime.logging.slf4j.level"))
+      .orElse(_get_("textus.logging.level"))
       .getOrElse("warn")
-    val hikarilevel = get("textus.logging.slf4j.hikari.level").getOrElse("warn")
-    val sqlitelevel = get("textus.logging.slf4j.sqlite.level").getOrElse("warn")
+    val hikarilevel = _get_("textus.logging.slf4j.hikari.level").getOrElse("warn")
+    val sqlitelevel = _get_("textus.logging.slf4j.sqlite.level").getOrElse("warn")
 
     val p = Paths.get(logfile)
     Option(p.getParent).foreach(Files.createDirectories(_))
@@ -560,8 +560,10 @@ object CncfRuntime extends GlobalObservable {
       RuntimeConfig.getString(configuration, RuntimeConfig.ComponentFileKey).nonEmpty ||
         RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentFileKey).nonEmpty ||
         RuntimeConfig.getString(configuration, RuntimeConfig.ComponentDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.RepositoryComponentDevDirKey).nonEmpty ||
         RuntimeConfig.getString(configuration, RuntimeConfig.ComponentCarDirKey).nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.component.dev.dir").nonEmpty ||
+        ConfigurationAccess.getString(configuration, "cncf.repository.component.dev.dir").nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.component.car.dir").nonEmpty ||
         args.exists(_.startsWith("--component-file=")) ||
         args.contains("--component-file") ||
@@ -575,6 +577,8 @@ object CncfRuntime extends GlobalObservable {
         args.contains(s"--${RuntimeConfig.RuntimeComponentFileKey}") ||
         args.exists(_.startsWith(s"--${RuntimeConfig.ComponentDevDirKey}=")) ||
         args.contains(s"--${RuntimeConfig.ComponentDevDirKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.RepositoryComponentDevDirKey}=")) ||
+        args.contains(s"--${RuntimeConfig.RepositoryComponentDevDirKey}") ||
         args.exists(_.startsWith(s"--${RuntimeConfig.ComponentCarDirKey}=")) ||
         args.contains(s"--${RuntimeConfig.ComponentCarDirKey}")
     val hassubsystem =
@@ -1345,6 +1349,7 @@ object CncfRuntime extends GlobalObservable {
       RuntimeConfig.ComponentFileKey,
       RuntimeConfig.RuntimeComponentFileKey,
       RuntimeConfig.ComponentDevDirKey,
+      RuntimeConfig.RepositoryComponentDevDirKey,
       RuntimeConfig.ComponentCarDirKey,
       RuntimeConfig.SubsystemDevDirKey,
       RuntimeConfig.SubsystemSarDirKey,
@@ -1354,6 +1359,7 @@ object CncfRuntime extends GlobalObservable {
       "cncf.component.file",
       "cncf.runtime.component.file",
       "cncf.component.dev.dir",
+      "cncf.repository.component.dev.dir",
       "cncf.component.car.dir",
       "cncf.subsystem.dev.dir",
       "cncf.subsystem.sar.dir",

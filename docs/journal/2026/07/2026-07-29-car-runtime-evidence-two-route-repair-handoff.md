@@ -354,6 +354,51 @@ The expected implementation and local-publication order is:
 All independent top-level sbt invocations must use the shared serialized SBT
 runner. Do not start multiple repository builds concurrently.
 
+## 2026-07-29 Implementation Evidence Update
+
+The maintained acceptance command is now:
+
+```sh
+scripts/acceptance/check-phase51-car-runtime-two-route.sh packaged
+scripts/acceptance/check-phase51-car-runtime-two-route.sh development
+```
+
+It supplies the same ArtScene standalone subsystem descriptor to both routes.
+The packaged route supplies the five explicit CAR files. The development route
+supplies the five prepared project roots through the structured
+`textus.repository.component.dev.dir` boundary; it does not depend on a
+project-default CAR directory.
+
+The development route first creates a disposable partial root containing only
+the runtime classpath evidence and proves that startup reports the missing
+development manifest together with the `sbt cozyPrepareRuntime` recovery
+operation. The diagnostic also states that no packaged-CAR fallback is
+permitted. It then verifies the fully prepared route. Both fully prepared
+routes verify the same ArtScene OpenAPI surface, component-origin reporting,
+application description, User Notification create/search behavior, and a
+local Scraper fixture fetch.
+
+The implementation also corrected descriptor assembly of multiple development
+repositories: `textus.repository.component.dev.dir` is a runtime activation
+boundary, and a descriptor whose complete component set is claimed by those
+directories is assembled from them before default CAR repositories are
+considered. Assembly API metadata is therefore collected from every selected
+development directory. This prevents a packaged provider and its development
+counterpart from being installed together.
+
+Focused evidence recorded during this repair:
+
+- `SpiSpec`: 32/32 passed;
+- `GenericSubsystemFactorySpec`: 10/10 passed;
+- `ComponentRepositoryCarSpec`: 70/70 passed;
+- `CncfRuntimeConfigFileSpec`: 24/24 passed; and
+- both maintained acceptance routes passed, including the development
+  no-fallback negative assertion.
+
+The remaining work is the normal Phase review, review-fix, clean re-review,
+final validation, and release-commit sequence; this update does not declare
+the phase closed.
+
 ## Completion Conditions
 
 This handoff is complete when:

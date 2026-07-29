@@ -1,6 +1,6 @@
 /*
  * @since   Jul. 12, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 package org.goldenport.cncf.component
@@ -18,6 +18,16 @@ import org.scalatest.wordspec.AnyWordSpec
 
 final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Assembly API classloader" should {
+    "retain the former descriptor-path symbol as a compatibility alias" in {
+      Given("the canonical component API descriptor path constant")
+
+      When("a source client resolves the former public symbol")
+      val path = AssemblyApiClassLoader.DescriptorPath
+
+      Then("it receives the canonical descriptor path")
+      path shouldBe AssemblyApiClassLoader.DESCRIPTOR_PATH
+    }
+
     "give consumer and provider component loaders one descriptor-declared API class identity" in {
       Given("one component API artifact and two component-local copies of the same class")
       val classname = classOf[AssemblyApiFixture].getName
@@ -62,7 +72,10 @@ final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with Gi
     }
 
     "reject a required API without a provider before any component is instantiated" in {
-      Given("a consumer descriptor requiring an API absent from the assembly")
+      Given("a consumer descriptor requiring an API absent from an assembly with one different provided API")
+      val providedclass = classOf[AssemblyApiFixture].getName
+      val providedbytes = _class_bytes(providedclass)
+      val provided = _artifact("provider", "1.0.0", "sha256:one", providedclass, providedbytes)
       val requirement = AssemblyApiRequirement(
         componentName = "consumer",
         componentVersion = "1.0.0",
@@ -73,14 +86,16 @@ final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with Gi
       When("the assembly API metadata is validated")
       val result = AssemblyApiClassLoader.create(
         getClass.getClassLoader,
-        AssemblyApiMetadata(requirements = Vector(requirement))
+        AssemblyApiMetadata(artifacts = Vector(provided), requirements = Vector(requirement))
       )
 
-      Then("startup fails with the consumer and missing API identity")
+      Then("startup fails with the consumer, missing API identity, and provided API inventory")
       result match {
         case Consequence.Failure(conclusion) =>
           conclusion.display should include ("consumer@1.0.0")
           conclusion.display should include ("example.api.MissingApi")
+          conclusion.display should include ("provided APIs")
+          conclusion.display should include (providedclass)
         case Consequence.Success(value) =>
           fail(s"expected missing component API failure but got $value")
       }
@@ -106,7 +121,7 @@ final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with Gi
       val descriptor =
         s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"provider","version":"1.0.0"},"provided":[{"apiClass":"$classname","packages":["org.goldenport.cncf.component"],"abiHash":"sha256:one","artifactPath":"spi/provider-api.jar"}],"required":[]}"""
       _zip(car, Vector(
-        AssemblyApiClassLoader.DescriptorPath -> descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        AssemblyApiClassLoader.DESCRIPTOR_PATH -> descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8),
         "spi/provider-api.jar" -> apijar
       ))
 
@@ -125,7 +140,7 @@ final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with Gi
       val descriptor =
         s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"provider","version":"1.0.0"},"provided":[{"apiClass":"$classname","packages":["org.goldenport.cncf.component"],"abiHash":"sha256:one","artifactPath":"spi/provider-api.jar"}],"required":[]}"""
       val carbytes = _zip_bytes(Vector(
-        AssemblyApiClassLoader.DescriptorPath -> descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        AssemblyApiClassLoader.DESCRIPTOR_PATH -> descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8),
         "spi/provider-api.jar" -> _jar_bytes(classname, classbytes)
       ))
       val sar = Files.createTempFile("assembly-api-", ".sar")

@@ -12,7 +12,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * registry populated from an existing dependency.
  *
  * @since   Jul.  2, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object SpiResolver {
@@ -103,7 +103,10 @@ object SpiResolver {
         case _: SpiSocketSet[?] => None
         case service => Some(DirectSpiProvider(service))
       }.flatten
-      (componentproviders ++ componentapiproviders ++ portproviders ++ directproviders).map(ProviderSlot(component, _))
+      val providers = componentproviders ++ componentapiproviders ++ portproviders ++ directproviders
+      providers.foldLeft(Vector.empty[SpiProvider[?]]) { (slots, provider) =>
+        if (slots.exists(_ eq provider)) slots else slots :+ provider
+      }.map(ProviderSlot(component, _))
     }
 
   private def _single_sockets(
@@ -211,7 +214,8 @@ object SpiResolver {
         case xs =>
           Consequence.serviceUnavailable(
             s"ambiguous SPI providers: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
-              s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection, candidates=${xs.size}"
+              s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection, " +
+              s"candidates=${_candidate_display(xs)}"
           )
       }
     }
@@ -295,7 +299,8 @@ object SpiResolver {
       case xs =>
         Consequence.serviceUnavailable(
           s"ambiguous SPI providers: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
-            s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection, candidates=${xs.size}"
+            s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection, " +
+            s"candidates=${_candidate_display(xs)}"
         )
     }
 
@@ -602,6 +607,15 @@ object SpiResolver {
 
   private def _provider_selector_display(binding: SpiRuntimeBinding): String =
     s"component=${binding.provider.component.getOrElse("*")}, instance=${binding.provider.instance.getOrElse("*")}"
+
+  private def _candidate_display(
+    candidates: Vector[ProviderSlot]
+  ): String =
+    candidates.map { candidate =>
+      val component = candidate.component
+      val identity = component.coreOption.map(_.instanceId.toString).getOrElse("uninitialized")
+      s"${_component_name(component)}[$identity,${component.origin.label}]:${candidate.provider.getClass.getName}"
+    }.mkString("[", ",", "]")
 
   private final case class SingleSocketSlot(
     component: Component,

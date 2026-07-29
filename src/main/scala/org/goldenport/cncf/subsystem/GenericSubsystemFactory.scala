@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -452,12 +452,38 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration,
     descriptor: GenericSubsystemDescriptor
   ): Vector[ComponentRepository.Specification] = {
-    val base = componentDevDirPath(configuration)
-      .filter(path => _descriptor_components_are_from_dev_dir(path, descriptor))
-      .map(path => Vector(ComponentRepository.ComponentDevDirRepository.Specification(path)))
-      .getOrElse(_repository_specs(configuration))
+    val developmentrepositories = _component_dev_repository_paths(configuration)
+    val base =
+      if (developmentrepositories.nonEmpty)
+        developmentrepositories.map(ComponentRepository.ComponentDevDirRepository.Specification.apply)
+      else
+        componentDevDirPath(configuration)
+          .filter(path => _descriptor_components_are_from_dev_dir(path, descriptor))
+          .map(path => Vector(ComponentRepository.ComponentDevDirRepository.Specification(path)))
+          .getOrElse(_repository_specs(configuration))
     _merge_repository_specs(_active_component_repository_specs(configuration), base)
   }
+
+  private def _component_dev_repository_paths(
+    configuration: ResolvedConfiguration
+  ): Vector[Path] =
+    Vector(
+      RuntimeConfig.RepositoryComponentDevDirKey,
+      "cncf.repository.component.dev.dir"
+    ).flatMap(ConfigurationAccess.getString(configuration, _).toVector)
+      .flatMap(_.split(",").toVector)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map { value =>
+        if (value.startsWith("component-dev-dir:")) value.stripPrefix("component-dev-dir:")
+        else if (value.contains(":"))
+          throw new IllegalArgumentException(
+            "component development directory configuration must be a plain path or component-dev-dir:path; use component-dir/component-file settings for packaged CARs"
+          )
+        else value
+      }
+      .map(Paths.get(_))
+      .distinct
 
   private def _active_component_repository_specs(
     configuration: ResolvedConfiguration

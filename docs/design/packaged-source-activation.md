@@ -55,6 +55,14 @@ The following are development-time execution paths:
     surface
   - does not package or activate `docs/`; component-facing documentation must
     come from `src/main/car` or another `src/main` artifact source
+- `--textus.repository.component.dev.dir=<path[,path...]>`
+  - selects one or more prepared sibling development directories as the
+    repository boundary for a descriptor-based assembly
+  - when those directories claim the complete descriptor component set, they
+    are activated before default CAR repositories and their assembly API
+    metadata is collected as one source route
+  - is itself an explicit component activation: it must not be combined with
+    an implicit project CAR or silently fall back to a packaged provider
 - `--component-car-dir <path>`
   - explicitly runs an expanded CAR directory
   - intended for CAR loader debugging, archive inspection, and reproducing a
@@ -133,7 +141,7 @@ intent:
 Example:
 
 ```conf
-textus.repository.component.dev.dir = "../textus-user-account"
+textus.repository.component.dev.dir = "../textus-user-account,../textus-user-notification"
 ```
 
 The development-directory override is for edit/run work against a sibling

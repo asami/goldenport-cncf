@@ -42,7 +42,7 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationBootstrapSpec
@@ -566,7 +566,7 @@ final class ComponentInitializationBootstrapSpec
 
   private def _with_parameter_repository[T](body: Path => T): T = {
     val repositorydir = Files.createTempDirectory("component-parameter-repository")
-    val classdir = repositorydir.resolve("classes")
+    val classdir = repositorydir.resolve("target/classes")
     val factoryresource = classOf[RepositoryParameterProbeFactory].getName.replace('.', '/') + ".class"
     val factoryclass = classdir.resolve(factoryresource)
     Files.createDirectories(factoryclass.getParent)

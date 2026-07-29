@@ -17,7 +17,7 @@ import org.goldenport.Consequence
  * not component discovery inputs, so their classes are never factory-scanned.
  *
  * @since   Jul. 12, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssemblyApiContract(
@@ -83,7 +83,10 @@ final class AssemblyApiClassLoader private (
 }
 
 object AssemblyApiClassLoader {
-  val DescriptorPath = "component-api-descriptor.json"
+  val DESCRIPTOR_PATH = "component-api-descriptor.json"
+
+  @deprecated("Use DESCRIPTOR_PATH.", "0.5.2")
+  val DescriptorPath = DESCRIPTOR_PATH
 
   def create(
     parent: ClassLoader,
@@ -136,7 +139,10 @@ object AssemblyApiClassLoader {
         Vector(
           Option.when(contractconflicts.nonEmpty)(s"component API contract conflicts: ${contractconflicts.sorted.mkString("; ")}"),
           Option.when(classconflicts.nonEmpty)(s"component API class conflicts: ${classconflicts.sorted.mkString(",")}"),
-          Option.when(missingrequirements.nonEmpty)(s"required component APIs are missing: ${missingrequirements.mkString(",")}")
+          Option.when(missingrequirements.nonEmpty)(
+            s"required component APIs are missing: ${missingrequirements.mkString(",")}; " +
+              s"provided APIs: ${providedclasses.toVector.sorted.mkString(",")}"
+          )
         ).flatten.mkString("; ")
       )
     } else {
@@ -146,7 +152,7 @@ object AssemblyApiClassLoader {
 
   def loadCar(path: Path): Consequence[AssemblyApiMetadata] = Consequence {
     Using.resource(new ZipFile(path.toFile)) { zip =>
-      Option(zip.getEntry(DescriptorPath)).map { entry =>
+      Option(zip.getEntry(DESCRIPTOR_PATH)).map { entry =>
         val descriptortext = Using.resource(zip.getInputStream(entry)) { in =>
           new String(in.readAllBytes(), StandardCharsets.UTF_8)
         }
@@ -166,7 +172,7 @@ object AssemblyApiClassLoader {
   }
 
   def loadDirectory(path: Path): Consequence[AssemblyApiMetadata] = Consequence {
-    val descriptor = path.resolve(DescriptorPath)
+    val descriptor = path.resolve(DESCRIPTOR_PATH)
     if (!Files.isRegularFile(descriptor)) {
       AssemblyApiMetadata()
     } else {
@@ -253,7 +259,7 @@ object AssemblyApiClassLoader {
     Using.resource(new JarInputStream(new ByteArrayInputStream(bytes))) { car =>
       var entry = car.getNextJarEntry
       while (entry != null) {
-        if (!entry.isDirectory && entry.getName == DescriptorPath)
+        if (!entry.isDirectory && entry.getName == DESCRIPTOR_PATH)
           descriptortext = Some(new String(car.readAllBytes(), StandardCharsets.UTF_8))
         else if (!entry.isDirectory && entry.getName.startsWith("spi/") && entry.getName.endsWith(".jar"))
           jars += entry.getName -> car.readAllBytes()

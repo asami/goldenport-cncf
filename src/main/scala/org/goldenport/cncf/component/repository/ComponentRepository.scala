@@ -516,7 +516,7 @@ object ComponentRepository extends GlobalObservable {
       }
       val classpath = ComponentDevDirRepository.devRuntimeClasspath(baseDir)
       {
-        val classdirs = classpath.filter(Files.isDirectory(_))
+        val classdirs = ComponentDevDirRepository.devComponentClassDirectories(baseDir, classpath)
         if (classdirs.isEmpty) {
           throw new IllegalStateException(ComponentDevDirRepository.noClassDirectoryMessage(baseDir))
         } else {
@@ -634,7 +634,7 @@ object ComponentRepository extends GlobalObservable {
           Vector.empty
         case Some(_) =>
           val classpath = devRuntimeClasspath(base)
-          val classdirs = classpath.filter(Files.isDirectory(_))
+          val classdirs = devComponentClassDirectories(base, classpath)
           if (classdirs.isEmpty) {
             Vector.empty
           } else {
@@ -702,6 +702,22 @@ object ComponentRepository extends GlobalObservable {
           .map(p => Paths.get(p).toAbsolutePath.normalize)
           .distinct
       }
+    }
+
+    /*
+     * A prepared component runtime classpath contains its own compiled output
+     * plus dependency outputs.  The latter are loadable dependencies, not
+     * component candidates: scanning them here makes a selected sibling
+     * component appear again through another sibling's classpath.
+     */
+    def devComponentClassDirectories(
+      base: Path,
+      classpath: Vector[Path]
+    ): Vector[Path] = {
+      val target = base.toAbsolutePath.normalize.resolve("target")
+      classpath.filter(path =>
+        Files.isDirectory(path) && path.startsWith(target)
+      )
     }
 
     def validate(base: Path): Consequence[Unit] = {

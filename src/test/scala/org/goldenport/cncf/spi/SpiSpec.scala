@@ -18,14 +18,13 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  2, 2026
- * @version Jul. 18, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-
   "SpiResolver" should {
     "publish paired socket forms for CNCF-owned standard SPI contracts" in {
       Given("the AI, geographic, and toolchain standard SPI contracts")
@@ -88,6 +87,20 @@ final class SpiSpec
       consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "provider-a:hello"
     }
 
+    "resolve one provider once when it is exposed through both the component and its port" in {
+      Given("one provider instance exposed through the component SPI and its output port")
+      given ExecutionContext = ExecutionContext.create()
+      val provider = PortBackedProviderComponent("provider-a")
+      val consumer = ConsumerComponent()
+
+      When("SPI resolution collects the component's providers")
+      val result = SpiResolver.resolve(Vector(provider, consumer))
+
+      Then("the repeated exposure is treated as one provider, not an ambiguity")
+      result shouldBe a[Consequence.Success[_]]
+      consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "provider-a:hello"
+    }
+
     "trace canonical AiRunner SPI invocation in CallTree and metrics" in {
       Given("an initialized provider component and consumer socket with calltree enabled")
       val subsystem = TestComponentFactory.emptySubsystem("spi_trace")
@@ -129,7 +142,7 @@ final class SpiSpec
       val provider = _initialized_component(subsystem, "trace_failing_provider", FailingProviderComponent())
       val consumer = _initialized_component(subsystem, "trace_failing_consumer", ConsumerComponent())
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
-      val beforeErrors = RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.errors
+      val beforeerrors = RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.errors
 
       When("the consumer calls the failing SPI")
       SpiResolver.resolve(Vector(provider, consumer)) shouldBe a[Consequence.Success[_]]
@@ -143,7 +156,7 @@ final class SpiSpec
       text should include ("outcome=failure")
       text should include ("diagnostic_key")
       text should not include ("hidden failure prompt")
-      RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.errors should be > beforeErrors
+      RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.errors should be > beforeerrors
     }
 
     "inject a direct Component.Port SPI service into a matching socket component" in {
@@ -216,6 +229,11 @@ final class SpiSpec
 
       Then("resolution fails rather than choosing implicitly")
       result shouldBe a[Consequence.Failure[_]]
+      val failure = result.asInstanceOf[Consequence.Failure[_]].conclusion.display
+      failure should include ("ProviderComponent")
+      failure should include ("uninitialized")
+      failure should include ("unknown")
+      failure should include (classOf[AiRunnerProvider].getName)
     }
     }
 
@@ -950,6 +968,15 @@ final class SpiSpec
   ) extends Component with SpiProviderComponent {
     def spiProviders: Vector[SpiProvider[?]] =
       Vector(AiRunnerProvider(providername, selection))
+  }
+
+  private final case class PortBackedProviderComponent(providername: String)
+    extends Component
+    with SpiProviderComponent {
+    private val _provider = AiRunnerProvider(providername, SpiSelection())
+    withPort(Component.Port.of(_provider))
+
+    def spiProviders: Vector[SpiProvider[?]] = Vector(_provider)
   }
 
   private final case class AiRunnerProvider(

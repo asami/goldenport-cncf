@@ -136,6 +136,15 @@ repository propagation MUST preserve a structured `Consequence` failure,
 including the resource-invalid classification, failed evidence path, and
 recovery operation.
 
+### R8 Multi-directory development assembly
+
+`textus.repository.component.dev.dir` MAY contain a comma-separated set of
+prepared development directories. When that set claims every component in the
+selected subsystem descriptor, CNCF MUST assemble from that set and collect
+its complete assembly API metadata before considering a default CAR
+repository. It MUST NOT install a packaged component alongside its selected
+development counterpart.
+
 ### Examples
 
 - E1: mutable class recompilation preserves development admission (R3, R4).
@@ -147,6 +156,7 @@ recovery operation.
 - E7: a deleted classpath entry is rejected as stale evidence (R3, R5, R6).
 - E8: an invalid classpath entry is normalized into structured recovery (R5, R6, R7).
 - E9: a descriptor changed after preparation is rejected as stale contract evidence (R3, R6).
+- E10: a complete sibling development set overrides a locally available older CAR without mixed-source SPI providers (R6, R8).
 
 The CNCF Information CML build resolves its invocation from the pinned Cozy
 generator version, the root build's effective CNCF artifact version, the output
