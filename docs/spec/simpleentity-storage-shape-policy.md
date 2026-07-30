@@ -203,12 +203,12 @@ to admit its declared `{ value: ... }` wrapper. It MUST reject an arbitrary
 Record rather than treating it as persisted scalar text. Application-local
 Base64, prefix, or repair encodings MUST NOT replace the CNCF projection.
 
-An ordinary scalar `EntityId` cannot prove the complete collection namespace
-expected by the runtime collection. The CNCF persistence boundary MUST supply
-the exact owning `EntityCollectionId`, decode the original physical Record
-exactly once, and require the returned Entity to carry that exact owner. CNCF
-MUST NOT rewrite a custom codec's physical input or invoke
-`fromStoreRecord` a second time.
+The canonical `EntityId` carries its complete exact `EntityCollectionId`.
+The CNCF persistence boundary MUST validate equality with the selected runtime
+owner, decode the original physical Record exactly once, and require the
+returned Entity to carry that exact owner. CNCF MUST NOT rewrite a custom
+codec's physical input, invoke `fromStoreRecord` a second time, or rebind a
+foreign ID collection.
 
 `EntitySpace` MUST index collections by exact identity. Logical-name
 compatibility MUST succeed only for one match and MUST fail deterministically
@@ -216,10 +216,10 @@ when same-name collections are ambiguous. Generated, built-in, custom, raw,
 and legacy adapter requirements are normative in
 [Entity Collection Identity](entity-collection-identity.md).
 
-Aggregate create MUST canonicalize a typed `EntityId` and a scalar `EntityId`
-to the selected runtime collection before persistence. This prevents generated
-model placeholder collection namespaces from becoming the stored collection
-identity without adding load-time inference or application-specific fallback.
+Aggregate create MUST reject a typed or scalar `EntityId` whose collection
+differs from the selected runtime collection before persistence. Generated
+models MUST emit the runtime-exact collection; a placeholder or foreign
+collection MUST NOT be canonicalized, rebound, or repaired at this boundary.
 
 Managed attributes MAY be projected read-only where the surface contract
 requires them. Application mutation inputs MUST omit or reject managed values.

@@ -492,9 +492,8 @@ Canonical purpose-based random helpers are:
 Canonical ID helpers are:
 
 - `entity_id(collection, purpose)` for the configured runtime ID namespace;
-- `collection_entity_id(collection, purpose)` when an `EntityId` must retain
-  the collection namespace and round-trip without external collection
-  context;
+  its canonical payload retains the exact collection and round-trips without
+  external collection context;
 - `opaque_id(purpose)` for non-Entity opaque identifiers.
 
 Every helper records only structural execution-capability CallTree metadata.

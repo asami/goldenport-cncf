@@ -20,16 +20,11 @@ trait IdGenerationContext {
 
   def entityId(collection: EntityCollectionId, purpose: String): EntityId
 
-  def entityIdInCollectionNamespace(
-    collection: EntityCollectionId,
-    purpose: String
-  ): EntityId
-
   def opaqueId(purpose: String): String
 }
 
 object IdGenerationContext {
-  val DefaultNamespace: IdNamespace = IdNamespace("single", "global")
+  val DEFAULT_NAMESPACE: IdNamespace = IdNamespace("single", "global")
 
   def default(namespace: IdNamespace): IdGenerationContext =
     production(namespace, Clock.systemUTC(), EntropyContext.secure())
@@ -116,12 +111,6 @@ object IdGenerationContext {
       _entity_id(namespace, collection, purpose)
     }
 
-    def entityIdInCollectionNamespace(
-      collection: EntityCollectionId,
-      purpose: String
-    ): EntityId =
-      _entity_id(IdNamespace(collection.major, collection.minor), collection, purpose)
-
     private def _entity_id(
       idnamespace: IdNamespace,
       collection: EntityCollectionId,
@@ -132,7 +121,7 @@ object IdGenerationContext {
         idnamespace.major,
         idnamespace.minor,
         collection,
-        timestamp = Some(clock.instant()),
+        timestamp = Some(Instant.ofEpochMilli(clock.instant().toEpochMilli)),
         entropy = Some(_token(key))
       )
     }

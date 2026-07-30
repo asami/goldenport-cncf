@@ -263,8 +263,9 @@ or other local encodings.
 - Generated, built-in, custom, raw, and legacy adapter responsibilities are
   defined by
   [Entity Collection Identity](entity-collection-identity.md).
-- Aggregate create canonicalizes either a typed `EntityId` or its scalar form
-  to the selected runtime collection before persistence.
+- Aggregate create rejects a typed or scalar `EntityId` whose exact collection
+  differs from the selected runtime owner before persistence; it never
+  canonicalizes, rebinds, or repairs that identity.
 - `toViewRecord` and admin/manual projections must not drive DB shape.
 - Logic that needs permission must use typed security access. It must not depend
   on expanded permission record paths.

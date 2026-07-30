@@ -13,7 +13,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityVersionedMutationSpec
@@ -42,7 +42,7 @@ final class EntityVersionedMutationSpec
         )
         val fixture = _fixture()
         given ExecutionContext = fixture.context
-        val id = _id("full-and-typed")
+        val id = _id("full_and_typed")
         val created = fixture.entitystore.create(
           TestEntity(id, "created")
         )

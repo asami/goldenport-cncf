@@ -23,7 +23,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   Mar. 27, 2026
  *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StartupEntityImportSpec
@@ -32,8 +33,8 @@ final class StartupEntityImportSpec
   with GivenWhenThen {
 
   private val collectionId = EntityCollectionId("test", "a", "person")
-  private val p1IdText = "test-a-entity-person-1742198400000-abcd1234"
-  private val p2IdText = "test-a-entity-person-1742198400000-abcd1235"
+  private val p1IdText = "test-a-entity-ec1_4_test_1_a_6_person-1742198400000-abcd1234"
+  private val p2IdText = "test-a-entity-ec1_4_test_1_a_6_person-1742198400000-abcd1235"
   private val p1Id = _parse_entity_id(p1IdText)
   private val p2Id = _parse_entity_id(p2IdText)
 
@@ -43,10 +44,10 @@ final class StartupEntityImportSpec
       val cwd = Files.createTempDirectory("cncf-startup-entity-url")
       val server = _http_server(
         "/entity.yaml",
-        """entitystore:
+        s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: test-a-entity-person-1742198400000-abcd1234
+          |      - id: $p1IdText
           |        name: url-entity
           |        age: 20
           |""".stripMargin
@@ -92,10 +93,10 @@ final class StartupEntityImportSpec
       val file = dir.resolve("a.yaml")
       Files.writeString(
         file,
-        """entitystore:
+        s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: test-a-entity-person-1742198400000-abcd1234
+          |      - id: $p1IdText
           |        name: default-entity
           |        age: 20
           |""".stripMargin
@@ -126,10 +127,10 @@ final class StartupEntityImportSpec
       val file = cwd.resolve("entity.yaml")
       Files.writeString(
         file,
-        """entitystore:
+        s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: test-a-entity-person-1742198400000-abcd1234
+          |      - id: $p1IdText
           |        name: taro
           |        age: 20
           |""".stripMargin
@@ -162,20 +163,20 @@ final class StartupEntityImportSpec
       val earlier = nested.resolve("a.yaml")
       Files.writeString(
         earlier,
-        """entitystore:
+        s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: test-a-entity-person-1742198400000-abcd1234
+          |      - id: $p1IdText
           |        name: nested-first
           |        age: 10
           |""".stripMargin
       )
       Files.writeString(
         later,
-        """entitystore:
+        s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: test-a-entity-person-1742198400000-abcd1235
+          |      - id: $p2IdText
           |        name: root-second
           |        age: 11
           |""".stripMargin
@@ -310,20 +311,20 @@ final class StartupEntityImportSpec
       val explicitFile = cwd.resolve("explicit.yaml")
       Files.writeString(
         defaultFile,
-        """entitystore:
+        s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: test-a-entity-person-1742198400000-abcd1235
+          |      - id: $p2IdText
           |        name: default-entity
           |        age: 20
           |""".stripMargin
       )
       Files.writeString(
         explicitFile,
-        """entitystore:
+        s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: test-a-entity-person-1742198400000-abcd1234
+          |      - id: $p1IdText
           |        name: explicit-entity
           |        age: 21
           |""".stripMargin

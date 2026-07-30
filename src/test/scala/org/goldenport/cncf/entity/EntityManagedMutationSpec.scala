@@ -53,7 +53,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityManagedMutationSpec
@@ -115,10 +115,10 @@ final class EntityManagedMutationSpec
       )
       val fixture = _fixture(EntityConcurrencyPolicy.Optimistic)
       given ExecutionContext = fixture.context
-      val createid = _id("managed-create")
-      val detachedcreateid = _id("managed-create-detached-alias")
-      val patchid = _id("managed-patch")
-      val detachedpatchid = _id("managed-patch-detached-alias")
+      val createid = _id("managed_create")
+      val detachedcreateid = _id("managed_create_detached_alias")
+      val patchid = _id("managed_patch")
+      val detachedpatchid = _id("managed_patch_detached_alias")
       val created = fixture.store.create(CreateEntity(patchid, "created"))
       val detachedcreated =
         fixture.store.create(
@@ -190,10 +190,10 @@ final class EntityManagedMutationSpec
       )
       val fixture = _fixture(EntityConcurrencyPolicy.Optimistic)
       given ExecutionContext = fixture.context
-      val saveid = _id("system-save")
-      val updateid = _id("system-update")
-      val patchid = _id("system-update-by-id")
-      val upsertid = _id("system-upsert")
+      val saveid = _id("system_save")
+      val updateid = _id("system_update")
+      val patchid = _id("system_update_by_id")
+      val upsertid = _id("system_upsert")
       val admitted =
         for {
           _ <- fixture.store.create(CreateEntity(saveid, "created"))
@@ -242,7 +242,7 @@ final class EntityManagedMutationSpec
       )
       val fixture = _fixture(EntityConcurrencyPolicy.Optimistic)
       given ExecutionContext = fixture.context
-      val id = _id("system-save-create")
+      val id = _id("system_save_create")
 
       When("System save receives a value without caller-managed revision")
       val saved =
@@ -263,7 +263,7 @@ final class EntityManagedMutationSpec
       )
       val fixture = _fixture(EntityConcurrencyPolicy.Optimistic)
       given ExecutionContext = fixture.context
-      val id = _id("observed-stale-diagnostic")
+      val id = _id("observed_stale_diagnostic")
       val advanced =
         for {
           _ <- fixture.store.create(CreateEntity(id, "created"))
@@ -376,7 +376,7 @@ final class EntityManagedMutationSpec
       )
       val fixture = _fixture(EntityConcurrencyPolicy.Optimistic)
       given ExecutionContext = fixture.context
-      val id = _id("working-set")
+      val id = _id("working_set")
       val admitted =
         fixture.store
           .create(CreateEntity(id, "created"))
@@ -425,7 +425,7 @@ final class EntityManagedMutationSpec
       )
       val fixture = _fixture(EntityConcurrencyPolicy.Optimistic)
       given ExecutionContext = fixture.context
-      val id = _id("request-policy-bypass")
+      val id = _id("request_policy_bypass")
       val admitted =
         fixture.store
           .create(CreateEntity(id, "created"))
@@ -482,7 +482,7 @@ final class EntityManagedMutationSpec
         EntityConcurrencyPolicy.Optimistic,
         datastore
       )
-      val id = _id("runtime-restart")
+      val id = _id("runtime_restart")
       val created = {
         given ExecutionContext = writer.context
         writer.store.create(CreateEntity(id, "created"))
@@ -527,7 +527,7 @@ final class EntityManagedMutationSpec
         datastore
       )
       given ExecutionContext = fixture.context
-      val id = _id("provider-rollback")
+      val id = _id("provider_rollback")
       val loaded =
         fixture.store
           .create(CreateEntity(id, "before"))

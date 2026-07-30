@@ -11,7 +11,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentBodyVersionedMutationSpec
@@ -50,7 +50,7 @@ final class ContentBodyVersionedMutationSpec
           EntityConcurrencyPolicy.Optimistic
         )
         val entitystore = EntityStore.standard()
-        val id = _id("stale-overflow")
+        val id = _id("stale_overflow")
         val initialcontent = _large_content("initial")
         val winnercontent = _large_content("winner")
         val stalecontent = _large_content("stale")
@@ -102,7 +102,7 @@ final class ContentBodyVersionedMutationSpec
         val context = ExecutionContext.create()
         context.dataStoreSpace.useDataStore(datastore)
         given ExecutionContext = context
-        val id = _id("pure-plan")
+        val id = _id("pure_plan")
         val content = _large_content("planned")
 
         When("ContentBodyStoragePolicy creates the provider-neutral plan")
