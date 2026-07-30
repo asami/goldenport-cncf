@@ -18,7 +18,6 @@ import org.goldenport.cncf.entity.{
   EntityMutationExecutionPolicy,
   EntityPersistent,
   EntityPersistentCreate,
-  EntityStoreDecodeContext,
   EntityQuery,
   EntityRevisionCarrier,
   EntitySearchScope,
@@ -36,7 +35,7 @@ import org.simplemodeling.model.datatype.{
  * Built-in hierarchical Tag master and Entity-to-Tag association workflow.
  *
  * @since   May.  5, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TagUsageKind(val value: String) {
@@ -132,17 +131,6 @@ object TagRepository {
     override def toStoreRecord(e: Tag): Record = TagRecordCodec.toStoreRecord(e)
     def fromRecord(r: Record): Consequence[Tag] = TagRecordCodec.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[Tag] = TagRecordCodec.fromStoreRecord(r)
-    override def fromStoreRecord(
-      context: EntityStoreDecodeContext,
-      r: Record
-    ): Consequence[Tag] =
-      TagRecordCodec.fromStoreRecord(r).flatMap { entity =>
-        EntityPersistent.restoreCollectionIdentity(
-          entity,
-          entity.id,
-          context.owningCollectionId
-        )(id => entity.copy(id = id))
-      }
   }
 
   given EntityPersistentCreate[TagCreate] with {
@@ -166,7 +154,7 @@ final class EntityStoreTagRepository extends TagRepository {
       )
     } yield {
       TagTreeCache.invalidate(normalized.tagSpace)
-      _normalize_collection(created)
+      created
     }
 
   def update(ref: String, update: TagUpdate)(using ctx: ExecutionContext): Consequence[Tag] =
@@ -271,7 +259,7 @@ final class EntityStoreTagRepository extends TagRepository {
     }
 
   def load(id: EntityId)(using ctx: ExecutionContext): Consequence[Option[Tag]] =
-    EntityStore.standard().load[Tag](_tag_id(id)).map(_.map(_normalize_collection))
+    _require_tag_id(id).flatMap(EntityStore.standard().load[Tag])
 
   def list()(using ctx: ExecutionContext): Consequence[Vector[Tag]] =
     EntityStore.standard()
@@ -281,7 +269,7 @@ final class EntityStoreTagRepository extends TagRepository {
         EntitySearchScope.Store,
         Some(EntityVisibilityScope.Admin)
       ))
-      .map(_.data.map(_normalize_collection).filterNot(_is_deleted).sortBy(x =>
+      .map(_.data.filterNot(_is_deleted).sortBy(x =>
         (x.path, x.sortOrder.getOrElse(Int.MaxValue), x.key)
       ))
 
@@ -330,7 +318,7 @@ final class EntityStoreTagRepository extends TagRepository {
       values <- list(tagspace)
       _ <- _reject_duplicate_sibling(values, parent.map(_.id), key)
       path = TagPath.childPath(parent.map(_.path), key)
-      id = create.id.map(_tag_id)
+      id <- create.id.map(_require_tag_id).map(_.map(Some(_))).getOrElse(Consequence.success(None))
     } yield create.copy(
       id = id,
       tagSpace = tagspace,
@@ -398,14 +386,13 @@ final class EntityStoreTagRepository extends TagRepository {
   private def _is_descendant_path(path: String, parentpath: String): Boolean =
     path.startsWith(parentpath + ".")
 
-  private def _normalize_collection(tag: Tag): Tag =
-    tag.copy(id = _tag_id(tag.id), parentTagId = tag.parentTagId.map(_tag_id))
-
-  private def _tag_id(id: EntityId): EntityId =
+  private def _require_tag_id(id: EntityId): Consequence[EntityId] =
     if (id.collection == TagEntityCollections.Tag)
-      id
+      Consequence.success(id)
     else
-      id.copy(collection = TagEntityCollections.Tag)
+      Consequence.argumentInvalid(
+        s"tag id collection mismatch: expected ${TagEntityCollections.Tag.print}, got ${id.collection.print}"
+      )
 
   private def _is_deleted(tag: Tag): Boolean =
     tag.toRecord.getString("aliveness").exists(_.equalsIgnoreCase("dead"))
@@ -463,7 +450,7 @@ final case class TagTree(tags: Vector[Tag]) {
       Consequence.argumentMissing("tagRef")
     else {
       val entityid = EntityId.parse(value).toOption
-      entityid.flatMap(id => _by_id.get(id.copy(collection = TagEntityCollections.Tag).value))
+      entityid.filter(_.collection == TagEntityCollections.Tag).flatMap(id => _by_id.get(id.value))
         .orElse(_by_id.get(value))
         .orElse(_by_entropy.get(value))
         .map(Consequence.success)
@@ -747,7 +734,7 @@ object TagRecordCodec {
 
   def fromStoreRecord(record: Record): Consequence[Tag] =
     for {
-      id <- EntityId.createC(record)
+      id <- EntityId.createC(record).flatMap(_require_tag_id)
       key <- _string(record, "key").map(TagPath.validateKey).getOrElse(
         Consequence.argumentMissing("key")
       )
@@ -765,13 +752,15 @@ object TagRecordCodec {
       updatedat <- _instant(record, "updatedAt", "updated_at").map(Consequence.success).getOrElse(
         Consequence.argumentMissing("updatedAt")
       )
+      parentid <- _entity_id(record, "parentTagId", "parent_tag_id").flatMap {
+        case Some(value) => _require_tag_id(value).map(Some(_))
+        case None => Consequence.success(None)
+      }
     } yield Tag(
-      id = id.copy(collection = TagEntityCollections.Tag),
+      id = id,
       tagSpace = tagspace,
       key = key,
-      parentTagId = _entity_id(record, "parentTagId", "parent_tag_id").map(_.copy(collection =
-        TagEntityCollections.Tag
-      )),
+      parentTagId = parentid,
       path = path,
       usageKind = usage,
       sortOrder = _int(record, "sortOrder", "sort_order"),
@@ -829,12 +818,20 @@ object TagRecordCodec {
       case other => scala.util.Try(Instant.parse(other.toString.trim)).toOption
     }.nextOption()
 
-  private def _entity_id(record: Record, names: String*): Option[EntityId] =
-    names.iterator.flatMap(record.getAny).flatMap {
-      case id: EntityId => Some(id)
-      case s: String => EntityId.parse(s).toOption
-      case other => EntityId.parse(other.toString).toOption
-    }.nextOption()
+  private def _entity_id(record: Record, names: String*): Consequence[Option[EntityId]] =
+    names.iterator.flatMap(record.getAny).toVector.headOption match {
+      case Some(id: EntityId) => Consequence.success(Some(id))
+      case Some(value) => EntityId.parse(value.toString.trim).map(Some(_))
+      case None => Consequence.success(None)
+    }
+
+  private def _require_tag_id(id: EntityId): Consequence[EntityId] =
+    if (id.collection == TagEntityCollections.Tag)
+      Consequence.success(id)
+    else
+      Consequence.argumentInvalid(
+        s"tag id collection mismatch: expected ${TagEntityCollections.Tag.print}, got ${id.collection.print}"
+      )
 
   private def _attributes(record: Record): Map[String, String] =
     record.getAny("attributes") match {

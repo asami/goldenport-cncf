@@ -20,7 +20,7 @@ import org.goldenport.cncf.job.JobId
  *  version Apr. 30, 2026
  *  version May. 31, 2026
  *  version Jun. 29, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -302,13 +302,13 @@ object OperationResponseFormatter {
   ): Option[String] =
     request.properties.reverseIterator.collectFirst {
       case prop if
-          prop.name.equalsIgnoreCase(RuntimeConfig.CommandExecutionModeKey) ||
-          prop.name.equalsIgnoreCase(RuntimeConfig.RuntimeCommandExecutionModeKey) ||
+          prop.name.equalsIgnoreCase(RuntimeConfig.commandExecutionModeKey) ||
+          prop.name.equalsIgnoreCase(RuntimeConfig.runtimeCommandExecutionModeKey) ||
           prop.name.equalsIgnoreCase("cncf.command.execution-mode") ||
           prop.name.equalsIgnoreCase("cncf.runtime.command.execution-mode") =>
         Option(prop.value).map(_.toString.trim).getOrElse("")
     }.filter(_.nonEmpty)
-      .orElse(_configuration_string(RuntimeConfig.CommandExecutionModeKey))
+      .orElse(_configuration_string(RuntimeConfig.commandExecutionModeKey))
       .orElse(GlobalRuntimeContext.current.flatMap(_.commandExecutionMode).map(_.toString))
 
   private def _requested_execution_policy(

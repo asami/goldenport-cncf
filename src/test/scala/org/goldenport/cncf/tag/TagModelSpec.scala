@@ -15,6 +15,7 @@ import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -24,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for hierarchical Tag master and TagAttachment.
  *
  * @since   May.  5, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagModelSpec
@@ -169,6 +170,53 @@ final class TagModelSpec
       invalid shouldBe a[Consequence.Failure[_]]
     }
 
+    "reject foreign canonical ids rather than rebinding them to the Tag collection" in {
+      Given("a Tag record and repository lookup with a foreign exact EntityId")
+      given ExecutionContext = _execution_context()
+      val foreign = EntityId("cncf", "foreign_tag", EntityCollectionId("cncf", "builtin", "blob"))
+      val record = Record.dataAuto(
+        "id" -> foreign.value,
+        "key" -> "foreign",
+        "tagSpace" -> "identity-space",
+        "path" -> "foreign",
+        "createdAt" -> "2026-07-30T00:00:00Z",
+        "updatedAt" -> "2026-07-30T00:00:00Z"
+      )
+
+      When("the Tag codec and repository receive that id")
+      val decoded = TagRecordCodec.fromStoreRecord(record)
+      val loaded = TagRepository.entityStore().load(foreign)
+
+      Then("both fail instead of changing its collection to tag")
+      decoded shouldBe a[Consequence.Failure[_]]
+      loaded shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject a present malformed parent Tag reference instead of dropping it" in {
+      Given("a canonical Tag record with a malformed optional parent reference")
+      val id = EntityId(
+        TagEntityCollections.Tag.major,
+        TagEntityCollections.Tag.minor,
+        TagEntityCollections.Tag,
+        entropy = Some("malformed_parent")
+      )
+      val record = Record.dataAuto(
+        "id" -> id.value,
+        "key" -> "malformed-parent",
+        "tagSpace" -> "identity-space",
+        "path" -> "malformed-parent",
+        "parentTagId" -> "legacy-parent",
+        "createdAt" -> "2026-07-30T00:00:00Z",
+        "updatedAt" -> "2026-07-30T00:00:00Z"
+      )
+
+      When("the Tag codec decodes the stored optional reference")
+      val decoded = TagRecordCodec.fromStoreRecord(record)
+
+      Then("it fails instead of treating malformed input as no parent")
+      decoded shouldBe a[Consequence.Failure[_]]
+    }
+
     "publish master descriptor with tag-specific resident tree handled outside entity working set" in {
       Given("the default subsystem with its built-in Tag component")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
@@ -198,16 +246,17 @@ final class TagModelSpec
       val root = _success(repository.create(TagCreate(None, "search-root", None, tagSpace = "search-space")))
       val child = _success(repository.create(TagCreate(None, "child", Some(root.id), tagSpace = "search-space")))
       val workflow = TaggingWorkflow(tagSpace = "search-space")
+      val sourceid = _source_id("entity_1")
 
       When("the same Tag is attached twice and searched through its parent")
-      val first = _success(workflow.attach("entity-1", child.path))
-      val second = _success(workflow.attach("entity-1", child.path))
+      val first = _success(workflow.attach(sourceid, child.path))
+      val second = _success(workflow.attach(sourceid, child.path))
       val matched = _success(workflow.searchSourceIds(root.path, includeDescendants = true, role = Some("tag")))
       val direct = _success(workflow.searchSourceIds(root.path, includeDescendants = false, role = Some("tag")))
       val stored = _success(AssociationRepository.entityStore(AssociationStoragePolicy.tagAttachmentDefault).list(
         AssociationFilter(
           domain = AssociationDomain.TagAttachment,
-          sourceEntityId = Some("entity-1"),
+          sourceEntityId = Some(sourceid),
           targetKind = Some("tag"),
           role = Some("tag")
         )
@@ -217,8 +266,8 @@ final class TagModelSpec
       first.targetEntityId shouldBe child.id.value
       second.targetEntityId shouldBe child.id.value
       stored.size shouldBe 1
-      matched should contain ("entity-1")
-      direct should not contain "entity-1"
+      matched should contain (sourceid)
+      direct should not contain sourceid
     }
 
     "merge explicit workflow tag space with execution context tag spaces" in {
@@ -237,20 +286,22 @@ final class TagModelSpec
       val blog = _success(repository.create(TagCreate(None, "blog-only", None, tagSpace = TagSpace.Blog)))
       val operational = _success(repository.create(TagCreate(None, "ops-only", None, tagSpace = TagSpace.Operational)))
       val workflow = TaggingWorkflow(tagSpace = TagSpace.Blog)
+      val blogsourceid = _source_id("entity_blog")
+      val operationalsourceid = _source_id("entity_ops")
 
       When("Tags from both effective spaces are attached and searched")
-      _success(workflow.attach("entity-blog", blog.path))
-      _success(workflow.attach("entity-ops", operational.path))
+      _success(workflow.attach(blogsourceid, blog.path))
+      _success(workflow.attach(operationalsourceid, operational.path))
       val blogmatches = _success(workflow.searchSourceIds(blog.path))
       val operationalmatches = _success(workflow.searchSourceIds(operational.path))
 
       Then("the workflow resolves both explicit and context-provided spaces")
-      blogmatches should contain ("entity-blog")
-      operationalmatches should contain ("entity-ops")
+      blogmatches should contain (blogsourceid)
+      operationalmatches should contain (operationalsourceid)
     }
 
     "load visible source entities through generic tag_search_entities" in {
-      Given("a source Tag associated with a classifier Tag and one invalid source ID")
+      Given("a canonical source Tag associated with a classifier Tag")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val source = _record(_success(subsystem.executeOperationResponse(_tag_request(
         "tag_create",
@@ -267,12 +318,6 @@ final class TagModelSpec
       _success(subsystem.executeOperationResponse(_tag_request(
         "tag_attach",
         Argument("sourceEntityId", sourceid),
-        Argument("tagRef", classifierpath),
-        Argument("tagSpace", "tag-search-op")
-      )))
-      _success(subsystem.executeOperationResponse(_tag_request(
-        "tag_attach",
-        Argument("sourceEntityId", "not-an-entity-id"),
         Argument("tagRef", classifierpath),
         Argument("tagSpace", "tag-search-op")
       )))
@@ -301,6 +346,102 @@ final class TagModelSpec
         data should have size 1
         data.head.asInstanceOf[Record].getString("id") shouldBe Some(sourceid)
       }
+    }
+
+    "reject noncanonical Entity IDs at Tag operation ingress" in {
+      Given("a Tag service with a classifier Tag and scalar Entity ID inputs")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val classifier = _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "tag-ingress-classifier"),
+        Argument("tagSpace", "tag-ingress")
+      ))))
+      val classifierpath = classifier.getString("path").getOrElse(fail("classifier tag path is missing"))
+
+      When("Tag operations receive a noncanonical Entity ID")
+      val attach = subsystem.executeOperationResponse(_tag_request(
+        "tag_attach",
+        Argument("sourceEntityId", "not-an-entity-id"),
+        Argument("tagRef", classifierpath),
+        Argument("tagSpace", "tag-ingress")
+      ))
+      val detach = subsystem.executeOperationResponse(_tag_request(
+        "tag_detach",
+        Argument("sourceEntityId", "not-an-entity-id"),
+        Argument("tagRef", classifierpath),
+        Argument("tagSpace", "tag-ingress")
+      ))
+      val listed = subsystem.executeOperationResponse(_tag_request(
+        "tag_list_entity_tags",
+        Argument("sourceEntityId", "not-an-entity-id"),
+        Argument("tagSpace", "tag-ingress")
+      ))
+      val generated = subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "invalid-explicit-id"),
+        Argument("id", "not-an-entity-id"),
+        Argument("tagSpace", "tag-ingress")
+      ))
+      val parent = subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "invalid-parent-id"),
+        Argument("parentTagId", "not-an-entity-id"),
+        Argument("tagSpace", "tag-ingress")
+      ))
+
+      Then("every explicit scalar input is rejected instead of being persisted or treated as absent")
+      attach shouldBe a[Consequence.Failure[_]]
+      detach shouldBe a[Consequence.Failure[_]]
+      listed shouldBe a[Consequence.Failure[_]]
+      generated shouldBe a[Consequence.Failure[_]]
+      parent shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject a same-name foreign canonical id at generic tag source ingress" in {
+      Given("a Tag association whose source id has the tag collection name but a foreign namespace")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val source = _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "tag-search-foreign-source"),
+        Argument("tagSpace", "tag-search-foreign")
+      ))))
+      val classifier = _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "tag-search-foreign-classifier"),
+        Argument("tagSpace", "tag-search-foreign")
+      ))))
+      val sourceid = source.getString("id").getOrElse(fail("source tag id is missing"))
+      val parsed = EntityId.parse(sourceid).toOption.getOrElse(fail("source tag id must be canonical"))
+      val foreign = EntityId(
+        "foreign",
+        parsed.minor,
+        EntityCollectionId("foreign", parsed.minor, "tag"),
+        parsed.timestamp,
+        parsed.entropy
+      )
+      val classifierpath = classifier.getString("path").getOrElse(fail("classifier tag path is missing"))
+      _success(subsystem.executeOperationResponse(_tag_request(
+        "tag_attach",
+        Argument("sourceEntityId", foreign.value),
+        Argument("tagRef", classifierpath),
+        Argument("tagSpace", "tag-search-foreign")
+      )))
+
+      When("tag_search_entities resolves the source against the local tag collection")
+      val result = subsystem.executeOperationResponse(Request.of(
+        component = "tag",
+        service = "tag",
+        operation = "tag_search_entities",
+        arguments = List(
+          Argument("component", "tag"),
+          Argument("entity", "tag"),
+          Argument("tagSpace", "tag-search-foreign"),
+          Argument("tagRef", classifierpath)
+        )
+      ))
+
+      Then("it rejects the foreign canonical id instead of rewriting it to the local tag collection")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "scope tag_update and tag_move by requested tagSpace" in {
@@ -412,4 +553,14 @@ final class TagModelSpec
       case OperationResponse.RecordResponse(record) => record
       case other => fail(s"unexpected response: $other")
     }
+
+  private def _source_id(entropy: String): String = {
+    val collection = EntityCollectionId("test", "tag", "source")
+    EntityId(
+      collection.major,
+      collection.minor,
+      collection,
+      entropy = Some(entropy)
+    ).value
+  }
 }

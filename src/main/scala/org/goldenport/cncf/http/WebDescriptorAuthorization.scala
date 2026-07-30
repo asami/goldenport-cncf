@@ -8,7 +8,7 @@ import org.goldenport.http.HttpRequest
 /*
  * @since   Apr. 14, 2026
  * version Apr. 19, 2026
- * @version May. 20, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebDescriptorAuthorization {
@@ -155,13 +155,13 @@ object WebDescriptorAuthorization {
     selector: String,
     subject: Subject
   ): Boolean =
-    isAllowed(descriptor, selector, subject, org.goldenport.cncf.config.RuntimeConfig.DefaultOperationMode)
+    isAllowed(descriptor, selector, subject, org.goldenport.cncf.config.RuntimeConfig.defaultOperationMode)
 
   def isAllowed(
     rule: WebDescriptor.Authorization,
     subject: Subject
   ): Boolean =
-    isAllowed(rule, subject, org.goldenport.cncf.config.RuntimeConfig.DefaultOperationMode)
+    isAllowed(rule, subject, org.goldenport.cncf.config.RuntimeConfig.defaultOperationMode)
 
   private def _operation_mode_allowed(
     rule: WebDescriptor.Authorization,

@@ -22,7 +22,7 @@ import org.simplemodeling.model.datatype.EntityId
  * markup values for the next content-format slice.
  *
  * @since   May.  3, 2026
- * @version May.  4, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 enum InlineImageMarkup {
@@ -446,12 +446,10 @@ final class BlobInlineImageWorkflow(
   private def _resolve_blob_value(
     value: String
   )(using ExecutionContext): Consequence[Option[Blob]] = {
-    EntityId.parse(value).toOption match {
-      case Some(id) if id.collection.name == BlobRepository.CollectionId.name =>
-        repository.get(_blob_entity_id(id)).map(Some(_))
-      case Some(_) =>
-        Consequence.success(None)
-      case None =>
+    EntityId.parse(value) match {
+      case Consequence.Success(id) =>
+        _blob_entity_id(id).flatMap(repository.get).map(Some(_))
+      case Consequence.Failure(_) =>
         _resolve_blob_urn(TextusUrn.blob(value))
     }
   }
@@ -468,11 +466,13 @@ final class BlobInlineImageWorkflow(
   private def _blob_urn(id: EntityId): TextusUrn =
     TextusUrn.blob(id.parts.entropy)
 
-  private def _blob_entity_id(id: EntityId): EntityId =
+  private def _blob_entity_id(id: EntityId): Consequence[EntityId] =
     if (id.collection == BlobRepository.CollectionId)
-      id
+      Consequence.success(id)
     else
-      id.copy(collection = BlobRepository.CollectionId)
+      Consequence.argumentInvalid(
+        s"Blob Entity ID collection mismatch: expected ${BlobRepository.CollectionId.print}, actual ${id.collection.print}"
+      )
 
   private def _display_url(blob: Blob): String =
     blob.sourceMode match {

@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionDeterminismReplayScenarioSpec
@@ -175,7 +175,7 @@ final class ExecutionDeterminismReplayScenarioSpec
   private def _controlled_configuration: ResolvedConfiguration =
     ResolvedConfiguration(
       Configuration(Map(
-        RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("test"),
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("test"),
         RuntimeConfig.EXECUTION_PROFILE_KEY -> ConfigurationValue.StringValue("controlled"),
         RuntimeConfig.EXECUTION_KEY -> ConfigurationValue.StringValue(_run_key),
         RuntimeConfig.EXECUTION_TIME_MODE_KEY -> ConfigurationValue.StringValue("manual"),

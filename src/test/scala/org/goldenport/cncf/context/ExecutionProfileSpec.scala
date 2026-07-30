@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionProfileSpec
@@ -73,7 +73,7 @@ final class ExecutionProfileSpec
           RuntimeConfig.EXECUTION_I18N_DATE_TIME_FORMAT_POLICY_KEY -> "iso-8601"
         ))
         val profile = ExecutionProfileResolver.resolve(configuration, OperationMode.Production).toOption.get
-        val binding = profile.newRuntime(IdGenerationContext.DefaultNamespace).baseBinding
+        val binding = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE).baseBinding
         val core = binding.environmentAssumptions.apply_to(ExecutionContext.create().core, binding.clock)
 
         core.locale.toLanguageTag == locale &&
@@ -109,7 +109,7 @@ final class ExecutionProfileSpec
         .resolve_with_environment(configuration, OperationMode.Production, ambient)
         .toOption
         .get
-      val binding = profile.newRuntime(IdGenerationContext.DefaultNamespace).baseBinding
+      val binding = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE).baseBinding
       val rendered = profile.toString + profile.environmentAssumptions.toRecord.toString + profile.control.toRecord.toString
 
       Then("the immutable snapshot contains only the declared name and diagnostics omit its value")
@@ -192,7 +192,7 @@ final class ExecutionProfileSpec
         val leftprofile = ExecutionProfileResolver.resolve(configuration, OperationMode.Production).toOption.get
         val rightprofile = ExecutionProfileResolver.resolve(configuration, OperationMode.Production).toOption.get
 
-        val namespace = IdGenerationContext.DefaultNamespace
+        val namespace = IdGenerationContext.DEFAULT_NAMESPACE
         val left = leftprofile.newRuntime(namespace).nextBinding("catalog.price", Some("price-case"))
         val right = rightprofile.newRuntime(namespace).nextBinding("catalog.price", Some("price-case"))
         val leftvalues = Vector.fill(4)(left.random.stream("price-table").nextLong())
@@ -212,7 +212,7 @@ final class ExecutionProfileSpec
       val config = _controlled_configuration("id-run", "domain-random-seed")
       val leftprofile = ExecutionProfileResolver.resolveForSpec(config).toOption.get
       val rightprofile = ExecutionProfileResolver.resolveForSpec(config).toOption.get
-      val namespace = IdGenerationContext.DefaultNamespace
+      val namespace = IdGenerationContext.DEFAULT_NAMESPACE
       val collection = org.simplemodeling.model.datatype.EntityCollectionId("sample", "catalog", "article")
       val leftruntime = leftprofile.newRuntime(namespace)
       val rightruntime = rightprofile.newRuntime(namespace)
@@ -297,7 +297,7 @@ final class ExecutionProfileSpec
           .resolveForSpec(_controlled_configuration("manual-clock-run", "manual-clock-seed"))
           .toOption
           .get
-        val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+        val runtime = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
         val binding = runtime.baseBinding
         val control = runtime.testControl.get
         val before = binding.clock.instant()
@@ -320,8 +320,8 @@ final class ExecutionProfileSpec
         .resolveForSpec(_controlled_configuration("isolated-clock-run", "isolated-clock-seed"))
         .toOption
         .get
-      val left = profile.newRuntime(IdGenerationContext.DefaultNamespace)
-      val right = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val left = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
+      val right = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
       val start = profile.runtimeClock.clock.instant()
       val collection = org.simplemodeling.model.datatype.EntityCollectionId(
         "sample",
@@ -591,7 +591,7 @@ final class ExecutionProfileSpec
       )))
       val context = _runtime_context(config)
       val component = TestComponentFactory.create("catalog", Protocol.empty)
-      val action = _ProfileQueryAction(Request.of(
+      val action = ProfileQueryAction(Request.of(
         component = "catalog",
         service = "price",
         operation = "calculate"
@@ -625,7 +625,7 @@ final class ExecutionProfileSpec
       )))
       val context = _runtime_context(config)
       val component = TestComponentFactory.create("catalog", Protocol.empty)
-      val action = _ProfileQueryAction(Request.of(component = "catalog", service = "price", operation = "calculate"))
+      val action = ProfileQueryAction(Request.of(component = "catalog", service = "price", operation = "calculate"))
 
       When("ComponentLogic creates two invocation-scoped ActionCalls")
       val first = ComponentLogic(component).createActionCall(action, context).executionContext
@@ -654,7 +654,7 @@ final class ExecutionProfileSpec
     seed: String
   ): Map[String, String] =
     Map(
-      RuntimeConfig.OperationModeKey -> "test",
+      RuntimeConfig.operationModeKey -> "test",
       RuntimeConfig.EXECUTION_PROFILE_KEY -> "controlled",
       RuntimeConfig.EXECUTION_KEY -> runkey,
       RuntimeConfig.EXECUTION_TIME_MODE_KEY -> "manual",
@@ -718,12 +718,12 @@ final class ExecutionProfileSpec
   }
 }
 
-private final case class _ProfileQueryAction(request: Request) extends QueryAction {
+private final case class ProfileQueryAction(request: Request) extends QueryAction {
   def createCall(core: ActionCall.Core): ActionCall =
-    _ProfileQueryActionCall(core)
+    ProfileQueryActionCall(core)
 }
 
-private final case class _ProfileQueryActionCall(core: ActionCall.Core)
+private final case class ProfileQueryActionCall(core: ActionCall.Core)
   extends ProcedureActionCall {
   def execute(): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Scalar("profile-bound"))

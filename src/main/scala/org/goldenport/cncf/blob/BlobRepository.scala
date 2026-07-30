@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreDecodeContext}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore}
 import org.goldenport.datatype.ContentType
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -14,7 +14,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 27, 2026
  *  version Apr. 28, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BlobRepository {
@@ -28,11 +28,13 @@ object BlobRepository {
   val CollectionId: EntityCollectionId =
     EntityCollectionId("cncf", "builtin", "blob")
 
-  def canonicalId(id: EntityId): EntityId =
+  def requireCanonicalId(id: EntityId): Consequence[EntityId] =
     if (id.collection == CollectionId)
-      id
+      Consequence.success(id)
     else
-      id.copy(collection = CollectionId)
+      Consequence.argumentInvalid(
+        s"blob id collection mismatch: expected ${CollectionId.print}, got ${id.collection.print}"
+      )
 
   def entityStore(): BlobRepository =
     new EntityStoreBlobRepository()
@@ -43,17 +45,6 @@ object BlobRepository {
     override def toStoreRecord(e: Blob): Record = BlobRecordCodec.toStoreRecord(e)
     def fromRecord(r: Record): Consequence[Blob] = BlobRecordCodec.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[Blob] = BlobRecordCodec.fromStoreRecord(r)
-    override def fromStoreRecord(
-      context: EntityStoreDecodeContext,
-      r: Record
-    ): Consequence[Blob] =
-      BlobRecordCodec.fromStoreRecord(r).flatMap { entity =>
-        EntityPersistent.restoreCollectionIdentity(
-          entity,
-          entity.id,
-          context.owningCollectionId
-        )(id => entity.copy(id = id))
-      }
   }
 
   given EntityPersistentCreate[BlobCreate] with {
@@ -69,6 +60,7 @@ final class EntityStoreBlobRepository extends BlobRepository {
 
   def create(blob: BlobCreate)(using ctx: ExecutionContext): Consequence[Blob] =
     for {
+      _ <- BlobRepository.requireCanonicalId(blob.id)
       result <- EntityStore.standard().create(blob)
       id = result.id
       loaded <- EntityStore.standard().load[Blob](id)
@@ -79,7 +71,7 @@ final class EntityStoreBlobRepository extends BlobRepository {
     } yield blob
 
   def get(id: EntityId)(using ctx: ExecutionContext): Consequence[Blob] =
-    EntityStore.standard().load[Blob](BlobRepository.canonicalId(id)).flatMap {
+    BlobRepository.requireCanonicalId(id).flatMap(EntityStore.standard().load[Blob]).flatMap {
       case Some(value) => Consequence.success(value)
       case None => Consequence.operationNotFound(s"blob metadata:${id.value}")
     }
@@ -88,7 +80,7 @@ final class EntityStoreBlobRepository extends BlobRepository {
     _search(Query.plan(Record.empty, limit = limit, offset = Some(offset)))
 
   def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] =
-    EntityStore.standard().delete(BlobRepository.canonicalId(id))
+    BlobRepository.requireCanonicalId(id).flatMap(EntityStore.standard().delete)
 
   private def _search(
     query: Query[?]
@@ -116,8 +108,7 @@ object BlobRecordCodec {
 
   def fromStoreRecord(record: Record): Consequence[Blob] =
     for {
-      rawid <- EntityId.createC(record)
-      id = EntityId(rawid.major, rawid.minor, BlobRepository.CollectionId, rawid.timestamp, rawid.entropy)
+      id <- EntityId.createC(record).flatMap(BlobRepository.requireCanonicalId)
       kind <- _string(record, "kind").map(BlobKind.parse).getOrElse(Consequence.argumentMissing("kind"))
       sourcemode <- _string(record, "sourceMode", "source_mode").map(BlobSourceMode.parse).getOrElse(Consequence.argumentMissing("sourceMode"))
       access <- _access_url(record)

@@ -23,7 +23,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 23, 2026
  *  version May. 10, 2026
- * @version Jun.  5, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
@@ -356,7 +356,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
     val configuration = ResolvedConfiguration(
       Configuration(
         webDescriptor.toVector.map(path =>
-          RuntimeConfig.WebDescriptorKey -> org.goldenport.configuration.ConfigurationValue.StringValue(path.toString)
+          RuntimeConfig.webDescriptorKey -> org.goldenport.configuration.ConfigurationValue.StringValue(path.toString)
         ).toMap
       ),
       ConfigurationTrace.empty

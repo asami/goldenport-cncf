@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  9, 2026
  *  version Apr.  9, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminDeploymentSecurityExecutionSpec
@@ -62,12 +62,12 @@ final class AdminDeploymentSecurityExecutionSpec
       val adminComponent = _admin_component(subsystem)
       val listRequest = _build_request(subsystem.resolver, "admin.variation.list")
       val describeRequest = _build_request(subsystem.resolver, "admin.variation.describe").copy(
-        arguments = List(Argument("key", RuntimeConfig.ExecutionHistoryRecentLimitKey))
+        arguments = List(Argument("key", RuntimeConfig.executionHistoryRecentLimitKey))
       )
 
       _execute(adminComponent, listRequest) match {
         case Consequence.Success(OperationResponse.Scalar(text: String)) =>
-          text should include (s"key  : ${RuntimeConfig.ExecutionHistoryRecentLimitKey}")
+          text should include (s"key  : ${RuntimeConfig.executionHistoryRecentLimitKey}")
           text should include ("brief: Recent execution history size.")
           text should not include ("detail: Number of most recent action execution records")
         case other =>
@@ -76,7 +76,7 @@ final class AdminDeploymentSecurityExecutionSpec
 
       _execute(adminComponent, describeRequest) match {
         case Consequence.Success(OperationResponse.RecordResponse(record)) =>
-          record.getString("key") shouldBe Some(RuntimeConfig.ExecutionHistoryRecentLimitKey)
+          record.getString("key") shouldBe Some(RuntimeConfig.executionHistoryRecentLimitKey)
           record.getString("brief") shouldBe Some("Recent execution history size.")
           record.getString("detail").exists(_.contains("Number of most recent action execution records")) shouldBe true
         case other =>

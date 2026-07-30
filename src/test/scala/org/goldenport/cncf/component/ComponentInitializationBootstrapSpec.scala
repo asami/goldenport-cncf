@@ -42,7 +42,7 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 29, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationBootstrapSpec
@@ -251,7 +251,7 @@ final class ComponentInitializationBootstrapSpec
         _with_parameter_repository { repositorydir =>
           val configuration = ResolvedConfiguration(
             Configuration(Map(
-              RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(repositorydir.toString)
+              RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(repositorydir.toString)
             )),
             ConfigurationTrace.empty
           )

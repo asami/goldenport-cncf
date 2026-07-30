@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May. 21, 2026
  *  version Jun.  5, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationEditorProjectionSpec
@@ -95,7 +95,7 @@ final class InformationEditorProjectionSpec
       _success(component.informationSpace.addResolutionCandidate(recordid, "dbpediaUri", "Domain-driven design", binding, Some(0.85), Some("title match")))
       _success(component.informationSpace.appendFieldEvent(recordid, InformationFieldEvent(
         fieldPath = "title",
-        state = InformationFieldState.Imported,
+        state = InformationFieldState.imported,
         source = "dbpedia",
         operation = Some("resolveBook"),
         provider = Some("provider:dbpedia.book.lookup"),
@@ -107,7 +107,7 @@ final class InformationEditorProjectionSpec
       )))
       _success(component.informationSpace.appendFieldEvent(recordid, InformationFieldEvent(
         fieldPath = "language",
-        state = InformationFieldState.Inferred,
+        state = InformationFieldState.inferred,
         source = "domain-rule",
         operation = Some("seedBook"),
         transformation = Some("isbn-language-inference"),
@@ -128,13 +128,13 @@ final class InformationEditorProjectionSpec
       projection.componentName shouldBe component.name
       projection.domain shouldBe "book"
       record.informationIdString shouldBe recordid.print
-      record.state shouldBe InformationLifecycleState.NeedsResolution
+      record.state shouldBe InformationLifecycleState.needsResolution
       record.actions.find(_.name == "resolve").map(_.enabled) shouldBe Some(true)
       title.value shouldBe Some("Domain-Driven Design")
-      title.status.map(_.state) shouldBe Some(InformationFieldState.Imported)
+      title.status.map(_.state) shouldBe Some(InformationFieldState.imported)
       title.events.map(_.source) shouldBe Vector("dbpedia")
       title.events.headOption.flatMap(_.transformation) shouldBe Some("label-normalized")
-      language.status.map(_.state) shouldBe Some(InformationFieldState.Inferred)
+      language.status.map(_.state) shouldBe Some(InformationFieldState.inferred)
       language.events.headOption.flatMap(_.transformation) shouldBe Some("isbn-language-inference")
       dbpedia.resolutionCandidates.map(_.label) shouldBe Vector("Domain-driven design")
     }
@@ -237,7 +237,7 @@ final class InformationEditorProjectionSpec
 
       Then("the record and DOI field expose the candidate and lifecycle")
       projection.domain shouldBe "paper"
-      record.state shouldBe InformationLifecycleState.NeedsResolution
+      record.state shouldBe InformationLifecycleState.needsResolution
       record.title shouldBe Some("Knowledge Editing with InformationSpace")
       doi.resolutionCandidates.map(_.label) shouldBe Vector("Knowledge Editing with InformationSpace")
     }
@@ -294,7 +294,7 @@ final class InformationEditorProjectionSpec
 
       Then("the record and URL field expose the candidate and lifecycle")
       projection.domain shouldBe "web-resource"
-      record.state shouldBe InformationLifecycleState.NeedsResolution
+      record.state shouldBe InformationLifecycleState.needsResolution
       record.title shouldBe Some("KnowledgeSpace Web Resource")
       url.resolutionCandidates.map(_.label) shouldBe Vector("KnowledgeSpace Web Resource")
     }
@@ -347,7 +347,7 @@ final class InformationEditorProjectionSpec
       readyrecord.actions.find(_.name == "confirm").map(_.enabled) shouldBe Some(true)
       publisheditem.actions.find(_.name == "publish").map(_.enabled) shouldBe Some(true)
       publisheditem.actions.find(_.name == "materialize").map(_.enabled) shouldBe Some(true)
-      publisheditem.publication.map(_.state) shouldBe Some(InformationPublicationState.Published)
+      publisheditem.publication.map(_.state) shouldBe Some(InformationPublicationState.published)
     }
 
     "disable confirmation when required book fields are missing" in {
@@ -363,7 +363,7 @@ final class InformationEditorProjectionSpec
       val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
 
       Then("the title issue disables confirmation and the lifecycle gate rejects it")
-      record.state shouldBe InformationLifecycleState.Invalid
+      record.state shouldBe InformationLifecycleState.invalid
       title.validationIssues.map(_.fieldPath) shouldBe Vector("title")
       record.actions.find(_.name == "confirm").map(_.enabled) shouldBe Some(false)
       component.informationSpace.confirmInformation(recordid) shouldBe a[Consequence.Failure[_]]
@@ -382,7 +382,7 @@ final class InformationEditorProjectionSpec
       val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
 
       Then("the title issue disables confirmation and the lifecycle gate rejects it")
-      record.state shouldBe InformationLifecycleState.Invalid
+      record.state shouldBe InformationLifecycleState.invalid
       title.validationIssues.map(_.fieldPath) shouldBe Vector("title")
       record.actions.find(_.name == "confirm").map(_.enabled) shouldBe Some(false)
       component.informationSpace.confirmInformation(recordid) shouldBe a[Consequence.Failure[_]]
@@ -401,7 +401,7 @@ final class InformationEditorProjectionSpec
       val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
 
       Then("the title issue disables confirmation and the lifecycle gate rejects it")
-      record.state shouldBe InformationLifecycleState.Invalid
+      record.state shouldBe InformationLifecycleState.invalid
       title.validationIssues.map(_.fieldPath) shouldBe Vector("title")
       record.actions.find(_.name == "confirm").map(_.enabled) shouldBe Some(false)
       component.informationSpace.confirmInformation(recordid) shouldBe a[Consequence.Failure[_]]

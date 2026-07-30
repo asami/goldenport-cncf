@@ -1,6 +1,5 @@
 package org.goldenport.cncf.component.builtin.tag
 
-import java.time.Instant
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction}
@@ -29,7 +28,7 @@ import org.simplemodeling.model.datatype.EntityId
  * Built-in Tag management and Entity-to-Tag workflow component.
  *
  * @since   May.  5, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagComponent() extends Component {
@@ -174,10 +173,11 @@ object TagComponent {
       for {
         key <- _required_string(args, "key")
         tagSpace = _optional_string(args, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace)
+        id <- _optional_entity_id(args, "id")
         parent <- _optional_parent_tag_id(args, tagSpace)
         usage <- _optional_string(args, "usageKind", "usage_kind").map(TagUsageKind.parse).getOrElse(Consequence.success(TagUsageKind.General))
         tag <- TagRepository.entityStore().create(TagCreate(
-          id = _optional_entity_id(args, "id"),
+          id = id,
           tagSpace = tagSpace,
           key = key,
           parentTagId = parent,
@@ -237,11 +237,11 @@ object TagComponent {
       given org.goldenport.cncf.context.ExecutionContext = core.executionContext
       val args = _action_values(core)
       for {
-        source <- _required_string(args, "sourceEntityId", "source_entity_id")
+        source <- _required_entity_id(args, "sourceEntityId", "source_entity_id")
         tag <- _required_string(args, "tagRef", "tag", "tagPath", "tag_path")
         role = _optional_string(args, "role").getOrElse("tag")
         workflow = TaggingWorkflow(tagSpace = _optional_string(args, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace))
-        association <- workflow.attach(source, tag, role, _optional_int(args, "sortOrder", "sort_order"))
+        association <- workflow.attach(source.value, tag, role, _optional_int(args, "sortOrder", "sort_order"))
       } yield OperationResponse.RecordResponse(org.goldenport.cncf.association.AssociationRecordCodec.toRecord(association))
     }
   }
@@ -251,10 +251,10 @@ object TagComponent {
       given org.goldenport.cncf.context.ExecutionContext = core.executionContext
       val args = _action_values(core)
       for {
-        source <- _required_string(args, "sourceEntityId", "source_entity_id")
+        source <- _required_entity_id(args, "sourceEntityId", "source_entity_id")
         tag <- _required_string(args, "tagRef", "tag", "tagPath", "tag_path")
         workflow = TaggingWorkflow(tagSpace = _optional_string(args, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace))
-        count <- workflow.detach(source, tag, _optional_string(args, "role"))
+        count <- workflow.detach(source.value, tag, _optional_string(args, "role"))
       } yield OperationResponse.RecordResponse(Record.dataAuto("detachedCount" -> count))
     }
   }
@@ -264,9 +264,9 @@ object TagComponent {
       given org.goldenport.cncf.context.ExecutionContext = core.executionContext
       val args = _action_values(core)
       for {
-        source <- _required_string(args, "sourceEntityId", "source_entity_id")
+        source <- _required_entity_id(args, "sourceEntityId", "source_entity_id")
         workflow = TaggingWorkflow(tagSpace = _optional_string(args, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace))
-        summary <- workflow.listEntityTags(source, _optional_string(args, "role"))
+        summary <- workflow.listEntityTags(source.value, _optional_string(args, "role"))
       } yield OperationResponse.RecordResponse(summary.toRecord)
     }
   }
@@ -301,8 +301,8 @@ object TagComponent {
     collection: EntityCollection[A],
     ids: Vector[String]
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[Record]] =
-    if (collection.descriptor.collectionId.name == TagEntityCollections.Tag.name)
-      _visible_tag_records(workflow, ids)
+    if (collection.descriptor.collectionId == TagEntityCollections.Tag)
+      _visible_tag_records(workflow, collection.descriptor.collectionId, ids)
     else {
       given org.goldenport.cncf.entity.EntityPersistent[A] = collection.descriptor.persistent
       ids.foldLeft(Consequence.success(Vector.empty[Record])) { (z, sourceId) =>
@@ -322,52 +322,41 @@ object TagComponent {
 
   private def _visible_tag_records(
     workflow: TaggingWorkflow,
+    collection: org.simplemodeling.model.datatype.EntityCollectionId,
     ids: Vector[String]
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[Record]] =
     ids.foldLeft(Consequence.success(Vector.empty[Record])) { (z, sourceId) =>
-      z.flatMap(xs => workflow.resolveTagOption(sourceId).map {
-        case Some(tag) => xs :+ tag.toRecord
-        case None => xs
-      })
+      z.flatMap { xs =>
+        EntityId.parse(sourceId) match {
+          case Consequence.Success(id) if id.collection == collection =>
+            workflow.resolveTagOption(sourceId).map {
+              case Some(tag) => xs :+ tag.toRecord
+              case None => xs
+            }
+          case Consequence.Success(id) =>
+            Consequence.argumentInvalid(
+              s"tag source Entity ID collection mismatch: expected ${collection.print}, actual ${id.collection.print}"
+            )
+          case Consequence.Failure(_) =>
+            Consequence.argumentInvalid(s"tag source Entity ID is not canonical: $sourceId")
+        }
+      }
     }
 
   private def _source_entity_id[A](
     sourceId: String,
     collection: EntityCollection[A]
   ): Consequence[Option[EntityId]] =
-    collection.resolveEntityId(sourceId) match {
-      case Some(id) =>
+    EntityId.parse(sourceId) match {
+      case Consequence.Success(id) if id.collection == collection.descriptor.collectionId =>
         Consequence.success(Some(id))
-      case None =>
-        EntityId.parse(sourceId) match {
-          case Consequence.Success(id) =>
-            Consequence.success(Some(id.copy(collection = collection.descriptor.collectionId)))
-          case Consequence.Failure(_) =>
-            _parse_entity_id_value(sourceId, collection.descriptor.collectionId)
-        }
+      case Consequence.Success(id) =>
+        Consequence.argumentInvalid(
+          s"tag source Entity ID collection mismatch: expected ${collection.descriptor.collectionId.print}, actual ${id.collection.print}"
+        )
+      case Consequence.Failure(_) =>
+        Consequence.argumentInvalid(s"tag source Entity ID is not canonical: $sourceId")
     }
-
-  private def _parse_entity_id_value(
-    sourceId: String,
-    collection: org.simplemodeling.model.datatype.EntityCollectionId
-  ): Consequence[Option[EntityId]] = {
-    val parts = sourceId.split("-", 6)
-    if (parts.length == 6 && parts(2) == "entity")
-      scala.util.Try(parts(4).toLong).toOption match {
-        case Some(millis) =>
-          Consequence.success(Some(EntityId(
-            major = parts(0),
-            minor = parts(1),
-            collection = collection,
-            timestamp = Some(Instant.ofEpochMilli(millis)),
-            entropy = Some(parts(5))
-          )))
-        case None =>
-          Consequence.success(None)
-      }
-    else
-      Consequence.success(None)
-  }
 
   private def _component_by_name(
     subsystem: Subsystem,
@@ -435,18 +424,27 @@ object TagComponent {
       case None => Consequence.success(None)
     }
 
-  private def _optional_entity_id(args: Map[String, Any], keys: String*): Option[EntityId] =
-    keys.iterator.flatMap(k => args.get(k)).flatMap {
-      case id: EntityId => Some(id)
-      case s: String => EntityId.parse(s).toOption
-      case other => EntityId.parse(other.toString).toOption
-    }.toSeq.headOption
+  private def _required_entity_id(
+    args: Map[String, Any],
+    keys: String*
+  ): Consequence[EntityId] =
+    _required_string(args, keys*).flatMap(EntityId.parse)
+
+  private def _optional_entity_id(
+    args: Map[String, Any],
+    keys: String*
+  ): Consequence[Option[EntityId]] =
+    keys.iterator.collectFirst(Function.unlift(args.get)) match {
+      case Some(id: EntityId) => Consequence.success(Some(id))
+      case Some(value) => EntityId.parse(value.toString).map(Some(_))
+      case None => Consequence.success(None)
+    }
 
   private def _optional_parent_tag_id(
     args: Map[String, Any],
     tagSpace: String
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Option[EntityId]] =
-    _optional_entity_id(args, "parentTagId", "parent_tag_id") match {
+    _optional_entity_id(args, "parentTagId", "parent_tag_id").flatMap {
       case Some(id) =>
         Consequence.success(Some(id))
       case None =>

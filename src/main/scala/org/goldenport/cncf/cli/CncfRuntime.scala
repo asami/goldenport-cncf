@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 29, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -508,7 +508,7 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration
   ): ResolvedConfiguration = {
     val source = RuntimeConfig
-      .getString(configuration, RuntimeConfig.AssemblyDescriptorKey)
+      .getString(configuration, RuntimeConfig.assemblyDescriptorKey)
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_))
@@ -557,11 +557,11 @@ object CncfRuntime extends GlobalObservable {
     invocation: RuntimeInvocationParameters
   ): Array[String] = {
     val hascomponentfile =
-      RuntimeConfig.getString(configuration, RuntimeConfig.ComponentFileKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentFileKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.ComponentDevDirKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.RepositoryComponentDevDirKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.ComponentCarDirKey).nonEmpty ||
+      RuntimeConfig.getString(configuration, RuntimeConfig.componentFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.runtimeComponentFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.componentDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.repositoryComponentDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.componentCarDirKey).nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.component.dev.dir").nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.repository.component.dev.dir").nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.component.car.dir").nonEmpty ||
@@ -571,25 +571,25 @@ object CncfRuntime extends GlobalObservable {
         args.contains("--component-dev-dir") ||
         args.exists(_.startsWith("--component-car-dir=")) ||
         args.contains("--component-car-dir") ||
-        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentFileKey}=")) ||
-        args.contains(s"--${RuntimeConfig.ComponentFileKey}") ||
-        args.exists(_.startsWith(s"--${RuntimeConfig.RuntimeComponentFileKey}=")) ||
-        args.contains(s"--${RuntimeConfig.RuntimeComponentFileKey}") ||
-        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentDevDirKey}=")) ||
-        args.contains(s"--${RuntimeConfig.ComponentDevDirKey}") ||
-        args.exists(_.startsWith(s"--${RuntimeConfig.RepositoryComponentDevDirKey}=")) ||
-        args.contains(s"--${RuntimeConfig.RepositoryComponentDevDirKey}") ||
-        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentCarDirKey}=")) ||
-        args.contains(s"--${RuntimeConfig.ComponentCarDirKey}")
+        args.exists(_.startsWith(s"--${RuntimeConfig.componentFileKey}=")) ||
+        args.contains(s"--${RuntimeConfig.componentFileKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.runtimeComponentFileKey}=")) ||
+        args.contains(s"--${RuntimeConfig.runtimeComponentFileKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.componentDevDirKey}=")) ||
+        args.contains(s"--${RuntimeConfig.componentDevDirKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.repositoryComponentDevDirKey}=")) ||
+        args.contains(s"--${RuntimeConfig.repositoryComponentDevDirKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.componentCarDirKey}=")) ||
+        args.contains(s"--${RuntimeConfig.componentCarDirKey}")
     val hassubsystem =
-      RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemFileKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemFileKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemDescriptorKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemDescriptorKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemDevDirKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemDevDirKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemSarDirKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemSarDirKey).nonEmpty ||
+      RuntimeConfig.getString(configuration, RuntimeConfig.subsystemFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.runtimeSubsystemFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.subsystemDescriptorKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.runtimeSubsystemDescriptorKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.subsystemDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.runtimeSubsystemDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.subsystemSarDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.runtimeSubsystemSarDirKey).nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.subsystem.descriptor").nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.subsystem.file").nonEmpty ||
         ConfigurationAccess.getString(configuration, "cncf.subsystem.dev.dir").nonEmpty ||
@@ -602,7 +602,7 @@ object CncfRuntime extends GlobalObservable {
         case None => _detect_latest_component_archive(cwd)
       }
       archive.map { path =>
-        args ++ Array(s"--${RuntimeConfig.ComponentFileKey}=${path.toString}")
+        args ++ Array(s"--${RuntimeConfig.componentFileKey}=${path.toString}")
       }.getOrElse(args)
     }
   }
@@ -735,14 +735,14 @@ object CncfRuntime extends GlobalObservable {
           val repoargs =
             _active_spec_argument(spec)
               .filterNot {
-                case (RuntimeConfig.ComponentDirKey, value) =>
+                case (RuntimeConfig.componentDirKey, value) =>
                   _has_component_dir_config_arg(args, value)
                 case _ =>
                   false
               }
               .map { case (key, value) => Array(s"--${key}=${value}") }
               .getOrElse(Array.empty[String])
-          componentresolved.copy(actualArgs = args ++ repoargs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}"))
+          componentresolved.copy(actualArgs = args ++ repoargs ++ Array(s"--${RuntimeConfig.subsystemFileKey}=${descriptor.path}"))
         }
         .getOrElse(componentresolved)
     }
@@ -769,14 +769,14 @@ object CncfRuntime extends GlobalObservable {
         .flatMap { name =>
           _resolve_component_archive_entry(searchspecs, name, invocation.componentVersion)
             .map { path =>
-              invocation.copy(actualArgs = args ++ Array(s"--${RuntimeConfig.ComponentFileKey}=${path}"))
+              invocation.copy(actualArgs = args ++ Array(s"--${RuntimeConfig.componentFileKey}=${path}"))
             }
             .orElse {
               _resolve_component_descriptor_entry(searchspecs, name)
                 .flatMap { case (spec, _) =>
                   _active_spec_argument(spec)
                     .filterNot {
-                      case (RuntimeConfig.ComponentDirKey, value) =>
+                      case (RuntimeConfig.componentDirKey, value) =>
                         _has_component_dir_config_arg(args, value)
                       case _ =>
                         false
@@ -1009,14 +1009,14 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String]
   ): Option[String] =
     _component_name_from_args(args)
-      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.ComponentNameKey))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.componentNameKey))
 
   private def _component_version(
     configuration: ResolvedConfiguration,
     args: Array[String]
   ): Option[String] =
     _component_version_from_args(args)
-      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.ComponentVersionKey))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.componentVersionKey))
 
   private def _subsystem_name_from_args(
     args: Array[String]
@@ -1100,38 +1100,38 @@ object CncfRuntime extends GlobalObservable {
 
   private def _subsystem_name_keys: Vector[String] =
     Vector(
-      RuntimeConfig.SubsystemNameKey,
-      RuntimeConfig.RuntimeSubsystemNameKey,
+      RuntimeConfig.subsystemNameKey,
+      RuntimeConfig.runtimeSubsystemNameKey,
       "cncf.subsystem",
       "cncf.runtime.subsystem"
     )
 
   private def _component_name_keys: Vector[String] =
     Vector(
-      RuntimeConfig.ComponentNameKey,
-      RuntimeConfig.RuntimeComponentNameKey,
+      RuntimeConfig.componentNameKey,
+      RuntimeConfig.runtimeComponentNameKey,
       "cncf.component",
       "cncf.runtime.component"
     )
 
   private def _component_version_keys: Vector[String] =
     Vector(
-      RuntimeConfig.ComponentVersionKey,
-      RuntimeConfig.RuntimeComponentVersionKey,
+      RuntimeConfig.componentVersionKey,
+      RuntimeConfig.runtimeComponentVersionKey,
       "cncf.component.version",
       "cncf.runtime.component.version"
     )
 
   private def _subsystem_descriptor_keys: Vector[String] =
     Vector(
-      RuntimeConfig.SubsystemDescriptorKey,
-      RuntimeConfig.SubsystemFileKey,
-      RuntimeConfig.SubsystemDevDirKey,
-      RuntimeConfig.SubsystemSarDirKey,
-      RuntimeConfig.RuntimeSubsystemDescriptorKey,
-      RuntimeConfig.RuntimeSubsystemFileKey,
-      RuntimeConfig.RuntimeSubsystemDevDirKey,
-      RuntimeConfig.RuntimeSubsystemSarDirKey,
+      RuntimeConfig.subsystemDescriptorKey,
+      RuntimeConfig.subsystemFileKey,
+      RuntimeConfig.subsystemDevDirKey,
+      RuntimeConfig.subsystemSarDirKey,
+      RuntimeConfig.runtimeSubsystemDescriptorKey,
+      RuntimeConfig.runtimeSubsystemFileKey,
+      RuntimeConfig.runtimeSubsystemDevDirKey,
+      RuntimeConfig.runtimeSubsystemSarDirKey,
       "cncf.subsystem.descriptor",
       "cncf.subsystem.file",
       "cncf.subsystem.dev.dir",
@@ -1151,43 +1151,43 @@ object CncfRuntime extends GlobalObservable {
     while (i < args.length) {
       val current = args(i)
       if (current.startsWith("--subsystem-sar-dir=")) {
-        buffer += s"--${RuntimeConfig.SubsystemSarDirKey}=${current.stripPrefix("--subsystem-sar-dir=")}"
+        buffer += s"--${RuntimeConfig.subsystemSarDirKey}=${current.stripPrefix("--subsystem-sar-dir=")}"
         changed = true
         i += 1
       } else if (current.startsWith("--subsystem-dev-dir=")) {
-        buffer += s"--${RuntimeConfig.SubsystemDevDirKey}=${current.stripPrefix("--subsystem-dev-dir=")}"
+        buffer += s"--${RuntimeConfig.subsystemDevDirKey}=${current.stripPrefix("--subsystem-dev-dir=")}"
         changed = true
         i += 1
       } else if (current.startsWith("--component-car-dir=")) {
-        buffer += s"--${RuntimeConfig.ComponentCarDirKey}=${current.stripPrefix("--component-car-dir=")}"
+        buffer += s"--${RuntimeConfig.componentCarDirKey}=${current.stripPrefix("--component-car-dir=")}"
         changed = true
         i += 1
       } else if (current.startsWith("--component-dev-dir=")) {
-        buffer += s"--${RuntimeConfig.ComponentDevDirKey}=${current.stripPrefix("--component-dev-dir=")}"
+        buffer += s"--${RuntimeConfig.componentDevDirKey}=${current.stripPrefix("--component-dev-dir=")}"
         changed = true
         i += 1
       } else if (current.startsWith("--component-file=")) {
-        buffer += s"--${RuntimeConfig.ComponentFileKey}=${current.stripPrefix("--component-file=")}"
+        buffer += s"--${RuntimeConfig.componentFileKey}=${current.stripPrefix("--component-file=")}"
         changed = true
         i += 1
       } else if (current == "--subsystem-sar-dir" && i + 1 < args.length) {
-        buffer += s"--${RuntimeConfig.SubsystemSarDirKey}=${args(i + 1)}"
+        buffer += s"--${RuntimeConfig.subsystemSarDirKey}=${args(i + 1)}"
         changed = true
         i += 2
       } else if (current == "--subsystem-dev-dir" && i + 1 < args.length) {
-        buffer += s"--${RuntimeConfig.SubsystemDevDirKey}=${args(i + 1)}"
+        buffer += s"--${RuntimeConfig.subsystemDevDirKey}=${args(i + 1)}"
         changed = true
         i += 2
       } else if (current == "--component-car-dir" && i + 1 < args.length) {
-        buffer += s"--${RuntimeConfig.ComponentCarDirKey}=${args(i + 1)}"
+        buffer += s"--${RuntimeConfig.componentCarDirKey}=${args(i + 1)}"
         changed = true
         i += 2
       } else if (current == "--component-dev-dir" && i + 1 < args.length) {
-        buffer += s"--${RuntimeConfig.ComponentDevDirKey}=${args(i + 1)}"
+        buffer += s"--${RuntimeConfig.componentDevDirKey}=${args(i + 1)}"
         changed = true
         i += 2
       } else if (current == "--component-file" && i + 1 < args.length) {
-        buffer += s"--${RuntimeConfig.ComponentFileKey}=${args(i + 1)}"
+        buffer += s"--${RuntimeConfig.componentFileKey}=${args(i + 1)}"
         changed = true
         i += 2
       } else {
@@ -1206,7 +1206,7 @@ object CncfRuntime extends GlobalObservable {
     args.headOption match {
       case Some("test") =>
         val buffer = Vector.newBuilder[String]
-        buffer += s"--${RuntimeConfig.OperationModeKey}=test"
+        buffer += s"--${RuntimeConfig.operationModeKey}=test"
         var i = 1
         var done = false
         while (i < args.length && !done) {
@@ -1336,25 +1336,25 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String],
     value: String
   ): Boolean =
-    args.contains(s"--${RuntimeConfig.ComponentDirKey}=${value}") ||
+    args.contains(s"--${RuntimeConfig.componentDirKey}=${value}") ||
       args.sliding(2).exists {
         case Array(currentKey, currentValue) =>
-          currentKey == s"--${RuntimeConfig.ComponentDirKey}" && currentValue == value
+          currentKey == s"--${RuntimeConfig.componentDirKey}" && currentValue == value
         case _ => false
       }
 
   private def _component_activation_keys: Vector[String] =
     Vector(
-      RuntimeConfig.ComponentDirKey,
-      RuntimeConfig.ComponentFileKey,
-      RuntimeConfig.RuntimeComponentFileKey,
-      RuntimeConfig.ComponentDevDirKey,
-      RuntimeConfig.RepositoryComponentDevDirKey,
-      RuntimeConfig.ComponentCarDirKey,
-      RuntimeConfig.SubsystemDevDirKey,
-      RuntimeConfig.SubsystemSarDirKey,
-      RuntimeConfig.RuntimeSubsystemDevDirKey,
-      RuntimeConfig.RuntimeSubsystemSarDirKey,
+      RuntimeConfig.componentDirKey,
+      RuntimeConfig.componentFileKey,
+      RuntimeConfig.runtimeComponentFileKey,
+      RuntimeConfig.componentDevDirKey,
+      RuntimeConfig.repositoryComponentDevDirKey,
+      RuntimeConfig.componentCarDirKey,
+      RuntimeConfig.subsystemDevDirKey,
+      RuntimeConfig.subsystemSarDirKey,
+      RuntimeConfig.runtimeSubsystemDevDirKey,
+      RuntimeConfig.runtimeSubsystemSarDirKey,
       "cncf.component.dir",
       "cncf.component.file",
       "cncf.runtime.component.file",
@@ -1398,13 +1398,13 @@ object CncfRuntime extends GlobalObservable {
   ): Option[(String, String)] =
     spec match {
       case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
-        Some((RuntimeConfig.ComponentDirKey, baseDir.toString))
+        Some((RuntimeConfig.componentDirKey, baseDir.toString))
       case ComponentRepository.ComponentFileRepository.Specification(file) =>
-        Some((RuntimeConfig.ComponentFileKey, file.toString))
+        Some((RuntimeConfig.componentFileKey, file.toString))
       case ComponentRepository.ComponentDevDirRepository.Specification(baseDir) =>
-        Some((RuntimeConfig.ComponentDevDirKey, baseDir.toString))
+        Some((RuntimeConfig.componentDevDirKey, baseDir.toString))
       case ComponentRepository.SubsystemDevDirRepository.Specification(baseDir) =>
-        Some((RuntimeConfig.SubsystemDevDirKey, baseDir.toString))
+        Some((RuntimeConfig.subsystemDevDirKey, baseDir.toString))
       case _ =>
         None
     }
@@ -1793,7 +1793,7 @@ object CncfRuntime extends GlobalObservable {
   ): (Boolean, Array[String]) = {
     val noexit =
       args.contains("--no-exit") ||
-        _config_truthy(configuration, RuntimeConfig.NoExitKey)
+        _config_truthy(configuration, RuntimeConfig.noExitKey)
     val rest = args.filterNot(_ == "--no-exit")
     (noexit, rest)
   }
@@ -1804,7 +1804,7 @@ object CncfRuntime extends GlobalObservable {
   ): (Boolean, Array[String]) = {
     val forceexit =
       args.contains("--force-exit") ||
-        _config_truthy(configuration, RuntimeConfig.ForceExitKey)
+        _config_truthy(configuration, RuntimeConfig.forceExitKey)
     val rest = args.filterNot(_ == "--force-exit")
     (forceexit, rest)
   }
@@ -1815,7 +1815,7 @@ object CncfRuntime extends GlobalObservable {
   ): (Boolean, Array[String]) = {
     val enabled =
       args.contains("--discover=classes") ||
-        _config_truthy(configuration, RuntimeConfig.DiscoverClassesKey) ||
+        _config_truthy(configuration, RuntimeConfig.discoverClassesKey) ||
         _discover_env_enabled()
     val rest = args.filterNot(_ == "--discover=classes")
     (enabled, rest)
@@ -1842,7 +1842,7 @@ object CncfRuntime extends GlobalObservable {
       }
     }
     val configclasses =
-      _config_string(configuration, RuntimeConfig.ComponentFactoryClassKey)
+      _config_string(configuration, RuntimeConfig.componentFactoryClassKey)
         .toVector
         .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
     ((configclasses ++ classes.result()).distinct, rest.result().toArray)
@@ -1865,7 +1865,7 @@ object CncfRuntime extends GlobalObservable {
       }
     }
     val resolved =
-      workspace.orElse(_config_string(configuration, RuntimeConfig.WorkspaceKey).map(Paths.get(_)))
+      workspace.orElse(_config_string(configuration, RuntimeConfig.workspaceKey).map(Paths.get(_)))
     (resolved, buffer.result().toArray)
   }
 
@@ -2057,13 +2057,13 @@ object CncfRuntime extends GlobalObservable {
   private def _logging_backend_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    RuntimeConfig.getString(configuration, RuntimeConfig.LogBackendKey)
+    RuntimeConfig.getString(configuration, RuntimeConfig.logBackendKey)
   }
 
   private def _log_level_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    RuntimeConfig.getString(configuration, RuntimeConfig.LogLevelKey)
+    RuntimeConfig.getString(configuration, RuntimeConfig.logLevelKey)
   }
 
   private def _update_visibility_policy(
@@ -3114,12 +3114,12 @@ private[cli] object RuntimeOptionsParser {
       b += Property("textus.format", value, None)
     }
     if (options.debug) b += Property("textus.debug", "true", None)
-    if (options.debugCalltree) b += Property(RuntimeConfig.DebugCallTreeKey, "true", None)
-    if (options.debugTraceJob) b += Property(RuntimeConfig.DebugTraceJobKey, "true", None)
-    if (options.debugSaveCalltree) b += Property(RuntimeConfig.DebugSaveCallTreeKey, "true", None)
+    if (options.debugCalltree) b += Property(RuntimeConfig.debugCallTreeKey, "true", None)
+    if (options.debugTraceJob) b += Property(RuntimeConfig.debugTraceJobKey, "true", None)
+    if (options.debugSaveCalltree) b += Property(RuntimeConfig.debugSaveCallTreeKey, "true", None)
     if (options.noExit) b += Property("textus.no-exit", "true", None)
     options.commandExecutionMode.foreach { value =>
-      b += Property(RuntimeConfig.CommandExecutionModeKey, value, None)
+      b += Property(RuntimeConfig.commandExecutionModeKey, value, None)
     }
     b.result()
   }
@@ -3194,8 +3194,8 @@ private[cli] object RuntimeOptionsParser {
   private def _is_command_execution_mode_key(
     key: String
   ): Boolean =
-    key == RuntimeConfig.CommandExecutionModeKey ||
-      key == RuntimeConfig.RuntimeCommandExecutionModeKey ||
+    key == RuntimeConfig.commandExecutionModeKey ||
+      key == RuntimeConfig.runtimeCommandExecutionModeKey ||
       key == "cncf.command.execution-mode" ||
       key == "cncf.runtime.command.execution-mode" ||
       key == "runtime.command.execution-mode" ||
@@ -3204,24 +3204,24 @@ private[cli] object RuntimeOptionsParser {
   private def _is_debug_calltree_key(
     key: String
   ): Boolean =
-    key == RuntimeConfig.DebugCallTreeKey ||
-      key == RuntimeConfig.RuntimeDebugCallTreeKey ||
+    key == RuntimeConfig.debugCallTreeKey ||
+      key == RuntimeConfig.runtimeDebugCallTreeKey ||
       key == "cncf.debug.calltree" ||
       key == "cncf.runtime.debug.calltree"
 
   private def _is_debug_trace_job_key(
     key: String
   ): Boolean =
-    key == RuntimeConfig.DebugTraceJobKey ||
-      key == RuntimeConfig.RuntimeDebugTraceJobKey ||
+    key == RuntimeConfig.debugTraceJobKey ||
+      key == RuntimeConfig.runtimeDebugTraceJobKey ||
       key == "cncf.debug.trace-job" ||
       key == "cncf.runtime.debug.trace-job"
 
   private def _is_debug_save_calltree_key(
     key: String
   ): Boolean =
-    key == RuntimeConfig.DebugSaveCallTreeKey ||
-      key == RuntimeConfig.RuntimeDebugSaveCallTreeKey ||
+    key == RuntimeConfig.debugSaveCallTreeKey ||
+      key == RuntimeConfig.runtimeDebugSaveCallTreeKey ||
       key == "cncf.debug.save-calltree" ||
       key == "cncf.runtime.debug.save-calltree"
 
@@ -5215,18 +5215,18 @@ class CncfRuntime() extends GlobalObservable {
   private def _is_debug_trace_job_key(
     key: String
   ): Boolean =
-    key == RuntimeConfig.DebugTraceJobKey ||
-      key == RuntimeConfig.RuntimeDebugTraceJobKey ||
+    key == RuntimeConfig.debugTraceJobKey ||
+      key == RuntimeConfig.runtimeDebugTraceJobKey ||
       key == "cncf.debug.trace-job" ||
       key == "cncf.runtime.debug.trace-job"
 
   private def _is_client_debug_passthrough_key(
     key: String
   ): Boolean =
-    key == RuntimeConfig.DebugCallTreeKey ||
-      key == RuntimeConfig.RuntimeDebugCallTreeKey ||
-      key == RuntimeConfig.DebugSaveCallTreeKey ||
-      key == RuntimeConfig.RuntimeDebugSaveCallTreeKey ||
+    key == RuntimeConfig.debugCallTreeKey ||
+      key == RuntimeConfig.runtimeDebugCallTreeKey ||
+      key == RuntimeConfig.debugSaveCallTreeKey ||
+      key == RuntimeConfig.runtimeDebugSaveCallTreeKey ||
       key == "cncf.debug.calltree" ||
       key == "cncf.runtime.debug.calltree" ||
       key == "cncf.debug.save-calltree" ||

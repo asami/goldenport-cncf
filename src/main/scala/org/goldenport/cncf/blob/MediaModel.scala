@@ -5,7 +5,7 @@ import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreDecodeContext}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Built-in media entities layered above Blob storage metadata.
  *
  * @since   May.  3, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 enum MediaKind(val value: String) {
@@ -140,17 +140,6 @@ object MediaRepository {
     override def toStoreRecord(e: MediaEntity): Record = MediaRecordCodec.toStoreRecord(e)
     def fromRecord(r: Record): Consequence[MediaEntity] = MediaRecordCodec.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[MediaEntity] = MediaRecordCodec.fromStoreRecord(r)
-    override def fromStoreRecord(
-      context: EntityStoreDecodeContext,
-      r: Record
-    ): Consequence[MediaEntity] =
-      MediaRecordCodec.fromStoreRecord(r).flatMap { entity =>
-        EntityPersistent.restoreCollectionIdentity(
-          entity,
-          entity.id,
-          context.owningCollectionId
-        )(id => entity.copy(id = id))
-      }
   }
 
   given EntityPersistentCreate[MediaCreate] with {
@@ -166,26 +155,27 @@ final class EntityStoreMediaRepository extends MediaRepository {
 
   def create(media: MediaCreate)(using ctx: ExecutionContext): Consequence[MediaEntity] =
     for {
+      _ <- _require_media_id(media.kind, media.id)
+      _ <- BlobRepository.requireCanonicalId(media.blobId)
       result <- EntityStore.standard().create(media)
       loaded <- EntityStore.standard().load[MediaEntity](result.id)
       created <- loaded.map(Consequence.success).getOrElse(Consequence.operationNotFound(s"media entity:${result.id.print}"))
-    } yield _normalize_collection(created)
+    } yield created
 
   def get(kind: MediaKind, id: EntityId)(using ctx: ExecutionContext): Consequence[MediaEntity] = {
-    val mediaid = _media_entity_id(kind, id)
-    EntityStore.standard().load[MediaEntity](mediaid).flatMap {
-      case Some(value) => Consequence.success(_normalize_collection(value))
-      case None => Consequence.operationNotFound(s"${kind.print} entity:${mediaid.value}")
+    _require_media_id(kind, id).flatMap(EntityStore.standard().load[MediaEntity]).flatMap {
+      case Some(value) => Consequence.success(value)
+      case None => Consequence.operationNotFound(s"${kind.print} entity:${id.value}")
     }
   }
 
   def list(kind: MediaKind)(using ctx: ExecutionContext): Consequence[Vector[MediaEntity]] =
     EntityStore.standard()
       .search[MediaEntity](EntityQuery(MediaEntityCollections.collection(kind), Query.plan(Record.empty), EntitySearchScope.Store))
-      .map(_.data.map(_normalize_collection))
+      .map(_.data)
 
   def findByBlob(kind: MediaKind, blobId: EntityId)(using ctx: ExecutionContext): Consequence[Option[MediaEntity]] =
-    list(kind).map(_.find(_.blobId.value == blobId.value))
+    BlobRepository.requireCanonicalId(blobId).flatMap(id => list(kind).map(_.find(_.blobId == id)))
 
   def ensureForBlobResult(kind: MediaKind, blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ctx: ExecutionContext): Consequence[MediaEnsureResult] =
     findByBlob(kind, blob.id).flatMap {
@@ -210,15 +200,14 @@ final class EntityStoreMediaRepository extends MediaRepository {
   def delete(media: MediaEntity)(using ctx: ExecutionContext): Consequence[Unit] =
     EntityStore.standard().delete(media.id)
 
-  private def _normalize_collection(media: MediaEntity): MediaEntity =
-    media.copy(id = _media_entity_id(media.kind, media.id))
-
-  private def _media_entity_id(kind: MediaKind, id: EntityId): EntityId = {
+  private def _require_media_id(kind: MediaKind, id: EntityId): Consequence[EntityId] = {
     val collection = MediaEntityCollections.collection(kind)
     if (id.collection == collection)
-      id
+      Consequence.success(id)
     else
-      id.copy(collection = collection)
+      Consequence.argumentInvalid(
+        s"${kind.print} media id collection mismatch: expected ${collection.print}, got ${id.collection.print}"
+      )
   }
 }
 
@@ -280,11 +269,14 @@ object MediaRecordCodec {
     for {
       rawid <- EntityId.createC(record)
       kind <- _string(record, "kind").map(MediaKind.parse).orElse(MediaEntityCollections.kind(rawid.collection).map(Consequence.success)).getOrElse(Consequence.argumentMissing("kind"))
-      id = EntityId(rawid.major, rawid.minor, MediaEntityCollections.collection(kind), rawid.timestamp, rawid.entropy)
-      rawblobid <- _entity_id(record, "blobId", "blob_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("blobId"))
-      blobid = BlobRepository.canonicalId(rawblobid)
+      id <- _require_media_id(kind, rawid)
+      rawblobid <- _entity_id(record, "blobId", "blob_id").flatMap(
+        _.map(Consequence.success).getOrElse(Consequence.argumentMissing("blobId"))
+      )
+      blobid <- BlobRepository.requireCanonicalId(rawblobid)
       createdat <- _instant(record, "createdAt", "created_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("createdAt"))
       updatedat <- _instant(record, "updatedAt", "updated_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("updatedAt"))
+      posterimageid <- _entity_id(record, "posterImageId", "poster_image_id")
     } yield MediaEntity(
       id = id,
       kind = kind,
@@ -300,7 +292,7 @@ object MediaRecordCodec {
       width = _int(record, "width"),
       height = _int(record, "height"),
       duration = _long(record, "duration"),
-      posterImageId = _entity_id(record, "posterImageId", "poster_image_id"),
+      posterImageId = posterimageid,
       createdAt = createdat,
       updatedAt = updatedat,
       attributes = _attributes(record)
@@ -350,12 +342,22 @@ object MediaRecordCodec {
   private def _string(record: Record, names: String*): Option[String] =
     names.iterator.flatMap(record.getAny).map(_.toString.trim).find(_.nonEmpty)
 
-  private def _entity_id(record: Record, names: String*): Option[EntityId] =
-    names.iterator.flatMap(record.getAny).flatMap {
-      case id: EntityId => Some(id)
-      case s: String => EntityId.parse(s).toOption
-      case other => EntityId.parse(other.toString).toOption
-    }.nextOption()
+  private def _entity_id(record: Record, names: String*): Consequence[Option[EntityId]] =
+    names.iterator.flatMap(record.getAny).toVector.headOption match {
+      case Some(id: EntityId) => Consequence.success(Some(id))
+      case Some(value) => EntityId.parse(value.toString.trim).map(Some(_))
+      case None => Consequence.success(None)
+    }
+
+  private def _require_media_id(kind: MediaKind, id: EntityId): Consequence[EntityId] = {
+    val collection = MediaEntityCollections.collection(kind)
+    if (id.collection == collection)
+      Consequence.success(id)
+    else
+      Consequence.argumentInvalid(
+        s"${kind.print} media id collection mismatch: expected ${collection.print}, got ${id.collection.print}"
+      )
+  }
 
   private def _int(record: Record, names: String*): Option[Int] =
     names.iterator.flatMap(record.getAny).flatMap {

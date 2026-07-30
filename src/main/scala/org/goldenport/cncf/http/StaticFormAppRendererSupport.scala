@@ -34,7 +34,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 24, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
@@ -138,7 +138,7 @@ object StaticFormAppRendererSupport {
       StaticFormAppLayout.AssetCompletionOptions(),
     executionMetadata: RuntimeContext.ExecutionMetadata =
       RuntimeContext.ExecutionMetadata.empty,
-    operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
+    operationMode: OperationMode = RuntimeConfig.defaultOperationMode,
     fieldConfidentiality: Map[String, DataConfidentiality] = Map.empty,
     uxProfile: WebUxProfile = WebUxProfile.default
   ) {

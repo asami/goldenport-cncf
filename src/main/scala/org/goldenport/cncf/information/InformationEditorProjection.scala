@@ -9,7 +9,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version Jun.  5, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -1177,14 +1177,14 @@ object InformationSpaceEditorProjection {
 
   private def _information_actions(information: Information): Vector[InformationEditorActionDescriptor] =
     Vector(
-      _action("save", "Save", information.state != InformationLifecycleState.Published, None),
-      _action("validate", "Validate", information.state != InformationLifecycleState.Published, None),
-      _action("resolve", "Resolve", information.resolutionCandidates.nonEmpty && information.state == InformationLifecycleState.NeedsResolution, Some("available when unresolved candidates exist")),
-      _action("confirm", "Confirm", information.state == InformationLifecycleState.ReadyForConfirmation || information.state == InformationLifecycleState.Confirmed, Some("requires valid and resolved information")),
-      _action("reject", "Reject", information.state != InformationLifecycleState.Rejected && information.state != InformationLifecycleState.Published, None),
-      _action("reopen", "Reopen", information.state == InformationLifecycleState.Rejected || information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published || information.state == InformationLifecycleState.Conflict, None),
-      _action("publish", "Publish", information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published, Some("requires confirmed information")),
-      _action("materialize", "Materialize", information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published, Some("creates KnowledgeFrame / KnowledgeSpace projection"))
+      _action("save", "Save", information.state != InformationLifecycleState.published, None),
+      _action("validate", "Validate", information.state != InformationLifecycleState.published, None),
+      _action("resolve", "Resolve", information.resolutionCandidates.nonEmpty && information.state == InformationLifecycleState.needsResolution, Some("available when unresolved candidates exist")),
+      _action("confirm", "Confirm", information.state == InformationLifecycleState.readyForConfirmation || information.state == InformationLifecycleState.confirmed, Some("requires valid and resolved information")),
+      _action("reject", "Reject", information.state != InformationLifecycleState.rejected && information.state != InformationLifecycleState.published, None),
+      _action("reopen", "Reopen", information.state == InformationLifecycleState.rejected || information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published || information.state == InformationLifecycleState.conflict, None),
+      _action("publish", "Publish", information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published, Some("requires confirmed information")),
+      _action("materialize", "Materialize", information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published, Some("creates KnowledgeFrame / KnowledgeSpace projection"))
     )
 
   private def _action(

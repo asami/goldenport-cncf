@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 29, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -25,7 +25,7 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Option[String] =
     RuntimeConfig
-      .getString(configuration, RuntimeConfig.SubsystemNameKey)
+      .getString(configuration, RuntimeConfig.subsystemNameKey)
       .map(_.trim)
       .filter(_.nonEmpty)
 
@@ -33,13 +33,13 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Option[Path] =
     RuntimeConfig
-      .getString(configuration, RuntimeConfig.SubsystemDescriptorKey)
+      .getString(configuration, RuntimeConfig.subsystemDescriptorKey)
       .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.descriptor"))
-      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemFileKey))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.subsystemFileKey))
       .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.file"))
-      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemDevDirKey))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.subsystemDevDirKey))
       .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.dev.dir"))
-      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemSarDirKey))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.subsystemSarDirKey))
       .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.sar.dir"))
       .map(_.trim)
       .filter(_.nonEmpty)
@@ -49,8 +49,8 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Option[Path] =
     RuntimeConfig
-      .getString(configuration, RuntimeConfig.ComponentFileKey)
-      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentFileKey))
+      .getString(configuration, RuntimeConfig.componentFileKey)
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.runtimeComponentFileKey))
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_))
@@ -59,7 +59,7 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Option[Path] =
     RuntimeConfig
-      .getString(configuration, RuntimeConfig.ComponentCarDirKey)
+      .getString(configuration, RuntimeConfig.componentCarDirKey)
       .orElse(ConfigurationAccess.getString(configuration, "cncf.component.car.dir"))
       .map(_.trim)
       .filter(_.nonEmpty)
@@ -69,7 +69,7 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Option[Path] =
     RuntimeConfig
-      .getString(configuration, RuntimeConfig.ComponentDevDirKey)
+      .getString(configuration, RuntimeConfig.componentDevDirKey)
       .orElse(ConfigurationAccess.getString(configuration, "cncf.component.dev.dir"))
       .map(_.trim)
       .filter(_.nonEmpty)
@@ -141,8 +141,8 @@ object GenericSubsystemFactory {
               }
             ) {
               RuntimeConfig
-                .getString(configuration, RuntimeConfig.ComponentNameKey)
-                .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
+                .getString(configuration, RuntimeConfig.componentNameKey)
+                .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.runtimeComponentNameKey))
                 .map(_.trim)
                 .filter(_.nonEmpty)
                 .map { name =>
@@ -438,7 +438,7 @@ object GenericSubsystemFactory {
   ): Vector[ComponentRepository.Specification] = {
     val values =
       ConfigurationAccess
-        .getString(configuration, RuntimeConfig.RepositoryDirKey)
+        .getString(configuration, RuntimeConfig.repositoryDirKey)
     values match {
       case Some(value) =>
         _parse_repository_specs(value)
@@ -468,7 +468,7 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Vector[Path] =
     Vector(
-      RuntimeConfig.RepositoryComponentDevDirKey,
+      RuntimeConfig.repositoryComponentDevDirKey,
       "cncf.repository.component.dev.dir"
     ).flatMap(ConfigurationAccess.getString(configuration, _).toVector)
       .flatMap(_.split(",").toVector)
@@ -550,7 +550,7 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Option[Path] =
     RuntimeConfig
-      .getString(configuration, RuntimeConfig.AssemblyDescriptorKey)
+      .getString(configuration, RuntimeConfig.assemblyDescriptorKey)
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_))

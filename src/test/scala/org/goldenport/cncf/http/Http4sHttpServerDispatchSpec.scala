@@ -33,7 +33,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -55,7 +55,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -194,7 +194,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -231,7 +231,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString),
             "cncf.web.demo-assist.enabled" ->
               ConfigurationValue.StringValue("true")
@@ -283,7 +283,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -326,7 +326,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -366,7 +366,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -427,7 +427,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -466,7 +466,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -514,7 +514,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(web.toString)
           )
         ),
@@ -568,7 +568,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
           )
         ),
@@ -613,7 +613,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
           )
         ),
@@ -667,7 +667,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
           )
         ),
@@ -753,7 +753,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
           )
         ),
@@ -840,7 +840,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey ->
+            RuntimeConfig.webDescriptorKey ->
               ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
           )
         ),

@@ -18,7 +18,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -138,6 +138,6 @@ object GlobalRuntimeContext {
     resolvedConfiguration: ResolvedConfiguration
   ): String =
     RuntimeConfig
-      .getString(resolvedConfiguration, RuntimeConfig.SubsystemNameKey)
+      .getString(resolvedConfiguration, RuntimeConfig.subsystemNameKey)
       .getOrElse(SubsystemName)
 }

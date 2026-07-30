@@ -75,7 +75,7 @@ final class EventExecutionDeterminismSpec
         left.map(_.id) == right.map(_.id) &&
         left.map(_.createdAt).forall(_ == instant) &&
         left.map(_.id).distinct.size == 2 &&
-        left.map(_.id.major).forall(_ == IdGenerationContext.DefaultNamespace.major)
+        left.map(_.id.major).forall(_ == IdGenerationContext.DEFAULT_NAMESPACE.major)
       }
 
       When("equivalent transactions are committed through UnitOfWork")
@@ -138,10 +138,10 @@ final class EventExecutionDeterminismSpec
     "fix generic Event record time before transaction commit" in {
       Given("a mutable execution clock and one staged generic Event")
       val stagedat = Instant.parse("2026-07-15T13:00:00Z")
-      val clock = new _MutableClock(stagedat)
+      val clock = new MutableClock(stagedat)
       val factory = EventRecordFactory(
         clock,
-        IdGenerationContext.deterministic(IdGenerationContext.DefaultNamespace, clock, "stage-time-seed")
+        IdGenerationContext.deterministic(IdGenerationContext.DEFAULT_NAMESPACE, clock, "stage-time-seed")
       )
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(
@@ -154,7 +154,7 @@ final class EventExecutionDeterminismSpec
       )
 
       When("the Event is staged before logical time advances and the transaction commits")
-      eventengine.stage(Vector(_StoredEvent("staged")), factory)
+      eventengine.stage(Vector(StoredEvent("staged")), factory)
       eventengine.prepare(tx)
       clock.set(stagedat.plusSeconds(300L))
       eventengine.commit(tx)
@@ -188,7 +188,7 @@ final class EventExecutionDeterminismSpec
       recordfactory = fallbackfactory
     )
     val unitofwork = new UnitOfWork(ctx, eventengine)
-    val committed = unitofwork.commit(Vector(_StoredEvent("first"), _StoredEvent("second")))
+    val committed = unitofwork.commit(Vector(StoredEvent("first"), StoredEvent("second")))
     committed.toOption.toVector.flatMap(_ =>
       eventstore.query(EventStore.Query()).toOption.getOrElse(Vector.empty)
     )
@@ -258,7 +258,7 @@ final class EventExecutionDeterminismSpec
     val clock = Clock.fixed(instant, ZoneOffset.UTC)
     val base = ExecutionContext.create(clock)
     val idgeneration = IdGenerationContext.deterministic(
-      IdGenerationContext.DefaultNamespace,
+      IdGenerationContext.DEFAULT_NAMESPACE,
       clock,
       seed
     )
@@ -270,9 +270,9 @@ final class EventExecutionDeterminismSpec
     Instant.ofEpochSecond(epoch)
   }
 
-  private final case class _StoredEvent(name: String) extends DomainEvent
+  private final case class StoredEvent(name: String) extends DomainEvent
 
-  private final class _MutableClock(initial: Instant) extends Clock {
+  private final class MutableClock(initial: Instant) extends Clock {
     private var _current = initial
 
     def set(instant: Instant): Unit = synchronized {

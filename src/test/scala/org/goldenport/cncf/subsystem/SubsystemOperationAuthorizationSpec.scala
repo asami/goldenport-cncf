@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Apr. 18, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matchers {
@@ -55,7 +55,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
     "deny production admin operation when enabled but ingress security only resolved fallback system admin fields" in {
       val subsystem = _subsystem(
         OperationMode.Production,
-        RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
       )
       val request = Request.of(
         component = "admin",
@@ -85,7 +85,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
     "enforce a descriptor-provided operation authorization rule for operations without a provider" in {
       val subsystem = TestComponentFactory.subsystemWithConfig(
         Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
         ),
         name = "subsystem-operation-authorization-descriptor"
       )
@@ -125,7 +125,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
     "enforce a CML operation authorization rule carried by generated component metadata" in {
       val subsystem = TestComponentFactory.subsystemWithConfig(
         Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
         ),
         name = "subsystem-operation-authorization-cml"
       )
@@ -153,8 +153,8 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
   ): Subsystem = {
     val subsystem = TestComponentFactory.subsystemWithConfig(
       Map(
-        RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue(operationMode.name),
-        RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("true")
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(operationMode.name),
+        RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("true")
       ) ++ entries.toMap,
       name = s"subsystem-operation-authorization-${operationMode.name}"
     )

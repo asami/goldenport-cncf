@@ -11,14 +11,14 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.ContentType
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.EntityId
 
 /*
  * Initial BlobStore backends for development and executable specifications.
  *
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InMemoryBlobStore(
@@ -253,9 +253,6 @@ final class LocalBlobStore(
     Consequence {
       val props = new Properties()
       props.setProperty("id", metadata.id.value)
-      props.setProperty("idCollectionMajor", metadata.id.collection.major)
-      props.setProperty("idCollectionMinor", metadata.id.collection.minor)
-      props.setProperty("idCollectionName", metadata.id.collection.name)
       props.setProperty("contentType", metadata.contentType.header)
       props.setProperty("byteSize", metadata.byteSize.toString)
       props.setProperty("digest", metadata.digest)
@@ -296,18 +293,7 @@ final class LocalBlobStore(
         finally in.close()
         StoredMetadata(
           id = EntityId.parse(props.getProperty("id")) match {
-            case Consequence.Success(value) =>
-              Option(props.getProperty("idCollectionName"))
-                .map(name =>
-                  value.copy(
-                    collection = EntityCollectionId(
-                      Option(props.getProperty("idCollectionMajor")).getOrElse(""),
-                      Option(props.getProperty("idCollectionMinor")).getOrElse(""),
-                      name
-                    )
-                  )
-                )
-                .getOrElse(value)
+            case Consequence.Success(value) => value
             case Consequence.Failure(conclusion) => throw new IllegalArgumentException(conclusion.show)
           },
           contentType = ContentType.parse(props.getProperty("contentType")),

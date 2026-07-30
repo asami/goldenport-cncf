@@ -38,17 +38,21 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 16, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
+  private val _in_eid01_spec =
+    afterWord("in spec:entity-collection-identity, example:E3, rules:R1,R4, phase:52")
+  private val _in_phase52_spec =
+    afterWord("in spec:entity-collection-identity, example:entity-store-routing, rules:R1,R4, phase:52")
 
   private val _cid = EntityCollectionId("test", "a", "person")
 
-  "EntityPersistent store record contract" should {
+  "EntityPersistent store record contract" must _in_phase52_spec {
     "delegate default store APIs to RecordCodex compatibility methods" in {
       Given("an old-style EntityPersistent implementation with only toRecord/fromRecord")
       val id         = EntityId("test", "old_style", _cid)
@@ -79,9 +83,36 @@ final class EntityStoreQueryRouteSpec
       viewrecord.getString("store_name") shouldBe None
       storerecord.getString("store_name") shouldBe Some("view-name")
     }
+
+    "which records EID-01 datastore routing" which {
+      "E3 route canonical parsed ownership without reconstruction" must _in_eid01_spec {
+        "route the exact parsed owner to datastore addresses" in {
+          Given(
+            "Spec: docs/spec/entity-collection-identity.md; Rules: R1,R4; Example: E3; a canonical EntityId with an exact collection"
+          )
+          val exactcollection =
+            EntityCollectionId("textus", "artscene", "facility")
+          val original = EntityId("single", "global", exactcollection)
+          val space    = new EntityStoreSpace()
+
+          When("the canonical value is parsed and converted to datastore addresses")
+          val parsed     = EntityId.parse(original.value).toOption.get
+          val collection = space.dataStoreCollection(parsed)
+          val entry      = space.dataStoreEntryId(parsed)
+
+          Then("the route follows the exact parsed collection")
+          parsed shouldBe original
+          collection shouldBe Consequence.success(
+            DataStore.CollectionId.EntityStore(exactcollection)
+          )
+          entry shouldBe Consequence.success(DataStore.EntryId(parsed))
+        }
+      }
+    }
   }
 
-  "EntityStoreSpace.search" should {
+  "EntityStoreSpace.search" must _in_phase52_spec {
+    "query routing and exact persistence boundaries" which {
     "apply Query where/sort/offset/limit on entity-store route" in {
       Given("a searchable datastore + standard entity store route")
       val datastorespace     = DataStoreSpace.default()
@@ -109,9 +140,18 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
-            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+            EntityRevisionFixture.entitySeed(
+              DataStore.CollectionId.EntityStore(_cid),
+              p1.toRecord()
+            ),
+            EntityRevisionFixture.entitySeed(
+              DataStore.CollectionId.EntityStore(_cid),
+              p2.toRecord()
+            ),
+            EntityRevisionFixture.entitySeed(
+              DataStore.CollectionId.EntityStore(_cid),
+              p3.toRecord()
+            )
           )
         )
       )
@@ -222,6 +262,81 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("presentationName"))) shouldBe Consequence.success(None)
     }
 
+    "reject an explicit EntityId whose exact collection differs from the create collection" in {
+      Given("a create codec with a declared collection and an EntityId owned elsewhere")
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistentCreate[StoreCreateCandidate] = _store_create_candidate_persistent
+      val foreigncollection = EntityCollectionId("test", "foreign", "store_create_candidate")
+      val foreignid         = EntityId("test", "mismatch", foreigncollection)
+
+      When("the create route is asked to persist the foreign exact EntityId")
+      val created = entitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          entity = StoreCreateCandidate(Some(foreignid), "store-value"),
+          tc = summon[EntityPersistentCreate[StoreCreateCandidate]]
+        )
+      )
+
+      Then("the mismatch is rejected before a provider or datastore mutation")
+      created shouldBe a[Consequence.Failure[?]]
+      datastorespace
+        .dataStore(DataStore.CollectionId.EntityStore(foreigncollection))
+        .flatMap(_.load(DataStore.CollectionId.EntityStore(foreigncollection), DataStore.EntryId(foreignid))) shouldBe
+        Consequence.success(None)
+    }
+
+    "isolate same-local EntityIds in different exact datastore collections" in {
+      Given("two explicit EntityIds with the same local fields and different complete collections")
+      val firstcollection  = EntityCollectionId("test", "first", "facility")
+      val secondcollection = EntityCollectionId("test", "second", "facility")
+      val firstid          = EntityId("test", "same_local", firstcollection)
+      val secondid         = EntityId("test", "same_local", secondcollection)
+      val datastorespace   = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistentCreate[StoreCreateCandidate] =
+        new EntityPersistentCreate[StoreCreateCandidate] {
+          def id(entity: StoreCreateCandidate): Option[EntityId] = entity.id
+          def toRecord(entity: StoreCreateCandidate): Record =
+            Record.dataAuto("id" -> entity.id.map(_.value), "store_name" -> entity.name)
+          def collection(entity: StoreCreateCandidate): EntityCollectionId =
+            entity.id.map(_.collection).getOrElse(
+              fail("This isolation fixture requires an explicit EntityId")
+            )
+        }
+
+      When("both IDs are created through EntityStoreSpace")
+      val first = entitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          StoreCreateCandidate(Some(firstid), "first"),
+          summon[EntityPersistentCreate[StoreCreateCandidate]]
+        )
+      )
+      val second = entitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          StoreCreateCandidate(Some(secondid), "second"),
+          summon[EntityPersistentCreate[StoreCreateCandidate]]
+        )
+      )
+      val loaded = for {
+        firstcid <- entitystorespace.dataStoreCollection(firstid)
+        firstentry <- entitystorespace.dataStoreEntryId(firstid)
+        firststore <- datastorespace.dataStore(firstcid)
+        firstrecord <- firststore.load(firstcid, firstentry)
+        secondcid <- entitystorespace.dataStoreCollection(secondid)
+        secondentry <- entitystorespace.dataStoreEntryId(secondid)
+        secondstore <- datastorespace.dataStore(secondcid)
+        secondrecord <- secondstore.load(secondcid, secondentry)
+      } yield (firstrecord.flatMap(_.getString("store_name")), secondrecord.flatMap(_.getString("store_name")))
+
+      Then("both values remain independently addressable by exact collection and complete ID")
+      first.map(_.id) shouldBe Consequence.success(firstid)
+      second.map(_.id) shouldBe Consequence.success(secondid)
+      loaded shouldBe Consequence.success((Some("first"), Some("second")))
+    }
+
     "decode load and search results through EntityPersistent.fromStoreRecord" in {
       Given("store records whose physical field names cannot be decoded by fromRecord")
       val collectionid       = EntityCollectionId("test", "a", "store_decode")
@@ -313,7 +428,9 @@ final class EntityStoreQueryRouteSpec
       saved shouldBe a[Consequence.Success[_]]
       loaded shouldBe Consequence.success(Some(entity))
     }
+    }
 
+    "visibility and search policies" which {
     "return empty result when collection has not been created yet" in {
       Given("a searchable datastore with no entries for the collection")
       val datastorespace     = DataStoreSpace.default()
@@ -507,7 +624,9 @@ final class EntityStoreQueryRouteSpec
       result.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(p1.id, p2.id, p3.id))
       result.map(_.totalCount) shouldBe Consequence.success(None)
     }
+    }
 
+    "create, save, and update lifecycle routing" which {
     "apply patch update by id on entity-store route" in {
       Given("a seeded entity")
       val datastorespace     = DataStoreSpace.default()
@@ -521,7 +640,10 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            EntityRevisionFixture.entitySeed(DataStore.CollectionId.EntityStore(_cid), entity.toRecord())
+            EntityRevisionFixture.entitySeed(
+              DataStore.CollectionId.EntityStore(_cid),
+              entity.toRecord()
+            )
           )
         )
       )
@@ -612,7 +734,7 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("creating entity through EntityStoreSpace")
-      val created = entitystorespace.create(createop)
+      val created   = entitystorespace.create(createop)
       val createdid = created.map(_.id)
       val loaded = for {
         result <- created
@@ -1079,10 +1201,10 @@ final class EntityStoreQueryRouteSpec
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         Record.dataAuto(
-          "id" -> id,
-          "name" -> "before",
-          "age" -> 30,
-          "content" -> "日本語",
+          "id"              -> id,
+          "name"            -> "before",
+          "age"             -> 30,
+          "content"         -> "日本語",
           "content_charset" -> "UTF-8"
         ),
         ContentBodyStoragePolicy.Config(inlineByteThreshold = 5)
@@ -1120,7 +1242,7 @@ final class EntityStoreQueryRouteSpec
           .dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace
           .dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        ds     <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
         record <- ds.load(cid, dsid)
         result <- record
           .map(ContentBodyStoragePolicy.hydrate(id, _))
@@ -1193,7 +1315,9 @@ final class EntityStoreQueryRouteSpec
       )
       loaded.map(_.flatMap(_.getAny("updatedAt"))) shouldBe Consequence.success(None)
     }
+    }
 
+    "delete lifecycle routing" which {
     "perform soft delete on entity-store route and keep record with lifecycle updates" in {
       Given("a seeded entity")
       val datastorespace     = DataStoreSpace.default()
@@ -1318,6 +1442,7 @@ final class EntityStoreQueryRouteSpec
       deleted shouldBe Consequence.unit
       loaded shouldBe Consequence.success(None)
     }
+    }
   }
 
   private def _execution_context(
@@ -1374,7 +1499,7 @@ final class EntityStoreQueryRouteSpec
               capabilities = capabilities,
               level = SecurityLevel("test")
             ),
-            idGeneration = IdGenerationContext.deterministic(IdGenerationContext.DefaultNamespace)
+            idGeneration = IdGenerationContext.deterministic(IdGenerationContext.DEFAULT_NAMESPACE)
           )
         )
       case _ =>
@@ -1648,13 +1773,6 @@ private def _owned_value_persistent: EntityPersistent[OwnedValueEntity] =
         case None         => Consequence.argumentInvalid("invalid owned value storage record")
       }
     }
-    override def fromStoreRecord(
-      context: EntityStoreDecodeContext,
-      record: Record
-    ): Consequence[OwnedValueEntity] =
-      fromStoreRecord(record).map(entity =>
-        entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
-      )
   }
 
 private def _owned_address(record: Record): Option[OwnedAddress] =

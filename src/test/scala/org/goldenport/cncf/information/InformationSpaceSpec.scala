@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeFrameId, RdfNodeName}
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -11,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May. 20, 2026
  *  version May. 25, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceSpec
@@ -22,6 +23,17 @@ final class InformationSpaceSpec
   private given ExecutionContext = ExecutionContext.test()
 
   "InformationSpace" should {
+    "reject a malformed Information ID without synthesizing a replacement" in {
+      Given("a malformed scalar Information ID")
+      val malformed = "information-1"
+
+      When("the canonical Information ID constructor is used")
+      val parsed = InformationId.createC(malformed)
+
+      Then("it returns a deterministic failure rather than a generated identity")
+      parsed shouldBe a[Consequence.Failure[_]]
+    }
+
     "register validate confirm publish and clear information records" in {
       Given("an empty InformationSpace and a valid paper record")
       val space = new InformationSpace
@@ -35,33 +47,37 @@ final class InformationSpaceSpec
         )
       )))
       val recordid = batch.head.id
+      val namespace = summon[ExecutionContext].idGeneration.namespace
+      val expectedcollection = EntityCollectionId(namespace.major, namespace.minor, "information")
 
       Then("the imported state is retained")
       space.counts.informationCount shouldBe 1
-      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.imported)
       batch.map(_.id) shouldBe Vector(recordid)
+      recordid.collection shouldBe expectedcollection
+      EntityId.parse(recordid.value) shouldBe Consequence.success(recordid)
 
       When("the imported record is validated")
       val validated = _success(space.validateInformation(recordid))
 
       Then("the record becomes ready for confirmation")
-      validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
+      validated.state shouldBe InformationLifecycleState.readyForConfirmation
       space.validationIssues(recordid) shouldBe Vector.empty
 
       When("the ready record is confirmed")
       val item = _success(space.confirmInformation(recordid))
 
       Then("the confirmed state is retained")
-      item.state shouldBe InformationLifecycleState.Confirmed
+      item.state shouldBe InformationLifecycleState.confirmed
       space.getInformation(item.id) shouldBe Some(item)
 
       When("the confirmed record is published")
       val publication = _success(space.publishInformation(item.id, "rdf-vector", Some("published"), Some(KnowledgeFrameId("frame-1"))))
 
       Then("the publication links the KnowledgeFrame and advances the lifecycle")
-      publication.state shouldBe InformationPublicationState.Published
+      publication.state shouldBe InformationPublicationState.published
       publication.knowledgeFrameId shouldBe Some(KnowledgeFrameId("frame-1"))
-      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Published)
+      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.published)
 
       When("the InformationSpace is cleared")
       space.clear()
@@ -87,9 +103,9 @@ final class InformationSpaceSpec
       ))
 
       Then("the failure is retained without advancing the Information lifecycle")
-      publication.state shouldBe InformationPublicationState.Failed
+      publication.state shouldBe InformationPublicationState.failed
       publication.knowledgeFrameId shouldBe Some(KnowledgeFrameId("frame-failed"))
-      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
+      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.confirmed)
       space.getInformation(item.id).flatMap(_.publicationStatuses.headOption.map(_.publicationKey)) shouldBe Some(publication.publicationKey)
     }
 
@@ -103,7 +119,7 @@ final class InformationSpaceSpec
       val validated = _success(space.validateInformation(recordid))
 
       Then("validation identifies the title and confirmation fails")
-      validated.state shouldBe InformationLifecycleState.Invalid
+      validated.state shouldBe InformationLifecycleState.invalid
       space.validationIssues(recordid).map(_.fieldPath) shouldBe Vector("title")
       space.confirmInformation(recordid) shouldBe a[Consequence.Failure[_]]
     }
@@ -119,7 +135,7 @@ final class InformationSpaceSpec
       val item = _success(space.confirmInformation(recordid))
 
       Then("the title-only paper reaches the confirmed lifecycle")
-      validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
+      validated.state shouldBe InformationLifecycleState.readyForConfirmation
       item.domain shouldBe "paper"
     }
 
@@ -133,7 +149,7 @@ final class InformationSpaceSpec
       val invalid = _success(space.validateInformation(invalidid))
 
       Then("both required fields are reported")
-      invalid.state shouldBe InformationLifecycleState.Invalid
+      invalid.state shouldBe InformationLifecycleState.invalid
       space.validationIssues(invalidid).map(_.fieldPath).toSet shouldBe Set("title", "url")
 
       Given("a web-resource record containing both required fields")
@@ -147,7 +163,7 @@ final class InformationSpaceSpec
       val item = _success(space.confirmInformation(validid))
 
       Then("it reaches the confirmed lifecycle")
-      validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
+      validated.state shouldBe InformationLifecycleState.readyForConfirmation
       item.domain shouldBe "web-resource"
     }
 
@@ -176,10 +192,10 @@ final class InformationSpaceSpec
       val resolved = _success(space.resolveConflict(item.id, conflict.conflictKey, "keep-information"))
 
       Then("the conflict history and confirmed lifecycle are preserved")
-      conflict.state shouldBe InformationConflictState.Open
-      resolved.state shouldBe InformationConflictState.Resolved
+      conflict.state shouldBe InformationConflictState.open
+      resolved.state shouldBe InformationConflictState.resolved
       resolved.resolution shouldBe Some("keep-information")
-      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
+      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.confirmed)
     }
 
     "clear resolution candidate and its identity binding" in {
@@ -204,7 +220,7 @@ final class InformationSpaceSpec
       And("the candidate and binding are visible before removal")
       space.counts.resolutionCandidateCount shouldBe 1
       space.counts.identityBindingCount shouldBe 1
-      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.NeedsResolution)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.needsResolution)
 
       When("the candidate is cleared before confirmation")
       val removed = _success(space.clearResolutionCandidate(recordid, candidate.candidateKey))
@@ -214,7 +230,7 @@ final class InformationSpaceSpec
       space.resolutionCandidates(recordid) shouldBe Vector.empty
       space.counts.resolutionCandidateCount shouldBe 0
       space.counts.identityBindingCount shouldBe 0
-      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.imported)
       space.getInformation(recordid).map(_.resolutionCandidates) shouldBe Some(Vector.empty)
       space.getInformation(recordid).map(_.identityBindings) shouldBe Some(Vector.empty)
     }
@@ -248,7 +264,7 @@ final class InformationSpaceSpec
       result shouldBe a[Consequence.Failure[_]]
       space.resolutionCandidates(recordid).map(_.candidateKey) shouldBe Vector(candidate.candidateKey)
       space.counts.identityBindingCount shouldBe 1
-      space.getInformation(item.id).map(_.identityBindings.map(_.status)) shouldBe Some(Vector(InformationBindingStatus.Confirmed))
+      space.getInformation(item.id).map(_.identityBindings.map(_.status)) shouldBe Some(Vector(InformationBindingStatus.confirmed))
     }
   }
 

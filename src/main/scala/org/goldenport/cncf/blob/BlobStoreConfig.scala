@@ -13,7 +13,7 @@ import org.goldenport.cncf.config.RuntimeConfig
  * Runtime configuration and factory for CNCF BlobStore backends.
  *
  * @since   Apr. 28, 2026
- * @version Apr. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class BlobStoreConfig(
@@ -47,26 +47,26 @@ object BlobStoreConfig {
     configuration: ResolvedConfiguration
   ): BlobStoreConfig =
     BlobStoreConfig(
-      backend = RuntimeConfig.getString(configuration, RuntimeConfig.BlobStoreBackendKey)
+      backend = RuntimeConfig.getString(configuration, RuntimeConfig.blobStoreBackendKey)
         .getOrElse(DefaultBackend),
-      name = RuntimeConfig.getString(configuration, RuntimeConfig.BlobStoreNameKey),
-      container = RuntimeConfig.getString(configuration, RuntimeConfig.BlobStoreContainerKey)
+      name = RuntimeConfig.getString(configuration, RuntimeConfig.blobStoreNameKey),
+      container = RuntimeConfig.getString(configuration, RuntimeConfig.blobStoreContainerKey)
         .map(_.trim)
         .filter(_.nonEmpty)
         .getOrElse(BlobStorageRef.DefaultContainer),
-      localRoot = RuntimeConfig.getString(configuration, RuntimeConfig.BlobStoreLocalRootKey)
+      localRoot = RuntimeConfig.getString(configuration, RuntimeConfig.blobStoreLocalRootKey)
         .map(_.trim)
         .filter(_.nonEmpty)
         .map(Path.of(_)),
-      publicBasePath = RuntimeConfig.getString(configuration, RuntimeConfig.BlobStorePublicBasePathKey)
+      publicBasePath = RuntimeConfig.getString(configuration, RuntimeConfig.blobStorePublicBasePathKey)
         .map(normalizePublicBasePath)
         .filter(_.nonEmpty),
-      providerClass = RuntimeConfig.getString(configuration, RuntimeConfig.BlobStoreProviderClassKey)
+      providerClass = RuntimeConfig.getString(configuration, RuntimeConfig.blobStoreProviderClassKey)
         .map(_.trim)
         .filter(_.nonEmpty),
-      maxByteSize = parseMaxByteSize(RuntimeConfig.getString(configuration, RuntimeConfig.BlobMaxByteSizeKey))
+      maxByteSize = parseMaxByteSize(RuntimeConfig.getString(configuration, RuntimeConfig.blobMaxByteSizeKey))
         .getOrElse(DefaultMaxByteSize),
-      maxByteSizeParseError = parseMaxByteSizeError(RuntimeConfig.getString(configuration, RuntimeConfig.BlobMaxByteSizeKey))
+      maxByteSizeParseError = parseMaxByteSizeError(RuntimeConfig.getString(configuration, RuntimeConfig.blobMaxByteSizeKey))
     )
 
   def normalizePublicBasePath(value: String): String = {

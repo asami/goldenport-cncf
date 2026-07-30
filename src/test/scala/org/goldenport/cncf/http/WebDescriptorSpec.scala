@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 25, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -1020,7 +1020,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(path.toString)
+            RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(path.toString)
           )
         ),
         ConfigurationTrace.empty
@@ -1054,7 +1054,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(root.toString)
+            RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(root.toString)
           )
         ),
         ConfigurationTrace.empty
@@ -1153,7 +1153,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
         val configuration = ResolvedConfiguration(
           Configuration(
             Map(
-              RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(overridepath.toString)
+              RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(overridepath.toString)
             )
           ),
           ConfigurationTrace.empty

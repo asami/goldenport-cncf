@@ -175,7 +175,7 @@ object EventRecordFactory {
     val clock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
     EventRecordFactory(
       clock,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, clock)
+      IdGenerationContext.default(IdGenerationContext.DEFAULT_NAMESPACE, clock)
     )
   }
 

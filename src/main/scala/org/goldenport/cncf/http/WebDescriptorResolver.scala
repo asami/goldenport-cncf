@@ -10,7 +10,7 @@ import org.goldenport.configuration.ResolvedConfiguration
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 14, 2026
- * @version May. 27, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebDescriptorResolver {
@@ -32,7 +32,7 @@ object WebDescriptorResolver {
         }
       case None => base
     }
-    RuntimeConfig.getString(subsystem.configuration, RuntimeConfig.WebDescriptorKey) match {
+    RuntimeConfig.getString(subsystem.configuration, RuntimeConfig.webDescriptorKey) match {
       case Some(path) =>
         WebDescriptor.load(Paths.get(path)).map(withdescriptor.mergeOverride)
       case None => Consequence.success(withdescriptor)
@@ -42,7 +42,7 @@ object WebDescriptorResolver {
   def resolve(
     configuration: ResolvedConfiguration
   ): Consequence[WebDescriptor] =
-    RuntimeConfig.getString(configuration, RuntimeConfig.WebDescriptorKey) match {
+    RuntimeConfig.getString(configuration, RuntimeConfig.webDescriptorKey) match {
       case Some(path) => WebDescriptor.load(Paths.get(path))
       case None => Consequence.success(WebDescriptor.empty)
     }
@@ -69,7 +69,7 @@ object WebDescriptorResolver {
     configuration: ResolvedConfiguration
   ): Vector[Path] =
     Vector(
-      RuntimeConfig.ComponentDevDirKey,
+      RuntimeConfig.componentDevDirKey,
       "cncf.component.dev.dir"
     ).flatMap(key => RuntimeConfig.getString(configuration, key).toVector)
       .flatMap(_split_path_values)

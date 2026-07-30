@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May. 20, 2026
  *  version May. 25, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationIdentityBindingSpec
@@ -45,7 +45,7 @@ final class InformationIdentityBindingSpec
 
       Then("each identity remains distinct while the binding becomes confirmed")
       selected.selected shouldBe true
-      confirmed.status shouldBe InformationBindingStatus.Confirmed
+      confirmed.status shouldBe InformationBindingStatus.confirmed
       confirmed.rdfSubject.map(_.print) shouldBe Some("https://example.org/paper/identity")
       confirmed.entityBindings shouldBe Vector(KnowledgeEntityBinding("paper", "paper-1"))
       confirmed.knowledgeNodeId shouldBe Some(KnowledgeNodeId("node-paper-1"))

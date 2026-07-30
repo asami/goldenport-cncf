@@ -31,7 +31,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionProfileJobSchedulingSpec
@@ -69,12 +69,12 @@ final class ExecutionProfileJobSchedulingSpec
 
       When("two asynchronous Jobs share a due time and logical time reaches it")
       val first = engine.submit(
-        List(_RecordingTask("first", order)),
+        List(RecordingTask("first", order)),
         ExecutionContext.test(),
         JobSubmitOption(runMode = JobRunMode.Async, scheduledStartAt = Some(dueat))
       ).toOption.get
       val second = engine.submit(
-        List(_RecordingTask("second", order)),
+        List(RecordingTask("second", order)),
         ExecutionContext.test(),
         JobSubmitOption(runMode = JobRunMode.Async, scheduledStartAt = Some(dueat))
       ).toOption.get
@@ -94,11 +94,11 @@ final class ExecutionProfileJobSchedulingSpec
     "make a delayed retry eligible through the same runtime control" in {
       Given("a controlled Job whose first Task attempt requests RetryLater")
       val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
-      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val runtime = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
       val control = runtime.testControl.get
       val engine = registerJobEngine(InMemoryJobEngine.create(runtime))
       val attempts = new AtomicInteger(0)
-      val task = _RetryOnceTask(attempts = attempts)
+      val task = RetryOnceTask(attempts = attempts)
 
       When("the initial work and default delayed retry are driven without host sleeping")
       val jobid = engine.submit(List(task), ExecutionContext.test()).toOption.get
@@ -118,12 +118,12 @@ final class ExecutionProfileJobSchedulingSpec
     "drive observable Job await timeout from logical time" in {
       Given("a controlled asynchronous Job that is not yet eligible")
       val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
-      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val runtime = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
       val control = runtime.testControl.get
       val engine = registerJobEngine(InMemoryJobEngine.create(runtime))
       val dueat = control.now.plus(Duration.ofMinutes(10L))
       val jobid = engine.submit(
-        List(_RecordingTask("delayed", ArrayBuffer.empty)),
+        List(RecordingTask("delayed", ArrayBuffer.empty)),
         ExecutionContext.test(),
         JobSubmitOption(runMode = JobRunMode.Async, scheduledStartAt = Some(dueat))
       ).toOption.get
@@ -157,11 +157,11 @@ final class ExecutionProfileJobSchedulingSpec
     "cancel an observable await timer when controlled Job work completes" in {
       Given("a controlled asynchronous Job and a long logical await deadline")
       val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
-      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val runtime = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
       val control = runtime.testControl.get
       val engine = registerJobEngine(InMemoryJobEngine.create(runtime))
       val jobid = engine.submit(
-        List(_RecordingTask("ready", ArrayBuffer.empty)),
+        List(RecordingTask("ready", ArrayBuffer.empty)),
         ExecutionContext.test()
       ).toOption.get
       val executor = Executors.newSingleThreadExecutor()
@@ -190,10 +190,10 @@ final class ExecutionProfileJobSchedulingSpec
     "keep performance duration independent from manual wall-time advancement" in {
       Given("a short Task that advances only the controlled wall clock")
       val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
-      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val runtime = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
       val control = runtime.testControl.get
       val engine = registerJobEngine(InMemoryJobEngine.create(runtime))
-      val task = _CallbackTask(() => control.advanceBy(Duration.ofHours(4L)))
+      val task = CallbackTask(() => control.advanceBy(Duration.ofHours(4L)))
 
       When("the Task completes after changing logical wall time")
       val jobid = engine.submit(
@@ -213,7 +213,7 @@ final class ExecutionProfileJobSchedulingSpec
     }
   }
 
-  private final case class _RecordingTask(
+  private final case class RecordingTask(
     name: String,
     order: ArrayBuffer[String],
     actionId: ActionId = ActionId.generate()
@@ -225,7 +225,7 @@ final class ExecutionProfileJobSchedulingSpec
     }
   }
 
-  private final case class _RetryOnceTask(
+  private final case class RetryOnceTask(
     attempts: AtomicInteger,
     actionId: ActionId = ActionId.generate()
   ) extends JobTask {
@@ -242,7 +242,7 @@ final class ExecutionProfileJobSchedulingSpec
     }
   }
 
-  private final case class _CallbackTask(
+  private final case class CallbackTask(
     callback: () => Unit,
     actionId: ActionId = ActionId.generate()
   ) extends JobTask {
@@ -266,7 +266,7 @@ final class ExecutionProfileJobSchedulingSpec
   private def _controlled_configuration: ResolvedConfiguration =
     ResolvedConfiguration(
       Configuration(Map(
-        RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("test"),
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("test"),
         RuntimeConfig.EXECUTION_PROFILE_KEY -> ConfigurationValue.StringValue("controlled"),
         RuntimeConfig.EXECUTION_KEY -> ConfigurationValue.StringValue("job-scheduling-run"),
         RuntimeConfig.EXECUTION_TIME_MODE_KEY -> ConfigurationValue.StringValue("manual"),

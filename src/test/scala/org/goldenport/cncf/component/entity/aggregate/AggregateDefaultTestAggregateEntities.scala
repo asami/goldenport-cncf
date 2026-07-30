@@ -177,5 +177,12 @@ private def _entity_id(
 ): EntityId =
   EntityId
     .parse(record.getString(fieldname).getOrElse(sys.error(s"$fieldname missing")))
+    .flatMap { id =>
+      if (id.collection == collectionid)
+        Consequence.success(id)
+      else
+        Consequence.argumentInvalid(
+          s"aggregate record ID collection mismatch: expected ${collectionid.print}, actual ${id.collection.print}"
+        )
+    }
     .TAKE
-    .copy(collection = collectionid)

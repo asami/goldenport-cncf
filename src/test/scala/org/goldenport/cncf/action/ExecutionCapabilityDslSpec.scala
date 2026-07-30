@@ -16,19 +16,22 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionCapabilityDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _in_phase52_spec =
+    afterWord("in spec:entity-collection-identity, example:execution-capability, rules:R1,R4, phase:52")
   private val _purpose =
     Gen.nonEmptyListOf(Gen.alphaNumChar).map(_.mkString)
 
-  "Behavior internal execution capability DSL" should {
+  "Behavior internal execution capability DSL" must _in_phase52_spec {
     "derive repeatable random values from isolated purpose streams" in {
       Given("generated purposes and two equivalent seeded execution contexts")
-      When("behavior reads random values through the purpose-based DSL")
       val property = Prop.forAll(_purpose) { purpose =>
-        val left = new _CapabilityBehavior(Behavior.Core(_context("random-seed", "id-seed"), None, None))
-        val right = new _CapabilityBehavior(Behavior.Core(_context("random-seed", "id-seed"), None, None))
+        val left = new CapabilityBehavior(Behavior.Core(_context("random-seed", "id-seed"), None, None))
+        val right = new CapabilityBehavior(Behavior.Core(_context("random-seed", "id-seed"), None, None))
 
         left.randomSnapshot(purpose) == right.randomSnapshot(purpose)
       }
+
+      When("behavior reads random values through the purpose-based DSL")
       val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(50), property)
 
       Then("all generated purpose streams reproduce")
@@ -39,7 +42,7 @@ final class ExecutionCapabilityDslSpec extends AnyWordSpec with Matchers with Gi
       Given("a behavior with CallTree enabled and deterministic capabilities")
       val seed = "confidential-capability-seed"
       val context = _context(seed, seed, calltreeenabled = true)
-      val behavior = new _CapabilityBehavior(Behavior.Core(context, None, None))
+      val behavior = new CapabilityBehavior(Behavior.Core(context, None, None))
 
       When("the behavior generates an Entity ID and an opaque ID")
       val generated = behavior.idSnapshot("order-number")
@@ -47,14 +50,12 @@ final class ExecutionCapabilityDslSpec extends AnyWordSpec with Matchers with Gi
 
       Then("CallTree records only capability, operation, purpose, and collection metadata")
       rendered should include ("execution:id.entity-id")
-      rendered should include ("execution:id.collection-entity-id")
       rendered should include ("execution:id.opaque-id")
       rendered should include ("execution-capability")
       rendered should include ("order-number")
       rendered should not include seed
       rendered should not include generated._1.value
-      rendered should not include generated._2.value
-      rendered should not include generated._3
+      rendered should not include generated._2
     }
   }
 
@@ -70,12 +71,12 @@ final class ExecutionCapabilityDslSpec extends AnyWordSpec with Matchers with Gi
       core = base.core.copy(random = RandomContext.seeded(randomseed)),
       cncfCore = base.cncfCore.copy(
         observability = base.observability.copy(callTreeContext = calltree),
-        idGeneration = IdGenerationContext.deterministic(IdGenerationContext.DefaultNamespace, clock, idseed)
+        idGeneration = IdGenerationContext.deterministic(IdGenerationContext.DEFAULT_NAMESPACE, clock, idseed)
       )
     )
   }
 
-  private final class _CapabilityBehavior(
+  private final class CapabilityBehavior(
     val behaviorCore: Behavior.Core
   ) extends Behavior {
     private val _collection = EntityCollectionId("sample", "catalog", "order")
@@ -88,10 +89,9 @@ final class ExecutionCapabilityDslSpec extends AnyWordSpec with Matchers with Gi
         random_boolean(purpose)
       )
 
-    def idSnapshot(purpose: String): (EntityId, EntityId, String) =
+    def idSnapshot(purpose: String): (EntityId, String) =
       (
         entity_id(_collection, purpose),
-        collection_entity_id(_collection, purpose),
         opaque_id(purpose)
       )
   }

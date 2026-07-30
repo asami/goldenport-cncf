@@ -4,7 +4,7 @@ import cats.~>
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => execution_context}
 import scala.concurrent.duration.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{
@@ -56,19 +56,23 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 26, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
+  private val _in_eid01_spec =
+    afterWord("in spec:entity-collection-identity, example:E7, rules:R1,R5, phase:52")
+  private val _in_phase52_spec =
+    afterWord("in spec:entity-collection-identity, example:unit-of-work-target-authorization, rules:R1,R5, phase:52")
 
   private val _cid = EntityCollectionId("test", "authz", "person")
   private val _initialrevision =
     EntityRevision.INITIAL
 
-  "UnitOfWork target authorization" should {
+  "UnitOfWork target authorization" must _in_phase52_spec {
     "authorize operation preflight and aggregate command admission" which {
       "allow create by default for domain resources in phase 1" in {
         Given("an authenticated creator and a domain Entity create operation")
@@ -267,6 +271,54 @@ final class UnitOfWorkTargetAuthorizationSpec
     }
 
     "enforce Entity CRUD permissions and identity locking" which {
+      "E7 register exact target identity before EID-05 authorization adoption" must _in_eid01_spec {
+        "reject an old scalar before the authorization datastore branch" in {
+          Given(
+            "Spec: docs/spec/entity-collection-identity.md; Rules: R1,R5; Example: E7; a frozen old scalar whose exact authorization owner is absent from the String"
+          )
+          val oldscalar         = "test-authorization_target-entity-person-0-stable"
+          val countingdatastore = new CountingDataStore(DataStore.inMemory())
+          val datastorespace    = new DataStoreSpace().addDataStore(countingdatastore)
+          given ExecutionContext = _execution_context(
+            principalid = "authorization-owner",
+            datastorespace = datastorespace
+          )
+          given EntityPersistent[PersonEntity] = _person_persistent
+
+          When("the old target is parsed and submitted to an authorized UnitOfWork load")
+          val result = EntityId.parse(oldscalar).flatMap { parsedid =>
+            val record = PersonEntity(parsedid, "legacy-target", "authorization-owner").toRecord()
+            val _ = summon[ExecutionContext].dataStoreSpace.inject(
+              DataStoreSpace.Seed(Vector(EntityRevisionFixture.entitySeed(
+                DataStore.CollectionId.EntityStore(parsedid.collection),
+                record
+              )))
+            )
+            val uow = new UnitOfWork(summon[ExecutionContext])
+            new UnitOfWorkInterpreter(uow).run(
+              org.goldenport.ConsequenceT.liftF(
+                cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+                  UnitOfWorkOp.EntityStoreLoad(
+                    parsedid,
+                    summon[EntityPersistent[PersonEntity]],
+                    authorization = Some(UnitOfWorkAuthorization(
+                      resourceFamily = "domain",
+                      resourceType = Some("Person"),
+                      targetId = Some(parsedid),
+                      accessKind = "read"
+                    ))
+                  )
+                )
+              )
+            )
+          }
+
+          Then("canonical parsing rejects the old scalar before authorization or datastore side effects")
+          result shouldBe a[Consequence.Failure[_]]
+          countingdatastore.loadcalls shouldBe 0
+        }
+      }
+
       "allow load for a group-visible entity" in {
         Given("a principal sharing the target Entity group")
         given ExecutionContext = _execution_context(
@@ -1393,9 +1445,9 @@ final class UnitOfWorkTargetAuthorizationSpec
   private def _execution_context(
       principalid: String,
       capabilities: Vector[Capability] = Vector.empty,
-      principalattributes: Map[String, String] = Map.empty
+      principalattributes: Map[String, String] = Map.empty,
+      datastorespace: DataStoreSpace = DataStoreSpace.default()
   ): ExecutionContext = {
-    val datastorespace   = DataStoreSpace.default()
     val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
     val observability = ObservabilityContext(
       traceId = TraceId("test", "runtime"),
@@ -1548,7 +1600,54 @@ final class UnitOfWorkTargetAuthorizationSpec
       )
   }
 
-  private val _person_persistent: EntityPersistent[PersonEntity] =
+  private final class CountingDataStore(delegate: DataStore) extends DataStore {
+    private var _loadcalls: Int = 0
+
+    def loadcalls: Int = _loadcalls
+
+    def isAccept(cid: DataStore.CollectionId): Boolean = delegate.isAccept(cid)
+
+    def create(
+        collection: DataStore.CollectionId,
+        id: DataStore.EntryId,
+        record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      delegate.create(collection, id, record)
+
+    def load(
+        collection: DataStore.CollectionId,
+        id: DataStore.EntryId
+    )(using ctx: ExecutionContext): Consequence[Option[Record]] = {
+      _loadcalls += 1
+      delegate.load(collection, id)
+    }
+
+    def save(
+        collection: DataStore.CollectionId,
+        id: DataStore.EntryId,
+        record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      delegate.save(collection, id, record)
+
+    def update(
+        collection: DataStore.CollectionId,
+        id: DataStore.EntryId,
+        changes: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      delegate.update(collection, id, changes)
+
+    def delete(
+        collection: DataStore.CollectionId,
+        id: DataStore.EntryId
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      delegate.delete(collection, id)
+
+    def prepare(tx: TransactionContext): PrepareResult = delegate.prepare(tx)
+    def commit(tx: TransactionContext): Unit           = delegate.commit(tx)
+    def abort(tx: TransactionContext): Unit            = delegate.abort(tx)
+  }
+
+  private lazy val _person_persistent: EntityPersistent[PersonEntity] =
     new EntityPersistent[PersonEntity] {
       def id(e: PersonEntity): EntityId     = e.id
       def toRecord(e: PersonEntity): Record = e.toRecord()

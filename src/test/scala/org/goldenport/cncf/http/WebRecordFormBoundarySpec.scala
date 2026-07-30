@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebRecordFormBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -106,7 +106,7 @@ final class WebRecordFormBoundarySpec extends AnyWordSpec with Matchers with Giv
     )
     val configuration = ResolvedConfiguration(
       Configuration(Map(
-        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(web.toString)
+        RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(web.toString)
       )),
       ConfigurationTrace.empty
     )

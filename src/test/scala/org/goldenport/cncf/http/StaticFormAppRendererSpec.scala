@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -471,9 +471,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("externalUrl", "https://example.test/cover.png", None)
       ))))
       val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
+      val sourceid = _notice_entity_id_from_shortid("article_1").value
       _success(subsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "article-1", None),
+        Property("sourceEntityId", sourceid, None),
         Property("id", id, None),
         Property("role", "mainImage", None)
       )))
@@ -482,7 +483,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val list = _success(_renderer.renderBlobAdminBlobs(subsystem)).body
       val detail = _success(_renderer.renderBlobAdminBlobDetail(subsystem, id)).body
       val delete = _success(_renderer.renderBlobAdminBlobDelete(subsystem, id)).body
-      val associations = _success(_renderer.renderBlobAdminAssociations(subsystem, Map("sourceEntityId" -> "article-1"))).body
+      val associations = _success(_renderer.renderBlobAdminAssociations(subsystem, Map("sourceEntityId" -> sourceid))).body
       When("render Blob admin read-only pages is exercised")
       val store = _success(_renderer.renderBlobAdminStore(subsystem)).body
 
@@ -515,7 +516,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       associations should include ("data-bs-toggle=\"modal\"")
       associations should include ("class=\"modal fade\"")
       associations should include ("<noscript>")
-      associations should include ("article-1")
+      associations should include (sourceid)
       associations should include ("mainImage")
       store should include ("Blob Admin Store")
       store should include ("Store Status")
@@ -693,8 +694,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Some("server"),
         ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.BlobStoreBackendKey -> ConfigurationValue.StringValue(BlobStoreConfig.BackendLocal),
-            RuntimeConfig.BlobStoreLocalRootKey -> ConfigurationValue.StringValue(root.toString)
+            RuntimeConfig.blobStoreBackendKey -> ConfigurationValue.StringValue(BlobStoreConfig.BackendLocal),
+            RuntimeConfig.blobStoreLocalRootKey -> ConfigurationValue.StringValue(root.toString)
           )),
           ConfigurationTrace.empty
         )
@@ -753,15 +754,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))))
       val secondid = second.getString("id").getOrElse(fail("Blob id is missing"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val sourceid = _notice_entity_id_from_shortid("product_1").value
 
       val attach = server.routes(null).orNotFound.run(_post_form_request(
         "/web/blob/admin/associations/attach",
-        s"sourceEntityId=product-1&id=${java.net.URLEncoder.encode(secondid, StandardCharsets.UTF_8)}&role=manual&sortOrder=7"
+        s"sourceEntityId=${java.net.URLEncoder.encode(sourceid, StandardCharsets.UTF_8)}&id=${java.net.URLEncoder.encode(secondid, StandardCharsets.UTF_8)}&role=manual&sortOrder=7"
       )).unsafeRunSync()
       When("serve Blob admin mutation routes is exercised")
       val attached = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "admin_list_blob_associations",
-        Property("sourceEntityId", "product-1", None),
+        Property("sourceEntityId", sourceid, None),
         Property("id", secondid, None)
       ))))
 
@@ -774,11 +776,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val detach = server.routes(null).orNotFound.run(_post_form_request(
         "/web/blob/admin/associations/detach",
-        s"sourceEntityId=product-1&id=${java.net.URLEncoder.encode(secondid, StandardCharsets.UTF_8)}&role=manual"
+        s"sourceEntityId=${java.net.URLEncoder.encode(sourceid, StandardCharsets.UTF_8)}&id=${java.net.URLEncoder.encode(secondid, StandardCharsets.UTF_8)}&role=manual"
       )).unsafeRunSync()
       val detached = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "admin_list_blob_associations",
-        Property("sourceEntityId", "product-1", None),
+        Property("sourceEntityId", sourceid, None),
         Property("id", secondid, None)
       ))))
 
@@ -812,9 +814,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("externalUrl", "https://example.test/attached.png", None)
       ))))
       val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
+      val sourceid = _notice_entity_id_from_shortid("product_2").value
       _success(subsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "product-2", None),
+        Property("sourceEntityId", sourceid, None),
         Property("id", id, None),
         Property("role", "mainImage", None)
       )))
@@ -859,7 +862,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = DefaultSubsystemFactory.default(
         Some("server"),
         ResolvedConfiguration(
-          Configuration(Map(RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"))),
+          Configuration(Map(RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"))),
           ConfigurationTrace.empty
         )
       )
@@ -1485,7 +1488,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "hide generated help and packaged manuals in production operation mode" in {
       Given("a production-mode subsystem")
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets(
-        Configuration(Map(RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")))
+        Configuration(Map(RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
@@ -1598,7 +1601,6 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val entitypath = "notice"
       val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id
       val recordid = recordentityid.value
-      val recordshortid = recordentityid.parts.entropy
 
       val list = _renderer.renderComponentAdminEntityType(subsystem, componentname, entitypath).map(_.body).getOrElse(fail("component entity type admin is missing"))
       val firstpage = _renderer.renderComponentAdminEntityType(
@@ -1621,7 +1623,6 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         WebDescriptor(admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
       ).map(_.body).getOrElse(fail("component entity total page admin is missing"))
       val detail = _renderer.renderComponentAdminEntityDetail(subsystem, componentname, entitypath, recordid).map(_.body).getOrElse(fail("component entity detail admin is missing"))
-      val detailbyshortid = _renderer.renderComponentAdminEntityDetail(subsystem, componentname, entitypath, recordshortid).map(_.body).getOrElse(fail("component entity detail admin by shortid is missing"))
       When("render component entity pages from a live EntityCollection fixture is exercised")
       val edit = _renderer.renderComponentAdminEntityEdit(subsystem, componentname, entitypath, recordid).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
@@ -1650,8 +1651,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       list should include ("class=\"btn-group btn-group-sm\"")
       list should include ("board update")
       list should include ("alice")
-      list should include (s"/web/${componentpath}/admin/entities/${entitypath}/${recordshortid}")
-      list should include (s"/web/${componentpath}/admin/entities/${entitypath}/${recordshortid}/edit")
+      list should include (s"/web/${componentpath}/admin/entities/${entitypath}/${recordid}")
+      list should include (s"/web/${componentpath}/admin/entities/${entitypath}/${recordid}/edit")
       list should not include ("No records are currently available")
       firstpage should include ("Page 1")
       firstpage should include ("page=2&amp;pageSize=1")
@@ -1671,17 +1672,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       detail should include ("name=\"sourceEntityId\"")
       detail should include ("entityImageRoleOptions")
       detail should include ("No BlobAttachment images are associated with this Entity.")
-      detailbyshortid should include ("board update")
-      detailbyshortid should include ("alice")
-      val shortdetailsourceid = """name="sourceEntityId" value="([^"]+)"""".r.findFirstMatchIn(detailbyshortid).map(_.group(1)).getOrElse(fail("short-id detail sourceEntityId is missing"))
-      shortdetailsourceid shouldBe recordid
-      shortdetailsourceid should not be recordshortid
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
       edit should include (
         s"""type="hidden" name="version" value="${_notice_entity_version(subsystem, recordid)}""""
       )
-      edit should include (s"/form/${componentpath}/admin/entities/${entitypath}/${recordshortid}/update")
+      edit should include (s"/form/${componentpath}/admin/entities/${entitypath}/${recordid}/update")
 
       val searched = _renderer.renderComponentAdminEntityType(
         subsystem,
@@ -1864,7 +1860,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "sourceEntityId" -> sourceid,
         "tagSpace" -> "admin-tag-space",
         "tagRef" -> childpath,
-        "role" -> "tag"
+        "role" -> "notice"
       )
 
       val tagpage = _page_body(_renderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-tag-space")), "Tag admin page")
@@ -2027,7 +2023,6 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val entitypath = "notice"
       val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id
       val recordid = recordentityid.value
-      val recordshortid = recordentityid.parts.entropy
       val context = Map(
         "search.author" -> "alice",
         "paging.page" -> "2",
@@ -2066,7 +2061,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       list should include ("search.author=alice")
       list should include ("/edit?crud.origin.href=")
       detail should include (s"/web/${componentpath}/admin/entities/${entitypath}?crud.origin.href=")
-      detail should include (s"/web/${componentpath}/admin/entities/${entitypath}/${recordshortid}/edit?crud.origin.href=")
+      detail should include (s"/web/${componentpath}/admin/entities/${entitypath}/${recordid}/edit?crud.origin.href=")
       edit should include ("type=\"hidden\" name=\"crud.origin.href\"")
       edit should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
       edit should include ("type=\"hidden\" name=\"paging.pageSize\" value=\"1\"")
@@ -2082,15 +2077,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val recordentityid = collection.storage.storeRealm.values.head.id
       val recordid = recordentityid.value
-      val recordshortid = recordentityid.parts.entropy
       val req = _post_form_request(
-        s"/form/notice-board/admin/entities/notice/${recordshortid}/update",
+        s"/form/notice-board/admin/entities/notice/${recordid}/update",
         s"title=board+updated&author=bob&version=${_notice_entity_version(subsystem, recordid)}"
       )
 
       When("apply component entity update form POST through EntityCollection into EntityStoreSpace is exercised")
       val html = server
-        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordshortid)
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordid)
         .flatMap(_.as[String])
         .unsafeRunSync()
 
@@ -2104,6 +2098,64 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       stored.getString("title") shouldBe Some("board updated")
       stored.getString("author") shouldBe Some("bob")
       dispatcher.paths should contain ("/admin/entity/update")
+      dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some(recordid)
+    }
+
+    "reject unresolved scalar and canonical component entity update routes before Admin dispatch" in {
+      Given("update forms whose route locators cannot resolve to the route collection")
+      val subsystem = _management_console_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val canonicalid = _new_notice_entity_id().value
+      val storedid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head.id
+      val foreigncollection = EntityCollectionId("foreign", "route", "notice")
+      val foreignid = EntityId(
+        foreigncollection.major,
+        foreigncollection.minor,
+        foreigncollection,
+        timestamp = Some(java.time.Instant.EPOCH),
+        entropy = Some(storedid.parts.entropy)
+      ).value
+
+      When("an unresolved scalar route is submitted")
+      val scalarresponse = server
+        ._submit_component_admin_entity_update(
+          _post_form_request("/form/notice-board/admin/entities/notice/unknown/update", "title=valid&author=route"),
+          "notice-board",
+          "notice",
+          "unknown"
+        )
+        .unsafeRunSync()
+
+      And("a canonical ID is paired with an unknown entity route")
+      val canonicalresponse = server
+        ._submit_component_admin_entity_update(
+          _post_form_request(s"/form/notice-board/admin/entities/missing/${canonicalid}/update", "title=valid&author=route"),
+          "notice-board",
+          "missing",
+          canonicalid
+        )
+        .unsafeRunSync()
+
+      And("a foreign canonical ID collides with a local short route ID")
+      val foreignresponse = server
+        ._submit_component_admin_entity_update(
+          _post_form_request(s"/form/notice-board/admin/entities/notice/${foreignid}/update", "title=valid&author=route"),
+          "notice-board",
+          "notice",
+          foreignid
+        )
+        .unsafeRunSync()
+
+      Then("all requests return a client error without forwarding an ID to Admin")
+      scalarresponse.status.code shouldBe 400
+      scalarresponse.as[String].unsafeRunSync() should include ("Unknown entity route id")
+      canonicalresponse.status.code shouldBe 400
+      canonicalresponse.as[String].unsafeRunSync() should include ("Unknown entity route id")
+      foreignresponse.status.code shouldBe 400
+      foreignresponse.as[String].unsafeRunSync() should include ("Unknown entity route id")
+      dispatcher.paths should not contain ("/admin/entity/update")
     }
 
     "reject a stale component entity update form without replacing the committed Entity" in {
@@ -2393,9 +2445,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val before = collection.storage.storeRealm.values.size
+      val id = _new_notice_entity_id()
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
-        "fields=id%3Dnotice_2%0Atitle%3Dnew+notice%0Aauthor%3Dbob"
+        s"fields=id%3D${java.net.URLEncoder.encode(id.value, StandardCharsets.UTF_8)}%0Atitle%3Dnew+notice%0Aauthor%3Dbob"
       )
 
       When("apply component entity create form POST through EntityCollection into EntityStoreSpace is exercised")
@@ -2645,10 +2698,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val filename = s"web-admin-${java.util.UUID.randomUUID().toString.replace("-", "")}.png"
+      val id = _new_notice_entity_id()
       val req = _post_multipart_request(
         "/form/notice-board/admin/entities/notice/create",
         Vector(
-          "id" -> s"notice_web_image_${java.util.UUID.randomUUID().toString.replace("-", "")}",
+          "id" -> id.value,
           "title" -> "multipart image create",
           "author" -> "web",
           "imageAttachments.0.role" -> "primary"
@@ -2750,7 +2804,6 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val entitypath = "notice"
       val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id
       val recordid = recordentityid.value
-      val recordshortid = recordentityid.parts.entropy
 
       val newhtml = _renderer
         .renderComponentAdminEntityNew(subsystem, componentname, entitypath)
@@ -2771,7 +2824,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       newhtml should include ("Image Attachments")
       newhtml should not include ("name=\"title\"")
       newhtml should not include ("name=\"content\"")
-      edithtml should include (s"/form/${componentpath}/admin/entities/${entitypath}/${recordshortid}/update")
+      edithtml should include (s"/form/${componentpath}/admin/entities/${entitypath}/${recordid}/update")
       edithtml should include ("enctype=\"multipart/form-data\"")
       edithtml should include ("name=\"subject\"")
       edithtml should include ("name=\"body\"")
@@ -2986,9 +3039,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val id = _new_notice_entity_id()
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
-        "id=notice_alias&senderName=alice&recipientName=bob&subject=Phase+12&body=Alias+body"
+        s"id=${java.net.URLEncoder.encode(id.value, StandardCharsets.UTF_8)}&senderName=alice&recipientName=bob&subject=Phase+12&body=Alias+body"
       )
 
       When("pass derived alias admin entity create fields through to the dispatcher is exercised")
@@ -3011,7 +3065,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for keep static result page convention out of built-in admin entity create flow")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "__200.html",
             "<article><h2>Static Operation Result</h2></article>"
           ).resolve("web.yaml").toString)
@@ -3020,9 +3074,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val id = _new_notice_entity_id()
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
-        "fields=id%3Dnotice_static%0Atitle%3Dstatic+guard%0Aauthor%3Dbob"
+        s"fields=id%3D${java.net.URLEncoder.encode(id.value, StandardCharsets.UTF_8)}%0Atitle%3Dstatic+guard%0Aauthor%3Dbob"
       )
 
       When("keep static result page convention out of built-in admin entity create flow is exercised")
@@ -3072,7 +3127,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("notice-board").resolve("notice").resolve("post-notice__200.html"), "SERVICE OPERATION", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       When("load Static Form Web App result templates from the descriptor root with route-local precedence is exercised")
@@ -3106,7 +3161,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("post-notice__200.html"), "<section>${operation}</section>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3127,7 +3182,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("notice-board").resolve("assets").resolve("app.css"), ".notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3154,7 +3209,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("notice-board").resolve("about.html"), "<h1>About Notice Board</h1>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3188,7 +3243,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("textus-art-scene").resolve("index.html"), "<h1>ArtScene</h1>", StandardCharsets.UTF_8)
       val base = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
@@ -3231,7 +3286,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("textus-art-scene").resolve("index.html"), "<h1>Entry ArtScene</h1>", StandardCharsets.UTF_8)
       val base = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
@@ -3285,7 +3340,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("art-alias").resolve("index.html"), "<h1>Alias ArtScene</h1>", StandardCharsets.UTF_8)
       val base = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
@@ -3329,7 +3384,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("art-gallery").resolve("index.html"), "<h1>Entry Gallery</h1>", StandardCharsets.UTF_8)
       val base = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
@@ -3368,7 +3423,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("textus-art-scene").resolve("index.html"), "<h1>Aliased ArtScene</h1>", StandardCharsets.UTF_8)
       val base = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
@@ -3409,7 +3464,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("textus-art-scene").resolve("assets").resolve("app.css"), ".routed-art-scene { color: #0f766e; }\n", StandardCharsets.UTF_8)
       val base = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
@@ -3457,7 +3512,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("notice-board").resolve("index.html"), "<h1>Fallback Notice Board</h1>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3532,7 +3587,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3592,7 +3647,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3673,7 +3728,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
         ))
       ).add(Vector(
         TestComponentFactory.create("textus_knowledge_editor", Protocol.empty),
@@ -3752,7 +3807,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("notice-board").resolve("login.html"), "<section>Login Screen</section>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3839,7 +3894,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(editorroot.resolve("src").resolve("main").resolve("web").resolve("editor").resolve("index.html"), "<section>Editor</section>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
         ))
       ).add(Vector(
         TestComponentFactory.create("textus_user_notification", Protocol.empty),
@@ -3966,7 +4021,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0-SNAPSHOT", component = Some("textus-knowledge-editor"), archivePath = Some(carroot.toString))
       )
       val subsystem = _management_console_fixture_subsystem(
-        Configuration(Map(RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(mainroot.toString)))
+        Configuration(Map(RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(mainroot.toString)))
       ).add(Vector(maincomponent, carcomponent))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
@@ -4033,7 +4088,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
         ))
       ).add(Vector(
         TestComponentFactory.create("blog_component", Protocol.empty),
@@ -4115,7 +4170,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
         ))
       ).add(Vector(
         TestComponentFactory.create("blog_component", Protocol.empty),
@@ -4180,7 +4235,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
         ))
       ).add(Vector(TestComponentFactory.create("textus_user_notification", Protocol.empty)))
       subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
@@ -4235,7 +4290,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("login-notice__200.html"), "<section>Login Result</section>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -4322,7 +4377,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("publicblogs.html"), "<h1>Public Blogs</h1>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -4353,7 +4408,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("post-notice__200.html"), "<section>Result</section>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       When("fail form result layout composition as a Consequence failure is exercised")
@@ -4402,7 +4457,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("app-b").resolve("assets").resolve("app.css"), ".app-b { color: blue; }\n", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -4450,7 +4505,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("notice-board").resolve("assets").resolve("app.css"), ".alias-notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -4479,7 +4534,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for redirect / to /web and render onboarding help on /web in non-production when no default web route is configured")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("develop")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("develop")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -4521,8 +4576,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("develop"),
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("develop"),
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -4543,7 +4598,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for redirect / to /web and keep /web strict in production when no default web route is configured")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -4632,7 +4687,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.writeString(root.resolve("notice-board").resolve("assets").resolve("app.css"), ".implicit-notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         )),
         ConfigurationTrace.empty
       )
@@ -4675,7 +4730,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(path.toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(path.toString)
         ))
       )
       val engine = new HttpExecutionEngine(subsystem)
@@ -5541,20 +5596,133 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render component view instance detail page through context-aware read" in {
       Given("the prerequisites for render component view instance detail page through context-aware read")
       val subsystem = _view_fixture_subsystem()
+      val id = _notice_entity_id_from_shortid("notice_1").value
 
       When("render component view instance detail page through context-aware read is exercised")
-      val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1").map(_.body).getOrElse(fail("component view instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", id).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
       Then("the observable contract for render component view instance detail page through context-aware read holds")
       html should include ("notice_board Notice View View Detail")
       html should include ("class=\"card admin-card")
-      html should include ("notice_1")
+      html should include (id)
       html should include ("label")
-      html should include ("value")
+      html should include ("title")
       html should include ("notice detail notice_1")
       html should not include ("Edit")
       html should not include ("Update")
       html should include ("/web/notice-board/admin/views/notice-view")
+    }
+
+    "reject a foreign canonical instance locator without rendering Admin reads or aggregate operations" in {
+      Given("view and aggregate fixtures with a local short ID colliding with a foreign canonical ID")
+      val foreigncollection = EntityCollectionId("foreign", "route", "notice")
+      val foreignid = EntityId(
+        foreigncollection.major,
+        foreigncollection.minor,
+        foreigncollection,
+        timestamp = Some(java.time.Instant.EPOCH),
+        entropy = Some("notice_1")
+      ).value
+      val viewsubsystem = _view_fixture_subsystem()
+      val aggregatesubsystem = _aggregate_fixture_subsystem()
+
+      When("the foreign canonical locator is rendered through view and aggregate detail routes")
+      val viewhtml = _renderer.renderComponentAdminViewInstanceDetail(
+        viewsubsystem,
+        "notice_board",
+        "notice_view",
+        foreignid
+      ).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
+      val aggregatehtml = _renderer.renderComponentAdminAggregateInstanceDetail(
+        aggregatesubsystem,
+        "notice_board",
+        "notice_aggregate",
+        foreignid
+      ).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
+
+      Then("no Admin read result or instance operation is rendered for the foreign locator")
+      viewhtml should include (s"No canonical Entity ID is available for ${foreignid}.")
+      viewhtml should not include ("notice detail notice_1")
+      aggregatehtml should include (s"No canonical Entity ID is available for ${foreignid}.")
+      aggregatehtml should include (s"No instance operations are available for unresolved id ${foreignid}.")
+      aggregatehtml should not include ("aggregate id prefilled")
+      aggregatehtml should not include (s"id=${foreignid}")
+    }
+
+    "reject foreign canonical IDs at direct Admin view and aggregate reads" in {
+      Given("direct Admin surfaces with a local entropy collision in another collection")
+      val foreigncollection = EntityCollectionId("foreign", "route", "notice")
+      val foreignid = EntityId(
+        foreigncollection.major,
+        foreigncollection.minor,
+        foreigncollection,
+        timestamp = Some(java.time.Instant.EPOCH),
+        entropy = Some("notice_1")
+      ).value
+      val viewengine = new HttpExecutionEngine(_view_fixture_subsystem())
+      val aggregateengine = new HttpExecutionEngine(_aggregate_fixture_subsystem())
+
+      When("the foreign canonical ID is submitted to direct Admin reads")
+      val viewresponse = viewengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/view/read",
+        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> foreignid)
+      ))
+      val aggregateresponse = aggregateengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/aggregate/read",
+        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> foreignid)
+      ))
+
+      Then("both boundaries reject it before view or aggregate resolution")
+      viewresponse.code shouldBe 400
+      aggregateresponse.code shouldBe 400
+    }
+
+    "reject direct Admin ID reads whose declared backing collection is absent" in {
+      Given("view and aggregate definitions that name a missing backing entity")
+      val id = _notice_entity_id_from_shortid("notice_1").value
+      val viewengine = new HttpExecutionEngine(_view_fixture_subsystem(backingentityname = "missing"))
+      val aggregateengine = new HttpExecutionEngine(_aggregate_fixture_subsystem(backingentityname = "missing"))
+
+      When("a canonical local ID is submitted to the direct Admin reads")
+      val viewresponse = viewengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/view/read",
+        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> id)
+      ))
+      val aggregateresponse = aggregateengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/aggregate/read",
+        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> id)
+      ))
+
+      Then("neither surface infers a same-base collection from its surface name")
+      viewresponse.code shouldBe 400
+      aggregateresponse.code shouldBe 400
+    }
+
+    "reject direct Admin ID reads whose declared backing collection is ambiguous" in {
+      Given("view and aggregate definitions whose entity name has two exact runtime collections")
+      val id = _notice_entity_id_from_shortid("notice_1").value
+      val viewengine = new HttpExecutionEngine(_view_fixture_subsystem(ambiguousbacking = true))
+      val aggregateengine = new HttpExecutionEngine(_aggregate_fixture_subsystem(ambiguousbacking = true))
+
+      When("a canonical local ID is submitted to the direct Admin reads")
+      val viewresponse = viewengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/view/read",
+        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> id)
+      ))
+      val aggregateresponse = aggregateengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/aggregate/read",
+        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> id)
+      ))
+
+      Then("both boundaries expose the ambiguous server configuration rather than choosing a collection")
+      viewresponse.code shouldBe 500
+      aggregateresponse.code shouldBe 500
     }
 
     "render component view instance detail with descriptor field schema" in {
@@ -5572,9 +5740,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
+      val id = _notice_entity_id_from_shortid("notice_1").value
 
       When("render component view instance detail with descriptor field schema is exercised")
-      val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1", descriptor).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", id, descriptor).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
       Then("the observable contract for render component view instance detail with descriptor field schema holds")
       html should include ("<th>id</th>")
@@ -5606,6 +5775,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render component aggregate read page from a live AggregateSpace fixture" in {
       Given("the prerequisites for render component aggregate read page from a live AggregateSpace fixture")
       val subsystem = _aggregate_fixture_subsystem()
+      val id = _notice_entity_id_from_shortid("notice_1").value
 
       When("render component aggregate read page from a live AggregateSpace fixture is exercised")
       val html = _renderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate").map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
@@ -5621,7 +5791,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Read result")
       html should include ("<th>id</th><th>Short ID</th><th>label</th><th>status</th><th>Actions</th>")
       html should include ("notice_1")
-      html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
+      html should include (s"/web/notice-board/admin/aggregates/notice-aggregate/${id}")
       html should include ("Result pages")
       html should include ("Operations")
       html should include ("create-notice-aggregate")
@@ -5642,6 +5812,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render component aggregate list with descriptor field columns" in {
       Given("the prerequisites for render component aggregate list with descriptor field columns")
       val subsystem = _aggregate_fixture_subsystem()
+      val id = _notice_entity_id_from_shortid("notice_1").value
       val descriptor = WebDescriptor(
         admin = Map(
           "aggregate.notice-aggregate" -> WebDescriptor.AdminSurface(
@@ -5663,22 +5834,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("<th>note</th>")
       html.indexOf("<th>id</th>") should be < html.indexOf("<th>label</th>")
       html.indexOf("<th>label</th>") should be < html.indexOf("<th>note</th>")
-      html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
+      html should include (s"/web/notice-board/admin/aggregates/notice-aggregate/${id}")
     }
 
     "render component aggregate instance detail page through context-aware read" in {
       Given("the prerequisites for render component aggregate instance detail page through context-aware read")
       val subsystem = _aggregate_fixture_subsystem()
+      val id = _notice_entity_id_from_shortid("notice_1").value
 
       When("render component aggregate instance detail page through context-aware read is exercised")
-      val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1").map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", id).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
       Then("the observable contract for render component aggregate instance detail page through context-aware read holds")
       html should include ("notice_board Notice Aggregate Aggregate Detail")
       html should include ("class=\"card admin-card")
-      html should include ("notice_1")
+      html should include (id)
       html should include ("label")
-      html should include ("value")
+      html should include ("title")
       html should include ("notice aggregate")
       html should include ("Instance operations")
       html should include ("aggregate id prefilled")
@@ -5687,7 +5859,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should not include ("Create aggregate")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?")
       html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?")
-      html should include ("id=notice_1")
+      html should include (s"id=${id}")
       html should include ("crud.success.href=")
       html should not include ("textus.admin.principalId=system")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
@@ -5708,9 +5880,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
+      val id = _notice_entity_id_from_shortid("notice_1").value
 
       When("render component aggregate instance detail with descriptor field schema is exercised")
-      val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1", descriptor).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", id, descriptor).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
       Then("the observable contract for render component aggregate instance detail with descriptor field schema holds")
       html should include ("<th>id</th>")
@@ -5829,9 +6002,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val viewsubsystem = _view_fixture_subsystem()
       val viewengine = new HttpExecutionEngine(viewsubsystem)
+      val viewid = _notice_entity_id_from_shortid("notice_2").value
       val viewread = viewengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/view/read", form = Record.data("component" -> "notice-board", "view" -> "notice-view")))
+      val invalidviewread = viewengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/view/read",
+        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> "legacy-view-id")
+      ))
 
       viewread.code shouldBe 200
+      invalidviewread.code shouldBe 400
       viewread.getString.getOrElse("") should include ("notice summary")
       val viewreadrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view")
       viewreadrecord.getString("kind") shouldBe Some("view.read")
@@ -5866,7 +6046,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       secondviewpage.getString("fields") shouldBe Some("notice next")
       secondviewpage.getBoolean("hasNext") shouldBe Some(false)
       val viewblobid = _register_external_blob(viewsubsystem, "view-image.png", "https://example.test/view-image.png")
-      val viewnoblobrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_2")
+      val viewnoblobrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> viewid)
       viewnoblobrecord.getAny("images") shouldBe Some(Vector.empty)
       viewnoblobrecord.getAny("representativeImage") shouldBe Some(None)
       val viewsourceentityid = viewnoblobrecord.getString("sourceEntityId").getOrElse(fail("view sourceEntityId is missing"))
@@ -5877,9 +6057,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("role", "primary", None),
         Property("sortOrder", "1", None)
       )))
-      val viewinstancerecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_2")
+      val viewinstancerecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> viewid)
       viewinstancerecord.getString("kind") shouldBe Some("view.read")
-      viewinstancerecord.getString("id") shouldBe Some("notice_2")
+      viewinstancerecord.getString("id") shouldBe Some(viewid)
       viewinstancerecord.getString("label").getOrElse("") should include ("notice detail notice_2")
       viewinstancerecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_2")
       viewinstancerecord.getString("fields").getOrElse("") should include ("notice detail notice_2")
@@ -5894,40 +6074,47 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val aggregatesubsystem = _aggregate_fixture_subsystem()
       val aggregateengine = new HttpExecutionEngine(aggregatesubsystem)
+      val aggregateid = _notice_entity_id_from_shortid("notice_1").value
       val aggregateblobid = _register_external_blob(aggregatesubsystem, "aggregate-image.png", "https://example.test/aggregate-image.png")
       val earlyaggregateblobid = _register_external_blob(aggregatesubsystem, "aggregate-early.png", "https://example.test/aggregate-early.png")
       val lateaggregateblobid = _register_external_blob(aggregatesubsystem, "aggregate-late.png", "https://example.test/aggregate-late.png")
       val unorderedaggregateblobid = _register_external_blob(aggregatesubsystem, "aggregate-unordered.png", "https://example.test/aggregate-unordered.png")
       _success(aggregatesubsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "notice_1", None),
+        Property("sourceEntityId", aggregateid, None),
         Property("id", lateaggregateblobid, None),
         Property("role", "lateImage", None),
         Property("sortOrder", "20", None)
       )))
       _success(aggregatesubsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "notice_1", None),
+        Property("sourceEntityId", aggregateid, None),
         Property("id", aggregateblobid, None),
         Property("role", "heroImage", None),
         Property("sortOrder", "2", None)
       )))
       _success(aggregatesubsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "notice_1", None),
+        Property("sourceEntityId", aggregateid, None),
         Property("id", unorderedaggregateblobid, None),
         Property("role", "unorderedImage", None)
       )))
       _success(aggregatesubsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "notice_1", None),
+        Property("sourceEntityId", aggregateid, None),
         Property("id", earlyaggregateblobid, None),
         Property("role", "earlyImage", None),
         Property("sortOrder", "1", None)
       )))
       val aggregateread = aggregateengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/aggregate/read", form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate")))
+      val invalidaggregateread = aggregateengine.execute(HttpRequest.fromPath(
+        HttpRequest.POST,
+        "/admin/aggregate/read",
+        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> "legacy-aggregate-id")
+      ))
 
       aggregateread.code shouldBe 200
+      invalidaggregateread.code shouldBe 400
       aggregateread.getString.getOrElse("") should include ("notice aggregate")
       val aggregatereadrecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate")
       aggregatereadrecord.getString("kind") shouldBe Some("aggregate.read")
@@ -5960,9 +6147,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val secondaggregatepage = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "2", "pageSize" -> "1")
       secondaggregatepage.getString("fields").getOrElse("") should include ("notice next")
       secondaggregatepage.getBoolean("hasNext") shouldBe Some(false)
-      val aggregateinstancerecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> "notice_1")
+      val aggregateinstancerecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> aggregateid)
       aggregateinstancerecord.getString("kind") shouldBe Some("aggregate.read")
-      aggregateinstancerecord.getString("id") shouldBe Some("notice_1")
+      aggregateinstancerecord.getString("id") shouldBe Some(aggregateid)
       aggregateinstancerecord.getString("label") shouldBe Some("notice aggregate")
       aggregateinstancerecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_1")
       aggregateinstancerecord.getString("fields").getOrElse("") should include ("notice aggregate")
@@ -8032,7 +8219,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for deny anonymous admin form API when develop anonymous admin is disabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
+          RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -8060,7 +8247,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for include status and detail code in plain-text structured API errors")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
+          RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -8090,7 +8277,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for deny anonymous admin form API in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -8112,7 +8299,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for deny anonymous component admin HTML route in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -8141,8 +8328,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for deny forged query/header admin identity in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -8162,8 +8349,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for strip forged authorization fields before resolving the production admin session")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       _install_echoing_auth_session(
@@ -8199,8 +8386,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for allow component operator session to use component admin in production when explicitly enabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       _install_auth_session(
@@ -8231,8 +8418,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for deny system admin role when production privilege ceiling is only user")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       _install_auth_session(
@@ -8263,8 +8450,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for allow system admin session to use system admin in production when explicitly enabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       _install_auth_session(
@@ -8307,8 +8494,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for allow audit viewer session to read production admin jobs but not system admin home")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       _install_auth_session(
@@ -8351,7 +8538,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for allow authenticated admin form API when develop anonymous admin is disabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
+          RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -8373,7 +8560,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for deny anonymous admin entity create POST in production operation mode before dispatch")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         ))
       )
       val engine = new HttpExecutionEngine(subsystem)
@@ -8401,8 +8588,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for allow component operator admin entity create POST in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       _install_auth_session(
@@ -9445,7 +9632,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         StandardCharsets.UTF_8
       )
       val configuration = Configuration(Map(
-        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+        RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
         WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("ja-JP")
       ))
       val subsystem = _aggregate_http_fixture_subsystem(
@@ -9545,7 +9732,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         StandardCharsets.UTF_8
       )
       val configuration = Configuration(Map(
-        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+        RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
       ))
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets(configuration)
       val selector = "notice-admin.notice-aggregate.approve-notice-aggregate"
@@ -9656,7 +9843,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         StandardCharsets.UTF_8
       )
       val multiconfiguration = Configuration(Map(
-        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+        RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
         WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("multi-user")
       ))
       val multisubsystem = _aggregate_http_fixture_subsystem(multiconfiguration)
@@ -9703,7 +9890,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       And("standalone documents remain private even without an authentication session")
       val standaloneconfiguration = Configuration(Map(
-        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+        RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
       ))
       val standalonesubsystem = _aggregate_http_fixture_subsystem(standaloneconfiguration)
       val standaloneserver = new Http4sHttpServer(new HttpExecutionEngine(standalonesubsystem))
@@ -9797,7 +9984,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for render operation form result through static success template convention before descriptor template")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "approve-notice-aggregate__success.html",
             """<!doctype html>
               |<html>
@@ -9847,7 +10034,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for prefer page-local static result template when textus form page is submitted")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "new__success.html",
             """<!doctype html>
               |<html>
@@ -9952,7 +10139,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
         ))
       )
       val descriptor = WebDescriptor(
@@ -9985,7 +10172,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for render operation form result through static status template convention")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "approve-notice-aggregate__200.html",
             """<article>
               |  <h2>${operation.label} Static 200</h2>
@@ -10024,7 +10211,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for render operation form result through common static status template convention")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "__200.html",
             """<article>
               |  <h2>Common Static 200</h2>
@@ -10069,7 +10256,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val responsebody = s"""{"data":${rows},"fetched_count":21}"""
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "approve-notice-aggregate__200.html",
             """<article>
               |  <h2>Matching notices</h2>
@@ -10148,7 +10335,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
         ))
       )
       val descriptor = WebDescriptor(
@@ -10210,7 +10397,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val responsebody = s"""{"data":${rows},"total_count":21}"""
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "approve-notice-aggregate__200.html",
             """<article>
               |  <h2>Matching notices</h2>
@@ -10301,7 +10488,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
         ))
       )
       val descriptor = WebDescriptor(
@@ -10351,7 +10538,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for render operation failure through common static error template when status template is absent")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "__error.html",
             """<article>
               |  <h2>Common Static Error</h2>
@@ -10423,7 +10610,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -10446,7 +10633,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for render Web HTML errors through global static error template convention")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
             "__error.html",
             """<article>
               |  <h2>Global Web Error</h2>
@@ -13980,20 +14167,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   }
 
   private def _view_fixture_subsystem(
-    totalcountcapability: TotalCountCapability = TotalCountCapability.Unsupported
+    totalcountcapability: TotalCountCapability = TotalCountCapability.Unsupported,
+    backingentityname: String = "notice",
+    ambiguousbacking: Boolean = false
   ): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
       override def viewDefinitions: Vector[ViewDefinition] =
         Vector(
           ViewDefinition(
             name = "notice_view",
-            entityName = "notice",
+            entityName = backingentityname,
             viewNames = Vector("default"),
             queries = Vector(ViewQueryDefinition("recent", Some("notice.updatedAt desc")))
           )
         )
     }
     _initialize_component("notice_board", component)
+    given EntityPersistent[_NoticeEntity] = _notice_persistent
     component.withComponentDescriptors(Vector(
       ComponentDescriptor(
         componentName = Some("notice_board"),
@@ -14010,10 +14200,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
     ))
+    component.entitySpace.registerEntity(
+      "notice",
+      _notice_collection(Vector(_NoticeEntity(_notice_entity_id_from_shortid("notice_1"), "notice", "view")))
+    )
+    if (ambiguousbacking)
+      component.entitySpace.registerEntity(
+        "notice",
+        _notice_collection(Vector.empty, EntityCollectionId("sample", "other", "notice"))
+      )
     val collection = new ViewCollection[String](
       new ViewBuilder[String] {
         def build(id: EntityId): Consequence[String] =
-          Consequence.success(s"notice detail ${id.minor}")
+          Consequence.success(s"notice detail ${id.parts.entropy}")
       }
     )
     val browser = Browser.from(
@@ -14027,14 +14226,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   }
 
   private def _aggregate_fixture_subsystem(
-    totalcountcapability: TotalCountCapability = TotalCountCapability.Unsupported
+    totalcountcapability: TotalCountCapability = TotalCountCapability.Unsupported,
+    backingentityname: String = "notice",
+    ambiguousbacking: Boolean = false
   ): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
           AggregateDefinition(
             name = "notice_aggregate",
-            entityName = "notice",
+            entityName = backingentityname,
             members = Vector(AggregateMemberDefinition("notice", "notice")),
             creates = Vector(AggregateCreateDefinition("create-notice-aggregate")),
             commands = Vector(AggregateCommandDefinition("approve-notice-aggregate"))
@@ -14042,6 +14243,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
     }
     _initialize_component("notice_board", component, _aggregate_protocol())
+    given EntityPersistent[_NoticeEntity] = _notice_persistent
     component.withComponentDescriptors(Vector(
       ComponentDescriptor(
         componentName = Some("notice_board"),
@@ -14058,8 +14260,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
     ))
-    val aggregate = _NoticeAggregate("notice_1", "notice aggregate")
-    val nextaggregate = _NoticeAggregate("notice_2", "notice next")
+    val aggregate = _NoticeAggregate(_notice_entity_id_from_shortid("notice_1"), "notice aggregate")
+    val nextaggregate = _NoticeAggregate(_notice_entity_id_from_shortid("notice_2"), "notice next")
+    component.entitySpace.registerEntity(
+      "notice",
+      _notice_collection(Vector(_NoticeEntity(aggregate.id, "notice aggregate", "aggregate")))
+    )
+    if (ambiguousbacking)
+      component.entitySpace.registerEntity(
+        "notice",
+        _notice_collection(Vector.empty, EntityCollectionId("sample", "other", "notice"))
+      )
     component.aggregateSpace.register(
       "notice_aggregate",
       new AggregateCollection[_NoticeAggregate](
@@ -14614,7 +14825,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     })
 
   private def _notice_collection(
-    entities: Vector[_NoticeEntity]
+    entities: Vector[_NoticeEntity],
+    collectionid: EntityCollectionId = _NoticeEntity.collectionid
   )(using EntityPersistent[_NoticeEntity]): EntityCollection[_NoticeEntity] = {
     val store = new EntityRealm[_NoticeEntity](
       entityName = "notice",
@@ -14626,7 +14838,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       idOf = _.id
     )
     val descriptor = EntityDescriptor(
-      collectionId = _NoticeEntity.collectionid,
+      collectionId = collectionid,
       plan = EntityRuntimePlan(
         entityName = "notice",
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
@@ -14710,6 +14922,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private def _new_notice_entity_id(): EntityId = {
     val collection = _NoticeEntity.collectionid
     val generated = EntityId(collection.major, collection.minor, collection)
+    EntityId.parse(generated.value).getOrElse(fail("notice entity id generation failed"))
+  }
+
+  private def _notice_entity_id_from_shortid(shortid: String): EntityId = {
+    val collection = _NoticeEntity.collectionid
+    val generated = EntityId(
+      collection.major,
+      collection.minor,
+      collection,
+      timestamp = Some(java.time.Instant.EPOCH),
+      entropy = Some(shortid)
+    )
     EntityId.parse(generated.value).getOrElse(fail("notice entity id generation failed"))
   }
 
@@ -14869,7 +15093,7 @@ private object _EmbeddedNoticeEntity {
     EntityCollectionId("sample", "web", "embedded_notice")
 }
 
-private final case class _NoticeAggregate(id: String, summary: String)
+private final case class _NoticeAggregate(id: EntityId, summary: String)
 
 private final case class _NoopOperation(
   opname: String,

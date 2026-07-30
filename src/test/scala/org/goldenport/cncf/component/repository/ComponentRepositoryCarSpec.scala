@@ -33,7 +33,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 29, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -340,7 +340,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         )
 
         Then("the explicitly requested CAR becomes the component file")
-        resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.ComponentFileKey}=${olddir.resolve("blog-component-0.0.1.car")}")
+        resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${olddir.resolve("blog-component-0.0.1.car")}")
       }
     }
 
@@ -384,8 +384,8 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         )
 
         Then("the public version is selected instead of the stale local snapshot")
-        resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.ComponentFileKey}=${remotecar}")
-        resolved.actualArgs.toVector should not contain s"--${RuntimeConfig.ComponentFileKey}=${localcar}"
+        resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${remotecar}")
+        resolved.actualArgs.toVector should not contain s"--${RuntimeConfig.componentFileKey}=${localcar}"
       }
     }
 
@@ -451,7 +451,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         Files.createDirectories(componentdir)
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+            RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
           )),
           ConfigurationTrace.empty
         )
@@ -472,7 +472,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       _with_temp_dir { root =>
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.RepositoryComponentDevDirKey -> ConfigurationValue.StringValue("component-dir:/tmp/packaged-cars")
+            RuntimeConfig.repositoryComponentDevDirKey -> ConfigurationValue.StringValue("component-dir:/tmp/packaged-cars")
           )),
           ConfigurationTrace.empty
         )
@@ -495,7 +495,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         _write_runtime_classpath(componentdir, classdir, "textus-user-account", "0.1.0-SNAPSHOT", "textus-user-account")
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.RepositoryComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+            RuntimeConfig.repositoryComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
           )),
           ConfigurationTrace.empty
         )
@@ -685,7 +685,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(bootstrap.configuration)
 
         Then("the packaged CAR is not appended and development identity wins")
-        RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.ComponentFileKey) shouldBe empty
+        RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.componentFileKey) shouldBe empty
         descriptor.map(_.subsystemName) shouldBe Some("dev-cwitter")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("dev-cwitter")
       }
@@ -700,7 +700,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         _write_runtime_classpath(componentdir, classdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample")
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+            RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
           )),
           ConfigurationTrace.empty
         )
@@ -1146,7 +1146,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         )
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.ComponentFileKey -> ConfigurationValue.StringValue(carpath.toString)
+            RuntimeConfig.componentFileKey -> ConfigurationValue.StringValue(carpath.toString)
           )),
           ConfigurationTrace.empty
         )

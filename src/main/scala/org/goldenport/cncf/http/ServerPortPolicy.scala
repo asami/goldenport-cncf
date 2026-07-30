@@ -15,7 +15,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Jul. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object ServerPortPolicy {
@@ -247,11 +247,11 @@ object ServerPortPolicy {
       val configuration = subsystem.configuration
       val configuredname = kind match {
         case ArtifactKind.Car =>
-          ConfigurationAccess.getString(configuration, RuntimeConfig.ComponentNameKey)
-            .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
+          ConfigurationAccess.getString(configuration, RuntimeConfig.componentNameKey)
+            .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.runtimeComponentNameKey))
         case ArtifactKind.Sar =>
-          ConfigurationAccess.getString(configuration, RuntimeConfig.SubsystemNameKey)
-            .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.RuntimeSubsystemNameKey))
+          ConfigurationAccess.getString(configuration, RuntimeConfig.subsystemNameKey)
+            .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.runtimeSubsystemNameKey))
         case ArtifactKind.Runtime => None
       }
       val name = configuredname
@@ -275,24 +275,24 @@ object ServerPortPolicy {
   def artifactKind(subsystem: Subsystem): ArtifactKind = {
     val configuration = subsystem.configuration
     val subsystemkeys = Vector(
-      RuntimeConfig.SubsystemNameKey,
-      RuntimeConfig.RuntimeSubsystemNameKey,
-      RuntimeConfig.SubsystemDescriptorKey,
-      RuntimeConfig.RuntimeSubsystemDescriptorKey,
-      RuntimeConfig.SubsystemFileKey,
-      RuntimeConfig.RuntimeSubsystemFileKey,
-      RuntimeConfig.SubsystemDevDirKey,
-      RuntimeConfig.RuntimeSubsystemDevDirKey,
-      RuntimeConfig.SubsystemSarDirKey,
-      RuntimeConfig.RuntimeSubsystemSarDirKey
+      RuntimeConfig.subsystemNameKey,
+      RuntimeConfig.runtimeSubsystemNameKey,
+      RuntimeConfig.subsystemDescriptorKey,
+      RuntimeConfig.runtimeSubsystemDescriptorKey,
+      RuntimeConfig.subsystemFileKey,
+      RuntimeConfig.runtimeSubsystemFileKey,
+      RuntimeConfig.subsystemDevDirKey,
+      RuntimeConfig.runtimeSubsystemDevDirKey,
+      RuntimeConfig.subsystemSarDirKey,
+      RuntimeConfig.runtimeSubsystemSarDirKey
     )
     val componentkeys = Vector(
-      RuntimeConfig.ComponentNameKey,
-      RuntimeConfig.RuntimeComponentNameKey,
-      RuntimeConfig.ComponentFileKey,
-      RuntimeConfig.RuntimeComponentFileKey,
-      RuntimeConfig.ComponentDevDirKey,
-      RuntimeConfig.ComponentCarDirKey
+      RuntimeConfig.componentNameKey,
+      RuntimeConfig.runtimeComponentNameKey,
+      RuntimeConfig.componentFileKey,
+      RuntimeConfig.runtimeComponentFileKey,
+      RuntimeConfig.componentDevDirKey,
+      RuntimeConfig.componentCarDirKey
     )
     if (subsystemkeys.exists(ConfigurationAccess.getString(configuration, _).nonEmpty)) {
       ArtifactKind.Sar

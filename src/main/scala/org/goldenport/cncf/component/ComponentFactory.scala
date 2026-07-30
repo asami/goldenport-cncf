@@ -19,7 +19,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.simplemodeling.model.value.NominalScalar
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityConcurrencyPolicy, EntityPersistable, EntityPersistent, EntityQuery, EntityRevisionBinding, EntityRevisionModelKind, EntityRevisionModelMetadata, EntityRevisionRepresentation, EntityStore, EntityStoreDecodeContext}
+import org.goldenport.cncf.entity.{EntityConcurrencyPolicy, EntityPersistable, EntityPersistent, EntityQuery, EntityRevisionBinding, EntityRevisionModelKind, EntityRevisionModelMetadata, EntityRevisionRepresentation, EntityStore}
 import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateCount, ContextualAggregateQuery}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetDescriptor, WorkingSetInitializer, WorkingSetPolicy, WorkingSetPolicySource}
@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -2265,27 +2265,6 @@ final class ComponentFactory(
               .map(_.asInstanceOf[Consequence[Any]])
               .getOrElse(fromRecord(r))
 
-          override def fromStoreRecord(
-            context: EntityStoreDecodeContext,
-            r: Record
-          ): Consequence[Any] =
-            _invoke_entity_persistent_context_option(
-              m,
-              "fromStoreRecord",
-              context,
-              r
-            )
-              .map(_.asInstanceOf[Consequence[Any]])
-              .getOrElse(
-                fromStoreRecord(r).flatMap { entity =>
-                  EntityPersistent._require_exact_collection(
-                    entity,
-                    id(entity),
-                    context.owningCollectionId
-                  )
-                }
-              )
-
           override def storeFieldName(logicalName: String): String =
             mapping.getOrElse(logicalName, logicalName)
         })
@@ -2305,11 +2284,6 @@ final class ComponentFactory(
         def fromRecord(r: Record): Consequence[Any] = bridge.fromRecord(r)
         override def toStoreRecord(e: Any): Record = bridge.toStoreRecord(e)
         override def fromStoreRecord(r: Record): Consequence[Any] = bridge.fromStoreRecord(r)
-        override def fromStoreRecord(
-          context: EntityStoreDecodeContext,
-          r: Record
-        ): Consequence[Any] =
-          bridge.fromStoreRecord(context, r)
         override def storeFieldName(logicalName: String): String =
           mapping.getOrElse(logicalName, bridge.storeFieldName(logicalName))
       }
@@ -2392,28 +2366,6 @@ final class ComponentFactory(
     raw.getClass.getMethods.toVector
       .find(m => m.getName == name && m.getParameterCount == 1)
       .map(_.invoke(raw, arg.asInstanceOf[AnyRef]))
-
-  private def _invoke_entity_persistent_context_option(
-    raw: AnyRef,
-    name: String,
-    context: EntityStoreDecodeContext,
-    record: Record
-  ): Option[Any] =
-    raw.getClass.getMethods.toVector
-      .find { method =>
-        val parameters = method.getParameterTypes
-        method.getName == name &&
-        parameters.length == 2 &&
-        parameters(0).isInstance(context) &&
-        parameters(1).isInstance(record)
-      }
-      .map(
-        _.invoke(
-          raw,
-          context.asInstanceOf[AnyRef],
-          record.asInstanceOf[AnyRef]
-        )
-      )
 
   private def _legacy_memory_plan(
     entityname: String

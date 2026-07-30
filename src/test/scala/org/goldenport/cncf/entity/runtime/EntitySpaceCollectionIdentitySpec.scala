@@ -25,43 +25,41 @@ import org.goldenport.cncf.entity.{
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.cncf.unitofwork.{
-  UnitOfWork,
-  UnitOfWorkInterpreter,
-  UnitOfWorkOp
-}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.{
-  EntityCollectionId,
-  EntityId
-}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 28, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntitySpaceCollectionIdentitySpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
-  "EntitySpace collection identity" should {
+  private val _in_eid01_spec =
+    afterWord("in spec:entity-collection-identity, example:E2, rules:R1,R4, phase:52")
+  private val _in_phase52_spec =
+    afterWord("in spec:entity-collection-identity, example:entity-space-routing, rules:R1,R4, phase:52")
+
+  "EntitySpace collection identity" must _in_phase52_spec {
     "resolve same-name collections independently by exact identity" in {
       Given("two registered collections with one logical name and distinct namespaces")
-      val firstid = EntityCollectionId("first", "runtime", "facility")
+      val firstid  = EntityCollectionId("first", "runtime", "facility")
       val secondid = EntityCollectionId("second", "runtime", "facility")
-      val first = _collection(firstid)
-      val second = _collection(secondid)
-      val space = new EntitySpace()
+      val first    = _collection(firstid)
+      val second   = _collection(secondid)
+      val space    = new EntitySpace()
       space.registerEntity(firstid.name, first)
       space.registerEntity(secondid.name, second)
 
       When("each exact collection identity is resolved")
-      val firstresult = space.entityOption(firstid)
+      val firstresult  = space.entityOption(firstid)
       val secondresult = space.entityOption(secondid)
 
       Then("the exact registrations remain isolated")
@@ -79,40 +77,53 @@ final class EntitySpaceCollectionIdentitySpec
         Vector(first, second)
     }
 
-    "restore the selected exact owner for a compatible scalar reference" in {
-      Given("one exact collection and a scalar whose parser namespace differs")
-      val collectionid =
-        EntityCollectionId("runtime", "selected", "facility")
-      val collection = _collection(collectionid)
-      val scalarid =
-        EntityId(
-          "runtime",
-          "entry_scope",
-          EntityCollectionId("runtime", "entry_scope", "facility")
-        )
-      val otherentityid =
-        EntityId(
-          "runtime",
-          "entry_scope",
-          EntityCollectionId("runtime", "entry_scope", "exhibition")
-        )
+    "which records EID-01 EntitySpace routing" which {
+      "E2 reject a parsed EntityId whose exact owner differs from this collection" must _in_eid01_spec {
+        "preserve parsed ownership without selected-owner compatibility routing" in {
+          Given(
+            "Spec: docs/spec/entity-collection-identity.md; Rules: R1,R4; Example: E2; one exact collection and a canonical EntityId owned by a different collection"
+          )
+          val collectionid =
+            EntityCollectionId("runtime", "selected", "facility")
+          val collection = _collection(collectionid)
+          val scalarid =
+            EntityId(
+              "runtime",
+              "entry_scope",
+              EntityCollectionId("runtime", "entry_scope", "facility")
+            )
+          val otherentityid =
+            EntityId(
+              "runtime",
+              "entry_scope",
+              EntityCollectionId("runtime", "entry_scope", "exhibition")
+            )
 
-      When("the selected collection resolves compatible and incompatible scalar references")
-      val compatible = collection.resolveEntityId(scalarid.value)
-      val incompatible = collection.resolveEntityId(otherentityid.value)
+          And("the canonical parser exposes the stored exact owner")
+          val parsed = EntityId.parse(scalarid.value).toOption.get
+          parsed.collection shouldBe
+            EntityCollectionId("runtime", "entry_scope", "facility")
+          parsed.collection should not equal collectionid
 
-      Then("the compatible scalar is rebound to the selected exact owner")
-      compatible.map(_.collection) shouldBe Some(collectionid)
+          When("the selected collection resolves foreign references")
+          val compatible   = collection.resolveEntityId(scalarid.value)
+          val incompatible = collection.resolveEntityId(otherentityid.value)
 
-      And("another logical collection remains rejected")
-      incompatible shouldBe None
+          Then("neither foreign reference is rebound to the selected exact owner")
+          compatible shouldBe None
+
+          And("another logical collection remains rejected")
+          incompatible shouldBe None
+
+        }
+      }
     }
 
     "reject an ambiguous logical-name lookup with candidate evidence" in {
       Given("two exact collections sharing one logical name")
-      val firstid = EntityCollectionId("first", "runtime", "facility")
+      val firstid  = EntityCollectionId("first", "runtime", "facility")
       val secondid = EntityCollectionId("second", "runtime", "facility")
-      val space = new EntitySpace()
+      val space    = new EntitySpace()
       space.registerEntity(firstid.name, _collection(firstid))
       space.registerEntity(secondid.name, _collection(secondid))
 
@@ -123,7 +134,7 @@ final class EntitySpaceCollectionIdentitySpec
       result match {
         case Consequence.Failure(conclusion) =>
           val diagnostic = ConclusionDiagnostics.classify(conclusion)
-          val facets = conclusion.observation.cause.descriptor.facets
+          val facets     = conclusion.observation.cause.descriptor.facets
           diagnostic.policy shouldBe Some("entity.collection.identity")
           diagnostic.reason shouldBe Some("entity-collection-name-ambiguous")
           facets should contain(
@@ -138,7 +149,7 @@ final class EntitySpaceCollectionIdentitySpec
       And("the Option compatibility lookup does not pick an arbitrary owner")
       space.entityOption[FixtureEntity]("facility") shouldBe None
 
-      And("canonical EntityId ingress returns the same structured ambiguity")
+      And("canonical EntityId ingress does not use logical-name ambiguity resolution")
       val runtimeid =
         EntityId(
           "fixture",
@@ -147,20 +158,18 @@ final class EntitySpaceCollectionIdentitySpec
         )
       space.canonicalEntityIdC(runtimeid) match {
         case Consequence.Failure(conclusion) =>
-          ConclusionDiagnostics
-            .classify(conclusion)
-            .reason shouldBe Some("entity-collection-name-ambiguous")
+          conclusion.displayMessage should include("EntityCollection not found")
         case Consequence.Success(_) =>
-          fail("Ambiguous name-only EntityId ingress must fail")
+          fail("An unregistered exact EntityId must fail")
       }
     }
 
-    "retain unique logical-name compatibility" in {
+    "reject unique logical-name compatibility for exact EntityId ingress" in {
       Given("one exact collection registered for a logical name")
       val collectionid =
         EntityCollectionId("major", "minor", "facility")
       val collection = _collection(collectionid)
-      val space = new EntitySpace()
+      val space      = new EntitySpace()
       space.registerEntity(collectionid.name, collection)
 
       When("a compatibility caller resolves the logical name")
@@ -169,16 +178,15 @@ final class EntitySpaceCollectionIdentitySpec
       Then("the unique exact owner is returned")
       result shouldBe Consequence.success(collection)
 
-      And("a scalar EntityId is rebound to that unique exact owner")
+      And("an unregistered exact EntityId is not rebound to that unique owner")
       val runtimeid =
         EntityId(
           "fixture",
           "unique",
           EntityCollectionId("single", "global", "facility")
         )
-      space
-        .canonicalEntityIdC(runtimeid)
-        .map(_.collection) shouldBe Consequence.success(collectionid)
+      val canonical = space.canonicalEntityIdC(runtimeid)
+      canonical shouldBe a[Consequence.Failure[?]]
     }
 
     "preserve the registered plan name when the exact collection name differs" in {
@@ -186,10 +194,10 @@ final class EntitySpaceCollectionIdentitySpec
       val collectionid =
         EntityCollectionId("major", "minor", "media_object")
       val collection = _collection(collectionid, "MediaEntity")
-      val space = new EntitySpace()
+      val space      = new EntitySpace()
       space.registerEntity("MediaEntity", collection)
 
-      When("legacy plan-name and scalar collection-name callers resolve it")
+      When("a legacy plan-name caller and an unregistered exact collection are resolved")
       val byplanname =
         space.entityByNameC[FixtureEntity]("MediaEntity")
       val bycollectionname =
@@ -197,15 +205,15 @@ final class EntitySpaceCollectionIdentitySpec
           EntityCollectionId("single", "global", "media_object")
         )
 
-      Then("both ingress forms select the same exact collection")
+      Then("only the explicit name compatibility path selects the collection")
       byplanname shouldBe Consequence.success(collection)
-      bycollectionname shouldBe Consequence.success(collectionid)
+      bycollectionname shouldBe a[Consequence.Failure[?]]
       space.entityNames shouldBe Vector("MediaEntity")
     }
 
-    "reject ambiguous scalar identity at the UnitOfWork boundary" in {
+    "pass an unregistered exact scalar identity unchanged at the UnitOfWork boundary" in {
       Given("a component with two exact collections sharing one logical name")
-      val firstid = EntityCollectionId("first", "runtime", "facility")
+      val firstid  = EntityCollectionId("first", "runtime", "facility")
       val secondid = EntityCollectionId("second", "runtime", "facility")
       val component =
         TestComponentFactory.create(
@@ -233,7 +241,7 @@ final class EntitySpaceCollectionIdentitySpec
           EntityCollectionId("single", "global", "facility")
         )
 
-      When("a direct load reaches UnitOfWork with only scalar collection identity")
+      When("a direct load reaches UnitOfWork with an unregistered exact collection identity")
       val result =
         interpreter.interpret(
           UnitOfWorkOp.EntityStoreLoadDirect(
@@ -242,18 +250,11 @@ final class EntitySpaceCollectionIdentitySpec
           )
         )
 
-      Then("UnitOfWork returns the structured ambiguity before datastore access")
-      result match {
-        case Consequence.Failure(conclusion) =>
-          ConclusionDiagnostics
-            .classify(conclusion)
-            .reason shouldBe Some("entity-collection-name-ambiguous")
-        case Consequence.Success(_) =>
-          fail("UnitOfWork must not continue after ambiguous name ingress")
-      }
+      Then("UnitOfWork does not rewrite the exact identity by logical name")
+      result shouldBe Consequence.success(Option.empty[FixtureEntity])
     }
 
-    "route unique name-only search ingress through the exact owner" in {
+    "preserve exact search ingress without a unique-name rewrite" in {
       Given("one exact collection and an observed component execution context")
       val collectionid =
         EntityCollectionId("major", "minor", "facility")
@@ -287,7 +288,7 @@ final class EntitySpaceCollectionIdentitySpec
           EntitySearchScope.Store
         )
 
-      When("a direct store search starts with only scalar collection identity")
+      When("a direct store search starts with an unregistered exact collection identity")
       val _ =
         interpreter.interpret(
           UnitOfWorkOp.EntityStoreSearchDirect(
@@ -301,13 +302,48 @@ final class EntitySpaceCollectionIdentitySpec
           .map(_.toRecord.print)
           .getOrElse(fail("UnitOfWork CallTree is missing"))
 
-      Then("the datastore operation is observed under the exact runtime owner")
-      rendered should include(collectionid.print)
-      rendered should not include scalarcollectionid.print
+      Then("the datastore operation is observed under the supplied exact collection")
+      rendered should include(scalarcollectionid.print)
+      rendered should not include collectionid.print
+    }
+
+    "keep a normal resident search inside its exact collection namespace" in {
+      Given("two resident collections with one logical name and data only in the second namespace")
+      val firstid  = EntityCollectionId("first", "runtime", "facility")
+      val secondid = EntityCollectionId("second", "runtime", "facility")
+      val first    = _collection(firstid)
+      val second   = _collection(secondid)
+      val component =
+        TestComponentFactory.create(
+          "entity_space_exact_resident_search",
+          Protocol.empty
+        )
+      component.entitySpace.registerEntity(firstid.name, first)
+      component.entitySpace.registerEntity(secondid.name, second)
+      given ExecutionContext = ExecutionContext.create().withScope(component.scopeContext)
+      val secondentity = FixtureEntity(EntityId("fixture", "resident", secondid))
+      second.putScoped(secondentity)
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+      val query = EntityQuery[FixtureEntity](
+        firstid,
+        Query(Record.empty),
+        EntitySearchScope.WorkingSet
+      )
+
+      When("a normal UnitOfWork search asks for the empty first namespace")
+      val result = interpreter.interpret(
+        UnitOfWorkOp.EntityStoreSearch(
+          query,
+          _persistent
+        )
+      )
+
+      Then("the resident entity from the same-name second namespace is not returned")
+      result.map(_.data) shouldBe Consequence.success(Vector.empty)
     }
   }
 
-  "EntityCollection synchronized create" should {
+  "EntityCollection synchronized create" must _in_phase52_spec {
     "retain compatibility when a successful provider omits its optional record" in {
       Given("an exact Entity and a provider returning CreateResult without a Record")
       val collectionid =
@@ -351,8 +387,8 @@ final class EntitySpaceCollectionIdentitySpec
       collection.resolve(id).map(_.id) shouldBe Consequence.success(id)
     }
 
-    "remove a newly created record when authoritative decoding fails" in {
-      Given("a scalar store codec that cannot restore the selected exact owner")
+    "retain a newly created record when authoritative decoding preserves exact ownership" in {
+      Given("a canonical store codec whose EntityId retains the selected exact owner")
       val collectionid =
         EntityCollectionId("runtime", "create_rollback", "facility")
       val collection = _collection(collectionid)
@@ -376,33 +412,24 @@ final class EntitySpaceCollectionIdentitySpec
         ExecutionContext.create().withScope(scope)
       val id = EntityId("fixture", "create_rollback", collectionid)
 
-      When("the persisted scalar Record fails exact-owner decoding")
+      When("the persisted canonical Record is decoded under its exact owner")
       val result =
         collection.createRecordSynced(
           Record.dataAuto("id" -> id)
         )
-      val stored = for {
-        cid <- entitystorespace.dataStoreCollection(id)
-        dsid <- entitystorespace.dataStoreEntryId(id)
-        datastore <- datastorespace.dataStore(cid)
-        record <- datastore.load(cid, dsid)
-      } yield record
 
-      Then("the create reports the exact-owner failure")
-      result shouldBe a[Consequence.Failure[?]]
+      Then("the create succeeds without ownership repair")
+      result shouldBe Consequence.unit
 
-      And("hard-delete compensation leaves no persisted orphan")
-      stored shouldBe Consequence.success(None)
-
-      And("the failed Entity does not enter resident collection state")
-      collection.resolve(id) shouldBe a[Consequence.Failure[?]]
+      And("the exact Entity enters resident collection state")
+      collection.resolve(id).map(_.id) shouldBe Consequence.success(id)
     }
   }
 
   private def _collection(
-    collectionid: EntityCollectionId,
-    logicalname: String = "",
-    persistent: EntityPersistent[FixtureEntity] = _persistent
+      collectionid: EntityCollectionId,
+      logicalname: String = "",
+      persistent: EntityPersistent[FixtureEntity] = _persistent
   ): EntityCollection[FixtureEntity] = {
     val entityname =
       if (logicalname.isEmpty) collectionid.name else logicalname
@@ -445,7 +472,7 @@ final class EntitySpaceCollectionIdentitySpec
     }
 
   private def _restoring_persistent(
-    collectionid: EntityCollectionId
+      collectionid: EntityCollectionId
   ): EntityPersistent[FixtureEntity] =
     new EntityPersistent[FixtureEntity] {
       def id(entity: FixtureEntity): EntityId =
@@ -459,26 +486,22 @@ final class EntitySpaceCollectionIdentitySpec
           if (id.collection == collectionid)
             Consequence.success(FixtureEntity(id))
           else
-            EntityPersistent.restoreCollectionIdentity(
-              FixtureEntity(id),
-              id,
-              collectionid
-            )(canonicalid => FixtureEntity(canonicalid))
+            EntityPersistent._collection_mismatch(id.collection, collectionid)
         }
     }
 
   private final case class FixtureEntity(
-    id: EntityId
+      id: EntityId
   )
 
   private final class MissingCreateRecordEntityStore
       extends StandardEntityStore() {
     override def create[T](
-      entity: T,
-      options: EntityCreateOptions
+        entity: T,
+        options: EntityCreateOptions
     )(using
-      tc: EntityPersistentCreate[T],
-      ctx: ExecutionContext
+        tc: EntityPersistentCreate[T],
+        ctx: ExecutionContext
     ): Consequence[CreateResult[T]] =
       tc.id(entity)
         .map(id => Consequence.success(CreateResult[T](id)))
@@ -490,7 +513,7 @@ final class EntitySpaceCollectionIdentitySpec
   }
 
   private final class IdRef[A](
-    initial: A
+      initial: A
   ) extends Ref[cats.Id, A] {
     private var _value: A = initial
 
@@ -550,7 +573,7 @@ final class EntitySpaceCollectionIdentitySpec
     }
 
     override def tryModifyState[B](
-      state: State[A, B]
+        state: State[A, B]
     ): Option[B] = synchronized {
       val (next, result) = state.run(_value).value
       _value = next

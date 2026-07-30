@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
@@ -43,7 +43,7 @@ final class EventReceptionSpec
       val store = fixture.store
       val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
-      val dispatcher = new _RecordingDispatcher(calls)
+      val dispatcher = new RecordingDispatcher(calls)
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = dispatcher,
@@ -92,7 +92,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
 
@@ -130,7 +130,7 @@ final class EventReceptionSpec
       val fixture = _event_fixture()
       val reception = EventReception.default(
         fixture.bus,
-        new _RecordingDispatcher(ArrayBuffer.empty)
+        new RecordingDispatcher(ArrayBuffer.empty)
       )
 
       When("receiving unknown event")
@@ -157,7 +157,7 @@ final class EventReceptionSpec
       val fixture = _event_fixture()
       val reception = EventReception.default(
         fixture.bus,
-        new _RecordingDispatcher(ArrayBuffer.empty)
+        new RecordingDispatcher(ArrayBuffer.empty)
       )
       reception.register(
         CmlEventDefinition(
@@ -189,7 +189,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
       reception.register(
@@ -221,7 +221,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = fixture.bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
       reception.register(
@@ -259,7 +259,7 @@ final class EventReceptionSpec
       val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val levels = ArrayBuffer.empty[SecurityLevel]
-      val dispatcher = new _SecureRecordingDispatcher(calls, levels)
+      val dispatcher = new SecureRecordingDispatcher(calls, levels)
       val reception = EventReception.default(bus, dispatcher, IngressSecurityResolver.default)
       reception.register(
         CmlEventDefinition(
@@ -301,7 +301,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
       val listened = ArrayBuffer.empty[String]
@@ -354,7 +354,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
       val listened = ArrayBuffer.empty[String]
@@ -407,7 +407,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
       reception.register(
@@ -456,7 +456,7 @@ final class EventReceptionSpec
       val fixture = _event_fixture()
       val store = fixture.store
       val bus = fixture.bus
-      val reception = EventReception.default(bus, new _RecordingDispatcher(ArrayBuffer.empty))
+      val reception = EventReception.default(bus, new RecordingDispatcher(ArrayBuffer.empty))
 
       When("registering invalid subscription")
       val ex = intercept[IllegalStateException] {
@@ -573,19 +573,19 @@ final class EventReceptionSpec
         )
       )
       val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val subsystemScope = ScopeContext(
+      val subsystemscope = ScopeContext(
         kind = ScopeKind.Subsystem,
         name = "sample",
         parent = None,
         observabilityContext = base.observability
       )
-      val componentScope = subsystemScope.createChildScope(ScopeKind.Component, "publisher")
+      val componentscope = subsystemscope.createChildScope(ScopeKind.Component, "publisher")
       val jobctx = JobContext(
         jobId = Some(JobId.generate()),
         taskId = Some(TaskId.generate()),
         actionId = Some(ActionId.generate())
       )
-      given ExecutionContext = ExecutionContext.withJobContext(base.withScope(componentScope), jobctx)
+      given ExecutionContext = ExecutionContext.withJobContext(base.withScope(componentscope), jobctx)
 
       When("receiving authorized event")
       val result = reception.receiveAuthorized(
@@ -631,7 +631,7 @@ final class EventReceptionSpec
       val parentjobs = ArrayBuffer.empty[Option[String]]
       val levels = ArrayBuffer.empty[SecurityLevel]
       val attrs = ArrayBuffer.empty[Map[String, String]]
-      val dispatcher = new _SecureRecordingDispatcher2(calls, levels, parentjobs, attrs)
+      val dispatcher = new SecureRecordingDispatcher2(calls, levels, parentjobs, attrs)
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = dispatcher,
@@ -717,7 +717,7 @@ final class EventReceptionSpec
       val jobengine = _recording_job_engine()
       val reception = EventReception.default(
         eventBus = fixture.bus,
-        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        dispatcher = new RecordingDispatcher(ArrayBuffer.empty),
         currentSubsystemName = Some("inventory"),
         jobEngine = Some(jobengine)
       )
@@ -773,7 +773,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = fixture.bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("inventory"),
         jobEngine = Some(jobengine)
       )
@@ -826,7 +826,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
       reception.register(
@@ -901,7 +901,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("sample")
       )
       reception.register(
@@ -979,7 +979,7 @@ final class EventReceptionSpec
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
-      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val dispatcher = new SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = dispatcher,
@@ -1058,7 +1058,7 @@ final class EventReceptionSpec
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
-      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val dispatcher = new SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = dispatcher,
@@ -1129,8 +1129,8 @@ final class EventReceptionSpec
       persistedattrs.get(EventReception.StandardAttribute.DispatchKind) shouldBe Some("async-new-job")
       persistedattrs.get(EventReception.StandardAttribute.DispatchStatus) shouldBe Some("queued")
       persistedattrs.get(EventReception.StandardAttribute.EventHistory).nonEmpty shouldBe true
-      val childJobId = JobId.parse(jobids.flatten.head).toOption.get
-      val child = jobengine.query(childJobId).get
+      val childjobid = JobId.parse(jobids.flatten.head).toOption.get
+      val child = jobengine.query(childjobid).get
       calls.toVector shouldBe Vector("notice.sync")
       parentids.flatten should contain(parentjob.print)
       attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("compatibility:new-job")
@@ -1158,7 +1158,7 @@ final class EventReceptionSpec
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
-      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val dispatcher = new SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = dispatcher,
@@ -1244,7 +1244,7 @@ final class EventReceptionSpec
       val jobids = ArrayBuffer.empty[Option[String]]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _FailingSecureDispatcherWithCapture(jobids, ArrayBuffer.empty),
+        dispatcher = new FailingSecureDispatcherWithCapture(jobids, ArrayBuffer.empty),
         currentSubsystemName = Some("inventory"),
         currentComponentName = Some("public-notice"),
         jobEngine = Some(jobengine)
@@ -1281,8 +1281,8 @@ final class EventReceptionSpec
         )
       )
       jobengine.drainAll() should be >= 1
-      val childJobId = JobId.parse(jobids.flatten.head).toOption.get
-      val child = jobengine.query(childJobId).get
+      val childjobid = JobId.parse(jobids.flatten.head).toOption.get
+      val child = jobengine.query(childjobid).get
 
       Then("the resulting lineage is retryable")
       result shouldBe Consequence.success(
@@ -1306,7 +1306,7 @@ final class EventReceptionSpec
       val attrs = ArrayBuffer.empty[Map[String, String]]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _SecureRecordingDispatcher3(calls, ArrayBuffer.empty, ArrayBuffer.empty, attrs),
+        dispatcher = new SecureRecordingDispatcher3(calls, ArrayBuffer.empty, ArrayBuffer.empty, attrs),
         currentSubsystemName = Some("inventory"),
         currentComponentName = Some("notice-admin"),
         jobEngine = Some(jobengine)
@@ -1322,11 +1322,11 @@ final class EventReceptionSpec
         )
       )
       val base = fixture.executionContext()
-      val rootJobId = _jobid(jobengine.submit(Nil, base))
+      val rootjobid = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
         JobContext(
-          jobId = Some(rootJobId),
+          jobId = Some(rootjobid),
           taskId = Some(TaskId.generate()),
           actionId = Some(ActionId.generate()),
           currentTask = Some(TaskId.generate())
@@ -1347,8 +1347,8 @@ final class EventReceptionSpec
 
       result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
       jobengine.submissionCount shouldBe 1
-      jobengine.syncRuns.map(_._1) should contain(rootJobId)
-      val record = jobengine.query(rootJobId).getOrElse(fail("root job missing"))
+      jobengine.syncRuns.map(_._1) should contain(rootjobid)
+      val record = jobengine.query(rootjobid).getOrElse(fail("root job missing"))
       record.lineage.targetComponent shouldBe Some("notice-admin")
       record.lineage.jobRelation shouldBe Some("samejob")
       record.lineage.taskRelation shouldBe Some("separate-task")
@@ -1364,7 +1364,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("inventory"),
         currentComponentName = Some("notice-admin"),
         jobEngine = Some(jobengine)
@@ -1391,11 +1391,11 @@ final class EventReceptionSpec
         )
       )
       val base = fixture.executionContext()
-      val rootJobId = _jobid(jobengine.submit(Nil, base))
+      val rootjobid = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
         JobContext(
-          jobId = Some(rootJobId),
+          jobId = Some(rootjobid),
           taskId = Some(TaskId.generate()),
           actionId = Some(ActionId.generate()),
           currentTask = Some(TaskId.generate())
@@ -1418,7 +1418,7 @@ final class EventReceptionSpec
       result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
       jobengine.asyncEnqueues.nonEmpty shouldBe true
       jobengine.submissionCount shouldBe 1
-      val record = jobengine.query(rootJobId).getOrElse(fail("root job missing"))
+      val record = jobengine.query(rootjobid).getOrElse(fail("root job missing"))
       record.lineage.receptionRule shouldBe Some("notice-async-samejob")
       record.lineage.taskRelation shouldBe Some("separate-task")
       record.lineage.transactionRelation shouldBe Some("new-transaction")
@@ -1427,14 +1427,14 @@ final class EventReceptionSpec
     "route asynchronous same-job reception through the controlled Job scheduler" in {
       Given("a controlled runtime and an explicit async same-job reception rule")
       val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
-      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val runtime = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
       val control = runtime.testControl.get
       val jobengine = registerJobEngine(InMemoryJobEngine.create(runtime))
       val fixture = _event_fixture()
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = fixture.bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("inventory"),
         currentComponentName = Some("notice-admin"),
         jobEngine = Some(jobengine)
@@ -1501,14 +1501,14 @@ final class EventReceptionSpec
     "keep same-transaction Event reception immediate under a controlled scheduler" in {
       Given("a controlled runtime and a local same-transaction reception")
       val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
-      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val runtime = profile.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
       val control = runtime.testControl.get
       val jobengine = registerJobEngine(InMemoryJobEngine.create(runtime))
       val fixture = _event_fixture()
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = fixture.bus,
-        dispatcher = new _RecordingDispatcher(calls),
+        dispatcher = new RecordingDispatcher(calls),
         currentSubsystemName = Some("inventory"),
         currentComponentName = Some("notice-admin"),
         jobEngine = Some(jobengine)
@@ -1563,7 +1563,7 @@ final class EventReceptionSpec
       val jobengine = _recording_job_engine()
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        dispatcher = new RecordingDispatcher(ArrayBuffer.empty),
         currentSubsystemName = Some("inventory"),
         currentComponentName = Some("notice-admin"),
         jobEngine = Some(jobengine)
@@ -1596,10 +1596,10 @@ final class EventReceptionSpec
         )
       )
       val base = fixture.executionContext()
-      val rootJobId = _jobid(jobengine.submit(Nil, base))
+      val rootjobid = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
-        JobContext(jobId = Some(rootJobId), taskId = Some(TaskId.generate()), actionId = Some(ActionId.generate()))
+        JobContext(jobId = Some(rootjobid), taskId = Some(TaskId.generate()), actionId = Some(ActionId.generate()))
       )
 
       val result = reception.receiveAuthorized(
@@ -1631,7 +1631,7 @@ final class EventReceptionSpec
       val jobids = ArrayBuffer.empty[Option[String]]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _FailingSecureDispatcherWithCapture(jobids, ArrayBuffer.empty),
+        dispatcher = new FailingSecureDispatcherWithCapture(jobids, ArrayBuffer.empty),
         currentSubsystemName = Some("inventory"),
         currentComponentName = Some("public-notice"),
         jobEngine = Some(jobengine)
@@ -1684,8 +1684,8 @@ final class EventReceptionSpec
         )
       )
       jobengine.drainAll() should be >= 1
-      val childJobId = JobId.parse(jobids.flatten.head).toOption.get
-      val child = jobengine.query(childJobId).get
+      val childjobid = JobId.parse(jobids.flatten.head).toOption.get
+      val child = jobengine.query(childjobid).get
 
       Then("the resulting lineage is terminal")
       result shouldBe Consequence.success(
@@ -1709,7 +1709,7 @@ final class EventReceptionSpec
       val calls = ArrayBuffer.empty[String]
       val parentjobs = ArrayBuffer.empty[Option[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
-      val dispatcher = new _SecureRecordingDispatcher2(calls, ArrayBuffer.empty, parentjobs, attrs)
+      val dispatcher = new SecureRecordingDispatcher2(calls, ArrayBuffer.empty, parentjobs, attrs)
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = dispatcher,
@@ -1798,7 +1798,7 @@ final class EventReceptionSpec
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
-      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val dispatcher = new SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = dispatcher,
@@ -1842,12 +1842,12 @@ final class EventReceptionSpec
       )
 
       val matched = {
-        val managerBase = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-        val managerParent = _jobid(jobengine.submit(Nil, managerBase))
+        val managerbase = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+        val managerparent = _jobid(jobengine.submit(Nil, managerbase))
         given ExecutionContext = ExecutionContext.withJobContext(
-          managerBase,
+          managerbase,
           JobContext(
-            jobId = Some(managerParent),
+            jobId = Some(managerparent),
             taskId = Some(TaskId.generate()),
             actionId = Some(ActionId.generate())
           )
@@ -1881,18 +1881,18 @@ final class EventReceptionSpec
 
       When("the ABAC condition misses for a user context")
       val missed = {
-        val userCtx = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-        val userParent = _jobid(jobengine.submit(Nil, userCtx))
+        val userctx = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+        val userparent = _jobid(jobengine.submit(Nil, userctx))
         given ExecutionContext = ExecutionContext.withJobContext(
-          userCtx,
+          userctx,
           JobContext(
-            jobId = Some(userParent),
+            jobId = Some(userparent),
             taskId = Some(TaskId.generate()),
             actionId = Some(ActionId.generate())
           )
         )
-        val beforeSubmissions = jobengine.submissionCount
-        val beforeAnnotations = jobengine.annotations.size
+        val beforesubmissions = jobengine.submissionCount
+        val beforeannotations = jobengine.annotations.size
         val result = reception.receiveAuthorized(
           ReceptionInput(
             name = "notice.authorized",
@@ -1906,7 +1906,7 @@ final class EventReceptionSpec
             )
           )
         )
-        (beforeSubmissions, beforeAnnotations, result)
+        (beforesubmissions, beforeannotations, result)
       }
 
       Then("the explicit rule becomes non-match and compatibility mapping is used")
@@ -1929,7 +1929,7 @@ final class EventReceptionSpec
       val attrs = ArrayBuffer.empty[Map[String, String]]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _SecureRecordingDispatcherWithRecorder(dispatchentries, attrs, fixture.recorder),
+        dispatcher = new SecureRecordingDispatcherWithRecorder(dispatchentries, attrs, fixture.recorder),
         currentSubsystemName = Some("public-notice"),
         currentComponentName = Some("notice-admin")
       )
@@ -2004,7 +2004,7 @@ final class EventReceptionSpec
       val bus = fixture.bus
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _FailingSecureDispatcher,
+        dispatcher = new FailingSecureDispatcher,
         currentSubsystemName = Some("public-notice"),
         currentComponentName = Some("notice-admin")
       )
@@ -2053,7 +2053,7 @@ final class EventReceptionSpec
       val bus = fixture.bus
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _SecureRecordingDispatcher(ArrayBuffer.empty, ArrayBuffer.empty),
+        dispatcher = new SecureRecordingDispatcher(ArrayBuffer.empty, ArrayBuffer.empty),
         currentSubsystemName = Some("public-notice"),
         currentComponentName = Some("notice-admin")
       )
@@ -2102,7 +2102,7 @@ final class EventReceptionSpec
       val bus = fixture.bus
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        dispatcher = new RecordingDispatcher(ArrayBuffer.empty),
         currentSubsystemName = Some("sample")
       )
       reception.register(
@@ -2143,7 +2143,7 @@ final class EventReceptionSpec
       val recordingengine = _recording_job_engine()
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        dispatcher = new RecordingDispatcher(ArrayBuffer.empty),
         jobEngine = Some(recordingengine)
       )
       reception.register(
@@ -2177,8 +2177,8 @@ final class EventReceptionSpec
     }
   }
 
-  private final case class _EventReceptionFixture(
-    recorder: _InMemoryCommitRecorder,
+  private final case class EventReceptionFixture(
+    recorder: InMemoryCommitRecorder,
     store: EventStore,
     engine: EventEngine,
     bus: EventBus
@@ -2203,11 +2203,11 @@ final class EventReceptionSpec
       _shared_event_context(recorder, store)
   }
 
-  private def _event_fixture(): _EventReceptionFixture = {
-    val recorder = new _InMemoryCommitRecorder
+  private def _event_fixture(): EventReceptionFixture = {
+    val recorder = new InMemoryCommitRecorder
     val store = EventStore.inMemory
     val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-    _EventReceptionFixture(
+    EventReceptionFixture(
       recorder = recorder,
       store = store,
       engine = engine,
@@ -2215,7 +2215,7 @@ final class EventReceptionSpec
     )
   }
 
-  private final class _RecordingDispatcher(
+  private final class RecordingDispatcher(
     calls: ArrayBuffer[String]
   ) extends ActionCallDispatcher {
     def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
@@ -2225,7 +2225,7 @@ final class EventReceptionSpec
     }
   }
 
-  private final class _SecureRecordingDispatcher(
+  private final class SecureRecordingDispatcher(
     calls: ArrayBuffer[String],
     levels: ArrayBuffer[SecurityLevel]
   ) extends SecureActionCallDispatcher {
@@ -2246,7 +2246,7 @@ final class EventReceptionSpec
     }
   }
 
-  private final class _SecureRecordingDispatcher2(
+  private final class SecureRecordingDispatcher2(
     calls: ArrayBuffer[String],
     levels: ArrayBuffer[SecurityLevel],
     parentjobs: ArrayBuffer[Option[String]],
@@ -2279,16 +2279,16 @@ final class EventReceptionSpec
   private def _manual_job_engine(): InMemoryJobEngine =
     createManualJobEngine().engine
 
-  private def _recording_job_engine(): _RecordingJobEngine =
-    registerJobEngine(new _RecordingJobEngine)
+  private def _recording_job_engine(): RecordingJobEngine =
+    registerJobEngine(new RecordingJobEngine)
 
-  private final class _InMemoryCommitRecorder extends CommitRecorder {
+  private final class InMemoryCommitRecorder extends CommitRecorder {
     private val _entries = ArrayBuffer.empty[String]
     def entries: Vector[String] = _entries.toVector
     def record(entry: String): Unit = _entries += entry
   }
 
-  private final class _SecureRecordingDispatcher3(
+  private final class SecureRecordingDispatcher3(
     calls: ArrayBuffer[String],
     jobids: ArrayBuffer[Option[String]],
     parentids: ArrayBuffer[Option[String]],
@@ -2318,10 +2318,10 @@ final class EventReceptionSpec
     }
   }
 
-  private final class _SecureRecordingDispatcherWithRecorder(
+  private final class SecureRecordingDispatcherWithRecorder(
     entriesAtDispatch: ArrayBuffer[Vector[String]],
     attrs: ArrayBuffer[Map[String, String]],
-    recorder: _InMemoryCommitRecorder
+    recorder: InMemoryCommitRecorder
   ) extends SecureActionCallDispatcher {
     def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
       val _ = actionName
@@ -2348,7 +2348,7 @@ final class EventReceptionSpec
     }
   }
 
-  private final class _FailingSecureDispatcher extends SecureActionCallDispatcher {
+  private final class FailingSecureDispatcher extends SecureActionCallDispatcher {
     def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
       val _ = actionName
       val _ = event
@@ -2366,7 +2366,7 @@ final class EventReceptionSpec
     }
   }
 
-  private final class _FailingSecureDispatcherWithCapture(
+  private final class FailingSecureDispatcherWithCapture(
     jobids: ArrayBuffer[Option[String]],
     attrs: ArrayBuffer[Map[String, String]]
   ) extends SecureActionCallDispatcher {
@@ -2393,7 +2393,7 @@ final class EventReceptionSpec
     }
   }
 
-  private final class _RecordingJobEngine extends JobEngine {
+  private final class RecordingJobEngine extends JobEngine {
     @volatile private var _options: Vector[JobSubmitOption] = Vector.empty
     @volatile private var _annotations: Vector[(JobId, Map[String, String])] = Vector.empty
     @volatile private var _syncRuns: Vector[(JobId, String)] = Vector.empty
@@ -2463,7 +2463,7 @@ final class EventReceptionSpec
   private def _controlled_configuration: ResolvedConfiguration =
     ResolvedConfiguration(
       Configuration(Map(
-        RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("test"),
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("test"),
         RuntimeConfig.EXECUTION_PROFILE_KEY -> ConfigurationValue.StringValue("controlled"),
         RuntimeConfig.EXECUTION_KEY -> ConfigurationValue.StringValue("event-reception-run"),
         RuntimeConfig.EXECUTION_TIME_MODE_KEY -> ConfigurationValue.StringValue("manual"),

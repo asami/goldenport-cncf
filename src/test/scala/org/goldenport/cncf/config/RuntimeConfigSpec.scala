@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -29,7 +29,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       config.webProductionAdminSystemRoles shouldBe Vector("system_admin")
       config.webProductionAdminComponentRoles shouldBe Vector("component_operator", "system_admin")
       config.webProductionAdminJobsRoles shouldBe Vector("system_admin", "audit_viewer")
-      config.idNamespace shouldBe IdGenerationContext.DefaultNamespace
+      config.idNamespace shouldBe IdGenerationContext.DEFAULT_NAMESPACE
       config.executionClock.isVirtual shouldBe false
       config.mcpClientPolicyPath shouldBe None
       config.operationToolPolicyPath shouldBe None
@@ -136,7 +136,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       Given("runtime aliases for constrained file roots and HTTPS hosts")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.RuntimeResourceUrlFileRootsKey -> ConfigurationValue.StringValue("/tmp/resources-a,/tmp/resources-b"),
+          RuntimeConfig.runtimeResourceUrlFileRootsKey -> ConfigurationValue.StringValue("/tmp/resources-a,/tmp/resources-b"),
           "cncf.resource.url.https.hosts" -> ConfigurationValue.StringValue("catalog.example.test,assets.example.test")
         )),
         ConfigurationTrace.empty
@@ -154,8 +154,8 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       Given("a relative file root and a host value containing a path")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ResourceUrlFileRootsKey -> ConfigurationValue.StringValue("relative/resources"),
-          RuntimeConfig.ResourceUrlHttpsHostsKey -> ConfigurationValue.StringValue("catalog.example.test/path")
+          RuntimeConfig.resourceUrlFileRootsKey -> ConfigurationValue.StringValue("relative/resources"),
+          RuntimeConfig.resourceUrlHttpsHostsKey -> ConfigurationValue.StringValue("catalog.example.test/path")
         )),
         ConfigurationTrace.empty
       )
@@ -173,7 +173,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       Given("runtime and CNCF aliases for logical Textus namespace roots")
       val runtimeconfiguration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.RuntimeResourceTextusUrnFileRootsKey -> ConfigurationValue.StringValue("book=/tmp/books,paper=/tmp/papers")
+          RuntimeConfig.runtimeResourceTextusUrnFileRootsKey -> ConfigurationValue.StringValue("book=/tmp/books,paper=/tmp/papers")
         )),
         ConfigurationTrace.empty
       )
@@ -201,7 +201,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       Given("a namespace binding without an absolute root")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ResourceTextusUrnFileRootsKey -> ConfigurationValue.StringValue("book=relative/books")
+          RuntimeConfig.resourceTextusUrnFileRootsKey -> ConfigurationValue.StringValue("book=relative/books")
         )),
         ConfigurationTrace.empty
       )
@@ -219,7 +219,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       Given("runtime and CNCF aliases for logical resource-tree roots")
       val runtimeconfiguration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.RuntimeResourceTreeFileRootsKey -> ConfigurationValue.StringValue("catalog=/tmp/catalog")
+          RuntimeConfig.runtimeResourceTreeFileRootsKey -> ConfigurationValue.StringValue("catalog=/tmp/catalog")
         )),
         ConfigurationTrace.empty
       )
@@ -294,14 +294,14 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "parse id namespace configuration and aliases" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.RuntimeIdNamespaceMajorKey -> ConfigurationValue.StringValue("Customer-A"),
-          RuntimeConfig.RuntimeIdNamespaceMinorKey -> ConfigurationValue.StringValue("Tokyo.01")
+          RuntimeConfig.runtimeIdNamespaceMajorKey -> ConfigurationValue.StringValue("Customer-A"),
+          RuntimeConfig.runtimeIdNamespaceMinorKey -> ConfigurationValue.StringValue("Tokyo.01")
         )),
         ConfigurationTrace.empty
       )
 
-      RuntimeConfig.getString(configuration, RuntimeConfig.IdNamespaceMajorKey) shouldBe Some("Customer-A")
-      RuntimeConfig.getString(configuration, RuntimeConfig.IdNamespaceMinorKey) shouldBe Some("Tokyo.01")
+      RuntimeConfig.getString(configuration, RuntimeConfig.idNamespaceMajorKey) shouldBe Some("Customer-A")
+      RuntimeConfig.getString(configuration, RuntimeConfig.idNamespaceMinorKey) shouldBe Some("Tokyo.01")
       val config = RuntimeConfig.from(configuration)
       config.idNamespace shouldBe IdGenerationContext.IdNamespace("customer_a", "tokyo_01")
     }
@@ -309,8 +309,8 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject invalid id namespace configuration deterministically" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.IdNamespaceMajorKey -> ConfigurationValue.StringValue("!!!"),
-          RuntimeConfig.IdNamespaceMinorKey -> ConfigurationValue.StringValue("global")
+          RuntimeConfig.idNamespaceMajorKey -> ConfigurationValue.StringValue("!!!"),
+          RuntimeConfig.idNamespaceMinorKey -> ConfigurationValue.StringValue("global")
         )),
         ConfigurationTrace.empty
       )
@@ -323,10 +323,10 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "parse production admin gate configuration and aliases" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.RuntimeWebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true"),
-          RuntimeConfig.RuntimeWebProductionAdminSystemRolesKey -> ConfigurationValue.StringValue("system_admin,platform_admin"),
-          RuntimeConfig.RuntimeWebProductionAdminComponentRolesKey -> ConfigurationValue.StringValue("component_operator system_admin"),
-          RuntimeConfig.RuntimeWebProductionAdminJobsRolesKey -> ConfigurationValue.StringValue("audit_viewer|system_admin")
+          RuntimeConfig.runtimeWebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.runtimeWebProductionAdminSystemRolesKey -> ConfigurationValue.StringValue("system_admin,platform_admin"),
+          RuntimeConfig.runtimeWebProductionAdminComponentRolesKey -> ConfigurationValue.StringValue("component_operator system_admin"),
+          RuntimeConfig.runtimeWebProductionAdminJobsRolesKey -> ConfigurationValue.StringValue("audit_viewer|system_admin")
         )),
         ConfigurationTrace.empty
       )
@@ -379,7 +379,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject debug auth in production operation mode" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
           RuntimeConfig.DEBUG_AUTH_ENABLED_KEY -> ConfigurationValue.StringValue("true")
         )),
         ConfigurationTrace.empty
@@ -395,7 +395,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "allow debug auth in demo operation mode" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("demo"),
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("demo"),
           RuntimeConfig.DEBUG_AUTH_ENABLED_KEY -> ConfigurationValue.StringValue("true"),
           RuntimeConfig.DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY -> ConfigurationValue.StringValue("true"),
           RuntimeConfig.DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY -> ConfigurationValue.StringValue("true")
@@ -413,7 +413,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "keep CSV parsing for execution history filters independent from admin role token parsing" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ExecutionHistoryFilterOperationContainsKey ->
+          RuntimeConfig.executionHistoryFilterOperationContainsKey ->
             ConfigurationValue.StringValue("notice search|with pipe,admin jobs")
         )),
         ConfigurationTrace.empty
@@ -430,8 +430,8 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "parse operation mode independently from run mode" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ModeKey -> ConfigurationValue.StringValue("server"),
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+          RuntimeConfig.modeKey -> ConfigurationValue.StringValue("server"),
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         )),
         ConfigurationTrace.empty
       )
@@ -454,14 +454,14 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val root = java.nio.file.Files.createTempDirectory("cncf-observability-payloads")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ObservabilityPayloadExternalizationEnabledKey -> ConfigurationValue.StringValue("true"),
-          RuntimeConfig.ObservabilityPayloadExternalizationDestinationKey -> ConfigurationValue.StringValue("local-file"),
-          RuntimeConfig.ObservabilityPayloadExternalizationLocalRootKey -> ConfigurationValue.StringValue(root.toString),
-          RuntimeConfig.ObservabilityPayloadExternalizationThresholdBytesKey -> ConfigurationValue.StringValue("32"),
-          RuntimeConfig.ObservabilityPayloadExternalizationPayloadsKey -> ConfigurationValue.StringValue("result,response,calltree"),
-          RuntimeConfig.ObservabilityPayloadExternalizationOperationKey -> ConfigurationValue.StringValue("blog.component.search"),
-          RuntimeConfig.ObservabilityPayloadExternalizationOperationContainsKey -> ConfigurationValue.StringValue("notification.search"),
-          RuntimeConfig.ObservabilityPayloadExternalizationRetentionDaysKey -> ConfigurationValue.StringValue("3")
+          RuntimeConfig.observabilityPayloadExternalizationEnabledKey -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.observabilityPayloadExternalizationDestinationKey -> ConfigurationValue.StringValue("local-file"),
+          RuntimeConfig.observabilityPayloadExternalizationLocalRootKey -> ConfigurationValue.StringValue(root.toString),
+          RuntimeConfig.observabilityPayloadExternalizationThresholdBytesKey -> ConfigurationValue.StringValue("32"),
+          RuntimeConfig.observabilityPayloadExternalizationPayloadsKey -> ConfigurationValue.StringValue("result,response,calltree"),
+          RuntimeConfig.observabilityPayloadExternalizationOperationKey -> ConfigurationValue.StringValue("blog.component.search"),
+          RuntimeConfig.observabilityPayloadExternalizationOperationContainsKey -> ConfigurationValue.StringValue("notification.search"),
+          RuntimeConfig.observabilityPayloadExternalizationRetentionDaysKey -> ConfigurationValue.StringValue("3")
         )),
         ConfigurationTrace.empty
       )
@@ -484,8 +484,8 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject production diagnostic payload destination errors deterministically" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.ObservabilityPayloadExternalizationEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.observabilityPayloadExternalizationEnabledKey -> ConfigurationValue.StringValue("true")
         )),
         ConfigurationTrace.empty
       )
@@ -501,13 +501,13 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val root = java.nio.file.Files.createTempDirectory("cncf-runtime-blob-store")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.RuntimeBlobStoreBackendKey -> ConfigurationValue.StringValue("local"),
-          RuntimeConfig.RuntimeBlobStoreNameKey -> ConfigurationValue.StringValue("media-store"),
-          RuntimeConfig.RuntimeBlobStoreContainerKey -> ConfigurationValue.StringValue("media"),
-          RuntimeConfig.RuntimeBlobStoreLocalRootKey -> ConfigurationValue.StringValue(root.toString),
-          RuntimeConfig.RuntimeBlobStorePublicBasePathKey -> ConfigurationValue.StringValue("/assets/blob"),
-          RuntimeConfig.RuntimeBlobStoreProviderClassKey -> ConfigurationValue.StringValue("example.BlobProvider"),
-          RuntimeConfig.RuntimeBlobMaxByteSizeKey -> ConfigurationValue.StringValue("12345")
+          RuntimeConfig.runtimeBlobStoreBackendKey -> ConfigurationValue.StringValue("local"),
+          RuntimeConfig.runtimeBlobStoreNameKey -> ConfigurationValue.StringValue("media-store"),
+          RuntimeConfig.runtimeBlobStoreContainerKey -> ConfigurationValue.StringValue("media"),
+          RuntimeConfig.runtimeBlobStoreLocalRootKey -> ConfigurationValue.StringValue(root.toString),
+          RuntimeConfig.runtimeBlobStorePublicBasePathKey -> ConfigurationValue.StringValue("/assets/blob"),
+          RuntimeConfig.runtimeBlobStoreProviderClassKey -> ConfigurationValue.StringValue("example.BlobProvider"),
+          RuntimeConfig.runtimeBlobMaxByteSizeKey -> ConfigurationValue.StringValue("12345")
         )),
         ConfigurationTrace.empty
       )
@@ -531,12 +531,12 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       BlobStoreFactory.create(BlobStoreConfig(maxByteSizeParseError = Some("bad max size"))) shouldBe a[org.goldenport.Consequence.Failure[_]]
 
       val invalid = RuntimeConfig.from(ResolvedConfiguration(
-        Configuration(Map(RuntimeConfig.BlobMaxByteSizeKey -> ConfigurationValue.StringValue("1.9"))),
+        Configuration(Map(RuntimeConfig.blobMaxByteSizeKey -> ConfigurationValue.StringValue("1.9"))),
         ConfigurationTrace.empty
       ))
       BlobStoreFactory.create(invalid.blobStoreConfig) shouldBe a[org.goldenport.Consequence.Failure[_]]
       val negative = RuntimeConfig.from(ResolvedConfiguration(
-        Configuration(Map(RuntimeConfig.BlobMaxByteSizeKey -> ConfigurationValue.StringValue("-1"))),
+        Configuration(Map(RuntimeConfig.blobMaxByteSizeKey -> ConfigurationValue.StringValue("-1"))),
         ConfigurationTrace.empty
       ))
       BlobStoreFactory.create(negative.blobStoreConfig) shouldBe a[org.goldenport.Consequence.Failure[_]]
@@ -626,14 +626,14 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
 
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.RuntimeOperationModeKey -> ConfigurationValue.StringValue("test"),
-          RuntimeConfig.RuntimeWebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
+          RuntimeConfig.runtimeOperationModeKey -> ConfigurationValue.StringValue("test"),
+          RuntimeConfig.runtimeWebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
         )),
         ConfigurationTrace.empty
       )
 
-      RuntimeConfig.getString(configuration, RuntimeConfig.OperationModeKey) shouldBe Some("test")
-      RuntimeConfig.getString(configuration, RuntimeConfig.WebDevelopAnonymousAdminKey) shouldBe Some("false")
+      RuntimeConfig.getString(configuration, RuntimeConfig.operationModeKey) shouldBe Some("test")
+      RuntimeConfig.getString(configuration, RuntimeConfig.webDevelopAnonymousAdminKey) shouldBe Some("false")
       val config = RuntimeConfig.from(configuration)
       config.operationMode shouldBe OperationMode.Test
       config.webDevelopAnonymousAdmin shouldBe false
@@ -654,33 +654,33 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "suppress console log backends during executable specs while preserving file logging" in {
-      val serverConfiguration = ResolvedConfiguration(
-        Configuration(Map(RuntimeConfig.ModeKey -> ConfigurationValue.StringValue("server"))),
+      val serverconfiguration = ResolvedConfiguration(
+        Configuration(Map(RuntimeConfig.modeKey -> ConfigurationValue.StringValue("server"))),
         ConfigurationTrace.empty
       )
-      val stderrConfiguration = ResolvedConfiguration(
+      val stderrconfiguration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ModeKey -> ConfigurationValue.StringValue("server"),
-          RuntimeConfig.LogBackendKey -> ConfigurationValue.StringValue("stderr")
+          RuntimeConfig.modeKey -> ConfigurationValue.StringValue("server"),
+          RuntimeConfig.logBackendKey -> ConfigurationValue.StringValue("stderr")
         )),
         ConfigurationTrace.empty
       )
-      val fileConfiguration = ResolvedConfiguration(
+      val fileconfiguration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ModeKey -> ConfigurationValue.StringValue("server"),
-          RuntimeConfig.LogBackendKey -> ConfigurationValue.StringValue("file"),
-          RuntimeConfig.LogFilePathKey -> ConfigurationValue.StringValue("/tmp/textus-runtime-test.log")
+          RuntimeConfig.modeKey -> ConfigurationValue.StringValue("server"),
+          RuntimeConfig.logBackendKey -> ConfigurationValue.StringValue("file"),
+          RuntimeConfig.logFilePathKey -> ConfigurationValue.StringValue("/tmp/textus-runtime-test.log")
         )),
         ConfigurationTrace.empty
       )
 
       _with_system_property("textus.test", None) {
-        RuntimeConfig.from(serverConfiguration).logBackend shouldBe LogBackend.StdoutBackend
+        RuntimeConfig.from(serverconfiguration).logBackend shouldBe LogBackend.StdoutBackend
       }
       _with_system_property("textus.test", Some("true")) {
-        RuntimeConfig.from(serverConfiguration).logBackend shouldBe LogBackend.NopLogBackend
-        RuntimeConfig.from(stderrConfiguration).logBackend shouldBe LogBackend.NopLogBackend
-        RuntimeConfig.from(fileConfiguration).logBackend shouldBe LogBackend.FileLogBackend("/tmp/textus-runtime-test.log")
+        RuntimeConfig.from(serverconfiguration).logBackend shouldBe LogBackend.NopLogBackend
+        RuntimeConfig.from(stderrconfiguration).logBackend shouldBe LogBackend.NopLogBackend
+        RuntimeConfig.from(fileconfiguration).logBackend shouldBe LogBackend.FileLogBackend("/tmp/textus-runtime-test.log")
       }
     }
   }

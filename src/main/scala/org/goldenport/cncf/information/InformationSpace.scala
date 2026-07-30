@@ -2,6 +2,7 @@ package org.goldenport.cncf.information
 
 import java.time.Instant
 import org.goldenport.Consequence
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.knowledge.{
   ExternalKnowledgeIdentifier,
   KnowledgeAttributes,
@@ -42,7 +43,7 @@ import org.goldenport.record.Record
 /*
  * @since   May. 20, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -77,7 +78,7 @@ final class InformationSpace {
       val now = ctx.clock.instant()
       val values = records.zipWithIndex.map { case (record, index) =>
         Information(
-          id = InformationId(_next_id("information", base + index + 1)),
+          id = ctx.idGeneration.entityId(_information_collection(ctx), s"information.${base + index + 1}"),
           domain = domain,
           rawData = record,
           workingData = record,
@@ -98,7 +99,7 @@ final class InformationSpace {
     _update_information(informationid) { information =>
       information.copy(
         workingData = workingdata,
-        state = InformationLifecycleState.Imported,
+        state = InformationLifecycleState.imported,
         validationIssues = Vector.empty,
         updatedAt = ctx.clock.instant()
       )
@@ -132,11 +133,11 @@ final class InformationSpace {
         val issues = InformationSpace.validate(information)
         val state =
           if (issues.nonEmpty)
-            InformationLifecycleState.Invalid
+            InformationLifecycleState.invalid
           else if (information.resolutionCandidates.exists(!_.selected))
-            InformationLifecycleState.NeedsResolution
+            InformationLifecycleState.needsResolution
           else
-            InformationLifecycleState.ReadyForConfirmation
+            InformationLifecycleState.readyForConfirmation
         val updated = information.copy(
           state = state,
           validationIssues = issues,
@@ -162,10 +163,10 @@ final class InformationSpace {
     getInformation(informationid) match {
       case Some(information) =>
         val key = _next_key("candidate", information.resolutionCandidates.size + 1)
-        val nextbinding = binding.copy(status = InformationBindingStatus.Candidate)
+        val nextbinding = binding.copy(status = InformationBindingStatus.candidate)
         val candidate = InformationResolutionCandidate(key, fieldpath, label, nextbinding, confidence, evidence)
         val updated = information.copy(
-          state = InformationLifecycleState.NeedsResolution,
+          state = InformationLifecycleState.needsResolution,
           resolutionCandidates = information.resolutionCandidates :+ candidate,
           identityBindings = information.identityBindings :+ nextbinding,
           updatedAt = ctx.clock.instant()
@@ -187,7 +188,7 @@ final class InformationSpace {
       case Some(information) =>
         information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
           case Some(candidate) =>
-            val selectedbinding = candidate.binding.copy(status = InformationBindingStatus.Selected)
+            val selectedbinding = candidate.binding.copy(status = InformationBindingStatus.selected)
             val selected = candidate.copy(binding = selectedbinding, selected = true)
             val candidates = information.resolutionCandidates.map(x => if (x.candidateKey == candidatekey) selected else x)
             val bindings = information.identityBindings.map { binding =>
@@ -214,7 +215,7 @@ final class InformationSpace {
     candidatekey: String
   )(using ctx: ExecutionContext): Consequence[InformationResolutionCandidate] =
     getInformation(informationid) match {
-      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+      case Some(information) if information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published =>
         Consequence.argumentInvalid(s"information is already confirmed: ${informationid.print}")
       case Some(information) =>
         information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
@@ -246,7 +247,7 @@ final class InformationSpace {
       case Some(information) =>
         information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
           case Some(candidate) =>
-            val nextselected = selected.getOrElse(status == InformationBindingStatus.Selected || status == InformationBindingStatus.Confirmed)
+            val nextselected = selected.getOrElse(status == InformationBindingStatus.selected || status == InformationBindingStatus.confirmed)
             val nextbinding = candidate.binding.copy(status = status)
             val nextcandidate = candidate.copy(binding = nextbinding, selected = nextselected)
             val candidates = information.resolutionCandidates.map(x => if (x.candidateKey == candidatekey) nextcandidate else x)
@@ -270,15 +271,15 @@ final class InformationSpace {
 
   def confirmInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
     getInformation(informationid) match {
-      case Some(information) if information.state == InformationLifecycleState.Invalid =>
+      case Some(information) if information.state == InformationLifecycleState.invalid =>
         Consequence.argumentInvalid(s"information is invalid: ${informationid.print}")
-      case Some(information) if information.state != InformationLifecycleState.ReadyForConfirmation && information.state != InformationLifecycleState.Confirmed =>
+      case Some(information) if information.state != InformationLifecycleState.readyForConfirmation && information.state != InformationLifecycleState.confirmed =>
         Consequence.argumentInvalid(s"information is not ready for confirmation: ${informationid.print}")
       case Some(information) =>
         val now = ctx.clock.instant()
-        val bindings = information.identityBindings.map(_.copy(status = InformationBindingStatus.Confirmed))
+        val bindings = information.identityBindings.map(_.copy(status = InformationBindingStatus.confirmed))
         val confirmed = information.copy(
-          state = InformationLifecycleState.Confirmed,
+          state = InformationLifecycleState.confirmed,
           identityBindings = bindings,
           confirmedAt = information.confirmedAt.orElse(Some(now)),
           updatedAt = now
@@ -299,10 +300,10 @@ final class InformationSpace {
     informationid: InformationId,
     reason: String
   )(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information(informationid)(_.copy(state = InformationLifecycleState.Rejected, updatedAt = ctx.clock.instant()))
+    _update_information(informationid)(_.copy(state = InformationLifecycleState.rejected, updatedAt = ctx.clock.instant()))
 
   def reopenInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information(informationid)(_.copy(state = InformationLifecycleState.ReadyForConfirmation, updatedAt = ctx.clock.instant()))
+    _update_information(informationid)(_.copy(state = InformationLifecycleState.readyForConfirmation, updatedAt = ctx.clock.instant()))
 
   def publishInformation(
     informationid: InformationId,
@@ -311,19 +312,19 @@ final class InformationSpace {
     knowledgeframeid: Option[KnowledgeFrameId] = None
   )(using ctx: ExecutionContext): Consequence[InformationPublicationStatus] =
     getInformation(informationid) match {
-      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+      case Some(information) if information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published =>
         val now = ctx.clock.instant()
         val key = information.publicationStatuses.headOption.map(_.publicationKey).getOrElse(_next_key("publication", 1))
         val publication = InformationPublicationStatus(
           publicationKey = key,
-          state = InformationPublicationState.Published,
+          state = InformationPublicationState.published,
           target = target,
           message = message,
           knowledgeFrameId = knowledgeframeid,
           publishedAt = Some(now)
         )
         val published = information.copy(
-          state = InformationLifecycleState.Published,
+          state = InformationLifecycleState.published,
           publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
           updatedAt = now
         )
@@ -342,12 +343,12 @@ final class InformationSpace {
     knowledgeframeid: Option[KnowledgeFrameId] = None
   )(using ctx: ExecutionContext): Consequence[InformationPublicationStatus] =
     getInformation(informationid) match {
-      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+      case Some(information) if information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published =>
         val now = ctx.clock.instant()
         val key = information.publicationStatuses.headOption.map(_.publicationKey).getOrElse(_next_key("publication", 1))
         val publication = InformationPublicationStatus(
           publicationKey = key,
-          state = InformationPublicationState.Failed,
+          state = InformationPublicationState.failed,
           target = target,
           message = message,
           knowledgeFrameId = knowledgeframeid,
@@ -388,7 +389,7 @@ final class InformationSpace {
           severity = severity
         )
         val updated = information.copy(
-          state = InformationLifecycleState.Conflict,
+          state = InformationLifecycleState.conflict,
           conflicts = information.conflicts :+ conflict,
           updatedAt = ctx.clock.instant()
         )
@@ -416,15 +417,15 @@ final class InformationSpace {
         information.conflicts.find(_.conflictKey == conflictkey) match {
           case Some(conflict) =>
             val resolved = conflict.copy(
-              state = InformationConflictState.Resolved,
+              state = InformationConflictState.resolved,
               resolution = Some(decision)
             )
             val conflicts = information.conflicts.map(x => if (x.conflictKey == conflictkey) resolved else x)
             val state =
-              if (conflicts.forall(_.state == InformationConflictState.Resolved))
-                information.publicationStatuses.find(_.state == InformationPublicationState.Published).fold(InformationLifecycleState.Confirmed)(_ => InformationLifecycleState.Published)
+              if (conflicts.forall(_.state == InformationConflictState.resolved))
+                information.publicationStatuses.find(_.state == InformationPublicationState.published).fold(InformationLifecycleState.confirmed)(_ => InformationLifecycleState.published)
               else
-                InformationLifecycleState.Conflict
+                InformationLifecycleState.conflict
             _replace_information(information.copy(state = state, conflicts = conflicts, updatedAt = ctx.clock.instant()))
             Consequence.success(resolved)
           case None =>
@@ -436,7 +437,7 @@ final class InformationSpace {
 
   def materializeInformation(informationid: InformationId)(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
     getInformation(informationid) match {
-      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+      case Some(information) if information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published =>
         Consequence.success(InformationToKnowledgeProjection.materializeWithRelated(information, _snapshot.information))
       case Some(_) =>
         Consequence.argumentInvalid(s"information is not knowledge-ready: ${informationid.print}")
@@ -461,11 +462,12 @@ final class InformationSpace {
       information = _snapshot.information.map(x => if (x.id == information.id) information else x)
     )
 
-  private def _next_id(
-    prefix: String,
-    index: Int
-  ): String =
-    s"$prefix-$index"
+  private def _information_collection(
+    ctx: ExecutionContext
+  ): EntityCollectionId = {
+    val namespace = ctx.idGeneration.namespace
+    EntityCollectionId(namespace.major, namespace.minor, "information")
+  }
 
   private def _next_key(
     prefix: String,
@@ -474,16 +476,16 @@ final class InformationSpace {
     s"$prefix-$index"
 
   private def _state_after_candidate_update(information: Information): InformationLifecycleState =
-    if (information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published)
+    if (information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published)
       information.state
     else if (information.validationIssues.nonEmpty)
-      InformationLifecycleState.Invalid
+      InformationLifecycleState.invalid
     else if (information.resolutionCandidates.isEmpty)
-      InformationLifecycleState.Imported
+      InformationLifecycleState.imported
     else if (information.resolutionCandidates.forall(_.selected))
-      InformationLifecycleState.ReadyForConfirmation
+      InformationLifecycleState.readyForConfirmation
     else
-      InformationLifecycleState.NeedsResolution
+      InformationLifecycleState.needsResolution
 
   private def _same_binding(
     lhs: InformationIdentityBinding,
@@ -1344,9 +1346,9 @@ object InformationToKnowledgeProjection {
         }
 
   private def _is_active_candidate_status(status: InformationBindingStatus): Boolean =
-    status == InformationBindingStatus.Candidate ||
-      status == InformationBindingStatus.Selected ||
-      status == InformationBindingStatus.Confirmed
+    status == InformationBindingStatus.candidate ||
+      status == InformationBindingStatus.selected ||
+      status == InformationBindingStatus.confirmed
 
   private def _book_information_association_nodes_and_relationships(
     information: Information,

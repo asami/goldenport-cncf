@@ -20,7 +20,7 @@ import org.simplemodeling.model.datatype.EntityId
  * operation returns or supplies the parent Entity id.
  *
  * @since   Apr. 30, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ChildEntityBindingSummary(
@@ -76,9 +76,7 @@ final class ChildEntityBindingWorkflow(
         ids <-
           summary.createdIds.foldLeft(Consequence.success(Vector.empty[EntityId])) { (z, value) =>
           z.flatMap(xs =>
-            EntityId
-              .parse(value)
-              .flatMap(component.entitySpace.canonicalEntityIdC)
+            _exact_collection_entity_id(collection, value, "child compensation")
               .map(xs :+ _)
           )
         }
@@ -168,11 +166,10 @@ final class ChildEntityBindingWorkflow(
     val field = binding.childIdField.getOrElse("id")
     record.getAny(field).map(_.toString.trim).filter(_.nonEmpty) match {
       case Some(value) =>
-        EntityId.parse(value)
-          .flatMap(component.entitySpace.canonicalEntityIdC)
+        _exact_collection_entity_id(collection, value, "child creation")
           .map(id => record -> id)
       case None if binding.childIdField.isDefined =>
-        val id = ctx.idGeneration.entityIdInCollectionNamespace(
+        val id = ctx.idGeneration.entityId(
           collection.descriptor.collectionId,
           "child-entity.binding"
         )
@@ -207,6 +204,20 @@ final class ChildEntityBindingWorkflow(
         summon[ExecutionContext].entityStoreSpace.delete(UnitOfWorkOp.EntityStoreDelete(id))
           .map(_ => collection.evict(id))
       }
+    }
+
+  private def _exact_collection_entity_id(
+    collection: EntityCollection[?],
+    value: String,
+    operation: String
+  ): Consequence[EntityId] =
+    EntityId.parse(value).flatMap { id =>
+      if (id.collection == collection.descriptor.collectionId)
+        Consequence.success(id)
+      else
+        Consequence.argumentInvalid(
+          s"${operation} Entity ID collection mismatch: expected ${collection.descriptor.collectionId.print}, actual ${id.collection.print}"
+        )
     }
 
   private def _compensate_parent(

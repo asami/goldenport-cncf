@@ -12,7 +12,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 
 /*
  * @since   May. 16, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentDependencyManifest(
@@ -101,11 +101,11 @@ final case class ComponentDependencyConfig(
 )
 
 object ComponentDependencyConfig {
-  val RESOLVE_ENABLED_KEY = RuntimeConfig.ComponentDependenciesResolveEnabledKey
-  val CACHE_DIR_KEY = RuntimeConfig.ComponentDependenciesCacheDirKey
-  val SHARED_ENABLED_KEY = RuntimeConfig.ComponentDependenciesSharedEnabledKey
-  val LOCAL_OVERRIDE_ENABLED_KEY = RuntimeConfig.ComponentDependenciesLocalOverrideEnabledKey
-  val REPOSITORIES_KEY = RuntimeConfig.ComponentDependenciesRepositoriesKey
+  val RESOLVE_ENABLED_KEY = RuntimeConfig.componentDependenciesResolveEnabledKey
+  val CACHE_DIR_KEY = RuntimeConfig.componentDependenciesCacheDirKey
+  val SHARED_ENABLED_KEY = RuntimeConfig.componentDependenciesSharedEnabledKey
+  val LOCAL_OVERRIDE_ENABLED_KEY = RuntimeConfig.componentDependenciesLocalOverrideEnabledKey
+  val REPOSITORIES_KEY = RuntimeConfig.componentDependenciesRepositoriesKey
   val DEFAULT_COURSIER_COMMAND = "cs"
 
   def from(configuration: ResolvedConfiguration): ComponentDependencyConfig =

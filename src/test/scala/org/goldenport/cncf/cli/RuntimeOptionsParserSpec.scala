@@ -7,7 +7,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 24, 2026
- * @version Apr. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeOptionsParserSpec
@@ -24,8 +24,8 @@ final class RuntimeOptionsParserSpec
 
       Then("debug trace-job and calltree are framework properties and do not remain as positional args")
       clean shouldBe Seq("client", "get")
-      properties.find(_.name == RuntimeConfig.DebugTraceJobKey).map(_.value.toString) shouldBe Some("true")
-      properties.find(_.name == RuntimeConfig.DebugCallTreeKey).map(_.value.toString) shouldBe Some("true")
+      properties.find(_.name == RuntimeConfig.debugTraceJobKey).map(_.value.toString) shouldBe Some("true")
+      properties.find(_.name == RuntimeConfig.debugCallTreeKey).map(_.value.toString) shouldBe Some("true")
     }
 
     "map debug trace-job key-value input to framework properties" in {
@@ -37,7 +37,7 @@ final class RuntimeOptionsParserSpec
 
       Then("debug trace-job is captured as a framework option and removed from positional args")
       clean shouldBe Seq("client", "get")
-      properties.find(_.name == RuntimeConfig.DebugTraceJobKey).map(_.value.toString) shouldBe Some("true")
+      properties.find(_.name == RuntimeConfig.debugTraceJobKey).map(_.value.toString) shouldBe Some("true")
     }
   }
 }

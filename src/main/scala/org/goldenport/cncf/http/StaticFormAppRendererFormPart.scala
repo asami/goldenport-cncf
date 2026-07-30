@@ -33,7 +33,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormPart {
@@ -188,7 +188,7 @@ trait StaticFormAppRendererFormPart {
     webdescriptor: WebDescriptor = WebDescriptor.empty,
     values: Map[String, String] = Map.empty,
     validation: Option[FormValidationResult] = None,
-    operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
+    operationMode: OperationMode = RuntimeConfig.defaultOperationMode,
     showExecutionDebugPanel: Boolean = false
   ): Option[Page] =
     resolve_operation_web_schema_context(subsystem, componentname, servicename, operationname, webdescriptor).map { context =>

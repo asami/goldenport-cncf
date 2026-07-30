@@ -23,7 +23,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -47,7 +47,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
           WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("standalone"),
           WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("ja-JP"),
           WebExecutionResolutionPolicy.TIMEZONE_KEY -> ConfigurationValue.StringValue("Asia/Tokyo"),
@@ -106,7 +106,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
           WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("en-US")
         )),
         ConfigurationTrace.empty
@@ -152,7 +152,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
         )),
         ConfigurationTrace.empty
       )

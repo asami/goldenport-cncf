@@ -1,12 +1,12 @@
 # Entity Collection Identity
 
-Status: normative static contract
+Status: normative Phase 52 static contract
 
 ## Scope
 
 This specification defines exact collection ownership for Entity registration,
 routing, persistence decoding, runtime projection, and `EntityId` equality. It
-applies to generated, CNCF built-in, custom typed, raw `Record`, and legacy
+applies to generated, CNCF built-in, custom typed, and raw `Record`
 persistence adapters.
 
 The architectural rationale is in
@@ -14,14 +14,46 @@ The architectural rationale is in
 
 ## Evolution Boundary
 
-This document specifies the implemented Phase 51 contract.
-
-[Phase 52](../phase/phase-52.md) is the planned clean replacement. It defines a
+This document specifies the Phase 52 clean-break contract. It defines a
 complete canonical Entity ID String that contains the exact
-`EntityCollectionId` and round-trips without external context. Phase 52 does
-not preserve old scalar input, context rebinding, legacy adapters, stored-data
-migration, or mixed old/new operation. When Phase 52 closes, its verified
-specification supersedes the applicable requirements below.
+`EntityCollectionId` and round-trips without external context. It does not
+preserve old scalar input, context rebinding, legacy adapters, stored-data
+migration, or mixed old/new operation.
+
+## Phase 52 EID-01 Traceability Labels
+
+The following stable labels bind EID-01 historical failing-first evidence to
+this specification. They document the preceding identity-loss boundary and do
+not authorize Phase 52 compatibility behavior.
+
+- **R1**: an identity-sensitive boundary requires an exact collection owner.
+- **R3**: primary and referenced Entity IDs must retain their own collection
+  ownership across persistence boundaries.
+- **R4**: a scalar Entity ID is not proof of a complete collection owner.
+- **R5**: an Association, Blob, child-binding, or authorization consumer must
+  not infer an exact owner from a scalar ID or logical collection name.
+
+The registered examples are:
+
+- **E1** persistence decoding under a selected owner;
+- **E1b** selected-owner mismatch rejection registration;
+- **E1c** generated primary and reference persistence;
+- **E2** EntitySpace exact routing;
+- **E3** datastore collection and entry routing;
+- **E4** Association target parsing;
+- **E5** Blob reference parsing;
+- **E6** child-binding source identity; and
+- **E7** UnitOfWork authorization target identity.
+
+## Phase 52 EID-02 Traceability Labels
+
+The following examples bind canonical exact serialization evidence to the
+EID-02 clean replacement. They do not authorize old scalar compatibility,
+collection inference, or rebinding.
+
+- **E8** independently namespaced canonical EntityId round-trip;
+- **E9** canonical EntityId rejection without synthetic ownership; and
+- **E10** property-based exact canonical EntityId round-trip.
 
 ## Collection Ownership
 
@@ -41,48 +73,32 @@ specification supersedes the applicable requirements below.
 1. `EntitySpace` MUST index registered collections by complete
    `EntityCollectionId`.
 2. Exact lookup MUST NOT fall back to a different namespace.
-3. Logical-name lookup MAY remain as an ingress compatibility operation.
-4. A logical-name lookup MUST succeed only when exactly one registered
+3. Logical-name lookup MAY support non-identity discovery only; it MUST NOT
+   accept, canonicalize, or resolve an `EntityId`.
+4. A logical-name discovery query MUST succeed only when exactly one registered
    collection matches.
-5. An ambiguous name MUST fail with reason
+5. An ambiguous discovery name MUST fail with reason
    `entity-collection-name-ambiguous` and deterministic exact-candidate
    evidence.
-6. Canonicalization MUST retain an exact registered ID before considering
-   unique-name compatibility.
-7. Storage, revision, authorization, resident-cache, ActionCall, and
-   UnitOfWork paths MUST use exact identity after ingress canonicalization.
+6. Storage, revision, authorization, resident-cache, ActionCall, and
+   UnitOfWork paths MUST use the parsed exact identity directly.
 
 ## Storage Decode Contract
 
-The runtime MUST supply:
-
-```scala
-EntityStoreDecodeContext(
-  owningCollectionId: EntityCollectionId
-)
-```
-
-to the context-aware operation:
-
-```scala
-fromStoreRecord(
-  context: EntityStoreDecodeContext,
-  record: Record
-): Consequence[E]
-```
-
 For each physical store result:
 
-1. the owning context MUST come from the selected runtime collection;
-2. the context-aware decoder MUST be invoked exactly once;
+1. the selected runtime collection MUST be retained as the expected exact
+   owner;
+2. the ordinary `fromStoreRecord(record)` decoder MUST be invoked exactly
+   once;
 3. the supplied physical `Record` MUST remain unchanged;
 4. the returned Entity MUST satisfy
-   `persistent.id(entity).collection == context.owningCollectionId`;
+   `persistent.id(entity).collection == expectedCollectionId`;
 5. a mismatch MUST fail before resident projection; and
 6. CNCF MUST NOT select decoding policy from the returned value's runtime
    type.
 
-A failure for a legacy codec that cannot restore the exact owner MUST use
+A failure for a codec that cannot provide the exact owner MUST use
 `entity-persistence-exact-collection-required`. A codec that returns a
 different declared collection MUST fail through the collection-mismatch
 contract.
@@ -94,7 +110,7 @@ contract.
 Generated and built-in codecs MUST:
 
 - decode the original store record once;
-- restore only the decoded `EntityId.collection` from the exact context;
+- parse and retain the complete canonical `EntityId` from that record;
 - preserve the physical entry identity, timestamp, entropy, and business
   values; and
 - return the Entity for the central exact postcondition.
@@ -103,28 +119,24 @@ Their ordinary `fromRecord` operations MUST remain business/API decoders.
 
 ### Custom typed codecs
 
-A custom typed codec MAY override the context-aware method to restore exact
-ownership. When it uses the compatibility implementation, its one physical
-decode MUST already return the exact owner. A custom codec MUST NOT bypass the
-exact postcondition.
+A custom typed codec MUST make its one physical decode return the exact owner.
+There is no context-aware override, collection restoration, or compatibility
+implementation. A custom codec MUST NOT bypass the exact postcondition.
 
 ### Raw Record adapters
 
-A raw `Record` adapter MUST implement its context-aware behavior explicitly.
-It MAY produce a domain record with the exact Entity ID, but MUST NOT mutate or
+A raw `Record` adapter MUST parse canonical Entity ID fields explicitly. It
+MAY produce a domain record with the exact Entity ID, but MUST NOT mutate or
 replace the supplied physical input before decoding. CNCF MUST NOT grant raw
 records an implicit runtime-type exception.
 
 ### Legacy codecs
 
-A legacy codec without usable context-aware behavior MAY be invoked through
-the one-argument compatibility method exactly once. Its result MUST be
-accepted only when it already carries the exact owner. Otherwise CNCF MUST
-fail with deterministic regeneration guidance.
-
-Regenerated codecs SHOULD restore existing scalar keys from the runtime-owned
-context. CI-01 MUST NOT require a persisted-key rewrite, new scalar wire
-format, Base64/prefix encoding, or application-local identity repair.
+There is no legacy context-aware compatibility codec in Phase 52. A codec
+which cannot parse a canonical complete ID is unsupported input and MUST fail
+deterministically. Regeneration MUST emit canonical complete IDs; it MUST NOT
+restore ownership from runtime context or introduce an application-local
+identity repair.
 
 ## EntityId Equality and Map-Key Contract
 
@@ -132,10 +144,10 @@ format, Base64/prefix encoding, or application-local identity repair.
 2. In-memory equality and hashing MUST include both the canonical physical
    value and complete `EntityCollectionId`.
 3. Parsed/materialized and newly constructed IDs with the same physical value
-   and restored exact owner MUST compare equal.
+   and exact owner MUST compare equal.
 4. Equal physical values owned by different collections MUST compare unequal.
-5. Runtime code SHOULD canonicalize collection ownership before using an
-   `EntityId` as an identity-sensitive map key.
+5. Runtime code MUST use the parsed exact ID directly as an identity-sensitive
+   map key and MUST NOT canonicalize or rebind its collection ownership.
 
 ## Required Executable Evidence
 
@@ -148,14 +160,15 @@ The contract is covered by:
 - [ArtSceneExactCollectionIdentitySpec](../../../../dev2026/textus-art-scene/src/test/scala/org/simplemodeling/textus/artscene/ArtSceneExactCollectionIdentitySpec.scala); and
 - [EntityIdSpec](../../../../dev2026/simplemodeling-model/src/test/scala/org/simplemodeling/model/datatype/EntityIdSpec.scala).
 
-Together the evidence MUST demonstrate exact restoration, cross-collection
-rejection, same-name coexistence and ambiguity, single invocation with
+Together the evidence MUST demonstrate exact canonical parsing,
+cross-collection rejection, same-name coexistence and discovery ambiguity,
+single invocation with
 unchanged physical input, generated and raw adapter behavior, regeneration
 failure, and physical-key-plus-collection equality.
 
 ## Non-Goals
 
 This specification does not define general persisted scalar store projection,
-nominal String restoration, a new EntityId wire format, or application-local
-collection inference. Those scalar-projection requirements belong to Phase 51
-SP-01.
+nominal String restoration, alternate EntityId wire formats, or
+application-local collection inference. Phase 52 rejects those inputs rather
+than supporting a Phase 51 compatibility path.

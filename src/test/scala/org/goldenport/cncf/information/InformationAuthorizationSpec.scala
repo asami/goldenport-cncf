@@ -1,20 +1,26 @@
 package org.goldenport.cncf.information
 
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationAuthorizationSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
 
   "InformationCapabilities" should {
-    "define canonical capability names without domain-specific names" in {
-      InformationCapabilities.all should contain allOf (
+    "provide the complete ordered canonical capability vector" in {
+      Given("the public capability facade")
+      When("its aggregate capability vector is resolved")
+      val actual = InformationCapabilities.all
+      Then("it preserves every canonical capability exactly once and in order")
+      actual shouldBe Vector(
         "information:read",
         "information:import",
         "information:edit",
@@ -27,7 +33,7 @@ final class InformationAuthorizationSpec
         "information:conflict:resolve",
         "information:audit:read"
       )
-      InformationCapabilities.all.exists(_.startsWith("paper_information")) shouldBe false
+      actual.exists(_.startsWith("paper_information")) shouldBe false
     }
   }
 }

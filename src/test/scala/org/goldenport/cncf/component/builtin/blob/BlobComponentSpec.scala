@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
  *  version Apr. 29, 2026
- * @version May. 11, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec
@@ -56,7 +56,7 @@ final class BlobComponentSpec
       Given("a subsystem configuration with an unknown BlobStore backend")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.BlobStoreBackendKey -> ConfigurationValue.StringValue("missing_backend")
+          RuntimeConfig.blobStoreBackendKey -> ConfigurationValue.StringValue("missing_backend")
         )),
         ConfigurationTrace.empty
       )
@@ -491,7 +491,7 @@ final class BlobComponentSpec
       val zeroLimitSubsystem = DefaultSubsystemFactory.default(
         Some("command"),
         ResolvedConfiguration(
-          Configuration(Map(RuntimeConfig.BlobMaxByteSizeKey -> ConfigurationValue.StringValue("0"))),
+          Configuration(Map(RuntimeConfig.blobMaxByteSizeKey -> ConfigurationValue.StringValue("0"))),
           ConfigurationTrace.empty
         )
       )
@@ -988,6 +988,37 @@ final class BlobComponentSpec
       Then("the admin delete proceeds through the existing system mutation path")
       deleted.getString("deletedBlobId") shouldBe Some(id)
       subsystem.executeOperationResponse(_blob_request("admin_get_blob", id)) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject a canonical foreign id before admin Blob deletion" in {
+      Given("a managed Blob and a same-shaped exact id from the image collection")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val registered = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("foreign delete".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "foreign-delete.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))))
+      val blobid = registered.getString("id").getOrElse(fail("Blob id should be present"))
+      val parsed = EntityId.parse(blobid).toOption.getOrElse(fail("Blob id must be canonical"))
+      val foreign = EntityId(
+        parsed.major,
+        parsed.minor,
+        EntityCollectionId(parsed.major, parsed.minor, "image"),
+        parsed.timestamp,
+        parsed.entropy
+      )
+
+      When("admin_delete_blob receives the foreign canonical id")
+      val result = subsystem.executeOperationResponse(_blob_request("admin_delete_blob", foreign.value))
+
+      Then("request admission fails and the actual Blob remains visible")
+      result shouldBe a[Consequence.Failure[_]]
+      _success(subsystem.executeOperationResponse(_blob_request("admin_get_blob", blobid))) shouldBe a[OperationResponse.RecordResponse]
     }
 
     "reject admin Blob delete while attached unless forced" in {

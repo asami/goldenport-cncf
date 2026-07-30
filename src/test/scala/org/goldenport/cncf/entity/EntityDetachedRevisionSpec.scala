@@ -55,7 +55,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityDetachedRevisionSpec
@@ -78,7 +78,7 @@ final class EntityDetachedRevisionSpec
         EntityConcurrencyPolicy.Optimistic
       )
       given ExecutionContext = fixture.context
-      val id = _id("detached-lifecycle")
+      val id = _id("detached_lifecycle")
       val entity = DetachedEntity(id, "created", "domain-r1")
       val created = fixture.store.create(entity)
 
@@ -165,7 +165,7 @@ final class EntityDetachedRevisionSpec
         EntityConcurrencyPolicy.Optimistic
       )
       given ExecutionContext = fixture.context
-      val id = _id("detached-ordinary-patch")
+      val id = _id("detached_ordinary_patch")
       val interpreter =
         new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
       val created =
@@ -210,7 +210,7 @@ final class EntityDetachedRevisionSpec
         EntityConcurrencyPolicy.Optimistic
       )
       given ExecutionContext = fixture.context
-      val id = _id("detached-stale")
+      val id = _id("detached_stale")
       val initial =
         fixture.store
           .create(DetachedEntity(id, "created", "domain"))
@@ -279,7 +279,7 @@ final class EntityDetachedRevisionSpec
         EntityConcurrencyPolicy.Optimistic
       )
       given ExecutionContext = fixture.context
-      val id = _id("detached-derived-precondition")
+      val id = _id("detached_derived_precondition")
       val created =
         fixture.store.create(
           DetachedEntity(id, "created", "domain-r1")
@@ -394,7 +394,7 @@ final class EntityDetachedRevisionSpec
         EntityConcurrencyPolicy.Optimistic
       )
       given ExecutionContext = fixture.context
-      val id = _id("malformed-detached-revision")
+      val id = _id("malformed_detached_revision")
       val seeded = fixture.context.dataStoreSpace.inject(
         DataStore.CollectionId.EntityStore(_collection_id),
         Record.dataAuto(
@@ -437,7 +437,7 @@ final class EntityDetachedRevisionSpec
         datastore
       )
       given ExecutionContext = fixture.context
-      val id = _id("detached-rollback")
+      val id = _id("detached_rollback")
       val created =
         fixture.store.create(
           DetachedEntity(id, "committed", "domain")
@@ -488,7 +488,7 @@ final class EntityDetachedRevisionSpec
         EntityConcurrencyPolicy.None
       )
       given ExecutionContext = fixture.context
-      val id = _id("detached-none")
+      val id = _id("detached_none")
       val initial =
         fixture.store
           .create(DetachedEntity(id, "created", "domain"))
@@ -527,7 +527,7 @@ final class EntityDetachedRevisionSpec
         policy = EntityConcurrencyPolicy.None
       )
       given ExecutionContext = fixture.context
-      val id = _id("typed-codec-boundary")
+      val id = _id("typed_codec_boundary")
       fixture.store.create(DetachedEntity(id, "stored", "domain")).TAKE
       val foreigncollection =
         EntityCollectionId("test", "detached", "foreign")
@@ -545,17 +545,6 @@ final class EntityDetachedRevisionSpec
             )
           )
 
-        override def fromStoreRecord(
-          context: EntityStoreDecodeContext,
-          record: Record
-        ): Consequence[DetachedEntity] =
-          fromStoreRecord(record).flatMap { entity =>
-            EntityPersistent.restoreCollectionIdentity(
-              entity,
-              entity.id,
-              context.owningCollectionId
-            )(id => entity.copy(id = id))
-          }
       }
 
       When("the EntityStoreSpace decodes the requested record through that caller codec")
@@ -582,7 +571,7 @@ final class EntityDetachedRevisionSpec
       Given(
         "a custom EntityStore that returns the requested Entity type under a different exact owner"
       )
-      val requestedid = _id("typed-store-owner-alias")
+      val requestedid = _id("typed_store_owner_alias")
       val foreigncollection =
         EntityCollectionId("provider", "alias", _collection_id.name)
       val foreignentity =

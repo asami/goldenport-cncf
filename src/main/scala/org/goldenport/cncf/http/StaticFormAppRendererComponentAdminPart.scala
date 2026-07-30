@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -1015,11 +1015,37 @@ trait StaticFormAppRendererComponentAdminPart {
     entityPath: String,
     id: String
   ): Option[Record] =
-    admin_operation_record(
-      subsystem,
-      "/admin/entity/read",
-      Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id, "view" -> "detail")
-    )
+    admin_entity_route_canonical_id(subsystem, componentPath, entityPath, id).flatMap { canonicalid =>
+      admin_operation_record(
+        subsystem,
+        "/admin/entity/read",
+        Record.data(
+          "component" -> componentPath,
+          "entity" -> entityPath,
+          "id" -> canonicalid,
+          "view" -> "detail"
+        )
+      )
+    }
+
+  // Browser route locators must already be canonical Entity IDs. The
+  // presentation boundary rejects all scalar and foreign-collection values.
+  protected def admin_entity_route_canonical_id(
+    subsystem: Subsystem,
+    componentPath: String,
+    entityPath: String,
+    routeId: String
+  ): Option[String] =
+    val collectionoption = find_component(subsystem, componentPath).
+      flatMap(_.entitySpace.entityOption[Any](entityPath))
+    EntityId.parse(routeId) match {
+      case Consequence.Success(id) =>
+        collectionoption.
+          filter(_.descriptor.collectionId == id.collection).
+          map(_ => id.value).
+          filter(_.nonEmpty)
+      case Consequence.Failure(_) => None
+    }
 
   protected def admin_entity_record_fields(
     subsystem: Subsystem,
@@ -1588,15 +1614,12 @@ trait StaticFormAppRendererComponentAdminPart {
     item: AdminReadListItem,
     values: Map[String, String] = Map.empty
   ): String =
-    values.get("shortid")
-      .orElse(admin_read_list_item_fields(item).get("shortid"))
-      .filter(_.nonEmpty)
-      .getOrElse(item.id)
+    item.id
 
   protected def entity_route_id(
     id: String
   ): String =
-    EntityId.parse(id).toOption.map(_.parts.entropy).getOrElse(id)
+    id
 
   protected def web_field_labels(
     fields: Vector[WebSchemaResolver.ResolvedWebField]
@@ -2087,6 +2110,7 @@ trait StaticFormAppRendererComponentAdminPart {
       val basepath = s"/web/${componentpath}/admin/views/${viewpath}"
       val definition = view_definition(component, viewName)
       val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(viewpath, "view").getOrElse(viewpath))
+      val canonicalid = admin_entity_route_canonical_id(subsystem, componentpath, entityname, id)
       val webschema = WebSchemaResolver.resolveView(
         component,
         componentpath,
@@ -2101,13 +2125,15 @@ trait StaticFormAppRendererComponentAdminPart {
         "View definitions" -> s"/web/${componentpath}/admin/views",
         "Component admin" -> s"/web/${componentpath}/admin"
       ))
-      val body = admin_read_result_table_web_schema(
-        subsystem,
-        "/admin/view/read",
-        Record.data("component" -> componentpath, "view" -> viewpath, "id" -> id),
-        s"No view record is currently available for ${id}.",
-        webschema.fields
-      )
+      val body = canonicalid.map { value =>
+        admin_read_result_table_web_schema(
+          subsystem,
+          "/admin/view/read",
+          Record.data("component" -> componentpath, "view" -> viewpath, "id" -> value),
+          s"No view record is currently available for ${id}.",
+          webschema.fields
+        )
+      }.getOrElse(admin_empty_state(s"No canonical Entity ID is available for ${id}."))
       Page(simple_page(
         title = s"${escape(component.name)} ${escape(title_label(viewpath))} View Detail",
         subtitle = "View instance read baseline",
@@ -2253,6 +2279,7 @@ trait StaticFormAppRendererComponentAdminPart {
       val basepath = s"/web/${componentpath}/admin/aggregates/${aggregatepath}"
       val definition = aggregate_definition(component, aggregateName)
       val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(aggregatepath, "aggregate").getOrElse(aggregatepath))
+      val canonicalid = admin_entity_route_canonical_id(subsystem, componentpath, entityname, id)
       val webschema = WebSchemaResolver.resolveAggregate(
         component,
         componentpath,
@@ -2267,14 +2294,18 @@ trait StaticFormAppRendererComponentAdminPart {
         "Aggregate definitions" -> s"/web/${componentpath}/admin/aggregates",
         "Component admin" -> s"/web/${componentpath}/admin"
       ))
-      val body = admin_read_result_table_web_schema(
-        subsystem,
-        "/admin/aggregate/read",
-        Record.data("component" -> componentpath, "aggregate" -> aggregatepath, "id" -> id),
-        s"No aggregate record is currently available for ${id}.",
-        webschema.fields
+      val body = canonicalid.map { value =>
+        admin_read_result_table_web_schema(
+          subsystem,
+          "/admin/aggregate/read",
+          Record.data("component" -> componentpath, "aggregate" -> aggregatepath, "id" -> value),
+          s"No aggregate record is currently available for ${id}.",
+          webschema.fields
+        )
+      }.getOrElse(admin_empty_state(s"No canonical Entity ID is available for ${id}."))
+      val operations = canonicalid.map(aggregate_instance_operation_actions(component, aggregateName, _)).getOrElse(
+        admin_empty_state(s"No instance operations are available for unresolved id ${id}.")
       )
-      val operations = aggregate_instance_operation_actions(component, aggregateName, id)
       Page(simple_page(
         title = s"${escape(component.name)} ${escape(title_label(aggregatepath))} Aggregate Detail",
         subtitle = "Aggregate instance read baseline",

@@ -11,7 +11,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Mar. 26, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object TextusIdentitySubsystemFactory {
@@ -90,7 +90,7 @@ object TextusIdentitySubsystemFactory {
   ): Vector[ComponentRepository.Specification] = {
     val values =
       ConfigurationAccess
-        .getString(configuration, RuntimeConfig.RepositoryDirKey)
+        .getString(configuration, RuntimeConfig.repositoryDirKey)
     values match {
       case Some(value) =>
         _parse_repository_specs(value)

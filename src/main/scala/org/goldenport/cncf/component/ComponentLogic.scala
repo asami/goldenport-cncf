@@ -34,7 +34,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -689,7 +689,7 @@ case class ComponentLogic(
       token = "component-runtime-context",
       operationMode = global
         .map(_.config.operationMode)
-        .getOrElse(RuntimeConfig.DefaultOperationMode),
+        .getOrElse(RuntimeConfig.defaultOperationMode),
       transitionValidationHook = new PlannedTransitionValidationHook(
         component.stateMachinePlannerProvider
       )

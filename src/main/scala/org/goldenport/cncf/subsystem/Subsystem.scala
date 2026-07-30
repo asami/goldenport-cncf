@@ -64,7 +64,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -110,8 +110,8 @@ final class Subsystem(
   private val _component_metrics: ComponentMetricsRegistry = ComponentMetricsRegistry.shared
   private val _operation_evaluation_delivery_runtime = new OperationEvaluationDeliveryRuntime()
   private val _site_base_url_keys = Vector(
-    RuntimeConfig.SiteBaseUrlKey,
-    RuntimeConfig.RuntimeSiteBaseUrlKey,
+    RuntimeConfig.siteBaseUrlKey,
+    RuntimeConfig.runtimeSiteBaseUrlKey,
     "cncf.site.base-url",
     "cncf.runtime.site.base-url"
   )
@@ -973,8 +973,8 @@ final class Subsystem(
     request: Request
   ): Boolean = {
     val keys = Set(
-      RuntimeConfig.DebugTraceJobKey,
-      RuntimeConfig.RuntimeDebugTraceJobKey,
+      RuntimeConfig.debugTraceJobKey,
+      RuntimeConfig.runtimeDebugTraceJobKey,
       "cncf.debug.trace-job",
       "cncf.runtime.debug.trace-job",
       "x-textus-debug-trace-job"
@@ -1494,7 +1494,7 @@ final class Subsystem(
         request <- req
         scheme <- request.context.scheme.map(_.trim).filter(_.nonEmpty)
         authority <- request.context.authority.map(_.trim).filter(_.nonEmpty)
-      } yield Property(RuntimeConfig.SiteBaseUrlKey, s"$scheme://$authority", None)
+      } yield Property(RuntimeConfig.siteBaseUrlKey, s"$scheme://$authority", None)
 
   private def _has_resolved_site_base_url(
     ctx: ExecutionContext

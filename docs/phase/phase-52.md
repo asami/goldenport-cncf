@@ -1,6 +1,6 @@
 # Phase 52 - Exact Entity ID Serialization and Collection Identity
 
-status=planned
+status=in_progress
 planned_at=2026-07-29
 depends_on=[Phase 51](phase-51.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -17,12 +17,13 @@ that String alone:
 EntityId.parse(EntityId.serialize(id)) == id
 ```
 
-The current model does not satisfy this law. `EntityId.value` omits the
-independent `major` and `minor` of its exact `EntityCollectionId`, so a parser
-constructs a synthetic collection from the Entity ID's operational namespace.
-Phase 51 compensated at runtime by supplying the selected collection as decode
-context. Phase 52 replaces that compensation model with complete
-serialization.
+The historical Phase 51 model did not satisfy this law. Its `EntityId.value`
+omitted the independent `major` and `minor` of the exact `EntityCollectionId`,
+so parsing constructed a synthetic collection from the Entity ID operational
+namespace and runtime decode supplied a selected collection as context. Phase
+52 is replacing that compensation model with complete serialization; EID-02
+and EID-03 have established the canonical format, while the remaining phase
+work removes every consumer-side reconstruction.
 
 Phase 52 is an intentional clean break. It provides no compatibility parser,
 legacy rebinding, stored-data migration, read repair, or mixed old/new
@@ -193,12 +194,12 @@ irrelevant to those references.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| EID-01 | Inventory and failing-first contract | Current lossy serialization, synthetic collection reconstruction, context repair, and affected core paths are fixed as failing evidence. | planned |
-| EID-02 | Canonical exact serialization | `EntityCollectionId` and `EntityId` use one versioned lossless encoding and satisfy round-trip and non-collision laws. | planned |
-| EID-03 | Model and generated-code adoption | SimpleModeling types and generated primary/reference codecs persist and parse only complete exact IDs. | planned |
-| EID-04 | CNCF persistence and routing simplification | Store addressing, decoding, UnitOfWork, direct APIs, and resident projection use exact IDs without rebinding or name-only resolution. | planned |
-| EID-05 | Identity consumers and built-ins | Admin, Association, loaders, Blob, child binding, caches, locks, revision, authorization, and diagnostics use exact identity. | planned |
-| EID-06 | Core validation and canonical closure | Core affected repositories pass and design/specification replace the Phase 51 compensation model. | planned |
+| EID-01 | Inventory and failing-first contract | Current lossy serialization, synthetic collection reconstruction, context repair, and affected core paths are fixed as failing evidence. | done |
+| EID-02 | Canonical exact serialization | `EntityCollectionId` and `EntityId` use one versioned lossless encoding and satisfy round-trip and non-collision laws. | done |
+| EID-03 | Model and generated-code adoption | SimpleModeling types and generated primary/reference codecs persist and parse only complete exact IDs. | done |
+| EID-04 | CNCF persistence and routing simplification | Store addressing, decoding, UnitOfWork, direct APIs, and resident projection use exact IDs without rebinding or name-only resolution. | done |
+| EID-05 | Identity consumers and built-ins | Admin, Association, loaders, Blob, child binding, caches, locks, revision, authorization, and diagnostics use exact identity. | done |
+| EID-06 | Core validation and canonical closure | Core affected repositories pass and design/specification replace the Phase 51 compensation model. | in_progress |
 
 ## Acceptance
 
@@ -237,9 +238,24 @@ irrelevant to those references.
 | `cloud-native-component-framework` | Store addressing, routing, decode validation, UnitOfWork, built-ins, caches, locks, authorization |
 | `cozy` | Generated-source acceptance for the new exact serialization contract |
 | `sbt-cozy` | Build/generation acceptance where the contract changes its fixtures or bridge |
+| `textus-sample-apps` | Migrate downstream `RuntimeConfig` public-constant callers to the canonical lower-camel API. |
+| `textus-knowledge-editor` | Migrate downstream `InformationModel` public-constant callers to the canonical lower-camel API. |
+| `textus-semantic-integration-engine` | Migrate downstream `InformationModel` public-constant callers to the canonical lower-camel API. |
 
 CAR repositories are not required repositories for Phase 52. They adopt the
 new contract through later CAR-local fixes when concrete failures are found.
+
+## Attributable Scope Decision
+
+### P52-COMP-01 (2026-07-30)
+
+The phase owner selected the breaking public-API migration: replace the
+PascalCase public constants in `RuntimeConfig` and `InformationModel` with
+canonical lower-camel names, without compatibility aliases.  The admitted
+Phase 52 repository set therefore includes `textus-sample-apps`,
+`textus-knowledge-editor`, and `textus-semantic-integration-engine` for the
+corresponding downstream source migration and validation.  This decision is a
+scope reset; subsequent work resumes with a fresh Phase 52 plan.
 
 ## Planning References
 
@@ -252,5 +268,6 @@ new contract through later CAR-local fixes when concrete failures are found.
 
 ## Current Status
 
-Phase 52 is planned. Phase 51 remains historical evidence, not a compatibility
-constraint on the clean design.
+Phase 52 is in progress. EID-01 through EID-05 are complete; EID-06 is in progress.
+Phase 51 remains historical evidence, not a compatibility constraint on the
+clean design.

@@ -18,7 +18,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -38,7 +38,7 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
         val instant = Instant.parse("2026-07-28T09:00:00Z")
         val clock = Clock.fixed(instant, ZoneOffset.UTC)
         val context = ExecutionContext.create(clock)
-        val behavior = new _ClockBehavior(Behavior.Core(context, None, None))
+        val behavior = new ClockBehavior(Behavior.Core(context, None, None))
 
         When("component behavior reads time through the internal DSL")
         val snapshot = behavior.snapshot()
@@ -55,7 +55,7 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
       "when a caller-owned context requests a bounded delay" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R1, R2; Example: E3; a component behavior with a caller-owned execution context")
         val context = ExecutionContext.create(Clock.fixed(Instant.parse("2026-07-28T09:00:00Z"), ZoneOffset.UTC))
-        val behavior = new _ClockBehavior(Behavior.Core(context, None, None))
+        val behavior = new ClockBehavior(Behavior.Core(context, None, None))
 
         When("the behavior requests a zero-duration delay")
         val result = behavior.delay(Duration.ZERO)
@@ -90,7 +90,7 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
             executionControl = global.executionProfileRuntime.baseBinding.control
           )
         )
-        val behavior = new _ClockBehavior(Behavior.Core(context, None, None))
+        val behavior = new ClockBehavior(Behavior.Core(context, None, None))
 
         When("the behavior requests a bounded manual delay")
         val result = behavior.delay(Duration.ofMillis(250L))
@@ -111,8 +111,8 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
           val component = new Component() {}
           val pair = ActionCallSupport.componentPair(component, context)
           val call = ActionCallSupport.actionCall("execution-clock", pair) { core =>
-            _ClockActionCall(core)
-          }.asInstanceOf[_ClockActionCall]
+            ClockActionCall(core)
+          }.asInstanceOf[ClockActionCall]
 
           val result = call.execute()
 
@@ -136,8 +136,8 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
         val component = new Component() {}
         val pair = ActionCallSupport.componentPair(component, context)
         val call = ActionCallSupport.actionCall("execution-clock", pair) { core =>
-          _ClockActionCall(core)
-        }.asInstanceOf[_ClockActionCall]
+          ClockActionCall(core)
+        }.asInstanceOf[ClockActionCall]
 
         When("the component ActionCall reads execution time from the runtime context")
         val result = call.execute()
@@ -152,7 +152,7 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
   private def _controlled_configuration(start: Instant): ResolvedConfiguration =
     ResolvedConfiguration(
       Configuration(Map(
-        RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("test"),
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("test"),
         RuntimeConfig.EXECUTION_PROFILE_KEY -> ConfigurationValue.StringValue("controlled"),
         RuntimeConfig.EXECUTION_KEY -> ConfigurationValue.StringValue("execution-clock-dsl-spec"),
         RuntimeConfig.EXECUTION_TIME_MODE_KEY -> ConfigurationValue.StringValue("manual"),
@@ -197,7 +197,7 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
     context
   }
 
-  private final class _ClockBehavior(
+  private final class ClockBehavior(
     val behaviorCore: Behavior.Core
   ) extends Behavior {
     def snapshot(): (Clock, Instant, ZonedDateTime, EntityId) =
@@ -205,14 +205,14 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
         execution_clock,
         current_instant,
         current_zoned_datetime,
-        collection_entity_id(EntityCollectionId("sample", "clock", "snapshot"), "clock-spec")
+        entity_id(EntityCollectionId("sample", "clock", "snapshot"), "clock-spec")
       )
 
     def delay(duration: Duration) =
       await_delay(duration)
   }
 
-  private final case class _ClockActionCall(
+  private final case class ClockActionCall(
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     private var _snapshot: Option[(Clock, Instant, ZonedDateTime)] = None

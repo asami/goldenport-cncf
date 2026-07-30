@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 30, 2026
  *  version May.  3, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationBindingPart(
@@ -72,10 +72,10 @@ object AssociationTargetValidator {
         } yield ()
 
       private def _validate_target_kind(
-        targetKind: Option[String],
+        targetkind: Option[String],
         id: EntityId
       ): Consequence[Unit] =
-        targetKind match {
+        targetkind match {
           case Some(kind) if !NamingConventions.equivalentByNormalized(kind, id.collection.name) =>
             Consequence.argumentInvalid(s"association target kind mismatch: expected $kind but was ${id.collection.name}")
           case _ =>
@@ -184,18 +184,18 @@ final class AssociationBindingWorkflow(
   }
 
   private def _attach_existing_targets(
-    sourceEntityId: String,
+    sourceentityid: String,
     binding: CmlOperationAssociationBinding,
     parts: Vector[AssociationBindingPart]
   )(using ExecutionContext): Consequence[Vector[AssociationBindingAttachResult]] = {
     val domain = AssociationDomain(binding.domain)
-    val targetKind = Option(binding.targetKind).filter(_.nonEmpty)
+    val targetkind = Option(binding.targetKind).filter(_.nonEmpty)
     parts.foldLeft(Consequence.success(Vector.empty[AssociationBindingAttachResult])) { (z, part) =>
       z.flatMap { created =>
         attachExistingTargetResult(
-          sourceEntityId = sourceEntityId,
+          sourceEntityId = sourceentityid,
           domain = domain,
-          targetKind = targetKind,
+          targetKind = targetkind,
           targetEntityId = part.targetEntityId,
           role = part.role,
           sortOrder = part.sortOrder
@@ -217,7 +217,7 @@ final class AssociationBindingWorkflow(
   private def _association_entity_id(
     collection: EntityCollectionId
   )(using ctx: ExecutionContext): EntityId =
-    ctx.idGeneration.entityIdInCollectionNamespace(collection, "association.binding")
+    ctx.idGeneration.entityId(collection, "association.binding")
 }
 
 object AssociationBindingWorkflow {

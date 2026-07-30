@@ -9,7 +9,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 30, 2026
- * @version Apr. 30, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object AtomFeedProjection {
@@ -25,9 +25,9 @@ object AtomFeedProjection {
 
   val SiteBaseUrlKeys: Vector[String] =
     Vector(
-      RuntimeConfig.SiteBaseUrlKey,
+      RuntimeConfig.siteBaseUrlKey,
       "cncf.site.base-url",
-      RuntimeConfig.RuntimeSiteBaseUrlKey,
+      RuntimeConfig.runtimeSiteBaseUrlKey,
       "cncf.runtime.site.base-url"
     )
 

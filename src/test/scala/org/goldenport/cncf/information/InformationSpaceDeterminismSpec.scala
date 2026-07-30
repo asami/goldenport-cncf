@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceDeterminismSpec
@@ -32,7 +32,7 @@ final class InformationSpaceDeterminismSpec
         )))).head
         val fieldevent = InformationFieldEvent(
           fieldPath = "title",
-          state = InformationFieldState.Stable,
+          state = InformationFieldState.stable,
           source = "executable-spec",
           occurredAt = summon[ExecutionContext].clock.instant()
         )

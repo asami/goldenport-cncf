@@ -24,7 +24,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -56,6 +56,7 @@ class EntityStoreSpace {
     val cid = op.tc.collection(op.entity)
     _with_calltree("space:entitystore:create", _entitystore_space_attributes("create", cid)) {
       for {
+        _ <- _require_create_collection(op.tc, op.entity, cid)
         entitystore <- _by_collection(cid)
         r <- entitystore.create(op.entity, _create_options(op))
       } yield r
@@ -72,9 +73,23 @@ class EntityStoreSpace {
       "space:entitystore:claim-or-load",
       _entitystore_space_attributes("claim-or-load", cid)
     ) {
-      _by_collection(cid).flatMap(_.claimOrLoad(op.entity, op.options))
+      _require_create_collection(op.create, op.entity, cid).flatMap { _ =>
+        _by_collection(cid).flatMap(_.claimOrLoad(op.entity, op.options))
+      }
     }
   }
+
+  private def _require_create_collection[T](
+    persistent: EntityPersistentCreate[T],
+    entity: T,
+    expected: EntityCollectionId
+  ): Consequence[Unit] =
+    persistent.id(entity) match {
+      case Some(id) if id.collection != expected =>
+        EntityPersistent._collection_mismatch(id.collection, expected)
+      case _ =>
+        Consequence.unit
+    }
 
   private[cncf] def upsertVersioned[T](
     op: EntityStoreUpsert[T]

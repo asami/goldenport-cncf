@@ -90,7 +90,7 @@ object ExecutionContext {
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext,
     framework: FrameworkParameter = FrameworkParameter(),
-    idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+    idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DEFAULT_NAMESPACE),
     executionControl: ExecutionControlContext = ExecutionControlContext.standard,
     tagSpaces: TagSpaceContext = TagSpaceContext.default,
     resources: ResourceAccess = ResourceAccess.unavailable,
@@ -175,14 +175,14 @@ object ExecutionContext {
   def create(): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock),
+      IdGenerationContext.default(IdGenerationContext.DEFAULT_NAMESPACE, RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock),
       RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
     )
 
   def create(clock: Clock): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, clock),
+      IdGenerationContext.default(IdGenerationContext.DEFAULT_NAMESPACE, clock),
       clock
     )
 
@@ -191,7 +191,7 @@ object ExecutionContext {
   ): ExecutionContext =
     _create(
       privilege,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock),
+      IdGenerationContext.default(IdGenerationContext.DEFAULT_NAMESPACE, RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock),
       RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
     )
 
@@ -688,7 +688,7 @@ object ExecutionContext {
   ): IdGenerationContext.IdNamespace =
     _global_runtime_context(scope)
       .map(_.config.idNamespace)
-      .getOrElse(IdGenerationContext.DefaultNamespace)
+      .getOrElse(IdGenerationContext.DEFAULT_NAMESPACE)
 
   private def _execution_clock(
     scope: ScopeContext

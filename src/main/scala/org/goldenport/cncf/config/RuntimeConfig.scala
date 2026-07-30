@@ -25,7 +25,7 @@ import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceTreeQueryLimits
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -36,15 +36,15 @@ final case class RuntimeConfig(
   dataStoreSpace: DataStoreSpace,
   entityStoreSpace: EntityStoreSpace,
   mode: RunMode,
-  operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
-  webOperationDispatcher: String = RuntimeConfig.DefaultWebOperationDispatcher,
+  operationMode: OperationMode = RuntimeConfig.defaultOperationMode,
+  webOperationDispatcher: String = RuntimeConfig.defaultWebOperationDispatcher,
   webOperationDispatcherRestBaseUrl: Option[String] = None,
-  webDevelopAnonymousAdmin: Boolean = RuntimeConfig.DefaultWebDevelopAnonymousAdmin,
+  webDevelopAnonymousAdmin: Boolean = RuntimeConfig.defaultWebDevelopAnonymousAdmin,
   webDemoAssistEnabled: Boolean = RuntimeConfig.DEFAULT_WEB_DEMO_ASSIST_ENABLED,
-  webProductionAdminEnabled: Boolean = RuntimeConfig.DefaultWebProductionAdminEnabled,
-  webProductionAdminSystemRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminSystemRoles,
-  webProductionAdminComponentRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminComponentRoles,
-  webProductionAdminJobsRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminJobsRoles,
+  webProductionAdminEnabled: Boolean = RuntimeConfig.defaultWebProductionAdminEnabled,
+  webProductionAdminSystemRoles: Vector[String] = RuntimeConfig.defaultWebProductionAdminSystemRoles,
+  webProductionAdminComponentRoles: Vector[String] = RuntimeConfig.defaultWebProductionAdminComponentRoles,
+  webProductionAdminJobsRoles: Vector[String] = RuntimeConfig.defaultWebProductionAdminJobsRoles,
   debugAuthConfig: RuntimeConfig.DebugAuthConfig = RuntimeConfig.DebugAuthConfig(),
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
@@ -56,7 +56,7 @@ final case class RuntimeConfig(
   staticFormAppRendererConfig: StaticFormAppRendererConfig =
     StaticFormAppRendererConfig.default,
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
-  idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace,
+  idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DEFAULT_NAMESPACE,
   executionProfile: ResolvedExecutionProfile = RuntimeConfig.DEFAULT_EXECUTION_PROFILE,
   resourceUrlPolicy: ResourceUrlPolicy = ResourceUrlPolicy(),
   textusUrnResourcePolicy: TextusUrnResourcePolicy = TextusUrnResourcePolicy(),
@@ -91,16 +91,16 @@ object RuntimeConfig {
         None
   }
 
-  val ServerEmulatorBaseUrlKey = "textus.server-emulator.baseurl"
-  val RuntimeServerEmulatorBaseUrlKey = "textus.runtime.server-emulator.baseurl"
-  val HttpDriverKey = "textus.http.driver"
-  val RuntimeHttpDriverKey = "textus.runtime.http.driver"
-  val ModeKey = "textus.mode"
-  val RuntimeModeKey = "textus.runtime.mode"
-  val OperationModeKey = "textus.operation-mode"
-  val RuntimeOperationModeKey = "textus.runtime.operation-mode"
-  val CommandExecutionModeKey = "textus.command.execution-mode"
-  val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
+  val serverEmulatorBaseUrlKey = "textus.server-emulator.baseurl"
+  val runtimeServerEmulatorBaseUrlKey = "textus.runtime.server-emulator.baseurl"
+  val httpDriverKey = "textus.http.driver"
+  val runtimeHttpDriverKey = "textus.runtime.http.driver"
+  val modeKey = "textus.mode"
+  val runtimeModeKey = "textus.runtime.mode"
+  val operationModeKey = "textus.operation-mode"
+  val runtimeOperationModeKey = "textus.runtime.operation-mode"
+  val commandExecutionModeKey = "textus.command.execution-mode"
+  val runtimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
   val CLOCK_VIRTUAL_START_AT_KEY = "textus.clock.virtual-start-at"
   val RUNTIME_CLOCK_VIRTUAL_START_AT_KEY = "textus.runtime.clock.virtual-start-at"
   val EXECUTION_PROFILE_KEY = "textus.execution.profile"
@@ -141,16 +141,16 @@ object RuntimeConfig {
   val RUNTIME_EXECUTION_ENVIRONMENT_ALLOW_KEY = "textus.runtime.execution.environment.allow"
   val EXECUTION_ENVIRONMENT_VALUES_KEY = "textus.execution.environment.values"
   val RUNTIME_EXECUTION_ENVIRONMENT_VALUES_KEY = "textus.runtime.execution.environment.values"
-  val IdNamespaceMajorKey = "textus.id.namespace.major"
-  val RuntimeIdNamespaceMajorKey = "textus.runtime.id.namespace.major"
-  val IdNamespaceMinorKey = "textus.id.namespace.minor"
-  val RuntimeIdNamespaceMinorKey = "textus.runtime.id.namespace.minor"
-  val DebugCallTreeKey = "textus.debug.calltree"
-  val RuntimeDebugCallTreeKey = "textus.runtime.debug.calltree"
-  val DebugTraceJobKey = "textus.debug.trace-job"
-  val RuntimeDebugTraceJobKey = "textus.runtime.debug.trace-job"
-  val DebugSaveCallTreeKey = "textus.debug.save-calltree"
-  val RuntimeDebugSaveCallTreeKey = "textus.runtime.debug.save-calltree"
+  val idNamespaceMajorKey = "textus.id.namespace.major"
+  val runtimeIdNamespaceMajorKey = "textus.runtime.id.namespace.major"
+  val idNamespaceMinorKey = "textus.id.namespace.minor"
+  val runtimeIdNamespaceMinorKey = "textus.runtime.id.namespace.minor"
+  val debugCallTreeKey = "textus.debug.calltree"
+  val runtimeDebugCallTreeKey = "textus.runtime.debug.calltree"
+  val debugTraceJobKey = "textus.debug.trace-job"
+  val runtimeDebugTraceJobKey = "textus.runtime.debug.trace-job"
+  val debugSaveCallTreeKey = "textus.debug.save-calltree"
+  val runtimeDebugSaveCallTreeKey = "textus.runtime.debug.save-calltree"
   val DEBUG_AUTH_ENABLED_KEY = "textus.debug.auth.enabled"
   val RUNTIME_DEBUG_AUTH_ENABLED_KEY = "textus.runtime.debug.auth.enabled"
   val DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY = "textus.debug.auth.seed-account.enabled"
@@ -165,44 +165,44 @@ object RuntimeConfig {
   val RUNTIME_DEBUG_AUTH_ACCOUNT_PASSWORD_KEY = "textus.runtime.debug.auth.account.password"
   val DEBUG_AUTH_ACCOUNT_STATUS_KEY = "textus.debug.auth.account.status"
   val RUNTIME_DEBUG_AUTH_ACCOUNT_STATUS_KEY = "textus.runtime.debug.auth.account.status"
-  val ExecutionHistoryRecentLimitKey = "textus.execution.history.recent-limit"
-  val RuntimeExecutionHistoryRecentLimitKey = "textus.runtime.execution.history.recent-limit"
-  val ExecutionHistoryFilteredLimitKey = "textus.execution.history.filtered-limit"
-  val RuntimeExecutionHistoryFilteredLimitKey = "textus.runtime.execution.history.filtered-limit"
-  val ExecutionHistoryFilterOperationContainsKey = "textus.execution.history.filter.operation-contains"
-  val RuntimeExecutionHistoryFilterOperationContainsKey = "textus.runtime.execution.history.filter.operation-contains"
-  val ObservabilityPayloadExternalizationEnabledKey = "textus.observability.payload.externalization.enabled"
-  val RuntimeObservabilityPayloadExternalizationEnabledKey = "textus.runtime.observability.payload.externalization.enabled"
-  val ObservabilityPayloadExternalizationDestinationKey = "textus.observability.payload.externalization.destination"
-  val RuntimeObservabilityPayloadExternalizationDestinationKey = "textus.runtime.observability.payload.externalization.destination"
-  val ObservabilityPayloadExternalizationLocalRootKey = "textus.observability.payload.externalization.local.root"
-  val RuntimeObservabilityPayloadExternalizationLocalRootKey = "textus.runtime.observability.payload.externalization.local.root"
-  val ObservabilityPayloadExternalizationThresholdBytesKey = "textus.observability.payload.externalization.threshold.bytes"
-  val RuntimeObservabilityPayloadExternalizationThresholdBytesKey = "textus.runtime.observability.payload.externalization.threshold.bytes"
-  val ObservabilityPayloadExternalizationPayloadsKey = "textus.observability.payload.externalization.payloads"
-  val RuntimeObservabilityPayloadExternalizationPayloadsKey = "textus.runtime.observability.payload.externalization.payloads"
-  val ObservabilityPayloadExternalizationOperationKey = "textus.observability.payload.externalization.operation"
-  val RuntimeObservabilityPayloadExternalizationOperationKey = "textus.runtime.observability.payload.externalization.operation"
-  val ObservabilityPayloadExternalizationOperationContainsKey = "textus.observability.payload.externalization.operation-contains"
-  val RuntimeObservabilityPayloadExternalizationOperationContainsKey = "textus.runtime.observability.payload.externalization.operation-contains"
-  val ObservabilityPayloadExternalizationAllowRequestOverrideKey = "textus.observability.payload.externalization.allow-request-override"
-  val RuntimeObservabilityPayloadExternalizationAllowRequestOverrideKey = "textus.runtime.observability.payload.externalization.allow-request-override"
-  val ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey = "textus.observability.payload.externalization.unsafe-opaque-payloads"
-  val RuntimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey = "textus.runtime.observability.payload.externalization.unsafe-opaque-payloads"
-  val ObservabilityPayloadExternalizationRetentionDaysKey = "textus.observability.payload.externalization.retention.days"
-  val RuntimeObservabilityPayloadExternalizationRetentionDaysKey = "textus.runtime.observability.payload.externalization.retention.days"
-  val ObservabilityOtelEnabledKey = "textus.observability.otel.enabled"
-  val RuntimeObservabilityOtelEnabledKey = "textus.runtime.observability.otel.enabled"
-  val ObservabilityOtelEndpointKey = "textus.observability.otel.endpoint"
-  val RuntimeObservabilityOtelEndpointKey = "textus.runtime.observability.otel.endpoint"
-  val ObservabilityOtelProtocolKey = "textus.observability.otel.protocol"
-  val RuntimeObservabilityOtelProtocolKey = "textus.runtime.observability.otel.protocol"
-  val ObservabilityOtelTracesEnabledKey = "textus.observability.otel.traces.enabled"
-  val RuntimeObservabilityOtelTracesEnabledKey = "textus.runtime.observability.otel.traces.enabled"
-  val ObservabilityOtelMetricsEnabledKey = "textus.observability.otel.metrics.enabled"
-  val RuntimeObservabilityOtelMetricsEnabledKey = "textus.runtime.observability.otel.metrics.enabled"
-  val ObservabilityOtelLogsEnabledKey = "textus.observability.otel.logs.enabled"
-  val RuntimeObservabilityOtelLogsEnabledKey = "textus.runtime.observability.otel.logs.enabled"
+  val executionHistoryRecentLimitKey = "textus.execution.history.recent-limit"
+  val runtimeExecutionHistoryRecentLimitKey = "textus.runtime.execution.history.recent-limit"
+  val executionHistoryFilteredLimitKey = "textus.execution.history.filtered-limit"
+  val runtimeExecutionHistoryFilteredLimitKey = "textus.runtime.execution.history.filtered-limit"
+  val executionHistoryFilterOperationContainsKey = "textus.execution.history.filter.operation-contains"
+  val runtimeExecutionHistoryFilterOperationContainsKey = "textus.runtime.execution.history.filter.operation-contains"
+  val observabilityPayloadExternalizationEnabledKey = "textus.observability.payload.externalization.enabled"
+  val runtimeObservabilityPayloadExternalizationEnabledKey = "textus.runtime.observability.payload.externalization.enabled"
+  val observabilityPayloadExternalizationDestinationKey = "textus.observability.payload.externalization.destination"
+  val runtimeObservabilityPayloadExternalizationDestinationKey = "textus.runtime.observability.payload.externalization.destination"
+  val observabilityPayloadExternalizationLocalRootKey = "textus.observability.payload.externalization.local.root"
+  val runtimeObservabilityPayloadExternalizationLocalRootKey = "textus.runtime.observability.payload.externalization.local.root"
+  val observabilityPayloadExternalizationThresholdBytesKey = "textus.observability.payload.externalization.threshold.bytes"
+  val runtimeObservabilityPayloadExternalizationThresholdBytesKey = "textus.runtime.observability.payload.externalization.threshold.bytes"
+  val observabilityPayloadExternalizationPayloadsKey = "textus.observability.payload.externalization.payloads"
+  val runtimeObservabilityPayloadExternalizationPayloadsKey = "textus.runtime.observability.payload.externalization.payloads"
+  val observabilityPayloadExternalizationOperationKey = "textus.observability.payload.externalization.operation"
+  val runtimeObservabilityPayloadExternalizationOperationKey = "textus.runtime.observability.payload.externalization.operation"
+  val observabilityPayloadExternalizationOperationContainsKey = "textus.observability.payload.externalization.operation-contains"
+  val runtimeObservabilityPayloadExternalizationOperationContainsKey = "textus.runtime.observability.payload.externalization.operation-contains"
+  val observabilityPayloadExternalizationAllowRequestOverrideKey = "textus.observability.payload.externalization.allow-request-override"
+  val runtimeObservabilityPayloadExternalizationAllowRequestOverrideKey = "textus.runtime.observability.payload.externalization.allow-request-override"
+  val observabilityPayloadExternalizationUnsafeOpaquePayloadsKey = "textus.observability.payload.externalization.unsafe-opaque-payloads"
+  val runtimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey = "textus.runtime.observability.payload.externalization.unsafe-opaque-payloads"
+  val observabilityPayloadExternalizationRetentionDaysKey = "textus.observability.payload.externalization.retention.days"
+  val runtimeObservabilityPayloadExternalizationRetentionDaysKey = "textus.runtime.observability.payload.externalization.retention.days"
+  val observabilityOtelEnabledKey = "textus.observability.otel.enabled"
+  val runtimeObservabilityOtelEnabledKey = "textus.runtime.observability.otel.enabled"
+  val observabilityOtelEndpointKey = "textus.observability.otel.endpoint"
+  val runtimeObservabilityOtelEndpointKey = "textus.runtime.observability.otel.endpoint"
+  val observabilityOtelProtocolKey = "textus.observability.otel.protocol"
+  val runtimeObservabilityOtelProtocolKey = "textus.runtime.observability.otel.protocol"
+  val observabilityOtelTracesEnabledKey = "textus.observability.otel.traces.enabled"
+  val runtimeObservabilityOtelTracesEnabledKey = "textus.runtime.observability.otel.traces.enabled"
+  val observabilityOtelMetricsEnabledKey = "textus.observability.otel.metrics.enabled"
+  val runtimeObservabilityOtelMetricsEnabledKey = "textus.runtime.observability.otel.metrics.enabled"
+  val observabilityOtelLogsEnabledKey = "textus.observability.otel.logs.enabled"
+  val runtimeObservabilityOtelLogsEnabledKey = "textus.runtime.observability.otel.logs.enabled"
   val WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY = "textus.web.renderer.default-page-size"
   val RUNTIME_WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY = "textus.runtime.web.renderer.default-page-size"
   val WEB_RENDERER_ADMIN_PAGE_SIZE_KEY = "textus.web.renderer.admin-page-size"
@@ -215,51 +215,51 @@ object RuntimeConfig {
   val RUNTIME_WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY = "textus.runtime.web.renderer.debug-body-preview-chars"
   val WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY = "textus.web.renderer.calltree.initial-open-depth"
   val RUNTIME_WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY = "textus.runtime.web.renderer.calltree.initial-open-depth"
-  val DiscoverClassesKey = "textus.discover.classes"
-  val RuntimeDiscoverClassesKey = "textus.runtime.discover.classes"
-  val ComponentFactoryClassKey = "textus.component.factory-class"
-  val RuntimeComponentFactoryClassKey = "textus.runtime.component-factory-class"
-  val WorkspaceKey = "textus.workspace"
-  val RuntimeWorkspaceKey = "textus.runtime.workspace"
-  val ForceExitKey = "textus.force-exit"
-  val RuntimeForceExitKey = "textus.runtime.force-exit"
-  val NoExitKey = "textus.no-exit"
-  val RuntimeNoExitKey = "textus.runtime.no-exit"
-  val SiteBaseUrlKey = "textus.site.base-url"
-  val RuntimeSiteBaseUrlKey = "textus.runtime.site.base-url"
-  val SubsystemNameKey = "textus.subsystem"
-  val ComponentNameKey = "textus.component"
-  val ComponentVersionKey = "textus.component.version"
-  val RuntimeComponentVersionKey = "textus.runtime.component.version"
-  val ComponentDependenciesResolveEnabledKey = "textus.component.dependencies.resolve.enabled"
-  val RuntimeComponentDependenciesResolveEnabledKey = "textus.runtime.component.dependencies.resolve.enabled"
-  val ComponentDependenciesCacheDirKey = "textus.component.dependencies.cache.dir"
-  val RuntimeComponentDependenciesCacheDirKey = "textus.runtime.component.dependencies.cache.dir"
-  val ComponentDependenciesSharedEnabledKey = "textus.component.dependencies.shared.enabled"
-  val RuntimeComponentDependenciesSharedEnabledKey = "textus.runtime.component.dependencies.shared.enabled"
-  val ComponentDependenciesLocalOverrideEnabledKey = "textus.component.dependencies.local_override.enabled"
-  val RuntimeComponentDependenciesLocalOverrideEnabledKey = "textus.runtime.component.dependencies.local_override.enabled"
-  val ComponentDependenciesRepositoriesKey = "textus.component.dependencies.repositories"
-  val RuntimeComponentDependenciesRepositoriesKey = "textus.runtime.component.dependencies.repositories"
-  val SubsystemDescriptorKey = "textus.subsystem.descriptor"
-  val SubsystemFileKey = "textus.subsystem.file"
-  val SubsystemDevDirKey = "textus.subsystem.dev.dir"
-  val SubsystemSarDirKey = "textus.subsystem.sar.dir"
-  val RuntimeSubsystemNameKey = "textus.runtime.subsystem"
-  val RuntimeComponentNameKey = "textus.runtime.component"
-  val RuntimeSubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
-  val RuntimeSubsystemFileKey = "textus.runtime.subsystem.file"
-  val RuntimeSubsystemDevDirKey = "textus.runtime.subsystem.dev.dir"
-  val RuntimeSubsystemSarDirKey = "textus.runtime.subsystem.sar.dir"
-  val ComponentFileKey = "textus.component.file"
-  val RuntimeComponentFileKey = "textus.runtime.component.file"
+  val discoverClassesKey = "textus.discover.classes"
+  val runtimeDiscoverClassesKey = "textus.runtime.discover.classes"
+  val componentFactoryClassKey = "textus.component.factory-class"
+  val runtimeComponentFactoryClassKey = "textus.runtime.component-factory-class"
+  val workspaceKey = "textus.workspace"
+  val runtimeWorkspaceKey = "textus.runtime.workspace"
+  val forceExitKey = "textus.force-exit"
+  val runtimeForceExitKey = "textus.runtime.force-exit"
+  val noExitKey = "textus.no-exit"
+  val runtimeNoExitKey = "textus.runtime.no-exit"
+  val siteBaseUrlKey = "textus.site.base-url"
+  val runtimeSiteBaseUrlKey = "textus.runtime.site.base-url"
+  val subsystemNameKey = "textus.subsystem"
+  val componentNameKey = "textus.component"
+  val componentVersionKey = "textus.component.version"
+  val runtimeComponentVersionKey = "textus.runtime.component.version"
+  val componentDependenciesResolveEnabledKey = "textus.component.dependencies.resolve.enabled"
+  val runtimeComponentDependenciesResolveEnabledKey = "textus.runtime.component.dependencies.resolve.enabled"
+  val componentDependenciesCacheDirKey = "textus.component.dependencies.cache.dir"
+  val runtimeComponentDependenciesCacheDirKey = "textus.runtime.component.dependencies.cache.dir"
+  val componentDependenciesSharedEnabledKey = "textus.component.dependencies.shared.enabled"
+  val runtimeComponentDependenciesSharedEnabledKey = "textus.runtime.component.dependencies.shared.enabled"
+  val componentDependenciesLocalOverrideEnabledKey = "textus.component.dependencies.local_override.enabled"
+  val runtimeComponentDependenciesLocalOverrideEnabledKey = "textus.runtime.component.dependencies.local_override.enabled"
+  val componentDependenciesRepositoriesKey = "textus.component.dependencies.repositories"
+  val runtimeComponentDependenciesRepositoriesKey = "textus.runtime.component.dependencies.repositories"
+  val subsystemDescriptorKey = "textus.subsystem.descriptor"
+  val subsystemFileKey = "textus.subsystem.file"
+  val subsystemDevDirKey = "textus.subsystem.dev.dir"
+  val subsystemSarDirKey = "textus.subsystem.sar.dir"
+  val runtimeSubsystemNameKey = "textus.runtime.subsystem"
+  val runtimeComponentNameKey = "textus.runtime.component"
+  val runtimeSubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
+  val runtimeSubsystemFileKey = "textus.runtime.subsystem.file"
+  val runtimeSubsystemDevDirKey = "textus.runtime.subsystem.dev.dir"
+  val runtimeSubsystemSarDirKey = "textus.runtime.subsystem.sar.dir"
+  val componentFileKey = "textus.component.file"
+  val runtimeComponentFileKey = "textus.runtime.component.file"
   val MCP_CLIENT_POLICY_KEY = "textus.mcp.client.policy"
   val RUNTIME_MCP_CLIENT_POLICY_KEY = "textus.runtime.mcp.client.policy"
   val OPERATION_TOOL_POLICY_KEY = "textus.operation-tools.policy"
   val RUNTIME_OPERATION_TOOL_POLICY_KEY = "textus.runtime.operation-tools.policy"
-  val ComponentDevDirKey = "textus.component.dev.dir"
-  val ComponentCarDirKey = "textus.component.car.dir"
-  val AssemblyDescriptorKey = "textus.assembly.descriptor"
+  val componentDevDirKey = "textus.component.dev.dir"
+  val componentCarDirKey = "textus.component.car.dir"
+  val assemblyDescriptorKey = "textus.assembly.descriptor"
   val TEST_DESCRIPTOR_KEY = "textus.test.descriptor"
   val RUNTIME_TEST_DESCRIPTOR_KEY = "textus.runtime.test.descriptor"
   val TEST_HOME_MODE_KEY = "textus.test.home.mode"
@@ -276,56 +276,56 @@ object RuntimeConfig {
   val RUNTIME_TEST_HOME_INHERIT_CREDENTIALS_KEY = "textus.runtime.test.home.inherit.credentials"
   val TEST_HOME_INHERIT_LOCAL_DATA_KEY = "textus.test.home.inherit.local-data"
   val RUNTIME_TEST_HOME_INHERIT_LOCAL_DATA_KEY = "textus.runtime.test.home.inherit.local-data"
-  val WebDescriptorKey = "textus.web.descriptor"
-  val RepositoryDirKey = "textus.repository.dir"
-  val RepositoryComponentDevDirKey = "textus.repository.component.dev.dir"
-  val ComponentDirKey = "textus.component.dir"
-  val LogBackendKey = "textus.logging.backend"
-  val RuntimeLogBackendKey = "textus.runtime.logging.backend"
-  val LogLevelKey = "textus.logging.level"
-  val RuntimeLogLevelKey = "textus.runtime.logging.level"
-  val LogFilePathKey = "textus.logging.file.path"
-  val RuntimeLogFilePathKey = "textus.runtime.logging.file.path"
-  val WebOperationDispatcherKey = "textus.web.operation.dispatcher"
-  val RuntimeWebOperationDispatcherKey = "textus.runtime.web.operation.dispatcher"
-  val WebOperationDispatcherRestBaseUrlKey = "textus.web.operation.dispatcher.rest.base-url"
-  val RuntimeWebOperationDispatcherRestBaseUrlKey = "textus.runtime.web.operation.dispatcher.rest.base-url"
-  val WebDevelopAnonymousAdminKey = "textus.web.develop.anonymous-admin"
-  val RuntimeWebDevelopAnonymousAdminKey = "textus.runtime.web.develop.anonymous-admin"
+  val webDescriptorKey = "textus.web.descriptor"
+  val repositoryDirKey = "textus.repository.dir"
+  val repositoryComponentDevDirKey = "textus.repository.component.dev.dir"
+  val componentDirKey = "textus.component.dir"
+  val logBackendKey = "textus.logging.backend"
+  val runtimeLogBackendKey = "textus.runtime.logging.backend"
+  val logLevelKey = "textus.logging.level"
+  val runtimeLogLevelKey = "textus.runtime.logging.level"
+  val logFilePathKey = "textus.logging.file.path"
+  val runtimeLogFilePathKey = "textus.runtime.logging.file.path"
+  val webOperationDispatcherKey = "textus.web.operation.dispatcher"
+  val runtimeWebOperationDispatcherKey = "textus.runtime.web.operation.dispatcher"
+  val webOperationDispatcherRestBaseUrlKey = "textus.web.operation.dispatcher.rest.base-url"
+  val runtimeWebOperationDispatcherRestBaseUrlKey = "textus.runtime.web.operation.dispatcher.rest.base-url"
+  val webDevelopAnonymousAdminKey = "textus.web.develop.anonymous-admin"
+  val runtimeWebDevelopAnonymousAdminKey = "textus.runtime.web.develop.anonymous-admin"
   val WEB_DEMO_ASSIST_ENABLED_KEY = "textus.web.demo-assist.enabled"
   val RUNTIME_WEB_DEMO_ASSIST_ENABLED_KEY = "textus.runtime.web.demo-assist.enabled"
-  val WebProductionAdminEnabledKey = "textus.web.production.admin.enabled"
-  val RuntimeWebProductionAdminEnabledKey = "textus.runtime.web.production.admin.enabled"
-  val WebProductionAdminSystemRolesKey = "textus.web.production.admin.system.roles"
-  val RuntimeWebProductionAdminSystemRolesKey = "textus.runtime.web.production.admin.system.roles"
-  val WebProductionAdminComponentRolesKey = "textus.web.production.admin.component.roles"
-  val RuntimeWebProductionAdminComponentRolesKey = "textus.runtime.web.production.admin.component.roles"
-  val WebProductionAdminJobsRolesKey = "textus.web.production.admin.jobs.roles"
-  val RuntimeWebProductionAdminJobsRolesKey = "textus.runtime.web.production.admin.jobs.roles"
-  val BlobStoreBackendKey = "textus.blob.store.backend"
-  val RuntimeBlobStoreBackendKey = "textus.runtime.blob.store.backend"
-  val BlobStoreNameKey = "textus.blob.store.name"
-  val RuntimeBlobStoreNameKey = "textus.runtime.blob.store.name"
-  val BlobStoreContainerKey = "textus.blob.store.container"
-  val RuntimeBlobStoreContainerKey = "textus.runtime.blob.store.container"
-  val BlobStoreLocalRootKey = "textus.blob.store.local.root"
-  val RuntimeBlobStoreLocalRootKey = "textus.runtime.blob.store.local.root"
-  val BlobStorePublicBasePathKey = "textus.blob.store.public-base-path"
-  val RuntimeBlobStorePublicBasePathKey = "textus.runtime.blob.store.public-base-path"
-  val BlobStoreProviderClassKey = "textus.blob.store.provider-class"
-  val RuntimeBlobStoreProviderClassKey = "textus.runtime.blob.store.provider-class"
-  val BlobMaxByteSizeKey = "textus.blob.max-byte-size"
-  val RuntimeBlobMaxByteSizeKey = "textus.runtime.blob.max-byte-size"
-  val ResourceUrlFileRootsKey = "textus.resource.url.file.roots"
-  val RuntimeResourceUrlFileRootsKey = "textus.runtime.resource.url.file.roots"
-  val ResourceUrlHttpsHostsKey = "textus.resource.url.https.hosts"
-  val RuntimeResourceUrlHttpsHostsKey = "textus.runtime.resource.url.https.hosts"
-  val ResourceTextusUrnFileRootsKey = "textus.resource.urn.textus.file-roots"
-  val RuntimeResourceTextusUrnFileRootsKey = "textus.runtime.resource.urn.textus.file-roots"
-  val ResourceUrnProvidersKey = "textus.resource.urn.providers"
-  val RuntimeResourceUrnProvidersKey = "textus.runtime.resource.urn.providers"
-  val ResourceTreeFileRootsKey = "textus.resource.tree.file-roots"
-  val RuntimeResourceTreeFileRootsKey = "textus.runtime.resource.tree.file-roots"
+  val webProductionAdminEnabledKey = "textus.web.production.admin.enabled"
+  val runtimeWebProductionAdminEnabledKey = "textus.runtime.web.production.admin.enabled"
+  val webProductionAdminSystemRolesKey = "textus.web.production.admin.system.roles"
+  val runtimeWebProductionAdminSystemRolesKey = "textus.runtime.web.production.admin.system.roles"
+  val webProductionAdminComponentRolesKey = "textus.web.production.admin.component.roles"
+  val runtimeWebProductionAdminComponentRolesKey = "textus.runtime.web.production.admin.component.roles"
+  val webProductionAdminJobsRolesKey = "textus.web.production.admin.jobs.roles"
+  val runtimeWebProductionAdminJobsRolesKey = "textus.runtime.web.production.admin.jobs.roles"
+  val blobStoreBackendKey = "textus.blob.store.backend"
+  val runtimeBlobStoreBackendKey = "textus.runtime.blob.store.backend"
+  val blobStoreNameKey = "textus.blob.store.name"
+  val runtimeBlobStoreNameKey = "textus.runtime.blob.store.name"
+  val blobStoreContainerKey = "textus.blob.store.container"
+  val runtimeBlobStoreContainerKey = "textus.runtime.blob.store.container"
+  val blobStoreLocalRootKey = "textus.blob.store.local.root"
+  val runtimeBlobStoreLocalRootKey = "textus.runtime.blob.store.local.root"
+  val blobStorePublicBasePathKey = "textus.blob.store.public-base-path"
+  val runtimeBlobStorePublicBasePathKey = "textus.runtime.blob.store.public-base-path"
+  val blobStoreProviderClassKey = "textus.blob.store.provider-class"
+  val runtimeBlobStoreProviderClassKey = "textus.runtime.blob.store.provider-class"
+  val blobMaxByteSizeKey = "textus.blob.max-byte-size"
+  val runtimeBlobMaxByteSizeKey = "textus.runtime.blob.max-byte-size"
+  val resourceUrlFileRootsKey = "textus.resource.url.file.roots"
+  val runtimeResourceUrlFileRootsKey = "textus.runtime.resource.url.file.roots"
+  val resourceUrlHttpsHostsKey = "textus.resource.url.https.hosts"
+  val runtimeResourceUrlHttpsHostsKey = "textus.runtime.resource.url.https.hosts"
+  val resourceTextusUrnFileRootsKey = "textus.resource.urn.textus.file-roots"
+  val runtimeResourceTextusUrnFileRootsKey = "textus.runtime.resource.urn.textus.file-roots"
+  val resourceUrnProvidersKey = "textus.resource.urn.providers"
+  val runtimeResourceUrnProvidersKey = "textus.runtime.resource.urn.providers"
+  val resourceTreeFileRootsKey = "textus.resource.tree.file-roots"
+  val runtimeResourceTreeFileRootsKey = "textus.runtime.resource.tree.file-roots"
   val RESOURCE_TREE_QUERY_MAX_DEPTH_KEY = "textus.resource.tree.query.max-depth"
   val RUNTIME_RESOURCE_TREE_QUERY_MAX_DEPTH_KEY = "textus.runtime.resource.tree.query.max-depth"
   val RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY = "textus.resource.tree.query.max-visited-directories"
@@ -337,23 +337,23 @@ object RuntimeConfig {
   val RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY = "textus.resource.tree.query.max-total-bytes"
   val RUNTIME_RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY = "textus.runtime.resource.tree.query.max-total-bytes"
 
-  val DefaultServerEmulatorBaseUrl = "http://localhost/"
-  val DefaultHttpDriverName = "real"
-  val DefaultMode = "command"
-  val DefaultOperationMode = OperationMode.Develop
-  val DefaultLogFilePath = ".textus/data.d/trace.log"
-  val DefaultWebOperationDispatcher = "local"
-  val DefaultWebDevelopAnonymousAdmin = true
+  val defaultServerEmulatorBaseUrl = "http://localhost/"
+  val defaultHttpDriverName = "real"
+  val defaultMode = "command"
+  val defaultOperationMode = OperationMode.Develop
+  val defaultLogFilePath = ".textus/data.d/trace.log"
+  val defaultWebOperationDispatcher = "local"
+  val defaultWebDevelopAnonymousAdmin = true
   val DEFAULT_WEB_DEMO_ASSIST_ENABLED = false
-  val DefaultWebProductionAdminEnabled = false
-  val DefaultWebProductionAdminSystemRoles = Vector("system_admin")
-  val DefaultWebProductionAdminComponentRoles = Vector("component_operator", "system_admin")
-  val DefaultWebProductionAdminJobsRoles = Vector("system_admin", "audit_viewer")
+  val defaultWebProductionAdminEnabled = false
+  val defaultWebProductionAdminSystemRoles = Vector("system_admin")
+  val defaultWebProductionAdminComponentRoles = Vector("component_operator", "system_admin")
+  val defaultWebProductionAdminJobsRoles = Vector("system_admin", "audit_viewer")
   val DEFAULT_DEBUG_AUTH_LOGIN_NAME = "test"
   val DEFAULT_DEBUG_AUTH_EMAIL = "test@example.com"
   val DEFAULT_DEBUG_AUTH_PASSWORD = "test"
   val DEFAULT_DEBUG_AUTH_STATUS = "active"
-  val DefaultIdNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
+  val DEFAULT_ID_NAMESPACE: IdGenerationContext.IdNamespace = IdGenerationContext.DEFAULT_NAMESPACE
   val DEFAULT_EXECUTION_PROFILE: ResolvedExecutionProfile = ExecutionProfileResolver.standard
   val DEFAULT_EXECUTION_CLOCK: RuntimeClock = DEFAULT_EXECUTION_PROFILE.runtimeClock
 
@@ -361,20 +361,20 @@ object RuntimeConfig {
     RuntimeConfig(
       LogBackend.NopLogBackend,
       LogLevel.Info,
-      serverEmulatorBaseUrl = DefaultServerEmulatorBaseUrl,
+      serverEmulatorBaseUrl = defaultServerEmulatorBaseUrl,
       httpDriver = HttpDriverFactory.default,
       dataStoreSpace = DataStoreSpace.default(),
       entityStoreSpace = new EntityStoreSpace().addEntityStore(EntityStore.standard()),
       mode = RunMode.Command,
-      operationMode = DefaultOperationMode,
-      webOperationDispatcher = DefaultWebOperationDispatcher,
+      operationMode = defaultOperationMode,
+      webOperationDispatcher = defaultWebOperationDispatcher,
       webOperationDispatcherRestBaseUrl = None,
-      webDevelopAnonymousAdmin = DefaultWebDevelopAnonymousAdmin,
+      webDevelopAnonymousAdmin = defaultWebDevelopAnonymousAdmin,
       webDemoAssistEnabled = DEFAULT_WEB_DEMO_ASSIST_ENABLED,
-      webProductionAdminEnabled = DefaultWebProductionAdminEnabled,
-      webProductionAdminSystemRoles = DefaultWebProductionAdminSystemRoles,
-      webProductionAdminComponentRoles = DefaultWebProductionAdminComponentRoles,
-      webProductionAdminJobsRoles = DefaultWebProductionAdminJobsRoles,
+      webProductionAdminEnabled = defaultWebProductionAdminEnabled,
+      webProductionAdminSystemRoles = defaultWebProductionAdminSystemRoles,
+      webProductionAdminComponentRoles = defaultWebProductionAdminComponentRoles,
+      webProductionAdminJobsRoles = defaultWebProductionAdminJobsRoles,
       debugAuthConfig = DebugAuthConfig(),
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig(),
@@ -382,7 +382,7 @@ object RuntimeConfig {
       openTelemetryExportConfig = OpenTelemetryExportConfig(),
       staticFormAppRendererConfig = StaticFormAppRendererConfig.default,
       blobStoreConfig = BlobStoreConfig(),
-      idNamespace = DefaultIdNamespace,
+      idNamespace = DEFAULT_ID_NAMESPACE,
       executionProfile = DEFAULT_EXECUTION_PROFILE,
       resourceUrlPolicy = ResourceUrlPolicy(),
       textusUrnResourcePolicy = TextusUrnResourcePolicy(),
@@ -403,11 +403,11 @@ object RuntimeConfig {
     profileoverride: Option[ResolvedExecutionProfile]
   ): RuntimeConfig = {
     val baseurl =
-      _get_string(configuration, ServerEmulatorBaseUrlKey)
-        .getOrElse(DefaultServerEmulatorBaseUrl)
+      _get_string(configuration, serverEmulatorBaseUrlKey)
+        .getOrElse(defaultServerEmulatorBaseUrl)
     val httpdriver = {
-      val a = _get_string(configuration, HttpDriverKey)
-        .getOrElse(DefaultHttpDriverName)
+      val a = _get_string(configuration, httpDriverKey)
+        .getOrElse(defaultHttpDriverName)
       HttpDriverFactory.create(a, baseurl) match {
         case Consequence.Success(driver) =>
           driver
@@ -417,19 +417,19 @@ object RuntimeConfig {
       }
     }
     val modename =
-      _get_string(configuration, ModeKey)
-        .getOrElse(DefaultMode)
+      _get_string(configuration, modeKey)
+        .getOrElse(defaultMode)
     val mode =
       modeoverride.orElse(RunMode.from(modename)).getOrElse(RunMode.Command)
     val operationmode = _operation_mode(configuration)
     val commandexecutionmode =
-      _get_string(configuration, CommandExecutionModeKey)
+      _get_string(configuration, commandExecutionModeKey)
         .flatMap(parseCommandExecutionMode)
     val logbackend: LogBackend = {
-      val name = _get_string(configuration, LogBackendKey)
+      val name = _get_string(configuration, logBackendKey)
       val logfile =
-        _get_string(configuration, LogFilePathKey).
-          getOrElse(DefaultLogFilePath)
+        _get_string(configuration, logFilePathKey).
+          getOrElse(defaultLogFilePath)
       name match {
         case Some("file") =>
           LogBackend.FileLogBackend(logfile)
@@ -445,7 +445,7 @@ object RuntimeConfig {
         backend
     }
     val loglevel = {
-      val name = _get_string(configuration, LogLevelKey)
+      val name = _get_string(configuration, logLevelKey)
       name match {
         case Some(s) => LogLevel.from(s) getOrElse LogLevel.Warn
         case None => RuntimeDefaults.defaultLogLevel(mode)
@@ -476,37 +476,37 @@ object RuntimeConfig {
     val idnamespace = _id_namespace(configuration)
     val executionprofile = profileoverride.getOrElse(_execution_profile(configuration, operationmode))
     val weboperationdispatcher =
-      _get_string(configuration, WebOperationDispatcherKey)
+      _get_string(configuration, webOperationDispatcherKey)
         .map(_.trim.toLowerCase)
         .filter(_.nonEmpty)
-        .getOrElse(DefaultWebOperationDispatcher)
+        .getOrElse(defaultWebOperationDispatcher)
     val weboperationdispatcherrestbaseurl =
-      _get_string(configuration, WebOperationDispatcherRestBaseUrlKey)
+      _get_string(configuration, webOperationDispatcherRestBaseUrlKey)
     val webdevelopanonymousadmin =
-      _get_boolean(configuration, WebDevelopAnonymousAdminKey)
-        .getOrElse(DefaultWebDevelopAnonymousAdmin)
+      _get_boolean(configuration, webDevelopAnonymousAdminKey)
+        .getOrElse(defaultWebDevelopAnonymousAdmin)
     val webdemoassistenabled =
       _get_boolean(configuration, WEB_DEMO_ASSIST_ENABLED_KEY)
         .getOrElse(DEFAULT_WEB_DEMO_ASSIST_ENABLED)
     val webproductionadminenabled =
-      _get_boolean(configuration, WebProductionAdminEnabledKey)
-        .getOrElse(DefaultWebProductionAdminEnabled)
+      _get_boolean(configuration, webProductionAdminEnabledKey)
+        .getOrElse(defaultWebProductionAdminEnabled)
     val webproductionadminsystemroles =
-      _split_token_list(_get_string(configuration, WebProductionAdminSystemRolesKey))
+      _split_token_list(_get_string(configuration, webProductionAdminSystemRolesKey))
         .filter(_.nonEmpty) match {
-          case Vector() => DefaultWebProductionAdminSystemRoles
+          case Vector() => defaultWebProductionAdminSystemRoles
           case roles => roles
         }
     val webproductionadmincomponentroles =
-      _split_token_list(_get_string(configuration, WebProductionAdminComponentRolesKey))
+      _split_token_list(_get_string(configuration, webProductionAdminComponentRolesKey))
         .filter(_.nonEmpty) match {
-          case Vector() => DefaultWebProductionAdminComponentRoles
+          case Vector() => defaultWebProductionAdminComponentRoles
           case roles => roles
         }
     val webproductionadminjobsroles =
-      _split_token_list(_get_string(configuration, WebProductionAdminJobsRolesKey))
+      _split_token_list(_get_string(configuration, webProductionAdminJobsRolesKey))
         .filter(_.nonEmpty) match {
-          case Vector() => DefaultWebProductionAdminJobsRoles
+          case Vector() => defaultWebProductionAdminJobsRoles
           case roles => roles
         }
     val debugauthconfig = _debug_auth_config(configuration)
@@ -570,9 +570,9 @@ object RuntimeConfig {
     }
 
   private def _operation_mode(configuration: ResolvedConfiguration): OperationMode =
-    _get_string(configuration, OperationModeKey)
+    _get_string(configuration, operationModeKey)
       .flatMap(OperationMode.from)
-      .getOrElse(DefaultOperationMode)
+      .getOrElse(defaultOperationMode)
 
   private def _validate(config: RuntimeConfig): Unit = {
     config.diagnosticPayloadExternalizationConfig.validationError.foreach { message =>
@@ -654,11 +654,11 @@ object RuntimeConfig {
   ): ObservabilityEngine.ExecutionHistoryConfig = {
     val defaults = ObservabilityEngine.ExecutionHistoryConfig()
     val recentlimit =
-      _get_int(configuration, ExecutionHistoryRecentLimitKey).getOrElse(defaults.recentLimit)
+      _get_int(configuration, executionHistoryRecentLimitKey).getOrElse(defaults.recentLimit)
     val filteredlimit =
-      _get_int(configuration, ExecutionHistoryFilteredLimitKey).getOrElse(defaults.filteredLimit)
+      _get_int(configuration, executionHistoryFilteredLimitKey).getOrElse(defaults.filteredLimit)
     val filters =
-      _split_csv(_get_string(configuration, ExecutionHistoryFilterOperationContainsKey))
+      _split_csv(_get_string(configuration, executionHistoryFilterOperationContainsKey))
         .map(x => ObservabilityEngine.ExecutionHistoryFilter(operationContains = Some(x)))
     defaults.copy(
       recentLimit = math.max(0, recentlimit),
@@ -672,16 +672,16 @@ object RuntimeConfig {
     operationmode: OperationMode
   ): DiagnosticPayloadExternalizationConfig =
     DiagnosticPayloadExternalizationConfig.fromValues(
-      enabled = _get_boolean(configuration, ObservabilityPayloadExternalizationEnabledKey).getOrElse(false),
-      destination = _get_string(configuration, ObservabilityPayloadExternalizationDestinationKey),
-      localRoot = _get_string(configuration, ObservabilityPayloadExternalizationLocalRootKey),
-      thresholdBytes = _get_int(configuration, ObservabilityPayloadExternalizationThresholdBytesKey),
-      payloadTargets = _split_csv(_get_string(configuration, ObservabilityPayloadExternalizationPayloadsKey)),
-      operationExact = _split_csv(_get_string(configuration, ObservabilityPayloadExternalizationOperationKey)),
-      operationContains = _split_csv(_get_string(configuration, ObservabilityPayloadExternalizationOperationContainsKey)),
-      allowRequestOverride = _get_boolean(configuration, ObservabilityPayloadExternalizationAllowRequestOverrideKey),
-      unsafeOpaquePayloads = _get_boolean(configuration, ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey),
-      retentionDays = _get_int(configuration, ObservabilityPayloadExternalizationRetentionDaysKey),
+      enabled = _get_boolean(configuration, observabilityPayloadExternalizationEnabledKey).getOrElse(false),
+      destination = _get_string(configuration, observabilityPayloadExternalizationDestinationKey),
+      localRoot = _get_string(configuration, observabilityPayloadExternalizationLocalRootKey),
+      thresholdBytes = _get_int(configuration, observabilityPayloadExternalizationThresholdBytesKey),
+      payloadTargets = _split_csv(_get_string(configuration, observabilityPayloadExternalizationPayloadsKey)),
+      operationExact = _split_csv(_get_string(configuration, observabilityPayloadExternalizationOperationKey)),
+      operationContains = _split_csv(_get_string(configuration, observabilityPayloadExternalizationOperationContainsKey)),
+      allowRequestOverride = _get_boolean(configuration, observabilityPayloadExternalizationAllowRequestOverrideKey),
+      unsafeOpaquePayloads = _get_boolean(configuration, observabilityPayloadExternalizationUnsafeOpaquePayloadsKey),
+      retentionDays = _get_int(configuration, observabilityPayloadExternalizationRetentionDaysKey),
       operationMode = operationmode
     )
 
@@ -690,12 +690,12 @@ object RuntimeConfig {
     operationmode: OperationMode
   ): OpenTelemetryExportConfig =
     OpenTelemetryExportConfig.fromValues(
-      enabled = _get_boolean(configuration, ObservabilityOtelEnabledKey).getOrElse(false),
-      endpoint = _get_string(configuration, ObservabilityOtelEndpointKey),
-      protocol = _get_string(configuration, ObservabilityOtelProtocolKey),
-      tracesEnabled = _get_boolean(configuration, ObservabilityOtelTracesEnabledKey),
-      metricsEnabled = _get_boolean(configuration, ObservabilityOtelMetricsEnabledKey),
-      logsEnabled = _get_boolean(configuration, ObservabilityOtelLogsEnabledKey),
+      enabled = _get_boolean(configuration, observabilityOtelEnabledKey).getOrElse(false),
+      endpoint = _get_string(configuration, observabilityOtelEndpointKey),
+      protocol = _get_string(configuration, observabilityOtelProtocolKey),
+      tracesEnabled = _get_boolean(configuration, observabilityOtelTracesEnabledKey),
+      metricsEnabled = _get_boolean(configuration, observabilityOtelMetricsEnabledKey),
+      logsEnabled = _get_boolean(configuration, observabilityOtelLogsEnabledKey),
       operationMode = operationmode
     )
 
@@ -739,10 +739,10 @@ object RuntimeConfig {
   private def _id_namespace(
     configuration: ResolvedConfiguration
   ): IdGenerationContext.IdNamespace = {
-    val major = _get_string(configuration, IdNamespaceMajorKey)
-      .getOrElse(DefaultIdNamespace.major)
-    val minor = _get_string(configuration, IdNamespaceMinorKey)
-      .getOrElse(DefaultIdNamespace.minor)
+    val major = _get_string(configuration, idNamespaceMajorKey)
+      .getOrElse(DEFAULT_ID_NAMESPACE.major)
+    val minor = _get_string(configuration, idNamespaceMinorKey)
+      .getOrElse(DEFAULT_ID_NAMESPACE.minor)
     IdGenerationContext.IdNamespace.normalizeOrThrow(major, minor)
   }
 
@@ -750,8 +750,8 @@ object RuntimeConfig {
     configuration: ResolvedConfiguration
   ): ResourceUrlPolicy =
     ResourceUrlPolicy.fromValuesC(
-      fileroots = _split_csv(_get_string(configuration, ResourceUrlFileRootsKey)),
-      httpshosts = _split_csv(_get_string(configuration, ResourceUrlHttpsHostsKey))
+      fileroots = _split_csv(_get_string(configuration, resourceUrlFileRootsKey)),
+      httpshosts = _split_csv(_get_string(configuration, resourceUrlHttpsHostsKey))
     ) match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) =>
@@ -762,7 +762,7 @@ object RuntimeConfig {
     configuration: ResolvedConfiguration
   ): TextusUrnResourcePolicy =
     TextusUrnResourcePolicy.fromValuesC(
-      _split_csv(_get_string(configuration, ResourceTextusUrnFileRootsKey))
+      _split_csv(_get_string(configuration, resourceTextusUrnFileRootsKey))
     ) match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) =>
@@ -773,7 +773,7 @@ object RuntimeConfig {
     configuration: ResolvedConfiguration
   ): Vector[UrnResourceProvider] =
     UrnResourceProviderConfig.fromValuesC(
-      _split_csv(_get_string(configuration, ResourceUrnProvidersKey))
+      _split_csv(_get_string(configuration, resourceUrnProvidersKey))
     ) match {
       case Consequence.Success(value) => value.providers
       case Consequence.Failure(conclusion) =>
@@ -784,7 +784,7 @@ object RuntimeConfig {
     configuration: ResolvedConfiguration
   ): ResourceTreePolicy =
     ResourceTreePolicy.fromValuesC(
-      _split_csv(_get_string(configuration, ResourceTreeFileRootsKey)),
+      _split_csv(_get_string(configuration, resourceTreeFileRootsKey)),
       _resource_tree_query_limits(configuration)
     ) match {
       case Consequence.Success(value) => value
@@ -856,11 +856,11 @@ object RuntimeConfig {
   ): Vector[String] = {
     val textusruntime =
       key match {
-        case ServerEmulatorBaseUrlKey => Vector(RuntimeServerEmulatorBaseUrlKey)
-        case HttpDriverKey => Vector(RuntimeHttpDriverKey)
-        case ModeKey => Vector(RuntimeModeKey)
-        case OperationModeKey => Vector(RuntimeOperationModeKey)
-        case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
+        case `serverEmulatorBaseUrlKey` => Vector(runtimeServerEmulatorBaseUrlKey)
+        case `httpDriverKey` => Vector(runtimeHttpDriverKey)
+        case `modeKey` => Vector(runtimeModeKey)
+        case `operationModeKey` => Vector(runtimeOperationModeKey)
+        case `commandExecutionModeKey` => Vector(runtimeCommandExecutionModeKey)
         case CLOCK_VIRTUAL_START_AT_KEY => Vector(RUNTIME_CLOCK_VIRTUAL_START_AT_KEY)
         case EXECUTION_PROFILE_KEY => Vector(RUNTIME_EXECUTION_PROFILE_KEY)
         case EXECUTION_KEY => Vector(RUNTIME_EXECUTION_KEY)
@@ -881,11 +881,11 @@ object RuntimeConfig {
         case EXECUTION_I18N_DATE_TIME_FORMAT_POLICY_KEY => Vector(RUNTIME_EXECUTION_I18N_DATE_TIME_FORMAT_POLICY_KEY)
         case EXECUTION_ENVIRONMENT_ALLOW_KEY => Vector(RUNTIME_EXECUTION_ENVIRONMENT_ALLOW_KEY)
         case EXECUTION_ENVIRONMENT_VALUES_KEY => Vector(RUNTIME_EXECUTION_ENVIRONMENT_VALUES_KEY)
-        case IdNamespaceMajorKey => Vector(RuntimeIdNamespaceMajorKey)
-        case IdNamespaceMinorKey => Vector(RuntimeIdNamespaceMinorKey)
-        case DebugCallTreeKey => Vector(RuntimeDebugCallTreeKey)
-        case DebugTraceJobKey => Vector(RuntimeDebugTraceJobKey)
-        case DebugSaveCallTreeKey => Vector(RuntimeDebugSaveCallTreeKey)
+        case `idNamespaceMajorKey` => Vector(runtimeIdNamespaceMajorKey)
+        case `idNamespaceMinorKey` => Vector(runtimeIdNamespaceMinorKey)
+        case `debugCallTreeKey` => Vector(runtimeDebugCallTreeKey)
+        case `debugTraceJobKey` => Vector(runtimeDebugTraceJobKey)
+        case `debugSaveCallTreeKey` => Vector(runtimeDebugSaveCallTreeKey)
         case DEBUG_AUTH_ENABLED_KEY => Vector(RUNTIME_DEBUG_AUTH_ENABLED_KEY)
         case DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY => Vector(RUNTIME_DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY)
         case DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY => Vector(RUNTIME_DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY)
@@ -893,50 +893,50 @@ object RuntimeConfig {
         case DEBUG_AUTH_ACCOUNT_EMAIL_KEY => Vector(RUNTIME_DEBUG_AUTH_ACCOUNT_EMAIL_KEY)
         case DEBUG_AUTH_ACCOUNT_PASSWORD_KEY => Vector(RUNTIME_DEBUG_AUTH_ACCOUNT_PASSWORD_KEY)
         case DEBUG_AUTH_ACCOUNT_STATUS_KEY => Vector(RUNTIME_DEBUG_AUTH_ACCOUNT_STATUS_KEY)
-        case ExecutionHistoryRecentLimitKey => Vector(RuntimeExecutionHistoryRecentLimitKey)
-        case ExecutionHistoryFilteredLimitKey => Vector(RuntimeExecutionHistoryFilteredLimitKey)
-        case ExecutionHistoryFilterOperationContainsKey => Vector(RuntimeExecutionHistoryFilterOperationContainsKey)
-        case ObservabilityPayloadExternalizationEnabledKey => Vector(RuntimeObservabilityPayloadExternalizationEnabledKey)
-        case ObservabilityPayloadExternalizationDestinationKey => Vector(RuntimeObservabilityPayloadExternalizationDestinationKey)
-        case ObservabilityPayloadExternalizationLocalRootKey => Vector(RuntimeObservabilityPayloadExternalizationLocalRootKey)
-        case ObservabilityPayloadExternalizationThresholdBytesKey => Vector(RuntimeObservabilityPayloadExternalizationThresholdBytesKey)
-        case ObservabilityPayloadExternalizationPayloadsKey => Vector(RuntimeObservabilityPayloadExternalizationPayloadsKey)
-        case ObservabilityPayloadExternalizationOperationKey => Vector(RuntimeObservabilityPayloadExternalizationOperationKey)
-        case ObservabilityPayloadExternalizationOperationContainsKey => Vector(RuntimeObservabilityPayloadExternalizationOperationContainsKey)
-        case ObservabilityPayloadExternalizationAllowRequestOverrideKey => Vector(RuntimeObservabilityPayloadExternalizationAllowRequestOverrideKey)
-        case ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey => Vector(RuntimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey)
-        case ObservabilityPayloadExternalizationRetentionDaysKey => Vector(RuntimeObservabilityPayloadExternalizationRetentionDaysKey)
-        case ObservabilityOtelEnabledKey => Vector(RuntimeObservabilityOtelEnabledKey)
-        case ObservabilityOtelEndpointKey => Vector(RuntimeObservabilityOtelEndpointKey)
-        case ObservabilityOtelProtocolKey => Vector(RuntimeObservabilityOtelProtocolKey)
-        case ObservabilityOtelTracesEnabledKey => Vector(RuntimeObservabilityOtelTracesEnabledKey)
-        case ObservabilityOtelMetricsEnabledKey => Vector(RuntimeObservabilityOtelMetricsEnabledKey)
-        case ObservabilityOtelLogsEnabledKey => Vector(RuntimeObservabilityOtelLogsEnabledKey)
+        case `executionHistoryRecentLimitKey` => Vector(runtimeExecutionHistoryRecentLimitKey)
+        case `executionHistoryFilteredLimitKey` => Vector(runtimeExecutionHistoryFilteredLimitKey)
+        case `executionHistoryFilterOperationContainsKey` => Vector(runtimeExecutionHistoryFilterOperationContainsKey)
+        case `observabilityPayloadExternalizationEnabledKey` => Vector(runtimeObservabilityPayloadExternalizationEnabledKey)
+        case `observabilityPayloadExternalizationDestinationKey` => Vector(runtimeObservabilityPayloadExternalizationDestinationKey)
+        case `observabilityPayloadExternalizationLocalRootKey` => Vector(runtimeObservabilityPayloadExternalizationLocalRootKey)
+        case `observabilityPayloadExternalizationThresholdBytesKey` => Vector(runtimeObservabilityPayloadExternalizationThresholdBytesKey)
+        case `observabilityPayloadExternalizationPayloadsKey` => Vector(runtimeObservabilityPayloadExternalizationPayloadsKey)
+        case `observabilityPayloadExternalizationOperationKey` => Vector(runtimeObservabilityPayloadExternalizationOperationKey)
+        case `observabilityPayloadExternalizationOperationContainsKey` => Vector(runtimeObservabilityPayloadExternalizationOperationContainsKey)
+        case `observabilityPayloadExternalizationAllowRequestOverrideKey` => Vector(runtimeObservabilityPayloadExternalizationAllowRequestOverrideKey)
+        case `observabilityPayloadExternalizationUnsafeOpaquePayloadsKey` => Vector(runtimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey)
+        case `observabilityPayloadExternalizationRetentionDaysKey` => Vector(runtimeObservabilityPayloadExternalizationRetentionDaysKey)
+        case `observabilityOtelEnabledKey` => Vector(runtimeObservabilityOtelEnabledKey)
+        case `observabilityOtelEndpointKey` => Vector(runtimeObservabilityOtelEndpointKey)
+        case `observabilityOtelProtocolKey` => Vector(runtimeObservabilityOtelProtocolKey)
+        case `observabilityOtelTracesEnabledKey` => Vector(runtimeObservabilityOtelTracesEnabledKey)
+        case `observabilityOtelMetricsEnabledKey` => Vector(runtimeObservabilityOtelMetricsEnabledKey)
+        case `observabilityOtelLogsEnabledKey` => Vector(runtimeObservabilityOtelLogsEnabledKey)
         case WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY => Vector(RUNTIME_WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY)
         case WEB_RENDERER_ADMIN_PAGE_SIZE_KEY => Vector(RUNTIME_WEB_RENDERER_ADMIN_PAGE_SIZE_KEY)
         case WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY => Vector(RUNTIME_WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY)
         case WEB_RENDERER_PREVIEW_LIMIT_KEY => Vector(RUNTIME_WEB_RENDERER_PREVIEW_LIMIT_KEY)
         case WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY => Vector(RUNTIME_WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY)
         case WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY => Vector(RUNTIME_WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY)
-        case DiscoverClassesKey => Vector(RuntimeDiscoverClassesKey)
-        case ComponentFactoryClassKey => Vector(RuntimeComponentFactoryClassKey)
-        case WorkspaceKey => Vector(RuntimeWorkspaceKey)
-        case ForceExitKey => Vector(RuntimeForceExitKey)
-        case NoExitKey => Vector(RuntimeNoExitKey)
-        case SiteBaseUrlKey => Vector(RuntimeSiteBaseUrlKey)
-        case SubsystemNameKey => Vector(RuntimeSubsystemNameKey)
-        case ComponentNameKey => Vector(RuntimeComponentNameKey)
-        case ComponentVersionKey => Vector(RuntimeComponentVersionKey)
-        case ComponentDependenciesResolveEnabledKey => Vector(RuntimeComponentDependenciesResolveEnabledKey)
-        case ComponentDependenciesCacheDirKey => Vector(RuntimeComponentDependenciesCacheDirKey)
-        case ComponentDependenciesSharedEnabledKey => Vector(RuntimeComponentDependenciesSharedEnabledKey)
-        case ComponentDependenciesLocalOverrideEnabledKey => Vector(RuntimeComponentDependenciesLocalOverrideEnabledKey)
-        case ComponentDependenciesRepositoriesKey => Vector(RuntimeComponentDependenciesRepositoriesKey)
-        case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)
-        case SubsystemFileKey => Vector(RuntimeSubsystemFileKey)
-        case SubsystemDevDirKey => Vector(RuntimeSubsystemDevDirKey)
-        case SubsystemSarDirKey => Vector(RuntimeSubsystemSarDirKey)
-        case ComponentFileKey => Vector(RuntimeComponentFileKey)
+        case `discoverClassesKey` => Vector(runtimeDiscoverClassesKey)
+        case `componentFactoryClassKey` => Vector(runtimeComponentFactoryClassKey)
+        case `workspaceKey` => Vector(runtimeWorkspaceKey)
+        case `forceExitKey` => Vector(runtimeForceExitKey)
+        case `noExitKey` => Vector(runtimeNoExitKey)
+        case `siteBaseUrlKey` => Vector(runtimeSiteBaseUrlKey)
+        case `subsystemNameKey` => Vector(runtimeSubsystemNameKey)
+        case `componentNameKey` => Vector(runtimeComponentNameKey)
+        case `componentVersionKey` => Vector(runtimeComponentVersionKey)
+        case `componentDependenciesResolveEnabledKey` => Vector(runtimeComponentDependenciesResolveEnabledKey)
+        case `componentDependenciesCacheDirKey` => Vector(runtimeComponentDependenciesCacheDirKey)
+        case `componentDependenciesSharedEnabledKey` => Vector(runtimeComponentDependenciesSharedEnabledKey)
+        case `componentDependenciesLocalOverrideEnabledKey` => Vector(runtimeComponentDependenciesLocalOverrideEnabledKey)
+        case `componentDependenciesRepositoriesKey` => Vector(runtimeComponentDependenciesRepositoriesKey)
+        case `subsystemDescriptorKey` => Vector(runtimeSubsystemDescriptorKey)
+        case `subsystemFileKey` => Vector(runtimeSubsystemFileKey)
+        case `subsystemDevDirKey` => Vector(runtimeSubsystemDevDirKey)
+        case `subsystemSarDirKey` => Vector(runtimeSubsystemSarDirKey)
+        case `componentFileKey` => Vector(runtimeComponentFileKey)
         case MCP_CLIENT_POLICY_KEY => Vector(RUNTIME_MCP_CLIENT_POLICY_KEY)
         case OPERATION_TOOL_POLICY_KEY => Vector(RUNTIME_OPERATION_TOOL_POLICY_KEY)
         case TEST_DESCRIPTOR_KEY => Vector(RUNTIME_TEST_DESCRIPTOR_KEY)
@@ -947,29 +947,29 @@ object RuntimeConfig {
         case TEST_HOME_INHERIT_REPOSITORIES_KEY => Vector(RUNTIME_TEST_HOME_INHERIT_REPOSITORIES_KEY)
         case TEST_HOME_INHERIT_CREDENTIALS_KEY => Vector(RUNTIME_TEST_HOME_INHERIT_CREDENTIALS_KEY)
         case TEST_HOME_INHERIT_LOCAL_DATA_KEY => Vector(RUNTIME_TEST_HOME_INHERIT_LOCAL_DATA_KEY)
-        case LogBackendKey => Vector(RuntimeLogBackendKey)
-        case LogLevelKey => Vector(RuntimeLogLevelKey)
-        case LogFilePathKey => Vector(RuntimeLogFilePathKey)
-        case WebOperationDispatcherKey => Vector(RuntimeWebOperationDispatcherKey)
-        case WebOperationDispatcherRestBaseUrlKey => Vector(RuntimeWebOperationDispatcherRestBaseUrlKey)
-        case WebDevelopAnonymousAdminKey => Vector(RuntimeWebDevelopAnonymousAdminKey)
+        case `logBackendKey` => Vector(runtimeLogBackendKey)
+        case `logLevelKey` => Vector(runtimeLogLevelKey)
+        case `logFilePathKey` => Vector(runtimeLogFilePathKey)
+        case `webOperationDispatcherKey` => Vector(runtimeWebOperationDispatcherKey)
+        case `webOperationDispatcherRestBaseUrlKey` => Vector(runtimeWebOperationDispatcherRestBaseUrlKey)
+        case `webDevelopAnonymousAdminKey` => Vector(runtimeWebDevelopAnonymousAdminKey)
         case WEB_DEMO_ASSIST_ENABLED_KEY => Vector(RUNTIME_WEB_DEMO_ASSIST_ENABLED_KEY)
-        case WebProductionAdminEnabledKey => Vector(RuntimeWebProductionAdminEnabledKey)
-        case WebProductionAdminSystemRolesKey => Vector(RuntimeWebProductionAdminSystemRolesKey)
-        case WebProductionAdminComponentRolesKey => Vector(RuntimeWebProductionAdminComponentRolesKey)
-        case WebProductionAdminJobsRolesKey => Vector(RuntimeWebProductionAdminJobsRolesKey)
-        case BlobStoreBackendKey => Vector(RuntimeBlobStoreBackendKey)
-        case BlobStoreNameKey => Vector(RuntimeBlobStoreNameKey)
-        case BlobStoreContainerKey => Vector(RuntimeBlobStoreContainerKey)
-        case BlobStoreLocalRootKey => Vector(RuntimeBlobStoreLocalRootKey)
-        case BlobStorePublicBasePathKey => Vector(RuntimeBlobStorePublicBasePathKey)
-        case BlobStoreProviderClassKey => Vector(RuntimeBlobStoreProviderClassKey)
-        case BlobMaxByteSizeKey => Vector(RuntimeBlobMaxByteSizeKey)
-        case ResourceUrlFileRootsKey => Vector(RuntimeResourceUrlFileRootsKey)
-        case ResourceUrlHttpsHostsKey => Vector(RuntimeResourceUrlHttpsHostsKey)
-        case ResourceTextusUrnFileRootsKey => Vector(RuntimeResourceTextusUrnFileRootsKey)
-        case ResourceUrnProvidersKey => Vector(RuntimeResourceUrnProvidersKey)
-        case ResourceTreeFileRootsKey => Vector(RuntimeResourceTreeFileRootsKey)
+        case `webProductionAdminEnabledKey` => Vector(runtimeWebProductionAdminEnabledKey)
+        case `webProductionAdminSystemRolesKey` => Vector(runtimeWebProductionAdminSystemRolesKey)
+        case `webProductionAdminComponentRolesKey` => Vector(runtimeWebProductionAdminComponentRolesKey)
+        case `webProductionAdminJobsRolesKey` => Vector(runtimeWebProductionAdminJobsRolesKey)
+        case `blobStoreBackendKey` => Vector(runtimeBlobStoreBackendKey)
+        case `blobStoreNameKey` => Vector(runtimeBlobStoreNameKey)
+        case `blobStoreContainerKey` => Vector(runtimeBlobStoreContainerKey)
+        case `blobStoreLocalRootKey` => Vector(runtimeBlobStoreLocalRootKey)
+        case `blobStorePublicBasePathKey` => Vector(runtimeBlobStorePublicBasePathKey)
+        case `blobStoreProviderClassKey` => Vector(runtimeBlobStoreProviderClassKey)
+        case `blobMaxByteSizeKey` => Vector(runtimeBlobMaxByteSizeKey)
+        case `resourceUrlFileRootsKey` => Vector(runtimeResourceUrlFileRootsKey)
+        case `resourceUrlHttpsHostsKey` => Vector(runtimeResourceUrlHttpsHostsKey)
+        case `resourceTextusUrnFileRootsKey` => Vector(runtimeResourceTextusUrnFileRootsKey)
+        case `resourceUrnProvidersKey` => Vector(runtimeResourceUrnProvidersKey)
+        case `resourceTreeFileRootsKey` => Vector(runtimeResourceTreeFileRootsKey)
         case RESOURCE_TREE_QUERY_MAX_DEPTH_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_DEPTH_KEY)
         case RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY)
         case RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY)

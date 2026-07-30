@@ -5,10 +5,20 @@ import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall}
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.{
+  Component,
+  ComponentId,
+  ComponentInit,
+  ComponentInstanceId,
+  ComponentOrigin
+}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.operation.{CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationImageBinding}
+import org.goldenport.cncf.operation.{
+  CmlOperationAssociationBinding,
+  CmlOperationDefinition,
+  CmlOperationImageBinding
+}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.datatype.{ContentType, MimeBody}
@@ -25,63 +35,85 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Executable specification for BI-04 operation-level Association binding.
  *
  * @since   Apr. 30, 2026
- * @version Apr. 30, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AssociationBindingWorkflowSpec
-  extends AnyWordSpec
-  with Matchers
-  with GivenWhenThen {
-  "AssociationBindingWorkflow" should {
-    "create an Association from a source parameter and target id parameter" in {
-      Given("a binding that reads the source and target ids from request parameters")
-      given ExecutionContext = ExecutionContext.test()
-      val repository = AssociationRepository.entityStore()
-      val workflow = AssociationBindingWorkflow(repository)
-      val target = _article_id("target_1")
-      _seed_entity(target)
-      val binding = CmlOperationAssociationBinding(
-        domain = "related_entity",
-        targetKind = "article",
-        createsAssociation = true,
-        roles = Vector("related"),
-        sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeParameter,
-        sourceEntityIdParameters = Vector("sourceEntityId"),
-        targetIdParameters = Vector("targetEntityId")
-      )
-      val request = Request.of(
-        component = "sample",
-        service = "article",
-        operation = "attach",
-        properties = List(
-          Property("sourceEntityId", "source-1", None),
-          Property("targetEntityId", target.value, None)
-        )
-      )
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
+  private val _in_eid01_spec =
+    afterWord("in spec:entity-collection-identity, example:E4, rules:R1,R5, phase:52")
+  private val _in_phase52_spec =
+    afterWord("in spec:entity-collection-identity, example:association-binding, rules:R1,R5, phase:52")
 
-      When("the helper resolves the source and attaches the target")
-      val source = _success(AssociationBindingWorkflow.resolveSourceEntityId(binding, request, OperationResponse.RecordResponse(Record.empty)))
-      val summary = _success(workflow.attachExistingTargets(source, binding, request))
+  "AssociationBindingWorkflow" must _in_phase52_spec {
+    "which records EID-01 Association target parsing" which {
+      "E4 create an Association from a source parameter and target id parameter" must _in_eid01_spec {
+        "retain the exact canonical Association target owner" in {
+          Given(
+            "Spec: docs/spec/entity-collection-identity.md; Rules: R1,R5; Example: E4; a binding that reads the source and target ids from request parameters"
+          )
+          given ExecutionContext = ExecutionContext.test()
+          val repository         = AssociationRepository.entityStore()
+          val workflow           = AssociationBindingWorkflow(repository)
+          val target             = _article_id("target_1")
+          _seed_entity(target)
+          val binding = CmlOperationAssociationBinding(
+            domain = "related_entity",
+            targetKind = "article",
+            createsAssociation = true,
+            roles = Vector("related"),
+            sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeParameter,
+            sourceEntityIdParameters = Vector("sourceEntityId"),
+            targetIdParameters = Vector("targetEntityId")
+          )
+          val request = Request.of(
+            component = "sample",
+            service = "article",
+            operation = "attach",
+            properties = List(
+              Property("sourceEntityId", "source-1", None),
+              Property("targetEntityId", target.value, None)
+            )
+          )
 
-      Then("the Association is stored in the generic Association collection")
-      summary.sourceEntityId shouldBe "source-1"
-      summary.associations should have size 1
-      val listed = _success(repository.list(AssociationFilter(
-        domain = AssociationDomain("related_entity"),
-        sourceEntityId = Some("source-1"),
-        targetEntityId = Some(target.value),
-        targetKind = Some("article"),
-        role = Some("related")
-      )))
-      listed should have size 1
+          When("the helper resolves the source and attaches the target")
+          val source = _success(AssociationBindingWorkflow.resolveSourceEntityId(
+            binding,
+            request,
+            OperationResponse.RecordResponse(Record.empty)
+          ))
+          val summary = _success(workflow.attachExistingTargets(source, binding, request))
+
+          Then("the Association is stored in the generic Association collection")
+          summary.sourceEntityId shouldBe "source-1"
+          summary.associations should have size 1
+          val listed = _success(repository.list(AssociationFilter(
+            domain = AssociationDomain("related_entity"),
+            sourceEntityId = Some("source-1"),
+            targetEntityId = Some(target.value),
+            targetKind = Some("article"),
+            role = Some("related")
+          )))
+          listed should have size 1
+
+          And("the Association request parser retains the exact target owner")
+          val exacttarget =
+            EntityId("cncf", "target_1", _article_collection_id)
+          val parsedtarget = EntityId.parse(exacttarget.value).toOption.get
+          parsedtarget.collection shouldBe _article_collection_id
+          EntityId.parse(exacttarget.value).toOption shouldBe Some(exacttarget)
+        }
+      }
     }
 
     "reject target ids whose collection does not match targetKind" in {
       Given("a binding declared for articles and a target id from another Entity collection")
       given ExecutionContext = ExecutionContext.test()
-      val repository = AssociationRepository.entityStore()
-      val workflow = AssociationBindingWorkflow(repository)
-      val target = _comment_id("comment_target_1")
+      val repository         = AssociationRepository.entityStore()
+      val workflow           = AssociationBindingWorkflow(repository)
+      val target             = _comment_id("comment_target_1")
       _seed_entity(target)
       val binding = CmlOperationAssociationBinding(
         domain = "related_entity",
@@ -107,17 +139,17 @@ final class AssociationBindingWorkflowSpec
 
       Then("the association is rejected as a kind mismatch")
       result shouldBe a[Consequence.Failure[_]]
-      _failure_message(result) should include ("target kind mismatch")
+      _failure_message(result) should include("target kind mismatch")
     }
 
     "not delete pre-existing Associations when a later target fails" in {
       Given("an existing Association followed by a failing target binding")
       given ExecutionContext = ExecutionContext.test()
-      val repository = AssociationRepository.entityStore()
-      val source = "source-existing"
-      val existingTarget = _article_id("existing_target")
-      val rejectedTarget = _article_id("rejected_target")
-      val firstBinding = CmlOperationAssociationBinding(
+      val repository         = AssociationRepository.entityStore()
+      val source             = "source-existing"
+      val existingtarget     = _article_id("existing_target")
+      val rejectedtarget     = _article_id("rejected_target")
+      val firstbinding = CmlOperationAssociationBinding(
         domain = "related_entity",
         targetKind = "article",
         createsAssociation = true,
@@ -126,51 +158,55 @@ final class AssociationBindingWorkflowSpec
         sourceEntityIdParameters = Vector("sourceEntityId"),
         targetIdParameters = Vector("targetEntityId")
       )
-      val firstRequest = Request.of(
+      val firstrequest = Request.of(
         component = "sample",
         service = "article",
         operation = "attach",
         properties = List(
           Property("sourceEntityId", source, None),
-          Property("targetEntityId", existingTarget.value, None)
+          Property("targetEntityId", existingtarget.value, None)
         )
       )
-      val setupWorkflow = AssociationBindingWorkflow(repository, targetValidator = AssociationTargetValidator.unchecked)
-      _success(setupWorkflow.attachExistingTargets(source, firstBinding, firstRequest))
-      val failingWorkflow = AssociationBindingWorkflow(
+      val setupworkflow = AssociationBindingWorkflow(
+        repository,
+        targetValidator = AssociationTargetValidator.unchecked
+      )
+      _success(setupworkflow.attachExistingTargets(source, firstbinding, firstrequest))
+      val failingworkflow = AssociationBindingWorkflow(
         repository,
         targetValidator = new AssociationTargetValidator {
           def validate(
-            targetKind: Option[String],
-            id: EntityId
+              targetKind: Option[String],
+              id: EntityId
           )(using ExecutionContext): Consequence[Unit] =
-            if (id == rejectedTarget)
+            if (id == rejectedtarget)
               Consequence.argumentInvalid("target rejected")
             else
               Consequence.unit
         }
       )
-      val binding = firstBinding.copy(targetIdParameters = Vector("targetEntityId", "rejectedTargetEntityId"))
+      val binding =
+        firstbinding.copy(targetIdParameters = Vector("targetEntityId", "rejectedTargetEntityId"))
       val request = Request.of(
         component = "sample",
         service = "article",
         operation = "attach",
         properties = List(
           Property("sourceEntityId", source, None),
-          Property("targetEntityId", existingTarget.value, None),
-          Property("rejectedTargetEntityId", rejectedTarget.value, None)
+          Property("targetEntityId", existingtarget.value, None),
+          Property("rejectedTargetEntityId", rejectedtarget.value, None)
         )
       )
 
       When("the second target fails after the existing Association is reused")
-      val result = failingWorkflow.attachExistingTargets(source, binding, request)
+      val result = failingworkflow.attachExistingTargets(source, binding, request)
 
       Then("the pre-existing Association is preserved")
       result shouldBe a[Consequence.Failure[_]]
       val listed = _success(repository.list(AssociationFilter(
         domain = AssociationDomain("related_entity"),
         sourceEntityId = Some(source),
-        targetEntityId = Some(existingTarget.value),
+        targetEntityId = Some(existingtarget.value),
         targetKind = Some("article"),
         role = Some("related")
       )))
@@ -180,20 +216,20 @@ final class AssociationBindingWorkflowSpec
     "propagate cleanup failures for newly created Associations" in {
       Given("a newly created Association followed by a failing target and failing cleanup")
       given ExecutionContext = ExecutionContext.test()
-      val delegate = AssociationRepository.entityStore()
-      val repository = _FailingDeleteAssociationRepository(delegate)
-      val source = "source-cleanup-failure"
-      val createdTarget = _article_id("created_target_cleanup_failure")
-      val rejectedTarget = _article_id("rejected_target_cleanup_failure")
-      _seed_entity(createdTarget)
+      val delegate           = AssociationRepository.entityStore()
+        val repository         = FailingDeleteAssociationRepository(delegate)
+      val source             = "source-cleanup-failure"
+      val createdtarget      = _article_id("created_target_cleanup_failure")
+      val rejectedtarget     = _article_id("rejected_target_cleanup_failure")
+      _seed_entity(createdtarget)
       val workflow = AssociationBindingWorkflow(
         repository,
         targetValidator = new AssociationTargetValidator {
           def validate(
-            targetKind: Option[String],
-            id: EntityId
+              targetKind: Option[String],
+              id: EntityId
           )(using ExecutionContext): Consequence[Unit] =
-            if (id == rejectedTarget)
+            if (id == rejectedtarget)
               Consequence.argumentInvalid("target rejected")
             else
               Consequence.unit
@@ -214,8 +250,8 @@ final class AssociationBindingWorkflowSpec
         operation = "attach",
         properties = List(
           Property("sourceEntityId", source, None),
-          Property("targetEntityId", createdTarget.value, None),
-          Property("rejectedTargetEntityId", rejectedTarget.value, None)
+          Property("targetEntityId", createdtarget.value, None),
+          Property("rejectedTargetEntityId", rejectedtarget.value, None)
         )
       )
 
@@ -224,7 +260,7 @@ final class AssociationBindingWorkflowSpec
 
       Then("the cleanup failure is returned instead of being hidden")
       result shouldBe a[Consequence.Failure[_]]
-      _failure_message(result) should include ("association cleanup delete failed")
+      _failure_message(result) should include("association cleanup delete failed")
     }
 
     "resolve entity-create-result from standard entity_id response fields" in {
@@ -236,11 +272,12 @@ final class AssociationBindingWorkflowSpec
         sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
         targetIdParameters = Vector("targetEntityId")
       )
-      val request = Request.of("sample", "article", "create")
+      val request  = Request.of("sample", "article", "create")
       val response = OperationResponse.RecordResponse(Record.dataAuto("entity_id" -> "created-1"))
 
       When("resolving the source Entity id")
-      val source = _success(AssociationBindingWorkflow.resolveSourceEntityId(binding, request, response))
+      val source =
+        _success(AssociationBindingWorkflow.resolveSourceEntityId(binding, request, response))
 
       Then("entity_id is used as the source Entity id")
       source shouldBe "created-1"
@@ -255,7 +292,7 @@ final class AssociationBindingWorkflowSpec
         sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
         targetIdParameters = Vector("targetEntityId")
       )
-      val request = Request.of("sample", "article", "create")
+      val request  = Request.of("sample", "article", "create")
       val response = OperationResponse.RecordResponse(Record.dataAuto("title" -> "missing id"))
 
       When("resolving the source Entity id")
@@ -266,16 +303,16 @@ final class AssociationBindingWorkflowSpec
     }
   }
 
-  "Subsystem operation association binding adapter" should {
+  "Subsystem operation association binding adapter" must _in_phase52_spec {
     "attach existing target ids after an operation returns entity_id" in {
       Given("a component operation with associationBinding metadata")
       val subsystem = TestComponentFactory.emptySubsystem("association_binding_adapter_spec")
       val component = _component(subsystem)
       subsystem.add(component)
-      val runtimeComponent =
+      val runtimecomponent =
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
-      given ExecutionContext = runtimeComponent.logic.executionContext()
-      val target = _article_id("target_2")
+      given ExecutionContext = runtimecomponent.logic.executionContext()
+      val target             = _article_id("target_2")
       _seed_entity(target)
       val request = Request.of(
         component = component.name,
@@ -291,7 +328,9 @@ final class AssociationBindingWorkflowSpec
       response match {
         case OperationResponse.RecordResponse(record) =>
           record.getString("entity_id") shouldBe Some("article-1")
-          record.getVector("requestKeys").getOrElse(Vector.empty).map(_.toString) should not contain ("targetEntityId")
+          record.getVector("requestKeys").getOrElse(Vector.empty).map(
+            _.toString
+          ) should not contain "targetEntityId"
         case other =>
           fail(s"unexpected response: $other")
       }
@@ -312,15 +351,19 @@ final class AssociationBindingWorkflowSpec
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
-      val runtimeComponent =
+      val runtimecomponent =
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
-      given ExecutionContext = runtimeComponent.logic.executionContext()
+      given ExecutionContext = runtimecomponent.logic.executionContext()
       val request = Request.of(
         component = component.name,
         service = "article",
         operation = "createArticleBlobOnly",
         properties = List(
-          Property("blob.primary", MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))), None)
+          Property(
+            "blob.primary",
+            MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))),
+            None
+          )
         )
       )
 
@@ -336,16 +379,25 @@ final class AssociationBindingWorkflowSpec
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
-      val runtimeComponent =
+      val runtimecomponent =
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
-      given ExecutionContext = runtimeComponent.logic.executionContext()
+      given ExecutionContext = runtimecomponent.logic.executionContext()
       val request = Request.of(
         component = component.name,
         service = "article",
         operation = "createArticleUploadOnly",
-        properties = List(
-          Property("blobId.primary", EntityId("cncf", "existing_blob", org.goldenport.cncf.blob.BlobRepository.CollectionId).value, None)
-        )
+        properties =
+          List(
+            Property(
+              "blobId.primary",
+              EntityId(
+                "cncf",
+                "existing_blob",
+                org.goldenport.cncf.blob.BlobRepository.CollectionId
+              ).value,
+              None
+            )
+          )
       )
 
       When("the operation is executed through the subsystem")
@@ -360,15 +412,19 @@ final class AssociationBindingWorkflowSpec
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
-      val runtimeComponent =
+      val runtimecomponent =
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
-      given ExecutionContext = runtimeComponent.logic.executionContext()
+      given ExecutionContext = runtimecomponent.logic.executionContext()
       val request = Request.of(
         component = component.name,
         service = "article",
         operation = "createArticleWithImage",
         properties = List(
-          Property("blob.primary", MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))), None),
+          Property(
+            "blob.primary",
+            MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))),
+            None
+          ),
           Property("blob.primary.filename", "adapter.png", None)
         )
       )
@@ -384,12 +440,14 @@ final class AssociationBindingWorkflowSpec
           fail(s"unexpected response: $other")
       }
       val listed = _success(
-        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault).list(AssociationFilter(
-          domain = AssociationDomain.BlobAttachment,
-          sourceEntityId = Some("article-image-1"),
-          targetKind = Some("blob"),
-          role = Some("primary")
-        ))
+        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault).list(
+          AssociationFilter(
+            domain = AssociationDomain.BlobAttachment,
+            sourceEntityId = Some("article-image-1"),
+            targetKind = Some("blob"),
+            role = Some("primary")
+          )
+        )
       )
       listed should have size 1
     }
@@ -399,19 +457,23 @@ final class AssociationBindingWorkflowSpec
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
-      val runtimeComponent =
+      val runtimecomponent =
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
-      given ExecutionContext = runtimeComponent.logic.executionContext()
       val target = _article_id("target_image_failure_cleanup")
       _seed_entity(target)
-      val missingBlob = EntityId("cncf", "missing_blob_for_association_cleanup", org.goldenport.cncf.blob.BlobRepository.CollectionId)
+      given ExecutionContext = runtimecomponent.logic.executionContext()
+      val missingblob = EntityId(
+        "cncf",
+        "missing_blob_for_association_cleanup",
+        org.goldenport.cncf.blob.BlobRepository.CollectionId
+      )
       val request = Request.of(
         component = component.name,
         service = "article",
         operation = "createArticleWithAssociationAndBadImage",
         properties = List(
           Property("targetEntityId", target.value, None),
-          Property("blobId.primary", missingBlob.value, None)
+          Property("blobId.primary", missingblob.value, None)
         )
       )
 
@@ -433,14 +495,14 @@ final class AssociationBindingWorkflowSpec
     }
   }
 
-  "AdminComponent generic Association operations" should {
+  "AdminComponent generic Association operations" must _in_phase52_spec {
     "attach, reuse, list, and detach non-image Associations" in {
       Given("existing source and target Entity records")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val admin = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
+      val admin     = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
       given ExecutionContext = admin.logic.executionContext()
-      val source = _article_id("admin_source_1")
-      val target = _article_id("admin_target_1")
+      val source             = _article_id("admin_source_1")
+      val target             = _article_id("admin_target_1")
       _seed_entity(source)
       _seed_entity(target)
       val attach = Request.of(
@@ -458,7 +520,7 @@ final class AssociationBindingWorkflowSpec
       )
 
       When("the same Association is attached twice")
-      val first = _record(_success(subsystem.executeOperationResponse(attach)))
+      val first  = _record(_success(subsystem.executeOperationResponse(attach)))
       val second = _record(_success(subsystem.executeOperationResponse(attach)))
 
       Then("the second call reuses the existing Association")
@@ -508,31 +570,35 @@ final class AssociationBindingWorkflowSpec
     "reject missing source, missing target, and targetKind mismatch" in {
       Given("an admin Association attach request")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val admin = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
+      val admin     = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
       given ExecutionContext = admin.logic.executionContext()
-      val source = _article_id("admin_source_2")
-      val target = _article_id("admin_target_2")
-      val comment = _comment_id("admin_comment_2")
+      val source             = _article_id("admin_source_2")
+      val target             = _article_id("admin_target_2")
+      val comment            = _comment_id("admin_comment_2")
       _seed_entity(source)
       _seed_entity(target)
       _seed_entity(comment)
-      def attach(sourceId: EntityId, targetId: EntityId, targetKind: String) =
+      def _attach_(sourceid: EntityId, targetid: EntityId, targetkind: String) =
         subsystem.executeOperationResponse(Request.of(
           component = "admin",
           service = "association",
           operation = "admin_attach_association",
           arguments = List(
             Argument("domain", "related_entity"),
-            Argument("sourceEntityId", sourceId.value),
-            Argument("targetEntityId", targetId.value),
-            Argument("targetKind", targetKind),
+            Argument("sourceEntityId", sourceid.value),
+            Argument("targetEntityId", targetid.value),
+            Argument("targetKind", targetkind),
             Argument("role", "related")
           )
         ))
 
-      attach(_article_id("missing_admin_source"), target, "article") shouldBe a[Consequence.Failure[_]]
-      attach(source, _article_id("missing_admin_target"), "article") shouldBe a[Consequence.Failure[_]]
-      _failure_message(attach(source, comment, "article")) should include ("target kind mismatch")
+      _attach_(_article_id("missing_admin_source"), target, "article") shouldBe a[
+        Consequence.Failure[_]
+      ]
+      _attach_(source, _article_id("missing_admin_target"), "article") shouldBe a[
+        Consequence.Failure[_]
+      ]
+      _failure_message(_attach_(source, comment, "article")) should include("target kind mismatch")
     }
   }
 
@@ -544,11 +610,14 @@ final class AssociationBindingWorkflowSpec
             name = "article",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _CreateArticleOperation("createArticle", "article-1"),
-                _CreateArticleOperation("createArticleWithImage", "article-image-1"),
-                _CreateArticleOperation("createArticleBlobOnly", "article-blob-only"),
-                _CreateArticleOperation("createArticleUploadOnly", "article-upload-only"),
-                _CreateArticleOperation("createArticleWithAssociationAndBadImage", "article-association-image-failure")
+                CreateArticleOperation("createArticle", "article-1"),
+                CreateArticleOperation("createArticleWithImage", "article-image-1"),
+                CreateArticleOperation("createArticleBlobOnly", "article-blob-only"),
+                CreateArticleOperation("createArticleUploadOnly", "article-upload-only"),
+                CreateArticleOperation(
+                  "createArticleWithAssociationAndBadImage",
+                  "article-association-image-failure"
+                )
               )
             )
           )
@@ -569,7 +638,8 @@ final class AssociationBindingWorkflowSpec
               targetKind = "article",
               createsAssociation = true,
               roles = Vector("related"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               targetIdParameters = Vector("targetEntityId")
             ))
           ),
@@ -584,7 +654,8 @@ final class AssociationBindingWorkflowSpec
               createsAttachment = true,
               roles = Vector("primary", "cover", "thumbnail", "gallery", "inline"),
               parameters = Vector("blobId.primary"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               targetIdParameters = Vector("blobId.primary")
             ))
           ),
@@ -599,7 +670,8 @@ final class AssociationBindingWorkflowSpec
               createsAttachment = true,
               roles = Vector("primary"),
               parameters = Vector("blobId.primary"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               targetIdParameters = Vector("blobId.primary")
             ))
           ),
@@ -614,7 +686,8 @@ final class AssociationBindingWorkflowSpec
               createsAttachment = true,
               roles = Vector("primary"),
               parameters = Vector("blob.primary"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult
             ))
           ),
           CmlOperationDefinition(
@@ -628,7 +701,8 @@ final class AssociationBindingWorkflowSpec
               targetKind = "article",
               createsAssociation = true,
               roles = Vector("related"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               targetIdParameters = Vector("targetEntityId")
             )),
             imageBinding = Some(CmlOperationImageBinding(
@@ -636,7 +710,8 @@ final class AssociationBindingWorkflowSpec
               createsAttachment = true,
               roles = Vector("primary"),
               parameters = Vector("blobId.primary"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               targetIdParameters = Vector("blobId.primary")
             ))
           )
@@ -653,53 +728,51 @@ final class AssociationBindingWorkflowSpec
 
   private def _success[A](result: Consequence[A]): A =
     result match {
-      case Consequence.Success(value) => value
+      case Consequence.Success(value)      => value
       case Consequence.Failure(conclusion) => fail(conclusion.show)
     }
 
   private def _record(response: OperationResponse): Record =
     response match {
       case OperationResponse.RecordResponse(record) => record
-      case other => fail(s"unexpected response: $other")
+      case other                                    => fail(s"unexpected response: $other")
     }
 
   private def _failure_message[A](result: Consequence[A]): String =
     result match {
       case Consequence.Failure(conclusion) => conclusion.show
-      case Consequence.Success(value) => fail(s"unexpected success: $value")
+      case Consequence.Success(value)      => fail(s"unexpected success: $value")
     }
 
-  private val ArticleCollectionId: EntityCollectionId =
+  private lazy val _article_collection_id: EntityCollectionId =
     EntityCollectionId("cncf", "sample", "article")
 
-  private def _article_id(value: String): EntityId =
-    {
-      val id = EntityId("cncf", value, ArticleCollectionId)
-      EntityId.parse(id.value).toOption.getOrElse(id)
-    }
+  private def _article_id(value: String): EntityId = {
+    val id = EntityId("cncf", value, _article_collection_id)
+    EntityId.parse(id.value).toOption.getOrElse(id)
+  }
 
-  private val CommentCollectionId: EntityCollectionId =
+  private lazy val _comment_collection_id: EntityCollectionId =
     EntityCollectionId("cncf", "sample", "comment")
 
-  private def _comment_id(value: String): EntityId =
-    {
-      val id = EntityId("cncf", value, CommentCollectionId)
-      EntityId.parse(id.value).toOption.getOrElse(id)
-    }
+  private def _comment_id(value: String): EntityId = {
+    val id = EntityId("cncf", value, _comment_collection_id)
+    EntityId.parse(id.value).toOption.getOrElse(id)
+  }
 
   private def _seed_entity(
-    id: EntityId
+      id: EntityId
   )(using ctx: ExecutionContext): Unit = {
-    val cid = DataStore.CollectionId.EntityStore(id.collection)
-    val dsid = DataStore.EntryId(id)
-    val ds = _success(ctx.dataStoreSpace.dataStore(cid))
+    val cid    = DataStore.CollectionId.EntityStore(id.collection)
+    val dsid   = DataStore.EntryId(id)
+    val ds     = _success(ctx.dataStoreSpace.dataStore(cid))
     val record = Record.dataAuto("id" -> id.value)
     _success(ds.create(cid, dsid, record).recoverWith(_ => ds.save(cid, dsid, record)))
   }
 }
 
-private final case class _FailingDeleteAssociationRepository(
-  delegate: AssociationRepository
+private final case class FailingDeleteAssociationRepository(
+    delegate: AssociationRepository
 ) extends AssociationRepository {
   def create(association: AssociationCreate)(using ExecutionContext): Consequence[Association] =
     delegate.create(association)
@@ -708,16 +781,16 @@ private final case class _FailingDeleteAssociationRepository(
     Consequence.stateConflict("association cleanup delete failed")
 
   def list(
-    filter: AssociationFilter,
-    offset: Int = 0,
-    limit: Option[Int] = None
+      filter: AssociationFilter,
+      offset: Int = 0,
+      limit: Option[Int] = None
   )(using ExecutionContext): Consequence[Vector[Association]] =
     delegate.list(filter, offset, limit)
 }
 
-private final case class _CreateArticleOperation(
-  opname: String,
-  entityId: String
+private final case class CreateArticleOperation(
+    opname: String,
+    entityid: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
@@ -727,25 +800,25 @@ private final case class _CreateArticleOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_CreateArticleAction(req, entityId))
+    Consequence.success(CreateArticleAction(req, entityid))
 }
 
-private final case class _CreateArticleAction(
-  request: Request,
-  entityId: String
+private final case class CreateArticleAction(
+    request: Request,
+    entityid: String
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _CreateArticleActionCall(core, request, entityId)
+    CreateArticleActionCall(core, request, entityid)
 }
 
-private final case class _CreateArticleActionCall(
-  core: ActionCall.Core,
-  operationRequest: Request,
-  entityId: String
+private final case class CreateArticleActionCall(
+    core: ActionCall.Core,
+    operationrequest: Request,
+    entityid: String
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.RecordResponse(Record.dataAuto(
-      "entity_id" -> entityId,
-      "requestKeys" -> operationRequest.toRecord.asMap.keys.toVector.sorted
+      "entity_id"   -> entityid,
+      "requestKeys" -> operationrequest.toRecord.asMap.keys.toVector.sorted
     )))
 }

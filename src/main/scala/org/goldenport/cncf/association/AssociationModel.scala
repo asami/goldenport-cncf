@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreDecodeContext, EntityVisibilityScope}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityVisibilityScope}
 import org.goldenport.record.Record
 import org.goldenport.text.Presentable
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Generic entity-to-entity association runtime foundation.
  *
  * @since   Apr. 27, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationDomain(value: String) extends Presentable {
@@ -119,17 +119,6 @@ object AssociationRepository {
     override def toStoreRecord(e: Association): Record = AssociationRecordCodec.toStoreRecord(e)
     def fromRecord(r: Record): Consequence[Association] = AssociationRecordCodec.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[Association] = AssociationRecordCodec.fromStoreRecord(r)
-    override def fromStoreRecord(
-      context: EntityStoreDecodeContext,
-      r: Record
-    ): Consequence[Association] =
-      AssociationRecordCodec.fromStoreRecord(r).flatMap { entity =>
-        EntityPersistent.restoreCollectionIdentity(
-          entity,
-          entity.id,
-          context.owningCollectionId
-        )(id => entity.copy(id = id))
-      }
   }
 
   given EntityPersistentCreate[AssociationCreate] with {
@@ -147,10 +136,12 @@ final class EntityStoreAssociationRepository(
 
   def create(association: AssociationCreate)(using ctx: ExecutionContext): Consequence[Association] =
     for {
-      result <- EntityStore.standard().create(association)
+      _ <- _require_storage_collection(association)
+      canonicalassociation <- _canonical_association(association)
+      result <- EntityStore.standard().create(canonicalassociation)
       loaded <- EntityStore.standard().load[Association](result.id)
       created <- loaded match {
-        case Some(value) => Consequence.success(_normalize_association_id(value))
+        case Some(value) => Consequence.success(value)
         case None => Consequence.operationNotFound(s"association entity:${result.id.print}")
       }
     } yield created
@@ -170,22 +161,37 @@ final class EntityStoreAssociationRepository(
     EntityStore.standard()
       .search[Association](EntityQuery(collection, Query.plan(Record.empty), EntitySearchScope.Store, Some(EntityVisibilityScope.Admin)))
       .map { values =>
-        val sorted = values.data.map(_normalize_association_id).filter(_matches(filter)).sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
+        val sorted = values.data.filter(_matches(filter)).sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
         Query.sliceValues(sorted, Some(offset), limit)
       }
   }
 
-  private def _normalize_association_id(association: Association): Association =
-    association.copy(id = _with_collection(association.id, storagepolicy.collection(association.associationDomain)))
-
-  private def _with_collection(
-    id: EntityId,
-    collection: EntityCollectionId
-  ): EntityId =
-    if (id.collection == collection)
-      id
+  private def _require_storage_collection(association: AssociationCreate): Consequence[Unit] = {
+    val expected = storagepolicy.collection(association.associationDomain)
+    if (association.collectionId != expected)
+      Consequence.argumentInvalid(
+        s"association collection mismatch: expected ${expected.print}, got ${association.collectionId.print}"
+      )
     else
-      EntityId(id.major, id.minor, collection, id.timestamp, id.entropy)
+      association.id match {
+        case Some(id) if id.collection != expected =>
+          Consequence.argumentInvalid(
+            s"association id collection mismatch: expected ${expected.print}, got ${id.collection.print}"
+          )
+        case _ => Consequence.unit
+      }
+  }
+
+  private def _canonical_association(
+    association: AssociationCreate
+  ): Consequence[AssociationCreate] =
+    for {
+      sourceid <- EntityId.parse(association.sourceEntityId.trim)
+      targetid <- EntityId.parse(association.targetEntityId.trim)
+    } yield association.copy(
+      sourceEntityId = sourceid.value,
+      targetEntityId = targetid.value
+    )
 
   private def _matches(filter: AssociationFilter)(association: Association): Boolean =
     association.associationDomain == filter.domain &&
@@ -239,8 +245,10 @@ object AssociationRecordCodec {
     for {
       id <- EntityId.createC(record)
       associationid <- _string(record, "associationId", "association_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("associationId"))
-      sourceid <- _string(record, "sourceEntityId", "source_entity_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("sourceEntityId"))
-      targetid <- _string(record, "targetEntityId", "target_entity_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("targetEntityId"))
+      sourceraw <- _string(record, "sourceEntityId", "source_entity_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("sourceEntityId"))
+      sourceid <- EntityId.parse(sourceraw)
+      targetraw <- _string(record, "targetEntityId", "target_entity_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("targetEntityId"))
+      targetid <- EntityId.parse(targetraw)
       role <- _string(record, "role").map(Consequence.success).getOrElse(Consequence.argumentMissing("role"))
       domain <- _string(record, "associationDomain", "association_domain").map(x => Consequence.success(AssociationDomain(x))).getOrElse(Consequence.argumentMissing("associationDomain"))
       createdat <- _instant(record, "createdAt", "created_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("createdAt"))
@@ -248,8 +256,8 @@ object AssociationRecordCodec {
     } yield Association(
       id = id,
       associationId = associationid,
-      sourceEntityId = sourceid,
-      targetEntityId = targetid,
+      sourceEntityId = sourceid.value,
+      targetEntityId = targetid.value,
       targetKind = _string(record, "targetKind", "target_kind"),
       role = role,
       associationDomain = domain,

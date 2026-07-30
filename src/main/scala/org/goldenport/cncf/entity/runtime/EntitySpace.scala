@@ -12,7 +12,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Mar. 14, 2026
  *  version Mar. 27, 2026
  *  version May. 10, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 // Component-local container for entity collections.
@@ -87,25 +87,15 @@ class EntitySpace {
       case Some(_) =>
         Consequence.success(collectionId)
       case None =>
-        entityByNameC[Any](collectionId.name)
-          .map(_.descriptor.collectionId)
+        Consequence.resourceNotFound(
+          s"EntityCollection not found: ${collectionId.print}"
+        )
     }
 
   def canonicalEntityIdC(
     id: EntityId
   ): Consequence[EntityId] =
-    canonicalCollectionIdC(id.collection).map { collectionid =>
-      if (id.collection == collectionid)
-        id
-      else
-        EntityId(
-          id.major,
-          id.minor,
-          collectionid,
-          id.timestamp,
-          id.entropy
-        )
-    }
+    canonicalCollectionIdC(id.collection).map(_ => id)
 
   def entityNames: Vector[String] =
     _entity_collections.valuesIterator
@@ -198,11 +188,11 @@ class EntitySpace {
 
   private def _entity_space_attributes(
     operation: String,
-    collectionId: EntityCollectionId
+    collectionid: EntityCollectionId
   ): Map[String, String] =
     Map(
       "space" -> "entity",
       "operation" -> operation,
-      "collection" -> collectionId.print
+      "collection" -> collectionid.print
     )
 }

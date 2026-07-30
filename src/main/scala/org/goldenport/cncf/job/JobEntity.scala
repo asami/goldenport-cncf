@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
 import org.goldenport.Consequence
-import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityStoreDecodeContext}
+import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   May.  7, 2026
  *  version May. 31, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -185,7 +185,7 @@ object JobDefinitionEntity {
       jcl <- _required(record, "jclSource")
       jclformat <- _jcl_format(record)
       status <- JobDefinitionStatus.parse(record.getString("definitionStatus").getOrElse("draft"))
-      id <- EntityId.createC(record).map(_.copy(collection = JobEntityCollections.JobDefinition))
+      id <- EntityId.createC(record).flatMap(_require_definition_id)
       parsed = JobBatchDefinition.parse(jcl, jclformat).toOption.flatMap(_.jobs.headOption)
     } yield JobDefinitionEntity(
       id = id,
@@ -219,17 +219,6 @@ object JobDefinitionEntity {
     override def toStoreRecord(e: JobDefinitionEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[JobDefinitionEntity] = JobDefinitionEntity.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[JobDefinitionEntity] = JobDefinitionEntity.fromRecord(r)
-    override def fromStoreRecord(
-      context: EntityStoreDecodeContext,
-      r: Record
-    ): Consequence[JobDefinitionEntity] =
-      JobDefinitionEntity.fromRecord(r).flatMap { entity =>
-        EntityPersistent.restoreCollectionIdentity(
-          entity,
-          entity.id,
-          context.owningCollectionId
-        )(id => entity.copy(id = id))
-      }
   }
 
   def entityPersistent: EntityPersistent[JobDefinitionEntity] =
@@ -237,6 +226,14 @@ object JobDefinitionEntity {
 
   private def _normalize_key(key: String): String =
     key.trim
+
+  private def _require_definition_id(id: EntityId): Consequence[EntityId] =
+    if (id.collection == JobEntityCollections.JobDefinition)
+      Consequence.success(id)
+    else
+      Consequence.argumentInvalid(
+        s"job definition id collection mismatch: expected ${JobEntityCollections.JobDefinition.print}, got ${id.collection.print}"
+      )
 
   private def _entity_id_label(key: String): String = {
     val normalized = key.trim.map {
@@ -409,7 +406,7 @@ object JobEntity {
   }
 
   def fromRecord(record: Record): Consequence[JobEntity] =
-    EntityId.createC(record).map(id => JobEntity(id.copy(collection = JobEntityCollections.Job), record))
+    EntityId.createC(record).flatMap(_require_job_id).map(id => JobEntity(id, record))
 
   given EntityPersistent[JobEntity] with {
     def id(e: JobEntity): EntityId = e.id
@@ -417,21 +414,18 @@ object JobEntity {
     override def toStoreRecord(e: JobEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[JobEntity] = JobEntity.fromRecord(r)
     override def fromStoreRecord(r: Record): Consequence[JobEntity] = JobEntity.fromRecord(r)
-    override def fromStoreRecord(
-      context: EntityStoreDecodeContext,
-      r: Record
-    ): Consequence[JobEntity] =
-      JobEntity.fromRecord(r).flatMap { entity =>
-        EntityPersistent.restoreCollectionIdentity(
-          entity,
-          entity.id,
-          context.owningCollectionId
-        )(id => entity.copy(id = id))
-      }
   }
 
   def entityPersistent: EntityPersistent[JobEntity] =
     summon[EntityPersistent[JobEntity]]
+
+  private def _require_job_id(id: EntityId): Consequence[EntityId] =
+    if (id.collection == JobEntityCollections.Job)
+      Consequence.success(id)
+    else
+      Consequence.argumentInvalid(
+        s"job id collection mismatch: expected ${JobEntityCollections.Job.print}, got ${id.collection.print}"
+      )
 
   private def _retry_record(retry: JobRetryState): Record =
     Record.dataAuto(

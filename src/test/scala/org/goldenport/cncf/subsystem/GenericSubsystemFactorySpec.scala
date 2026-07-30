@@ -38,7 +38,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 29, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -184,7 +184,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val descriptor = GenericSubsystemDescriptor.load(descriptorpath).toOption.get
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.RepositoryDirKey ->
+            RuntimeConfig.repositoryDirKey ->
               ConfigurationValue.StringValue(s"component-dir:${componentdir.toString}")
           )),
           ConfigurationTrace.empty
@@ -239,8 +239,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         )
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.ComponentCarDirKey -> ConfigurationValue.StringValue(packagedir.toString),
-            RuntimeConfig.RepositoryComponentDevDirKey -> ConfigurationValue.StringValue(
+            RuntimeConfig.componentCarDirKey -> ConfigurationValue.StringValue(packagedir.toString),
+            RuntimeConfig.repositoryComponentDevDirKey -> ConfigurationValue.StringValue(
               s"component-dev-dir:$primarydir,component-dev-dir:$secondarydir"
             )
           )),
@@ -313,7 +313,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         )
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.RepositoryDirKey ->
+            RuntimeConfig.repositoryDirKey ->
               ConfigurationValue.StringValue(
                 s"component-file:${appcar},component-file:${providercar}"
               )
@@ -374,7 +374,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val descriptor = GenericSubsystemDescriptor.load(descriptorpath).toOption.get
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.RepositoryDirKey ->
+            RuntimeConfig.repositoryDirKey ->
               ConfigurationValue.StringValue(s"component-dir:${componentdir.toString}")
           )),
           ConfigurationTrace.empty
@@ -457,9 +457,9 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.SubsystemNameKey ->
+            RuntimeConfig.subsystemNameKey ->
               ConfigurationValue.StringValue("textus-identity"),
-            RuntimeConfig.RepositoryDirKey ->
+            RuntimeConfig.repositoryDirKey ->
               ConfigurationValue.StringValue(s"component-dir:${componentdir.toString}")
           )),
           ConfigurationTrace.empty

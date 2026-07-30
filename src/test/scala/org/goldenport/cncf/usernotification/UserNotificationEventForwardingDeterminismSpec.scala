@@ -109,7 +109,7 @@ final class UserNotificationEventForwardingDeterminismSpec
     val clock = Clock.fixed(instant, ZoneOffset.UTC)
     val base = ExecutionContext.create(clock)
     val idgeneration = IdGenerationContext.deterministic(
-      IdGenerationContext.DefaultNamespace,
+      IdGenerationContext.DEFAULT_NAMESPACE,
       clock,
       seed
     )

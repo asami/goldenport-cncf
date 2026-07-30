@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Phase 33 RR-04 generic external URN resolution.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UrnResourceAccessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -26,7 +26,7 @@ final class UrnResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
       Given("a runtime configuration binding example to an external provider class")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ResourceUrnProvidersKey -> ConfigurationValue.StringValue(
+          RuntimeConfig.resourceUrnProvidersKey -> ConfigurationValue.StringValue(
             s"example=${classOf[ExampleUrnResourceProvider].getName}"
           )
         )),
@@ -120,7 +120,7 @@ final class UrnResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
       val results = values.map { value =>
         intercept[IllegalArgumentException] {
           RuntimeConfig.from(ResolvedConfiguration(
-            Configuration(Map(RuntimeConfig.ResourceUrnProvidersKey -> ConfigurationValue.StringValue(value))),
+            Configuration(Map(RuntimeConfig.resourceUrnProvidersKey -> ConfigurationValue.StringValue(value))),
             ConfigurationTrace.empty
           ))
         }

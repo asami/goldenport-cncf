@@ -25,7 +25,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Configur
  *  version Apr. 15, 2026
  *  version May. 11, 2026
  *  version Jun. 18, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach {
@@ -430,12 +430,12 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.ObservabilityOtelEnabledKey -> ConfigurationValue.BooleanValue(true),
-            RuntimeConfig.ObservabilityOtelEndpointKey -> ConfigurationValue.StringValue("http://127.0.0.1:4318"),
-            RuntimeConfig.ObservabilityOtelProtocolKey -> ConfigurationValue.StringValue("otlp-http"),
-            RuntimeConfig.ObservabilityOtelTracesEnabledKey -> ConfigurationValue.BooleanValue(true),
-            RuntimeConfig.ObservabilityOtelMetricsEnabledKey -> ConfigurationValue.BooleanValue(false),
-            RuntimeConfig.ObservabilityOtelLogsEnabledKey -> ConfigurationValue.BooleanValue(false)
+            RuntimeConfig.observabilityOtelEnabledKey -> ConfigurationValue.BooleanValue(true),
+            RuntimeConfig.observabilityOtelEndpointKey -> ConfigurationValue.StringValue("http://127.0.0.1:4318"),
+            RuntimeConfig.observabilityOtelProtocolKey -> ConfigurationValue.StringValue("otlp-http"),
+            RuntimeConfig.observabilityOtelTracesEnabledKey -> ConfigurationValue.BooleanValue(true),
+            RuntimeConfig.observabilityOtelMetricsEnabledKey -> ConfigurationValue.BooleanValue(false),
+            RuntimeConfig.observabilityOtelLogsEnabledKey -> ConfigurationValue.BooleanValue(false)
           )
         ),
         ConfigurationTrace.empty
@@ -455,8 +455,8 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.ObservabilityOtelEnabledKey -> ConfigurationValue.BooleanValue(true),
-            RuntimeConfig.ObservabilityOtelProtocolKey -> ConfigurationValue.StringValue("otlp-grpc")
+            RuntimeConfig.observabilityOtelEnabledKey -> ConfigurationValue.BooleanValue(true),
+            RuntimeConfig.observabilityOtelProtocolKey -> ConfigurationValue.StringValue("otlp-grpc")
           )
         ),
         ConfigurationTrace.empty
@@ -650,9 +650,9 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
-            RuntimeConfig.ExecutionHistoryRecentLimitKey -> ConfigurationValue.NumberValue(BigDecimal(7)),
-            RuntimeConfig.ExecutionHistoryFilteredLimitKey -> ConfigurationValue.NumberValue(BigDecimal(70)),
-            RuntimeConfig.ExecutionHistoryFilterOperationContainsKey -> ConfigurationValue.StringValue("foo,bar")
+            RuntimeConfig.executionHistoryRecentLimitKey -> ConfigurationValue.NumberValue(BigDecimal(7)),
+            RuntimeConfig.executionHistoryFilteredLimitKey -> ConfigurationValue.NumberValue(BigDecimal(70)),
+            RuntimeConfig.executionHistoryFilterOperationContainsKey -> ConfigurationValue.StringValue("foo,bar")
           )
         ),
         ConfigurationTrace.empty
@@ -688,19 +688,19 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
         ConfigurationTrace.empty
       )
 
-      RuntimeConfig.getString(configuration, RuntimeConfig.ServerEmulatorBaseUrlKey) shouldBe Some("http://example.com/")
-      RuntimeConfig.getString(configuration, RuntimeConfig.HttpDriverKey) shouldBe Some("fake")
-      RuntimeConfig.getString(configuration, RuntimeConfig.ModeKey) shouldBe Some("server")
-      RuntimeConfig.getString(configuration, RuntimeConfig.DiscoverClassesKey) shouldBe Some("true")
-      RuntimeConfig.getString(configuration, RuntimeConfig.ComponentFactoryClassKey) shouldBe Some("example.Factory")
-      RuntimeConfig.getString(configuration, RuntimeConfig.WorkspaceKey) shouldBe Some("/tmp/workspace")
-      RuntimeConfig.getString(configuration, RuntimeConfig.ForceExitKey) shouldBe Some("true")
-      RuntimeConfig.getString(configuration, RuntimeConfig.NoExitKey) shouldBe Some("true")
-      RuntimeConfig.getString(configuration, RuntimeConfig.LogBackendKey) shouldBe Some("stderr")
-      RuntimeConfig.getString(configuration, RuntimeConfig.LogLevelKey) shouldBe Some("debug")
-      RuntimeConfig.getString(configuration, RuntimeConfig.LogFilePathKey) shouldBe Some("/tmp/cncf.log")
-      RuntimeConfig.getString(configuration, RuntimeConfig.WebOperationDispatcherKey) shouldBe Some("rest")
-      RuntimeConfig.getString(configuration, RuntimeConfig.WebOperationDispatcherRestBaseUrlKey) shouldBe Some("http://app.example")
+      RuntimeConfig.getString(configuration, RuntimeConfig.serverEmulatorBaseUrlKey) shouldBe Some("http://example.com/")
+      RuntimeConfig.getString(configuration, RuntimeConfig.httpDriverKey) shouldBe Some("fake")
+      RuntimeConfig.getString(configuration, RuntimeConfig.modeKey) shouldBe Some("server")
+      RuntimeConfig.getString(configuration, RuntimeConfig.discoverClassesKey) shouldBe Some("true")
+      RuntimeConfig.getString(configuration, RuntimeConfig.componentFactoryClassKey) shouldBe Some("example.Factory")
+      RuntimeConfig.getString(configuration, RuntimeConfig.workspaceKey) shouldBe Some("/tmp/workspace")
+      RuntimeConfig.getString(configuration, RuntimeConfig.forceExitKey) shouldBe Some("true")
+      RuntimeConfig.getString(configuration, RuntimeConfig.noExitKey) shouldBe Some("true")
+      RuntimeConfig.getString(configuration, RuntimeConfig.logBackendKey) shouldBe Some("stderr")
+      RuntimeConfig.getString(configuration, RuntimeConfig.logLevelKey) shouldBe Some("debug")
+      RuntimeConfig.getString(configuration, RuntimeConfig.logFilePathKey) shouldBe Some("/tmp/cncf.log")
+      RuntimeConfig.getString(configuration, RuntimeConfig.webOperationDispatcherKey) shouldBe Some("rest")
+      RuntimeConfig.getString(configuration, RuntimeConfig.webOperationDispatcherRestBaseUrlKey) shouldBe Some("http://app.example")
     }
   }
 

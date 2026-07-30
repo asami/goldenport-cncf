@@ -28,7 +28,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
  *  version May. 10, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -411,13 +411,7 @@ final class EntityCollection[E](
       idorshortid: String
   ): Option[EntityId] =
     EntityId.parse(idorshortid).toOption
-      .filter(_.collection.name == descriptor.collectionId.name)
-      .map { id =>
-        if (id.collection == descriptor.collectionId)
-          id
-        else
-          id.copy(collection = descriptor.collectionId)
-      }
+      .filter(_.collection == descriptor.collectionId)
 
   private def _entity_id_by_shortid(
     shortid: String
@@ -612,24 +606,24 @@ final class EntityCollection[E](
   private def _time_dependent_policy_message: String =
     "time-dependent working-set policy evaluation requires ExecutionContext"
 
-  private final case class _VisibilityPolicy(
+  private final case class VisibilityPolicy(
     poststatuses: Option[Set[String]],
     alivenesses: Option[Set[String]]
   )
 
-  private final case class _LifecycleConstraint(
+  private final case class LifecycleConstraint(
     poststatusexplicit: Boolean,
     alivenessexplicit: Boolean
   )
 
   private def _visibility_policy(
       entityquery: EntityQuery[?]
-  )(using ctx: ExecutionContext): _VisibilityPolicy = {
+  )(using ctx: ExecutionContext): VisibilityPolicy = {
     entityquery.visibilityScope match {
       case Some(EntityVisibilityScope.Public) =>
-        return _VisibilityPolicy(Some(Set("published")), Some(Set("alive")))
+        return VisibilityPolicy(Some(Set("published")), Some(Set("alive")))
       case Some(EntityVisibilityScope.Owner) | Some(EntityVisibilityScope.Admin) =>
-        return _VisibilityPolicy(None, None)
+        return VisibilityPolicy(None, None)
       case None =>
         ()
     }
@@ -652,7 +646,7 @@ final class EntityCollection[E](
     } else {
       Some(Set("alive"))
     }
-    _VisibilityPolicy(
+    VisibilityPolicy(
       poststatuses = poststatuses,
       alivenesses = alivenesses
     )
@@ -660,10 +654,10 @@ final class EntityCollection[E](
 
   private def _lifecycle_constraint(
     query: Query[?]
-  ): _LifecycleConstraint = {
+  ): LifecycleConstraint = {
     val expr = Query.whereOf(query)
     val raw = _query_condition(query)
-    _LifecycleConstraint(
+    LifecycleConstraint(
       poststatusexplicit =
         _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
       alivenessexplicit =
@@ -730,7 +724,7 @@ final class EntityCollection[E](
 
   private def _is_visible(
     record: Record,
-    policy: _VisibilityPolicy
+    policy: VisibilityPolicy
   ): Boolean = {
     val postok = policy.poststatuses match {
       case Some(allowed) =>

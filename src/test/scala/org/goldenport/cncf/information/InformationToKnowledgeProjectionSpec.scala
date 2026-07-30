@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   May. 20, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -177,8 +177,8 @@ final class InformationToKnowledgeProjectionSpec
         Some("rejected publisher evidence")
       ))
       _success(space.selectResolutionCandidate(informationid, author.candidateKey))
-      _success(space.updateResolutionCandidateStatus(informationid, supersededauthor.candidateKey, InformationBindingStatus.Superseded, Some(false)))
-      _success(space.updateResolutionCandidateStatus(informationid, rejectedpublisher.candidateKey, InformationBindingStatus.Rejected, Some(false)))
+      _success(space.updateResolutionCandidateStatus(informationid, supersededauthor.candidateKey, InformationBindingStatus.superseded, Some(false)))
+      _success(space.updateResolutionCandidateStatus(informationid, rejectedpublisher.candidateKey, InformationBindingStatus.rejected, Some(false)))
       val information = space.getInformation(informationid).getOrElse(fail("missing book information"))
 
       When("the effective book neighborhood is materialized")
@@ -236,7 +236,7 @@ final class InformationToKnowledgeProjectionSpec
       _success(space.selectResolutionCandidate(informationid, author.candidateKey))
       _success(space.appendFieldEvent(informationid, InformationFieldEvent(
         fieldPath = "informationLinks",
-        state = InformationFieldState.Stable,
+        state = InformationFieldState.stable,
         source = "manual",
         operation = Some("saveBook"),
         transformation = Some("information-link-review"),
@@ -246,7 +246,7 @@ final class InformationToKnowledgeProjectionSpec
       )))
       _success(space.appendFieldEvent(informationid, InformationFieldEvent(
         fieldPath = "informationLinks",
-        state = InformationFieldState.Stable,
+        state = InformationFieldState.stable,
         source = "manual",
         operation = Some("saveBook"),
         transformation = Some("information-link-review"),

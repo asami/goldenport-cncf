@@ -24,7 +24,7 @@ import org.smartdox.renderer.DoxHtmlRenderer
  * SimpleEntity content reference normalization and attachment workflow.
  *
  * @since   May.  3, 2026
- * @version May.  5, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ContentReferenceContent(
@@ -992,8 +992,9 @@ final class ContentReferenceWorkflow(
         ref.targetEntityId match {
           case Some(value) =>
             EntityId.parse(value).flatMap { id =>
-              val mediaId = _media_entity_id(kind, id)
-              mediaRepository.get(kind, mediaId).map(_ => Some(MediaAttachmentReference(ref, mediaId, kind, role)))
+              _media_entity_id(kind, id).flatMap { mediaid =>
+                mediaRepository.get(kind, mediaid).map(_ => Some(MediaAttachmentReference(ref, mediaid, kind, role)))
+              }
             }
           case None =>
             ref.urn.orElse(ref.normalizedRef).orElse(ref.originalRef)
@@ -1088,28 +1089,31 @@ final class ContentReferenceWorkflow(
   private def _resolve_blob_content_value(
     value: String
   )(using ExecutionContext): Consequence[Option[EntityId]] =
-    EntityId.parse(value).toOption match {
-      case Some(id) if id.collection.name == BlobRepository.CollectionId.name =>
-        val blobId = _blob_entity_id(id)
-        repository.get(blobId).map(_ => Some(blobId))
-      case Some(_) =>
-        Consequence.success(None)
-      case None =>
+    EntityId.parse(value) match {
+      case Consequence.Success(id) =>
+        _blob_entity_id(id).flatMap { blobid =>
+          repository.get(blobid).map(_ => Some(blobid))
+        }
+      case Consequence.Failure(_) =>
         urnRepository.resolve(TextusUrn.blob(value)).map(_.map(_.entityId))
     }
 
-  private def _blob_entity_id(id: EntityId): EntityId =
+  private def _blob_entity_id(id: EntityId): Consequence[EntityId] =
     if (id.collection == BlobRepository.CollectionId)
-      id
+      Consequence.success(id)
     else
-      id.copy(collection = BlobRepository.CollectionId)
+      Consequence.argumentInvalid(
+        s"Blob Entity ID collection mismatch: expected ${BlobRepository.CollectionId.print}, actual ${id.collection.print}"
+      )
 
-  private def _media_entity_id(kind: MediaKind, id: EntityId): EntityId = {
+  private def _media_entity_id(kind: MediaKind, id: EntityId): Consequence[EntityId] = {
     val collection = MediaEntityCollections.collection(kind)
     if (id.collection == collection)
-      id
+      Consequence.success(id)
     else
-      id.copy(collection = collection)
+      Consequence.argumentInvalid(
+        s"${kind.print} Entity ID collection mismatch: expected ${collection.print}, actual ${id.collection.print}"
+      )
   }
 
   private def _media_urn(kind: MediaKind, id: EntityId): TextusUrn =

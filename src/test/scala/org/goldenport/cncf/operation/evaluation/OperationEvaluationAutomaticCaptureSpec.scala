@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * chokepoint.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAutomaticCaptureSpec
@@ -272,7 +272,7 @@ final class OperationEvaluationAutomaticCaptureSpec
     "emit no fact when operation authorization rejects the request" in {
       Given("a production subsystem whose descriptor denies anonymous operation use")
       val subsystem = _track(TestComponentFactory.subsystemWithConfig(
-        Map(RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)),
+        Map(RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)),
         name = "evaluation-authorization"
       ))
       val sink = _success(DeterministicCorpusEvaluationSink.createC("evaluation", "test-corpus"))

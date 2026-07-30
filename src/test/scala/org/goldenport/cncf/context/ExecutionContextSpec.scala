@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version May.  5, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -51,7 +51,7 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
 
       ctx.major shouldBe "single"
       ctx.minor shouldBe "global"
-      ctx.idGeneration.namespace shouldBe IdGenerationContext.DefaultNamespace
+      ctx.idGeneration.namespace shouldBe IdGenerationContext.DEFAULT_NAMESPACE
     }
 
     "bind namespace overload through the UnitOfWork context" in {
@@ -180,7 +180,7 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
       val base = ExecutionContext.create()
       val config = RuntimeConfig.from(ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.ResourceUrnProvidersKey -> ConfigurationValue.StringValue(
+          RuntimeConfig.resourceUrnProvidersKey -> ConfigurationValue.StringValue(
             s"example=${classOf[ExampleUrnResourceProvider].getName}"
           )
         )),

@@ -21,7 +21,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -177,8 +177,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _find_first(
       attributes,
       Vector(
-        RuntimeConfig.CommandExecutionModeKey,
-        RuntimeConfig.RuntimeCommandExecutionModeKey,
+        RuntimeConfig.commandExecutionModeKey,
+        RuntimeConfig.runtimeCommandExecutionModeKey,
         "cncf.command.execution-mode",
         "cncf.runtime.command.execution-mode"
       )
@@ -193,8 +193,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _find_first(
       attributes,
       Vector(
-        RuntimeConfig.DebugCallTreeKey,
-        RuntimeConfig.RuntimeDebugCallTreeKey,
+        RuntimeConfig.debugCallTreeKey,
+        RuntimeConfig.runtimeDebugCallTreeKey,
         "cncf.debug.calltree",
         "cncf.runtime.debug.calltree",
         "x-textus-debug-calltree",
@@ -211,8 +211,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _find_first(
       attributes,
       Vector(
-        RuntimeConfig.DebugTraceJobKey,
-        RuntimeConfig.RuntimeDebugTraceJobKey,
+        RuntimeConfig.debugTraceJobKey,
+        RuntimeConfig.runtimeDebugTraceJobKey,
         "cncf.debug.trace-job",
         "cncf.runtime.debug.trace-job",
         "x-textus-debug-trace-job",
@@ -229,8 +229,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _find_first(
       attributes,
       Vector(
-        RuntimeConfig.DebugSaveCallTreeKey,
-        RuntimeConfig.RuntimeDebugSaveCallTreeKey,
+        RuntimeConfig.debugSaveCallTreeKey,
+        RuntimeConfig.runtimeDebugSaveCallTreeKey,
         "cncf.debug.save-calltree",
         "cncf.runtime.debug.save-calltree",
         "x-textus-debug-save-calltree",

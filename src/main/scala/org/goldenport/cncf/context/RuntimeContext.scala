@@ -32,7 +32,7 @@ import org.goldenport.util.StringUtils
  *  version Apr. 28, 2026
  *  version May. 10, 2026
  *  version Jun. 18, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -44,7 +44,7 @@ final class RuntimeContext(
   @deprecatedName("disposeAction", "0.5.1") disposeaction: UnitOfWork => Unit,
   token: String,
   val context: RuntimeContext.Context = RuntimeContext.Context.default,
-  val operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
+  val operationMode: OperationMode = RuntimeConfig.defaultOperationMode,
   val transitionValidationHook: TransitionValidationHook = TransitionValidationHook.noop,
   val entityCreateDefaultsPolicy: EntityCreateDefaultsPolicy = EntityCreateDefaultsPolicy.default
 ) extends ScopeContext() {

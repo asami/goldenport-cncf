@@ -9,82 +9,65 @@ import org.goldenport.cncf.knowledge.{
   KnowledgeNodeId,
   RdfNodeName
 }
-import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   May. 20, 2026
  *  version May. 30, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
 object InformationId {
-  def apply(value: String): InformationId =
-    _information_entity_id(value, "information")
+  def createC(value: String): Consequence[InformationId] =
+    EntityId.parse(value.trim)
 }
-
-private def _information_entity_id(
-  value: String,
-  collection: String
-): EntityId =
-  EntityId.parse(value.trim).fold(
-    _ => {
-      val namespace = IdGenerationContext.DefaultNamespace
-      EntityId(
-        namespace.major,
-        namespace.minor,
-        EntityCollectionId(namespace.major, namespace.minor, collection)
-      )
-    },
-    identity
-  )
 
 type InformationLifecycleState = value.InformationLifecycleState
 object InformationLifecycleState {
-  val Imported: InformationLifecycleState = value.InformationLifecycleState.imported
-  val Invalid: InformationLifecycleState = value.InformationLifecycleState.invalid
-  val NeedsResolution: InformationLifecycleState = value.InformationLifecycleState.needs_resolution
-  val ReadyForConfirmation: InformationLifecycleState = value.InformationLifecycleState.ready_for_confirmation
-  val Confirmed: InformationLifecycleState = value.InformationLifecycleState.confirmed
-  val Published: InformationLifecycleState = value.InformationLifecycleState.published
-  val Rejected: InformationLifecycleState = value.InformationLifecycleState.rejected
-  val Conflict: InformationLifecycleState = value.InformationLifecycleState.conflict
+  val imported: InformationLifecycleState = value.InformationLifecycleState.imported
+  val invalid: InformationLifecycleState = value.InformationLifecycleState.invalid
+  val needsResolution: InformationLifecycleState = value.InformationLifecycleState.needs_resolution
+  val readyForConfirmation: InformationLifecycleState = value.InformationLifecycleState.ready_for_confirmation
+  val confirmed: InformationLifecycleState = value.InformationLifecycleState.confirmed
+  val published: InformationLifecycleState = value.InformationLifecycleState.published
+  val rejected: InformationLifecycleState = value.InformationLifecycleState.rejected
+  val conflict: InformationLifecycleState = value.InformationLifecycleState.conflict
 }
 
 type InformationBindingStatus = value.InformationBindingStatus
 object InformationBindingStatus {
-  val Candidate: InformationBindingStatus = value.InformationBindingStatus.candidate
-  val Selected: InformationBindingStatus = value.InformationBindingStatus.selected
-  val Confirmed: InformationBindingStatus = value.InformationBindingStatus.confirmed
-  val Rejected: InformationBindingStatus = value.InformationBindingStatus.rejected
-  val Superseded: InformationBindingStatus = value.InformationBindingStatus.superseded
-  val Conflict: InformationBindingStatus = value.InformationBindingStatus.conflict
+  val candidate: InformationBindingStatus = value.InformationBindingStatus.candidate
+  val selected: InformationBindingStatus = value.InformationBindingStatus.selected
+  val confirmed: InformationBindingStatus = value.InformationBindingStatus.confirmed
+  val rejected: InformationBindingStatus = value.InformationBindingStatus.rejected
+  val superseded: InformationBindingStatus = value.InformationBindingStatus.superseded
+  val conflict: InformationBindingStatus = value.InformationBindingStatus.conflict
 }
 
 type InformationPublicationState = value.InformationPublicationState
 object InformationPublicationState {
-  val NotPublished: InformationPublicationState = value.InformationPublicationState.not_published
-  val Published: InformationPublicationState = value.InformationPublicationState.published
-  val Failed: InformationPublicationState = value.InformationPublicationState.failed
+  val notPublished: InformationPublicationState = value.InformationPublicationState.not_published
+  val published: InformationPublicationState = value.InformationPublicationState.published
+  val failed: InformationPublicationState = value.InformationPublicationState.failed
 }
 
 type InformationConflictState = value.InformationConflictState
 object InformationConflictState {
-  val Open: InformationConflictState = value.InformationConflictState.open
-  val Resolved: InformationConflictState = value.InformationConflictState.resolved
+  val open: InformationConflictState = value.InformationConflictState.open
+  val resolved: InformationConflictState = value.InformationConflictState.resolved
 }
 
 type InformationFieldState = value.InformationFieldState
 object InformationFieldState {
-  val Untouched: InformationFieldState = value.InformationFieldState.untouched
-  val Unresolved: InformationFieldState = value.InformationFieldState.unresolved
-  val Inferred: InformationFieldState = value.InformationFieldState.inferred
-  val Imported: InformationFieldState = value.InformationFieldState.imported
-  val Editing: InformationFieldState = value.InformationFieldState.editing
-  val Stable: InformationFieldState = value.InformationFieldState.stable
+  val untouched: InformationFieldState = value.InformationFieldState.untouched
+  val unresolved: InformationFieldState = value.InformationFieldState.unresolved
+  val inferred: InformationFieldState = value.InformationFieldState.inferred
+  val imported: InformationFieldState = value.InformationFieldState.imported
+  val editing: InformationFieldState = value.InformationFieldState.editing
+  val stable: InformationFieldState = value.InformationFieldState.stable
 }
 
 type InformationImportContext = value.InformationImportContext
@@ -94,7 +77,7 @@ final case class Information(
   domain: String,
   rawData: Record,
   workingData: Record,
-  state: InformationLifecycleState = InformationLifecycleState.Imported,
+  state: InformationLifecycleState = InformationLifecycleState.imported,
   importContext: Option[InformationImportContext] = None,
   validationIssues: Vector[InformationValidationIssue] = Vector.empty,
   resolutionCandidates: Vector[InformationResolutionCandidate] = Vector.empty,
@@ -121,7 +104,7 @@ final case class InformationIdentityBinding(
   knowledgeNodeId: Option[KnowledgeNodeId] = None,
   authority: Option[String] = None,
   confidence: Option[Double] = None,
-  status: InformationBindingStatus = InformationBindingStatus.Candidate
+  status: InformationBindingStatus = InformationBindingStatus.candidate
 )
 
 object InformationIdentityBinding {
@@ -186,7 +169,7 @@ final case class InformationConflict(
   informationValue: String,
   rdfValue: String,
   severity: String = "warning",
-  state: InformationConflictState = InformationConflictState.Open,
+  state: InformationConflictState = InformationConflictState.open,
   resolution: Option[String] = None
 )
 
@@ -303,29 +286,29 @@ object WebResourceInformation {
 }
 
 object InformationCapabilities {
-  val Read = "information:read"
-  val Import = "information:import"
-  val Edit = "information:edit"
-  val Validate = "information:validate"
-  val Resolve = "information:resolve"
-  val Confirm = "information:confirm"
-  val Reject = "information:reject"
-  val Publish = "information:publish"
-  val ConflictRead = "information:conflict:read"
-  val ConflictResolve = "information:conflict:resolve"
-  val AuditRead = "information:audit:read"
+  val read = "information:read"
+  val `import` = "information:import"
+  val edit = "information:edit"
+  val validate = "information:validate"
+  val resolve = "information:resolve"
+  val confirm = "information:confirm"
+  val reject = "information:reject"
+  val publish = "information:publish"
+  val conflictRead = "information:conflict:read"
+  val conflictResolve = "information:conflict:resolve"
+  val auditRead = "information:audit:read"
 
   val all: Vector[String] = Vector(
-    Read,
-    Import,
-    Edit,
-    Validate,
-    Resolve,
-    Confirm,
-    Reject,
-    Publish,
-    ConflictRead,
-    ConflictResolve,
-    AuditRead
+    read,
+    `import`,
+    edit,
+    validate,
+    resolve,
+    confirm,
+    reject,
+    publish,
+    conflictRead,
+    conflictResolve,
+    auditRead
   )
 }

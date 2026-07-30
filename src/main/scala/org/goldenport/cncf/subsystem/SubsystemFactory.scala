@@ -36,7 +36,7 @@ import org.goldenport.protocol.spec as spec
  *  version Mar. 29, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -136,7 +136,7 @@ object DefaultSubsystemFactory {
     }
     val subsystemname =
       RuntimeConfig
-        .getString(configuration, RuntimeConfig.SubsystemNameKey)
+        .getString(configuration, RuntimeConfig.subsystemNameKey)
         .map(_.trim)
         .filter(_.nonEmpty)
         .getOrElse(_subsystem_name)

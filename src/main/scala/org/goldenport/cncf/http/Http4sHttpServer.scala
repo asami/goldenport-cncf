@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -60,7 +60,7 @@ import org.goldenport.protocol.spec.OperationDefinition
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 import org.goldenport.observation.{Cause, Descriptor}
-import org.simplemodeling.model.datatype.EntityRevision
+import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 
 /*
  * @since   Jan.  7, 2026
@@ -2879,16 +2879,22 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_form_record(req)
-      record = form.upsertSingle("id", id)
-      values = _form_values(record)
+      validationrecord = form.upsertSingle("id", id)
+      values = _form_values(validationrecord)
       validation = _static_form_app_renderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("detail"))
       html <- validation match {
         case Some(result) if !result.valid =>
           _admin_entity_validation_error_response(app, entity, Some(id), values, result)
         case _ =>
-          val result = _dispatch_component_admin_entity_record("update", app, entity, record)
-          val page = _static_form_app_renderer.renderComponentAdminEntityUpdateResult(app, entity, id, values, result.applied, result.message, result.response.code)
-          _admin_form_transition_response(app, "entities", entity, "update", record, result, page)
+          _component_entity_route_canonical_id(app, entity, id) match {
+            case Some(canonicalid) =>
+              val record = form.upsertSingle("id", canonicalid)
+              val result = _dispatch_component_admin_entity_record("update", app, entity, record)
+              val page = _static_form_app_renderer.renderComponentAdminEntityUpdateResult(app, entity, id, values, result.applied, result.message, result.response.code)
+              _admin_form_transition_response(app, "entities", entity, "update", record, result, page)
+            case None =>
+              _web_error_response(Some(app), HStatus.BadRequest, s"Unknown entity route id: ${id}", req.uri.path.renderString)
+          }
       }
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
@@ -4207,7 +4213,7 @@ final class Http4sHttpServer(
 
   private def _configured_component_dev_dirs(): Vector[Path] =
     Vector(
-      RuntimeConfig.ComponentDevDirKey,
+      RuntimeConfig.componentDevDirKey,
       "cncf.component.dev.dir"
     ).flatMap(key => RuntimeConfig.getString(engine.runtimeSubsystem.configuration, key).toVector)
       .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
@@ -5225,6 +5231,25 @@ final class Http4sHttpServer(
   ): Boolean =
     engine.runtimeSubsystem.findComponent(componentName).isDefined
 
+  // A browser route may carry shortid as its locator.  Convert it at the HTTP
+  // boundary, before the Admin operation receives an EntityId input.
+  private def _component_entity_route_canonical_id(
+    app: String,
+    entity: String,
+    routeid: String
+  ): Option[String] =
+    val collectionoption = engine.runtimeSubsystem.
+      findComponent(app).
+      flatMap(_.entitySpace.entityOption[Any](entity))
+    EntityId.parse(routeid) match {
+      case Consequence.Success(id) =>
+        collectionoption.
+          filter(_.descriptor.collectionId == id.collection).
+          map(_ => id.value).
+          filter(_.nonEmpty)
+      case Consequence.Failure(_) => None
+    }
+
   private def _safe_asset_name(
     assetName: String
   ): Boolean =
@@ -5353,7 +5378,7 @@ final class Http4sHttpServer(
     MediaType.parse(value).fold(_ => MediaType.text.plain, identity)
 
   private[http] def _web_descriptor_config_root(): Option[WebResourceRoot] =
-    RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.WebDescriptorKey).map { value =>
+    RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.webDescriptorKey).map { value =>
       val path = Paths.get(value)
       if (WebResourceRoot.isArchiveFile(path))
         WebResourceRoot.archive(path)

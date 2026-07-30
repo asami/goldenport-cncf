@@ -39,7 +39,7 @@ import org.simplemodeling.model.datatype.{
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionRevisionSpec
@@ -687,14 +687,6 @@ final class EntityConditionalTransitionRevisionSpec
           "revision" -> entity.revision.value
         )
 
-      override def fromStoreRecord(
-        context: EntityStoreDecodeContext,
-        record: Record
-      ): Consequence[EmbeddedRoot] =
-        fromRecord(record).map(entity =>
-          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
-        )
-
       def fromRecord(record: Record): Consequence[EmbeddedRoot] =
         (
           record.getAs[EntityId]("id"),
@@ -732,14 +724,6 @@ final class EntityConditionalTransitionRevisionSpec
           "revision" -> entity.revision.value
         )
 
-      override def fromStoreRecord(
-        context: EntityStoreDecodeContext,
-        record: Record
-      ): Consequence[EmbeddedSuccessor] =
-        fromRecord(record).map(entity =>
-          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
-        )
-
       def fromRecord(record: Record): Consequence[EmbeddedSuccessor] =
         (
           record.getAs[EntityId]("id"),
@@ -771,14 +755,6 @@ final class EntityConditionalTransitionRevisionSpec
           "successor_id" -> entity.successorid
         )
 
-      override def fromStoreRecord(
-        context: EntityStoreDecodeContext,
-        record: Record
-      ): Consequence[DetachedRoot] =
-        fromRecord(record).map(entity =>
-          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
-        )
-
       def fromRecord(record: Record): Consequence[DetachedRoot] =
         (record.getAs[EntityId]("id"), record.getString("status")) match {
           case (Some(id), Some(status)) =>
@@ -808,14 +784,6 @@ final class EntityConditionalTransitionRevisionSpec
         Record.dataAuto(
           "id" -> entity.id.value,
           "label" -> entity.label
-        )
-
-      override def fromStoreRecord(
-        context: EntityStoreDecodeContext,
-        record: Record
-      ): Consequence[DetachedSuccessor] =
-        fromRecord(record).map(entity =>
-          entity.copy(id = entity.id.copy(collection = context.owningCollectionId))
         )
 
       def fromRecord(record: Record): Consequence[DetachedSuccessor] =

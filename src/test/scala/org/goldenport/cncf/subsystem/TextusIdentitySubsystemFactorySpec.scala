@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 26, 2026
  *  version Apr. 24, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TextusIdentitySubsystemFactorySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -45,7 +45,7 @@ final class TextusIdentitySubsystemFactorySpec extends AnyWordSpec with Matchers
       _with_development_repository { repository =>
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.RepositoryDirKey ->
+            RuntimeConfig.repositoryDirKey ->
               ConfigurationValue.StringValue(s"scala-cli:${repository}")
           )),
           ConfigurationTrace.empty

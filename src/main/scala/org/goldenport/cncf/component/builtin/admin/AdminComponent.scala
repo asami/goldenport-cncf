@@ -114,7 +114,7 @@ import org.simplemodeling.model.datatype.{
  *  version Feb. 19, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {}
@@ -1948,21 +1948,21 @@ object AdminComponent {
     val defaults = ObservabilityEngine.ExecutionHistoryConfig()
     Vector(
       _DeclaredVariationPoint(
-        key = RuntimeConfig.ExecutionHistoryRecentLimitKey,
+        key = RuntimeConfig.executionHistoryRecentLimitKey,
         value = defaults.recentLimit.toString,
         brief = "Recent execution history size.",
         detail =
           "Number of most recent action execution records retained unconditionally for admin inspection."
       ),
       _DeclaredVariationPoint(
-        key = RuntimeConfig.ExecutionHistoryFilteredLimitKey,
+        key = RuntimeConfig.executionHistoryFilteredLimitKey,
         value = defaults.filteredLimit.toString,
         brief = "Filtered execution history size.",
         detail =
           "Number of additional action execution records retained when they match configured debug filters."
       ),
       _DeclaredVariationPoint(
-        key = RuntimeConfig.ExecutionHistoryFilterOperationContainsKey,
+        key = RuntimeConfig.executionHistoryFilterOperationContainsKey,
         value = "",
         brief = "Operation-name debug filter.",
         detail =
@@ -2047,7 +2047,7 @@ object AdminComponent {
         policyselection,
         expectedrevision
       )
-      inputrecord = _admin_entity_record(collection, _action_record(core))
+      inputrecord <- _admin_entity_record(collection, _action_record(core))
       record <- _canonical_admin_entity_record(
         operation,
         entityexecutioncontext,
@@ -2369,10 +2369,7 @@ object AdminComponent {
               record.getString("id"),
               "entity id is required"
             )
-            entityid <- Consequence.fromOption(
-              collection.resolveEntityId(idtext),
-              s"Entity record not found: ${idtext}"
-            )
+            entityid <- _resolve_entity_id(collection, idtext)
             value <- _admin_entity_revision_value(
               executioncontext,
               collection,
@@ -2390,7 +2387,7 @@ object AdminComponent {
       entityid: String
   )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
     for {
-      id <- EntityId.parse(entityid)
+      id <- _exact_entity_id(collection, entityid)
       _ <- ctx.entityStoreSpace.delete(UnitOfWorkOp.EntityStoreDelete(id))
       _ = collection.evict(id)
     } yield ()
@@ -2503,10 +2500,7 @@ object AdminComponent {
       )
       view = args.get("view").map(_.toString).getOrElse("detail")
       fields = _entity_view_fields(component, entityname, view)
-      entityid <- Consequence.fromOption(
-        collection.resolveEntityId(id),
-        s"Entity record not found: ${id}"
-      )
+      entityid <- _resolve_entity_id(collection, id)
       revisionvalue <- _admin_entity_revision_value(
         entityexecutioncontext,
         collection,
@@ -2832,18 +2826,22 @@ object AdminComponent {
         _view_browser(component, viewname),
         s"View browser not found: ${viewname}"
       )
-      idoption <- _optional_entity_id(args, "id", componentname, "view", viewname)
+      idoption <- _optional_entity_id(args, "id")
       response <- idoption match {
         case Some((idText, id)) =>
-          browser.find_with_context(id)(using core.executionContext).flatMap { value =>
-            _read_value_response_record_with_blobs(
-              core,
-              "view",
-              componentname,
-              viewname,
-              idText,
-              value
-            )(using core.executionContext).map(OperationResponse.RecordResponse(_))
+          _view_exact_entity_collection(component, viewname).flatMap { entitycollection =>
+            _exact_entity_id(entitycollection, id).flatMap { canonicalid =>
+              browser.find_with_context(canonicalid)(using core.executionContext).flatMap { value =>
+                _read_value_response_record_with_blobs(
+                  core,
+                  "view",
+                  componentname,
+                  viewname,
+                  idText,
+                  value
+                )(using core.executionContext).map(OperationResponse.RecordResponse(_))
+              }
+            }
           }
         case None =>
           _admin_view_page_response(core, componentname, viewname, browser, paging)
@@ -2901,25 +2899,29 @@ object AdminComponent {
         _aggregate_collection(component, aggregatename),
         s"Aggregate collection not found: ${aggregatename}"
       )
-      idoption <- _optional_entity_id(args, "id", componentname, "aggregate", aggregatename)
+      idoption <- _optional_entity_id(args, "id")
       response <- idoption match {
         case Some((idText, id)) =>
-          collection.resolve_with_context(id)(using core.executionContext).recoverWith {
-            case c if _is_not_implemented(c) =>
-              _admin_aggregate_entity_read(component, aggregatename, idText)
-            case c =>
-              Consequence.Failure(c)
-          }.flatMap { value =>
-            val displayvalue =
-              _admin_aggregate_display_value(component, aggregatename, idText, value)
-            _read_value_response_record_with_blobs(
-              core,
-              "aggregate",
-              componentname,
-              aggregatename,
-              idText,
-              displayvalue
-            )(using core.executionContext).map(OperationResponse.RecordResponse(_))
+          _aggregate_exact_entity_collection(component, aggregatename).flatMap { entitycollection =>
+            _exact_entity_id(entitycollection, id).flatMap { canonicalid =>
+              collection.resolve_with_context(canonicalid)(using core.executionContext).recoverWith {
+                case c if _is_not_implemented(c) =>
+                  _admin_aggregate_entity_read(component, aggregatename, idText)
+                case c =>
+                  Consequence.Failure(c)
+              }.flatMap { value =>
+                val displayvalue =
+                  _admin_aggregate_display_value(component, aggregatename, idText, value)
+                _read_value_response_record_with_blobs(
+                  core,
+                  "aggregate",
+                  componentname,
+                  aggregatename,
+                  idText,
+                  displayvalue
+                )(using core.executionContext).map(OperationResponse.RecordResponse(_))
+              }
+            }
           }
         case None =>
           _admin_aggregate_page_response(
@@ -3083,25 +3085,11 @@ object AdminComponent {
 
   private def _optional_entity_id(
     args: Map[String, Any],
-    key: String,
-      componentname: String,
-    namespace: String,
-      collectionname: String
+    key: String
   ): Consequence[Option[(String, EntityId)]] =
     args.get(key).map(_.toString).filter(_.nonEmpty) match {
       case Some(value) =>
         EntityId.parse(value)
-          .orElse {
-            val componentpart =
-              NamingConventions.toNormalizedSegment(componentname).replace('-', '_')
-            val collectionpart =
-              NamingConventions.toNormalizedSegment(collectionname).replace('-', '_')
-            Consequence.success(EntityId(
-              namespace,
-              value,
-              EntityCollectionId(componentpart, namespace, collectionpart)
-            ))
-          }
           .map(id => Some(value -> id))
       case None => Consequence.success(None)
     }
@@ -3286,7 +3274,7 @@ object AdminComponent {
   private def _admin_entity_record(
     collection: EntityCollection[?],
     args: Record
-  ): Record = {
+  ): Consequence[Record] = {
     val data = args.filterFields { field =>
       field.key != "component" &&
         field.key != "entity" &&
@@ -3297,12 +3285,11 @@ object AdminComponent {
     val withid =
       data.getString("id").filter(_.nonEmpty) match {
         case Some(idOrShortid) =>
-          collection.resolveEntityId(idOrShortid)
+          _resolve_entity_id(collection, idOrShortid)
             .map(id => data.upsertSingle("id", id.value))
-            .getOrElse(data)
         case None =>
           val cid = collection.descriptor.collectionId
-          data.appendField("id", EntityId(cid.major, cid.minor, cid).value)
+          Consequence.success(data.appendField("id", EntityId(cid.major, cid.minor, cid).value))
       }
     withid
   }
@@ -3331,11 +3318,48 @@ object AdminComponent {
     id: String,
     fields: Vector[String] = Vector.empty
   ): Option[Record] =
-    collection.resolveEntityId(id).flatMap { canonicalid =>
+    _resolve_entity_route_locator_option(collection, id).flatMap { canonicalid =>
       _entity_values(collection)
         .find(x => collection.descriptor.persistent.id(x) == canonicalid)
     }
       .map(_entity_view_record(collection, _, fields))
+
+  private def _resolve_entity_id(
+    collection: EntityCollection[?],
+    value: String
+  ): Consequence[EntityId] =
+    _exact_entity_id(collection, value)
+
+  // Route locators may use a shortid; operation and record `id` inputs above
+  // always use _resolve_entity_id and therefore require canonical EntityId.
+  private def _resolve_entity_route_locator_option(
+    collection: EntityCollection[?],
+    value: String
+  ): Option[EntityId] =
+    EntityId.parse(value).toOption match {
+      case Some(id) if id.collection == collection.descriptor.collectionId => Some(id)
+      case Some(_) => None
+      case None => collection.resolveEntityId(value)
+    }
+
+  private def _exact_entity_id(
+    collection: EntityCollection[?],
+    value: String
+  ): Consequence[EntityId] =
+    EntityId.parse(value).flatMap { id =>
+      _exact_entity_id(collection, id)
+    }
+
+  private def _exact_entity_id(
+    collection: EntityCollection[?],
+    id: EntityId
+  ): Consequence[EntityId] =
+    if (id.collection == collection.descriptor.collectionId)
+      Consequence.success(id)
+    else
+      Consequence.argumentInvalid(
+        s"entity ID collection mismatch: expected ${collection.descriptor.collectionId.print}, actual ${id.collection.print}"
+      )
 
   private def _entity_view_fields(
     component: Component,
@@ -3896,6 +3920,30 @@ object AdminComponent {
       }
   }
 
+  private def _view_entity_name(
+    component: Component,
+    viewname: String
+  ): Option[String] = {
+    val candidates = _surface_name_candidates(viewname, "view")
+    component.viewDefinitions
+      .find(x =>
+        candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate))
+      )
+      .map(_.entityName)
+  }
+
+  private def _view_exact_entity_collection(
+    component: Component,
+    viewname: String
+  ): Consequence[EntityCollection[?]] =
+    for {
+      entityname <- Consequence.fromOption(
+        _view_entity_name(component, viewname),
+        s"View definition not found: ${viewname}"
+      )
+      collection <- component.entitySpace.entityByNameC[Any](entityname)
+    } yield collection
+
   private def _aggregate_collection(
     component: Component,
       aggregatename: String
@@ -3932,16 +3980,21 @@ object AdminComponent {
   private def _aggregate_entity_collection(
     component: Component,
       aggregatename: String
-  ): Option[(String, EntityCollection[?])] = {
-    val names = (
-      _aggregate_entity_name(component, aggregatename).toVector ++
-        _surface_name_candidates(aggregatename, "aggregate")
-    ).distinct
-    names.iterator
+  ): Option[(String, EntityCollection[?])] =
+    _aggregate_entity_name(component, aggregatename)
       .flatMap(name => _entity_collection(component, name).map(name -> _))
-      .toSeq
-      .headOption
-  }
+
+  private def _aggregate_exact_entity_collection(
+    component: Component,
+    aggregatename: String
+  ): Consequence[EntityCollection[?]] =
+    for {
+      entityname <- Consequence.fromOption(
+        _aggregate_entity_name(component, aggregatename),
+        s"Aggregate definition not found: ${aggregatename}"
+      )
+      collection <- component.entitySpace.entityByNameC[Any](entityname)
+    } yield collection
 
   private def _surface_name_candidates(
     value: String,

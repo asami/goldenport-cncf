@@ -265,20 +265,6 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
       execution_context.idGeneration.entityId(collection, purpose)
     }
 
-  protected final def collection_entity_id(
-    collection: EntityCollectionId,
-    purpose: String
-  ): EntityId =
-    _execution_capability(
-      "id.collection-entity-id",
-      Map(
-        "purpose" -> purpose,
-        "collection" -> collection.name
-      )
-    ) {
-      execution_context.idGeneration.entityIdInCollectionNamespace(collection, purpose)
-    }
-
   protected final def opaque_id(purpose: String): String =
     _execution_capability("id.opaque-id", Map("purpose" -> purpose)) {
       execution_context.idGeneration.opaqueId(purpose)
@@ -1005,40 +991,39 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       aggregatename: String,
     id: EntityId
   ): Consequence[Unit] =
-    if (_aggregate_has_entity_collection(aggregatename))
-      AggregateAuthorization.authorizeInstance(
-        aggregateName = aggregatename,
-        targetId = id,
-        accessKind = "read",
-        loadRecord = _aggregate_load_record(aggregatename),
-        access = _aggregate_declared_access,
-        sourceComponentName = component_name_option,
-        targetComponentName = component_name_option,
-        operationModel = _aggregate_operation_model,
-        relationRules = _aggregate_relation_rules,
-        naturalConditions = _aggregate_natural_conditions
-      )(using execution_context)
-    else
-      Consequence.unit
+    _aggregate_declared_entity_collection_option_c(aggregatename).flatMap {
+      case Some(_) =>
+        _aggregate_entity_collection_c(aggregatename, id).flatMap { _ =>
+          AggregateAuthorization.authorizeInstance(
+            aggregateName = aggregatename,
+            targetId = id,
+            accessKind = "read",
+            loadRecord = _aggregate_load_record(aggregatename),
+            access = _aggregate_declared_access,
+            sourceComponentName = component_name_option,
+            targetComponentName = component_name_option,
+            operationModel = _aggregate_operation_model,
+            relationRules = _aggregate_relation_rules,
+            naturalConditions = _aggregate_natural_conditions
+          )(using execution_context)
+        }
+      case None =>
+        Consequence.unit
+    }
 
   private def _aggregate_load_record(
       aggregatename: String
   )(id: EntityId): Consequence[Option[Record]] =
-    component.flatMap(_aggregate_entity_collection_name(_, aggregatename)).flatMap(name =>
-      component.flatMap(_.entitySpace.entityOption[Any](name))
-    ) match {
-        case Some(collection) => _aggregate_load_record_from_collection(collection, id)
-        case None => Consequence.success(None)
-      }
+    _aggregate_entity_collection_c(aggregatename, id).flatMap(
+      _aggregate_load_record_from_collection(_, id)
+    )
 
   private def _aggregate_load_record_from_collection(
     collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
     id: EntityId
   ): Consequence[Option[Record]] = {
-    val effectiveid = _canonical_aggregate_entity_id(collection, id)
-
     def _to_record_(entity: Any): Consequence[Record] =
-      _aggregate_raw_record(effectiveid).map {
+      _aggregate_raw_record(id).map {
         case Some(record) =>
           collection.descriptor.persistent.authorizationRecord(entity, record)
         case None =>
@@ -1048,11 +1033,11 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           collection.descriptor.persistent.authorizationRecord(entity)
       }
 
-    collection.resolve(effectiveid).flatMap(x => _to_record_(x).map(Some(_))).recoverWith {
+    collection.resolve(id).flatMap(x => _to_record_(x).map(Some(_))).recoverWith {
       case conclusion if _is_aggregate_record_not_found(conclusion) =>
         given EntityPersistent[Any] =
           collection.descriptor.persistent.asInstanceOf[EntityPersistent[Any]]
-        EntityStore.standard().load[Any](effectiveid)(using
+        EntityStore.standard().load[Any](id)(using
           summon[EntityPersistent[Any]],
           execution_context
         ).flatMap {
@@ -1062,17 +1047,6 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       case conclusion =>
         Consequence.Failure(conclusion)
     }
-  }
-
-  private def _canonical_aggregate_entity_id(
-    collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
-    id: EntityId
-  ): EntityId = {
-    val cid = collection.descriptor.collectionId
-    if (id.collection == cid)
-      id
-    else
-      EntityId(id.major, id.minor, cid, id.timestamp, id.entropy)
   }
 
   private def _aggregate_raw_record(
@@ -1104,12 +1078,59 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       aggregatename
     ))
 
-  private def _aggregate_has_entity_collection(
+  private def _aggregate_declared_entity_collection_option_c(
       aggregatename: String
-  ): Boolean =
-    component.flatMap(c =>
-      _aggregate_entity_collection_name(c, aggregatename).flatMap(c.entitySpace.entityOption[Any])
-    ).isDefined
+  ): Consequence[Option[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]] =
+    component match {
+      case Some(c) =>
+        _aggregate_entity_collection_name(c, aggregatename)
+          .map { entityname =>
+            c.entitySpace.entityCollectionsByName(entityname) match {
+              case Vector() =>
+                Consequence.success(None)
+              case Vector(collection) =>
+                Consequence.success(
+                  Some(
+                    collection.asInstanceOf[
+                      org.goldenport.cncf.entity.runtime.EntityCollection[Any]
+                    ]
+                  )
+                )
+              case collections =>
+                val candidates =
+                  collections.map(_.descriptor.collectionId.print).sorted.mkString(", ")
+                Consequence.stateInvalid(
+                  s"$aggregatename aggregate entity collection is ambiguous: $entityname",
+                  Vector(
+                    Descriptor.Facet.Policy("entity.collection.identity"),
+                    Descriptor.Facet.Reason("entity-collection-name-ambiguous"),
+                    Descriptor.Facet.Actual(candidates)
+                  )
+                )
+            }
+          }
+          .getOrElse(Consequence.success(None))
+      case None =>
+        Consequence.uninitializedState
+    }
+
+  private def _aggregate_entity_collection_c(
+    aggregatename: String,
+    id: EntityId
+  ): Consequence[org.goldenport.cncf.entity.runtime.EntityCollection[Any]] =
+    _aggregate_declared_entity_collection_option_c(aggregatename).flatMap {
+      case Some(collection)
+          if collection.descriptor.collectionId == id.collection =>
+        Consequence.success(collection)
+      case Some(_) =>
+        Consequence.argumentInvalid(
+          s"$aggregatename aggregate does not own exact collection: ${id.collection.print}"
+        )
+      case None =>
+        Consequence.argumentInvalid(
+          s"$aggregatename aggregate entity collection is not available"
+        )
+    }
 
   protected final def aggregate_load_or_throw[A](
       collectionName: String,
@@ -1182,10 +1203,10 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[Unit] =
     component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
-        collection.createRecordSynced(
-          _aggregate_canonical_root_record(collection, record)
-        )(using execution_context).map { _ =>
-          component.foreach(_.viewSpace.invalidate(entityname))
+        _aggregate_exact_root_record_c(collection, record).flatMap { exactrecord =>
+          collection.createRecordSynced(exactrecord)(using execution_context).map { _ =>
+            component.foreach(_.viewSpace.invalidate(entityname))
+          }
         }
       case None => Consequence.argumentInvalid(s"$entityname entity collection is not available")
     }
@@ -1198,56 +1219,56 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[Unit] =
     component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
-        val canonicalrecord =
-          _aggregate_canonical_root_record(collection, record)
-        val saved =
-          if (
-            executionpolicy.concurrencyPolicy ==
-              EntityConcurrencyPolicy.None
-          )
-            collection.saveRecordManaged(
-              canonicalrecord,
-              executionpolicy
-            )(using execution_context)
-          else
-            collection.descriptor.revisionBinding match {
-              case Some(binding)
-                  if binding.representation ==
-                    EntityRevisionRepresentation.Embedded =>
-                collection.saveRecordVersioned(
-                  canonicalrecord,
-                  expectedrevision,
-                  executionpolicy
-                )(using execution_context).map(_ => ())
-              case Some(binding)
-                  if binding.representation ==
-                    EntityRevisionRepresentation.Detached =>
-                collection.saveRecordDetached(
-                  canonicalrecord,
-                  expectedrevision,
-                  executionpolicy
-                )(using execution_context).map(_ => ())
-              case Some(_) =>
-                Consequence.operationInvalid(
-                  "aggregate-revision-representation",
-                  "unsupported aggregate root revision representation"
-                )
-              case None =>
-                Consequence.operationInvalid(
-                  "aggregate-revision-representation",
-                  "aggregate root has no managed revision representation"
-                )
-            }
-        saved.map { _ =>
-          component.foreach(_.viewSpace.invalidate(entityname))
-          ()
-        }.recoverWith { conclusion =>
-          if (
-            ConclusionDiagnostics.classify(conclusion).reason
-              .contains("committed-entity-projection-failure")
-          )
+        _aggregate_exact_root_record_c(collection, record, requireid = true).flatMap { exactrecord =>
+          val saved =
+            if (
+              executionpolicy.concurrencyPolicy ==
+                EntityConcurrencyPolicy.None
+            )
+              collection.saveRecordManaged(
+                exactrecord,
+                executionpolicy
+              )(using execution_context)
+            else
+              collection.descriptor.revisionBinding match {
+                case Some(binding)
+                    if binding.representation ==
+                      EntityRevisionRepresentation.Embedded =>
+                  collection.saveRecordVersioned(
+                    exactrecord,
+                    expectedrevision,
+                    executionpolicy
+                  )(using execution_context).map(_ => ())
+                case Some(binding)
+                    if binding.representation ==
+                      EntityRevisionRepresentation.Detached =>
+                  collection.saveRecordDetached(
+                    exactrecord,
+                    expectedrevision,
+                    executionpolicy
+                  )(using execution_context).map(_ => ())
+                case Some(_) =>
+                  Consequence.operationInvalid(
+                    "aggregate-revision-representation",
+                    "unsupported aggregate root revision representation"
+                  )
+                case None =>
+                  Consequence.operationInvalid(
+                    "aggregate-revision-representation",
+                    "aggregate root has no managed revision representation"
+                  )
+              }
+          saved.map { _ =>
             component.foreach(_.viewSpace.invalidate(entityname))
-          Consequence.Failure(conclusion)
+            ()
+          }.recoverWith { conclusion =>
+            if (
+              ConclusionDiagnostics.classify(conclusion).reason
+                .contains("committed-entity-projection-failure")
+            )
+              component.foreach(_.viewSpace.invalidate(entityname))
+            Consequence.Failure(conclusion)
+          }
         }
       case None =>
         Consequence.argumentInvalid(
@@ -1265,15 +1286,12 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     targetid: EntityId,
     revisionrequired: Boolean
   ): Consequence[AggregateRootState[Any]] =
-    component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
-      case Some(collection) =>
-        val canonicalid =
-          _canonical_aggregate_entity_id(collection, targetid)
+    _aggregate_entity_collection_c(entityname, targetid).flatMap { collection =>
         if (!revisionrequired)
           execution_context.entityStoreSpace
             .load(
               UnitOfWorkOp.EntityStoreLoad(
-                canonicalid,
+                targetid,
                 collection.descriptor.persistent
               )
             )(using execution_context)
@@ -1288,7 +1306,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
                 EntityRevisionRepresentation.Embedded =>
             execution_context.entityStoreSpace
               .loadSnapshot(
-                canonicalid,
+                targetid,
                 collection.descriptor.persistent
               )(using execution_context)
               .flatMap(snapshot =>
@@ -1305,7 +1323,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
                 EntityRevisionRepresentation.Detached =>
             execution_context.entityStoreSpace
               .loadDetached(
-                canonicalid,
+                targetid,
                 collection.descriptor.persistent
               )(using execution_context)
               .flatMap(carrier =>
@@ -1328,10 +1346,6 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
               "aggregate root has no managed revision representation"
             )
         }
-      case None =>
-        Consequence.argumentInvalid(
-          s"$entityname entity collection is not available"
-        )
     }
 
   private def _aggregate_mutation_policy(
@@ -1401,54 +1415,73 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[Unit] =
     component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
-        val rootrecord =
-          SimpleEntityStorageShapePolicy.withoutManagedFields(
-            _aggregate_canonical_root_record(
-              collection,
-              collection.descriptor.persistent.toRecord(rootstate.entity)
+        for {
+          rootrecord <- _aggregate_exact_root_record_c(
+            collection,
+            collection.descriptor.persistent.toRecord(rootstate.entity),
+            requireid = true
+          ).map(SimpleEntityStorageShapePolicy.withoutManagedFields)
+          aggregaterecord <- _aggregate_exact_root_record_c(
+            collection,
+            aggregate.toRecord(),
+            requireid = true
+          ).map(SimpleEntityStorageShapePolicy.withoutManagedFields)
+          _ <- {
+            val aggregatemap = aggregaterecord.asMap
+            if (
+              rootrecord.asMap.forall { case (key, value) =>
+                aggregatemap.get(key).contains(value)
+              }
             )
-          )
-        val aggregaterecord =
-          SimpleEntityStorageShapePolicy.withoutManagedFields(
-            _aggregate_canonical_root_record(collection, aggregate.toRecord())
-          )
-        val aggregatemap = aggregaterecord.asMap
-        if (
-          rootrecord.asMap.forall { case (key, value) =>
-            aggregatemap.get(key).contains(value)
-        }
-        )
-          Consequence.unit
-        else
-          Consequence.operationConflict(
-            "aggregate-command",
-            Vector(
-              Descriptor.Facet.Reason("aggregate-root-snapshot-mismatch"),
-              Descriptor.Facet.Policy("entity.optimistic-concurrency"),
-              Descriptor.Facet.Actual(targetid.print)
-            )
-          )
+              Consequence.unit
+            else
+              Consequence.operationConflict(
+                "aggregate-command",
+                Vector(
+                  Descriptor.Facet.Reason("aggregate-root-snapshot-mismatch"),
+                  Descriptor.Facet.Policy("entity.optimistic-concurrency"),
+                  Descriptor.Facet.Actual(targetid.print)
+                )
+              )
+          }
+        } yield ()
       case None =>
         Consequence.argumentInvalid(
           s"$entityname entity collection is not available"
         )
     }
 
-  private def _aggregate_canonical_root_record(
+  private def _aggregate_exact_root_record_c(
     collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
-    record: Record
-  ): Record =
-    record.getAny("id")
-      .flatMap {
-        case id: EntityId => Some(id)
-        case value: String => EntityId.parse(value).toOption
-        case _ => None
-      }
-      .map { id =>
-        val canonicalid = _canonical_aggregate_entity_id(collection, id)
-        record.upsertSingle("id", canonicalid)
-      }
-      .getOrElse(record)
+    record: Record,
+    requireid: Boolean = false
+  ): Consequence[Record] =
+    record.getAny("id") match {
+      case None if requireid =>
+        Consequence.argumentInvalid("aggregate record ID is required for update persistence")
+      case None =>
+        Consequence.success(record)
+      case Some(id: EntityId) =>
+        _aggregate_exact_root_record_c(collection, record, id)
+      case Some(value: String) =>
+        EntityId.parse(value).flatMap(_aggregate_exact_root_record_c(collection, record, _))
+      case Some(value) =>
+        Consequence.argumentInvalid(
+          s"aggregate record ID must be an EntityId or canonical String: ${value.getClass.getName}"
+        )
+    }
+
+  private def _aggregate_exact_root_record_c(
+    collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
+    record: Record,
+    id: EntityId
+  ): Consequence[Record] =
+    if (id.collection == collection.descriptor.collectionId)
+      Consequence.success(record.upsertSingle("id", id))
+    else
+      Consequence.argumentInvalid(
+        s"aggregate record ID collection mismatch: ${id.collection.print}"
+      )
 
   protected final def aggregate_create[A <: org.goldenport.record.RecordPresentable](
     entityName: String,
@@ -1814,18 +1847,20 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       targetid: EntityId,
       commandname: String
   ): Consequence[Unit] =
-    AggregateAuthorization.authorizeInstance(
-      aggregateName = aggregatename,
-      targetId = targetid,
-      accessKind = s"command:$commandname",
-      loadRecord = _aggregate_load_record(aggregatename),
-      access = _aggregate_declared_access,
-      sourceComponentName = component_name_option,
-      targetComponentName = component_name_option,
-      operationModel = _aggregate_operation_model,
-      relationRules = _aggregate_relation_rules,
-      naturalConditions = _aggregate_natural_conditions
-    )(using execution_context)
+    _aggregate_entity_collection_c(aggregatename, targetid).flatMap { _ =>
+      AggregateAuthorization.authorizeInstance(
+        aggregateName = aggregatename,
+        targetId = targetid,
+        accessKind = s"command:$commandname",
+        loadRecord = _aggregate_load_record(aggregatename),
+        access = _aggregate_declared_access,
+        sourceComponentName = component_name_option,
+        targetComponentName = component_name_option,
+        operationModel = _aggregate_operation_model,
+        relationRules = _aggregate_relation_rules,
+        naturalConditions = _aggregate_natural_conditions
+      )(using execution_context)
+    }
 }
 
 trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -2571,24 +2606,6 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       message.contains("notfound")
   }
 
-  private def _canonical_entity_id(
-    id: EntityId
-  ): EntityId =
-    component
-      .flatMap { component =>
-        component.entitySpace.entityOption(id.collection).orElse(
-          component.entitySpace.entityOption[Any](id.collection.name)
-        )
-      }
-      .map { collection =>
-        val cid = collection.descriptor.collectionId
-        if (id.collection == cid)
-          id
-        else
-          EntityId(id.major, id.minor, cid, id.timestamp, id.entropy)
-      }
-      .getOrElse(id)
-
   protected final def entity_create[T](
     entity: T
   )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
@@ -2629,7 +2646,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ensure_component_application_datastore()
     tc.id(entity) match {
       case Some(sourceid) =>
-        val id = _canonical_entity_id(sourceid)
+        val id = sourceid
         val op = UnitOfWorkOp.EntityStoreUpsert(
           entity,
           id,
@@ -2654,7 +2671,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ensure_component_application_datastore()
     tc.id(entity) match {
       case Some(sourceid) =>
-        val id = _canonical_entity_id(sourceid)
+        val id = sourceid
         val createauthorization =
           _entity_uow_authorization(Some(id.collection.name), None, "create")
             .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
@@ -2744,7 +2761,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     _emit_entity_access(
       "entity.load.start",
       _entity_load_attributes(effectiveid, "unknown", "start")
@@ -2914,7 +2931,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     exec_from(
       _effective_entity_persistent_c(effectiveid.collection, tc)
     ).flatMap { effectivetc =>
@@ -2947,7 +2964,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     exec_from(
       _component_entity_owner(Vector(effectiveid.collection)).map(_ => ())
     ).flatMap { _ =>
@@ -2993,7 +3010,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     serviceinternal: Boolean
   )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val ownership =
       if (serviceinternal)
         _component_entity_owner(Vector(effectiveid.collection)).map(_ => ())
@@ -3046,7 +3063,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     exec_from(
       _effective_entity_persistent_c(effectiveid.collection, tc)
     ).flatMap { effectivetc =>
@@ -3364,7 +3381,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     patch: T
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[Record] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val op = new UnitOfWorkOp.EntityStoreUpdateById(
       effectiveid,
       patch,
@@ -3384,7 +3401,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       expectedRevision: EntityRevision
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val op = UnitOfWorkOp.EntityStoreUpdateByIdObserved(
       effectiveid,
       patch,
@@ -3406,7 +3423,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     patch: T
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[Record] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val authorization =
       _entity_uow_authorization(
         Some(effectiveid.collection.name),
@@ -3428,7 +3445,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       expectedRevision: EntityRevision
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val authorization =
       _entity_uow_authorization(
         Some(effectiveid.collection.name),
@@ -3508,7 +3525,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     tc: EntityPersistentUpdate[T]
   ): ExecUowM[EntityRevisionCarrier[Record]] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val authorization =
       _entity_uow_authorization(
         Some(effectiveid.collection.name),
@@ -3545,13 +3562,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     serviceinternal: Boolean
   ): ExecUowM[EntityConditionalTransitionResult[R, S]] = {
     ensure_component_application_datastore()
-    val rootid = _canonical_entity_id(request.rootId)
+    val rootid = request.rootId
     val successorintent = request.successor match {
       case create: EntitySuccessorIntent.Create[c, S] @unchecked =>
         create
       case bind: EntitySuccessorIntent.Bind[S] @unchecked =>
         new EntitySuccessorIntent.Bind(
-          _canonical_entity_id(bind.id),
+          bind.id,
           bind.persisted
         )
     }
@@ -3665,7 +3682,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val op = UnitOfWorkOp.EntityStoreDelete(
       effectiveid,
       _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "delete")
@@ -3675,7 +3692,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_restore(id: EntityId): ExecUowM[Unit] = {
     ensure_component_application_datastore()
-    val effectiveid = _canonical_entity_id(id)
+    val effectiveid = id
     val op = UnitOfWorkOp.EntityStoreRestore(
       effectiveid,
       _entity_uow_authorization(
@@ -3689,7 +3706,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_delete_hard(id: EntityId): ExecUowM[Unit] = {
     ensure_component_application_datastore()
-    val op = UnitOfWorkOp.EntityStoreDeleteHard(_canonical_entity_id(id))
+    val op = UnitOfWorkOp.EntityStoreDeleteHard(id)
     ConsequenceT.liftF(Free.liftF(op))
   }
 

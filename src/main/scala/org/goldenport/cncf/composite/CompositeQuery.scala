@@ -10,7 +10,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 10, 2026
- * @version May. 10, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CompositeQueryRequest(
@@ -46,8 +46,8 @@ final case class CompositeQueryRequest(
 
   private def _is_trace_job_query(query: NamedQuery): Boolean = {
     val keys = Set(
-      RuntimeConfig.DebugTraceJobKey,
-      RuntimeConfig.RuntimeDebugTraceJobKey,
+      RuntimeConfig.debugTraceJobKey,
+      RuntimeConfig.runtimeDebugTraceJobKey,
       "cncf.debug.trace-job",
       "cncf.runtime.debug.trace-job",
       "x-textus-debug-trace-job"

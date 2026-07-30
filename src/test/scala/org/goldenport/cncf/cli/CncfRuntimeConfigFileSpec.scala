@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul. 28, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -110,7 +110,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       RuntimeConfig.getString(bootstrap.configuration, "textus.web.execution.sample-ratio") shouldBe Some("1.5")
 
       And("the resolved invocation retains the assembly descriptor source")
-      invocation.actualArgs.exists(_.startsWith(s"--${RuntimeConfig.AssemblyDescriptorKey}=")) shouldBe true
+      invocation.actualArgs.exists(_.startsWith(s"--${RuntimeConfig.assemblyDescriptorKey}=")) shouldBe true
 
       When("the resolved launcher invocation initializes the runtime subsystem")
       val runtime = new CncfRuntime()
@@ -262,7 +262,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the runtime resolves the file and preserves the framework argument")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
       bootstrap.invocation.actualArgs.toVector should contain (s"--textus.config.file=${config}")
     }
 
@@ -305,7 +305,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the runtime resolves the compatibility input")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
       bootstrap.invocation.actualArgs.toVector should contain (s"--cncf.config.file=${config}")
     }
 
@@ -329,7 +329,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the standard configuration is resolved")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
     }
 
     "resolve a legacy standard .cncf config.yaml file as compatibility input" in {
@@ -352,7 +352,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the compatibility configuration is resolved")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
     }
 
     "resolve explicit test descriptor config before command-line scalar overrides" in {
@@ -394,7 +394,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       Then("the descriptor contributes assembly data and the command line retains scalar precedence")
       descriptorpath shouldBe testdescriptor.normalize
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WEB_DEMO_ASSIST_ENABLED_KEY) shouldBe Some("true")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/from-cli.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-cli.yaml")
       bindings.head.provider.component shouldBe Some("target-test-provider")
     }
 
@@ -493,7 +493,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       Then("test configuration is applied without changing JVM user.home")
       bootstrap.invocation.actualArgs.toVector should contain ("server")
       bootstrap.invocation.actualArgs.toVector should not contain ("test")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.OperationModeKey) shouldBe Some("test")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.operationModeKey) shouldBe Some("test")
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.TEST_DESCRIPTOR_KEY) shouldBe Some(testdescriptor.normalize.toString)
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.TEST_HOME_PATH_KEY) shouldBe Some(testhome.toString)
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.TEST_HOME_INHERIT_REPOSITORIES_KEY) shouldBe Some("true")
@@ -582,7 +582,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the standard .textus value takes precedence")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/from-textus.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-textus.yaml")
     }
 
     "prefer standard config.yaml over config.conf in the same .textus scope" in {
@@ -606,7 +606,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the later YAML source takes precedence")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/from-yaml.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-yaml.yaml")
     }
 
     "resolve standard configuration files in conf props properties json yaml xml order" in {
@@ -644,7 +644,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the documented final XML source has precedence")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/from-xml.yaml")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-xml.yaml")
     }
 
     }
@@ -665,7 +665,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
 
       Then("the project CAR becomes the component file")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.ComponentFileKey) shouldBe Some(car.toString)
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.componentFileKey) shouldBe Some(car.toString)
     }
 
     "resolve a named component from the standard repository for server startup" in {
@@ -701,7 +701,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       val resolved = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, specs)
 
       Then("the repository CAR is appended as the component file")
-      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.ComponentFileKey}=${car}")
+      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${car}")
     }
 
     "not append a repository component file when component file is already explicit" in {
@@ -723,15 +723,15 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       When("the component invocation is resolved")
       val bootstrap = CncfRuntime.bootstrap(
         cwd,
-        Array("--repository-dir", repository.toString, s"--${RuntimeConfig.ComponentFileKey}=${explicitcar}", "--textus.component=cwitter", "server")
+        Array("--repository-dir", repository.toString, s"--${RuntimeConfig.componentFileKey}=${explicitcar}", "--textus.component=cwitter", "server")
       )
       val specs = bootstrap.repositories.searchRepositories.toOption.get
 
       val resolved = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, specs)
 
       Then("the explicit component file remains the only component-file argument")
-      resolved.actualArgs.toVector.count(_.startsWith(s"--${RuntimeConfig.ComponentFileKey}=")) shouldBe 1
-      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.ComponentFileKey}=${explicitcar}")
+      resolved.actualArgs.toVector.count(_.startsWith(s"--${RuntimeConfig.componentFileKey}=")) shouldBe 1
+      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${explicitcar}")
     }
 
     "resolve a named subsystem SAR from the standard repository for server startup" in {
@@ -765,7 +765,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       val resolved = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, specs)
 
       Then("the repository SAR is appended as the subsystem file")
-      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.SubsystemFileKey}=${sar}")
+      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.subsystemFileKey}=${sar}")
     }
     }
   }

@@ -83,19 +83,19 @@ final class BlobAttachmentWorkflow(
     request: BlobAttachmentRequest
   )(using ExecutionContext): Consequence[BlobAttachmentSummary] =
     _register_uploads(request.uploads).flatMap { uploaded =>
-      val uploadRefs = uploaded.zip(request.uploads).map { case (blob, part) =>
+      val uploadrefs = uploaded.zip(request.uploads).map { case (blob, part) =>
         BlobReferencePart(part.role, blob.id, part.sortOrder)
       }
-      _attach_references(sourceEntityId, uploadRefs).flatMap { case (_, uploadedAssociations) =>
-        _attach_references(sourceEntityId, request.references).flatMap { case (referenced, referencedAssociations) =>
+      _attach_references(sourceEntityId, uploadrefs).flatMap { case (_, uploadedassociations) =>
+        _attach_references(sourceEntityId, request.references).flatMap { case (referenced, referencedassociations) =>
           Consequence.success(BlobAttachmentSummary(
             sourceEntityId = sourceEntityId,
             uploaded = uploaded.map(_.metadata),
             referenced = referenced.map(_.metadata),
-            associations = (uploadedAssociations ++ referencedAssociations).map(x => AssociationRecordCodec.toRecord(x.association))
+            associations = (uploadedassociations ++ referencedassociations).map(x => AssociationRecordCodec.toRecord(x.association))
           ))
         }.recoverWith { conclusion =>
-          _cleanup_associations(uploadedAssociations)
+          _cleanup_associations(uploadedassociations)
             .flatMap(_ => _cleanup_uploaded(uploaded))
             .flatMap(_ => Consequence.Failure[BlobAttachmentSummary](conclusion))
         }
@@ -142,7 +142,7 @@ final class BlobAttachmentWorkflow(
   private def _register_upload(
     part: BlobUploadPart
   )(using ctx: ExecutionContext): Consequence[Blob] = {
-    val id = ctx.idGeneration.entityIdInCollectionNamespace(BlobRepository.CollectionId, "blob.attachment-upload")
+    val id = ctx.idGeneration.entityId(BlobRepository.CollectionId, "blob.attachment-upload")
     store.put(
       BlobPutRequest(
         id = id,
@@ -178,13 +178,13 @@ final class BlobAttachmentWorkflow(
       BlobUrl.cncfRoute(result.id)
 
   private def _attach_references(
-    sourceEntityId: String,
+    sourceentityid: String,
     parts: Vector[BlobReferencePart]
   )(using ExecutionContext): Consequence[(Vector[Blob], Vector[AssociationBindingAttachResult])] =
     parts.foldLeft(Consequence.success((Vector.empty[Blob], Vector.empty[AssociationBindingAttachResult]))) { (z, part) =>
       z.flatMap { case (blobs, created) =>
         repository.get(part.id).flatMap { blob =>
-          _attach_blob(sourceEntityId, blob.id, part.role, part.sortOrder).map { association =>
+          _attach_blob(sourceentityid, blob.id, part.role, part.sortOrder).map { association =>
             (blobs :+ blob, created :+ association)
           }
         }.recoverWith { conclusion =>
@@ -194,18 +194,18 @@ final class BlobAttachmentWorkflow(
     }
 
   private def _attach_blob(
-    sourceEntityId: String,
+    sourceentityid: String,
     id: EntityId,
     role: String,
-    sortOrder: Option[Int]
+    sortorder: Option[Int]
   )(using ExecutionContext): Consequence[AssociationBindingAttachResult] =
         _association_workflow.attachExistingTargetResult(
-      sourceEntityId = sourceEntityId,
+      sourceEntityId = sourceentityid,
       domain = AssociationDomain.BlobAttachment,
       targetKind = Some("blob"),
       targetEntityId = id,
       role = role,
-      sortOrder = sortOrder
+      sortOrder = sortorder
     )
 
   private def _cleanup_uploaded(
@@ -326,7 +326,7 @@ object BlobAttachmentWorkflow {
 
   private def _image_attachment_rows(
     values: Vector[(String, Any)]
-  ): Vector[_ImageAttachmentRow] = {
+  ): Vector[ImageAttachmentRow] = {
     val rows = scala.collection.mutable.Map.empty[Int, Vector[(String, Any, Int)]]
     values.zipWithIndex.foreach { case ((name, value), position) =>
       _image_attachment_name(name).foreach { case (index, field) =>
@@ -335,12 +335,12 @@ object BlobAttachmentWorkflow {
       }
     }
     rows.toVector.sortBy(_._1).map { case (index, fields) =>
-      _ImageAttachmentRow(index, fields)
+      ImageAttachmentRow(index, fields)
     }
   }
 
   private def _image_attachment(
-    row: _ImageAttachmentRow
+    row: ImageAttachmentRow
   ): Consequence[BlobAttachmentRequest] =
     if (row.isEmpty)
       Consequence.success(BlobAttachmentRequest(Vector.empty, Vector.empty))
@@ -370,8 +370,8 @@ object BlobAttachmentWorkflow {
                   )
                 }
               }
-            case (None, Some(blobId)) =>
-              EntityId.parse(blobId).map { id =>
+            case (None, Some(blobid)) =>
+              EntityId.parse(blobid).map { id =>
                 BlobAttachmentRequest(
                   uploads = Vector.empty,
                   references = Vector(BlobReferencePart(role, id, row.int("sortOrder", "sort_order").orElse(Some(row.position))))
@@ -490,7 +490,7 @@ object BlobAttachmentWorkflow {
   ): Option[Int] =
     _string(values, names*).flatMap(_.toIntOption)
 
-  private final case class _ImageAttachmentRow(
+  private final case class ImageAttachmentRow(
     index: Int,
     values: Vector[(String, Any, Int)]
   ) {
