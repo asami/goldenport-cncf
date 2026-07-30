@@ -23,6 +23,7 @@ final class InformationSpaceSpec
   private given ExecutionContext = ExecutionContext.test()
 
   "InformationSpace" should {
+    "enforce canonical Information ID input contracts" which {
     "reject a malformed Information ID without synthesizing a replacement" in {
       Given("a malformed scalar Information ID")
       val malformed = "information-1"
@@ -34,6 +35,20 @@ final class InformationSpaceSpec
       parsed shouldBe a[Consequence.Failure[_]]
     }
 
+    "reject a null Information ID without throwing or synthesizing a replacement" in {
+      Given("a null scalar Information ID")
+      val malformed: String = null
+
+      When("the canonical Information ID constructor is used")
+      val parsed = InformationId.createC(malformed)
+
+      Then("it returns a deterministic failure")
+      parsed shouldBe a[Consequence.Failure[_]]
+    }
+
+    }
+
+    "provide information lifecycle, publication, and validation contracts" which {
     "register validate confirm publish and clear information records" in {
       Given("an empty InformationSpace and a valid paper record")
       val space = new InformationSpace
@@ -179,6 +194,9 @@ final class InformationSpaceSpec
       result shouldBe a[Consequence.Failure[_]]
     }
 
+    }
+
+    "provide conflict recording and resolution contracts" which {
     "track conflicts explicitly" in {
       Given("a confirmed paper with divergent local and RDF values")
       val space = new InformationSpace
@@ -198,6 +216,9 @@ final class InformationSpaceSpec
       space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.confirmed)
     }
 
+    }
+
+    "provide resolution candidate lifecycle contracts" which {
     "clear resolution candidate and its identity binding" in {
       Given("an imported paper with one resolution candidate and identity binding")
       val space = new InformationSpace
@@ -265,6 +286,7 @@ final class InformationSpaceSpec
       space.resolutionCandidates(recordid).map(_.candidateKey) shouldBe Vector(candidate.candidateKey)
       space.counts.identityBindingCount shouldBe 1
       space.getInformation(item.id).map(_.identityBindings.map(_.status)) shouldBe Some(Vector(InformationBindingStatus.confirmed))
+    }
     }
   }
 

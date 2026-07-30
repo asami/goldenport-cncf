@@ -1,12 +1,5 @@
 package org.goldenport.cncf.http
 
-/*
- * @since   May. 18, 2026
- *  version May. 27, 2026
- *  version Jun. 19, 2026
- * @version Jul. 30, 2026
- * @author  ASAMI, Tomoharu
- */
 import scala.collection.mutable.ListBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -81,13 +74,14 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _renderer = StaticFormAppRenderer()
   private val _test_csrf_token = WebCsrf.issue(None)
   "StaticFormAppRenderer" should {
+    "provide dashboard, system administration, Blob, and documentation contracts" which {
     "render subsystem dashboard state contract" in {
       Given("the prerequisites for render subsystem dashboard state contract")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -593,47 +587,47 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val inline = server.routes(null).orNotFound.run(_get_request(displayurl)).unsafeRunSync()
       val download = server.routes(null).orNotFound.run(_get_request(s"$displayurl?download=true")).unsafeRunSync()
       When("serve managed Blob payloads and GET-backed HEAD through the CNCF content route is exercised")
-      def header(response: org.http4s.Response[IO], name: String): Option[String] =
+      def _header_(response: org.http4s.Response[IO], name: String): Option[String] =
         response.headers.get(org.typelevel.ci.CIString(name)).map(_.head.value)
 
       Then("the observable contract for serve managed Blob payloads and GET-backed HEAD through the CNCF content route holds")
       inline.status.code shouldBe 200
-      header(inline, "Content-Disposition") shouldBe Some("""inline; filename="route.png"""")
-      header(inline, "ETag").getOrElse(fail("ETag is missing")) should startWith ("\"")
-      header(inline, "Last-Modified").getOrElse(fail("Last-Modified is missing")) should include ("GMT")
-      header(inline, "Content-Length") shouldBe Some(bytes.length.toString)
-      header(inline, "Cache-Control") shouldBe Some("private, max-age=60")
-      header(inline, "X-Content-Type-Options") shouldBe Some("nosniff")
+      _header_(inline, "Content-Disposition") shouldBe Some("""inline; filename="route.png"""")
+      _header_(inline, "ETag").getOrElse(fail("ETag is missing")) should startWith ("\"")
+      _header_(inline, "Last-Modified").getOrElse(fail("Last-Modified is missing")) should include ("GMT")
+      _header_(inline, "Content-Length") shouldBe Some(bytes.length.toString)
+      _header_(inline, "Cache-Control") shouldBe Some("private, max-age=60")
+      _header_(inline, "X-Content-Type-Options") shouldBe Some("nosniff")
       inline.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
       RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total should be > contenteventsbefore
       download.status.code shouldBe 200
-      header(download, "Content-Disposition") shouldBe Some("""attachment; filename="route.png"""")
+      _header_(download, "Content-Disposition") shouldBe Some("""attachment; filename="route.png"""")
       download.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
       val headinline = server.routes(null).orNotFound.run(_head_request(displayurl)).unsafeRunSync()
       headinline.status.code shouldBe 200
-      header(headinline, "Content-Disposition") shouldBe header(inline, "Content-Disposition")
-      header(headinline, "ETag") shouldBe header(inline, "ETag")
-      header(headinline, "Last-Modified") shouldBe header(inline, "Last-Modified")
-      header(headinline, "Content-Length") shouldBe header(inline, "Content-Length")
-      header(headinline, "Cache-Control") shouldBe header(inline, "Cache-Control")
-      header(headinline, "X-Content-Type-Options") shouldBe header(inline, "X-Content-Type-Options")
+      _header_(headinline, "Content-Disposition") shouldBe _header_(inline, "Content-Disposition")
+      _header_(headinline, "ETag") shouldBe _header_(inline, "ETag")
+      _header_(headinline, "Last-Modified") shouldBe _header_(inline, "Last-Modified")
+      _header_(headinline, "Content-Length") shouldBe _header_(inline, "Content-Length")
+      _header_(headinline, "Cache-Control") shouldBe _header_(inline, "Cache-Control")
+      _header_(headinline, "X-Content-Type-Options") shouldBe _header_(inline, "X-Content-Type-Options")
       headinline.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
 
       val notmodified = server.routes(null).orNotFound.run(
         _get_request(displayurl).putHeaders(
-          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), header(inline, "ETag").get)
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), _header_(inline, "ETag").get)
         )
       ).unsafeRunSync()
       notmodified.status.code shouldBe 304
-      header(notmodified, "ETag") shouldBe header(inline, "ETag")
+      _header_(notmodified, "ETag") shouldBe _header_(inline, "ETag")
       notmodified.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
       val headnotmodified = server.routes(null).orNotFound.run(
         _head_request(displayurl).putHeaders(
-          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), header(inline, "ETag").get)
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), _header_(inline, "ETag").get)
         )
       ).unsafeRunSync()
       headnotmodified.status.code shouldBe 304
-      header(headnotmodified, "ETag") shouldBe header(inline, "ETag")
+      _header_(headnotmodified, "ETag") shouldBe _header_(inline, "ETag")
       headnotmodified.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
 
       _success(subsystem.executeOperationResponse(_blob_request(
@@ -643,7 +637,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )))
       val missing = server.routes(null).orNotFound.run(
         _get_request(displayurl).putHeaders(
-          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), header(inline, "ETag").get)
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), _header_(inline, "ETag").get)
         )
       ).unsafeRunSync()
       missing.status.code shouldBe 404
@@ -683,7 +677,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val unsafeinline = server.routes(null).orNotFound.run(
         _get_request(unsafeblob.getString("displayPath").getOrElse(fail("displayPath is missing")))
       ).unsafeRunSync()
-      header(unsafeinline, "Content-Disposition") shouldBe
+      _header_(unsafeinline, "Content-Disposition") shouldBe
         Some("""inline; filename="bad_____name-__.png"; filename*=UTF-8''bad%22%3B%0D%0A%2Fname-%E7%94%BB%E5%83%8F.png""")
     }
 
@@ -1519,6 +1513,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       compatmanresponse.status.code shouldBe 404
     }
 
+    }
+
+    "provide entity administration and mutation contracts" which {
     "render component entity administration page" in {
       Given("the prerequisites for render component entity administration page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -1572,25 +1569,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Next")
     }
 
-    "render component entity detail page contract" in {
-      Given("the prerequisites for render component entity detail page contract")
+    "reject a scalar component entity detail and edit route before it can render actions" in {
+      Given("a component entity route with an old scalar ID")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
-      val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
-      When("render component entity detail page contract is exercised")
-      val html = _renderer.renderComponentAdminEntityDetail(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      When("detail and edit pages are rendered")
+      val detail = _renderer.renderComponentAdminEntityDetail(subsystem, component.name, "sales-order", "missing-id")
+      val edit = _renderer.renderComponentAdminEntityEdit(subsystem, component.name, "sales-order", "missing-id")
 
-      Then("the observable contract for render component entity detail page contract holds")
-      html should include (s"${component.name} Sales Order Detail")
-      html should include ("Sales Order detail")
-      html should include ("class=\"card admin-card")
-      html should include ("class=\"btn btn-primary\"")
-      html should include (s"/web/${componentpath}/admin/entities/sales-order")
-      html should include (s"/web/${componentpath}/admin/entities/sales-order/missing-id/edit")
-      html should include ("No record is currently available")
-      html should include ("admin-empty-state")
-      html should include ("missing-id")
+      Then("neither page is emitted and no action route can be exposed")
+      detail shouldBe None
+      edit shouldBe None
     }
 
     "render component entity pages from a live EntityCollection fixture" in {
@@ -1707,6 +1697,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       semantic should include ("Semantic or hybrid search is not configured")
       semantic should include ("No records are currently available")
       semantic should not include ("board update")
+    }
+
+    "reject a foreign canonical component entity detail and edit route before it can render actions" in {
+      Given("a foreign EntityId with the same local timestamp and entropy as a stored notice")
+      val subsystem = _management_console_fixture_subsystem()
+      val storedid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head.id
+      val foreigncollection = EntityCollectionId("foreign", "route", "notice")
+      val foreignid = EntityId(
+        foreigncollection.major,
+        foreigncollection.minor,
+        foreigncollection,
+        timestamp = storedid.timestamp,
+        entropy = storedid.entropy
+      ).value
+
+      When("detail and edit pages are rendered for the foreign owner")
+      val detail = _renderer.renderComponentAdminEntityDetail(subsystem, "notice_board", "notice", foreignid)
+      val edit = _renderer.renderComponentAdminEntityEdit(subsystem, "notice_board", "notice", foreignid)
+
+      Then("neither page is emitted and no foreign-owner action route can be exposed")
+      detail shouldBe None
+      edit shouldBe None
     }
 
     "render generic non-image Associations on entity detail pages" in {
@@ -2739,7 +2751,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val localid = s"notice_admin_compensate_${java.util.UUID.randomUUID().toString.replace("-", "")}"
-      val missingblobid = EntityId(BlobRepository.CollectionId.major, s"missing_${localid}", BlobRepository.CollectionId).value
+      val missingtoken = s"missing_${localid}"
+      val missingblobid = EntityId(
+        BlobRepository.CollectionId.major,
+        BlobRepository.CollectionId.minor,
+        BlobRepository.CollectionId,
+        entropy = Some(missingtoken)
+      ).value
 
       When("compensate admin entity create when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
@@ -2770,7 +2788,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id
-      val missingblobid = EntityId(BlobRepository.CollectionId.major, s"missing_update_${java.util.UUID.randomUUID().toString.replace("-", "")}", BlobRepository.CollectionId).value
+      val missingtoken = s"missing_update_${java.util.UUID.randomUUID().toString.replace("-", "")}"
+      val missingblobid = EntityId(
+        BlobRepository.CollectionId.major,
+        BlobRepository.CollectionId.minor,
+        BlobRepository.CollectionId,
+        entropy = Some(missingtoken)
+      ).value
 
       When("keep admin entity update when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
@@ -3093,6 +3117,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       dispatcher.paths should contain ("/admin/entity/create")
     }
 
+    }
+
+    "provide Static Web application routing and template contracts" which {
     "define Static Form Web App template lookup precedence as route-local before common templates" in {
       Given("the prerequisites for define Static Form Web App template lookup precedence as route-local before common templates")
       val subsystem = _management_console_fixture_subsystem()
@@ -4746,58 +4773,68 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .map(x => new String(x._1.openInputStream().readAllBytes(), StandardCharsets.UTF_8)) shouldBe Some(".archive-notice-board { color: #14532d; }\n")
     }
 
+    }
+
+    "provide entity edit, data, and form-definition contracts" which {
     "render component entity edit page contract" in {
-      Given("the prerequisites for render component entity edit page contract")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
-      val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      Given("a live entity collection and its canonical stored Entity ID")
+      val subsystem = _management_console_fixture_subsystem()
+      val componentname = "notice_board"
+      val componentpath = "notice-board"
+      val entitypath = "notice"
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
 
-      When("render component entity edit page contract is exercised")
-      val html = _renderer.renderComponentAdminEntityEdit(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity edit admin is missing"))
+      When("the edit page is rendered with its canonical route locator")
+      val html = _renderer.renderComponentAdminEntityEdit(subsystem, componentname, entitypath, recordid).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
-      Then("the observable contract for render component entity edit page contract holds")
-      html should include (s"${component.name} Sales Order Edit")
-      html should include ("Edit Sales Order")
+      Then("the canonical route is used in form, value, and navigation contracts")
+      html should include ("notice_board Notice Edit")
+      html should include ("Edit Notice")
       html should include ("<form method=\"post\"")
       html should include ("class=\"admin-form\"")
       html should include ("class=\"card admin-card")
-      html should include (s"/form/${componentpath}/admin/entities/sales-order/missing-id/update")
+      html should include (s"/form/${componentpath}/admin/entities/${entitypath}/${recordid}/update")
       html should include ("name=\"id\"")
-      html should include ("value=\"missing-id\"")
+      html should include (s"value=\"${recordid}\"")
       html should include ("Update")
       html should include ("Cancel")
-      html should include (s"/web/${componentpath}/admin/entities/sales-order/missing-id")
+      html should include (s"/web/${componentpath}/admin/entities/${entitypath}/${recordid}")
     }
 
     "render component entity edit page with hidden form context" in {
-      Given("the prerequisites for render component entity edit page with hidden form context")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
-      val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      Given("a live entity collection, a canonical stored Entity ID, and hidden navigation context")
+      val subsystem = _management_console_fixture_subsystem()
+      val componentname = "notice_board"
+      val componentpath = "notice-board"
+      val entitypath = "notice"
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
 
-      When("render component entity edit page with hidden form context is exercised")
+      When("the edit page is rendered")
       val html = _renderer.renderComponentAdminEntityEdit(
         subsystem,
-        component.name,
-        "sales-order",
-        "missing-id",
+        componentname,
+        entitypath,
+        recordid,
         values = Map(
-          "crud.origin.href" -> s"/web/${componentpath}/admin/entities/sales-order?page=2&pageSize=20",
-          "crud.success.href" -> s"/web/${componentpath}/admin/entities/sales-order/missing-id",
+          "crud.origin.href" -> s"/web/${componentpath}/admin/entities/${entitypath}?page=2&pageSize=20",
+          "crud.success.href" -> s"/web/${componentpath}/admin/entities/${entitypath}/${recordid}",
           "paging.page" -> "2",
           "paging.pageSize" -> "20",
           "search.status" -> "open",
-          "etag" -> "v1"
+          "etag" -> "v1",
+          "id" -> "missing-id"
         )
       ).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
-      Then("the observable contract for render component entity edit page with hidden form context holds")
+      Then("the hidden context remains in form fields and never leaks into visible links")
       html should include ("type=\"hidden\" name=\"crud.origin.href\"")
       html should include ("type=\"hidden\" name=\"crud.success.href\"")
       html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
       html should include ("type=\"hidden\" name=\"paging.pageSize\" value=\"20\"")
       html should include ("type=\"hidden\" name=\"search.status\" value=\"open\"")
       html should include ("type=\"hidden\" name=\"etag\" value=\"v1\"")
+      html should include (s"value=\"${recordid}\"")
+      html should not include ("value=\"missing-id\"")
       html should not include ("crud.origin.href=")
       html should not include ("search.status=")
     }
@@ -5064,6 +5101,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))
       val subsystem = _management_console_fixture_subsystem(schema = schema)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head.id.value
 
       val createresponse = server
         ._submit_component_admin_entity_create(
@@ -5085,10 +5123,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val updateresponse = server
         ._submit_component_admin_entity_update(
-          _post_form_request("/form/notice-board/admin/entities/notice/notice_1/update", "title=No&author="),
+          _post_form_request(s"/form/notice-board/admin/entities/notice/${recordid}/update", "title=No&author="),
           "notice-board",
           "notice",
-          "notice_1"
+          recordid
         )
         .unsafeRunSync()
       val updatehtml = updateresponse.as[String].unsafeRunSync()
@@ -5551,6 +5589,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
     }
 
+    }
+
+    "provide view, aggregate, and operation-action contracts" which {
     "render component view administration page" in {
       Given("the prerequisites for render component view administration page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -6466,6 +6507,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
     }
 
+    }
+
+    "provide HTTP operation dispatch and response contracts" which {
     "execute aggregate create/update actions through an HTTP ingress-capable component" in {
       Given("the prerequisites for execute aggregate create/update actions through an HTTP ingress-capable component")
       val subsystem = _aggregate_http_fixture_subsystem()
@@ -7069,6 +7113,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       page.map(_.body).getOrElse(fail("dashboard is missing")) should include (s"${component.name} Dashboard")
     }
 
+    }
+
+    "provide HTML operation form and typed-update contracts" which {
     "render component HTML form operation index" in {
       Given("the prerequisites for render component HTML form operation index")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -7763,6 +7810,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       }
     }
 
+    }
+
+    "provide binding, admin API, and authorization contracts" which {
     "render operation image binding controls and Form API metadata" in {
       Given("the prerequisites for render operation image binding controls and Form API metadata")
       val component = new org.goldenport.cncf.component.Component() {
@@ -9455,6 +9505,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       pagehtml should include (">material</article>")
     }
 
+    }
+
+    "provide Static Web result, session, and UX contracts" which {
     "render a schema-backed operation form inside a Static Web page" in {
       Given("an aggregate command exposed to a Static Web template")
       val subsystem = _aggregate_http_fixture_subsystem()
@@ -13766,6 +13819,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       pages.mkString("\n") should include ("d-flex flex-wrap")
       pages.mkString("\n") should include ("card")
       pages.mkString("\n") should include ("shadow-sm")
+    }
     }
   }
 

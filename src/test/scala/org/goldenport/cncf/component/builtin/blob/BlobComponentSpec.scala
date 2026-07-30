@@ -1035,9 +1035,10 @@ final class BlobComponentSpec
         )
       ))))
       val id = registered.getString("id").getOrElse(fail("Blob id should be present"))
+      val sourceid = _product_entity_id("admin_delete_product").value
       _success(subsystem.executeOperationResponse(_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "admin-delete-product", None),
+        Property("sourceEntityId", sourceid, None),
         Property("id", id, None),
         Property("role", "galleryImage", None)
       )))
@@ -1067,9 +1068,10 @@ final class BlobComponentSpec
         Property("externalUrl", "https://example.test/forced-delete.pdf", None)
       ))))
       val id = registered.getString("id").getOrElse(fail("Blob id should be present"))
+      val sourceid = _product_entity_id("admin_force_product").value
       _success(subsystem.executeOperationResponse(_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "admin-force-product", None),
+        Property("sourceEntityId", sourceid, None),
         Property("id", id, None),
         Property("role", "attachment", None)
       )))
@@ -1193,7 +1195,20 @@ final class BlobComponentSpec
     }
 
   private def _blob_entity_id(minor: String): EntityId =
-    EntityId("cncf", minor, EntityCollectionId("cncf", "builtin", "blob"))
+    EntityId(
+      "cncf",
+      "builtin",
+      EntityCollectionId("cncf", "builtin", "blob"),
+      entropy = Some(minor)
+    )
+
+  private def _product_entity_id(value: String): EntityId =
+    EntityId(
+      "cncf",
+      "sample",
+      EntityCollectionId("cncf", "sample", "product"),
+      entropy = Some(value)
+    )
 
   private def _subsystem_with_blob_store(
     store: BlobStore,

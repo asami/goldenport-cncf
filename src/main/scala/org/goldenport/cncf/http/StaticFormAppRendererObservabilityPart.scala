@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererObservabilityPart {

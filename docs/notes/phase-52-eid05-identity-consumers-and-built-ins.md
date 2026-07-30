@@ -1,12 +1,16 @@
 # Phase 52 EID-05 - Identity Consumers and Built-Ins
 
-Status: done; implementation, independent review, review-fix, and clean re-review accepted
+Status: focused Admin detail/edit canonical-route revalidation passed; EID-06 closure review pending
 
 ## Outcome
 
 Every covered CNCF identity consumer now treats a canonical `EntityId` as its
 complete exact identity. A selected collection can validate the ID owner, but
 cannot rewrite, rebind, normalize, or infer it from a logical collection name.
+
+The final Admin detail/edit renderer boundary passed focused revalidation: scalar
+and foreign-owner locators produce neither a page nor an actionable form/link.
+The remaining independent review belongs to EID-06's phase-closure gate.
 
 ## Implemented rules
 

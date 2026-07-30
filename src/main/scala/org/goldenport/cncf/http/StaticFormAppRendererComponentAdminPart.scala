@@ -533,40 +533,41 @@ trait StaticFormAppRendererComponentAdminPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty,
     values: Map[String, String] = Map.empty
   ): Option[Page] =
-    find_component(subsystem, componentName).map { component =>
+    find_component(subsystem, componentName).flatMap { component =>
       val componentpath = NamingConventions.toNormalizedSegment(componentName)
       val entitypath = NamingConventions.toNormalizedSegment(entityName)
-      val entitylabel = title_label(entitypath)
-      val basepath = s"/web/${componentpath}/admin/entities/${entitypath}"
-      val routeid = entity_route_id(id)
-      val querysuffix = hidden_form_context_query_suffix(values)
-      val readrecord = admin_entity_read_record(subsystem, componentpath, entitypath, id)
-      val body = admin_entity_record_table_from_record(subsystem, component, componentpath, entitypath, id, readrecord, webDescriptor)
-      val images = admin_entity_images_section(readrecord, id)
-      val tags = admin_entity_tags_section(subsystem, readrecord, id, values)
-      val associations = admin_entity_associations_section(subsystem, component, entitypath, readrecord, id)
-      val nav = admin_nav_card(Vector(
-        s"Back to ${entitylabel} records" -> s"${basepath}${querysuffix}",
-        "Entity types" -> s"/web/${componentpath}/admin/entities"
-      ))
-      Page(simple_page(
-        title = s"${escape(component.name)} ${escape(entitylabel)} Detail",
-        subtitle = "Entity record detail baseline",
-        body =
-          s"""${nav}
-             |<article class="card admin-card">
-             |  <div class="card-body">
-             |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
-             |      <h2 class="card-title mb-0">${escape(entitylabel)} detail</h2>
-             |      <a class="btn btn-primary" href="${escape(basepath + "/" + escape_path_segment(routeid) + "/edit" + querysuffix)}">Edit</a>
-             |    </div>
-             |    ${body}
-             |  </div>
-             |</article>
-             |${images}
-             |${tags}
-             |${associations}""".stripMargin
-      ))
+      admin_entity_route_canonical_id(subsystem, componentpath, entitypath, id).map { canonicalid =>
+        val entitylabel = title_label(entitypath)
+        val basepath = s"/web/${componentpath}/admin/entities/${entitypath}"
+        val querysuffix = hidden_form_context_query_suffix(values)
+        val readrecord = admin_entity_read_record(subsystem, componentpath, entitypath, canonicalid)
+        val body = admin_entity_record_table_from_record(subsystem, component, componentpath, entitypath, canonicalid, readrecord, webDescriptor)
+        val images = admin_entity_images_section(readrecord, canonicalid)
+        val tags = admin_entity_tags_section(subsystem, readrecord, canonicalid, values)
+        val associations = admin_entity_associations_section(subsystem, component, entitypath, readrecord, canonicalid)
+        val nav = admin_nav_card(Vector(
+          s"Back to ${entitylabel} records" -> s"${basepath}${querysuffix}",
+          "Entity types" -> s"/web/${componentpath}/admin/entities"
+        ))
+        Page(simple_page(
+          title = s"${escape(component.name)} ${escape(entitylabel)} Detail",
+          subtitle = "Entity record detail baseline",
+          body =
+            s"""${nav}
+               |<article class="card admin-card">
+               |  <div class="card-body">
+               |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+               |      <h2 class="card-title mb-0">${escape(entitylabel)} detail</h2>
+               |      <a class="btn btn-primary" href="${escape(basepath + "/" + escape_path_segment(canonicalid) + "/edit" + querysuffix)}">Edit</a>
+               |    </div>
+               |    ${body}
+               |  </div>
+               |</article>
+               |${images}
+               |${tags}
+               |${associations}""".stripMargin
+        ))
+      }
     }
 
   def renderComponentAdminEntityEdit(
@@ -579,78 +580,84 @@ trait StaticFormAppRendererComponentAdminPart {
     validation: Option[FormValidationResult] = None,
     submittedVersion: Option[String] = None
   ): Option[Page] =
-    find_component(subsystem, componentName).map { component =>
+    find_component(subsystem, componentName).flatMap { component =>
       val componentpath = NamingConventions.toNormalizedSegment(componentName)
       val entitypath = NamingConventions.toNormalizedSegment(entityName)
-      val entitylabel = title_label(entitypath)
-      val webbasepath = s"/web/${componentpath}/admin/entities/${entitypath}"
-      val routeid = entity_route_id(id)
-      val actionpath = s"/form/${componentpath}/admin/entities/${entitypath}/${routeid}/update"
-      val webschema = WebSchemaResolver.resolveEntity(
-        component,
-        componentpath,
-        entitypath,
-        webDescriptor,
-        admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
-        fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
-      val displayfields = admin_entity_display_fields(component, entitypath, "detail", webschema.fieldNames)
-      val displayschema = webschema.copy(fields = admin_display_web_fields(webschema.fields, displayfields))
-      val effectivevalidation = validation.filter(_.webSchema.selector == displayschema.selector)
-      val readrecord = admin_entity_read_record(
-        subsystem,
-        componentpath,
-        entitypath,
-        id
-      )
-      val version = submittedVersion
-        .map(_.trim)
-        .filter(_.nonEmpty)
-        .orElse(
-          readrecord
-            .flatMap(EntityRevisionProjection.responseRevision)
-            .map(_.value.toString)
+      admin_entity_route_canonical_id(subsystem, componentpath, entitypath, id).map { canonicalid =>
+        val entitylabel = title_label(entitypath)
+        val webbasepath = s"/web/${componentpath}/admin/entities/${entitypath}"
+        val actionpath = s"/form/${componentpath}/admin/entities/${entitypath}/${canonicalid}/update"
+        val webschema = WebSchemaResolver.resolveEntity(
+          component,
+          componentpath,
+          entitypath,
+          webDescriptor,
+          admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
+          fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
         )
-      val effectivevalues =
-        values.removed("version") ++ version.map("version" -> _)
-      val hiddencontext = hidden_form_context_inputs(effectivevalues)
-      val controls = admin_record_controls(
-        displayschema.fields,
-        readrecord
+        val displayfields = admin_entity_display_fields(component, entitypath, "detail", webschema.fieldNames)
+        val displayschema = webschema.copy(fields = admin_display_web_fields(webschema.fields, displayfields))
+        val effectivevalidation = validation.filter(_.webSchema.selector == displayschema.selector)
+        val readrecord = admin_entity_read_record(
+          subsystem,
+          componentpath,
+          entitypath,
+          canonicalid
+        )
+        val version = submittedVersion
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .orElse(
+            readrecord
+              .flatMap(EntityRevisionProjection.responseRevision)
+              .map(_.value.toString)
+          )
+        val effectivevalues =
+          values.removed("version").updated("id", canonicalid) ++ version.map("version" -> _)
+        val hiddencontext = hidden_form_context_inputs(effectivevalues)
+        val fields = readrecord
           .flatMap(_.getString("fields"))
           .map(field_lines)
-          .getOrElse(Vector("id" -> id)),
-        effectivevalues,
-        "field",
-        effectivevalidation,
-        includeExtensionFields = false
-      )
-      val imageattachments = admin_entity_image_attachment_controls("imageAttachments")
-      val nav = admin_nav_card(Vector(
-        "Detail" -> s"${webbasepath}/${routeid}",
-        s"Back to ${entitylabel} records" -> webbasepath
-      ))
-      Page(simple_page(
-        title = s"${escape(component.name)} ${escape(entitylabel)} Edit",
-        subtitle = "Entity record edit baseline",
-        body =
-          s"""${nav}
-             |<article class="card admin-card">
-             |  <div class="card-body">
-             |    <h2 class="card-title">Edit ${escape(entitylabel)}</h2>
-             |    ${form_error_panel(values)}${form_validation_panel(effectivevalidation)}
-             |    <form method="post" action="${escape(actionpath)}" class="admin-form" enctype="multipart/form-data">
-             |      ${controls}
-             |      ${imageattachments}
-             |      ${hiddencontext}
-             |      <div class="d-flex flex-wrap gap-2">
-             |        <button type="submit" class="btn btn-primary">Update</button>
-             |        <a class="btn btn-outline-secondary" href="${escape(webbasepath)}/${escape(routeid)}">Cancel</a>
-             |      </div>
-             |    </form>
-             |  </div>
-             |</article>""".stripMargin
-      ))
+          .getOrElse(Vector("id" -> canonicalid))
+          .map {
+            case ("id", _) => "id" -> canonicalid
+            case field => field
+          }
+        val controls = admin_record_controls(
+          displayschema.fields,
+          fields,
+          effectivevalues,
+          "field",
+          effectivevalidation,
+          includeExtensionFields = false
+        )
+        val imageattachments = admin_entity_image_attachment_controls("imageAttachments")
+        val nav = admin_nav_card(Vector(
+          "Detail" -> s"${webbasepath}/${canonicalid}",
+          s"Back to ${entitylabel} records" -> webbasepath
+        ))
+        Page(simple_page(
+          title = s"${escape(component.name)} ${escape(entitylabel)} Edit",
+          subtitle = "Entity record edit baseline",
+          body =
+            s"""${nav}
+               |<article class="card admin-card">
+               |  <div class="card-body">
+               |    <h2 class="card-title">Edit ${escape(entitylabel)}</h2>
+               |    ${form_error_panel(values)}${form_validation_panel(effectivevalidation)}
+               |    <form method="post" action="${escape(actionpath)}" class="admin-form" enctype="multipart/form-data">
+               |      ${controls}
+               |      ${imageattachments}
+               |      ${hiddencontext}
+               |      <div class="d-flex flex-wrap gap-2">
+               |        <button type="submit" class="btn btn-primary">Update</button>
+               |        <a class="btn btn-outline-secondary" href="${escape(webbasepath)}/${escape(canonicalid)}">Cancel</a>
+               |      </div>
+               |    </form>
+               |  </div>
+               |</article>""".stripMargin
+        ))
+      }
     }
 
   def renderComponentAdminEntityNew(

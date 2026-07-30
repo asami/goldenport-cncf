@@ -124,7 +124,7 @@ Evidence:
 ## EID-05: Identity Consumers and Built-Ins
 
 Stage Status:
-- Current status: DONE
+- Current status: DONE (Admin detail/edit canonical-route revalidation passed)
 - Owner: CNCF Component, Association, security, and observability maintainers
 - Entry rule: EID-04 is DONE.
 - Completion rule: Every core identity-sensitive consumer uses exact parsed
@@ -138,6 +138,8 @@ Stage Status:
 - [x] Update dirty-entity maps and aggregate locks.
 - [x] Update authorization resources, audit, and CallTree identity.
 - [x] Update built-in and raw `Record` persistence adapters.
+- [x] Revalidate Admin detail/edit rendering: scalar and foreign canonical route
+  locators must emit neither a page nor an actionable form/link.
 - [x] Prove no synthetic or rebound ID reaches a datastore, cache, lock,
   authorization, or Association side effect.
 
@@ -160,7 +162,7 @@ Stage Status:
 - [x] Run affected sbt-cozy validation.
 - [ ] Verify no old-format compatibility, migration, dual parser, read repair,
   or context rebinding remains.
-- [ ] Perform a clean full review and focused re-review until findings close.
+- [ ] Perform the EID-06 closure review and focused re-review until findings close.
 - [x] Promote verified behavior to `docs/design` and `docs/spec`.
 - [x] Mark the Phase 51 compensation model as historical/superseded without
   rewriting its evidence.

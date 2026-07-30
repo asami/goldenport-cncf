@@ -22,7 +22,10 @@ import org.simplemodeling.model.datatype.EntityId
 type InformationId = EntityId
 object InformationId {
   def createC(value: String): Consequence[InformationId] =
-    EntityId.parse(value.trim)
+    Option(value)
+      .map(_.trim)
+      .map(EntityId.parse)
+      .getOrElse(Consequence.valueInvalid("Invalid InformationId value: null"))
 }
 
 type InformationLifecycleState = value.InformationLifecycleState
@@ -123,12 +126,13 @@ object InformationIdentityBinding {
       confidence = confidence
     )
 
-  given ValueReader[InformationIdentityBinding] with
+  given ValueReader[InformationIdentityBinding] with {
     def readC(v: Any): Consequence[InformationIdentityBinding] = v match {
       case m: InformationIdentityBinding => Consequence.success(m)
       case m: Record => createC(m)
       case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
     }
+  }
 
   private def _record_get_as_c[A](
     record: Record,

@@ -198,7 +198,7 @@ irrelevant to those references.
 | EID-02 | Canonical exact serialization | `EntityCollectionId` and `EntityId` use one versioned lossless encoding and satisfy round-trip and non-collision laws. | done |
 | EID-03 | Model and generated-code adoption | SimpleModeling types and generated primary/reference codecs persist and parse only complete exact IDs. | done |
 | EID-04 | CNCF persistence and routing simplification | Store addressing, decoding, UnitOfWork, direct APIs, and resident projection use exact IDs without rebinding or name-only resolution. | done |
-| EID-05 | Identity consumers and built-ins | Admin, Association, loaders, Blob, child binding, caches, locks, revision, authorization, and diagnostics use exact identity. | done |
+| EID-05 | Identity consumers and built-ins | Admin, Association, loaders, Blob, child binding, caches, locks, revision, authorization, and diagnostics use exact identity. Admin detail/edit canonical-route revalidation passed. | done |
 | EID-06 | Core validation and canonical closure | Core affected repositories pass and design/specification replace the Phase 51 compensation model. | in_progress |
 
 ## Acceptance

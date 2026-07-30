@@ -57,6 +57,7 @@ final class AssociationBindingWorkflowSpec
           given ExecutionContext = ExecutionContext.test()
           val repository         = AssociationRepository.entityStore()
           val workflow           = AssociationBindingWorkflow(repository)
+          val sourceid           = _article_id("source_1").value
           val target             = _article_id("target_1")
           _seed_entity(target)
           val binding = CmlOperationAssociationBinding(
@@ -73,7 +74,7 @@ final class AssociationBindingWorkflowSpec
             service = "article",
             operation = "attach",
             properties = List(
-              Property("sourceEntityId", "source-1", None),
+              Property("sourceEntityId", sourceid, None),
               Property("targetEntityId", target.value, None)
             )
           )
@@ -87,11 +88,11 @@ final class AssociationBindingWorkflowSpec
           val summary = _success(workflow.attachExistingTargets(source, binding, request))
 
           Then("the Association is stored in the generic Association collection")
-          summary.sourceEntityId shouldBe "source-1"
+          summary.sourceEntityId shouldBe sourceid
           summary.associations should have size 1
           val listed = _success(repository.list(AssociationFilter(
             domain = AssociationDomain("related_entity"),
-            sourceEntityId = Some("source-1"),
+            sourceEntityId = Some(sourceid),
             targetEntityId = Some(target.value),
             targetKind = Some("article"),
             role = Some("related")
@@ -100,7 +101,12 @@ final class AssociationBindingWorkflowSpec
 
           And("the Association request parser retains the exact target owner")
           val exacttarget =
-            EntityId("cncf", "target_1", _article_collection_id)
+            EntityId(
+              _article_collection_id.major,
+              _article_collection_id.minor,
+              _article_collection_id,
+              entropy = Some("target_1")
+            )
           val parsedtarget = EntityId.parse(exacttarget.value).toOption.get
           parsedtarget.collection shouldBe _article_collection_id
           EntityId.parse(exacttarget.value).toOption shouldBe Some(exacttarget)
@@ -113,6 +119,7 @@ final class AssociationBindingWorkflowSpec
       given ExecutionContext = ExecutionContext.test()
       val repository         = AssociationRepository.entityStore()
       val workflow           = AssociationBindingWorkflow(repository)
+      val source             = _article_id("source_1").value
       val target             = _comment_id("comment_target_1")
       _seed_entity(target)
       val binding = CmlOperationAssociationBinding(
@@ -129,13 +136,13 @@ final class AssociationBindingWorkflowSpec
         service = "article",
         operation = "attach",
         properties = List(
-          Property("sourceEntityId", "source-1", None),
+          Property("sourceEntityId", source, None),
           Property("targetEntityId", target.value, None)
         )
       )
 
       When("the helper validates the target")
-      val result = workflow.attachExistingTargets("source-1", binding, request)
+      val result = workflow.attachExistingTargets(source, binding, request)
 
       Then("the association is rejected as a kind mismatch")
       result shouldBe a[Consequence.Failure[_]]
@@ -146,7 +153,7 @@ final class AssociationBindingWorkflowSpec
       Given("an existing Association followed by a failing target binding")
       given ExecutionContext = ExecutionContext.test()
       val repository         = AssociationRepository.entityStore()
-      val source             = "source-existing"
+      val source             = _article_id("source_existing").value
       val existingtarget     = _article_id("existing_target")
       val rejectedtarget     = _article_id("rejected_target")
       val firstbinding = CmlOperationAssociationBinding(
@@ -218,7 +225,7 @@ final class AssociationBindingWorkflowSpec
       given ExecutionContext = ExecutionContext.test()
       val delegate           = AssociationRepository.entityStore()
         val repository         = FailingDeleteAssociationRepository(delegate)
-      val source             = "source-cleanup-failure"
+      val source             = _article_id("source_cleanup_failure").value
       val createdtarget      = _article_id("created_target_cleanup_failure")
       val rejectedtarget     = _article_id("rejected_target_cleanup_failure")
       _seed_entity(createdtarget)
@@ -273,14 +280,15 @@ final class AssociationBindingWorkflowSpec
         targetIdParameters = Vector("targetEntityId")
       )
       val request  = Request.of("sample", "article", "create")
-      val response = OperationResponse.RecordResponse(Record.dataAuto("entity_id" -> "created-1"))
+      val expected = _article_id("created_1").value
+      val response = OperationResponse.RecordResponse(Record.dataAuto("entity_id" -> expected))
 
       When("resolving the source Entity id")
       val source =
         _success(AssociationBindingWorkflow.resolveSourceEntityId(binding, request, response))
 
       Then("entity_id is used as the source Entity id")
-      source shouldBe "created-1"
+      source shouldBe expected
     }
 
     "fail deterministically when an entity-create-result source id is missing" in {
@@ -313,6 +321,7 @@ final class AssociationBindingWorkflowSpec
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val target             = _article_id("target_2")
+      val source             = _article_id("article_1").value
       _seed_entity(target)
       val request = Request.of(
         component = component.name,
@@ -327,7 +336,7 @@ final class AssociationBindingWorkflowSpec
       Then("the operation result is preserved and the Association is created")
       response match {
         case OperationResponse.RecordResponse(record) =>
-          record.getString("entity_id") shouldBe Some("article-1")
+          record.getString("entity_id") shouldBe Some(source)
           record.getVector("requestKeys").getOrElse(Vector.empty).map(
             _.toString
           ) should not contain "targetEntityId"
@@ -337,7 +346,7 @@ final class AssociationBindingWorkflowSpec
       val listed = _success(
         AssociationRepository.entityStore().list(AssociationFilter(
           domain = AssociationDomain("related_entity"),
-          sourceEntityId = Some("article-1"),
+          sourceEntityId = Some(source),
           targetEntityId = Some(target.value),
           targetKind = Some("article"),
           role = Some("related")
@@ -391,9 +400,10 @@ final class AssociationBindingWorkflowSpec
             Property(
               "blobId.primary",
               EntityId(
-                "cncf",
-                "existing_blob",
-                org.goldenport.cncf.blob.BlobRepository.CollectionId
+                org.goldenport.cncf.blob.BlobRepository.CollectionId.major,
+                org.goldenport.cncf.blob.BlobRepository.CollectionId.minor,
+                org.goldenport.cncf.blob.BlobRepository.CollectionId,
+                entropy = Some("existing_blob")
               ).value,
               None
             )
@@ -415,6 +425,7 @@ final class AssociationBindingWorkflowSpec
       val runtimecomponent =
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
+      val source = _article_id("article_image_1").value
       val request = Request.of(
         component = component.name,
         service = "article",
@@ -435,7 +446,7 @@ final class AssociationBindingWorkflowSpec
       Then("the image binding uses the BlobAttachment Association path")
       response match {
         case OperationResponse.RecordResponse(record) =>
-          record.getString("entity_id") shouldBe Some("article-image-1")
+          record.getString("entity_id") shouldBe Some(source)
         case other =>
           fail(s"unexpected response: $other")
       }
@@ -443,7 +454,7 @@ final class AssociationBindingWorkflowSpec
         AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault).list(
           AssociationFilter(
             domain = AssociationDomain.BlobAttachment,
-            sourceEntityId = Some("article-image-1"),
+            sourceEntityId = Some(source),
             targetKind = Some("blob"),
             role = Some("primary")
           )
@@ -460,12 +471,14 @@ final class AssociationBindingWorkflowSpec
       val runtimecomponent =
         subsystem.findComponent(component.name).getOrElse(fail("component missing"))
       val target = _article_id("target_image_failure_cleanup")
+      val source = _article_id("article_association_image_failure").value
       _seed_entity(target)
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val missingblob = EntityId(
-        "cncf",
-        "missing_blob_for_association_cleanup",
-        org.goldenport.cncf.blob.BlobRepository.CollectionId
+        org.goldenport.cncf.blob.BlobRepository.CollectionId.major,
+        org.goldenport.cncf.blob.BlobRepository.CollectionId.minor,
+        org.goldenport.cncf.blob.BlobRepository.CollectionId,
+        entropy = Some("missing_blob_for_association_cleanup")
       )
       val request = Request.of(
         component = component.name,
@@ -485,7 +498,7 @@ final class AssociationBindingWorkflowSpec
       val listed = _success(
         AssociationRepository.entityStore().list(AssociationFilter(
           domain = AssociationDomain("related_entity"),
-          sourceEntityId = Some("article-association-image-failure"),
+          sourceEntityId = Some(source),
           targetEntityId = Some(target.value),
           targetKind = Some("article"),
           role = Some("related")
@@ -610,13 +623,13 @@ final class AssociationBindingWorkflowSpec
             name = "article",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                CreateArticleOperation("createArticle", "article-1"),
-                CreateArticleOperation("createArticleWithImage", "article-image-1"),
-                CreateArticleOperation("createArticleBlobOnly", "article-blob-only"),
-                CreateArticleOperation("createArticleUploadOnly", "article-upload-only"),
+                CreateArticleOperation("createArticle", _article_id("article_1").value),
+                CreateArticleOperation("createArticleWithImage", _article_id("article_image_1").value),
+                CreateArticleOperation("createArticleBlobOnly", _article_id("article_blob_only").value),
+                CreateArticleOperation("createArticleUploadOnly", _article_id("article_upload_only").value),
                 CreateArticleOperation(
                   "createArticleWithAssociationAndBadImage",
-                  "article-association-image-failure"
+                  _article_id("article_association_image_failure").value
                 )
               )
             )
@@ -747,18 +760,26 @@ final class AssociationBindingWorkflowSpec
   private lazy val _article_collection_id: EntityCollectionId =
     EntityCollectionId("cncf", "sample", "article")
 
-  private def _article_id(value: String): EntityId = {
-    val id = EntityId("cncf", value, _article_collection_id)
-    EntityId.parse(id.value).toOption.getOrElse(id)
-  }
+  private def _article_id(value: String): EntityId =
+    EntityId(
+      _article_collection_id.major,
+      _article_collection_id.minor,
+      _article_collection_id,
+      timestamp = Some(java.time.Instant.EPOCH),
+      entropy = Some(value)
+    )
 
   private lazy val _comment_collection_id: EntityCollectionId =
     EntityCollectionId("cncf", "sample", "comment")
 
-  private def _comment_id(value: String): EntityId = {
-    val id = EntityId("cncf", value, _comment_collection_id)
-    EntityId.parse(id.value).toOption.getOrElse(id)
-  }
+  private def _comment_id(value: String): EntityId =
+    EntityId(
+      _comment_collection_id.major,
+      _comment_collection_id.minor,
+      _comment_collection_id,
+      timestamp = Some(java.time.Instant.EPOCH),
+      entropy = Some(value)
+    )
 
   private def _seed_entity(
       id: EntityId

@@ -78,12 +78,13 @@ final class ContentReferenceWorkflowSpec
       )))
 
       When("attaching references")
-      val result = _success(workflow.attachReferences("article-content-ref-attach", normalized.references))
+      val source = _article_id("content_ref_attach").value
+      val result = _success(workflow.attachReferences(source, normalized.references))
 
       Then("occurrences remain duplicated but Association is Image-distinct")
       normalized.references.map(_.targetEntityId).flatten.distinct.size shouldBe 1
       result.associations.size shouldBe 1
-      _associations("article-content-ref-attach").map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
+      _associations(source).map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
     }
 
     "not attach Blob links as inline image Associations" in {
@@ -115,7 +116,8 @@ final class ContentReferenceWorkflowSpec
       )))
 
       When("attaching content references")
-      val result = _success(workflow.attachReferences("article-content-ref-link", normalized.references))
+      val source = _article_id("content_ref_link").value
+      val result = _success(workflow.attachReferences(source, normalized.references))
 
       Then("only the img/src Blob becomes an inline image association")
       normalized.references.map(x => (x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
@@ -123,7 +125,7 @@ final class ContentReferenceWorkflowSpec
         (Some("a"), Some("href"), Some("blob"))
       )
       result.associations.size shouldBe 1
-      _associations("article-content-ref-link").map(_.targetEntityId) shouldBe normalized.references.head.targetEntityId.toVector
+      _associations(source).map(_.targetEntityId) shouldBe normalized.references.head.targetEntityId.toVector
     }
 
     "normalize HTML video and source references to media URNs" in {
@@ -188,7 +190,8 @@ final class ContentReferenceWorkflowSpec
         """<article><a href="docs/a.pdf" download title="PDF">Download PDF</a></article>""",
         fileBundle = Some(FileBundle.Directory(root))
       )))
-      val result = _success(workflow.attachReferences("article-content-ref-download", normalized.references))
+      val source = _article_id("content_ref_download").value
+      val result = _success(workflow.attachReferences(source, normalized.references))
 
       Then("the href is rewritten to an Attachment URN and attached with attachment role")
       normalized.normalizedText should include ("""href="urn:textus:attachment:""")
@@ -197,7 +200,7 @@ final class ContentReferenceWorkflowSpec
       )
       normalized.references.head.targetEntityId.flatMap(EntityId.parse(_).toOption).map(_.collection.name) shouldBe Some("attachment")
       result.associations.size shouldBe 1
-      _associations("article-content-ref-download", "attachment", "attachment").map(_.targetEntityId) shouldBe normalized.references.head.targetEntityId.toVector
+      _associations(source, "attachment", "attachment").map(_.targetEntityId) shouldBe normalized.references.head.targetEntityId.toVector
     }
 
     "leave HTML source failure comments for ambiguous or conflicting source refs" in {
@@ -330,11 +333,12 @@ final class ContentReferenceWorkflowSpec
       )
 
       When("attachment references are persisted")
-      val result = workflow.attachReferences("article-content-ref-foreign", Vector(reference))
+      val source = _article_id("content_ref_foreign").value
+      val result = workflow.attachReferences(source, Vector(reference))
 
       Then("the foreign canonical id is rejected rather than rebound to image")
       result shouldBe a[Consequence.Failure[_]]
-      _associations("article-content-ref-foreign") shouldBe Vector.empty
+      _associations(source) shouldBe Vector.empty
     }
 
     "normalize Markdown inline images and index inline links" in {
@@ -392,13 +396,14 @@ final class ContentReferenceWorkflowSpec
       )))
 
       When("attaching normalized references")
-      val result = _success(workflow.attachReferences("article-content-ref-markdown-duplicate", normalized.references))
+      val source = _article_id("content_ref_markdown_duplicate").value
+      val result = _success(workflow.attachReferences(source, normalized.references))
 
       Then("occurrences remain duplicated but the association is Image-distinct")
       normalized.references.size shouldBe 2
       normalized.references.map(_.targetEntityId).flatten.distinct.size shouldBe 1
       result.associations.size shouldBe 1
-      _associations("article-content-ref-markdown-duplicate").map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
+      _associations(source).map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
     }
 
     "index Markdown Blob links without creating inline image attachments" in {
@@ -421,7 +426,8 @@ final class ContentReferenceWorkflowSpec
       )))
 
       When("attaching normalized references")
-      val result = _success(workflow.attachReferences("article-content-ref-markdown-link", normalized.references))
+      val source = _article_id("content_ref_markdown_link").value
+      val result = _success(workflow.attachReferences(source, normalized.references))
 
       Then("the link occurrence is indexed but no inline image association is created")
       normalized.normalizedText shouldBe s"""[PDF](/web/blob/content/${attachmentId.value})"""
@@ -429,7 +435,7 @@ final class ContentReferenceWorkflowSpec
         (Some("a"), Some("href"), Some("blob"))
       )
       result.associations shouldBe Vector.empty
-      _associations("article-content-ref-markdown-link") shouldBe Vector.empty
+      _associations(source) shouldBe Vector.empty
     }
 
     "normalize Markdown reference-style images and index reference-style links" in {
@@ -503,7 +509,8 @@ final class ContentReferenceWorkflowSpec
       )))
 
       When("attaching normalized references")
-      val result = _success(workflow.attachReferences("article-content-ref-markdown-shortcut", normalized.references))
+      val source = _article_id("content_ref_markdown_shortcut").value
+      val result = _success(workflow.attachReferences(source, normalized.references))
 
       Then("occurrences are preserved while MediaAttachment is Image-distinct")
       normalized.normalizedText should include ("[A]: urn:textus:image:")
@@ -511,7 +518,7 @@ final class ContentReferenceWorkflowSpec
       normalized.references.size shouldBe 3
       normalized.references.map(_.targetEntityId).flatten.distinct.size shouldBe 1
       result.associations.size shouldBe 1
-      _associations("article-content-ref-markdown-shortcut").map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
+      _associations(source).map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
     }
 
     "not rewrite a Markdown reference definition shared by an image and a link" in {
@@ -906,6 +913,14 @@ final class ContentReferenceWorkflowSpec
 
   private def _blob_id(value: String): EntityId =
     EntityId("cncf", "builtin", EntityCollectionId("cncf", "builtin", "blob"), entropy = Some(value))
+
+  private def _article_id(value: String): EntityId =
+    EntityId(
+      "cncf",
+      "sample",
+      EntityCollectionId("cncf", "sample", "article"),
+      entropy = Some(value)
+    )
 
   private def _success[A](result: Consequence[A]): A =
     result match {

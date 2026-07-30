@@ -12,7 +12,7 @@ import org.goldenport.cncf.association.{
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.protocol.{Argument, Request}
-import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -148,6 +148,7 @@ final class BlobAttachmentWorkflowSpec
       val associations =
         AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
       val workflow = BlobAttachmentWorkflow(store, repository, associations)
+      val source = _article_entity_id("article_1").value
       val existing =
         _success(_create_managed_blob(repository, store, _new_blob_entity_id(), "existing.png"))
       val request = Request.of(
@@ -168,7 +169,7 @@ final class BlobAttachmentWorkflowSpec
       )
 
       When("attaching Blob inputs to the entity")
-      val summary = _success(workflow.attachToEntity("article-1", request))
+      val summary = _success(workflow.attachToEntity(source, request))
 
       Then("both the uploaded Blob and existing Blob reference are attached")
       summary.uploaded.map(_.filename) shouldBe Vector(Some("new.png"))
@@ -177,7 +178,7 @@ final class BlobAttachmentWorkflowSpec
       summary.associations should have size 2
       val listed = _success(associations.list(AssociationFilter(
         domain = AssociationDomain.BlobAttachment,
-        sourceEntityId = Some("article-1"),
+        sourceEntityId = Some(source),
         targetKind = Some("blob"),
         role = Some("galleryImage")
       )))
@@ -195,6 +196,7 @@ final class BlobAttachmentWorkflowSpec
       val associations =
         AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
       val workflow = BlobAttachmentWorkflow(store, repository, associations)
+      val source = _article_entity_id("article_failure").value
       val missing  = _blob_entity_id("missing_reference")
       val request = Request.of(
         component = "sample",
@@ -211,14 +213,14 @@ final class BlobAttachmentWorkflowSpec
       )
 
       When("attaching Blob inputs to the entity")
-      val result = workflow.attachToEntity("article-failure", request)
+      val result = workflow.attachToEntity(source, request)
 
       Then("the operation fails and newly uploaded Blob metadata is removed")
       result shouldBe a[Consequence.Failure[_]]
       _success(repository.list()).map(_.filename) shouldBe Vector.empty
       _success(associations.list(AssociationFilter(
         domain = AssociationDomain.BlobAttachment,
-        sourceEntityId = Some("article-failure"),
+        sourceEntityId = Some(source),
         targetKind = Some("blob")
       ))) shouldBe Vector.empty
     }
@@ -241,7 +243,7 @@ final class BlobAttachmentWorkflowSpec
 
       When("the create helper tries to compensate the created Entity")
       val result = workflow.createEntityWithBlobAttachments(request)(
-        create = Consequence.success("article-created"),
+        create = Consequence.success(_article_entity_id("article_created").value),
         entityId = identity,
         compensateEntity = _ => Consequence.stateConflict("entity compensation failed")
       )
@@ -279,13 +281,26 @@ final class BlobAttachmentWorkflowSpec
     }
 
   private def _blob_entity_id(value: String): EntityId =
-    EntityId(BlobRepository.CollectionId.major, value, BlobRepository.CollectionId)
+    EntityId(
+      BlobRepository.CollectionId.major,
+      BlobRepository.CollectionId.minor,
+      BlobRepository.CollectionId,
+      entropy = Some(value)
+    )
 
   private def _new_blob_entity_id(): EntityId =
     EntityId(
       BlobRepository.CollectionId.major,
       BlobRepository.CollectionId.minor,
       BlobRepository.CollectionId
+    )
+
+  private def _article_entity_id(value: String): EntityId =
+    EntityId(
+      "cncf",
+      "sample",
+      EntityCollectionId("cncf", "sample", "article"),
+      entropy = Some(value)
     )
 
   private def _success[A](result: Consequence[A]): A =
