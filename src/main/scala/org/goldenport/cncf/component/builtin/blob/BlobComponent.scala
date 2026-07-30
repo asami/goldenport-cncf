@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 26, 2026
  *  version Jun.  5, 2026
- * @version Jul. 26, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -94,8 +94,8 @@ object BlobComponent {
   }
 
   object AdminPageRequest {
-    val DefaultLimit: Int = 100
-    val MaxLimit: Int = 500
+    val DEFAULT_LIMIT: Int = 100
+    val MAX_LIMIT: Int = 500
   }
 
   final case class AdminListBlobAssociationsRequest(
@@ -117,7 +117,7 @@ object BlobComponent {
 
   val name: String = "blob"
   val componentId: ComponentId = ComponentId(name)
-  val BlobCollectionId: EntityCollectionId = BlobRepository.CollectionId
+  val BLOB_COLLECTION_ID: EntityCollectionId = BlobRepository.CollectionId
   private val _blob_store_resource_name: String = "blobstore"
 
   def componentDescriptors: Vector[ComponentDescriptor] =
@@ -126,7 +126,7 @@ object BlobComponent {
       entityRuntimeDescriptors = Vector(
         EntityRuntimeDescriptor(
           entityName = "blob",
-          collectionId = BlobCollectionId,
+          collectionId = BLOB_COLLECTION_ID,
           memoryPolicy = EntityMemoryPolicy.StoreOnly,
           partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
           maxPartitions = 4,
@@ -148,32 +148,32 @@ object BlobComponent {
       comp: Component
     ): Component.Core = {
       val request = _register_blob_request_definition
-      val emptyRequest = spec.RequestDefinition()
-      val idRequest = _id_request
-      val attachRequest = _attach_blob_request_definition
-      val detachRequest = _detach_blob_request_definition
-      val listRequest = _list_entity_blobs_request_definition
-      val adminListRequest = _admin_list_blobs_request_definition
-      val adminAssociationRequest = _admin_list_blob_associations_request_definition
-      val adminDeleteRequest = _admin_delete_blob_request_definition
-      val metadataResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobMetadata")))
-      val urlResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobAccessUrl")))
-      val payloadResponse = spec.ResponseDefinition(result = List(XBlob))
-      val recordResponse = spec.ResponseDefinition(result = List(DataType.Named("Record")))
-      val register = new RegisterBlobOperationDefinition(request, metadataResponse)
-      val read = new ReadBlobOperationDefinition(idRequest, payloadResponse)
-      val resolve = new ResolveBlobUrlOperationDefinition(idRequest, urlResponse)
-      val metadata = new GetBlobMetadataOperationDefinition(idRequest, metadataResponse)
-      val attach = new AttachBlobToEntityOperationDefinition(attachRequest, recordResponse)
-      val detach = new DetachBlobFromEntityOperationDefinition(detachRequest, recordResponse)
-      val list = new ListEntityBlobsOperationDefinition(listRequest, recordResponse)
-      val adminList = new AdminListBlobsOperationDefinition(adminListRequest, recordResponse)
-      val adminGet = new AdminGetBlobOperationDefinition(idRequest, metadataResponse)
-      val adminAssociations = new AdminListBlobAssociationsOperationDefinition(adminAssociationRequest, recordResponse)
-      val adminStatus = new AdminBlobStoreStatusOperationDefinition(emptyRequest, recordResponse)
-      val adminDelete = new AdminDeleteBlobOperationDefinition(adminDeleteRequest, recordResponse)
-      val adminAttach = new AdminAttachBlobToEntityOperationDefinition(attachRequest, recordResponse)
-      val adminDetach = new AdminDetachBlobFromEntityOperationDefinition(detachRequest, recordResponse)
+      val emptyrequest = spec.RequestDefinition()
+      val idrequest = _id_request
+      val attachrequest = _attach_blob_request_definition
+      val detachrequest = _detach_blob_request_definition
+      val listrequest = _list_entity_blobs_request_definition
+      val adminlistrequest = _admin_list_blobs_request_definition
+      val adminassociationrequest = _admin_list_blob_associations_request_definition
+      val admindeleterequest = _admin_delete_blob_request_definition
+      val metadataresponse = spec.ResponseDefinition(result = List(DataType.Named("BlobMetadata")))
+      val urlresponse = spec.ResponseDefinition(result = List(DataType.Named("BlobAccessUrl")))
+      val payloadresponse = spec.ResponseDefinition(result = List(XBlob))
+      val recordresponse = spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      val register = new RegisterBlobOperationDefinition(request, metadataresponse)
+      val read = new ReadBlobOperationDefinition(idrequest, payloadresponse)
+      val resolve = new ResolveBlobUrlOperationDefinition(idrequest, urlresponse)
+      val metadata = new GetBlobMetadataOperationDefinition(idrequest, metadataresponse)
+      val attach = new AttachBlobToEntityOperationDefinition(attachrequest, recordresponse)
+      val detach = new DetachBlobFromEntityOperationDefinition(detachrequest, recordresponse)
+      val list = new ListEntityBlobsOperationDefinition(listrequest, recordresponse)
+      val adminlist = new AdminListBlobsOperationDefinition(adminlistrequest, recordresponse)
+      val adminget = new AdminGetBlobOperationDefinition(idrequest, metadataresponse)
+      val adminassociations = new AdminListBlobAssociationsOperationDefinition(adminassociationrequest, recordresponse)
+      val adminstatus = new AdminBlobStoreStatusOperationDefinition(emptyrequest, recordresponse)
+      val admindelete = new AdminDeleteBlobOperationDefinition(admindeleterequest, recordresponse)
+      val adminattach = new AdminAttachBlobToEntityOperationDefinition(attachrequest, recordresponse)
+      val admindetach = new AdminDetachBlobFromEntityOperationDefinition(detachrequest, recordresponse)
       val service = spec.ServiceDefinition(
         name = "blob",
         operations = spec.OperationDefinitionGroup(
@@ -185,13 +185,13 @@ object BlobComponent {
             attach,
             detach,
             list,
-            adminList,
-            adminGet,
-            adminAssociations,
-            adminStatus,
-            adminDelete,
-            adminAttach,
-            adminDetach
+            adminlist,
+            adminget,
+            adminassociations,
+            adminstatus,
+            admindelete,
+            adminattach,
+            admindetach
           )
         )
       )
@@ -364,9 +364,9 @@ object BlobComponent {
         success = false,
         conclusion = Some(conclusion),
         kind = _string(req, "kind"),
-        sourceMode = _string(req, "sourceMode", "source_mode"),
+        sourcemode = _string(req, "sourceMode", "source_mode"),
         backend = None,
-        recordGenericValidation = false
+        recordgenericvalidation = false
       )
   }
 
@@ -620,67 +620,67 @@ object BlobComponent {
 
   private final case class RegisterBlobAction(
     request: Request,
-    registerRequest: RegisterBlobRequest
+    registerrequest: RegisterBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
       CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
-      RegisterBlobActionCall(core, registerRequest)
+      RegisterBlobActionCall(core, registerrequest)
   }
 
   private final case class ReadBlobAction(
     request: Request,
-    idRef: String
+    idref: String
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ReadBlobActionCall(core, idRef)
+      ReadBlobActionCall(core, idref)
   }
 
   private final case class ResolveBlobUrlAction(
     request: Request,
-    idRef: String
+    idref: String
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ResolveBlobUrlActionCall(core, idRef)
+      ResolveBlobUrlActionCall(core, idref)
   }
 
   private final case class GetBlobMetadataAction(
     request: Request,
-    idRef: String
+    idref: String
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetBlobMetadataActionCall(core, idRef)
+      GetBlobMetadataActionCall(core, idref)
   }
 
   private final case class AttachBlobToEntityAction(
     request: Request,
-    attachRequest: AttachBlobRequest
+    attachrequest: AttachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
       CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
-      AttachBlobToEntityActionCall(core, attachRequest)
+      AttachBlobToEntityActionCall(core, attachrequest)
   }
 
   private final case class DetachBlobFromEntityAction(
     request: Request,
-    detachRequest: DetachBlobRequest
+    detachrequest: DetachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
       CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
-      DetachBlobFromEntityActionCall(core, detachRequest)
+      DetachBlobFromEntityActionCall(core, detachrequest)
   }
 
   private final case class ListEntityBlobsAction(
     request: Request,
-    listRequest: ListEntityBlobsRequest
+    listrequest: ListEntityBlobsRequest
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ListEntityBlobsActionCall(core, listRequest)
+      ListEntityBlobsActionCall(core, listrequest)
   }
 
   private final case class AdminListBlobsAction(
@@ -701,10 +701,10 @@ object BlobComponent {
 
   private final case class AdminListBlobAssociationsAction(
     request: Request,
-    listRequest: AdminListBlobAssociationsRequest
+    listrequest: AdminListBlobAssociationsRequest
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      AdminListBlobAssociationsActionCall(core, listRequest)
+      AdminListBlobAssociationsActionCall(core, listrequest)
   }
 
   private final case class AdminBlobStoreStatusAction(
@@ -716,44 +716,44 @@ object BlobComponent {
 
   private final case class AdminDeleteBlobAction(
     request: Request,
-    deleteRequest: AdminDeleteBlobRequest
+    deleterequest: AdminDeleteBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
       CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
-      AdminDeleteBlobActionCall(core, deleteRequest)
+      AdminDeleteBlobActionCall(core, deleterequest)
   }
 
   private final case class AdminAttachBlobToEntityAction(
     request: Request,
-    attachRequest: AttachBlobRequest
+    attachrequest: AttachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
       CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
-      AdminAttachBlobToEntityActionCall(core, attachRequest)
+      AdminAttachBlobToEntityActionCall(core, attachrequest)
   }
 
   private final case class AdminDetachBlobFromEntityAction(
     request: Request,
-    detachRequest: DetachBlobRequest
+    detachrequest: DetachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
       CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
-      AdminDetachBlobFromEntityActionCall(core, detachRequest)
+      AdminDetachBlobFromEntityActionCall(core, detachrequest)
   }
 
   private final case class RegisterBlobActionCall(
     core: ActionCall.Core,
-    registerRequest: RegisterBlobRequest
+    registerrequest: RegisterBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      observe_blob("register_blob", Some(registerRequest.kind), Some(registerRequest.sourceMode)) {
-        register_blob(registerRequest)
+      observe_blob("register_blob", Some(registerrequest.kind), Some(registerrequest.sourceMode)) {
+        register_blob(registerrequest)
       }.map { metadata =>
         OperationResponse.RecordResponse(metadata.toRecord)
       }
@@ -761,12 +761,12 @@ object BlobComponent {
 
   private final case class ReadBlobActionCall(
     core: ActionCall.Core,
-    idRef: String
+    idref: String
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       observe_blob("read_blob") {
         for {
-          id <- blob_resolve_id(idRef)
+          id <- blob_resolve_id(idref)
           blob <- blob_load(id)
           result <- blob.sourceMode match {
             case BlobSourceMode.Managed =>
@@ -798,11 +798,11 @@ object BlobComponent {
 
   private final case class ResolveBlobUrlActionCall(
     core: ActionCall.Core,
-    idRef: String
+    idref: String
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       for {
-        id <- blob_resolve_id(idRef)
+        id <- blob_resolve_id(idref)
         blob <- blob_load(id)
         record <- exec_from(_blob_access_url_record(blob.metadata))
       } yield OperationResponse.RecordResponse(record)
@@ -810,41 +810,41 @@ object BlobComponent {
 
   private final case class GetBlobMetadataActionCall(
     core: ActionCall.Core,
-    idRef: String
+    idref: String
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       for {
-        id <- blob_resolve_id(idRef)
+        id <- blob_resolve_id(idref)
         blob <- blob_load(id)
       } yield OperationResponse.RecordResponse(blob.metadata.toRecord)
   }
 
   private final case class AttachBlobToEntityActionCall(
     core: ActionCall.Core,
-    attachRequest: AttachBlobRequest
+    attachrequest: AttachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      attach_blob_to_entity(attachRequest).map { record =>
+      attach_blob_to_entity(attachrequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
 
   private final case class DetachBlobFromEntityActionCall(
     core: ActionCall.Core,
-    detachRequest: DetachBlobRequest
+    detachrequest: DetachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      detach_blob_from_entity(detachRequest).map { record =>
+      detach_blob_from_entity(detachrequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
 
   private final case class ListEntityBlobsActionCall(
     core: ActionCall.Core,
-    listRequest: ListEntityBlobsRequest
+    listrequest: ListEntityBlobsRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      list_entity_blobs(listRequest).map { record =>
+      list_entity_blobs(listrequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
@@ -882,19 +882,19 @@ object BlobComponent {
 
   private final case class AdminListBlobAssociationsActionCall(
     core: ActionCall.Core,
-    listRequest: AdminListBlobAssociationsRequest
+    listrequest: AdminListBlobAssociationsRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       authorize_blob_attachment_access("search/list").flatMap { _ =>
-        association_search(_blob_admin_association_filter(listRequest), listRequest.page.offset, Some(listRequest.page.fetchLimit), system = true)
+        association_search(_blob_admin_association_filter(listrequest), listrequest.page.offset, Some(listrequest.page.fetchLimit), system = true)
       }.map { values =>
-        val rows = values.take(listRequest.page.limit)
+        val rows = values.take(listrequest.page.limit)
         OperationResponse.RecordResponse(Record.dataAuto(
           "data" -> rows.map(AssociationRecordCodec.toRecord),
-          "offset" -> listRequest.page.offset,
-          "limit" -> listRequest.page.limit,
+          "offset" -> listrequest.page.offset,
+          "limit" -> listrequest.page.limit,
           "fetchedCount" -> rows.size,
-          "hasMore" -> (values.size > listRequest.page.limit)
+          "hasMore" -> (values.size > listrequest.page.limit)
         ))
       }
   }
@@ -906,10 +906,10 @@ object BlobComponent {
       for {
         _ <- authorize_blob_store_access("status")
         store <- exec_from(blob_store)
-        maxByteSize <- exec_from(blob_max_byte_size)
+        maxbytesize <- exec_from(blob_max_byte_size)
         record <- observe_blob("admin_blob_store_status", backend = Some(store.name)) {
           observe_blob_store("blob_store_status", store) {
-            exec_from(store.status().map(status => _blob_store_status_record(status, maxByteSize)))
+            exec_from(store.status().map(status => _blob_store_status_record(status, maxbytesize)))
           }
         }
       } yield {
@@ -919,30 +919,30 @@ object BlobComponent {
 
   private final case class AdminDeleteBlobActionCall(
     core: ActionCall.Core,
-    deleteRequest: AdminDeleteBlobRequest
+    deleterequest: AdminDeleteBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      admin_delete_blob(deleteRequest).map { record =>
+      admin_delete_blob(deleterequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
 
   private final case class AdminAttachBlobToEntityActionCall(
     core: ActionCall.Core,
-    attachRequest: AttachBlobRequest
+    attachrequest: AttachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      attach_blob_to_entity(attachRequest, system = true).map { record =>
+      attach_blob_to_entity(attachrequest, system = true).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
 
   private final case class AdminDetachBlobFromEntityActionCall(
     core: ActionCall.Core,
-    detachRequest: DetachBlobRequest
+    detachrequest: DetachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      detach_blob_from_entity(detachRequest, system = true).map { record =>
+      detach_blob_from_entity(detachrequest, system = true).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
@@ -980,7 +980,7 @@ object BlobComponent {
       success: Boolean,
       conclusion: Option[Conclusion],
       kind: Option[BlobKind],
-      sourceMode: Option[BlobSourceMode],
+      sourcemode: Option[BlobSourceMode],
       backend: Option[String]
     ): Unit =
       _record_blob_observation_strings(
@@ -988,7 +988,7 @@ object BlobComponent {
         success = success,
         conclusion = conclusion,
         kind = kind.map(_.print),
-        sourceMode = sourceMode.map(_.print),
+        sourcemode = sourcemode.map(_.print),
         backend = backend
       )
 
@@ -997,7 +997,7 @@ object BlobComponent {
       success: Boolean,
       conclusion: Option[Conclusion],
       kind: Option[String],
-      sourceMode: Option[String],
+      sourcemode: Option[String],
       backend: Option[String]
     ): Unit =
       BlobComponent._record_blob_observation(
@@ -1006,14 +1006,14 @@ object BlobComponent {
         success = success,
         conclusion = conclusion,
         kind = kind,
-        sourceMode = sourceMode,
+        sourcemode = sourcemode,
         backend = backend
       )
 
     protected final def register_blob(
       request: RegisterBlobRequest
     ): ExecUowM[BlobMetadata] = {
-      val id = collection_entity_id(BlobCollectionId, "blob.register")
+      val id = entity_id(BLOB_COLLECTION_ID, "blob.register")
       request.sourceMode match {
         case BlobSourceMode.Managed => _register_managed_blob(request, id)
         case BlobSourceMode.ExternalUrl => _register_external_url_blob(request, id)
@@ -1026,10 +1026,10 @@ object BlobComponent {
     ): ExecUowM[BlobMetadata] =
       request.payload match {
         case Some(payload) =>
-          val contentType = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
+          val contenttype = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
           for {
-            maxByteSize <- exec_from(blob_max_byte_size)
-            _ <- exec_from(_validate_managed_request(request, payload, contentType, maxByteSize))
+            maxbytesize <- exec_from(blob_max_byte_size)
+            _ <- exec_from(_validate_managed_request(request, payload, contenttype, maxbytesize))
             _ <- _authorize_blob_create(id.collection, system = false)
             store <- exec_from(blob_store)
             result <- observe_blob_store("blob_store_put", store) {
@@ -1038,13 +1038,13 @@ object BlobComponent {
                   id = id,
                   kind = request.kind,
                   filename = request.filename,
-                  contentType = contentType,
+                  contentType = contenttype,
                   attributes = request.attributes
                 ),
                 payload
               ))
             }
-            _ <- recover_with(exec_from(_validate_managed_result(request, result, maxByteSize))) { conclusion =>
+            _ <- recover_with(exec_from(_validate_managed_result(request, result, maxbytesize))) { conclusion =>
               _delete_payload_then_fail(store, result.storageRef, conclusion)
             }
             blob <- _blob_create_managed(
@@ -1184,9 +1184,14 @@ object BlobComponent {
 
     protected final def blob_resolve_id(value: String): ExecUowM[EntityId] = {
       import BlobRepository.given
-      EntityId.parse(value).toOption.filter(_.collection == BlobRepository.CollectionId) match {
-        case Some(id) => exec_pure(id)
-        case None =>
+      EntityId.parse(value) match {
+        case Consequence.Success(id) if id.collection == BlobRepository.CollectionId =>
+          exec_pure(id)
+        case Consequence.Success(id) =>
+          exec_from(Consequence.argumentInvalid(
+            s"Blob Entity ID collection mismatch: expected ${BlobRepository.CollectionId.print}, actual ${id.collection.print}"
+          ))
+        case Consequence.Failure(_) =>
           entity_resolve_identity[Blob](
             BlobRepository.CollectionId,
             value,
@@ -1219,7 +1224,7 @@ object BlobComponent {
     private def _blob_create_managed(
       create: BlobCreate,
       store: BlobStore,
-      storageRef: BlobStorageRef
+      storageref: BlobStorageRef
     ): ExecUowM[Blob] = {
       import BlobRepository.given
       val op = UnitOfWorkOp.EntityStoreCreate(
@@ -1229,13 +1234,13 @@ object BlobComponent {
         Some(_authorization(create.id.collection, None, "create", system = false))
       )
       recover_with(_exec_uow(op)) { conclusion =>
-        _delete_payload_then_fail(store, storageRef, conclusion)
-      }.flatMap(result => _blob_from_create_result(result, Some((store, storageRef))))
+        _delete_payload_then_fail(store, storageref, conclusion)
+      }.flatMap(result => _blob_from_create_result(result, Some((store, storageref))))
     }
 
     private def _blob_from_create_result(
       result: org.goldenport.cncf.entity.CreateResult[BlobCreate],
-      managedPayload: Option[(BlobStore, BlobStorageRef)] = None
+      managedpayload: Option[(BlobStore, BlobStorageRef)] = None
     ): ExecUowM[Blob] = {
       import BlobRepository.given
       result.record match {
@@ -1249,12 +1254,12 @@ object BlobComponent {
               )
             )
           ) { conclusion =>
-            _cleanup_created_blob_after_decode_failure(result.id, managedPayload, conclusion)
+            _cleanup_created_blob_after_decode_failure(result.id, managedpayload, conclusion)
           }
         case None =>
           _cleanup_created_blob_after_decode_failure(
             result.id,
-            managedPayload,
+            managedpayload,
             Consequence.operationIllegal[Blob](
               "blob.register_blob",
               s"Blob metadata create returned no storage record: ${result.id.value}"
@@ -1265,10 +1270,10 @@ object BlobComponent {
 
     private def _cleanup_created_blob_after_decode_failure[A](
       id: EntityId,
-      managedPayload: Option[(BlobStore, BlobStorageRef)],
+      managedpayload: Option[(BlobStore, BlobStorageRef)],
       conclusion: Conclusion
     ): ExecUowM[A] =
-      managedPayload match {
+      managedpayload match {
         case Some((store, ref)) =>
           _blob_delete(id, system = true).flatMap { _ =>
             _delete_payload_then_fail(store, ref, conclusion)
@@ -1291,14 +1296,14 @@ object BlobComponent {
     protected final def blob_search(page: AdminPageRequest, system: Boolean): ExecUowM[Vector[Blob]] = {
       import BlobRepository.given
       val query = EntityQuery[Blob](
-        BlobCollectionId,
+        BLOB_COLLECTION_ID,
         Query.plan(Record.empty, limit = Some(page.fetchLimit), offset = Some(page.offset)),
         EntitySearchScope.Store
       )
       val op = UnitOfWorkOp.EntityStoreSearch(
         query,
         summon[EntityPersistent[Blob]],
-        Some(_authorization(BlobCollectionId, None, "search/list", system))
+        Some(_authorization(BLOB_COLLECTION_ID, None, "search/list", system))
       )
       _exec_uow(op).map(_.data)
     }
@@ -1401,15 +1406,16 @@ object BlobComponent {
       )
 
     private def _blob_delete(id: EntityId, system: Boolean): ExecUowM[Unit] = {
-      val blobid = BlobRepository.canonicalId(id)
-      _exec_uow(UnitOfWorkOp.EntityStoreDelete(
-        id,
-        Some(_authorization(id.collection, Some(id), "delete", system))
-      )).flatMap(_ =>
-        exec_from(core.executionContext.entityStoreSpace.deleteHard(
+      for {
+        blobid <- exec_from(BlobRepository.requireCanonicalId(id))
+        _ <- _exec_uow(UnitOfWorkOp.EntityStoreDelete(
+          id,
+          Some(_authorization(id.collection, Some(id), "delete", system))
+        ))
+        _ <- exec_from(core.executionContext.entityStoreSpace.deleteHard(
           UnitOfWorkOp.EntityStoreDeleteHard(blobid)
         )(using core.executionContext))
-      )
+      } yield ()
     }
 
     private def _association_create(create: AssociationCreate, system: Boolean): ExecUowM[Association] = {
@@ -1495,7 +1501,7 @@ object BlobComponent {
     protected final def authorize_blob_collection_access(
       accessKind: String
     ): ExecUowM[Unit] =
-      _exec_uow(UnitOfWorkOp.Authorize(_authorization(BlobCollectionId, None, accessKind, system = false)))
+      _exec_uow(UnitOfWorkOp.Authorize(_authorization(BLOB_COLLECTION_ID, None, accessKind, system = false)))
 
     protected final def authorize_blob_attachment_access(
       accessKind: String
@@ -1514,15 +1520,15 @@ object BlobComponent {
       _exec_uow(UnitOfWorkOp.Authorize(_store_authorization(_blob_store_resource_name, accessKind, system = false)))
 
     private def _authorize_source_entity(
-      sourceEntityId: String,
-      accessKind: String,
+      sourceentityid: String,
+      accesskind: String,
       system: Boolean
     ): ExecUowM[Unit] =
       if (system)
         exec_pure(())
       else
-        exec_from(EntityId.parse(sourceEntityId)).flatMap { id =>
-          _exec_uow(UnitOfWorkOp.Authorize(_authorization(id.collection, Some(id), accessKind, system = false)))
+        exec_from(EntityId.parse(sourceentityid)).flatMap { id =>
+          _exec_uow(UnitOfWorkOp.Authorize(_authorization(id.collection, Some(id), accesskind, system = false)))
         }
 
     private def _exec_uow[A](op: UnitOfWorkOp[A]): ExecUowM[A] =
@@ -1576,16 +1582,16 @@ object BlobComponent {
 
     private def _authorization(
       collection: EntityCollectionId,
-      targetId: Option[EntityId],
-      accessKind: String,
+      targetid: Option[EntityId],
+      accesskind: String,
       system: Boolean
     ): UnitOfWorkAuthorization =
       UnitOfWorkAuthorization(
         resourceFamily = "domain",
         resourceType = Some(collection.name),
         collectionName = Some(collection.name),
-        targetId = targetId,
-        accessKind = accessKind,
+        targetId = targetid,
+        accessKind = accesskind,
         sourceComponentName = core.component.map(_.name),
         targetComponentName = core.component.map(_.name),
         accessMode = if (system) EntityAccessMode.System else EntityAccessMode.UserPermission
@@ -1594,32 +1600,32 @@ object BlobComponent {
     private def _association_authorization(
       domain: AssociationDomain,
       collection: EntityCollectionId,
-      targetId: Option[EntityId],
-      accessKind: String,
+      targetid: Option[EntityId],
+      accesskind: String,
       system: Boolean
     ): UnitOfWorkAuthorization =
       UnitOfWorkAuthorization(
         resourceFamily = "association",
         resourceType = Some(domain.value),
         collectionName = Some(collection.name),
-        targetId = targetId,
-        accessKind = accessKind,
+        targetId = targetid,
+        accessKind = accesskind,
         sourceComponentName = core.component.map(_.name),
         targetComponentName = core.component.map(_.name),
         accessMode = if (system) EntityAccessMode.System else EntityAccessMode.UserPermission
       )
 
     private def _store_authorization(
-      storeName: String,
-      accessKind: String,
+      storename: String,
+      accesskind: String,
       system: Boolean
     ): UnitOfWorkAuthorization =
       UnitOfWorkAuthorization(
         resourceFamily = "store",
-        resourceType = Some(storeName),
+        resourceType = Some(storename),
         collectionName = None,
         targetId = None,
-        accessKind = accessKind,
+        accessKind = accesskind,
         sourceComponentName = core.component.map(_.name),
         targetComponentName = core.component.map(_.name),
         accessMode = if (system) EntityAccessMode.System else EntityAccessMode.UserPermission
@@ -1675,8 +1681,8 @@ object BlobComponent {
   private def _validate_managed_request(
     request: RegisterBlobRequest,
     payload: BinaryBag,
-    contentType: ContentType,
-    maxByteSize: Long
+    contenttype: ContentType,
+    maxbytesize: Long
   ): Consequence[Unit] =
     for {
       _ <- request.expectedByteSize match {
@@ -1690,18 +1696,18 @@ object BlobComponent {
         case None => Consequence.unit
       }
       _ <- payload.metadata.size match {
-        case Some(size) if size > maxByteSize =>
-          Consequence.argumentFieldLimitExceeded("payload.byteSize", maxByteSize, size, "blob.upload.max-byte-size")
+        case Some(size) if size > maxbytesize =>
+          Consequence.argumentFieldLimitExceeded("payload.byteSize", maxbytesize, size, "blob.upload.max-byte-size")
         case _ =>
           Consequence.unit
       }
-      _ <- _validate_mime_kind(request.kind, contentType)
+      _ <- _validate_mime_kind(request.kind, contenttype)
     } yield ()
 
   private def _validate_managed_result(
     request: RegisterBlobRequest,
     result: BlobPutResult,
-    maxByteSize: Long
+    maxbytesize: Long
   ): Consequence[Unit] =
     for {
       _ <- request.expectedByteSize match {
@@ -1722,8 +1728,8 @@ object BlobComponent {
           Consequence.unit
       }
       _ <-
-        if (result.byteSize > maxByteSize)
-          Consequence.argumentFieldLimitExceeded("payload.byteSize", maxByteSize, result.byteSize, "blob.upload.max-byte-size")
+        if (result.byteSize > maxbytesize)
+          Consequence.argumentFieldLimitExceeded("payload.byteSize", maxbytesize, result.byteSize, "blob.upload.max-byte-size")
         else
           Consequence.unit
       _ <- _validate_mime_kind(request.kind, result.contentType)
@@ -1731,15 +1737,15 @@ object BlobComponent {
 
   private def _validate_mime_kind(
     kind: BlobKind,
-    contentType: ContentType
+    contenttype: ContentType
   ): Consequence[Unit] = {
     kind match {
-      case BlobKind.Image if !_is_mime_kind_compatible(kind, contentType) =>
-        Consequence.argumentPolicyViolation("contentType", "mime-kind", "image/*", contentType.header)
-      case BlobKind.Video if !_is_mime_kind_compatible(kind, contentType) =>
-        Consequence.argumentPolicyViolation("contentType", "mime-kind", "video/*", contentType.header)
-      case BlobKind.Audio if !_is_mime_kind_compatible(kind, contentType) =>
-        Consequence.argumentPolicyViolation("contentType", "mime-kind", "audio/*", contentType.header)
+      case BlobKind.Image if !_is_mime_kind_compatible(kind, contenttype) =>
+        Consequence.argumentPolicyViolation("contentType", "mime-kind", "image/*", contenttype.header)
+      case BlobKind.Video if !_is_mime_kind_compatible(kind, contenttype) =>
+        Consequence.argumentPolicyViolation("contentType", "mime-kind", "video/*", contenttype.header)
+      case BlobKind.Audio if !_is_mime_kind_compatible(kind, contenttype) =>
+        Consequence.argumentPolicyViolation("contentType", "mime-kind", "audio/*", contenttype.header)
       case _ =>
         Consequence.unit
     }
@@ -1767,26 +1773,26 @@ object BlobComponent {
 
   private def _register_blob_request(req: Request): Consequence[RegisterBlobRequest] =
     for {
-      sourceMode <- _string(req, "sourceMode", "source_mode").map(BlobSourceMode.parse).getOrElse(Consequence.argumentMissing("sourceMode"))
+      sourcemode <- _string(req, "sourceMode", "source_mode").map(BlobSourceMode.parse).getOrElse(Consequence.argumentMissing("sourceMode"))
       kind <- _string(req, "kind").map(BlobKind.parse).getOrElse(Consequence.argumentMissing("kind"))
       filename = _string(req, "filename", "fileName")
-      mimeBody = _any(req, "payload", "body", "file").collect { case m: MimeBody => m }
-      contentType <- mimeBody match {
+      mimebody = _any(req, "payload", "body", "file").collect { case m: MimeBody => m }
+      contenttype <- mimebody match {
         case Some(m) => Consequence.success(Some(m.contentType))
         case None => _optional_content_type(req)
       }
-      expectedByteSize <- _optional_long(req, "expectedByteSize", "expected_byte_size")
-      expectedDigest = _string(req, "expectedDigest", "expected_digest")
-      payload <- _payload(req, mimeBody)
+      expectedbytesize <- _optional_long(req, "expectedByteSize", "expected_byte_size")
+      expecteddigest = _string(req, "expectedDigest", "expected_digest")
+      payload <- _payload(req, mimebody)
     } yield RegisterBlobRequest(
       kind = kind,
-      sourceMode = sourceMode,
+      sourceMode = sourcemode,
       filename = filename,
-      contentType = contentType,
+      contentType = contenttype,
       payload = payload,
       externalUrl = _string(req, "externalUrl", "external_url", "url"),
-      expectedByteSize = expectedByteSize,
-      expectedDigest = expectedDigest,
+      expectedByteSize = expectedbytesize,
+      expectedDigest = expecteddigest,
       attributes = Map.empty
     )
 
@@ -1815,9 +1821,9 @@ object BlobComponent {
 
   private def _is_mime_kind_compatible(
     kind: BlobKind,
-    contentType: ContentType
+    contenttype: ContentType
   ): Boolean = {
-    val mime = contentType.mimeType.value.toLowerCase(java.util.Locale.ROOT)
+    val mime = contenttype.mimeType.value.toLowerCase(java.util.Locale.ROOT)
     kind match {
       case BlobKind.Image => mime.startsWith("image/")
       case BlobKind.Video => mime.startsWith("video/")
@@ -1828,9 +1834,9 @@ object BlobComponent {
 
   private def _payload(
     req: Request,
-    mimeBody: Option[MimeBody]
+    mimebody: Option[MimeBody]
   ): Consequence[Option[BinaryBag]] =
-    mimeBody match {
+    mimebody match {
       case Some(m) => Consequence.success(Some(m.value.promoteToBinary()))
       case None =>
         _any(req, "payload", "body", "file") match {
@@ -1844,7 +1850,18 @@ object BlobComponent {
     }
 
   private def _id(req: Request): Consequence[EntityId] =
-    _string(req, "id").map(EntityId.parse).getOrElse(Consequence.argumentMissing("id"))
+    _string(req, "id").map(_blob_id).getOrElse(Consequence.argumentMissing("id"))
+
+  private def _blob_id(value: String): Consequence[EntityId] =
+    EntityId.parse(value).flatMap {
+      id =>
+        if (id.collection == BlobRepository.CollectionId)
+          Consequence.success(id)
+        else
+          Consequence.argumentInvalid(
+            s"Blob Entity ID collection mismatch: expected ${BlobRepository.CollectionId.print}, actual ${id.collection.print}"
+          )
+    }
 
   private def _id_ref(req: Request): Consequence[String] =
     _string(req, "id").map(Consequence.success).getOrElse(Consequence.argumentMissing("id"))
@@ -1880,7 +1897,7 @@ object BlobComponent {
     req: Request
   ): Consequence[AdminListBlobAssociationsRequest] = {
     val id = _string(req, "id") match {
-      case Some(value) => EntityId.parse(value).map(Some(_))
+      case Some(value) => _blob_id(value).map(Some(_))
       case None => Consequence.success(None)
     }
     for {
@@ -1902,13 +1919,13 @@ object BlobComponent {
 
   private def _admin_page_request(req: Request): Consequence[AdminPageRequest] = {
     val offset = _int(req, "offset").getOrElse(0)
-    val limit = _int(req, "limit").getOrElse(AdminPageRequest.DefaultLimit)
+    val limit = _int(req, "limit").getOrElse(AdminPageRequest.DEFAULT_LIMIT)
     if (offset < 0)
       Consequence.argumentInvalid("offset must be zero or greater")
     else if (limit < 1)
       Consequence.argumentInvalid("limit must be one or greater")
-    else if (limit > AdminPageRequest.MaxLimit)
-      Consequence.argumentInvalid(s"limit must be ${AdminPageRequest.MaxLimit} or less")
+    else if (limit > AdminPageRequest.MAX_LIMIT)
+      Consequence.argumentInvalid(s"limit must be ${AdminPageRequest.MAX_LIMIT} or less")
     else
       Consequence.success(AdminPageRequest(offset, limit))
   }
@@ -1957,13 +1974,13 @@ object BlobComponent {
     success: Boolean,
     conclusion: Option[Conclusion],
     kind: Option[String],
-    sourceMode: Option[String],
+    sourcemode: Option[String],
     backend: Option[String],
-    recordGenericValidation: Boolean = true
+    recordgenericvalidation: Boolean = true
   ): Unit = {
     val diagnostic = conclusion.map(ConclusionDiagnostics.classify)
     val diagnostickey = diagnostic.map(_.diagnosticKey)
-    conclusion.filter(c => recordGenericValidation && ValidationDiagnostics.isValidation(c)).foreach { c =>
+    conclusion.filter(c => recordgenericvalidation && ValidationDiagnostics.isValidation(c)).foreach { c =>
       val classification = ConclusionDiagnostics.classify(c)
       RuntimeDashboardMetrics.recordValidation(
         operation = operation,
@@ -1977,7 +1994,7 @@ object BlobComponent {
       diagnosticKey = diagnostickey,
       diagnosticRecord = diagnostic.map(_.toRecord),
       kind = kind,
-      sourceMode = sourceMode,
+      sourceMode = sourcemode,
       backend = backend
     )
     val _ = context.observability.emitInfo(
@@ -1988,7 +2005,7 @@ object BlobComponent {
         "blob.outcome" -> (if (success) "success" else "failure"),
         "diagnostic" -> diagnostic.map(_.toRecord),
         "blob.kind" -> kind,
-        "blob.sourceMode" -> sourceMode,
+        "blob.sourceMode" -> sourcemode,
         "blob.backend" -> backend
       )
     )

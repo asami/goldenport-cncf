@@ -37,47 +37,65 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 30, 2026
  *  version May. 18, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ChildEntityBindingWorkflowSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
-  "Subsystem operation child Entity binding adapter" should {
-    "create child records using entity_id from an Entity create result" in {
-      Given("a parent create operation with child Entity binding metadata")
-      val (component, context) = _runtime_component()
-      given ExecutionContext   = context
-      val orderid              = _order_id("order_child_binding_create")
-      val request = _create_order_request(
-        component,
-        orderid,
-        Vector(
-          Record.dataAuto("name" -> "Widget", "quantity" -> 2),
-          Record.dataAuto("name" -> "Cable", "quantity"  -> 4)
-        )
-      )
-      val binding = component.operationDefinitions.find(_.name == "createOrder").flatMap(
-        _.childEntityBindings.headOption
-      ).getOrElse(fail("binding missing"))
-      ChildEntityBindingWorkflow.extract(binding, request).map(_.size) shouldBe Consequence.success(
-        2
-      )
+  private val _in_eid01_spec =
+    afterWord("in spec:entity-collection-identity, example:E6, rules:R1,R5, phase:52")
+  private val _in_phase52_spec =
+    afterWord("in spec:entity-collection-identity, example:child-binding, rules:R1,R5, phase:52")
 
-      When("the operation is executed")
-      val response = _success(component.subsystem.get.executeOperationResponse(request))
+  "Subsystem operation child Entity binding adapter" must _in_phase52_spec {
+    "which records EID-01 child identity parsing" which {
+      "E6 create child records using entity_id from an Entity create result" must _in_eid01_spec {
+        "retain the exact canonical child-binding source identity" in {
+          Given(
+            "Spec: docs/spec/entity-collection-identity.md; Rules: R1,R5; Example: E6; a parent create operation with child Entity binding metadata"
+          )
+          val (component, context) = _runtime_component()
+          given ExecutionContext   = context
+          val orderid              = _order_id("order_child_binding_create")
+          val request = _create_order_request(
+            component,
+            orderid,
+            Vector(
+              Record.dataAuto("name" -> "Widget", "quantity" -> 2),
+              Record.dataAuto("name" -> "Cable", "quantity"  -> 4)
+            )
+          )
+          val binding = component.operationDefinitions.find(_.name == "createOrder").flatMap(
+            _.childEntityBindings.headOption
+          ).getOrElse(fail("binding missing"))
+          ChildEntityBindingWorkflow.extract(binding, request).map(_.size) shouldBe Consequence.success(
+            2
+          )
 
-      Then("the response is preserved and child lines are created with parent id and sort order")
-      response match {
-        case OperationResponse.RecordResponse(record) =>
-          record.getString("entity_id") shouldBe Some(orderid.value)
-        case other =>
-          fail(s"unexpected response: $other")
+          When("the operation is executed")
+          val response = _success(component.subsystem.get.executeOperationResponse(request))
+
+          Then(
+            "the response is preserved and child lines are created with parent id and sort order"
+          )
+          response match {
+            case OperationResponse.RecordResponse(record) =>
+              record.getString("entity_id") shouldBe Some(orderid.value)
+            case other =>
+              fail(s"unexpected response: $other")
+          }
+          val lines = _order_lines(component, orderid)
+          lines.map(_.orderId) shouldBe Vector(orderid, orderid)
+          lines.map(_.sortOrder) shouldBe Vector(Some(0), Some(1))
+
+          And("the child-binding response retains its exact source collection after scalar parsing")
+          val parsedorder = EntityId.parse(orderid.value).toOption.get
+          parsedorder shouldBe orderid
+          EntityId.parse(orderid.value).toOption shouldBe Some(orderid)
+        }
       }
-      val lines = _order_lines(component, orderid)
-      lines.map(_.orderId) shouldBe Vector(orderid, orderid)
-      lines.map(_.sortOrder) shouldBe Vector(Some(0), Some(1))
     }
 
     "accept a matching parent id already present in child input" in {
@@ -151,6 +169,30 @@ final class ChildEntityBindingWorkflowSpec
       line.orderId shouldBe existingorderid
       line.name shouldBe "Original"
       line.quantity shouldBe 9
+    }
+
+    "reject a canonical foreign child id before creating or compensating a foreign record" in {
+      Given("a child row whose canonical id belongs to the parent collection")
+      val (component, context) = _runtime_component()
+      given ExecutionContext   = context
+      val orderid              = _order_id("order_child_binding_foreign_child")
+      val request = _create_order_request(
+        component,
+        orderid,
+        Vector(Record.dataAuto(
+          "id" -> orderid.value,
+          "name" -> "Foreign",
+          "quantity" -> 1
+        ))
+      )
+
+      When("the child-binding create operation is executed")
+      val result = component.subsystem.get.executeOperationResponse(request)
+
+      Then("it fails before creating a child under a rebound collection identity")
+      result shouldBe a[Consequence.Failure[_]]
+      _resolve_order(component, orderid) shouldBe a[Consequence.Failure[_]]
+      _order_lines(component, orderid) shouldBe Vector.empty
     }
 
     "compensate child and parent records when a later association binding fails" in {
@@ -275,16 +317,16 @@ final class ChildEntityBindingWorkflowSpec
             name = "order",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _OrderOperation("createOrder", createsParent = true),
-                _OrderOperation("createOrderWithBadAssociation", createsParent = true),
-                _OrderOperation("appendLines", createsParent = false)
+                OrderOperation("createOrder", createsparent = true),
+                OrderOperation("createOrderWithBadAssociation", createsparent = true),
+                OrderOperation("appendLines", createsparent = false)
               )
             )
           ),
           spec.ServiceDefinition(
             name = "order_line",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_OrderOperation("noop", createsParent = false))
+              operations = NonEmptyVector.of(OrderOperation("noop", createsparent = false))
             )
           )
         )
@@ -481,9 +523,9 @@ final class ChildEntityBindingWorkflowSpec
     }
 }
 
-private final case class _OrderOperation(
+private final case class OrderOperation(
     opname: String,
-    createsParent: Boolean
+    createsparent: Boolean
 ) extends spec.OperationDefinition with ChildEntityBindingOperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
@@ -493,7 +535,7 @@ private final case class _OrderOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_OrderAction(req, createsParent))
+    Consequence.success(OrderAction(req, createsparent))
 
   override def childEntityBindings: Vector[CmlOperationChildEntityBinding] =
     if (opname == "createOrder" || opname == "createOrderWithBadAssociation")
@@ -523,25 +565,25 @@ private final case class _OrderOperation(
       Vector.empty
 }
 
-private final case class _OrderAction(
+private final case class OrderAction(
     request: Request,
-    createsParent: Boolean
+    createsparent: Boolean
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _OrderActionCall(core, request, createsParent)
+    OrderActionCall(core, request, createsparent)
 }
 
-private final case class _OrderActionCall(
+private final case class OrderActionCall(
     core: ActionCall.Core,
     oprequest: Request,
-    createsParent: Boolean
+    createsparent: Boolean
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] = {
     given ExecutionContext = core.executionContext
     val id = EntityId.parse(_string("id").getOrElse(_string("orderId").getOrElse("")))
     id.flatMap { orderid =>
       val created =
-        if (createsParent)
+        if (createsparent)
           core.component
             .flatMap(_.entitySpace.entityOption[Any]("order"))
             .map(_.createRecordSynced(Record.dataAuto(

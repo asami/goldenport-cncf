@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Apr. 26, 2026
  *  version Apr. 29, 2026
- * @version May.  4, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobStoreSpec
@@ -111,30 +111,30 @@ final class BlobStoreSpec
       val put = store.put(request, payload)
 
       Then("the store returns metadata without inventing a public content URL")
-      val putResult = _success(put)
-      putResult.id shouldBe request.id
-      putResult.contentType shouldBe ContentType.TEXT_PLAIN
-      putResult.byteSize shouldBe 10L
-      putResult.digest shouldBe BlobStoreSupport.sha256("hello blob".getBytes(StandardCharsets.UTF_8))
-      putResult.accessUrl.displayUrl shouldBe ""
-      putResult.accessUrl.downloadUrl shouldBe ""
-      _assert_no_cncf_content_route(putResult.accessUrl)
-      store.accessUrl(putResult.storageRef) shouldBe a[Consequence.Failure[_]]
+      val putresult = _success(put)
+      putresult.id shouldBe request.id
+      putresult.contentType shouldBe ContentType.TEXT_PLAIN
+      putresult.byteSize shouldBe 10L
+      putresult.digest shouldBe BlobStoreSupport.sha256("hello blob".getBytes(StandardCharsets.UTF_8))
+      putresult.accessUrl.displayUrl shouldBe ""
+      putresult.accessUrl.downloadUrl shouldBe ""
+      _assert_no_cncf_content_route(putresult.accessUrl)
+      store.accessUrl(putresult.storageRef) shouldBe a[Consequence.Failure[_]]
 
       When("reading the payload")
-      val read = _success(store.get(putResult.storageRef))
+      val read = _success(store.get(putresult.storageRef))
 
       Then("the same bytes and metadata are returned")
       _bytes(read.payload) shouldBe "hello blob".getBytes(StandardCharsets.UTF_8).toVector
-      read.digest shouldBe putResult.digest
-      read.byteSize shouldBe putResult.byteSize
+      read.digest shouldBe putresult.digest
+      read.byteSize shouldBe putresult.byteSize
 
       When("deleting the payload")
-      val deleted = store.delete(putResult.storageRef)
+      val deleted = store.delete(putresult.storageRef)
 
       Then("the delete succeeds and later reads fail because the storage ref is no longer valid")
       deleted shouldBe Consequence.unit
-      store.get(putResult.storageRef) shouldBe a[Consequence.Failure[_]]
+      store.get(putresult.storageRef) shouldBe a[Consequence.Failure[_]]
     }
 
     "return backend URLs when configured" in {
@@ -238,24 +238,24 @@ final class BlobStoreSpec
       val payload = Bag.binary("local blob".getBytes(StandardCharsets.UTF_8))
 
       When("putting the payload")
-      val putResult = _success(store.put(request, payload))
-      val storedPath = root.resolve(putResult.storageRef.container).resolve(putResult.storageRef.key)
+      val putresult = _success(store.put(request, payload))
+      val storedpath = root.resolve(putresult.storageRef.container).resolve(putresult.storageRef.key)
 
       Then("the bytes are written under the BlobStore root, outside entity records")
-      Files.exists(storedPath) shouldBe true
-      Files.readAllBytes(storedPath).toVector shouldBe "local blob".getBytes(StandardCharsets.UTF_8).toVector
-      putResult.accessUrl.displayUrl shouldBe ""
-      putResult.accessUrl.downloadUrl shouldBe ""
-      _assert_no_cncf_content_route(putResult.accessUrl)
-      store.accessUrl(putResult.storageRef) shouldBe a[Consequence.Failure[_]]
+      Files.exists(storedpath) shouldBe true
+      Files.readAllBytes(storedpath).toVector shouldBe "local blob".getBytes(StandardCharsets.UTF_8).toVector
+      putresult.accessUrl.displayUrl shouldBe ""
+      putresult.accessUrl.downloadUrl shouldBe ""
+      _assert_no_cncf_content_route(putresult.accessUrl)
+      store.accessUrl(putresult.storageRef) shouldBe a[Consequence.Failure[_]]
 
       When("reading the payload through the store")
-      val read = _success(store.get(putResult.storageRef))
+      val read = _success(store.get(putresult.storageRef))
 
       Then("the same bytes and result metadata are returned")
       _bytes(read.payload) shouldBe "local blob".getBytes(StandardCharsets.UTF_8).toVector
       read.contentType shouldBe ContentType.TEXT_PLAIN
-      read.digest shouldBe putResult.digest
+      read.digest shouldBe putresult.digest
     }
 
     "read payload metadata after a LocalBlobStore restart" in {
@@ -264,18 +264,36 @@ final class BlobStoreSpec
       val writer = LocalBlobStore(root)
       val request = _request("blob-local-restart", Some("photo.png"), ContentType.IMAGE_PNG)
       val payload = Bag.binary(Array[Byte](9, 8, 7))
-      val putResult = _success(writer.put(request, payload))
+      val putresult = _success(writer.put(request, payload))
 
       When("a fresh LocalBlobStore instance reads the same storage ref")
       val reader = LocalBlobStore(root)
-      val read = _success(reader.get(putResult.storageRef))
+      val read = _success(reader.get(putresult.storageRef))
 
       Then("the sidecar metadata preserves the BlobStore read contract")
-      read.id shouldBe putResult.id
+      read.id shouldBe putresult.id
       read.contentType shouldBe ContentType.IMAGE_PNG
       read.byteSize shouldBe 3L
-      read.digest shouldBe putResult.digest
+      read.digest shouldBe putresult.digest
       _bytes(read.payload) shouldBe Vector[Byte](9, 8, 7)
+    }
+
+    "preserve the canonical sidecar id when obsolete collection metadata conflicts" in {
+      Given("a local BlobStore sidecar with a canonical id and stale collection metadata")
+      val root = Files.createTempDirectory("cncf-blob-store-canonical-id-spec")
+      val writer = LocalBlobStore(root)
+      val request = _request("blob-local-canonical", Some("photo.png"), ContentType.IMAGE_PNG)
+      val putresult = _success(writer.put(request, Bag.binary(Array[Byte](1, 2, 3))))
+      val payloadpath = root.resolve(putresult.storageRef.container).resolve(putresult.storageRef.key)
+      val sidecar = payloadpath.resolveSibling(payloadpath.getFileName.toString + ".blob-meta.properties")
+      Files.writeString(sidecar, Files.readString(sidecar) + "idCollectionName=tag\n")
+
+      When("a new store reads the sidecar")
+      val read = _success(LocalBlobStore(root).get(putresult.storageRef))
+
+      Then("the parsed canonical id remains the Blob id and is not rebound from sidecar metadata")
+      read.id shouldBe putresult.id
+      read.id.collection shouldBe BlobRepository.CollectionId
     }
 
     "delete payload bytes when sidecar metadata write fails" in {
@@ -284,36 +302,36 @@ final class BlobStoreSpec
       val store = LocalBlobStore(root)
       val request = _request("blob-local-sidecar-failure", Some("photo.png"), ContentType.IMAGE_PNG)
       val key = BlobStoreSupport.keyFor(request.id, request.filename)
-      val payloadPath = root.resolve("default").resolve(key)
-      val metadataPath = payloadPath.resolveSibling(payloadPath.getFileName.toString + ".blob-meta.properties")
-      Files.createDirectories(metadataPath)
+      val payloadpath = root.resolve("default").resolve(key)
+      val metadatapath = payloadpath.resolveSibling(payloadpath.getFileName.toString + ".blob-meta.properties")
+      Files.createDirectories(metadatapath)
 
       When("put writes the payload but cannot write sidecar metadata")
       val result = store.put(request, Bag.binary(Array[Byte](1, 2, 3)))
 
       Then("the operation fails and compensates the payload file")
       result shouldBe a[Consequence.Failure[_]]
-      Files.exists(payloadPath) shouldBe false
+      Files.exists(payloadpath) shouldBe false
     }
 
     "return Failure for missing storage references and I/O failures" in {
       Given("a local BlobStore and a missing storage reference")
       val root = Files.createTempDirectory("cncf-blob-store-missing-spec")
       val store = LocalBlobStore(root)
-      val missingRef = BlobStorageRef("local", "default", "missing/payload.bin")
+      val missingref = BlobStorageRef("local", "default", "missing/payload.bin")
 
       When("reading the missing path")
-      val missing = store.get(missingRef)
+      val missing = store.get(missingref)
 
       Then("not found is represented as a Failure because BlobStorageRef is a committed reference")
       missing shouldBe a[Consequence.Failure[_]]
 
       Given("a storage reference whose path is a directory, not a readable payload file")
-      val brokenRef = BlobStorageRef("local", "default", "broken/payload.bin")
+      val brokenref = BlobStorageRef("local", "default", "broken/payload.bin")
       Files.createDirectories(root.resolve("default").resolve("broken").resolve("payload.bin"))
 
       When("reading the broken path")
-      val broken = store.get(brokenRef)
+      val broken = store.get(brokenref)
 
       Then("the I/O error is preserved as a Failure")
       broken shouldBe a[Consequence.Failure[_]]
@@ -325,12 +343,12 @@ final class BlobStoreSpec
       val store = LocalBlobStore(root, name = "local-a")
       val request = _request("blob-store-mismatch", Some("payload.bin"), ContentType.APPLICATION_OCTET_STREAM)
       val stored = _success(store.put(request, Bag.binary(Array[Byte](1, 2, 3))))
-      val foreignRef = stored.storageRef.copy(store = "local-b")
+      val foreignref = stored.storageRef.copy(store = "local-b")
 
       When("reading, deleting, or resolving URLs for the foreign reference")
-      val read = store.get(foreignRef)
-      val delete = store.delete(foreignRef)
-      val url = store.accessUrl(foreignRef)
+      val read = store.get(foreignref)
+      val delete = store.delete(foreignref)
+      val url = store.accessUrl(foreignref)
 
       Then("each operation fails before touching local payload paths")
       read shouldBe a[Consequence.Failure[_]]
@@ -345,8 +363,8 @@ final class BlobStoreSpec
       val store = LocalBlobStore(root)
       val request = _request("blob-key-safe", Some("payload.bin"), ContentType.APPLICATION_OCTET_STREAM)
       _success(store.put(request, Bag.binary(Array[Byte](1))))
-      val containerRoot = root.resolve("default")
-      Files.exists(containerRoot) shouldBe true
+      val containerroot = root.resolve("default")
+      Files.exists(containerroot) shouldBe true
 
       When("deleting invalid refs that point at directories rather than object keys")
       val empty = store.delete(BlobStorageRef("local", "default", ""))
@@ -357,7 +375,7 @@ final class BlobStoreSpec
       empty shouldBe a[Consequence.Failure[_]]
       dot shouldBe a[Consequence.Failure[_]]
       directory shouldBe a[Consequence.Failure[_]]
-      Files.exists(containerRoot) shouldBe true
+      Files.exists(containerroot) shouldBe true
     }
 
     "fail instead of fabricating metadata when payload file exists without metadata" in {

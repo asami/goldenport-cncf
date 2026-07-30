@@ -3,7 +3,12 @@ package org.goldenport.cncf.blob
 import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
+import org.goldenport.cncf.association.{
+  AssociationDomain,
+  AssociationFilter,
+  AssociationRepository,
+  AssociationStoragePolicy
+}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.protocol.{Argument, Request}
@@ -16,52 +21,83 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for BL-05B entity create/update Blob attachment workflow.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version Jul. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobAttachmentWorkflowSpec
-  extends AnyWordSpec
-  with Matchers
-  with GivenWhenThen {
-  "BlobAttachmentWorkflow" should {
-    "extract uploaded files and existing Blob id references from one request" in {
-      Given("a multipart-style operation request with one upload and one existing Blob id")
-      val existingId = _blob_entity_id("existing")
-      val request = Request.of(
-        component = "sample",
-        service = "article",
-        operation = "create",
-        arguments = List(
-          Argument("title", "Hello", None),
-          Argument("blob.mainImage", MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))), None),
-          Argument("blob.mainImage.filename", "cover.png", None),
-          Argument("blobId.attachment", existingId.value, None)
-        )
-      )
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
+  private val _in_eid01_spec =
+    afterWord("in spec:entity-collection-identity, example:E5, rules:R1,R5, phase:52")
+  private val _in_phase52_spec =
+    afterWord("in spec:entity-collection-identity, example:blob-attachment, rules:R1,R5, phase:52")
 
-      When("extracting Blob attachment parts")
-      val extracted = _success(BlobAttachmentWorkflow.extract(request))
+  "BlobAttachmentWorkflow" must _in_phase52_spec {
+    "which records EID-01 Blob parsing" which {
+      "E5 extract uploaded files and existing Blob id references from one request" must _in_eid01_spec {
+        "retain the exact canonical Blob reference owner" in {
+          Given(
+            "Spec: docs/spec/entity-collection-identity.md; Rules: R1,R5; Example: E5; a multipart-style operation request with one upload and one existing Blob id"
+          )
+          val existingid = _blob_entity_id("existing")
+          val request = Request.of(
+            component = "sample",
+            service = "article",
+            operation = "create",
+            arguments = List(
+              Argument("title", "Hello", None),
+              Argument(
+                "blob.mainImage",
+                MimeBody(
+                  ContentType.IMAGE_PNG,
+                  Bag.binary("image".getBytes(StandardCharsets.UTF_8))
+                ),
+                None
+              ),
+              Argument("blob.mainImage.filename", "cover.png", None),
+              Argument("blobId.attachment", existingid.value, None)
+            )
+          )
 
-      Then("ordinary fields are ignored and Blob upload/reference parts are preserved")
-      extracted.uploads.map(_.role) shouldBe Vector("mainImage")
-      extracted.uploads.map(_.kind) shouldBe Vector(BlobKind.Image)
-      extracted.uploads.flatMap(_.filename) shouldBe Vector("cover.png")
-      extracted.references.map(x => x.role -> x.id.value) shouldBe Vector("attachment" -> existingId.value)
+          When("extracting Blob attachment parts")
+          val extracted = _success(BlobAttachmentWorkflow.extract(request))
+
+          Then("ordinary fields are ignored and Blob upload/reference parts are preserved")
+          extracted.uploads.map(_.role) shouldBe Vector("mainImage")
+          extracted.uploads.map(_.kind) shouldBe Vector(BlobKind.Image)
+          extracted.uploads.flatMap(_.filename) shouldBe Vector("cover.png")
+          extracted.references.map(x => x.role -> x.id.value) shouldBe Vector(
+            "attachment" -> existingid.value
+          )
+
+          And("the Blob reference parser retains the exact collection owner")
+          val parsedid = EntityId.parse(existingid.value).toOption.get
+          extracted.references.map(_.id) shouldBe Vector(parsedid)
+          parsedid shouldBe existingid
+          EntityId.parse(existingid.value).toOption shouldBe Some(existingid)
+        }
+      }
     }
 
     "extract hybrid imageAttachments rows with existing blob syntax" in {
       Given("a request using the structured imageAttachments rows and legacy blobId fields")
-      val existingId = _blob_entity_id("existing_hybrid")
+      val existingid = _blob_entity_id("existing_hybrid")
       val request = Request.of(
         component = "sample",
         service = "article",
         operation = "create",
         arguments = List(
           Argument("imageAttachments.0.role", "primary", None),
-          Argument("imageAttachments.0.file", MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))), None),
+          Argument(
+            "imageAttachments.0.file",
+            MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))),
+            None
+          ),
           Argument("imageAttachments.0.file.filename", "primary.png", None),
           Argument("imageAttachments.0.sortOrder", "10", None),
-          Argument("blobId.thumbnail", existingId.value, None)
+          Argument("blobId.thumbnail", existingid.value, None)
         )
       )
 
@@ -69,21 +105,31 @@ final class BlobAttachmentWorkflowSpec
       val extracted = _success(BlobAttachmentWorkflow.extract(request))
 
       Then("structured upload rows and legacy references are normalized together")
-      extracted.uploads.map(x => (x.role, x.filename, x.sortOrder)) shouldBe Vector(("primary", Some("primary.png"), Some(10)))
-      extracted.references.map(x => x.role -> x.id.value) shouldBe Vector("thumbnail" -> existingId.value)
+      extracted.uploads.map(x => (x.role, x.filename, x.sortOrder)) shouldBe Vector((
+        "primary",
+        Some("primary.png"),
+        Some(10)
+      ))
+      extracted.references.map(x => x.role -> x.id.value) shouldBe Vector(
+        "thumbnail" -> existingid.value
+      )
     }
 
     "reject malformed imageAttachments rows deterministically" in {
       Given("a structured row that specifies both upload and existing Blob id")
-      val existingId = _blob_entity_id("existing_invalid")
+      val existingid = _blob_entity_id("existing_invalid")
       val request = Request.of(
         component = "sample",
         service = "article",
         operation = "create",
         arguments = List(
           Argument("imageAttachments.0.role", "primary", None),
-          Argument("imageAttachments.0.file", MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))), None),
-          Argument("imageAttachments.0.blobId", existingId.value, None)
+          Argument(
+            "imageAttachments.0.file",
+            MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))),
+            None
+          ),
+          Argument("imageAttachments.0.blobId", existingid.value, None)
         )
       )
 
@@ -97,17 +143,23 @@ final class BlobAttachmentWorkflowSpec
     "register uploaded files and attach uploaded plus existing Blob ids to an entity" in {
       Given("a workflow with an existing Blob and a request containing another upload")
       given ExecutionContext = ExecutionContext.test()
-      val store = InMemoryBlobStore()
-      val repository = BlobRepository.entityStore()
-      val associations = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+      val store              = InMemoryBlobStore()
+      val repository         = BlobRepository.entityStore()
+      val associations =
+        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
       val workflow = BlobAttachmentWorkflow(store, repository, associations)
-      val existing = _success(_create_managed_blob(repository, store, _new_blob_entity_id(), "existing.png"))
+      val existing =
+        _success(_create_managed_blob(repository, store, _new_blob_entity_id(), "existing.png"))
       val request = Request.of(
         component = "sample",
         service = "article",
         operation = "update",
         arguments = List(
-          Argument("blob.galleryImage.0", MimeBody(ContentType.IMAGE_PNG, Bag.binary("new".getBytes(StandardCharsets.UTF_8))), None),
+          Argument(
+            "blob.galleryImage.0",
+            MimeBody(ContentType.IMAGE_PNG, Bag.binary("new".getBytes(StandardCharsets.UTF_8))),
+            None
+          ),
           Argument("blob.galleryImage.0.filename", "new.png", None),
           Argument("blob.galleryImage.0.sortOrder", "1", None),
           Argument("blobId.galleryImage.1", existing.id.value, None),
@@ -129,23 +181,31 @@ final class BlobAttachmentWorkflowSpec
         targetKind = Some("blob"),
         role = Some("galleryImage")
       )))
-      listed.map(_.targetEntityId) shouldBe Vector(summary.uploaded.head.id.value, existing.id.value)
+      listed.map(_.targetEntityId) shouldBe Vector(
+        summary.uploaded.head.id.value,
+        existing.id.value
+      )
     }
 
     "compensate newly uploaded Blobs when an existing Blob reference is invalid" in {
       Given("a workflow request with one upload followed by an invalid Blob id reference")
       given ExecutionContext = ExecutionContext.test()
-      val store = InMemoryBlobStore()
-      val repository = BlobRepository.entityStore()
-      val associations = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+      val store              = InMemoryBlobStore()
+      val repository         = BlobRepository.entityStore()
+      val associations =
+        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
       val workflow = BlobAttachmentWorkflow(store, repository, associations)
-      val missing = _blob_entity_id("missing_reference")
+      val missing  = _blob_entity_id("missing_reference")
       val request = Request.of(
         component = "sample",
         service = "article",
         operation = "create",
         arguments = List(
-          Argument("blob.mainImage", MimeBody(ContentType.IMAGE_PNG, Bag.binary("new".getBytes(StandardCharsets.UTF_8))), None),
+          Argument(
+            "blob.mainImage",
+            MimeBody(ContentType.IMAGE_PNG, Bag.binary("new".getBytes(StandardCharsets.UTF_8))),
+            None
+          ),
           Argument("blobId.attachment", missing.value, None)
         )
       )
@@ -188,15 +248,15 @@ final class BlobAttachmentWorkflowSpec
 
       Then("the compensation failure is not hidden by the attachment failure")
       result shouldBe a[Consequence.Failure[_]]
-      _failure_message(result) should include ("entity compensation failed")
+      _failure_message(result) should include("entity compensation failed")
     }
   }
 
   private def _create_managed_blob(
-    repository: BlobRepository,
-    store: BlobStore,
-    id: EntityId,
-    filename: String
+      repository: BlobRepository,
+      store: BlobStore,
+      id: EntityId,
+      filename: String
   )(using ExecutionContext): Consequence[Blob] =
     store.put(
       BlobPutRequest(id, BlobKind.Image, Some(filename), ContentType.IMAGE_PNG),
@@ -222,17 +282,21 @@ final class BlobAttachmentWorkflowSpec
     EntityId(BlobRepository.CollectionId.major, value, BlobRepository.CollectionId)
 
   private def _new_blob_entity_id(): EntityId =
-    EntityId(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId)
+    EntityId(
+      BlobRepository.CollectionId.major,
+      BlobRepository.CollectionId.minor,
+      BlobRepository.CollectionId
+    )
 
   private def _success[A](result: Consequence[A]): A =
     result match {
-      case Consequence.Success(value) => value
+      case Consequence.Success(value)      => value
       case Consequence.Failure(conclusion) => fail(conclusion.show)
     }
 
   private def _failure_message[A](result: Consequence[A]): String =
     result match {
       case Consequence.Failure(conclusion) => conclusion.show
-      case Consequence.Success(value) => fail(s"unexpected success: $value")
+      case Consequence.Success(value)      => fail(s"unexpected success: $value")
     }
 }

@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for SimpleEntity content reference handling.
  *
  * @since   May.  3, 2026
- * @version May.  5, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentReferenceWorkflowSpec
@@ -311,6 +311,30 @@ final class ContentReferenceWorkflowSpec
       )
 
       workflow.validateInlineReferences(Vector(reference)) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject a foreign canonical media id without creating an attachment association" in {
+      Given("an inline image reference whose exact id belongs to the Blob collection")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val foreign = _blob_id("content_ref_foreign_media")
+      val workflow = ContentReferenceWorkflow(component)
+      val reference = org.goldenport.value.ContentReferenceOccurrence(
+        contentField = Some("content"),
+        markup = Some("html-fragment"),
+        elementKind = Some("img"),
+        attributeName = Some("src"),
+        occurrenceIndex = 0,
+        referenceKind = Some("image"),
+        targetEntityId = Some(foreign.value)
+      )
+
+      When("attachment references are persisted")
+      val result = workflow.attachReferences("article-content-ref-foreign", Vector(reference))
+
+      Then("the foreign canonical id is rejected rather than rebound to image")
+      result shouldBe a[Consequence.Failure[_]]
+      _associations("article-content-ref-foreign") shouldBe Vector.empty
     }
 
     "normalize Markdown inline images and index inline links" in {
