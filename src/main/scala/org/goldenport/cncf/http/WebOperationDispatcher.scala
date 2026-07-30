@@ -11,7 +11,7 @@ import org.goldenport.cncf.context.RuntimeContext
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 25, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait WebOperationDispatcher {

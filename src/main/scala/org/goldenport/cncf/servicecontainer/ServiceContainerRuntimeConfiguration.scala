@@ -8,7 +8,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 
 /*
  * @since   Jul. 20, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object ServiceContainerRuntimeConfiguration {

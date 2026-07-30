@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 11, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Jun. 18, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec

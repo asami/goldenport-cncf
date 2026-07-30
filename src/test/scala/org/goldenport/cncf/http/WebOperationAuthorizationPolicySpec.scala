@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Apr. 18, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matchers {

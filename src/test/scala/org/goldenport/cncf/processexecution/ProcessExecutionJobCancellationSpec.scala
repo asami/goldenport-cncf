@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Process Execution cancellation through Job.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ProcessExecutionJobCancellationSpec

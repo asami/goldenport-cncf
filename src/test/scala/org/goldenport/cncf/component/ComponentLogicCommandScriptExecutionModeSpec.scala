@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
  *  version May. 31, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec

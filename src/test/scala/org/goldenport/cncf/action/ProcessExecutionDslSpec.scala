@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * protected internal-DSL integration.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {

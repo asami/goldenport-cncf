@@ -15,7 +15,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ExecutionProfileMode(val name: String) {

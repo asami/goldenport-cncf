@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Phase 34 controlled local Process Execution.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers with GivenWhenThen {

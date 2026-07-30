@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 19, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec

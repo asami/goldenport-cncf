@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Jan. 18, 2026
  *  version May.  2, 2026
  *  version Jun. 29, 2026
- * @version Jul.  1, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {

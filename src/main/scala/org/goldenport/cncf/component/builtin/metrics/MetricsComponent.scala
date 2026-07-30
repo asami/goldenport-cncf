@@ -19,7 +19,7 @@ import org.goldenport.schema.DataType
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {

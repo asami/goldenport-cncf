@@ -11,7 +11,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemAssemblyDescriptorSource
 
 /*
  * @since   Jul.  8, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeTestDescriptor(
