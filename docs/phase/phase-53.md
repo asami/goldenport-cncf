@@ -1,385 +1,416 @@
-# Phase 53 - Component Documentation and AI Knowledge Integration
+# Phase 53 - CML ComponentStyle, ExecutionContext, and Capability Resolution
 
 status=planned
-planned_at=2026-07-25
+planned_at=2026-07-30
 depends_on=[Phase 52](phase-52.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 53 Checklist](phase-53-checklist.md)
 
 ## Purpose
 
-Make every CNCF Component a one-stop, self-describing execution and knowledge
-package for humans and AI.
+Let CML select a CNCF-provided `ComponentStyle`, project its provided
+ComponentCapabilities and required SubsystemCapabilities, and verify that the
+assembled Subsystem can satisfy that contract.
 
-Phase 53 organizes hand-written manuals, generated Help, Scaladoc, source,
-schemas, examples, provenance, and contextual documentation under one
-machine-readable Component knowledge manifest. It supports physical splitting
-into a Documentation Component without exposing that split to users or AI.
+Phase 53 introduces a versioned CNCF ComponentStyle catalog containing
+CNCF-supplied built-in styles. Its metadata contract reserves provider identity
+and an extension boundary so a future Metadata Factory can contribute
+additional styles, but Metadata Factory registration/discovery is not
+implemented in Phase 53. CML selects a CNCF style by identifier; it does not
+redefine the style or copy its policy parameters.
 
-Component-specific information continues to follow that Component-owned
-contract. Separately, shared CNCF/CML/Cozy/SmartDox framework and toolchain
-documentation is published primarily through SimpleModeling.org and is
-physically distributed only when required as a versioned Documentation
-Component generated from the same publication knowledge.
+Operating differences are resolved outside Component execution. Web ingress
+selects `WebApplicationMode`; the Subsystem selects user-context and datastore
+providers; CNCF then constructs the same mode-free `ExecutionContext` contract
+for every Component invocation. A Component implementation does not receive,
+inspect, or branch on operating mode.
 
-The phase primarily integrates Textus CBD Support for exact Component
-discovery, detail, usage, MCP assistance, and CAR Review. It also implements
-the complementary Textus BoK RAG/MCP route for terminology and semantic
-discovery. The exact Component Help manifest remains authoritative.
+ArtScene is the first real consumer. It selects
+`full-fledged-with-standalone`, keeps its full user-scoped domain model in both
+standalone and multi-user operation, and receives either a fixed or
+authenticated current user through `ExecutionContext`.
 
 ## Dependency
 
 Phase 53 begins after Phase 52 closes.
 
-Phase 53 does not reopen Phase 50 Entity revision/OCC behavior. It may document
-those contracts through the new Component knowledge mechanism after their
-canonical design/specification is stable.
+Phase 53 does not change Phase 52 Entity or collection identity. It resolves a
+ComponentStyle and its parameters before datastore initialization; it does not
+derive Entity ownership or datastore identity from an Entity ID.
+
+## Problem Statement
+
+ArtScene currently has private mode and datastore-policy authorities inside the
+Component boundary. That lets launcher, Web, ComponentFactory, and domain
+execution disagree and forces Component code to understand deployment shape.
+
+Phase 53 creates one declaration and resolution path:
+
+```text
+CNCF built-in ComponentStyle catalog
+  -> explicit CML COMPONENT style selection
+  -> Cozy typed style reference
+  -> development and packaged component descriptor
+       -> provided ComponentCapabilities
+       -> required SubsystemCapabilities
+  -> root implicit or explicit Subsystem assembly
+  -> stable Subsystem identity and mode-free ExecutionProfile
+  -> WebApplication profile when ingress is Web
+  -> capability matching and provider selection
+  -> resolved SecurityContext, formatting, datastore, and typed policies
+  -> ExecutionContext
+  -> mode-free Component execution
+```
 
 ## Selected Direction
 
-- Physical Components carry the Component-specific information required to
-  understand and use them.
-- Embedding Component-specific information in the execution Component is the
-  default.
-- Large Component-specific documentation, Scaladoc, source, media, and
-  generated artifacts may be moved to one versioned Documentation Component.
-- Physical splitting remains one logical Component information space.
-- User Guide and Reference Manual are the two standard hand-written manual
-  axes.
-- SmartDox is the canonical hand-written document model; admitted Markdown is
-  parsed through SmartDox.
-- Scaladoc is included in the Component distribution.
-- Source is embedded, moved to a Documentation Component, or explicitly
-  omitted according to disclosure policy.
-- Help is the unified human entry point and advertises a JSON Component
-  knowledge manifest for direct AI retrieval.
-- Textus CBD Support supplies the primary mediated AI route for exact
-  Component discovery, detail, usage guidance, and review.
-- Textus BoK supplies the complementary terminology and cross-Component
-  semantic RAG/MCP route with exact CBD Support handoff.
-- Shared CNCF/CML/Cozy/SmartDox documentation is published primarily through
-  versioned SimpleModeling.org pages and structured publication metadata.
-- Physical distribution of that shared framework/toolchain information uses
-  Documentation Components that remain separate from Component-specific
-  documentation ownership.
-- Framework Help links and MCP/RAG evidence resolve immutable product/version
-  document identities rather than human-facing `latest` aliases.
-- Public AI Development Guidance is an explicitly public projection of the
-  authoritative `ai-directive`; the mounted directive remains authoritative
-  for actual project behavior.
-- Public Skill Catalog metadata is information for discovery and comparison;
-  actual Skill bundles remain CAR-owned and use `SkillBundleManifest`.
-- Help or knowledge retrieval does not install, activate, execute, or grant
-  authority to a Skill.
-- Exact installed Component resources outrank a stale BoK snapshot for
-  execution decisions.
-- Notes are working proposals, journal is history, design/spec are the
-  canonical closed-phase contract, and executable specifications are behavior
-  evidence.
+### Style and capability contract
+
+`ComponentStyle` is a versioned CNCF catalog entry describing a standard
+bundle of capabilities a Component provides and Subsystem facilities it
+requires. It is not an operating-mode selector or an untyped policy bag.
+
+The initial ArtScene style `full-fledged-with-standalone` provides:
+
+- `domain.full@1`;
+- `user.multi-user@1`; and
+- `user.fixed-context-compatible@1`.
+
+It requires:
+
+- `user-context.current@1`;
+- `datastore.persistent@1`;
+- `datastore.transactional@1`; and
+- `datastore.optimistic-concurrency@1`.
+
+The name expresses a full-fledged, multi-user-capable domain Component that
+also runs unchanged when CNCF supplies one fixed current user.
+
+Detailed capabilities remain structured. `domain.full@1` is a versioned bundle
+of Entity, Aggregate, Command, Query, domain-event, projection, persistence,
+transaction, and optimistic-concurrency capabilities.
+
+### Mode ownership and permanent Component boundary
+
+Phase 53 does not introduce `ApplicationMode`, `ComponentMode`, or
+`SubsystemMode` as a permanent Component execution contract.
+
+`OperationMode` continues to describe execution posture such as `production`,
+`demo`, `develop`, and `test`. It is resolved at the launcher/runtime boundary
+and is not exposed to Component domain logic.
+
+`WebApplication` remains the canonical name for the Web application context,
+and `WebApplicationMode` remains the Web-specific `standalone` / `multi-user`
+contract. It controls Web ingress and supplies Web-specific identity evidence
+to the Subsystem. The Subsystem resolves the user-context provider.
+`WebApplicationMode` is not forwarded into Component execution and is not
+required by non-Web ingress.
+
+Permanent Component APIs, generated DSLs, ComponentFactory hooks, ActionCall
+implementations, and domain policies must not receive or expose an operating
+mode, read mode/configuration keys, construct a standalone UserId, select a
+datastore from mode, or branch on fixed versus authenticated user origin.
+
+Components consume only resolved facts through `ExecutionContext`, including
+current principal/user, authorization, locale/timezone, datastore and
+EntityStore bindings, UnitOfWork/transaction semantics, resource access, and
+typed mode-free policies.
+
+### CNCF style catalog and future Metadata Factory extension
+
+CNCF supplies built-in ComponentStyles and their canonical identifiers. The
+Phase 53 metadata schema contains the information a future Metadata Factory
+would need to contribute another style:
+
+- unique style identity and provider identity;
+- provided capability bundles and their deterministic expansion;
+- required Subsystem capabilities;
+- typed, mode-free parameter schema where needed; and
+- implementation-evidence metadata.
+
+Duplicate built-in identities, provider/schema disagreement, or a style missing
+from the generation/runtime catalog fail structurally. Cozy and CNCF consume
+the same metadata contract. The generated descriptor snapshots the resolved
+style metadata so development and packaged launch do not depend on runtime CML
+parsing or an unversioned registry lookup.
+
+Phase 53 does not implement Metadata Factory registration, discovery,
+dependency packaging, or conflict resolution. Those are recorded as a future
+development item after the built-in contract is verified.
+
+### CML and descriptor authority
+
+The explicit CML `COMPONENT` declaration selects one ComponentStyle. CML does
+not define new style metadata, select WebApplicationMode, configure a fixed
+user, or choose a datastore. `project.yaml` does not duplicate the selection.
+
+Cozy resolves and validates the style against the common metadata catalog and
+generates the typed reference and metadata snapshot. sbt-cozy makes the same
+projection available to source-directory launch. CNCF runtime consumes the
+generated descriptor and does not parse CML.
+
+Development and packaged descriptors generated from the same CML must be
+semantically equivalent and schema-versioned.
+
+The descriptor contains style identity, provider/schema identity, deterministic
+provided-capability expansion, and required Subsystem capabilities. It contains
+no Component mode, fixed UserId, locale, or datastore policy.
+
+### Subsystem capability matching and ExecutionContext absorption
+
+The explicit or implicit Subsystem resolves the complete Component dependency
+closure and must satisfy every required capability before activation. Provider
+metadata, not Component-local names or mode strings, supplies matching
+evidence.
+
+Standalone and multi-user operation construct the same Component-facing
+contract:
+
+```text
+standalone Web, CLI, job, or other fixed-user ingress
+  -> Subsystem user-context-provider resolution
+  -> ~/.textus FixedUserProfile common/subsystem baseline
+  -> always-admitted ~/.cncf FixedUserProfile common/subsystem override
+  -> SecurityContext + formatting + datastore bindings
+  -> ExecutionContext
+
+multi-user Web or another authenticated ingress
+  -> authenticated invocation identity
+  -> Subsystem user-context-provider resolution
+  -> ignore both FixedUserProfile documents
+  -> authenticated user preferences
+  -> SecurityContext + formatting + datastore bindings
+  -> ExecutionContext
+```
+
+Standalone therefore retains multi-user domain semantics with one fixed
+current user. Multi-user operation never falls back to fixed-user
+configuration.
+
+`~/.textus/user-profile.yaml` is the normal-operation `FixedUserProfile`
+baseline. `~/.cncf/user-profile.yaml` is an always-admitted
+higher-precedence overlay using the same schema. Admission is not gated by
+`OperationMode`; both documents participate only in fixed-user resolution and
+are ignored by multi-user operation. Each document supports common values and
+field-by-field `subsystems` overrides keyed by the stable Subsystem identity.
+PROJECT and CWD FixedUserProfile documents are not admitted.
+
+Common-field environment and argument inputs retain their existing precedence.
+A controlled runtime/test injection uses the distinct
+`ConfigurationOrigin.ExplicitOverride`. Resolved fields retain source path or
+input identity, `.textus`/`.cncf` layer, common/subsystem target, stable
+Subsystem identity, logical field, override history, and final source through
+the existing `ResolvedConfiguration`/`ConfigurationTrace` authority.
+Component execution receives only effective values.
+
+The canonical public Web operation parameter is
+`textus.web.application-mode`. It is resolved before FixedUserProfile. For a
+normal direct-Component launch, CNCF contributes a traceable `standalone`
+default only when no explicit value wins, the implicit Subsystem has a valid
+standalone ExecutionProfile, and the Component provides
+`user.fixed-context-compatible@1`. FixedUserProfile does not contain the Web
+operation selection.
+
+The fixed UserId is stable across restart; changing an ID that owns persisted
+data is a user-data migration. An overriding UserId requires isolated data
+unless migration is intentional.
+
+### ComponentFactory, datastore, and migration boundary
+
+ComponentFactory may provide typed, side-effect-free Component parameters and
+implementation evidence for domain capabilities. It may not receive mode,
+choose a user-context provider or datastore, read FixedUserProfile
+configuration, or
+return mode-specific parameters.
+
+Datastore placement, provider, endpoint/path, credentials, pool lifecycle, and
+migration lifecycle belong to the Subsystem. Both operation profiles expose
+the same mode-free datastore interfaces to Component execution.
+
+Temporary migration adapters, if unavoidable, remain internal and deprecated,
+carry an explicit removal item, and never enter CML, catalog metadata,
+generated DSLs, permanent Component APIs, or normative specification.
+
+### Development-directory use
+
+Phase 53 consumes the existing `cozyPrepareRuntime` route. It extends that
+route with the ComponentStyle and implicit Subsystem projection while
+preserving its ownership of
+`target/cncf.d/runtime-classpath.txt`,
+`target/cncf.d/car-runtime-manifest.json`, and related extensible evidence. A
+source-directory launch does not require `buildCar`.
+
+Missing, inconsistent, or stale development evidence fails with an actionable
+diagnostic. CNCF must not silently select an older locally published CAR.
+
+## ArtScene Acceptance
+
+Its Phase 53 adoption:
+
+- selects `full-fledged-with-standalone` in explicit-component CML;
+- advertises the full domain and user capabilities in its generated
+  descriptor;
+- removes private Component mode, `local-default`/`external-required`
+  datastore policy, hardcoded standalone user, and mode branches;
+- uses the same Component operations for fixed and authenticated current
+  users;
+- resolves the current user's locale through ExecutionContext;
+- uses Subsystem-owned local or shared datastore bindings; and
+- verifies both development-directory and packaged-CAR launches.
+
+The acceptance matrix is:
+
+| OperationMode | WebApplicationMode | User context | Component mode input | Datastore expectation |
+| --- | --- | --- | --- | --- |
+| `develop` | `standalone` | fixed user with common/subsystem overlay | none | isolated persistent local development binding |
+| `production` | `standalone` | fixed user with common/subsystem overlay | none | user-owned persistent local binding |
+| `develop` | `multi-user` | authenticated user | none | explicit shared development binding |
+| `production` | `multi-user` | authenticated user | none | explicit shared production binding |
+
+A development standalone launch must not reuse or overwrite production
+standalone data implicitly.
+
+## Work Groups
+
+| Group | Outcome |
+| --- | --- |
+| CS-01 | Inventory current style, mode, policy, metadata, descriptor, runtime, HTTP, launcher, and ArtScene authorities; register failing-first behavior. |
+| CS-02 | Implement the CNCF built-in style catalog, extension-ready metadata contract, CML style selection, typed model, validation, and deterministic descriptor projection. |
+| CS-03 | Extend the existing `cozyPrepareRuntime` route with coherent development descriptor/implicit-Subsystem evidence and packaged/development parity. |
+| CS-04 | Implement Subsystem capability matching, fixed/authenticated ExecutionContext construction, and the WebApplication boundary. |
+| CS-05 | Implement fixed-user overlays, Subsystem datastore selection, trace provenance, diagnostics, and launcher selection. |
+| CS-06 | Adopt the CNCF component style in ArtScene and pass the full operating-mode matrix. |
+| CS-07 | Run full cross-repository validation and promote verified behavior into normative design/specification. |
+
+## Documentation Lifecycle
+
+The planning contract is
+[CML ComponentStyle, ExecutionContext, and Capability Specification Proposal](../notes/cml-component-style-execution-context-capability-specification-proposal.md).
+It is intentionally a non-normative note.
+
+The selected planning decisions are consolidated in
+[Phase 53 ComponentStyle, ExecutionContext, and Configuration Consolidation](../journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md).
+
+Phase 53 does **not** create or revise normative `docs/design` or `docs/spec`
+before implementation. CS-01 through CS-06 use the note plus failing-first
+Executable Specifications. CS-07 writes normative documents only from
+implemented, reviewed, and verified behavior.
+
+Phase 53 cannot close while the final contract exists only in this note, the
+consideration journal, phase documents, or tests.
+
+## Repository Scope
+
+| Repository | Responsibility |
+| --- | --- |
+| `cozy` | CML selection of CNCF built-in styles, common style metadata consumption, typed model, validation, and descriptor projection |
+| `sbt-cozy` | extension of the existing `cozyPrepareRuntime` descriptor/runtime-evidence and freshness contract |
+| `simplemodeling-lib` | existing String-keyed configuration/trace authority, `ConfigurationOrigin.ExplicitOverride`, and minimal source metadata required by Phase 53 |
+| `cloud-native-component-framework` | built-in style catalog, capability matching, descriptor consumption, stable Subsystem identity, FixedUserProfile parsing/semantic resolution, fixed/authenticated ExecutionContext construction, Web-operation resolution/default contribution, and diagnostics |
+| `cncf-launcher` | runtime artifact selection, exact argument forwarding, and source-directory launch |
+| `textus-launcher` | runtime artifact selection and exact argument forwarding without duplicating CNCF configuration semantics |
+| `textus-art-scene` | first production-shaped declaration and acceptance consumer |
+
+`simplemodeling` is admitted only if CS-01 establishes that the affected CML
+semantic model is owned there. Additional sample repositories require an
+explicit Phase 53 acceptance reason.
 
 ## Scope
 
-- Define a versioned Component knowledge manifest and resource model.
-- Define canonical CAR source/archive paths without duplicating Component
-  identity metadata.
-- Define resource authority, stability, language, media type, digest,
-  provenance, license, and source-disclosure metadata.
-- Define mandatory User Guide and Reference Manual entry points plus optional
-  manual roles.
-- Define SmartDox and admitted Markdown authoring/lint behavior.
-- Decide and implement required HTML/PDF projection profiles.
-- Generate and package Scaladoc plus a structured symbol/search index.
-- Define source inclusion, exclusion, license, and commercial omission policy.
-- Define Component-specific Documentation Component identity, compatibility,
-  resolution, precedence, integrity, diagnostics, and lifecycle.
-- Compose embedded and Component-specific Documentation Component resources
-  into one resolved Component knowledge model.
-- Integrate the model with Help, `/man`, OpenAPI/schema, CLI inspection, and a
-  direct JSON manifest/resource route.
-- Enforce authorization, production visibility, path safety, integrity,
-  confidentiality, and disclosure policy.
-- Extend Cozy/sbt-cozy and SmartDox-owned build paths rather than duplicating
-  authoring/rendering behavior in CNCF runtime.
-- Extend Cozy and SmartDox publication so one generation supplies
-  versioned SimpleModeling.org HTML, RDF/JSON-LD/catalog, stable
-  document/section metadata, and optional framework Documentation Components.
-- Define framework Documentation Component subject/version,
-  publication-generation relationship, integrity, repository resolution, and
-  closed-network Hub SAR composition.
-- Define public AI Directive rule projection with directive/rule identity,
-  version, source digest, authority, visibility, redaction, and canonical URL.
-- Define public Skill Catalog metadata with Skill/bundle identity, owner,
-  purpose, triggers, requirements, permissions, side effects, MCP
-  requirements, installation reference, visibility, and digest.
-- Generate a SimpleModeling.org AI Development Guide and Skill Catalog plus
-  equivalent framework Documentation Component snapshots.
-- Extend Help with framework/toolchain documentation references:
-  `/help/system` describes the running CNCF runtime, `/man/system` resolves the
-  matching CNCF framework documentation locally or online, and CML/Cozy links
-  remain developer/toolchain navigation.
-- Extend Help with active directive version/profile/digest and public-guide
-  reference plus Component-associated Skill metadata and installation state.
-- Integrate Textus BoK admission of structured framework publication
-  knowledge, evidence-preserving indexing, RAG retrieval, read-only MCP
-  operations, stale detection, and disclosure enforcement.
-- Integrate Textus CBD Support manifest/resource admission, exact detail and
-  usage retrieval, evidence-bearing MCP, and CAR Review documentation quality
-  checks.
-- Reconcile the Textus BoK existence-only/CBD-handoff boundary with BoK-owned
-  semantic retrieval of authoritative packaged Component knowledge while CBD
-  Support remains the primary detailed Component-use service.
-- Validate the existing representative embedded Component, Component-specific
-  Documentation Component split, and source-omitted commercial-style profiles.
-- Validate online-only framework documentation, installed framework
-  Documentation Components, and a closed-network Documentation Hub SAR
-  without changing Component-specific information ownership.
-- Promote verified behavior to current CNCF, Textus CBD Support, and Textus BoK
-  design/specification documents before closure.
+In scope:
 
-## Boundaries
+- common typed ComponentStyle and capability identities;
+- CNCF built-in style catalog and an extension-ready metadata contract;
+- explicit-component CML style selection and generation validation;
+- schema-versioned development and packaged descriptor projection;
+- Subsystem requirement/provider capability matching;
+- fixed and authenticated user-context resolution into one ExecutionContext
+  contract;
+- `~/.textus` FixedUserProfile baseline and always-admitted field-by-field
+  `~/.cncf` higher-precedence override for fixed-user resolution;
+- common/subsystem overlay using stable Subsystem identity;
+- HOME-only profile-file admission, common-field environment/argument input,
+  and controlled explicit runtime/test override;
+- generic `.textus` baseline followed by `.cncf` override at every admitted
+  HOME/PROJECT/CWD scope, with source admission owned by each typed contract;
+- one canonical `textus.*` spelling for each public Phase 53 semantic even
+  when `.cncf` supplies the winning value, without a duplicate `cncf.*`
+  semantic;
+- existing `ResolvedConfiguration`/`ConfigurationTrace` authority with the
+  minimal provenance completion required by Phase 53;
+- canonical `textus.web.application-mode` resolution and traceable
+  conditional direct-Component standalone default;
+- OperationMode and WebApplicationMode exclusion from Component execution;
+- Subsystem-owned datastore selection and configuration trace;
+- common runtime access and Web projection;
+- launcher selection and stale development-evidence rejection;
+- ArtScene standalone and multi-user adoption; and
+- post-verification normative design/specification promotion.
 
-- Phase 53 does not make CAR embedding the primary public distribution of
-  CNCF/CML/Cozy documentation.
-- Phase 53 does not treat a framework Documentation Component as an
-  independent source of truth; its publication generation and hashes must
-  match the canonical source projection.
-- Phase 53 does not make HTML scraping the preferred RAG ingestion path when
-  structured SmartDox/publication projections are available.
-- Phase 53 does not publish every `ai-directive` rule or raw `SKILL.md`;
-  publication requires explicit visibility and disclosure admission.
-- Public Directive guidance does not override the mounted authoritative
-  directive.
-- Skill metadata, Help, or MCP/RAG discovery does not install, activate,
-  execute, configure, or grant authority to a Skill or its dependencies.
-- Actual Skill packaging, installation, and activation remain under the
-  `SkillBundleManifest`, Cozy, Launcher, and Codex boundaries.
-- Phase 53 does not distribute Component documentation primarily through Maven
-  documentation classifiers.
-- A manifest or Skill does not grant Operation authority or MCP readiness.
-- Textus BoK retrieval does not make mutation or execution Operations MCP
-  visible.
-- Textus BoK does not invent Component compatibility, suitability, or support
-  claims.
-- CBD Support owns exact Component detail, versions, dependencies, usage,
-  comparison, assessment, review, and primary AI assistance.
-- BoK owns terminology, semantic discovery, evidence-bearing RAG/MCP retrieval,
-  and exact identity handoff; it does not replace CBD Support.
-- Source does not override public contracts and is not indexed when disclosure
-  or authorization forbids it.
-- Proprietary source and secrets must not enter public CARs, diagnostics,
-  indexes, RAG context, or MCP responses.
-- Runtime Help must not require a compiler, Scaladoc generator, SmartDox
-  renderer, PDF toolchain, or embedding provider.
-- Online documentation unavailability must not prevent execution or make Help
-  report online material as locally present.
-- Human-facing `latest` aliases must not become MCP/RAG evidence identities.
-- Fine-grained Documentation Component fragmentation is not the default.
-- Phase 53 does not redesign the generic CAR executable dependency mechanism
-  beyond the documentation relationship required by this phase.
-- Component-specific manual content remains owned by each Component.
+Out of scope:
 
-## Work Stack
+- Component-visible `ApplicationMode`, `ComponentMode`, `SubsystemMode`,
+  `WebApplicationMode`, or `OperationMode`;
+- Component-side branching on standalone/multi-user or principal origin;
+- making locale or timezone inherent to `standalone`;
+- an untyped arbitrary profile property bag;
+- arbitrary runtime creation or mutation of ComponentStyle definitions;
+- Metadata Factory style registration, discovery, dependency packaging, and
+  conflict resolution, which are a future development item;
+- ComponentFactory selection of user-context provider or datastore;
+- duplicate declaration in `project.yaml`;
+- runtime CML parsing;
+- permanent compatibility APIs for the removed Component-private modes;
+- unrelated datastore pool lifecycle work planned for Phase 54;
+- Entity/collection identity changes;
+- a general component/subsystem/user data migration framework;
+- migration, deletion, or reinterpretation of unrelated CNCF operational state;
+- typed generic configuration keys, generic qualifier/candidate resolution,
+  namespace catalogs, general alias normalization, and new
+  binding/environment codecs planned for Phase 55; and
+- normative design/specification written from unverified proposal behavior.
 
-| ID | Stage | Outcome | Status |
-| --- | --- | --- | --- |
-| DOC-01 | Inventory and executable acceptance | Existing Help/Manual/CAR/CBD Support/BoK contracts, contradictions, routes, publication surfaces, and exact acceptance identities are fixed before implementation. | planned |
-| DOC-02 | Knowledge manifest and resource model | Versioned manifest, paths, resource identity, authority, provenance, disclosure, integrity, and codecs are implemented and validated. | planned |
-| DOC-03 | Authoring and packaging toolchain | User Guide/Reference, SmartDox/Markdown lint, HTML/PDF decisions, Scaladoc, source filtering, and CAR projection work through Cozy/SmartDox ownership. | planned |
-| DOC-04 | Documentation Component composition | Component-specific documentation relationships and framework publication snapshots have explicit identity, resolution, integrity, diagnostics, and offline composition. | planned |
-| DOC-05 | Unified Help and direct AI access | Component Help/manifest behavior remains exact while framework links distinguish installed and versioned online documentation. | planned |
-| DOC-06 | Textus CBD Support primary integration | CBD admits exact manifests/resources into Component detail, usage, MCP, and CAR Review without losing source authority or selection evidence. | planned |
-| DOC-07 | Textus BoK complementary integration | BoK performs Component semantic retrieval and admits structured framework, public Directive guidance, and Skill metadata with attributable RAG/MCP evidence and exact CBD handoff. | planned |
-| DOC-08 | Representative Component and framework documentation acceptance | Existing Component-specific profiles plus online/installed/offline framework, public Directive guide, and Skill Catalog profiles prove consistent ownership and access. | planned |
-| DOC-09 | Security, regression, and downstream validation | Path, integrity, authorization, disclosure, compatibility, regression, and full cross-repository suites pass. | planned |
-| DOC-10 | Canonical documentation and closure | CNCF/CBD Support/Textus BoK design/spec/notes/strategy/phase records match verified behavior; working notes are marked overridden and historical. | planned |
+## Completion Rules
 
-## Acceptance
+Phase 53 closes only when:
 
-- One manifest deterministically enumerates every admitted Component knowledge
-  resource.
-- For shared CNCF/CML/Cozy/SmartDox information, one publication generation
-  deterministically relates SmartDox source, SimpleModeling.org HTML,
-  structured metadata, and optional framework Documentation Component
-  resources.
-- SimpleModeling.org exposes immutable versioned framework document/section
-  identities and canonical URLs; human `latest` aliases are not evidence
-  identities.
-- Public AI guidance preserves directive version, rule identity, authority,
-  visibility, canonical URL, and source digest without becoming the active
-  directive.
-- Public Skill metadata preserves Skill/bundle identity, owner, requirements,
-  side effects, permissions, installation reference, visibility, and digest
-  without exposing restricted Skill content.
-- Manifest and resource paths are safe, versioned, integrity-checked, and
-  identical between the admitted source tree and packaged CAR.
-- Every representative user-facing Component provides a User Guide and
-  Reference Manual accepted by deterministic lint.
-- Admitted Markdown is parsed through the selected SmartDox profile.
-- A public Scala API has packaged Scaladoc without relying on a Maven
-  documentation classifier or runtime generator.
-- Source availability is explicit; included source obeys filtering/license
-  policy and omitted source is never claimed or indexed.
-- A Component-specific Documentation Component resolves as one logical
-  information space with its target Component.
-- A framework Documentation Component carries an exact product/version
-  publication snapshot and proves its canonical publication generation and
-  resource digests.
-- Missing, incompatible, duplicate, unsafe, corrupt, or unauthorized
-  Documentation Components fail with deterministic diagnostics.
-- Help provides unified Component-oriented human navigation and a stable
-  machine-readable manifest discovery path.
-- Framework/toolchain links explicitly distinguish installed and versioned
-  online availability without changing Component manual resolution.
-- `/help/system` describes the running runtime while `/man/system` resolves
-  the matching CNCF documentation locally or online.
-- AI can retrieve exact configuration, Operation, schema, manual, example,
-  Scaladoc, and admitted-source information from the direct manifest route.
-- Textus CBD Support resolves the same exact resources for selected
-  Component/version detail, usage guidance, read-only MCP, and CAR Review.
-- CBD Support remains operational without BoK and keeps BoK evidence
-  separately attributable when present.
-- Textus BoK ingests exact Component manifest resources under the existing
-  Component-specific contract and separately admits structured
-  SimpleModeling.org framework publication knowledge or an equivalent
-  framework Documentation Component snapshot.
-- Framework RAG retrieval does not require HTML screen scraping and returns
-  product version, document/section identity, canonical URL, source generation,
-  and content hash.
-- AI-guidance and Skill-catalog MCP/RAG reads cannot install or activate a
-  Skill, mutate Codex configuration, grant MCP authority, or override the
-  mounted directive.
-- BoK responses distinguish snapshot version/hash from the installed Component
-  and expose stale mismatch rather than silently mixing versions.
-- Proprietary or unauthorized source never enters BoK indexes, RAG context, or
-  MCP responses.
-- BoK retrieval and Help access do not grant runtime Operation authority or
-  broaden MCP-ready execution surfaces.
-- CBD Support and Textus BoK documentation describe CBD as the primary
-  Component-use service and BoK as the complementary semantic retrieval route.
-- Runtime presentation requires no build/render/embedding toolchain.
-- Online-only, installed framework snapshot, and offline-Hub profiles resolve
-  the same versioned framework document and section identities.
-- Canonical CNCF, Textus CBD Support, and Textus BoK design/specification
-  documents describe the final verified contract.
-- The implementation note is marked historical and explicitly overridden by
-  final design/specification.
-- No current design/spec/note/manual/strategy/phase record contradicts the
-  verified behavior.
+- every CS work group is DONE;
+- CNCF built-in style discovery and descriptor projection have executable
+  evidence;
+- capability expansion and requirement/provider matching have executable
+  evidence;
+- development and packaged descriptors have proven semantic parity;
+- invalid composition fails before component/runtime resource startup;
+- `~/.textus` baseline, always-admitted `~/.cncf` override,
+  common/subsystem target, source-admission rules, and field-level provenance
+  through the existing trace authority are verified;
+- FixedUserProfile is ignored completely by multi-user resolution;
+- `textus.web.application-mode` resolves before FixedUserProfile and the
+  conditional direct-Component standalone default is traceable;
+- `WebApplicationMode` remains inside the WebApplication boundary and no
+  operating mode reaches Component execution;
+- fixed-user and authenticated-user construction expose the same
+  Component-facing ExecutionContext contract;
+- ArtScene passes the full OperationMode/WebApplicationMode acceptance matrix
+  with no Component mode input;
+- source-directory and packaged-CAR launch both pass;
+- full tests pass in every modified required repository;
+- clean read-only review passes, with focused re-review only after actionable
+  findings were fixed; and
+- verified design/specification and user/operation documentation replace this
+  proposal as the final authority.
 
-## Verification
+## References
 
-Phase 53 closure requires:
+- [Phase 53 Checklist](phase-53-checklist.md)
+- [CML ComponentStyle, ExecutionContext, and Capability Specification Proposal](../notes/cml-component-style-execution-context-capability-specification-proposal.md)
+- [Phase 53 ComponentStyle, ExecutionContext, and Configuration Consolidation](../journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md)
+- [CML Application Mode Capability Consideration](../journal/2026/07/2026-07-30-cml-application-mode-capability-consideration.md)
 
-- failing-first Executable Specifications for every DOC-01 contract group;
-- manifest codec/schema/property/path/integrity specifications;
-- source-tree versus packaged-CAR equivalence specifications;
-- Cozy lint and strict release-readiness specifications;
-- SmartDox and admitted Markdown parsing/projection specifications;
-- SimpleModeling.org HTML/RDF/JSON-LD/catalog and document/section identity
-  projection specifications;
-- public Directive projection/visibility/redaction and mounted-authority
-  specifications;
-- public Skill metadata/catalog and SkillBundle authority-separation
-  specifications;
-- Scaladoc packaging and public-surface specifications;
-- Component-local and Component-specific Documentation Component resolution
-  specifications;
-- framework Documentation Component, canonical-online, and offline-Hub
-  resolution specifications;
-- direct Help/manifest/resource HTTP and CLI specifications;
-- authorization, production visibility, disclosure, and hostile-resource
-  specifications;
-- Textus CBD Support exact retrieval, usage, MCP, and CAR Review
-  specifications;
-- Textus BoK structured-publication ingestion, indexing, evidence, stale, RAG,
-  MCP, and CBD handoff specifications;
-- ai-directive public-projection and Skill Catalog/SkillBundle separation
-  validation;
-- an end-to-end packaged Component to direct Help, CBD Support, and BoK
-  RAG/MCP check;
-- representative downstream Component/CAR lint;
-- full CNCF, Cozy/sbt-cozy, SmartDox, Textus CBD Support, Textus BoK, and
-  selected downstream test suites;
-- `sbt --batch Test/compile` in every changed Scala repository;
-- `git diff --check`;
-- read-only review, review-fix, and clean re-review;
-- final reconciliation of implementation, Executable Specifications,
-  `docs/design`, `docs/spec`, and notes; and
-- strategy/phase/checklist closure records with exact evidence.
-
-## Final Documentation Gate
-
-DOC-10 is mandatory and occurs only after implementation and cross-repository
-acceptance are stable.
-
-It must:
-
-- create or update
-  `docs/design/component-documentation-knowledge-package.md`;
-- create or update
-  `docs/spec/component-documentation-knowledge-package.md`;
-- update affected current Help/Manual/CAR/Web/MCP designs and specifications;
-- update SimpleModeling.org and Cozy publication designs for canonical
-  versioned HTML, structured metadata, and Documentation Component projection;
-- update `ai-directive` public-projection guidance and Skill
-  bundle/catalog/installation documentation without weakening their
-  authoritative boundaries;
-- update Textus CBD Support design/spec/strategy/manuals for the primary
-  manifest/detail/usage/review boundary;
-- update Textus BoK design/spec/strategy/manuals for the complementary
-  ingestion/RAG/MCP/CBD-handoff boundary;
-- update
-  `docs/notes/component-documentation-knowledge-package-implementation.md`
-  to `historical, non-normative`;
-- state in that note that canonical design/specification override it;
-- retain the journal as chronological history;
-- remove or mark superseded every contradictory current documentation rule;
-- link normative behavior to exact Executable Specification evidence; and
-- confirm that no latest specification remains only in notes.
-
-Phase 53 cannot close with behavior represented only in notes, journal, phase
-documents, source code, or tests.
-
-## Repository Responsibility
-
-| Repository | Phase 53 responsibility |
-| --- | --- |
-| `/Users/asami/src/dev2025/cloud-native-component-framework` | Manifest/resolver model, Documentation Component composition, Help/direct AI access, authorization, integrity, and canonical CNCF contract |
-| `/Users/asami/src/dev2025/cozy` and `sbt-cozy` | Authoring lint, Scaladoc/source/manual projection, CAR packaging, and source/archive equivalence |
-| `/Users/asami/src/dev2025/smartdox` | SmartDox/Markdown and required HTML/PDF projection capabilities |
-| `/Users/asami/src/dev2025/simplemodeling-org` | Canonical versioned Web publication, stable document/section URLs, RDF/JSON-LD/catalog projection, and online human/AI access |
-| `ai/directive` (`ai-directive` repository) | Authoritative Directive ownership, stable public rule identities, visibility, and public-guide projection inputs |
-| CAR Skill owners and Textus/CNCF Launchers | Public Skill metadata inputs plus unchanged explicit SkillBundle installation/activation ownership |
-| `/Users/asami/src/dev2026/textus-cbd-support` | Primary exact Component detail/usage/MCP/CAR Review integration and canonical CBD contract |
-| `/Users/asami/src/dev2026/textus-bok` | Complementary semantic manifest/resource admission, RAG/MCP retrieval, CBD handoff, and canonical BoK contract |
-| selected sample/Component repositories | Embedded/split/source/commercial-style end-to-end acceptance |
-
-## Planning References
-
-- `docs/notes/component-documentation-knowledge-package-implementation.md`
-- `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`
-- `docs/design/static-form-ui-generation-contract.md`
-- `docs/design/packaged-source-activation.md`
-- `/Users/asami/src/dev2025/cozy/docs/design/car-documentation-lint.md`
-- `/Users/asami/src/dev2025/cozy/docs/strategy/cozy-development-strategy.md`
-- `/Users/asami/src/dev2025/smartdox/README.md`
-- `/Users/asami/src/dev2025/simplemodeling-org/docs/journal/2026/05/site-rdf-structure-and-usage.md`
-- `/Users/asami/src/dev2025/simplemodeling-org/docs/journal/2026/05/site-structure-expansion-for-ai-era-engineering-knowledge-platform.md`
-- `ai/directive/README.md`
-- `ai/directive/samples/README.md`
-- `docs/journal/2026/07/2026-07-21-codex-skill-bundle-contract.md`
-- `/Users/asami/src/dev2026/textus-cbd-support/docs/strategy/textus-cbd-support-development-strategy.md`
-- `/Users/asami/src/dev2026/textus-cbd-support/docs/spec/mcp-ownership.md`
-- `/Users/asami/src/dev2026/textus-bok/docs/strategy/textus-bok-development-strategy.md`
-- `/Users/asami/src/dev2026/textus-bok/docs/spec/bok-domain-model.md`
-
-## Current Resume Point
+## Next Step
 
 Phase 53 is planned and must not start before Phase 52 closes.
 
-After Phase 51 closes, begin DOC-01 with a cross-repository inventory. Preserve
-the Component-specific documentation contract while fixing the separate
-SimpleModeling.org framework publication identity, Help framework-link
-resolution, framework Documentation Component snapshot, CBD-primary, and
-Textus BoK complementary boundaries. Then record failing-first acceptance
-identities before implementing manifests or changing Help routes.
+After Phase 52 closes, start CS-01 with a cross-repository authority and
+generation-path inventory. Do not write normative design/specification during
+CS-01; first register executable failures against the notes proposal.
