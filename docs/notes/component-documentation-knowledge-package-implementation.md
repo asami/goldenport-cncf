@@ -2,18 +2,18 @@
 
 status = proposed, non-normative
 date = 2026-07-25
-phase = Phase 53
+phase = Phase 56
 
-This note is the working implementation proposal for Phase 53. It is not the
+This note is the working implementation proposal for Phase 56. It is not the
 final Component documentation contract.
 
-During Phase 53, verified decisions and behavior must be promoted to:
+During Phase 56, verified decisions and behavior must be promoted to:
 
 - `docs/design/component-documentation-knowledge-package.md`; and
 - `docs/spec/component-documentation-knowledge-package.md`.
 
 When either canonical document differs from this note, the design and
-specification take precedence. At Phase 53 closure this note must be marked
+specification take precedence. At Phase 56 closure this note must be marked
 historical and must point to the final design/specification instead of
 remaining a competing latest specification.
 
@@ -92,7 +92,7 @@ component.car
 └── provenance/
 ```
 
-Phase 53 must confirm paths against existing CAR source/archive rules before
+Phase 56 must confirm paths against existing CAR source/archive rules before
 making them normative. It must not introduce a second identity source that
 duplicates `project.yaml`, the CAR descriptor, or the existing runtime
 descriptor.
@@ -212,7 +212,7 @@ Generated resources include:
 The Component distribution must remain useful without a compiler, Scaladoc
 generator, SmartDox renderer, or PDF toolchain installed at runtime.
 
-Phase 53 must decide which HTML and PDF projections are mandatory. Generated
+Phase 56 must decide which HTML and PDF projections are mandatory. Generated
 output must record its source resource and source digest so stale projections
 can be detected.
 
@@ -335,7 +335,7 @@ The provisional AI discovery route is:
   -> resolved Component knowledge resources
 ```
 
-Phase 53 must confirm the canonical route and its relationship with existing
+Phase 56 must confirm the canonical route and its relationship with existing
 `/help`, `/man`, OpenAPI, MCP, authorization, and production-mode policies.
 
 Human Help should advertise the manifest with a machine-readable link relation.
@@ -382,7 +382,7 @@ human `latest` alias as an evidence identity.
 
 ## Textus CBD Support Primary Integration
 
-Phase 53 includes real integration with
+Phase 56 includes real integration with
 `/Users/asami/src/dev2026/textus-cbd-support`.
 
 CBD Support is the primary AI-facing Component use path after direct Help. Its
@@ -390,7 +390,7 @@ existing ownership already includes versions, runtime compatibility,
 dependencies, Operations, artifacts, manuals, examples, reuse guidance, CAR
 Review, and evidence-bearing read-only MCP operations.
 
-Phase 53 extends that contract so CBD Support consumes exact Component
+Phase 56 extends that contract so CBD Support consumes exact Component
 knowledge manifests and resources while preserving canonical
 SimpleModeling.org publication references for broader documentation. It does
 not rely only on catalog links or model-metadata sidecars.
@@ -427,11 +427,11 @@ rewrite CBD-owned Component facts.
 
 ## Textus BoK Complementary RAG/MCP Integration
 
-Phase 53 also includes real integration with
+Phase 56 also includes real integration with
 `/Users/asami/src/dev2026/textus-bok`.
 
 The current Textus BoK contract treats CAR/SAR references as existence-only and
-hands detailed usage questions to CBD Support. Phase 53 extends the BoK route
+hands detailed usage questions to CBD Support. Phase 56 extends the BoK route
 without reversing that primary ownership:
 
 - Textus BoK owns evidence-bearing indexing, search, and retrieval of admitted
@@ -492,7 +492,7 @@ The integration requires:
   verification.
 
 Textus BoK design, specification, strategy, manual, and executable evidence
-must be updated in the Textus BoK repository as part of Phase 53. A CNCF-only
+must be updated in the Textus BoK repository as part of Phase 56. A CNCF-only
 mock is not sufficient acceptance.
 
 ## Repository Responsibilities
@@ -508,7 +508,7 @@ mock is not sufficient acceptance.
 | `textus-bok` | Complementary terminology/semantic Component knowledge admission, indexing, RAG/MCP retrieval, CBD handoff, and stale/disclosure enforcement |
 | representative Component/sample | End-to-end online-only, local manual, Documentation Component, offline Hub, source-policy, Help discovery, CBD usage/review, and BoK retrieval evidence |
 
-If a missing capability belongs to one of these repositories, Phase 53 changes
+If a missing capability belongs to one of these repositories, Phase 56 changes
 the owning repository rather than duplicating the capability in CNCF.
 
 ## Implementation Sequence
@@ -547,7 +547,7 @@ During implementation:
 - phase/checklist documents hold plan, status, and acceptance evidence; and
 - executable specifications determine verified behavior.
 
-At Phase 53 closure:
+At Phase 56 closure:
 
 - `docs/design/component-documentation-knowledge-package.md` describes the
   verified architecture, ownership, flows, and rationale;
@@ -561,5 +561,5 @@ At Phase 53 closure:
 - no current README, design, spec, note, phase, manual, or executable
   specification contradicts the implemented behavior.
 
-Phase 53 cannot close while the latest contract exists only in this note,
+Phase 56 cannot close while the latest contract exists only in this note,
 journal, phase document, or implementation.

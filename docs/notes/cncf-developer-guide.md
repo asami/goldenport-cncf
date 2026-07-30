@@ -261,7 +261,8 @@ capabilities. In handwritten `ActionCall` behavior:
   semantic time;
 - use `random_int`, `random_long`, `random_double`, or `random_boolean` with a
   stable purpose name for domain randomness;
-- use `entity_id`, `collection_entity_id`, or `opaque_id` for generated IDs;
+- use `entity_id` or `opaque_id` for generated IDs; `entity_id` retains the
+  exact collection in its canonical payload;
 - represent delay and asynchronous continuation through Job/Event facilities,
   never `Thread.sleep` or an application-created executor;
 - use declared configuration and bound execution assumptions rather than

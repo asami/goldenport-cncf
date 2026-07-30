@@ -2999,7 +2999,7 @@ after 9.12 and 9.39 move to completed history.
     inventing a generic merge UI without evidence.
 
 ### 9.42 Component Documentation and AI Knowledge Integration
-Planned for Phase 53 after Phase 52 closes.
+Planned for Phase 56 after Phase 55 closes.
 
 - Goal:
   - make each physical Component a one-stop, self-describing execution and
@@ -3097,11 +3097,11 @@ Planned for Phase 53 after Phase 52 closes.
   - the implementation note is marked historical and explicitly overridden by
     final design/specification;
   - journal remains chronological history; and
-  - Phase 53 cannot close while the latest contract exists only in notes,
+  - Phase 56 cannot close while the latest contract exists only in notes,
     journal, phase documents, implementation, or tests.
 - Planning references:
-  - `docs/phase/phase-53.md`;
-  - `docs/phase/phase-53-checklist.md`;
+  - `docs/phase/phase-56.md`;
+  - `docs/phase/phase-56-checklist.md`;
   - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`;
     and
   - `docs/notes/component-documentation-knowledge-package-implementation.md`.
@@ -3176,7 +3176,7 @@ OCC foundation.
   - schedule this item as an independent phase rather than expanding Phase 50.
 
 ### 9.44 Information CML Runtime Canonicalization
-Planned for Phase 54 after Phase 53 closes.
+Planned for Phase 57 after Phase 56 closes.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected
@@ -3185,7 +3185,7 @@ Planned for Phase 54 after Phase 53 closes.
   - Phase 50 proved the generated Information `SimpleEntity` output/input
     revision contract but did not move the operational runtime to that
     generated Entity; and
-  - Phase 54 completes that runtime cutover rather than moving CNCF
+  - Phase 57 completes that runtime cutover rather than moving CNCF
     Information into `simplemodeling-model`.
 - Goal:
   - make the Information CML generated Entity/value/lifecycle family the one
@@ -3240,7 +3240,7 @@ Planned for Phase 54 after Phase 53 closes.
     standard Entity repository;
   - no two public canonical Information models remain after compatibility
     closure; and
-  - unrelated CML Entity or generator redesign remains outside Phase 54.
+  - unrelated CML Entity or generator redesign remains outside Phase 57.
 - Acceptance:
   - InformationSpace and every operational/projection/downstream path use the
     generated canonical Information Entity;
@@ -3255,8 +3255,8 @@ Planned for Phase 54 after Phase 53 closes.
   - final design/specification and Executable Specifications identify exactly
     one canonical runtime model.
 - Planning references:
-  - `docs/phase/phase-54.md`;
-  - `docs/phase/phase-54-checklist.md`;
+  - `docs/phase/phase-57.md`;
+  - `docs/phase/phase-57-checklist.md`;
   - `docs/phase/phase-27-checklist.md`;
   - `docs/phase/phase-50.md`;
   - `src/main/cozy/information.cml`; and
@@ -3341,7 +3341,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - equal numeric versions neither are required nor prove compatibility;
   - Cozy remains a build-time generator and is not a CAR runtime dependency;
   - generator compatibility does not replace CNCF runtime/ABI compatibility;
-  - Information canonicalization remains Phase 54 work;
+  - Information canonicalization remains Phase 57 work;
   - CML semantic redesign and unrelated generator output remain outside Phase
     51;
   - arbitrary business/API Records are not reinterpreted as persisted scalar
@@ -3448,7 +3448,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - `../cozy/docs/spec/car-project-scaffold.md`.
 
 ### 9.46 Web Session CSRF Unification
-Planned for Phase 55 after Phase 54 closes.
+Planned for Phase 58 after Phase 57 closes.
 
 - Historical basis:
   - CNCF already protects normal Form and `/form-api` POST execution with a
@@ -3494,8 +3494,8 @@ Planned for Phase 55 after Phase 54 closes.
     and
   - application-owned token generation or verification.
 - Planning references:
-  - `docs/phase/phase-55.md`;
-  - `docs/phase/phase-55-checklist.md`;
+  - `docs/phase/phase-58.md`;
+  - `docs/phase/phase-58-checklist.md`;
   - `docs/notes/web-session-csrf-unification-implementation.md`; and
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
 
@@ -3601,3 +3601,208 @@ related-project work.
   - `docs/spec/supervisor-spi.md`;
   - `src/test/scala/org/goldenport/cncf/spi/supervisor/SupervisorSpiSpec.scala`.
   - `docs/phase/phase-50-checklist.md`.
+
+### 9.49 Subsystem Datastore Pool Ownership and Shutdown Closure
+Planned for Phase 54 after Phase 53 closes.
+
+- Driver:
+  - a long-running Control Center process accumulated 2,524 Hikari
+    housekeeper threads and 10,095 descriptors to one `registry.sqlite`;
+  - source inspection found repeated Hikari pool creation during component
+    datastore resolution and no Subsystem-owned pool close path; and
+  - the resource leak is established, while its causal relationship to the
+    observed HTTP resets remains unproven.
+- Goal:
+  - make the Subsystem runtime the deterministic owner of managed SQL
+    datastore resources;
+  - reuse exactly one managed pool for each canonical datastore identity
+    inside one Subsystem; and
+  - stop new admission, drain admitted work, and close every owned pool exactly
+    once during Subsystem shutdown.
+- Selected direction:
+  - the cardinality contract is
+    `(subsystem runtime identity, canonical datastore identity) -> one managed pool`;
+  - ActionCall, Entity helpers, and UnitOfWork borrow datastore access but do
+    not own or create the pool;
+  - canonical datastore identity is typed, based on the resolved effective
+    provider/target/principal/credential-reference-or-version/pool/transaction
+    definition, uses a keyed non-reversible credential fingerprint when no
+    stable reference/version exists, and never exposes raw credentials;
+  - one Subsystem execution lease linearizes admission and shutdown across
+    HTTP/Action, Job, nested-call, managed-borrow, and creation paths;
+  - same-key concurrent acquisition is linearizable and single-flight;
+  - failed creation publishes no entry, closes partial resources, and permits
+    retry;
+  - different datastore identities and different Subsystems remain isolated;
+  - registry state is `Running`, `Stopping`, or `Stopped`; no new lease is
+    granted after `Stopping`, while a valid pre-`Stopping` lease may finish its
+    accounted lazy resolution before close;
+  - shutdown uses bounded drain, deterministic exactly-once close,
+    best-effort continuation, structured failure aggregation, and idempotent
+    repeated invocation; and
+  - caller-injected/external datastores remain caller-owned unless ownership is
+    explicitly transferred.
+- Initial scope:
+  - inventory and failing-first ownership/resource evidence;
+  - managed SQL lifecycle and secret-safe canonical datastore identity;
+  - Subsystem-owned single-flight registry;
+  - component/application datastore and ActionCall adoption;
+  - caller-owned direct resolution versus explicit Subsystem-owned managed
+    resolution;
+  - shutdown admission, bounded drain, close, and failure aggregation;
+  - existing `shutdownC` signature and successful-result compatibility;
+  - command, server, startup-failure, embedded, and fixture finalization;
+  - bounded pool/thread/file-descriptor acceptance; and
+  - full regression plus design/specification promotion.
+- Boundary:
+  - no action-, request-, helper-, or UnitOfWork-owned pool cache;
+  - no JVM-global pool shared across unrelated Subsystems;
+  - no datastore policy, configuration precedence, Entity identity, CRUD,
+    OCC, transaction, or UnitOfWork redesign;
+  - no silent closure of caller-owned resources;
+  - no Hikari tuning or unrelated SQL optimization; and
+  - no claim that pool leakage caused HTTP resets without separate evidence.
+- Planning references:
+  - `docs/phase/phase-54.md`; and
+  - `docs/phase/phase-54-checklist.md`.
+
+### 9.50 CML ComponentStyle, ExecutionContext, and Capability Resolution
+Planned for Phase 53 after Phase 52 closes.
+
+- Driver:
+  - ArtScene supports standalone personal-local and multi-user shared-external
+    operation, but currently exposes component-private mode and datastore
+    policy authorities instead of selecting a reusable CNCF capability
+    contract;
+  - CML needs a concise way to select framework-provided component behavior
+    without copying capability definitions; and
+  - assemblies and development-directory launch currently lack one generated
+    style/capability contract with which to validate this choice.
+- Goal:
+  - let explicit-component CML select a CNCF-provided ComponentStyle;
+  - define an extension-ready metadata contract whose Metadata Factory
+    implementation is deferred to a future development item;
+  - project the selected style identically into development and packaged
+    component descriptors;
+  - match Component-provided and Subsystem-required capabilities before
+    activation;
+  - construct fixed-user and authenticated-user calls through the same
+    mode-free ExecutionContext contract; and
+  - use ArtScene as the first real full-fledged-with-standalone consumer.
+- Selected direction:
+  - ComponentStyle is a static CML-selected, versioned bundle of provided
+    ComponentCapabilities and required SubsystemCapabilities;
+  - Phase 53 implements CNCF built-in styles only;
+  - provider/schema identity and the extension boundary are fixed so a future
+    Metadata Factory can add styles without changing CML or descriptor shape;
+  - `full-fledged-with-standalone` provides `domain.full@1`,
+    `user.multi-user@1`, and `user.fixed-context-compatible@1`;
+  - `domain.full@1` expands deterministically into detailed domain
+    capabilities rather than acting as an opaque boolean;
+  - the explicit CML `COMPONENT` declaration selects one known style and
+    `project.yaml` does not duplicate it;
+  - Cozy and CNCF consume one versioned style metadata contract;
+  - CML projects the style/provider/schema/provided/required snapshot through
+    the Cozy model into development and packaged descriptors; CNCF runtime
+    does not parse CML;
+  - explicit and implicit Subsystems resolve the complete dependency closure
+    and satisfy every Component requirement from provider metadata;
+  - `WebApplication` and `WebApplicationMode` remain the Web context model;
+    standalone selects a fixed-user provider and multi-user selects an
+    authenticated-user provider;
+  - `~/.textus/user-profile.yaml` supplies the normal-operation user-profile
+    baseline and `~/.cncf/user-profile.yaml` supplies a higher-precedence
+    development overlay;
+  - each layer supports global and per-application values, resolves
+    field-by-field, and retains source path/input, scope, application, and
+    logical-key provenance;
+  - fixed and authenticated current users, their locale/timezone,
+    authorization, datastore, and UnitOfWork bindings enter Component
+    execution only through ExecutionContext;
+  - ComponentFactory may provide typed, side-effect-free Component parameters
+    and capability implementation evidence, but cannot receive mode or select
+    user-context/datastore providers;
+  - datastore placement, provider, path/endpoint, credentials, and lifecycle
+    belong to the Subsystem;
+  - no `ApplicationMode`, `ComponentMode`, `SubsystemMode`,
+    `WebApplicationMode`, or `OperationMode` enters permanent Component APIs,
+    generated DSLs, ActionCall, or domain policies;
+  - missing, ambiguous, or incompatible capabilities fail before component
+    activation, datastore initialization, binding, or job admission;
+  - Component implementation cannot observe which Web path constructed its
+    ExecutionContext;
+  - temporary migration adapters remain deprecated/internal and never become
+    permanent CML, catalog, DSL, API, or normative specification; and
+  - missing or stale development descriptor/classpath evidence fails instead
+    of falling back to an older locally published CAR.
+- ArtScene acceptance:
+  - explicit-component CML selects `full-fledged-with-standalone`;
+  - the legacy private mode, mode key, local powertype,
+    `local-default`/`external-required` policy, hardcoded standalone UserId,
+    and Component mode branches are removed;
+  - standalone uses the resolved Textus/CNCF global/application user-profile
+    overlay and multi-user uses the authenticated request user;
+  - both paths provide identical Component-facing ExecutionContext contracts;
+  - the Subsystem owns local/shared datastore selection; and
+  - both source-directory and packaged-CAR launches pass the full
+    OperationMode/WebApplicationMode matrix with no Component mode input.
+- Documentation order:
+  - planning is recorded in a non-normative notes proposal;
+  - failing-first Executable Specifications and implementation come next; and
+  - normative design/specification are written only after implementation and
+    acceptance verify the final behavior.
+- Planning references:
+  - `docs/phase/phase-53.md`;
+  - `docs/phase/phase-53-checklist.md`;
+  - `docs/notes/cml-component-style-execution-context-capability-specification-proposal.md`; and
+  - `docs/journal/2026/07/2026-07-30-cml-application-mode-capability-consideration.md`.
+
+#### Future development item: Metadata Factory ComponentStyle contribution
+
+This item is explicitly outside Phase 53 implementation and completion.
+Phase 53 fixes only its direction and extension-ready metadata boundary.
+
+- Let a registered Metadata Factory contribute an additional ComponentStyle
+  through the versioned provider/schema/parameter contract established by
+  Phase 53.
+- Design generator-visible discovery, runtime provider loading, dependency
+  packaging, catalog composition, duplicate/conflict handling, diagnostics,
+  and development/packaged parity.
+- Prevent external factories from silently replacing CNCF built-ins.
+- Add executable acceptance using at least one non-CNCF style provider.
+- Assign a phase only after Phase 53 verifies the built-in contract and exposes
+  the concrete extension boundary.
+
+### 9.51 Generic Configuration Framework Extension
+Planned for Phase 55 after Phase 54 closes.
+
+- Driver:
+  - Phase 53 identified possible generic configuration extensions while
+    defining the minimal ComponentStyle, fixed-user, configuration-layering,
+    and provenance contract;
+  - those extensions are intentionally excluded from Phase 53 delivery; and
+  - their specification requires a separate consideration step before any
+    implementation scope is selected.
+- Candidate scope:
+  - typed canonical parameter and binding identities;
+  - a generic qualifier or semantic-scope model;
+  - namespace registration and conflict handling;
+  - candidate-based resolution across qualified contexts;
+  - reversible external binding and environment codecs;
+  - generic alias normalization and removal policy;
+  - typed configuration and trace indexes; and
+  - coherent migration of admitted String-keyed consumers.
+- Planning boundary:
+  - Phase 55 is currently a scheduling frame, not an approved specification;
+  - the candidate list records discussion without selecting a type model,
+    vocabulary, compatibility policy, repository set, or migration path;
+  - illustrative names in the Phase 53 journal are non-normative;
+  - implementation starts only after a separate specification consideration
+    selects or rejects each candidate and establishes failing-first acceptance;
+    and
+  - Phase 55 does not reopen Phase 53 or absorb Metadata Factory
+    ComponentStyle contribution.
+- Planning references:
+  - `docs/phase/phase-55.md`;
+  - `docs/phase/phase-55-checklist.md`; and
+  - `docs/journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md`.

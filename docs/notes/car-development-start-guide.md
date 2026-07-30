@@ -180,7 +180,8 @@ loader classes.
 
 Component-visible time, random values, and IDs are runtime capabilities too.
 Use `current_instant`/`execution_clock`, purpose-based `random_*`, and
-`entity_id`/`collection_entity_id`/`opaque_id` helpers. Do not use
+`entity_id`/`opaque_id` helpers. `entity_id` retains the exact collection in
+its canonical payload. Do not use
 `Instant.now()`, `UUID.randomUUID()`, `scala.util.Random`, `Thread.sleep`, host
 environment/system properties, direct host filesystem access, or
 component-created threads/executors in ordinary component logic. CNCF-owned

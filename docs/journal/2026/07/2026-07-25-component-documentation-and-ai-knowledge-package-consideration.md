@@ -628,3 +628,44 @@ Planning documents:
 - `ai/directive/README.md`
 - `ai/directive/samples/README.md`
 - `docs/journal/2026/07/2026-07-21-codex-skill-bundle-contract.md`
+
+## Planning Supersession — 2026-07-29
+
+This journal preserves the former Phase 53 assignment recorded later in this
+chronological 2026-07-25 entry. It does not attribute that assignment to the
+journal's original date.
+
+The Subsystem datastore pool lifecycle plan was inserted as the new Phase 53
+on 2026-07-29. The current Component Documentation and AI Knowledge
+Integration plan is therefore:
+
+- `docs/phase/phase-54.md`
+- `docs/phase/phase-54-checklist.md`
+
+Current planning follows Phase 54. Earlier Phase 53 wording in this journal is
+historical and is not a current phase-number reference.
+
+## Planning Supersession — 2026-07-30
+
+The CML ComponentStyle, ComponentMode, and policy-resolution plan was inserted
+as the new Phase 53 on 2026-07-30. The Subsystem datastore pool lifecycle plan
+moved to Phase 54, and the current Component Documentation and AI Knowledge
+Integration plan moved to:
+
+- `docs/phase/phase-55.md`
+- `docs/phase/phase-55-checklist.md`
+
+Current planning follows Phase 55. Earlier Phase 53 and Phase 54 assignments
+in this journal remain chronological history.
+
+## Planning Supersession — 2026-07-30 (Generic Configuration Insertion)
+
+The Generic Configuration Framework Extension frame was inserted as Phase 55.
+The current Component Documentation and AI Knowledge Integration plan
+therefore moved to:
+
+- `docs/phase/phase-56.md`
+- `docs/phase/phase-56-checklist.md`
+
+Current planning follows Phase 56. Earlier Phase 53, Phase 54, and Phase 55
+assignments in this journal remain chronological history.

@@ -1,88 +1,93 @@
-# Phase 55 - Web Session CSRF Unification
+# Phase 55 - Generic Configuration Framework Extension
 
 status=planned
-planned_at=2026-07-26
+planned_at=2026-07-30
 depends_on=[Phase 54](phase-54.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 55 Checklist](phase-55-checklist.md)
 
 ## Purpose
 
-Generalize CNCF's existing Static Form CSRF protection into one Web-session
-ingress contract for `/form-api`, Web-facing REST, and browser JavaScript.
+Evaluate and implement the generic configuration-framework extensions that
+were identified while planning Phase 53 but intentionally excluded from its
+delivery scope.
 
-Phase 55 preserves the CSRF requirement. It closes the gap where application
-JavaScript can call an unsafe CNCF endpoint without a standard way to obtain
-and attach the required token.
+Phase 55 is a scheduling frame only. Its exact specification, selected
+features, compatibility boundary, repository set, migration strategy, and
+acceptance contract are decided in a separate specification-consideration
+step before implementation begins.
 
 ## Dependency
 
 Phase 55 begins after Phase 54 closes.
 
-The relevant foundations are the Static Form/Web contracts, the existing
-stateless `WebCsrf` implementation, Operation authorization, and the planned
-API exposure distinction under strategy item 9.22.
+Phase 53 remains responsible for ComponentStyle, FixedUserProfile,
+Textus/CNCF layering, minimal provenance completion, and ArtScene adoption.
+Phase 55 must not reopen or delay Phase 53 merely because a more general
+configuration mechanism may later replace part of its implementation.
 
-## Selected Direction
+## Candidate Scope
 
-- CSRF policy follows the effective ingress authentication profile, not the
-  `/form-api` or `/rest` path name.
-- Unsafe requests authenticated by a CNCF Web session require CSRF.
-- `/form-api` and Web-facing REST share one issuing, projection, extraction,
-  verification, failure, and diagnostics mechanism.
-- Browser JavaScript uses a CNCF-owned helper or the equivalent explicit
-  canonical token header.
-- External REST using an explicitly admitted non-cookie identity does not
-  require CSRF and remains governed by external API authentication, scope,
-  replay, quota, and gateway policy.
-- CSRF verification never replaces authentication, authorization, validation,
-  idempotency, CORS, CSP, or XSS defenses.
+The initial candidates are recorded, not yet selected:
 
-## Work Stack
+- typed canonical parameter and binding identities;
+- a generic qualifier or semantic-scope model;
+- generic namespace registration and conflict handling;
+- candidate-based resolution across qualified contexts;
+- reversible external binding and environment codecs;
+- generic alias normalization and removal policy;
+- typed configuration and trace indexes; and
+- coherent migration of admitted String-keyed configuration consumers.
 
-| ID | Stage | Outcome | Status |
-| --- | --- | --- | --- |
-| CS-01 | Inventory and contract freeze | Current Form, Form API, REST, Web session, token, and JavaScript behavior plus failing-first acceptance identities are fixed. | planned |
-| CS-02 | Ingress security profile | Web-session, external-API, and internal-service credential selection is deterministic and cannot silently choose a weaker CSRF policy. | planned |
-| CS-03 | Common CSRF mechanism | One CNCF Web-session guard owns token issue, projection, extraction, method policy, verification, failures, and diagnostics. | planned |
-| CS-04 | Form API adoption | `/form-api` validation and execution use the common guard while preserving normal HTML form submission. | planned |
-| CS-05 | Web REST adoption | Unsafe session-authenticated REST requests use the common guard; explicit external REST remains separately governed. | planned |
-| CS-06 | JavaScript contract | CNCF provides a safe standard fetch/token path and unsafe JavaScript calls without a token fail before dispatch. | planned |
-| CS-07 | Component and security acceptance | ArtScene and representative Form/REST paths pass real HTTP, authorization, audit, and non-leakage acceptance. | planned |
-| CS-08 | Verification and contract promotion | Full validation passes and verified parameter/behavior contracts are promoted from notes to design/specification. | planned |
+The Phase 53 consolidated journal retains the current design sketch:
 
-## Acceptance
+- [Phase 53 ComponentStyle, ExecutionContext, and Configuration Consolidation](../journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md)
 
-- `/form-api` and Web-facing REST use one CSRF implementation.
-- Safe methods do not require a token and unsafe Web-session methods do.
-- HTML form-field and JavaScript-header transports follow one verified token
-  contract.
-- JavaScript has a CNCF-owned supported way to attach the token.
-- Missing or invalid tokens fail with structured `403` responses before
-  operation execution.
-- External REST exemption requires an explicit admitted non-cookie ingress
-  profile.
-- Token values never appear in logs, CallTree, metrics, audit payloads, URLs,
-  or error text.
-- ArtScene or another representative component proves the browser path through
-  the real CNCF HTTP boundary.
-- Final accepted header, field, cookie, method, profile, failure, and
-  projection behavior is recorded under `docs/spec` and `docs/design`.
+## Specification Gate
 
-## Non-Goals
+Before Phase 55 implementation:
 
-- Removing or weakening current CSRF enforcement.
-- Treating CORS or `SameSite` as a complete CSRF replacement.
-- Implementing a full public API gateway, OAuth server, or developer portal.
-- Making external service APIs use browser session cookies.
-- Letting application JavaScript generate or verify CNCF tokens.
-- Solving XSS, CSP, authorization, idempotency, or rate limiting through CSRF.
+1. inspect the existing `simplemodeling-lib` configuration and trace contract;
+2. distinguish required behavior from optional generalization;
+3. decide which candidates are admitted or rejected;
+4. define ownership and repository boundaries;
+5. define compatibility and migration policy;
+6. establish failing-first executable acceptance; and
+7. update this phase and its checklist with the selected contract.
 
-## Planning References
+No candidate name or illustrative type in the Phase 53 journal is normative
+for Phase 55 until this gate closes.
 
-- [Web Session CSRF Boundary](../journal/2026/07/2026-07-26-web-session-csrf-boundary.md)
-- [Implementation Proposal](../notes/web-session-csrf-unification-implementation.md)
-- [Static Web Application Specification](../spec/static-web-application.md)
-- [Web Layer Design](../design/web-layer.md)
-- [Web Form API Schema](../design/web-form-api-schema.md)
-- [Phase 55 Checklist](phase-55-checklist.md)
+## Initial Repository Boundary
+
+No repository set is frozen yet.
+
+`simplemodeling-lib`, `cloud-native-component-framework`, launchers, and direct
+configuration consumers are investigation candidates only. A repository
+becomes an implementation target only after the specification gate proves that
+its public or runtime contract must change.
+
+## Out of Scope
+
+- Phase 53 ComponentStyle and ExecutionContext implementation;
+- ArtScene-specific configuration semantics;
+- Metadata Factory ComponentStyle contribution;
+- unrelated Entity or collection identity;
+- Subsystem datastore pool lifecycle owned by Phase 54; and
+- speculative migration of repositories not admitted by the specification
+  gate.
+
+## Completion Boundary
+
+Phase 55 completion rules are intentionally provisional. They will be replaced
+after specification consideration. At minimum, Phase 55 cannot close without:
+
+- an approved generic configuration specification;
+- executable acceptance for every selected behavior;
+- migration and full validation of every admitted repository;
+- clean review; and
+- promotion of verified behavior to normative design and specification.
+
+## Current Status
+
+Phase 55 is planned. Specification consideration has not started.

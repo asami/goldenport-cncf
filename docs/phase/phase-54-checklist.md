@@ -1,251 +1,233 @@
-# Phase 54 Checklist - Information CML Runtime Canonicalization
+# Phase 54 Checklist - Subsystem Datastore Pool Ownership and Shutdown Closure
 
 status=planned
-phase=[Phase 54 - Information CML Runtime Canonicalization](phase-54.md)
+phase=[Phase 54 - Subsystem Datastore Pool Ownership and Shutdown Closure](phase-54.md)
 
 This checklist is the authoritative Phase 54 state ledger after Phase 54
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
 Phase 53 closes.
 
-## IC-01: Inventory and Failing-First Acceptance
+## DSP-01: Inventory and Failing-First Contract
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Information, Entity, projection, provider, and downstream
-  maintainers
+- Owner: CNCF datastore, runtime, and Subsystem maintainers
 - Entry rule: Phase 53 is closed.
-- Completion rule: The exact current split, target contract, migration surface,
-  and failing-first acceptance identities are recorded before implementation.
+- Completion rule: Every managed SQL creation/resolution path, lifecycle
+  owner, identity input, timeout decision, and injected-store boundary is
+  represented by failing executable evidence.
 
-- [ ] Inventory every hand-written Information model and helper.
-- [ ] Inventory every CML-generated Entity, input, view, value, powertype, and
-  state-machine output.
-- [ ] Record which generated types are used by runtime and which are only
-  compilation/specification evidence.
-- [ ] Inventory InformationSpace, Behavior DSL, Component ownership, provider
-  requests, projections, serialization, and persistence references.
-- [ ] Inventory Textus Knowledge Editor and Textus SIE public and persisted
-  dependencies.
-- [ ] Record current source, binary, JSON/YAML/XML/Form, schema, operation, and
-  persisted-state compatibility surfaces.
-- [ ] Fix `src/main/cozy/information.cml` as the canonical source and generated
-  `entity.Information` as the target runtime identity.
-- [ ] Fix the temporary alias/adapter and final removal policy.
-- [ ] Fix InformationSpace as the public curation/capability boundary and the
-  Entity repository as its persistence/OCC boundary.
-- [ ] Fix the exact expected use of CML state-machine output.
-- [ ] Register failing-first Executable Specification identities for every
-  Phase 54 acceptance group.
-- [ ] Add a runtime reference test that fails while InformationSpace still
-  uses the hand-written Information class.
+- [ ] Inventory `ComponentDataStore` local/dedicated/basic resolution.
+- [ ] Inventory direct `SqlDataStore.jdbc` and `SqlDataStore.sqlite` creation.
+- [ ] Inventory runtime-bootstrap and application datastore construction.
+- [ ] Inventory every ActionCall/Entity helper datastore resolution path.
+- [ ] Inventory command, server, embedded, fixture, and startup-failure
+  Subsystem termination paths.
+- [ ] Classify Subsystem-owned, caller-owned, injected, and partial resources.
+- [ ] Freeze canonical datastore identity inputs and secret-safe diagnostics.
+- [ ] Freeze datastore alias/provenance versus canonical identity behavior.
+- [ ] Freeze the Subsystem execution-lease grant/release linearization point
+  for HTTP/Action, Job, nested-call, direct-borrow, and creation paths.
+- [ ] Freeze lazy resolution behavior for work admitted before `Stopping`.
+- [ ] Freeze the bounded drain timeout and configuration ownership.
+- [ ] Freeze direct ownerless `ComponentDataStore` resolution as caller-owned
+  and the explicit owner input for managed resolution.
+- [ ] Freeze `shutdownC` source/binary compatibility and cleanup-result
+  aggregation.
+- [ ] Register failing-first same-key, concurrency, shutdown-race, close, and
+  resource-stability specifications.
+- [ ] Record that HTTP reset causality remains outside the proven baseline.
 
 Evidence:
 - Pending.
 
-## IC-02: Canonical CML and Generator Contract
+## DSP-02: Managed SQL Lifecycle and Identity
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF CML, simple-modeler, and Cozy maintainers
-- Entry rule: IC-01 is DONE.
-- Completion rule: One CML source generates the complete usable
-  revision-aware Entity/value/lifecycle family required by runtime migration.
+- Owner: CNCF datastore and SQL provider maintainers
+- Entry rule: DSP-01 is DONE.
+- Completion rule: Lifecycle-capable SQL stores have an explicit ownership and
+  close contract, and effective identities are deterministic and secret-safe.
 
-- [ ] Reconcile every hand-written runtime field with `information.cml`.
-- [ ] Reconcile generated common `SimpleEntity` attributes and Information
-  fields without duplicate timestamps, lifecycle, publication, or security
-  semantics.
-- [ ] Fix generated package and canonical type naming.
-- [ ] Verify required/optional/default behavior for Entity and nested values.
-- [ ] Verify one canonical generated class for every CML-defined Value and
-  Powertype.
-- [ ] Verify generated `Information` outputs contain one managed revision.
-- [ ] Verify generated Create, Update, and Query inputs omit managed revision.
-- [ ] Verify Update uses explicit `Update` semantics for optional and
-  collection-valued fields.
-- [ ] Inspect the generated `informationLifecycle` output for executable
-  transition metadata/planning.
-- [ ] Complete simple-modeler/Cozy state-machine generation if the current
-  output does not expose the CML transition contract.
-- [ ] Add cold-generation deterministic-output specifications.
-- [ ] Add generated schema/codec/record/persistence round-trip specifications.
-- [ ] Add invalid lifecycle transition specifications against generated
-  transition evidence.
+- [ ] Define the bounded managed datastore resource contract.
+- [ ] Make direct SQL construction explicitly caller-owned and closeable.
+- [ ] Close partially created resources when construction fails.
+- [ ] Make SQL datastore close idempotent and observable.
+- [ ] Define normalized SQLite path identity.
+- [ ] Define normalized JDBC endpoint/database/catalog/schema identity.
+- [ ] Include principal, mandatory credential reference/version/fingerprint,
+  and effective pool/transaction configuration without exposing credentials.
+- [ ] Prove credential rotation cannot reuse the old credential's pool.
+- [ ] Preserve logical name, alias, and selection-source provenance.
+- [ ] Add identity equality, non-collision, stability, and redaction property
+  specifications.
+- [ ] Add exactly-once and failed-construction lifecycle specifications.
 
 Evidence:
 - Pending.
 
-## IC-03: Generated Type Adoption
+## DSP-03: Subsystem Registry and Single-Flight Creation
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Information model maintainers
-- Entry rule: IC-02 is DONE.
-- Completion rule: Runtime source uses the generated Entity/value/powertype
-  family with only explicitly bounded compatibility adapters remaining.
+- Owner: CNCF Subsystem and datastore runtime maintainers
+- Entry rule: DSP-02 is DONE.
+- Completion rule: One Subsystem-owned registry linearizes creation and
+  enforces the cardinality contract without cross-Subsystem sharing.
 
-- [ ] Introduce the canonical generated Information import/facade policy.
-- [ ] Replace the hand-written Information case class in InformationSpace
-  snapshots and method signatures.
-- [ ] Replace duplicated ValidationIssue, IdentityBinding,
-  ResolutionCandidate, PublicationStatus, Conflict, FieldEvent, snapshot, and
-  count representations where defined by CML.
-- [ ] Preserve required helper construction and safe `ValueReader` behavior
-  through generated builders/codecs or explicit non-model utilities.
-- [ ] Preserve `InformationId` compatibility while using canonical `EntityId`.
-- [ ] Preserve deterministic field names and external wire aliases.
-- [ ] Add explicit compatibility decoding for admitted legacy payloads.
-- [ ] Reject ambiguous payloads that could select different hand-written and
-  generated interpretations.
-- [ ] Mark temporary root aliases/adapters with removal criteria.
-- [ ] Add compile-time and runtime class-identity specifications.
+- [ ] Add the Subsystem-owned managed datastore registry.
+- [ ] Implement `Running`, `Stopping`, and `Stopped` registry state.
+- [ ] Implement the Subsystem execution lease and active-lease accounting.
+- [ ] Make nested calls inherit the active lease.
+- [ ] Implement same-key linearizable single-flight creation.
+- [ ] Publish one successful resource to all current waiters.
+- [ ] Keep different canonical identities isolated.
+- [ ] Keep equal identities in different Subsystems isolated.
+- [ ] Close partial resources and publish no entry after failed creation.
+- [ ] Permit retry after a failed creation.
+- [ ] Reject conflicting effective definitions without replacement.
+- [ ] Reject requests without a pre-`Stopping` lease after shutdown wins the
+  state transition.
+- [ ] Allow a valid pre-`Stopping` lease to complete accounted lazy resolution
+  and include its creation in the drain.
+- [ ] Prove one creation for 100 concurrent same-key resolutions.
+- [ ] Prove deterministic behavior for concurrent creation failure and retry.
 
 Evidence:
 - Pending.
 
-## IC-04: InformationSpace Entity Persistence and OCC
+## DSP-04: Component and ActionCall Adoption
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF InformationSpace, Entity runtime, and persistence maintainers
-- Entry rule: IC-03 is DONE.
-- Completion rule: InformationSpace uses the standard Entity
-  repository/UnitOfWork/revision path without a parallel persistence kernel.
+- Owner: CNCF component, action, Entity, and datastore maintainers
+- Entry rule: DSP-03 is DONE.
+- Completion rule: Application datastore helpers borrow the Subsystem-owned
+  resource while preserving configuration and binding behavior.
 
-- [ ] Define the component-scoped Information Entity collection identity.
-- [ ] Register the generated Information Entity descriptor deterministically.
-- [ ] Bind InformationSpace to the owning Component Entity repository.
-- [ ] Replace private mutable snapshot authority with repository-backed
-  reads/writes while retaining a storage-neutral InformationSpace API.
-- [ ] Apply create defaults for id, revision, common attributes, audit, and
-  security without admitting managed input.
-- [ ] Advance revision on every effective Information mutation.
-- [ ] Apply `WriteIfChanged` only where the Information operation contract
-  explicitly selects it; preserve the standard default otherwise.
-- [ ] Require observed revision for user-visible edit/save paths according to
-  Phase 50 policy.
-- [ ] Use atomic conditional transition for stale-write rejection.
-- [ ] Ensure failed/stale mutations do not partially modify nested state,
-  field events, Tags, publication records, or Knowledge projections.
-- [ ] Preserve component ownership and isolation for multiple Components.
-- [ ] Add in-memory, SQLite, and representative provider OCC specifications.
-- [ ] Add concurrent update, replay, restart, and rollback specifications.
+- [ ] Add an explicit Subsystem-owned managed `ComponentDataStore` resolution
+  path.
+- [ ] Keep direct ownerless `ComponentDataStore` resolution caller-owned and
+  closeable.
+- [ ] Route application datastore binding through the registry.
+- [ ] Route direct component datastore helper access through the registry.
+- [ ] Remove repeated helper-time Hikari pool creation.
+- [ ] Preserve datastore policy and configuration precedence.
+- [ ] Preserve component/logical datastore provenance.
+- [ ] Preserve nested ActionCall capture/restore behavior.
+- [ ] Preserve one inherited execution lease across nested ActionCalls.
+- [ ] Preserve transaction and UnitOfWork connection ownership.
+- [ ] Preserve injected in-memory and caller-owned datastore behavior.
+- [ ] Add repeated Entity/helper/action reuse specifications.
+- [ ] Add alias-equivalence and distinct-effective-identity specifications.
+- [ ] Prove that no ActionCall cache owns or closes a pool.
 
 Evidence:
 - Pending.
 
-## IC-05: Curation and Knowledge Lifecycle Migration
+## DSP-05: Shutdown Admission, Drain, and Close
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Information, Knowledge, Tag, and provider maintainers
-- Entry rule: IC-04 is DONE.
-- Completion rule: Phase 26/27 curation and Knowledge behavior is preserved on
-  the generated revision-aware Entity.
+- Owner: CNCF Subsystem, Job, managed-service, and datastore maintainers
+- Entry rule: DSP-04 is DONE.
+- Completion rule: Subsystem shutdown deterministically stops admission,
+  drains accepted work, closes owned pools once, and aggregates all cleanup.
 
-- [ ] Migrate register/import while preserving raw and working data separation.
-- [ ] Migrate update and field-event append behavior.
-- [ ] Migrate validation and actionable issue projection.
-- [ ] Migrate candidate creation, selection, clearing, and binding state.
-- [ ] Migrate confirm, reject, and reopen through the CML lifecycle contract.
-- [ ] Migrate publication success and failure behavior.
-- [ ] Migrate conflict recording and resolution.
-- [ ] Migrate snapshot, count, lookup, list, and search behavior.
-- [ ] Preserve Information-specific capability checks and separation of duty.
-- [ ] Preserve Tag bindings and dedicated Information TagSpace behavior.
-- [ ] Preserve Information-to-Knowledge materialization and 1.5-hop
-  neighborhood behavior.
-- [ ] Preserve distinct Information, Entity, RDF, external, Tag, Knowledge
-  node, and Knowledge frame identities.
-- [ ] Preserve provider failures without false publication or revision state.
-- [ ] Add lifecycle property tests and invalid-transition matrices.
-- [ ] Re-run Phase 26/27 Information and Knowledge regression specifications.
+- [ ] Atomically enter `Stopping`.
+- [ ] Reject new execution leases after `Stopping`.
+- [ ] Quiesce the JobEngine before datastore closure.
+- [ ] Drain valid pre-`Stopping` leases, inherited nested calls, direct managed
+  borrows, and in-flight creation under the bounded policy.
+- [ ] Close owned pools once in deterministic registry order.
+- [ ] Continue closing later resources after a close failure.
+- [ ] Continue existing service-container, MCP, and evaluation cleanup.
+- [ ] Aggregate structured cleanup failures.
+- [ ] Make repeated and concurrent shutdown idempotent.
+- [ ] On drain timeout, revoke remaining leases, prevent later borrow, cancel
+  supported work, reclaim pools best-effort, and report affected work
+  structurally.
+- [ ] Preserve the existing `shutdownC` signature and successful
+  service-container outcome while aggregating datastore cleanup failures.
+- [ ] Ensure `shutdown()` does not bypass normal cleanup observation.
+- [ ] Add shutdown/acquire, shutdown/use, timeout, and multi-failure
+  specifications.
 
 Evidence:
 - Pending.
 
-## IC-06: DSL, Transport, Help, and Editor Projections
+## DSP-06: Runtime and Resource Acceptance
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Behavior, projection, HTTP/Web, and Help maintainers
-- Entry rule: IC-05 is DONE.
-- Completion rule: Every CNCF access surface uses the canonical Entity and
-  preserves revision, authorization, and managed-input boundaries.
+- Owner: CNCF CLI, server, fixture, runtime, and observability maintainers
+- Entry rule: DSP-05 is DONE.
+- Completion rule: Every runtime entry and exit path finalizes Subsystem
+  ownership, and bounded resource evidence proves no pool accumulation.
 
-- [ ] Migrate protected `information_*` Behavior DSL operations.
-- [ ] Preserve ExecutionContext and CallTree recording for every operation.
-- [ ] Project revision as system/read-only output metadata.
-- [ ] Exclude revision from application Create input.
-- [ ] Require and validate observed revision on applicable edit/update forms
-  and requests.
-- [ ] Migrate Information editor descriptors, field projections, actions, and
-  disabled reasons.
-- [ ] Migrate system admin/debug Information projections.
-- [ ] Migrate static Web form, HTTP, JSON/YAML/XML/Form, schema, OpenAPI, and
-  MCP projections.
-- [ ] Preserve raw provider-payload exclusion.
-- [ ] Preserve structured stale-conflict presentation.
-- [ ] Add projection parity and authorization-isolation specifications.
+- [ ] Finalize command-mode Subsystems.
+- [ ] Finalize server-mode Subsystems on normal termination.
+- [ ] Finalize Subsystems after startup failure.
+- [ ] Finalize embedded/runtime API Subsystems.
+- [ ] Preserve deterministic `SubsystemTestFixture` cleanup.
+- [ ] Add bounded repeated same-identity operation acceptance.
+- [ ] Prove pool count remains at the expected identity cardinality.
+- [ ] Prove Hikari housekeeper-thread count remains bounded.
+- [ ] Prove SQLite descriptor count remains bounded.
+- [ ] Prove owned pool threads and descriptors return to baseline after
+  shutdown.
+- [ ] Validate the representative Control Center datastore path without making
+  Control Center a framework implementation repository.
+- [ ] Keep HTTP reset causality as a separate runtime diagnosis unless directly
+  proven.
 
 Evidence:
 - Pending.
 
-## IC-07: Downstream and Migration Acceptance
+## DSP-07: Regression and Canonical Closure
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF, Textus Knowledge Editor, Textus SIE, and representative
-  application maintainers
-- Entry rule: IC-06 is DONE.
-- Completion rule: Supported downstream and persisted Information flows use
-  the canonical generated model without silent incompatibility or data loss.
+- Owner: CNCF datastore, Entity, runtime, documentation, and release maintainers
+- Entry rule: DSP-06 is DONE.
+- Completion rule: Full compatibility and resource evidence pass, normative
+  documentation matches verified behavior, and no pool lifecycle contract
+  remains planning-only.
 
-- [ ] Define supported legacy persisted Information shapes.
-- [ ] Implement deterministic migration or explicit incompatibility
-  diagnostics.
-- [ ] Preserve ids, lifecycle, working/raw data, candidates, bindings,
-  publications, conflicts, events, audit, and revision provenance.
-- [ ] Add migration preview and rollback-safe failure behavior.
-- [ ] Validate Textus Knowledge Editor list/detail/edit/lifecycle flows.
-- [ ] Validate Textus SIE authority resolution, publication, and
-  materialization flows.
-- [ ] Validate book, paper, web-resource, Person, Organization, and textual
-  work/edition/series/volume profiles.
-- [ ] Validate Tag filtering and local Knowledge materialization.
-- [ ] Validate Help/API compatibility for development source and packaged CAR
-  execution.
-- [ ] Run focused downstream suites and representative end-to-end smoke tests.
-
-Evidence:
-- Pending.
-
-## IC-08: Duplicate Removal and Canonical Closure
-
-Stage Status:
-- Current status: PLANNED
-- Owner: CNCF and affected downstream maintainers
-- Entry rule: IC-07 is DONE.
-- Completion rule: No competing Information model remains, all required
-  validation passes, and canonical documentation matches verified behavior.
-
-- [ ] Remove the hand-written root Information case class.
-- [ ] Remove duplicated hand-written CML value classes.
-- [ ] Remove expired compatibility adapters and aliases.
-- [ ] Remove generated-only fixture assumptions that no longer describe
-  runtime behavior.
-- [ ] Search source, tests, docs, generated inputs, and downstream repositories
-  for obsolete runtime type references.
-- [ ] Run cold CML generation and focused Phase 54 suites.
-- [ ] Run full CNCF validation.
-- [ ] Run full affected downstream validation.
-- [ ] Perform read-only review, review-fix, and clean re-review.
-- [ ] Promote verified architecture to `docs/design`.
-- [ ] Promote public and persistence/migration contracts to `docs/spec`.
-- [ ] Update strategy, phase, checklist, Help, and generated documentation.
-- [ ] Record final version, dependency, migration, and release evidence.
-- [ ] Close Phase 54 only after all completion rules and documentation gates
-  pass.
+- [ ] Run focused datastore, Entity, OCC, UnitOfWork, Subsystem, CLI, and HTTP
+  specifications.
+- [ ] Run `Test/compile`.
+- [ ] Run the complete CNCF full suite.
+- [ ] Run bounded resource acceptance with exact before/after evidence.
+- [ ] Run naming, executable-specification, and `git diff --check` gates.
+- [ ] Perform independent read-only review.
+- [ ] Apply every actionable review finding.
+- [ ] Perform a clean focused re-review.
+- [ ] Create or update
+  `docs/design/subsystem-datastore-pool-lifecycle.md`.
+- [ ] Create or update
+  `docs/spec/subsystem-datastore-pool-lifecycle.md`.
+- [ ] Update architecture, strategy, phase, checklist, and runtime lifecycle
+  references.
+- [ ] Record exact test, resource, review, and release evidence.
+- [ ] Close Phase 54 only after all completion rules pass.
 
 Evidence:
 - Pending.
+
+## Modified Scala File Compliance Ledger
+
+No Scala file is modified by the Phase 54 planning-only insertion.
+
+During implementation, every created or modified Scala file must be recorded
+with:
+
+- complete-file naming compliance;
+- executable-specification compliance or `not a spec`;
+- focused and full validation evidence; and
+- final Phase 54 commit.
+
+## Status
+
+Phase 54 is PLANNED. DSP-01 has not started.

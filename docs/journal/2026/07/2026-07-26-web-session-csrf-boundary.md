@@ -89,3 +89,40 @@ The note and this journal entry are not the final runtime contract. After
 implementation and executable verification, the accepted parameter, header,
 ingress, failure, and projection behavior must be promoted to the relevant
 documents under `docs/spec` and `docs/design`.
+
+## Planning Supersession — 2026-07-29
+
+This journal preserves the Phase 55 number selected on 2026-07-26 as
+chronological history.
+
+The Subsystem datastore pool lifecycle plan was inserted as Phase 53 on
+2026-07-29, shifting the current Web Session CSRF Unification plan to:
+
+- `docs/phase/phase-56.md`
+- `docs/phase/phase-56-checklist.md`
+
+Current planning follows Phase 56. Earlier Phase 55 wording in this journal is
+historical and is not a current phase-number reference.
+
+## Planning Supersession — 2026-07-30
+
+The CML ComponentStyle, ComponentMode, and policy-resolution plan was inserted
+as the new Phase 53 on 2026-07-30. The current Web Session CSRF Unification
+plan therefore moved to:
+
+- `docs/phase/phase-57.md`
+- `docs/phase/phase-57-checklist.md`
+
+Current planning follows Phase 57. Earlier Phase 55 and Phase 56 assignments
+in this journal remain chronological history.
+
+## Planning Supersession — 2026-07-30 (Generic Configuration Insertion)
+
+The Generic Configuration Framework Extension frame was inserted as Phase 55.
+The current Web Session CSRF Unification plan therefore moved to:
+
+- `docs/phase/phase-58.md`
+- `docs/phase/phase-58-checklist.md`
+
+Current planning follows Phase 58. Earlier Phase 55, Phase 56, and Phase 57
+assignments in this journal remain chronological history.
