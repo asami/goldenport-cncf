@@ -149,7 +149,7 @@ Evidence:
 ## EID-06: Core Validation and Canonical Closure
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: core Phase 52 repository maintainers
 - Entry rule: EID-05 is DONE.
 - Completion rule: Core validation passes and canonical documentation defines
@@ -160,16 +160,16 @@ Stage Status:
 - [x] Run full CNCF validation.
 - [x] Run full Cozy validation.
 - [x] Run affected sbt-cozy validation.
-- [ ] Verify no old-format compatibility, migration, dual parser, read repair,
+- [x] Verify no old-format compatibility, migration, dual parser, read repair,
   or context rebinding remains.
-- [ ] Perform the EID-06 closure review and focused re-review until findings close.
+- [x] Perform the EID-06 closure review and focused re-review until findings close.
 - [x] Promote verified behavior to `docs/design` and `docs/spec`.
 - [x] Mark the Phase 51 compensation model as historical/superseded without
   rewriting its evidence.
-- [ ] Record known CAR incompatibilities as CAR-local follow-up work without
+- [x] Record known CAR incompatibilities as CAR-local follow-up work without
   making them Phase 52 closure gates.
-- [ ] Update strategy and Phase 52 status with exact validation evidence.
-- [ ] Close Phase 52 only after all core completion rules pass.
+- [x] Update strategy and Phase 52 status with exact validation evidence.
+- [x] Close Phase 52 only after all core completion rules pass.
 
 Evidence:
 
@@ -187,6 +187,12 @@ Evidence:
   and exposes a separate P51 aggregate-operation generator type mismatch
   (`ExecUowM[EntitySnapshot[ShipmentOrder]]` where `Unit` is required).  It is
   not an Entity ID compatibility failure; no fallback or rebinding was added.
+- 2026-07-30 JST closure validation: `simplemodeling-model` 66/66 plus
+  `publishLocal`; `notice-board-event-driven` 8/8; CNCF 2,660/2,660 across
+  376 suites with 0 failures (14 environment-gated cancelled, 1 ignored, and
+  59 pending).  The final independent focused re-review found no actionable
+  findings.  No CAR incompatibility was discovered in the required repository
+  set; any future CAR repair remains CAR-local under the rule below.
 
 ## CAR Follow-Up Rule
 
@@ -201,4 +207,4 @@ Evidence:
 
 ## Status
 
-Phase 52 is IN_PROGRESS. EID-01 through EID-05 are DONE. EID-06 is in progress.
+Phase 52 is CLOSED. EID-01 through EID-06 are DONE.

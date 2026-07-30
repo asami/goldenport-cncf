@@ -863,6 +863,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 50: closed
   (`docs/phase/phase-50.md`)
 - Phase 51: closed (`docs/phase/phase-51.md`)
+- Phase 52: closed (`docs/phase/phase-52.md`)
 
 ## 8. Completed Development Item History
 
@@ -3499,7 +3500,7 @@ Planned for Phase 55 after Phase 54 closes.
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
 
 ### 9.47 Exact Entity ID Serialization and Collection Identity
-Planned for Phase 52 after Phase 51 closes.
+Completed in Phase 52.
 
 - Historical basis:
   - the current `EntityId.value` is a datastore-local scalar that retains the
@@ -3566,6 +3567,11 @@ Planned for Phase 52 after Phase 51 closes.
   - `docs/design/id.md`;
   - `docs/design/entity-collection-identity.md`; and
   - `docs/spec/entity-collection-identity.md`.
+
+- Closure evidence (2026-07-30 JST): `simplemodeling-model` 66/66 plus local
+  publish; `notice-board-event-driven` 8/8; and CNCF 2,660/2,660 tests across
+  376 suites with no failures.  The Phase 52 closure review and focused
+  re-review found no actionable issue.
 
 ### 9.48 Supervisor SPI and Managed Lifecycle Provider Integration
 CNCF contract baseline implemented; provider and consumer adoption remains
