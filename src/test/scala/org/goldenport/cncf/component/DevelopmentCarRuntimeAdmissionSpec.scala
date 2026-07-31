@@ -35,6 +35,10 @@ final class DevelopmentCarRuntimeAdmissionSpec
     afterWord("in spec:generation-compatibility-contract, example:E8, rules:R5,R6,R7, phase:51, slice:RE-01")
   private val _e9_metadata =
     afterWord("in spec:generation-compatibility-contract, example:E9, rules:R3,R6, phase:51, slice:RE-01")
+  private val _e10_metadata =
+    afterWord("in spec:generation-compatibility-contract, example:E10, rules:R3,R6, phase:53, slice:CS-03")
+  private val _e11_metadata =
+    afterWord("in spec:generation-compatibility-contract, example:E11, rules:R2,R3, phase:53, slice:CS-03")
 
   "Development CAR runtime admission" should {
     "E1 admit stable prepared evidence after mutable class recompilation" must _e1_metadata {
@@ -195,12 +199,53 @@ final class DevelopmentCarRuntimeAdmissionSpec
           val descriptor = root.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)
 
           When("the descriptor component changes without regenerating its ABI and runtime evidence")
-          Files.writeString(descriptor, Files.readString(descriptor, StandardCharsets.UTF_8).replace("\"component\":\"sample\"", "\"component\":\"other\""), StandardCharsets.UTF_8)
+          Files.writeString(descriptor, Files.readString(descriptor, StandardCharsets.UTF_8).replace("\"name\":\"sample\"}", "\"name\":\"other\"}"), StandardCharsets.UTF_8)
           val result = DevelopmentCarRuntimeAdmission.validate(root)
 
           Then("development admission rejects the stale contract with recovery")
           result.display should include("component development ABI does not export component other")
           result.display should include("sbt cozyPrepareRuntime")
+        }
+      }
+    }
+
+    "E10 reject an incomplete schema-v2 component style snapshot" must _e10_metadata {
+      "reject a partial development descriptor before runtime activation" in {
+        _with_prepared_manifest { root =>
+          Given("Spec: docs/spec/generation-compatibility-contract.md; Rules: R3,R6; Example: E10; a prepared v2 development descriptor")
+          val descriptor = root.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)
+
+          When("the required parameters field is removed without regenerating evidence")
+          Files.writeString(descriptor, Files.readString(descriptor, StandardCharsets.UTF_8).replace("\"parameters\":{},", ""), StandardCharsets.UTF_8)
+          val result = DevelopmentCarRuntimeAdmission.validate(root)
+
+          Then("admission rejects the incomplete snapshot with recovery guidance")
+          result.display should include("componentStyle must be a complete catalog-matching snapshot")
+          result.display should include("sbt cozyPrepareRuntime")
+        }
+      }
+    }
+
+    "E11 admit a digest-valid v1 development directory during migration" must _e11_metadata {
+      "preserve the reader-only v1 descriptor identity" in {
+        _with_temp_dir { root =>
+          Given("Spec: docs/spec/generation-compatibility-contract.md; Rules: R2,R3; Example: E11; a prepared v1 development directory")
+          _prepare(root)
+          Files.writeString(root.resolve("target/scala-3.3.8/classes/sample.class"), "compiled", StandardCharsets.UTF_8)
+          val legacy = root.resolve(DevelopmentCarRuntimeAdmission.LEGACY_COMPONENT_DESCRIPTOR_IDENTITY)
+          Files.createDirectories(legacy.getParent)
+          Files.writeString(legacy, """{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"}""", StandardCharsets.UTF_8)
+          _write_manifest(
+            root,
+            DevelopmentCarRuntimeAdmission.LEGACY_MANIFEST_SCHEMA,
+            DevelopmentCarRuntimeAdmission.LEGACY_COMPONENT_DESCRIPTOR_IDENTITY
+          )
+
+          When("CNCF admits the explicitly selected development directory")
+          val result = DevelopmentCarRuntimeAdmission.validate(root)
+
+          Then("the valid v1 migration contract remains readable")
+          result.isSuccess shouldBe true
         }
       }
     }
@@ -211,9 +256,10 @@ final class DevelopmentCarRuntimeAdmissionSpec
     val abi = root.resolve(DevelopmentCarRuntimeAdmission.ABI_MANIFEST_IDENTITY)
     val classpath = root.resolve(DevelopmentCarRuntimeAdmission.RUNTIME_CLASSPATH_IDENTITY)
     Files.createDirectories(descriptor.getParent)
+    Files.createDirectories(abi.getParent)
     Files.createDirectories(classpath.getParent)
     Files.createDirectories(root.resolve("target/scala-3.3.8/classes"))
-    Files.writeString(descriptor, """{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"}""", StandardCharsets.UTF_8)
+    Files.writeString(descriptor, """{"schemaVersion":2,"name":"sample","version":"0.0.1-SNAPSHOT","component":{"name":"sample"},"componentStyle":{"apiVersion":"cncf.textus/v1","provider":"cncf","id":"full-fledged-with-standalone@1","version":1,"parameterSchema":{"type":"object","properties":{},"required":[],"additionalProperties":false},"parameters":{},"provides":{"bundles":["domain.full@1"],"capabilities":["user.fixed-context-compatible@1","user.multi-user@1"],"effective":["domain.aggregate@1","domain.command@1","domain.domain-event@1","domain.entity@1","domain.optimistic-concurrency@1","domain.persistence@1","domain.projection@1","domain.query@1","domain.transaction@1","user.fixed-context-compatible@1","user.multi-user@1"]},"requires":{"subsystemCapabilities":["datastore.optimistic-concurrency@1","datastore.persistent@1","datastore.transactional@1","user-context.current@1"]}}}""", StandardCharsets.UTF_8)
     Files.writeString(abi, """{"format":"cozy.car.abi-manifest.v1","car":{"name":"sample","version":"0.0.1-SNAPSHOT"},"abi":{"exports":{"components":[{"name":"sample"}]}}}""", StandardCharsets.UTF_8)
     Files.writeString(classpath, root.resolve("target/scala-3.3.8/classes").toString, StandardCharsets.UTF_8)
   }
@@ -226,10 +272,14 @@ final class DevelopmentCarRuntimeAdmissionSpec
       body(root)
     }
 
-  private def _write_manifest(root: Path): Unit = {
+  private def _write_manifest(
+    root: Path,
+    schema: String = DevelopmentCarRuntimeAdmission.MANIFEST_SCHEMA,
+    descriptoridentity: String = DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY
+  ): Unit = {
     val evidence = Vector(
       DevelopmentCarRuntimeAdmission.RUNTIME_CLASSPATH_IDENTITY,
-      DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY,
+      descriptoridentity,
       DevelopmentCarRuntimeAdmission.ABI_MANIFEST_IDENTITY
     ).map { identity =>
       val file = root.resolve(identity)
@@ -250,7 +300,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
     val manifest = root.resolve("target/cncf.d/car-runtime-manifest.json")
     Files.writeString(
       manifest,
-      s"""{"schemaVersion":"${DevelopmentCarRuntimeAdmission.MANIFEST_SCHEMA}","sourceKind":"${DevelopmentCarRuntimeAdmission.SOURCE_KIND}","car":{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$digest"}}""",
+      s"""{"schemaVersion":"$schema","sourceKind":"${DevelopmentCarRuntimeAdmission.SOURCE_KIND}","car":{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$digest"}}""",
       StandardCharsets.UTF_8
     )
   }

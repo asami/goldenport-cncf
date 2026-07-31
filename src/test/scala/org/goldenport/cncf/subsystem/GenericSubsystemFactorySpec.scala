@@ -38,7 +38,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 30, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -166,7 +166,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           )
         )
 
-        val descriptorpath = Files.createTempFile("generic-subsystem-factory", ".yaml")
+        val descriptorpath = _create_temp_file("generic-subsystem-factory", ".yaml")
         Files.writeString(
           descriptorpath,
           """subsystem: mcprag
@@ -360,7 +360,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           )
         )
 
-        val descriptorpath = Files.createTempFile("generic-subsystem-factory-visibility", ".yaml")
+        val descriptorpath = _create_temp_file("generic-subsystem-factory-visibility", ".yaml")
         Files.writeString(
           descriptorpath,
           """subsystem: mcprag
@@ -399,7 +399,9 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
     "carry descriptor-defined security wiring from the textus-identity journal sample descriptor" in {
       Given("the maintained textus-identity descriptor")
-      val descriptorpath = java.nio.file.Path.of("/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")
+      val descriptorpath = Path.of(
+        "docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml"
+      ).toAbsolutePath.normalize
       val descriptor = GenericSubsystemDescriptor.load(descriptorpath).toOption.get
 
       When("the subsystem is constructed")
@@ -504,7 +506,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           )
         )
 
-        val descriptorpath = Files.createTempFile("generic-subsystem-factory-default-standard", ".yaml")
+        val descriptorpath = _create_temp_file("generic-subsystem-factory-default-standard", ".yaml")
         Files.writeString(
           descriptorpath,
           """subsystem: textus-identity
@@ -623,14 +625,16 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
   ): Unit = {
     val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
     val cardir = componentdir.resolve("src").resolve("main").resolve("car")
+    val descriptor = file.getParent.resolve("component-descriptor.json")
     Files.createDirectories(file.getParent)
     Files.createDirectories(cardir)
     Files.writeString(file, classdir.toString, StandardCharsets.UTF_8)
     Files.writeString(
-      cardir.resolve("component-descriptor.json"),
+      descriptor,
       s"""{"name":"$name","version":"$version","component":"$component"}""",
       StandardCharsets.UTF_8
     )
+    Files.writeString(cardir.resolve("component-descriptor.json"), Files.readString(descriptor, StandardCharsets.UTF_8), StandardCharsets.UTF_8)
     Files.writeString(
       cardir.resolve("abi-manifest.json"),
       s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$name","version":"$version"},"abi":{"exports":{"components":[{"name":"$component"}]}}}""",
@@ -718,7 +722,10 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
   }
 
   private def _with_temp_dir[T](body: Path => T): T = {
-    val base = Files.createTempDirectory("generic-subsystem-factory-spec")
+    val workdir = Files.createDirectories(
+      Path.of("target", "generic-subsystem-factory-spec", "work").toAbsolutePath.normalize
+    )
+    val base = Files.createTempDirectory(workdir, "generic-subsystem-factory-spec")
     try body(base)
     finally {
       if (Files.exists(base)) {
@@ -731,5 +738,12 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         }
       }
     }
+  }
+
+  private def _create_temp_file(prefix: String, suffix: String): Path = {
+    val workdir = Files.createDirectories(
+      Path.of("target", "generic-subsystem-factory-spec", "work").toAbsolutePath.normalize
+    )
+    Files.createTempFile(workdir, prefix, suffix)
   }
 }

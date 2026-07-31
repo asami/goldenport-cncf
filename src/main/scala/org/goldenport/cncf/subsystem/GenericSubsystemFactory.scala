@@ -1,9 +1,9 @@
 package org.goldenport.cncf.subsystem
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin, DevelopmentCarRuntimeAdmission}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig, RuntimeTestDescriptor}
@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 30, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -132,11 +132,20 @@ object GenericSubsystemFactory {
             _or_else(
               componentDevDirPath(configuration) match {
                 case Some(path) =>
-                  _component_descriptor_to_subsystem_c(
-                    _component_dev_car_root(path),
-                    _load_dev_component_descriptor(path)
-                      .getOrElse(_fallback_component_descriptor(path))
-                  ).flatMap(d => _with_assembly_descriptor_override_c(d, configuration).map(Some(_)))
+                  ComponentRepository.ComponentDevDirRepository.validate(path).flatMap { _ =>
+                    ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(path).headOption match {
+                      case Some(descriptor) =>
+                        Consequence.success(_development_component_descriptor_to_subsystem(path, descriptor))
+                          .flatMap(d => _with_assembly_descriptor_override_c(d, configuration).map(Some(_)))
+                      case None =>
+                        Consequence.resourceInvalid(
+                            s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                            s"${path.resolve(DevelopmentCarRuntimeAdmission.componentDescriptorIdentity(path))}. " +
+                            s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
+                            "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+                        )
+                    }
+                  }
                 case None => Consequence.success(None)
               }
             ) {
@@ -170,35 +179,6 @@ object GenericSubsystemFactory {
       case None => rhs
     }
 
-  private def _load_dev_component_descriptor(
-    path: Path
-  ): Option[ComponentDescriptor] =
-    Vector(
-      path.resolve("src").resolve("main").resolve("car"),
-      path.resolve("car.d")
-    ).iterator.flatMap { dir =>
-      ComponentDescriptorLoader.load(dir).toOption.toVector.flatten
-    }.toSeq.headOption.orElse(
-      ComponentRepository.ComponentDevDirRepository.inferComponentDescriptors(path).headOption
-    )
-
-  private def _fallback_component_descriptor(
-    path: Path
-  ): ComponentDescriptor =
-    ComponentDescriptor(
-      name = Some(path.getFileName.toString),
-      version = Some("0.1.0"),
-      componentName = Some(path.getFileName.toString)
-    )
-
-  private def _component_dev_car_root(
-    path: Path
-  ): Path =
-    Vector(
-      path.resolve("src").resolve("main").resolve("car"),
-      path.resolve("car.d")
-    ).find(Files.isDirectory(_)).getOrElse(path)
-
   private def _component_descriptor_to_subsystem(
     path: Path,
     descriptor: ComponentDescriptor
@@ -211,7 +191,7 @@ object GenericSubsystemFactory {
   ): Consequence[GenericSubsystemDescriptor] =
     GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor)
 
-  private def _legacy_component_descriptor_to_subsystem(
+  private def _development_component_descriptor_to_subsystem(
     path: Path,
     descriptor: ComponentDescriptor
   ): GenericSubsystemDescriptor = {

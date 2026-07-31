@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 29, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -763,14 +763,11 @@ object ComponentRepository extends GlobalObservable {
         s"Run 'sbt cozyPrepareRuntime' in ${base}, then restart the application server."
 
     def devComponentDescriptors(base: Path): Vector[ComponentDescriptor] =
-      Vector(
-        base.resolve("car.d"),
-        base.resolve("src").resolve("main").resolve("car")
-      ).flatMap { dir =>
-        ComponentDescriptorLoader.load(dir) match {
-          case Consequence.Success(xs) => xs
-          case Consequence.Failure(_) => Vector.empty
-        }
+      ComponentDescriptorLoader.load(
+        base.resolve(DevelopmentCarRuntimeAdmission.componentDescriptorIdentity(base))
+      ) match {
+        case Consequence.Success(xs) => xs
+        case Consequence.Failure(_) => Vector.empty
       }
 
     def devAssemblyComponentDescriptors(base: Path): Vector[ComponentDescriptor] =

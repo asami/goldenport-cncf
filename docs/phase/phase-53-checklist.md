@@ -1,6 +1,6 @@
 # Phase 53 Checklist - CML ComponentStyle, ExecutionContext, and Capability Resolution
 
-status=planned
+status=in_progress
 phase=[Phase 53 - CML ComponentStyle, ExecutionContext, and Capability Resolution](phase-53.md)
 planning_source=[Phase 53 ComponentStyle, ExecutionContext, and Configuration Consolidation](../journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md)
 
@@ -11,7 +11,7 @@ Phase 52 closes.
 ## CS-01: Authority Inventory and Failing-First Contract
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: Phase 53 cross-repository maintainers
 - Entry rule: Phase 52 is closed.
 - Completion rule: Every current authority, projection, selection path,
@@ -19,130 +19,161 @@ Stage Status:
   represented by
   failing-first executable evidence.
 
-- [ ] Inventory Cozy/SimpleModeling CML semantic ownership before admitting
-  `simplemodeling`.
-- [ ] Inventory existing CNCF metadata registries/factories and freeze an
-  extension-ready metadata boundary for a future Metadata Factory.
-- [ ] Inventory existing component style/default/factory override patterns.
-- [ ] Inventory component descriptor schemas and packaged generation.
-- [ ] Inventory sbt-cozy development descriptor and classpath production.
-- [ ] Inventory the existing `cozyPrepareRuntime` ownership of
+- [x] Inventory Cozy/SimpleModeling CML semantic ownership before admitting
+  `simplemodeling`; the typed `COMPONENT` authority is Kaleidox.  Cozy is the
+  current CS-01A executable-evidence consumer; neither `simplemodeling` nor
+  `simplemodeling-lib` adds a CS-01A ownership change.
+- [x] Inventory existing CNCF metadata registries/factories.
+- [x] Record the future Metadata Factory extension boundary without selecting
+  a provider API, discovery mechanism, or wire representation.
+- [x] Inventory existing component style/default/factory override patterns.
+- [x] Inventory component descriptor schemas and packaged generation.
+- [x] Inventory sbt-cozy development descriptor and classpath production.
+- [x] Inventory the existing `cozyPrepareRuntime` ownership of
   `target/cncf.d/runtime-classpath.txt`,
   `target/cncf.d/car-runtime-manifest.json`, and extensible development
   evidence.
-- [ ] Inventory CNCF assembly/configuration precedence and Subsystem startup.
-- [ ] Inventory affected `.cncf` configuration and operational-state paths,
+- [x] Inventory CNCF assembly/configuration precedence and Subsystem startup.
+- [x] Inventory affected `.cncf` configuration and operational-state paths,
   ownership, lifecycle, permissions, backup expectations, and deletion safety.
-- [ ] Inventory `simplemodeling-lib` String-keyed `Configuration`,
+- [x] Inventory `simplemodeling-lib` String-keyed `Configuration`,
   `ResolvedConfiguration`, `ConfigurationTrace`, source metadata, and direct
   consumers before selecting the minimal Phase 53 provenance changes.
-- [ ] Inventory `OperationMode`, `WebApplicationMode`, launcher inputs, and
+- [x] Inventory `OperationMode`, `WebApplicationMode`, launcher inputs, and
   runtime inspection.
-- [ ] Inventory ArtScene's local powertype, private configuration key,
+- [x] Inventory ArtScene's local powertype, private configuration key,
   unconditional datastore default, validation, and mode-dependent behavior.
-- [ ] Freeze ComponentStyle identity, provider identity, metadata schema,
-  duplicate/conflict handling, and built-in catalog ownership.
-- [ ] Freeze the provided ComponentCapability bundles, deterministic expansion,
-  and required SubsystemCapability contract.
-- [ ] Freeze the mode-free ComponentFactory evidence/parameter boundary.
-- [ ] Freeze WebApplicationMode, fixed/authenticated user-context provider,
-  Subsystem datastore, and ExecutionContext ownership boundaries.
-- [ ] Freeze `~/.textus/user-profile.yaml` as the normal-operation baseline
-  and `~/.cncf/user-profile.yaml` as the always-admitted higher-precedence
-  layer for fixed-user resolution.
-- [ ] Freeze `apiVersion: textus/v1`, `kind: FixedUserProfile`,
-  common/`subsystems` field overlay, and stable Subsystem identifier lookup.
-- [ ] Freeze HOME-only profile-file admission, common-field
-  environment/argument input, and controlled
-  `ConfigurationOrigin.ExplicitOverride`.
-- [ ] Freeze complete FixedUserProfile exclusion from multi-user resolution.
-- [ ] Freeze the canonical `textus.web.application-mode` parameter,
-  subsystem-specific lookup, resolution before FixedUserProfile, and the
-  conditional traceable direct-Component standalone default.
-- [ ] Freeze existing `ResolvedConfiguration`/`ConfigurationTrace` as the
-  provenance authority and limit generic changes to required origin/source
-  metadata.
-- [ ] Freeze generic admitted-source order as `.textus` baseline followed by
-  `.cncf` override at each HOME/PROJECT/CWD scope, then environment,
-  arguments, and controlled explicit override.
-- [ ] Freeze typed-contract source admission before generic precedence.
-- [ ] Freeze one canonical `textus.*` spelling for each public Phase 53
-  semantic even when `.cncf` supplies its value, without a duplicate
-  `cncf.*` semantic.
-- [ ] Record typed generic keys, generic qualifiers/candidates, namespace
+- [x] Freeze built-in ComponentStyle/capability semantics and catalog
+  ownership while deferring identity encoding, provider/schema API, and wire
+  layout to CS-02.
+- [x] Freeze the selected built-in style/capability semantics while leaving
+  its identity/provider wire form and metadata schema open.
+- [x] Freeze the selected ComponentCapability bundle semantics, deterministic
+  expansion, and required SubsystemCapability contract; CS-02 owns their typed
+  catalog and descriptor implementation.
+- [x] Freeze the mode-free ComponentFactory evidence/parameter boundary.
+- [x] Freeze WebApplicationMode and ExecutionContext ownership boundaries;
+  fixed/authenticated provider and datastore realization remains CS-04/CS-05.
+- [x] Record FixedUserProfile source admission, canonical parameters, profile
+  overlay, multi-user exclusion, and explicit override as CS-05 acceptance
+  requirements without inventing an unavailable resolver API.
+- [x] Register canonical `textus.web.application-mode` recognition through the
+  current resolver; conditional standalone default eligibility and provenance
+  remain CS-05 acceptance work.
+- [x] Freeze `ResolvedConfiguration`/`ConfigurationTrace` as the provenance
+  authority and register ordinary file-source provenance evidence.
+- [x] Record generic admitted-source ordering, typed-contract admission, and
+  canonical `textus.*` semantics as CS-05 implementation requirements.
+- [x] Record typed generic keys, generic qualifiers/candidates, namespace
   catalogs, alias normalization, and new binding/environment codecs as Phase
   55 candidates rather than Phase 53 work.
-- [ ] Freeze the rule that no operating mode enters Component APIs, generated
+- [x] Freeze the rule that no operating mode enters Component APIs, generated
   DSLs, ActionCall, or domain policy.
-- [ ] Register failing-first built-in style discovery, generation, composition,
-  precedence, launch, diagnostic, and ArtScene matrix specifications.
-- [ ] Record Metadata Factory style contribution as a future development item,
-  not a Phase 53 implementation or acceptance dependency.
-- [ ] Confirm no normative design/specification is edited in CS-01.
+- [x] Register current observable failing-first CML, provenance, mode-boundary,
+  Web-key, and descriptor-identity evidence; discovery/generation/launch and
+  ArtScene acceptance matrices remain their owning later stages.
+- [x] Record Metadata Factory style contribution as future work, not a Phase 53
+  implementation or acceptance dependency.
+- [x] Confirm no normative design/specification is edited in CS-01.
 
 Evidence:
-- Pending.
+- CS-01A records the Kaleidox `ComponentDefinition` ownership boundary in
+  [CML authority and style-selection failing-first contract](../notes/phase-53-cs01-cml-authority-and-style-selection-failing-first.md).
+- CS-01B records the current owner and consumer boundaries in
+  [existing authority inventory](../notes/phase-53-cs01b-existing-authority-inventory.md).
+- CS-01C records assembly/startup, mode, launcher, operational-state, and
+  supported style semantic boundaries in
+  [assembly, mode, operational state, and style boundary](../notes/phase-53-cs01c-assembly-mode-operational-state-and-style-freeze.md).
+- CS-01D records OperationMode classification and ComponentStyle semantic
+  contract freeze in
+  [OperationMode and ComponentStyle contract freeze](../notes/phase-53-cs01d-operation-mode-and-component-style-contract-freeze.md).
+- CS-01E records current observable provenance and stable identity boundaries,
+  and explicitly defers unavailable profile runtime observation to CS-05, in
+  [observable boundary and inventory completion](../notes/phase-53-cs01e-observable-boundary-and-completion.md).
+- Cozy `KaleidoxCmlParsingSpec` adds component-only
+  `full-fledged-with-standalone` and `domain-only` selection fixtures. CS-02B
+  admits the Kaleidox production owner and proves that each authored value is
+  retained through the typed `ComponentDefinition` semantic.
 
 ## CS-02: CNCF Built-in Style Catalog, CML Selection, and Descriptor Projection
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: CS-02E admission accepted; CS-03 owns development/package projection parity
 - Owner: CNCF built-in metadata, Cozy, and confirmed CML model maintainers
 - Entry rule: CS-01 is DONE.
 - Completion rule: Explicit COMPONENT CML selects one CNCF-provided built-in
   ComponentStyle and produces one validated, deterministic style snapshot in a
   versioned component descriptor.
 
-- [ ] Define the versioned ComponentStyle metadata contract.
-- [ ] Implement CNCF built-in ComponentStyle registration.
-- [ ] Include provider/schema identity and a future Metadata Factory extension
+- [x] Define the versioned ComponentStyle metadata contract.
+- [x] Implement CNCF built-in ComponentStyle registration.
+- [x] Include provider/schema identity and a future Metadata Factory extension
   boundary without implementing external style contribution.
-- [ ] Reject duplicate built-in style identities and provider/schema
+- [x] Reject duplicate built-in style identities and provider/schema
   disagreement.
-- [ ] Make the same CNCF built-in style metadata consumable by Cozy generation
+- [x] Make the same CNCF built-in style metadata consumable by Cozy generation
   and CNCF runtime.
-- [ ] Implement the explicit-component CML style-selection grammar.
-- [ ] Reject unknown or unavailable style identifiers.
-- [ ] Implement typed, versioned ComponentCapability and
+- [x] Implement the explicit-component CML style-selection grammar.
+- [x] Reject unknown or unavailable style identifiers.
+- [x] Implement typed, versioned ComponentCapability and
   SubsystemCapability identifiers.
-- [ ] Implement deterministic bundle expansion, including `domain.full@1`.
-- [ ] Reject duplicate, unknown, cyclic, or version-incompatible capability
+- [x] Implement deterministic bundle expansion, including `domain.full@1`.
+- [x] Reject duplicate, unknown, cyclic, or version-incompatible capability
   definitions.
-- [ ] Implement provided-capability and required-capability descriptor
+- [x] Implement provided-capability and required-capability descriptor
   projection.
-- [ ] Keep operating mode, fixed user, locale, and datastore policy out of the
+- [x] Keep operating mode, fixed user, locale, and datastore policy out of the
   Component descriptor.
-- [ ] Keep `project.yaml` free of duplicate capability declarations.
-- [ ] Generate a deterministic schema-versioned style/provider/parameter
+- [x] Keep `project.yaml` free of duplicate capability declarations.
+- [x] Generate a deterministic schema-versioned style/provider/parameter
   metadata snapshot.
-- [ ] Prove explicit COMPONENT declarations generate independently of service,
+- [x] Prove explicit COMPONENT declarations generate independently of service,
   entity, or other model declarations.
 
 Evidence:
-- Pending.
+- [CS-02 schema decision](../notes/phase-53-cs02-schema-decision.md) records
+  the owner approval to formalize the minimum versioned contract.
+- [CS-02A versioned contract](../notes/phase-53-cs02a-versioned-component-style-contract.md)
+  records the catalog, descriptor-v2, ordering, and compatibility boundary.
+- [CS-02B typed CML style selection](../journal/2026/07/2026-07-31-phase-53-cs02b-typed-cml-style-selection.md)
+  records the Kaleidox-owned typed selection boundary and Cozy consumer
+  evidence.
+- [CS-02C catalog handoff and selection admission](../journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md)
+  records the digest-protected runtime-descriptor carrier and Cozy's explicit
+  selection admission/rejection boundary.
+- [CS-02D capability graph validation](../journal/2026/07/2026-07-31-phase-53-cs02d-capability-graph-validation.md)
+  records the recursive bundle contract and the matching framework/Cozy
+  rejection evidence.
+- [CS-02E component-only generation and descriptor projection](../journal/2026/07/2026-07-31-phase-53-cs02e-component-only-descriptor-projection.md)
+  records the one-way CML/catalog-to-CAR snapshot projection and the
+  `project.yaml` authority guard.
 
 ## CS-03: Development and Packaged Projection Parity
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: Cozy and sbt-cozy maintainers
 - Entry rule: CS-02 is DONE.
 - Completion rule: Source-directory and CAR launches receive semantically
   identical capability evidence from one CML/catalog generation.
 
-- [ ] Extend the existing `cozyPrepareRuntime` route with the development
+- [x] Extend the existing `cozyPrepareRuntime` route with the development
   ComponentStyle and implicit Subsystem descriptor projection.
-- [ ] Preserve its ownership of `target/cncf.d/runtime-classpath.txt`,
+- [x] Preserve its ownership of `target/cncf.d/runtime-classpath.txt`,
   `target/cncf.d/car-runtime-manifest.json`, and any additional coherent
   runtime evidence.
-- [ ] Define deterministic freshness/generation identity across those files.
-- [ ] Keep packaged `component-descriptor.json` semantically equivalent.
-- [ ] Reject missing, mixed-generation, and stale development evidence.
-- [ ] Prove a development launch does not require `buildCar`.
-- [ ] Prove no fallback to an older locally published CAR.
+- [x] Define deterministic freshness/generation identity across those files.
+- [x] Keep packaged `component-descriptor.json` semantically equivalent.
+- [x] Reject missing, mixed-generation, and stale development evidence.
+- [x] Prove a development launch does not require `buildCar`.
+- [x] Prove no fallback to an older locally published CAR.
 
 Evidence:
-- Pending.
+- [CS-03 development projection parity](../journal/2026/07/2026-07-31-phase-53-cs03-development-projection-parity.md)
+  records the v2 writer, v1 reader migration, strict v2 descriptor admission,
+  style-less legacy fallback boundary, and the validated fail-closed source
+  authority checks.
 
 ## CS-04: Subsystem Capability Matching and ExecutionContext Authority
 
@@ -340,4 +371,9 @@ recorded ownership or acceptance evidence.
 
 ## Current State
 
-Phase 53 is PLANNED. CS-01 has not started.
+Phase 53 is IN_PROGRESS. CS-01A through CS-01E have completed the current
+authority inventory and registered observable failing-first contracts. Exact
+ComponentStyle catalog identity/provider/schema and descriptor wire behavior
+remain deliberately owned by CS-02. FixedUserProfile, configuration overlay,
+and conditional Web-default runtime acceptance remain deliberately owned by
+CS-05.

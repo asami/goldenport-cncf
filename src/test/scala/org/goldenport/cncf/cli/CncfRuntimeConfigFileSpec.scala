@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul. 30, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -163,6 +163,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
         searchdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.json"),
         """{"name":"dependency","version":"0.2.0-SNAPSHOT","component":"dependency"}"""
       )
+      _write_legacy_development_manifest(activedir)
+      _write_legacy_development_manifest(searchdir)
       val active = ComponentRepository.ComponentDevDirRepository.Specification(activedir)
       val search = ComponentRepository.ComponentDevDirRepository.Specification(searchdir)
 
@@ -194,6 +196,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
           |    version: 0.1.1
           |""".stripMargin
       )
+      _write_legacy_development_manifest(root)
       val dev = ComponentRepository.ComponentDevDirRepository.Specification(root)
 
       When("the API preflight descriptors and development claims are assembled")
@@ -781,5 +784,14 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     } finally {
       out.close()
     }
+  }
+
+  private def _write_legacy_development_manifest(root: java.nio.file.Path): Unit = {
+    val manifest = root.resolve("target/cncf.d/car-runtime-manifest.json")
+    Files.createDirectories(manifest.getParent)
+    Files.writeString(
+      manifest,
+      """{"schemaVersion":"cncf.car-development-runtime-manifest.v1"}"""
+    )
   }
 }

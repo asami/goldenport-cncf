@@ -1,8 +1,11 @@
 import sbt.TestFrameworks
 import sbt.Tests
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.Base64
 import org.goldenport.cncf.phase51.build.{CncfGenerationBuildContract, CncfGenerationInputs}
 
-val scala3version = "3.3.8"
+val scala3Version = "3.3.8"
 val cozyGeneratorVersion = "0.3.1-SNAPSHOT"
 
 Compile / javacOptions ++= Seq("--release", "8")
@@ -20,9 +23,9 @@ lazy val publishTextusRuntimeCatalog = taskKey[File]("Publish Textus runtime cat
 
 def textusBaseProvidedModules(
   dependencies: Seq[ModuleID],
-  organizationname: String,
-  modulename: String,
-  scalabinaryversion: String
+  organizationName: String,
+  moduleName: String,
+  scalaBinaryVersion: String
 ): Vector[String] = {
   def _is_test_dependency_(module: ModuleID): Boolean =
     module.configurations.exists(_.toLowerCase.contains("test"))
@@ -30,8 +33,8 @@ def textusBaseProvidedModules(
     if (module.crossVersion == CrossVersion.disabled)
       module.name
     else
-      s"${module.name}_$scalabinaryversion"
-  val self = s"$organizationname:${modulename}_$scalabinaryversion"
+      s"${module.name}_$scalaBinaryVersion"
+  val self = s"$organizationName:${moduleName}_$scalaBinaryVersion"
   (Vector(self) ++
     dependencies
       .filterNot(_is_test_dependency_)
@@ -41,14 +44,14 @@ def textusBaseProvidedModules(
 }
 
 def textusRuntimeCatalogText(
-  existingtext: String,
-  cncfversion: String,
-  scalabinaryversion: String,
-  generatedat: String,
-  baseprovidedmodules: Vector[String]
+  existingText: String,
+  cncfVersion: String,
+  scalaBinaryVersion: String,
+  generatedAt: String,
+  baseProvidedModules: Vector[String]
 ): String = {
   def _existing_value_(key: String): Option[String] =
-    existingtext.linesIterator.find(_.startsWith(s"$key:")).map(_.drop(key.length + 1).trim)
+    existingText.linesIterator.find(_.startsWith(s"$key:")).map(_.drop(key.length + 1).trim)
       .filter(_.nonEmpty)
   def _version_blocks_(text: String): Vector[(String, String)] = {
     val blocks = Vector.newBuilder[(String, String)]
@@ -71,7 +74,7 @@ def textusRuntimeCatalogText(
     blocks.result()
   }
   def _version_block_(version: String): Option[String] =
-    _version_blocks_(existingtext).find(_._1 == version).map(_._2)
+    _version_blocks_(existingText).find(_._1 == version).map(_._2)
   def _version_value_(version: String, key: String): Option[String] =
     _version_block_(version).flatMap { block =>
       block.linesIterator
@@ -92,15 +95,15 @@ def textusRuntimeCatalogText(
         .orElse(sys.env.get("TEXTUS_RUNTIME_CATALOG_RECOMMENDED"))
         .flatMap(_boolean_)
     val versionblock =
-      _version_value_(cncfversion, "recommended")
-        .orElse(_version_value_(cncfversion, "recommend"))
+      _version_value_(cncfVersion, "recommended")
+        .orElse(_version_value_(cncfVersion, "recommend"))
         .flatMap(_boolean_)
     configured.orElse(versionblock).contains(false)
   }
   def _preserved_version_lines_(version: String): Vector[String] = {
     val generatedkeys =
       Set("channel", "status", "scalaBinaryVersion", "module", "publishedAt", "metadataUrl")
-    _version_blocks_(existingtext)
+    _version_blocks_(existingText)
       .find(_._1 == version)
       .map { case (_, block) =>
         val lines = block.linesIterator.toVector.drop(1)
@@ -119,40 +122,40 @@ def textusRuntimeCatalogText(
       .getOrElse(Vector.empty)
   }
   val baseprovidedblock =
-    baseprovidedmodules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
+    baseProvidedModules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
   val channel =
-    if (cncfversion.endsWith("-SNAPSHOT")) "snapshot" else "stable"
+    if (cncfVersion.endsWith("-SNAPSHOT")) "snapshot" else "stable"
   val recommendcurrent =
     channel == "stable" && !_runtime_recommended_opt_out_()
   val recommended =
     if (recommendcurrent)
-      cncfversion
+      cncfVersion
     else
-      _existing_value_("recommended").getOrElse(cncfversion)
+      _existing_value_("recommended").getOrElse(cncfVersion)
   val lateststable =
-    if (channel == "stable") cncfversion else _existing_value_("latestStable").getOrElse("")
+    if (channel == "stable") cncfVersion else _existing_value_("latestStable").getOrElse("")
   val latestsnapshot =
-    if (channel == "snapshot") cncfversion else _existing_value_("latestSnapshot").getOrElse("")
+    if (channel == "snapshot") cncfVersion else _existing_value_("latestSnapshot").getOrElse("")
   val currentblock =
-    s"""  - version: $cncfversion
+    s"""  - version: $cncfVersion
        |    channel: $channel
        |    status: active
-       |    scalaBinaryVersion: "$scalabinaryversion"
-       |    module: org.goldenport:goldenport-cncf_$scalabinaryversion:$cncfversion
-       |    publishedAt: $generatedat
-       |    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_$scalabinaryversion/maven-metadata.xml""".stripMargin +
-      _preserved_version_lines_(cncfversion).map("\n" + _).mkString
+       |    scalaBinaryVersion: "$scalaBinaryVersion"
+       |    module: org.goldenport:goldenport-cncf_$scalaBinaryVersion:$cncfVersion
+       |    publishedAt: $generatedAt
+       |    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_$scalaBinaryVersion/maven-metadata.xml""".stripMargin +
+      _preserved_version_lines_(cncfVersion).map("\n" + _).mkString
   val historyblocks =
-    _version_blocks_(existingtext)
+    _version_blocks_(existingText)
       .foldLeft(Vector.empty[(String, String)]) { case (acc, (v, block)) =>
         acc.filterNot(_._1 == v) :+ (v -> block)
       }
-      .filterNot(_._1 == cncfversion)
+      .filterNot(_._1 == cncfVersion)
       .map(_._2)
   val versions =
     (historyblocks :+ currentblock).mkString("\n")
   s"""schemaVersion: 1
-     |generatedAt: $generatedat
+     |generatedAt: $generatedAt
      |recommended: $recommended
      |latestStable: $lateststable
      |latestSnapshot: $latestsnapshot
@@ -171,19 +174,19 @@ def textusRuntimeCatalogText(
 }
 
 def cncfBuildInfoSource(
-  targetdir: File,
-  packagename: String,
-  cncfversion: String
+  targetDir: File,
+  packageName: String,
+  cncfVersion: String
 ): File = {
-  val file = targetdir / packagename.replace('.', '/') / "CncfBuildInfo.scala"
+  val file = targetDir / packageName.replace('.', '/') / "CncfBuildInfo.scala"
   IO.createDirectory(file.getParentFile)
   IO.write(
     file,
-    s"""package $packagename
+    s"""package $packageName
        |
        |object CncfBuildInfo {
        |  val name: String = "cncf"
-       |  val version: String = "$cncfversion"
+       |  val version: String = "$cncfVersion"
        |}
        |""".stripMargin
   )
@@ -191,26 +194,39 @@ def cncfBuildInfoSource(
 }
 
 def cncfRuntimeDescriptorText(
-  cncfversion: String,
-  scalabinaryversion: String,
-  baseprovidedmodules: Vector[String],
-  predefinedresultcatalog: String
+  cncfVersion: String,
+  scalaBinaryVersion: String,
+  baseProvidedModules: Vector[String],
+  predefinedResultCatalog: String,
+  componentStyleCatalog: Array[Byte]
 ): String = {
   val baseprovidedblock =
-    baseprovidedmodules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
-  val cataloglines = predefinedresultcatalog.trim.linesIterator.toVector
+    baseProvidedModules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
+  val cataloglines = predefinedResultCatalog.trim.linesIterator.toVector
   val predefinedresultsblock = cataloglines.headOption.map { head =>
     (s"predefinedResults: $head" +: cataloglines.drop(1).map(line => s"  $line")).mkString("\n")
   }.getOrElse("predefinedResults: {}")
+  val componentstylecatalogblock = Vector(
+    "componentStyleCatalog:",
+    "  schemaVersion: cncf.component-style-catalog-carrier.v1",
+    "  resource: META-INF/cncf/component-style-catalog.json",
+    "  encoding: base64",
+    s"  sha256: ${sha256Bytes(componentStyleCatalog)}",
+    "  bytes: \"" + Base64.getEncoder.encodeToString(componentStyleCatalog) + "\""
+  ).mkString("\n")
   s"""schemaVersion: 1
      |runtime: cncf
-     |version: $cncfversion
-     |scalaBinaryVersion: "$scalabinaryversion"
-     |module: org.goldenport:goldenport-cncf_$scalabinaryversion:$cncfversion
+     |version: $cncfVersion
+     |scalaBinaryVersion: "$scalaBinaryVersion"
+     |module: org.goldenport:goldenport-cncf_$scalaBinaryVersion:$cncfVersion
      |$baseprovidedblock
      |$predefinedresultsblock
+     |$componentstylecatalogblock
      |""".stripMargin
 }
+
+def sha256Bytes(bytes: Array[Byte]): String =
+  MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
 def runInformationCmlGeneration(
   inputs: CncfGenerationInputs,
@@ -253,28 +269,28 @@ def runInformationCmlGeneration(
 }
 
 def textusWriteRuntimeCatalog(
-  sourcefile: File,
-  targetfile: File,
-  cncfversion: String,
-  scalabinaryversion: String,
-  baseprovidedmodules: Vector[String]
+  sourceFile: File,
+  targetFile: File,
+  cncfVersion: String,
+  scalaBinaryVersion: String,
+  baseProvidedModules: Vector[String]
 ): File = {
   val existingtext =
-    if (sourcefile.isFile)
-      IO.read(sourcefile)
+    if (sourceFile.isFile)
+      IO.read(sourceFile)
     else
       ""
   val text =
     textusRuntimeCatalogText(
       existingtext,
-      cncfversion,
-      scalabinaryversion,
+      cncfVersion,
+      scalaBinaryVersion,
       java.time.Instant.now().toString,
-      baseprovidedmodules
+      baseProvidedModules
     )
-  IO.createDirectory(targetfile.getParentFile)
-  IO.write(targetfile, text)
-  targetfile
+  IO.createDirectory(targetFile.getParentFile)
+  IO.write(targetFile, text)
+  targetFile
 }
 
 def textusPublishRepositoryFile(resolver: Resolver): Option[File] =
@@ -315,18 +331,18 @@ def textusWarehouseDirFromMavenRepository(repository: File): File =
   }
 
 def textusPublishRuntimeCatalogFile(
-  source: File,
-  publishresolver: Option[Resolver],
-  basedir: File,
+  sourceFile: File,
+  publishResolver: Option[Resolver],
+  baseDir: File,
   log: sbt.util.Logger
 ): File = {
   val warehousedir =
-    publishresolver
+    publishResolver
       .flatMap(textusPublishRepositoryFile)
       .map(textusWarehouseDirFromMavenRepository)
-      .getOrElse(textusWarehouseDirFromMavenRepository(basedir / "maven-local"))
+      .getOrElse(textusWarehouseDirFromMavenRepository(baseDir / "maven-local"))
   val target = warehousedir / "repository" / "textus" / "runtime-catalog.yaml"
-  val text = IO.read(source)
+  val text = IO.read(sourceFile)
   def _value_of_(key: String): Option[String] =
     text.linesIterator.find(_.startsWith(s"$key:")).map(_.drop(key.length + 1).trim).filter(_.nonEmpty)
   val versionlines =
@@ -362,7 +378,7 @@ def textusPublishRuntimeCatalogFile(
       sys.error(s"Textus runtime catalog latestSnapshot version is not listed: $v")
   }
   IO.createDirectory(target.getParentFile)
-  IO.copyFile(source, target)
+  IO.copyFile(sourceFile, target)
   log.info(s"Published Textus runtime catalog to ${target}")
   target
 }
@@ -374,7 +390,7 @@ lazy val root = project
     name := "goldenport-cncf",
     version := "0.5.2-SNAPSHOT",
 
-    scalaVersion := scala3version,
+    scalaVersion := scala3Version,
 
     Test / unmanagedSources += baseDirectory.value / "project" / "CncfGenerationBuildContract.scala",
 
@@ -470,7 +486,8 @@ lazy val root = project
             name.value,
             scalaBinaryVersion.value
           ),
-          IO.read(baseDirectory.value / "src" / "main" / "resources" / "META-INF" / "cncf" / "predefined-results.json")
+          IO.read(baseDirectory.value / "src" / "main" / "resources" / "META-INF" / "cncf" / "predefined-results.json"),
+          IO.readBytes(baseDirectory.value / "src" / "main" / "resources" / "META-INF" / "cncf" / "component-style-catalog.json")
         )
       )
       file

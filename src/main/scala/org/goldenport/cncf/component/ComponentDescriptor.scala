@@ -3,6 +3,8 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
+import org.goldenport.record.io.RecordEncoder
+import io.circe.Json
 import org.goldenport.cncf.entity.{
   EntityConcurrencyPolicy,
   EntityRevisionRepresentation
@@ -19,7 +21,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @since   Mar. 27, 2026
  *  version Apr. 24, 2026
  *  version May.  4, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentletDescriptor(
@@ -42,8 +44,15 @@ final case class ComponentDescriptor(
   entityRuntimeDescriptors: Vector[EntityRuntimeDescriptor] = Vector.empty,
   extensionBindings: Record = Record.empty,
   extensions: Map[String, String] = Map.empty,
-  config: Map[String, String] = Map.empty
-)
+  config: Map[String, String] = Map.empty,
+  schemaVersion: Option[Int] = None,
+  componentStyleSnapshot: Option[ComponentStyleSnapshot] = None
+) {
+  def requireComponentStyleSnapshotC: Consequence[ComponentStyleSnapshot] =
+    componentStyleSnapshot
+      .map(Consequence.success)
+      .getOrElse(Consequence.argumentInvalid("Component descriptor requires a schema v2 componentStyle snapshot"))
+}
 
 object ComponentDescriptor {
   given RecordDecoder[EntityRuntimeDescriptor] with
@@ -136,35 +145,112 @@ object ComponentDescriptor {
       val componentrec = _component_record(rec)
       val componentname = _string(componentrec, "component", "componentName")
         .orElse(_string(componentrec, "name"))
-      val entitiesc = _entity_descriptors(componentrec)
+      val entitiesc = _entity_descriptors_prefer_root(rec, componentrec)
       val componentletsc = _componentlet_descriptors(rec)
       val extensionbindings = _record_value(
+        rec,
+        List(
+          "extension_bindings",
+          "extensionBindings",
+          "extension_binding"
+        )
+      ).orElse(_record_value(
         componentrec,
         List(
           "extension_bindings",
           "extensionBindings",
           "extension_binding"
         )
-      ).getOrElse(Record.empty)
+      )).getOrElse(Record.empty)
       for {
         xs <- entitiesc
         componentlets <- componentletsc
+        schemaversion <- _schema_version_c(rec)
+        componentstylec = _component_style_snapshot(rec, schemaversion)
+        componentstyle <- componentstylec
       } yield
         ComponentDescriptor(
-          name = _string(componentrec, "name").orElse(componentname),
-          version = _string(componentrec, "version").orElse(_string(rec, "version")),
+          name = _string(rec, "name").orElse(_string(componentrec, "name")).orElse(componentname),
+          version = _string(rec, "version").orElse(_string(componentrec, "version")),
           componentName = componentname,
-          subsystemName = _string(componentrec, "subsystem", "subsystemName").orElse(_string(rec, "subsystem", "subsystemName")),
+          subsystemName = _string(rec, "subsystem", "subsystemName").orElse(_string(componentrec, "subsystem", "subsystemName")),
           componentlets = componentlets,
           entityRuntimeDescriptors = xs,
           extensionBindings = extensionbindings,
-          extensions = _component_extensions(componentrec),
-          config = _string_map_value(componentrec, List("config"))
+          extensions = _component_extensions(componentrec) ++ _component_extensions(rec),
+          config = _string_map_value(componentrec, List("config")) ++ _string_map_value(rec, List("config")),
+          schemaVersion = schemaversion,
+          componentStyleSnapshot = componentstyle
         )
     }
 
+  def componentStyleProjectionJson(snapshot: ComponentStyleSnapshot): Json =
+    ComponentStyleSnapshot.toJson(snapshot)
+
+  private def _schema_version_c(rec: Record): Consequence[Option[Int]] =
+    rec.getAny("schemaVersion") match {
+      case None =>
+        Consequence.success(None)
+      case Some(value: Int) if value == 1 || value == 2 =>
+        Consequence.success(Some(value))
+      case Some(value: Long) if value.isValidInt && (value == 1 || value == 2) =>
+        Consequence.success(Some(value.toInt))
+      case Some(value: BigInt) if value.isValidInt && (value == 1 || value == 2) =>
+        Consequence.success(Some(value.toInt))
+      case Some(value: BigDecimal) if value.isValidInt && (value == 1 || value == 2) =>
+        Consequence.success(Some(value.toInt))
+      case Some(value) =>
+        Consequence.argumentInvalid(s"Unsupported numeric component descriptor schemaVersion: $value")
+    }
+
+  private def _component_style_snapshot(
+    rec: Record,
+    schemaversion: Option[Int]
+  ): Consequence[Option[ComponentStyleSnapshot]] =
+    schemaversion match {
+      case Some(2) =>
+        _record_value(rec, List("componentStyle"))
+          .map { style =>
+            io.circe.parser.parse(RecordEncoder.json(style)).fold(
+              error => Consequence.argumentInvalid(s"Invalid descriptor componentStyle JSON: ${error.message}"),
+              json => ComponentStyleCatalog.snapshotC(_preserve_empty_snapshot_fields(style, json)).map(Some(_))
+            )
+          }
+          .getOrElse(Consequence.argumentMissing("componentStyle for descriptor schemaVersion 2"))
+      case Some(version) if version > 2 =>
+        Consequence.argumentInvalid(s"Unsupported component descriptor schemaVersion: $version")
+      case _ =>
+        if (_record_value(rec, List("componentStyle")).isDefined)
+          Consequence.argumentInvalid("componentStyle is only valid for component descriptor schemaVersion 2")
+        else
+          Consequence.success(None)
+    }
+
+  private def _preserve_empty_snapshot_fields(style: Record, json: Json): Json = {
+    def _restore(json: Json, record: Record, field: String, value: Json): Json =
+      if (record.getAny(field).isDefined && json.hcursor.downField(field).focus.isEmpty)
+        json.mapObject(_.add(field, value))
+      else
+        json
+    val schema = _record_value(style, List("parameterSchema")).map { record =>
+      val encoded = json.hcursor.downField("parameterSchema").focus.getOrElse(Json.obj())
+      _restore(_restore(encoded, record, "properties", Json.obj()), record, "required", Json.arr())
+    }
+    val withschema = schema.map(value => json.mapObject(_.add("parameterSchema", value))).getOrElse(json)
+    _restore(withschema, style, "parameters", Json.obj())
+  }
+
   private def _component_record(rec: Record): Record =
     _record_value(rec, List("component")).getOrElse(rec)
+
+  private def _entity_descriptors_prefer_root(
+    rec: Record,
+    componentrec: Record
+  ): Consequence[Vector[EntityRuntimeDescriptor]] =
+    if (rec.getAny("entities").isDefined || _string(rec, "entity", "entityName").isDefined)
+      _entity_descriptors(rec)
+    else
+      _entity_descriptors(componentrec)
 
   private def _entity_descriptors(rec: Record): Consequence[Vector[EntityRuntimeDescriptor]] =
     rec.getAny("entities") match {
@@ -284,7 +370,10 @@ object ComponentDescriptor {
     val reserved = Set(
       "name",
       "version",
+      "schemaVersion",
       "component",
+      "componentStyle",
+      "component_style",
       "componentName",
       "subsystem",
       "subsystemName",

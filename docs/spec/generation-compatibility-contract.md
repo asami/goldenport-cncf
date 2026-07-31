@@ -98,18 +98,26 @@ An explicitly selected component development directory MUST contain both
 `target/cncf.d/runtime-classpath.txt` and
 `target/cncf.d/car-runtime-manifest.json`.
 
-### R2 Development manifest identity
+### R2 Development manifest identity and migration
 
-The development manifest MUST use schema
-`cncf.car-development-runtime-manifest.v1` and source kind
-`development-directory`. A packaged manifest MUST NOT be accepted as
-development evidence.
+Styled CML development evidence MUST use schema
+`cncf.car-development-runtime-manifest.v2` and source kind
+`development-directory`. Its descriptor evidence is
+`target/cncf.d/component-descriptor.json`. CNCF MUST continue to admit a
+digest-valid `cncf.car-development-runtime-manifest.v1` prepared before this
+change, whose descriptor evidence remains
+`src/main/car/component-descriptor.json`. Style-less legacy CML may continue
+to prepare that v1 form; it is never upgraded to an incomplete v2 snapshot.
+A packaged manifest MUST NOT be accepted as development evidence.
 
 ### R3 Stable contract evidence
 
 The manifest MUST match the component descriptor and ABI export evidence,
 reproduce a supported CNCF runtime range, verify each declared stable evidence
 identity and SHA-256 digest, and use a deterministic evidence digest.
+For v2, the development descriptor MUST be schema version `2` and carry the
+complete catalog-matching `componentStyle` snapshot. A v1 migration descriptor
+keeps its legacy descriptor shape.
 
 ### R4 Mutable output exclusion
 
@@ -156,7 +164,8 @@ development counterpart.
 - E7: a deleted classpath entry is rejected as stale evidence (R3, R5, R6).
 - E8: an invalid classpath entry is normalized into structured recovery (R5, R6, R7).
 - E9: a descriptor changed after preparation is rejected as stale contract evidence (R3, R6).
-- E10: a complete sibling development set overrides a locally available older CAR without mixed-source SPI providers (R6, R8).
+- E10: an incomplete schema-v2 componentStyle snapshot is rejected before development activation (R3, R6).
+- E11: a digest-valid v1 development directory retains its legacy source descriptor identity during migration (R2, R3).
 
 The CNCF Information CML build resolves its invocation from the pinned Cozy
 generator version, the root build's effective CNCF artifact version, the output

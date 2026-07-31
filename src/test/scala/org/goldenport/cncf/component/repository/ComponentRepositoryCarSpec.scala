@@ -33,7 +33,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 30, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -688,6 +688,103 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.componentFileKey) shouldBe empty
         descriptor.map(_.subsystemName) shouldBe Some("dev-cwitter")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("dev-cwitter")
+      }
+    }
+
+    "resolve only the prepared generated descriptor from a component development directory" in {
+      Given("a schema-v2 generated descriptor and a later competing source descriptor")
+      _with_temp_dir { componentdir =>
+        val classdir = Files.createDirectories(componentdir.resolve("target/scala-3.3.8/classes"))
+        _write_runtime_classpath(
+          componentdir,
+          classdir,
+          "sample-car-artifact",
+          "0.1.0-SNAPSHOT",
+          "sample-component",
+          descriptorjson = Some(
+            """{
+              |  "schemaVersion": 2,
+              |  "name": "sample-car-artifact",
+              |  "version": "0.1.0-SNAPSHOT",
+              |  "component": { "name": "sample-component" },
+              |  "componentStyle": {
+              |    "apiVersion": "cncf.textus/v1",
+              |    "provider": "cncf",
+              |    "id": "full-fledged-with-standalone@1",
+              |    "version": 1,
+              |    "parameterSchema": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
+              |    "parameters": {},
+              |    "provides": {
+              |      "bundles": ["domain.full@1"],
+              |      "capabilities": ["user.fixed-context-compatible@1", "user.multi-user@1"],
+              |      "effective": ["domain.aggregate@1", "domain.command@1", "domain.domain-event@1", "domain.entity@1", "domain.optimistic-concurrency@1", "domain.persistence@1", "domain.projection@1", "domain.query@1", "domain.transaction@1", "user.fixed-context-compatible@1", "user.multi-user@1"]
+              |    },
+              |    "requires": { "subsystemCapabilities": ["datastore.optimistic-concurrency@1", "datastore.persistent@1", "datastore.transactional@1", "user-context.current@1"] }
+              |  }
+              |}
+              |""".stripMargin
+          )
+        )
+        Files.writeString(
+          componentdir.resolve("src/main/car/component-descriptor.json"),
+          """{"name":"source-override","version":"9.9.9","component":"source-override"}""",
+          StandardCharsets.UTF_8
+        )
+        Files.writeString(
+          componentdir.resolve("assembly-descriptor.yaml"),
+          """subsystem: root-assembly-override
+            |version: 9.9.9
+            |components:
+            |  - component: root-assembly-override
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+
+        When("development admission and descriptor resolution run after source mutation")
+        val admitted = ComponentRepository.ComponentDevDirRepository.validate(componentdir)
+        val descriptors = ComponentDescriptorLoader.load(
+          componentdir.resolve("target/cncf.d/component-descriptor.json")
+        ) match {
+          case Consequence.Success(values) => values
+          case Consequence.Failure(conclusion) => fail(conclusion.show)
+        }
+        val developmentdescriptors = ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(componentdir)
+        val resolved = ComponentRepository.ComponentDevDirRepository.Specification(componentdir).
+          resolveComponentDescriptor("sample-component")
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+        val factoryresolved = GenericSubsystemFactory.resolveDescriptorC(configuration)
+
+        Files.writeString(
+          componentdir.resolve("target/cncf.d/component-descriptor.json"),
+          """{"name":"stale-target","version":"9.9.9","component":"stale-target"}""",
+          StandardCharsets.UTF_8
+        )
+        val stale = GenericSubsystemFactory.resolveDescriptorC(configuration)
+
+        Then("the prepared target descriptor remains the sole runtime authority")
+        admitted.toOption shouldBe Some(())
+        descriptors.map(_.componentName) shouldBe Vector(Some("sample-component"))
+        descriptors.flatMap(_.componentStyleSnapshot.map(_.id.canonical)) shouldBe Vector("full-fledged-with-standalone@1")
+        developmentdescriptors shouldBe descriptors
+        resolved.flatMap(_.name) shouldBe Some("sample-car-artifact")
+        resolved.flatMap(_.componentName) shouldBe Some("sample-component")
+        factoryresolved.toOption.flatten.map(_.path) shouldBe Some(componentdir)
+        factoryresolved.toOption.flatten.map(_.subsystemName) shouldBe Some("sample-component")
+        factoryresolved.toOption.flatten.flatMap(_.version) shouldBe Some("0.1.0-SNAPSHOT")
+        factoryresolved.toOption.flatten.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("sample-component")
+        stale match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.observation.taxonomy.category.name shouldBe "resource"
+            conclusion.observation.taxonomy.symptom.name shouldBe "invalid"
+            conclusion.display should include("sbt cozyPrepareRuntime")
+          case Consequence.Success(_) =>
+            fail("stale prepared descriptor must not fall back to source metadata")
+        }
       }
     }
 
@@ -1503,7 +1600,12 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       )
       val origin = ComponentOrigin.Repository("component-dir")
       _with_temp_dir { componentdir =>
-        val dummyjar = Files.createTempFile("dummy", ".jar")
+        val dummyjar = Files.createTempFile(componentdir, "dummy", ".jar")
+        Using.resource(new ZipOutputStream(Files.newOutputStream(dummyjar))) { zip =>
+          zip.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"))
+          zip.write("Manifest-Version: 1.0\n\n".getBytes(StandardCharsets.UTF_8))
+          zip.closeEntry()
+        }
         try {
           val carpath = componentdir.resolve("invalid.car")
           val descriptor = componentdir.resolve("component-descriptor-invalid-structure.json")
@@ -2336,18 +2438,24 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     classdir: Path,
     name: String,
     version: String,
-    component: String
+    component: String,
+    descriptorjson: Option[String] = None
   ): Unit = {
     val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
     val cardir = componentdir.resolve("src").resolve("main").resolve("car")
+    val descriptor = file.getParent.resolve("component-descriptor.json")
     Files.createDirectories(file.getParent)
     Files.createDirectories(cardir)
     Files.writeString(file, classdir.toString, StandardCharsets.UTF_8)
     Files.writeString(
-      cardir.resolve("component-descriptor.json"),
-      s"""{"name":"$name","version":"$version","component":"$component"}""",
+      descriptor,
+      descriptorjson.getOrElse(s"""{"name":"$name","version":"$version","component":"$component"}"""),
       StandardCharsets.UTF_8
     )
+    val manifestschema = if (descriptorjson.isDefined) "cncf.car-development-runtime-manifest.v2" else "cncf.car-development-runtime-manifest.v1"
+    val descriptoridentity = if (descriptorjson.isDefined) "target/cncf.d/component-descriptor.json" else "src/main/car/component-descriptor.json"
+    if (descriptoridentity.startsWith("src/"))
+      Files.writeString(cardir.resolve("component-descriptor.json"), Files.readString(descriptor, StandardCharsets.UTF_8), StandardCharsets.UTF_8)
     Files.writeString(
       cardir.resolve("abi-manifest.json"),
       s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$name","version":"$version"},"abi":{"exports":{"components":[{"name":"$component"}]}}}""",
@@ -2356,7 +2464,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     val classpathidentity = s"project:${componentdir.relativize(classdir).toString.replace('\\', '/')}"
     val evidence = Vector(
       ("target/cncf.d/runtime-classpath.txt", _sha256(file), Some(_sha256(classpathidentity.getBytes(StandardCharsets.UTF_8)))),
-      ("src/main/car/component-descriptor.json", _sha256(cardir.resolve("component-descriptor.json")), None),
+      (descriptoridentity, _sha256(componentdir.resolve(descriptoridentity)), None),
       ("src/main/car/abi-manifest.json", _sha256(cardir.resolve("abi-manifest.json")), None)
     )
     val entries = evidence.map { case (path, digest, logical) =>
@@ -2368,7 +2476,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }.mkString("\n").getBytes(StandardCharsets.UTF_8))
     Files.writeString(
       file.getParent.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v1","sourceKind":"development-directory","car":{"name":"$name","version":"$version","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      s"""{"schemaVersion":"$manifestschema","sourceKind":"development-directory","car":{"name":"$name","version":"$version","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
       StandardCharsets.UTF_8
     )
   }
@@ -2442,7 +2550,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   }
 
   private def _with_temp_dir[T](body: Path => T): T = {
-    val base = Files.createTempDirectory("component-repo-spec")
+    val workdir = Files.createDirectories(
+      Path.of("target", "component-repository-car-spec", "work").toAbsolutePath.normalize
+    )
+    val base = Files.createTempDirectory(workdir, "component-repo-spec")
     try body(base)
     finally {
       _delete_recursively(base)

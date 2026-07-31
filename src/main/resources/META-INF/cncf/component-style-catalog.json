@@ -1,0 +1,48 @@
+{
+  "apiVersion" : "cncf.textus/v1",
+  "kind" : "ComponentStyleCatalog",
+  "provider" : "cncf",
+  "capabilityBundles" : [
+    {
+      "id" : "domain.full@1",
+      "bundles" : [],
+      "capabilities" : [
+        "domain.aggregate@1",
+        "domain.command@1",
+        "domain.domain-event@1",
+        "domain.entity@1",
+        "domain.optimistic-concurrency@1",
+        "domain.persistence@1",
+        "domain.projection@1",
+        "domain.query@1",
+        "domain.transaction@1"
+      ]
+    }
+  ],
+  "componentStyles" : [
+    {
+      "id" : "full-fledged-with-standalone@1",
+      "parameterSchema" : {
+        "type" : "object",
+        "properties" : {},
+        "required" : [],
+        "additionalProperties" : false
+      },
+      "provides" : {
+        "bundles" : ["domain.full@1"],
+        "capabilities" : [
+          "user.fixed-context-compatible@1",
+          "user.multi-user@1"
+        ]
+      },
+      "requires" : {
+        "subsystemCapabilities" : [
+          "datastore.optimistic-concurrency@1",
+          "datastore.persistent@1",
+          "datastore.transactional@1",
+          "user-context.current@1"
+        ]
+      }
+    }
+  ]
+}

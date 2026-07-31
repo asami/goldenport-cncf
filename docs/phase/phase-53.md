@@ -1,6 +1,6 @@
 # Phase 53 - CML ComponentStyle, ExecutionContext, and Capability Resolution
 
-status=planned
+status=in_progress
 planned_at=2026-07-30
 depends_on=[Phase 52](phase-52.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -90,6 +90,13 @@ Detailed capabilities remain structured. `domain.full@1` is a versioned bundle
 of Entity, Aggregate, Command, Query, domain-event, projection, persistence,
 transaction, and optimistic-concurrency capabilities.
 
+Every capability bundle has canonical `bundles` and `capabilities` vectors.
+Bundle references resolve only within the selected catalog and form an acyclic
+graph. Duplicate identities, unknown references, duplicate expanded terminal
+capabilities, and multiple major versions of one unversioned identity in a
+bundle or style closure are invalid. The framework and Cozy consumer reject
+the same graph before a style is admitted.
+
 ### Mode ownership and permanent Component boundary
 
 Phase 53 does not introduce `ApplicationMode`, `ComponentMode`, or
@@ -137,6 +144,11 @@ parsing or an unversioned registry lookup.
 Phase 53 does not implement Metadata Factory registration, discovery,
 dependency packaging, or conflict resolution. Those are recorded as a future
 development item after the built-in contract is verified.
+
+The CML semantic owner preserves the authored `COMPONENT` `STYLE` selection as
+an unversioned typed value. Catalog lookup, provider selection, capability
+expansion, and descriptor projection remain CNCF/Cozy responsibilities; the
+CML owner does not duplicate them.
 
 ### CML and descriptor authority
 
@@ -409,8 +421,17 @@ Phase 53 closes only when:
 
 ## Next Step
 
-Phase 53 is planned and must not start before Phase 52 closes.
-
-After Phase 52 closes, start CS-01 with a cross-repository authority and
-generation-path inventory. Do not write normative design/specification during
-CS-01; first register executable failures against the notes proposal.
+Phase 53 is in progress. CS-01 has completed its cross-repository authority
+and generation-path inventory; CS-02A has established the framework-owned
+versioned catalog and descriptor-v2 boundary; CS-02B has preserved typed CML
+style selection in the Kaleidox semantic owner; CS-02C has carried the same
+catalog through the digest-protected runtime descriptor so Cozy admits known
+explicit selections and rejects unavailable ones before generation. CS-02D has
+completed recursive capability-graph validation, including unreachable bundle
+closures and required SubsystemCapability major-version compatibility. CS-02E
+has a focused review-fix for its selected catalog snapshot projection,
+`project.yaml`/source-descriptor authority guard, and component-only generation
+evidence; it is accepted. CS-03 is complete: its v2 styled projection and v1
+style-less legacy projection share explicit evidence identities and runtime
+admission rules, and their source-authority boundaries are covered by focused
+review and full validation. CS-04 is the next implementation slice.
