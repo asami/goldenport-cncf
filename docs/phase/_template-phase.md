@@ -55,10 +55,15 @@ Once marked DONE, the work item **must not be modified**.
 
 - Each phase has a clearly defined purpose and completion conditions
 - When a phase is marked **CLOSED**:
-  - Its work documents are frozen
-  - Any new work must move to the next phase
+  - Its normal work groups and completion evidence are frozen
+  - Any new capability must move to the next phase
+  - Corrective post-completion work may only be appended through the
+    `PM-<phase>-<sequence>` convention defined by
+    `docs/rules/stage-status-and-checklist-convention.md`
 
-This document must not be edited after phase closure.
+After phase closure, this document may only receive an appended
+Post-Completion Maintenance summary; the closed phase body must not be
+rewritten.
 
 ### 6. Separation of Responsibilities
 

@@ -3,8 +3,7 @@ package org.goldenport.cncf.cli
 import java.nio.file.Path
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.http.WebExecutionResolutionPolicy
-import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem, SubsystemExecutionProfile}
+import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem, SubsystemExecutionProfile, SubsystemUserMode}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,13 +16,13 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class RuntimeStandaloneUserProfileAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _metadata(example: String, rules: String) =
-    afterWord(s"in spec:phase-53-cs05-runtime-admission, example:$example, rules:$rules, phase:53, slice:CS-05I")
+    afterWord(s"in spec:phase-53-pm-53-01-runtime-admission, example:$example, rules:$rules, phase:53, slice:PM-53-01")
 
   "Runtime standalone-user profile admission" should {
-    "E1 resolve the canonical Web operation before fixed-user HOME admission" must _metadata("E1", "CS05I-R1") {
+    "E1 resolve the canonical Subsystem user mode before fixed-user HOME admission" must _metadata("E1", "PM53-R1") {
     "when server admission receives canonical standalone execution" in {
-      Given("Spec: docs/journal/2026/07/2026-07-31-phase-53-cs05-standalone-user-configuration-admission.md; Rules: CS05I-R1; Example: E1; a descriptor-owned Subsystem with canonical standalone Web execution")
-      val subsystem = _subsystem(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone"))
+      Given("a descriptor-owned Subsystem with canonical standalone user-mode admission")
+      val subsystem = _subsystem(Map(SubsystemUserMode.CONFIGURATION_KEY -> "standalone"))
       var observed = Vector.empty[SubsystemExecutionProfile]
 
       When("server admission is evaluated")
@@ -33,7 +32,8 @@ final class RuntimeStandaloneUserProfileAdmissionSpec extends AnyWordSpec with M
         profile => {
           observed :+= profile
           Consequence.success(Vector.empty)
-        }
+        },
+        _ => Consequence.success(SubsystemExecutionProfile.Fixed)
       )
 
       Then("only the mode-free fixed profile reaches the HOME admission seam")
@@ -42,11 +42,11 @@ final class RuntimeStandaloneUserProfileAdmissionSpec extends AnyWordSpec with M
     }
     }
 
-    "E2 exclude authenticated and controlled execution from HOME admission" must _metadata("E2", "CS05I-R2") {
+    "E2 exclude authenticated and controlled execution from HOME admission" must _metadata("E2", "PM53-R2") {
     "when server admission receives multi-user and controlled execution" in {
-      Given("Spec: docs/journal/2026/07/2026-07-31-phase-53-cs05-standalone-user-configuration-admission.md; Rules: CS05I-R2; Example: E2; multi-user Web execution and a controlled profile")
-      val multiuser = _subsystem(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "multi-user"))
-      val controlled = _subsystem(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone"))
+      Given("multi-user Subsystem admission and a controlled test profile")
+      val multiuser = _subsystem(Map(SubsystemUserMode.CONFIGURATION_KEY -> "multi-user"))
+      val controlled = _subsystem(Map(SubsystemUserMode.CONFIGURATION_KEY -> "standalone"))
       var calls = 0
       val admission: RuntimeStandaloneUserProfileAdmission.ProfileAdmission = _ => {
         calls += 1
@@ -69,11 +69,11 @@ final class RuntimeStandaloneUserProfileAdmissionSpec extends AnyWordSpec with M
     }
     }
 
-    "E3 fail closed when fixed admission is malformed or lacks stable identity" must _metadata("E3", "CS05I-R3") {
+    "E3 fail closed when fixed admission is malformed or lacks stable identity" must _metadata("E3", "PM53-R3") {
     "when fixed server admission has invalid profile or identity evidence" in {
-      Given("Spec: docs/journal/2026/07/2026-07-31-phase-53-cs05-standalone-user-configuration-admission.md; Rules: CS05I-R3; Example: E3; a standalone server and failing fixed-profile admission")
-      val identified = _subsystem(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone"))
-      val unidentified = Subsystem("unidentified", configuration = _configuration(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone")))
+      Given("a standalone Subsystem server and failing fixed-profile admission")
+      val identified = _subsystem(Map(SubsystemUserMode.CONFIGURATION_KEY -> "standalone"))
+      val unidentified = Subsystem("unidentified", configuration = _configuration(Map(SubsystemUserMode.CONFIGURATION_KEY -> "standalone")))
 
       When("profile admission or stable identity validation fails")
       val malformed = RuntimeStandaloneUserProfileAdmission.admit(
@@ -84,7 +84,8 @@ final class RuntimeStandaloneUserProfileAdmissionSpec extends AnyWordSpec with M
       val missingidentity = RuntimeStandaloneUserProfileAdmission.admit(
         unidentified,
         serverExecution = true,
-        _ => Consequence.success(Vector.empty)
+        _ => Consequence.success(Vector.empty),
+        _ => Consequence.success(SubsystemExecutionProfile.Fixed)
       )
 
       Then("the runtime seam returns the failures without fallback")
@@ -95,11 +96,25 @@ final class RuntimeStandaloneUserProfileAdmissionSpec extends AnyWordSpec with M
   }
 
   private def _subsystem(values: Map[String, String]): Subsystem =
+    val mode = values.get(SubsystemUserMode.CONFIGURATION_KEY)
+    val authentication = mode match {
+      case Some("multi-user") => GenericSubsystemAuthenticationBinding(
+        providers = Vector(GenericSubsystemAuthenticationProviderBinding(
+          name = "runtime-admission",
+          component = "runtime-admission",
+          enabled = Some(true)
+        ))
+      )
+      case _ => GenericSubsystemAuthenticationBinding(
+        localSubject = Some(GenericSubsystemLocalSubjectBinding("runtime-admission"))
+      )
+    }
     Subsystem("runtime-admission", configuration = _configuration(values))
       .withDescriptor(
         GenericSubsystemDescriptor(
           path = Path.of("runtime-admission.car"),
-          subsystemName = "runtime-admission"
+          subsystemName = "runtime-admission",
+          security = Some(GenericSubsystemSecurityBinding(authentication = Some(authentication)))
         )
       )
 

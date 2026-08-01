@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -70,7 +70,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -3064,7 +3064,7 @@ final class Http4sHttpServer(
 
   private final case class WebRequestExecution(
     executionContext: ExecutionContext,
-    policy: WebExecutionResolutionPolicy
+    resolution: WebExecutionPolicyResolution
   )
 
   private def _admin_form_transition_response(
@@ -4598,7 +4598,7 @@ final class Http4sHttpServer(
         val queryvalues = _query_values(request)
         _static_request_execution_context(request, componentname.orElse(Some(webappname))).flatMap { resolvedexecution =>
           WebExecutionRuntimeProjection.resolve(
-            resolvedexecution.policy,
+            resolvedexecution.resolution,
             resolvedexecution.executionContext,
             WebExecutionRuntimeRequest(
               displayLocale = queryvalues.get("lang").orElse(queryvalues.get("locale")),
@@ -4625,9 +4625,28 @@ final class Http4sHttpServer(
             ._with_messages(messages)
             ._with_execution(projection)
           }
-        }.recover {
+        }.recoverWith {
           case _ if _is_unauthenticated_static_page_request(request) =>
-            _page_view_context(Some(request), webappname, page)
+            WebExecutionResolutionPolicy
+              .resolveForSubsystem(engine.runtimeSubsystem.configuration, engine.runtimeSubsystem)
+              .flatMap { resolution =>
+                WebExecutionRuntimeProjection.resolve(
+                  resolution,
+                  ExecutionContext.create(),
+                  WebExecutionRuntimeRequest(
+                    displayLocale = queryvalues.get("lang").orElse(queryvalues.get("locale")),
+                    displayTimezone = queryvalues.get("timezone").orElse(queryvalues.get("timeZone")),
+                    acceptLanguage = _request_header_value(request, "Accept-Language")
+                  )
+                )
+              }
+              .map(projection => _page_view_context(
+                Some(request),
+                webappname,
+                page,
+                None,
+                Some(projection)
+              )._with_execution(projection))
         }
     }
 
@@ -5842,15 +5861,9 @@ final class Http4sHttpServer(
       .resolveForSubsystem(engine.runtimeSubsystem.configuration, engine.runtimeSubsystem)
       .flatMap { resolution =>
         engine.runtimeSubsystem.executionProfileC.flatMap { subsystemprofile =>
-          val profile = subsystemprofile.currentUserEvidence match {
-            case SubsystemCurrentUserEvidence.Authenticated | SubsystemCurrentUserEvidence.ControlledTest =>
-              subsystemprofile
-            case SubsystemCurrentUserEvidence.Fixed =>
-              resolution.policy.applicationMode.toSubsystemExecutionProfile
-          }
           IngressSecurityResolver
-            .resolve(profile, base, attributes)
-            .map(resolved => WebRequestExecution(resolved.executionContext, resolution.policy))
+            .resolve(subsystemprofile, base, attributes)
+            .map(resolved => WebRequestExecution(resolved.executionContext, resolution))
         }
       }
   }
@@ -6006,8 +6019,11 @@ final class Http4sHttpServer(
     page: StaticFormAppRenderer.Page
   ): StaticFormAppRenderer.PageCachePolicy = {
     val execution = context.execution
+    val ismultiuser = engine.runtimeSubsystem.subsystemUserModeC.toOption.exists(
+      _.mode == org.goldenport.cncf.subsystem.SubsystemUserMode.MultiUser
+    )
     val ispublic =
-      execution.exists(_.applicationMode == WebApplicationMode.MultiUser) &&
+      ismultiuser &&
         execution.exists(x => !x.subject.authenticated) &&
         req.exists { request =>
           request.cookies.isEmpty &&

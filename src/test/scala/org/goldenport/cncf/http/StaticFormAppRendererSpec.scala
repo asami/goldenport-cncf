@@ -36,11 +36,11 @@ import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureAc
 import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
-import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
+import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentId, ComponentInstanceId, ComponentletDescriptor}
 import org.goldenport.cncf.testutil.DevelopmentRuntimeManifestFixture
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext}
-import org.goldenport.cncf.security.AuthenticationRequest
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, PrincipalId, RuntimeContext}
+import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.{
   EntityConcurrencyMetadata,
@@ -63,6 +63,7 @@ import org.goldenport.cncf.knowledge.*
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{PrepareResult, TransactionContext}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
@@ -74,13 +75,16 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _renderer = StaticFormAppRenderer()
   private val _test_csrf_token = WebCsrf.issue(None)
-  "StaticFormAppRenderer" should {
+  private val _in_phase53_spec =
+    afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-3, phase:53")
+
+  "StaticFormAppRenderer" must _in_phase53_spec {
     "provide dashboard, system administration, Blob, and documentation contracts" which {
     "render subsystem dashboard state contract" in {
       Given("the prerequisites for render subsystem dashboard state contract")
@@ -263,7 +267,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render system admin jobs list and detail pages" in {
       Given("the prerequisites for render system admin jobs list and detail pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val action = _RendererJobAction(GRequest.of(
+      val action = RendererJobAction(GRequest.of(
         component = "renderer",
         service = "job",
         operation = "debug-query"
@@ -1589,7 +1593,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentname = "notice_board"
       val componentpath = "notice-board"
       val entitypath = "notice"
-      val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id
+      val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id
       val recordid = recordentityid.value
 
       val list = _renderer.renderComponentAdminEntityType(subsystem, componentname, entitypath).map(_.body).getOrElse(fail("component entity type admin is missing"))
@@ -1702,7 +1706,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "reject a foreign canonical component entity detail and edit route before it can render actions" in {
       Given("a foreign EntityId with the same local timestamp and entropy as a stored notice")
       val subsystem = _management_console_fixture_subsystem()
-      val storedid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head.id
+      val storedid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
       val foreignid = EntityId(
         foreigncollection.major,
@@ -1755,8 +1759,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val subsystem = _management_console_fixture_subsystem(relationships = relationships)
       val component = _notice_fixture_component(subsystem)
-      val notices = component.entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.toVector
-      given EntityPersistent[_NoticeEntity] = _notice_persistent
+      val notices = component.entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.toVector
+      given EntityPersistent[NoticeEntity] = _notice_persistent
       given ExecutionContext = subsystem.components.find(_.name == "admin").getOrElse(fail("admin component is missing")).logic.executionContext()
       notices.foreach { notice =>
         org.goldenport.cncf.entity.EntityStore.standard().save(notice)
@@ -1823,10 +1827,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for render generic Tag admin and entity TagAttachment surfaces")
       val subsystem = _management_console_fixture_subsystem()
       val component = _notice_fixture_component(subsystem)
-      val notice = component.entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head
+      val notice = component.entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head
       val source = notice.id
       val sourceid = source.value
-      given EntityPersistent[_NoticeEntity] = _notice_persistent
+      given EntityPersistent[NoticeEntity] = _notice_persistent
       given ExecutionContext = subsystem.components.find(_.name == "admin").getOrElse(fail("admin component is missing")).logic.executionContext()
       org.goldenport.cncf.entity.EntityStore.standard().save(notice)
         .getOrElse(fail(s"admin notice fixture seed failed: ${notice.id.print}"))
@@ -2033,7 +2037,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentname = "notice_board"
       val componentpath = "notice-board"
       val entitypath = "notice"
-      val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id
+      val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id
       val recordid = recordentityid.value
       val context = Map(
         "search.author" -> "alice",
@@ -2086,7 +2090,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordentityid = collection.storage.storeRealm.values.head.id
       val recordid = recordentityid.value
       val req = _post_form_request(
@@ -2120,7 +2124,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
       val canonicalid = _new_notice_entity_id().value
-      val storedid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head.id
+      val storedid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
       val foreignid = EntityId(
         foreigncollection.major,
@@ -2179,7 +2183,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server =
         new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
       val collection =
-        _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+        _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val entityid = collection.storage.storeRealm.values.head.id
       val version = _notice_entity_version(subsystem, entityid.value)
 
@@ -2229,7 +2233,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server =
         new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
       val collection =
-        _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+        _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val entity = collection.storage.storeRealm.values.head
       val version = _notice_entity_version(subsystem, entity.id.value)
       val before = _load_notice_store_record(subsystem, entity.id)
@@ -2275,7 +2279,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
@@ -2312,7 +2316,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
@@ -2340,7 +2344,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
@@ -2386,7 +2390,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val edit = _renderer
         .renderComponentAdminEntityEdit(subsystem, "notice_board", "notice", recordid)
@@ -2425,7 +2429,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
@@ -2455,7 +2459,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val before = collection.storage.storeRealm.values.size
       val id = _new_notice_entity_id()
       val req = _post_form_request(
@@ -2489,7 +2493,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .findComponent("embedded_notice_board")
         .getOrElse(fail("embedded fixture component is missing"))
       val collection =
-        component.entitySpace.entity[_EmbeddedNoticeEntity]("notice")
+        component.entitySpace.entity[EmbeddedNoticeEntity]("notice")
 
       When("the admin operation creates the Entity")
       val response = _success(
@@ -2523,7 +2527,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .findComponent("embedded_notice_board")
         .getOrElse(fail("embedded fixture component is missing"))
       val collection =
-        component.entitySpace.entity[_EmbeddedNoticeEntity]("notice")
+        component.entitySpace.entity[EmbeddedNoticeEntity]("notice")
       _success(
         subsystem.executeOperationResponse(
           GRequest.of(
@@ -2577,7 +2581,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .findComponent("embedded_notice_board")
         .getOrElse(fail("embedded fixture component is missing"))
       val collection =
-        component.entitySpace.entity[_EmbeddedNoticeEntity]("notice")
+        component.entitySpace.entity[EmbeddedNoticeEntity]("notice")
       _success(
         subsystem.executeOperationResponse(
           GRequest.of(
@@ -2658,7 +2662,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "attach uploaded and existing Blob images during admin entity create" in {
       Given("the prerequisites for attach uploaded and existing Blob images during admin entity create")
       val subsystem = _management_console_fixture_subsystem()
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val existingblobid = _register_external_blob(subsystem, "existing-admin.png", "https://example.com/existing-admin.png")
       val localid = s"notice_admin_image_${java.util.UUID.randomUUID().toString.replace("-", "")}"
       val filename = s"${localid}.png"
@@ -2708,7 +2712,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val filename = s"web-admin-${java.util.UUID.randomUUID().toString.replace("-", "")}.png"
       val id = _new_notice_entity_id()
       val req = _post_multipart_request(
@@ -2749,7 +2753,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "compensate admin entity create when image attachment fails" in {
       Given("the prerequisites for compensate admin entity create when image attachment fails")
       val subsystem = _management_console_fixture_subsystem()
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val localid = s"notice_admin_compensate_${java.util.UUID.randomUUID().toString.replace("-", "")}"
       val missingtoken = s"missing_${localid}"
       val missingblobid = EntityId(
@@ -2786,7 +2790,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "keep admin entity update when image attachment fails" in {
       Given("the prerequisites for keep admin entity update when image attachment fails")
       val subsystem = _management_console_fixture_subsystem()
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id
       val missingtoken = s"missing_update_${java.util.UUID.randomUUID().toString.replace("-", "")}"
       val missingblobid = EntityId(
@@ -2826,7 +2830,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentname = "notice_board"
       val componentpath = "notice-board"
       val entitypath = "notice"
-      val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id
+      val recordentityid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id
       val recordid = recordentityid.value
 
       val newhtml = _renderer
@@ -2876,7 +2880,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))
       val componentname = "notice_board"
       val entitypath = "notice"
-      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
 
       val newhtml = _renderer
         .renderComponentAdminEntityNew(subsystem, componentname, entitypath)
@@ -2907,7 +2911,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentname = "notice_board"
       val componentpath = "notice-board"
       val entitypath = "notice"
-      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
 
       val list = _renderer
         .renderComponentAdminEntityType(subsystem, componentname, entitypath)
@@ -2950,7 +2954,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val componentname = "notice_board"
       val entitypath = "notice"
-      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
 
       val list = _renderer
         .renderComponentAdminEntityType(subsystem, componentname, entitypath)
@@ -3027,7 +3031,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
-      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath)
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath)
       val before = collection.storage.storeRealm.values.size
       val req = _post_form_request(
         s"/form/${componentpath}/admin/entities/${entitypath}/create",
@@ -3053,7 +3057,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val created = collection.storage.storeRealm.values.find(_.title == "idless notice").getOrElse(fail("created notice is missing"))
       created.author shouldBe "carol"
       created.id.value should not be "notice_1"
-      created.id.collection shouldBe _NoticeEntity.collectionid
+      created.id.collection shouldBe NoticeEntity.collectionid
       dispatcher.paths should contain ("/admin/entity/create")
     }
 
@@ -4782,7 +4786,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentname = "notice_board"
       val componentpath = "notice-board"
       val entitypath = "notice"
-      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
 
       When("the edit page is rendered with its canonical route locator")
       val html = _renderer.renderComponentAdminEntityEdit(subsystem, componentname, entitypath, recordid).map(_.body).getOrElse(fail("component entity edit admin is missing"))
@@ -4807,7 +4811,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentname = "notice_board"
       val componentpath = "notice-board"
       val entitypath = "notice"
-      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath).storage.storeRealm.values.head.id.value
 
       When("the edit page is rendered")
       val html = _renderer.renderComponentAdminEntityEdit(
@@ -5101,7 +5105,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))
       val subsystem = _management_console_fixture_subsystem(schema = schema)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
-      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head.id.value
+      val recordid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id.value
 
       val createresponse = server
         ._submit_component_admin_entity_create(
@@ -5199,7 +5203,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val recordid = _notice_fixture_component(subsystem).
         entitySpace.
-        entity[_NoticeEntity]("notice").
+        entity[NoticeEntity]("notice").
         storage.
         storeRealm.
         values.
@@ -5940,7 +5944,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for execute admin read/list operations for entity data view and aggregate surfaces")
       val entitysubsystem = _management_console_fixture_subsystem()
       val entityengine = new HttpExecutionEngine(entitysubsystem)
-      val entitycollection = _notice_fixture_component(entitysubsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val entitycollection = _notice_fixture_component(entitysubsystem).entitySpace.entity[NoticeEntity]("notice")
       val entityid = entitycollection.storage.storeRealm.values.head.id.value
 
       val entitylist = entityengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/list", form = Record.data("component" -> "notice-board", "entity" -> "notice")))
@@ -7550,7 +7554,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             spec.ServiceDefinition(
               name = "notice",
               operations = spec.OperationDefinitionGroup(
-                operations = NonEmptyVector.of(_NoopOperation("update-notice"))
+                operations = NonEmptyVector.of(NoopOperation("update-notice"))
               )
             )
           )
@@ -7611,7 +7615,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val protocol = Protocol(
         services = spec.ServiceDefinitionGroup(Vector(spec.ServiceDefinition(
           name = "notice",
-          operations = spec.OperationDefinitionGroup(NonEmptyVector.of(_NoopOperation("update-notice")))
+          operations = spec.OperationDefinitionGroup(NonEmptyVector.of(NoopOperation("update-notice")))
         )))
       )
       _initialize_component("notice_board", component, protocol)
@@ -7682,8 +7686,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           services = spec.ServiceDefinitionGroup(Vector(spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(NonEmptyVector.of(
-              _InspectingAggregateOperation("update-nickname", "nickname", "nickname"),
-              _InspectingAggregateOperation("clear-tags", "tags", "tags")
+              InspectingAggregateOperation("update-nickname", "nickname", "nickname"),
+              InspectingAggregateOperation("clear-tags", "tags", "tags")
             ))
           ))),
           handler = ProtocolHandler(
@@ -7747,7 +7751,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         services = spec.ServiceDefinitionGroup(Vector(spec.ServiceDefinition(
           name = "notice",
           operations = spec.OperationDefinitionGroup(NonEmptyVector.of(
-            _SuccessfulAggregateOperation("update-notice", "nickname", "updated")
+            SuccessfulAggregateOperation("update-notice", "nickname", "updated")
           ))
         ))),
         handler = ProtocolHandler(
@@ -7838,7 +7842,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Vector(spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("register-notice"))
+              operations = NonEmptyVector.of(NoopOperation("register-notice"))
             )
           ))
         )
@@ -7902,7 +7906,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Vector(spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("attach-notice-image"))
+              operations = NonEmptyVector.of(NoopOperation("attach-notice-image"))
             )
           ))
         )
@@ -7951,7 +7955,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Vector(spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("register-notice-tag"))
+              operations = NonEmptyVector.of(NoopOperation("register-notice-tag"))
             )
           ))
         )
@@ -8012,7 +8016,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Vector(spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("register-notice-tag"))
+              operations = NonEmptyVector.of(NoopOperation("register-notice-tag"))
             )
           ))
         )
@@ -8068,7 +8072,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Vector(spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("register-notice-tag"))
+              operations = NonEmptyVector.of(NoopOperation("register-notice-tag"))
             )
           ))
         )
@@ -8122,7 +8126,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Vector(spec.ServiceDefinition(
             name = "blob",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("register-blob-like"))
+              operations = NonEmptyVector.of(NoopOperation("register-blob-like"))
             )
           ))
         )
@@ -9048,7 +9052,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
               name = "notice",
               operations = spec.OperationDefinitionGroup(
                 operations = NonEmptyVector.of(
-                  _NoopOperation("validate-fields", Vector("count", "published", "publishedAt", "status", "tags"))
+                  NoopOperation("validate-fields", Vector("count", "published", "publishedAt", "status", "tags"))
                 )
               )
             )
@@ -9885,7 +9889,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "apply subject-safe cache policy to Static Web documents" in {
-      Given("a read-only Static Web page in multi-user mode")
+      Given("a read-only Static Web page in a wired multi-user Subsystem")
       val root = Files.createTempDirectory("cncf-static-web-cache-")
       val approot = root.resolve("planning-app")
       Files.createDirectories(approot)
@@ -9895,11 +9899,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "<!doctype html><html><head><title>Planning</title></head><body><main>Public planning page</main></body></html>",
         StandardCharsets.UTF_8
       )
+      Files.writeString(
+        approot.resolve("form.html"),
+        "<!doctype html><html><body><form method=\"post\" action=\"/form/notice-board/notice-aggregate/approve-notice-aggregate\"><input name=\"title\"></form></body></html>",
+        StandardCharsets.UTF_8
+      )
       val multiconfiguration = Configuration(Map(
         RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
-        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("multi-user")
+        org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user")
       ))
-      val multisubsystem = _aggregate_http_fixture_subsystem(multiconfiguration)
+      val multisubsystem = _with_multi_user_authentication(_aggregate_http_fixture_subsystem(multiconfiguration))
+      multisubsystem.subsystemUserModeC.toOption.map(_.mode) shouldBe
+        Some(org.goldenport.cncf.subsystem.SubsystemUserMode.MultiUser)
+      multisubsystem.resolvedSecurityWiring.authentication.enabledProviders.map(_.name) shouldBe
+        Vector("static-web-authentication")
       val multiserver = new Http4sHttpServer(new HttpExecutionEngine(multisubsystem))
       def _header_(response: org.http4s.Response[IO], name: String): Option[String] =
         response.headers.get(org.typelevel.ci.CIString(name)).map(_.head.value)
@@ -9913,9 +9926,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).unsafeRunSync()
 
       Then("shared storage is allowed only with revalidation and language variance")
+      publicresponse.status.code shouldBe 200
       _header_(publicresponse, "Cache-Control") shouldBe Some("public, max-age=0, must-revalidate")
       _header_(publicresponse, "Vary") shouldBe
-        Some("Accept-Language, Cookie, Authorization, X-Textus-Session")
+        Some("Accept-Language, Cookie, Authorization, X-Textus-Session, X-CNCF-Session")
 
       When("the same multi-user document is requested with a session")
       val sessionresponse = multiserver._component_web_app(
@@ -9926,6 +9940,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).unsafeRunSync()
 
       Then("the subject-associated document cannot enter a shared cache")
+      sessionresponse.status.code shouldBe 200
       _header_(sessionresponse, "Cache-Control") shouldBe Some("private, no-store")
       _header_(sessionresponse, "Vary") shouldBe None
 
@@ -9938,8 +9953,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           org.http4s.Header.Raw(org.typelevel.ci.CIString("Authorization"), "Bearer subject-token")
         ))
       ).unsafeRunSync()
+      authorizationresponse.status.code shouldBe 200
       _header_(authorizationresponse, "Cache-Control") shouldBe Some("private, no-store")
       _header_(authorizationresponse, "Vary") shouldBe None
+
+      And("an alternate session ingress remains private")
+      val alternatesessionresponse = multiserver._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector.empty,
+        Some(_get_request("/web/notice-board/planning-app").putHeaders(
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("X-CNCF-Session"), "alternate-session")
+        ))
+      ).unsafeRunSync()
+      alternatesessionresponse.status.code shouldBe 200
+      _header_(alternatesessionresponse, "Cache-Control") shouldBe Some("private, no-store")
+      _header_(alternatesessionresponse, "Vary") shouldBe None
+
+      And("an anonymous form retains its CSRF cookie and stays private")
+      val csrfresponse = multiserver._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector("form"),
+        Some(_get_request("/web/notice-board/planning-app/form"))
+      ).unsafeRunSync()
+      csrfresponse.status.code shouldBe 200
+      _header_(csrfresponse, "Cache-Control") shouldBe Some("private, no-store")
+      csrfresponse.headers.get(org.typelevel.ci.CIString("Set-Cookie")) should not be empty
 
       And("standalone documents remain private even without an authentication session")
       val standaloneconfiguration = Configuration(Map(
@@ -11795,7 +11835,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render application user job list and detail pages" in {
       Given("the prerequisites for render application user job list and detail pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val action = _RendererJobAction(GRequest.of(
+      val action = RendererJobAction(GRequest.of(
         component = "notice-board",
         service = "notice",
         operation = "post-notice"
@@ -14017,7 +14057,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private def _structured_conclusion(): Conclusion =
     Conclusion.simple("coded failure")
 
-  private final case class _DataFixture(
+  private final case class DataFixture(
     subsystem: Subsystem,
     runtime: GlobalRuntimeContext,
     datastorespace: DataStoreSpace
@@ -14025,7 +14065,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
   private def _data_fixture(
     totalcountcapability: TotalCountCapability = TotalCountCapability.Supported
-  ): _DataFixture = {
+  ): DataFixture = {
     val datastorespace = _data_store_space(totalcountcapability)
     given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
     val cid = DataStore.CollectionId("audit")
@@ -14048,7 +14088,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     )
     val component = TestComponentFactory.create("notice_board", Protocol.empty)
     val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-    _DataFixture(subsystem, runtime, datastorespace)
+    DataFixture(subsystem, runtime, datastorespace)
   }
 
   private def _data_store_space(
@@ -14059,11 +14099,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         DataStoreSpace.default()
       case other =>
         new DataStoreSpace().addDataStore(
-          new _TotalCountCapabilityDataStore(DataStore.inMemorySearchable(), other)
+          new TotalCountCapabilityDataStore(DataStore.inMemorySearchable(), other)
         )
     }
 
-  private final class _TotalCountCapabilityDataStore(
+  private final class TotalCountCapabilityDataStore(
     delegate: SearchableDataStore,
     capability: TotalCountCapability
   ) extends SearchableDataStore {
@@ -14237,14 +14277,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
     }
     _initialize_component("notice_board", component)
-    given EntityPersistent[_NoticeEntity] = _notice_persistent
+    given EntityPersistent[NoticeEntity] = _notice_persistent
     component.withComponentDescriptors(Vector(
       ComponentDescriptor(
         componentName = Some("notice_board"),
         entityRuntimeDescriptors = Vector(
           EntityRuntimeDescriptor(
             entityName = "notice",
-            collectionId = _NoticeEntity.collectionid,
+            collectionId = NoticeEntity.collectionid,
             memoryPolicy = EntityMemoryPolicy.LoadToMemory,
             partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
             maxPartitions = 4,
@@ -14256,7 +14296,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     ))
     component.entitySpace.registerEntity(
       "notice",
-      _notice_collection(Vector(_NoticeEntity(_notice_entity_id_from_shortid("notice_1"), "notice", "view")))
+      _notice_collection(Vector(NoticeEntity(_notice_entity_id_from_shortid("notice_1"), "notice", "view")))
     )
     if (ambiguousbacking)
       component.entitySpace.registerEntity(
@@ -14297,14 +14337,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
     }
     _initialize_component("notice_board", component, _aggregate_protocol())
-    given EntityPersistent[_NoticeEntity] = _notice_persistent
+    given EntityPersistent[NoticeEntity] = _notice_persistent
     component.withComponentDescriptors(Vector(
       ComponentDescriptor(
         componentName = Some("notice_board"),
         entityRuntimeDescriptors = Vector(
           EntityRuntimeDescriptor(
             entityName = "notice",
-            collectionId = _NoticeEntity.collectionid,
+            collectionId = NoticeEntity.collectionid,
             memoryPolicy = EntityMemoryPolicy.LoadToMemory,
             partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
             maxPartitions = 4,
@@ -14314,11 +14354,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
     ))
-    val aggregate = _NoticeAggregate(_notice_entity_id_from_shortid("notice_1"), "notice aggregate")
-    val nextaggregate = _NoticeAggregate(_notice_entity_id_from_shortid("notice_2"), "notice next")
+    val aggregate = NoticeAggregate(_notice_entity_id_from_shortid("notice_1"), "notice aggregate")
+    val nextaggregate = NoticeAggregate(_notice_entity_id_from_shortid("notice_2"), "notice next")
     component.entitySpace.registerEntity(
       "notice",
-      _notice_collection(Vector(_NoticeEntity(aggregate.id, "notice aggregate", "aggregate")))
+      _notice_collection(Vector(NoticeEntity(aggregate.id, "notice aggregate", "aggregate")))
     )
     if (ambiguousbacking)
       component.entitySpace.registerEntity(
@@ -14327,9 +14367,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
     component.aggregateSpace.register(
       "notice_aggregate",
-      new AggregateCollection[_NoticeAggregate](
-        new AggregateBuilder[_NoticeAggregate] {
-          def build(id: EntityId): Consequence[_NoticeAggregate] =
+      new AggregateCollection[NoticeAggregate](
+        new AggregateBuilder[NoticeAggregate] {
+          def build(id: EntityId): Consequence[NoticeAggregate] =
             Consequence.success(aggregate)
         },
         q => Consequence.success(org.goldenport.cncf.directive.Query.sliceValues(Vector(aggregate, nextaggregate), q.offset, q.limit)),
@@ -14348,9 +14388,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             name = "notice-aggregate",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _NoopOperation("read-notice-aggregate"),
-                _NoopOperation("create-notice-aggregate"),
-                _NoopOperation("approve-notice-aggregate", Vector("id"))
+                NoopOperation("read-notice-aggregate"),
+                NoopOperation("create-notice-aggregate"),
+                NoopOperation("approve-notice-aggregate", Vector("id"))
               )
             )
           )
@@ -14373,7 +14413,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             name = "notice",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _NoopOperation("validate-hints", Vector("code", "count"))
+                NoopOperation("validate-hints", Vector("code", "count"))
               )
             )
           )
@@ -14407,7 +14447,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             name = "notice",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _NoopOperation("post-secret-notice", Vector("body", "accessToken"))
+                NoopOperation("post-secret-notice", Vector("body", "accessToken"))
               )
             )
           )
@@ -14419,7 +14459,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     configuration: Configuration = Configuration.empty,
     messagecatalogs: Vector[WebMessageCatalog] = Vector.empty
   ): Subsystem = {
+    var ownersubsystem: Option[Subsystem] = None
     val component = new org.goldenport.cncf.component.Component() {
+      override def subsystem: Option[Subsystem] = ownersubsystem
       override def webMessageCatalogs: Vector[WebMessageCatalog] = messagecatalogs
 
       override def aggregateDefinitions: Vector[AggregateDefinition] =
@@ -14434,10 +14476,59 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
     }
     _initialize_component("notice_board", component, _aggregate_http_protocol())
-    new Subsystem(
+    val subsystem = new Subsystem(
       name = "sample-web",
       configuration = ResolvedConfiguration(configuration, ConfigurationTrace.empty)
-    ).add(Vector(component))
+    )
+    ownersubsystem = Some(subsystem)
+    subsystem.add(Vector(component))
+  }
+
+  private def _with_multi_user_authentication(subsystem: Subsystem): Subsystem = {
+    val ownersubsystem = subsystem
+    val provider = new Component {
+      override val core: Component.Core = Component.Core.create(
+        "StaticWebAuthentication",
+        ComponentId("static_web_authentication"),
+        ComponentInstanceId.default(ComponentId("static_web_authentication")),
+        Protocol.empty
+      )
+      override def subsystem: Option[Subsystem] = Some(ownersubsystem)
+      override def authenticationProviders: Vector[AuthenticationProvider] = Vector(new AuthenticationProvider {
+        override val name: String = "static-web-authentication"
+        override def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+          Consequence.success(
+            request.sessionId
+              .map(id => AuthenticationResult(PrincipalId(s"static-web-$id")))
+              .orElse(request.accessToken.map(id => AuthenticationResult(PrincipalId(s"static-web-$id"))))
+          )
+        override def currentSession(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+          authenticate(request)
+      })
+    }
+    provider.withArtifactMetadata(Component.ArtifactMetadata(
+      sourceType = "spec",
+      name = "StaticWebAuthentication",
+      version = "0.0.0",
+      component = Some("static-web-authentication")
+    ))
+    subsystem.add(provider)
+    subsystem.withDescriptor(GenericSubsystemDescriptor(
+      path = Path.of("build.sbt").toAbsolutePath,
+      subsystemName = "sample-web",
+      security = Some(GenericSubsystemSecurityBinding(authentication = Some(
+        GenericSubsystemAuthenticationBinding(
+          convention = Some("disabled"),
+          fallbackPrivilege = Some("disabled"),
+          providers = Vector(GenericSubsystemAuthenticationProviderBinding(
+            name = "static-web-authentication",
+            component = "static-web-authentication",
+            enabled = Some(true)
+          ))
+        )
+      )))
+    ))
+    subsystem
   }
 
   private def _aggregate_http_fixture_subsystem_with_componentlet_metadata_only(
@@ -14513,8 +14604,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             name = "notice-aggregate",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _SuccessfulAggregateOperation("create-notice-aggregate", "title", "aggregate-created"),
-                _SuccessfulAggregateOperation("approve-notice-aggregate", "id", "aggregate-updated")
+                SuccessfulAggregateOperation("create-notice-aggregate", "title", "aggregate-created"),
+                SuccessfulAggregateOperation("approve-notice-aggregate", "id", "aggregate-updated")
               )
             )
           )
@@ -14582,8 +14673,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ExecutionContext.create().observability,
       AliasResolver.empty
     )
-    given EntityPersistent[_NoticeEntity] = _notice_persistent
-    val cid = _NoticeEntity.collectionid
+    given EntityPersistent[NoticeEntity] = _notice_persistent
+    val cid = NoticeEntity.collectionid
     val descriptor = ComponentDescriptor(
       componentName = Some("notice_board"),
       entityRuntimeDescriptors = Vector(
@@ -14622,12 +14713,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       }
     component.withComponentDescriptors(Vector(descriptor))
     val notices = Vector(
-      _NoticeEntity(
+      NoticeEntity(
         _new_notice_entity_id(),
         "board update",
         "alice"
       ),
-      _NoticeEntity(
+      NoticeEntity(
         _new_notice_entity_id(),
         "board followup",
         "bob"
@@ -14653,7 +14744,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       EntityRevisionRepresentation.Detached
     )
     val noticecollection =
-      component.entitySpace.entity[_NoticeEntity]("notice")
+      component.entitySpace.entity[NoticeEntity]("notice")
     notices.foreach { notice =>
       val authorization =
         org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization(
@@ -14703,7 +14794,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Protocol.empty
       )
     val persistent = _embedded_notice_persistent
-    val cid = _EmbeddedNoticeEntity.collectionid
+    val cid = EmbeddedNoticeEntity.collectionid
     val descriptor = ComponentDescriptor(
       componentName = Some("embedded_notice_board"),
       entityRuntimeDescriptors = Vector(
@@ -14724,13 +14815,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
     )
     component.withComponentDescriptors(Vector(descriptor))
-    given EntityPersistent[_EmbeddedNoticeEntity] = persistent
-    val store = new EntityRealm[_EmbeddedNoticeEntity](
+    given EntityPersistent[EmbeddedNoticeEntity] = persistent
+    val store = new EntityRealm[EmbeddedNoticeEntity](
       entityName = "notice",
-      loader = EntityLoader[_EmbeddedNoticeEntity](_ => None),
-      state = new _IdRef(EntityRealmState(Map.empty))
+      loader = EntityLoader[EmbeddedNoticeEntity](_ => None),
+      state = new IdRef(EntityRealmState(Map.empty))
     )
-    val memory = new PartitionedMemoryRealm[_EmbeddedNoticeEntity](
+    val memory = new PartitionedMemoryRealm[EmbeddedNoticeEntity](
       strategy = PartitionStrategy.byOrganizationMonthUTC,
       idOf = _.id
     )
@@ -14879,15 +14970,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     })
 
   private def _notice_collection(
-    entities: Vector[_NoticeEntity],
-    collectionid: EntityCollectionId = _NoticeEntity.collectionid
-  )(using EntityPersistent[_NoticeEntity]): EntityCollection[_NoticeEntity] = {
-    val store = new EntityRealm[_NoticeEntity](
+    entities: Vector[NoticeEntity],
+    collectionid: EntityCollectionId = NoticeEntity.collectionid
+  )(using EntityPersistent[NoticeEntity]): EntityCollection[NoticeEntity] = {
+    val store = new EntityRealm[NoticeEntity](
       entityName = "notice",
-      loader = EntityLoader[_NoticeEntity](id => entities.find(_.id == id)),
-      state = new _IdRef(EntityRealmState(Map.empty))
+      loader = EntityLoader[NoticeEntity](id => entities.find(_.id == id)),
+      state = new IdRef(EntityRealmState(Map.empty))
     )
-    val memory = new PartitionedMemoryRealm[_NoticeEntity](
+    val memory = new PartitionedMemoryRealm[NoticeEntity](
       strategy = PartitionStrategy.byOrganizationMonthUTC,
       idOf = _.id
     )
@@ -14901,12 +14992,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         maxPartitions = 4,
         maxEntitiesPerPartition = 100
       ),
-      persistent = summon[EntityPersistent[_NoticeEntity]],
+      persistent = summon[EntityPersistent[NoticeEntity]],
       revisionBinding = Some(
         EntityRevisionBinding(EntityRevisionRepresentation.Detached)
       )
     )
-    val collection = new EntityCollection[_NoticeEntity](
+    val collection = new EntityCollection[NoticeEntity](
       descriptor = descriptor,
       storage = EntityStorage(store, Some(memory))
     )
@@ -14914,13 +15005,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     collection
   }
 
-  private def _notice_persistent: EntityPersistent[_NoticeEntity] =
-    new EntityPersistent[_NoticeEntity] {
-      def id(e: _NoticeEntity): EntityId = e.id
-      def toRecord(e: _NoticeEntity): Record = e.toRecord()
-      def fromRecord(r: Record): Consequence[_NoticeEntity] =
+  private def _notice_persistent: EntityPersistent[NoticeEntity] =
+    new EntityPersistent[NoticeEntity] {
+      def id(e: NoticeEntity): EntityId = e.id
+      def toRecord(e: NoticeEntity): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[NoticeEntity] =
         Consequence.success(
-          _NoticeEntity(
+          NoticeEntity(
             _notice_entity_id(r.getAny("id")),
             r.getString("title").getOrElse(""),
             r.getString("author").getOrElse("")
@@ -14929,12 +15020,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
   private def _embedded_notice_persistent
-      : EntityPersistent[_EmbeddedNoticeEntity] =
-    new EntityPersistent[_EmbeddedNoticeEntity] {
-      def id(e: _EmbeddedNoticeEntity): EntityId =
+      : EntityPersistent[EmbeddedNoticeEntity] =
+    new EntityPersistent[EmbeddedNoticeEntity] {
+      def id(e: EmbeddedNoticeEntity): EntityId =
         e.id
 
-      def toRecord(e: _EmbeddedNoticeEntity): Record =
+      def toRecord(e: EmbeddedNoticeEntity): Record =
         Record.dataAuto(
           "id" -> e.id,
           "revision" -> e.revision.value,
@@ -14943,7 +15034,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       def fromRecord(
         r: Record
-      ): Consequence[_EmbeddedNoticeEntity] =
+      ): Consequence[EmbeddedNoticeEntity] =
         for {
           idoption <- r.getAsC[EntityId]("id")
           id <- Consequence.fromOption(
@@ -14959,7 +15050,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             r.getString("title"),
             "title is required"
           )
-        } yield _EmbeddedNoticeEntity(id, revision, title)
+        } yield EmbeddedNoticeEntity(id, revision, title)
     }
 
   private def _notice_entity_id(value: Option[Any]): EntityId =
@@ -14974,13 +15065,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
   private def _new_notice_entity_id(): EntityId = {
-    val collection = _NoticeEntity.collectionid
+    val collection = NoticeEntity.collectionid
     val generated = EntityId(collection.major, collection.minor, collection)
     EntityId.parse(generated.value).getOrElse(fail("notice entity id generation failed"))
   }
 
   private def _notice_entity_id_from_shortid(shortid: String): EntityId = {
-    val collection = _NoticeEntity.collectionid
+    val collection = NoticeEntity.collectionid
     val generated = EntityId(
       collection.major,
       collection.minor,
@@ -15010,7 +15101,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       id: String
   ): String = {
     val collection =
-      _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
     val entityid =
       collection.resolveEntityId(id).getOrElse(fail(s"notice entity id is missing: ${id}"))
     val binding = collection.descriptor.revisionBinding
@@ -15104,21 +15195,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 }
 
-private final case class _RendererJobAction(
+private final case class RendererJobAction(
   request: GRequest
 ) extends QueryAction() {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _RendererJobActionCall(core)
+    RendererJobActionCall(core)
 }
 
-private final case class _RendererJobActionCall(
+private final case class RendererJobActionCall(
   core: ActionCall.Core
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Scalar("renderer-job-ok"))
 }
 
-private final case class _NoticeEntity(
+private final case class NoticeEntity(
   id: EntityId,
   title: String,
   author: String
@@ -15131,25 +15222,25 @@ private final case class _NoticeEntity(
     )
 }
 
-private object _NoticeEntity {
+private object NoticeEntity {
   val collectionid: EntityCollectionId =
     EntityCollectionId("sample", "web", "notice")
 }
 
-private final case class _EmbeddedNoticeEntity(
+private final case class EmbeddedNoticeEntity(
   id: EntityId,
   revision: EntityRevision,
   title: String
 )
 
-private object _EmbeddedNoticeEntity {
+private object EmbeddedNoticeEntity {
   val collectionid: EntityCollectionId =
     EntityCollectionId("sample", "web", "embedded_notice")
 }
 
-private final case class _NoticeAggregate(id: EntityId, summary: String)
+private final case class NoticeAggregate(id: EntityId, summary: String)
 
-private final case class _NoopOperation(
+private final case class NoopOperation(
   opname: String,
   parameters: Vector[String] = Vector.empty
 ) extends spec.OperationDefinition {
@@ -15191,7 +15282,7 @@ private final case class _NoopOperation(
     }
 }
 
-private final case class _SuccessfulAggregateOperation(
+private final case class SuccessfulAggregateOperation(
   opname: String,
   argumentname: String,
   resultprefix: String
@@ -15211,19 +15302,19 @@ private final case class _SuccessfulAggregateOperation(
     )
 
   override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
-    Consequence.success(_SuccessfulAggregateAction(OperationRequest.Core(req), argumentname, resultprefix))
+    Consequence.success(SuccessfulAggregateAction(OperationRequest.Core(req), argumentname, resultprefix))
 }
 
-private final case class _SuccessfulAggregateAction(
+private final case class SuccessfulAggregateAction(
   core: OperationRequest.Core,
   argumentname: String,
   resultprefix: String
 ) extends QueryAction with OperationRequest.Core.Holder {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _SuccessfulAggregateActionCall(core, argumentname, resultprefix)
+    SuccessfulAggregateActionCall(core, argumentname, resultprefix)
 }
 
-private final case class _SuccessfulAggregateActionCall(
+private final case class SuccessfulAggregateActionCall(
   core: ActionCall.Core,
   argumentname: String,
   resultprefix: String
@@ -15234,7 +15325,7 @@ private final case class _SuccessfulAggregateActionCall(
   }
 }
 
-private final case class _InspectingAggregateOperation(
+private final case class InspectingAggregateOperation(
   opname: String,
   argumentname: String,
   resultprefix: String
@@ -15254,19 +15345,19 @@ private final case class _InspectingAggregateOperation(
     )
 
   override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
-    Consequence.success(_InspectingAggregateAction(OperationRequest.Core(req), argumentname, resultprefix))
+    Consequence.success(InspectingAggregateAction(OperationRequest.Core(req), argumentname, resultprefix))
 }
 
-private final case class _InspectingAggregateAction(
+private final case class InspectingAggregateAction(
   core: OperationRequest.Core,
   argumentname: String,
   resultprefix: String
 ) extends QueryAction with OperationRequest.Core.Holder {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _InspectingAggregateActionCall(core, argumentname, resultprefix)
+    InspectingAggregateActionCall(core, argumentname, resultprefix)
 }
 
-private final case class _InspectingAggregateActionCall(
+private final case class InspectingAggregateActionCall(
   core: ActionCall.Core,
   argumentname: String,
   resultprefix: String
@@ -15381,7 +15472,7 @@ private object RecordingRestDriver {
   )
 }
 
-private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+private final class IdRef[A](initial: A) extends Ref[cats.Id, A] {
   private var _value: A = initial
 
   def get: A = synchronized {

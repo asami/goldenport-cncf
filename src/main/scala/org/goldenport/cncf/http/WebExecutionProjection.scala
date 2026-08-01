@@ -6,25 +6,26 @@ import java.util.Locale
 import io.circe.Json
 
 import org.goldenport.cncf.security.SecuritySubject
-import org.goldenport.cncf.subsystem.SubsystemExecutionProfile
+import org.goldenport.cncf.subsystem.SubsystemUserMode
 import org.goldenport.record.Record
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 enum WebApplicationMode(val name: String) {
   case Standalone extends WebApplicationMode("standalone")
   case MultiUser extends WebApplicationMode("multi-user")
 
-  def toSubsystemExecutionProfile: SubsystemExecutionProfile = this match {
-    case WebApplicationMode.Standalone => SubsystemExecutionProfile.Fixed
-    case WebApplicationMode.MultiUser => SubsystemExecutionProfile.Authenticated
-  }
 }
 
 object WebApplicationMode {
+  def fromSubsystemUserMode(mode: SubsystemUserMode): WebApplicationMode = mode match {
+    case SubsystemUserMode.Standalone => WebApplicationMode.Standalone
+    case SubsystemUserMode.MultiUser => WebApplicationMode.MultiUser
+  }
+
   def parse(value: String): Option[WebApplicationMode] =
     Option(value).map(_.trim.toLowerCase(Locale.ROOT)).flatMap {
       case "standalone" => Some(WebApplicationMode.Standalone)
@@ -53,7 +54,6 @@ object WebDisplayFormatPolicyId {
 }
 
 final case class WebExecutionProjectionPolicy(
-  applicationMode: WebApplicationMode = WebApplicationMode.Standalone,
   dateFormat: WebDisplayFormatPolicyId = WebDisplayFormatPolicyId.LOCALIZED_MEDIUM,
   dateTimeFormat: WebDisplayFormatPolicyId = WebDisplayFormatPolicyId.APPLICATION_DEFAULT,
   publicCapabilities: Vector[String] = Vector.empty
@@ -151,6 +151,7 @@ object WebExecutionProjection {
     locale: Locale,
     timezone: ZoneId,
     policy: WebExecutionProjectionPolicy,
+    applicationMode: WebApplicationMode,
     subject: WebExecutionSubjectProjection,
     effectiveCapabilities: Iterable[String]
   ): WebExecutionProjection =
@@ -158,7 +159,7 @@ object WebExecutionProjection {
       locale.toLanguageTag,
       timezone.getId,
       WebExecutionFormatProjection(policy.dateFormat, policy.dateTimeFormat),
-      policy.applicationMode,
+      applicationMode,
       subject,
       policy.selectPublicCapabilities(effectiveCapabilities)
     )

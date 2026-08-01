@@ -14,7 +14,7 @@ import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, SubsystemUserMode}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
@@ -33,13 +33,17 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _in_phase53_spec =
+    afterWord("in spec:subsystem-user-mode-http-dispatch, example:PM-53-01, rules:PM-53-01, phase:53")
 
-  "Http4sHttpServer" should {
+  "Http4sHttpServer" must _in_phase53_spec {
+    "HTTP operation, presentation, and protocol dispatch" which {
     "dispatch form-api submits through the runtime component name when the web selector uses artifact metadata" in {
+      Given("the prerequisites for dispatch form-api submits through the runtime component name when the web selector uses artifact metadata")
       val root = Files.createTempDirectory("http4s-http-server-dispatch-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -73,6 +77,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("the documented HTTP dispatch is exercised")
       val response = server
         ._submit_operation_form_api(
           _post_form_request("/form-api/textus-user-account/http/echo", "body=hello"),
@@ -82,6 +87,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         )
         .unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
       body should include("path: \"/debug/http/echo\"")
@@ -89,10 +95,12 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "decode percent-encoded REST query parameters before operation dispatch" in {
+      Given("the prerequisites for decode percent-encoded REST query parameters before operation dispatch")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app
         .run(HRequest[IO](
           method = Method.GET,
@@ -101,6 +109,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("body: \"Knowledge Import Paper\"")
       body should include ("url: \"https://example.test/a b\"")
@@ -109,6 +118,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "decode a JSON object body into REST operation arguments" in {
+      Given("the prerequisites for decode a JSON object body into REST operation arguments")
       Given("a generated REST operation accepting the debug echo body field")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -120,20 +130,24 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .withContentType(`Content-Type`.parse("application/json").toOption.get)
 
       When("the JSON client posts its generated operation envelope")
+      When("the documented HTTP dispatch is exercised")
       val response = app.run(request).unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
       Then("the operation receives the named field without requiring form encoding")
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("name: \"body\"")
       body should include ("value: \"JSON Review submission\"")
     }
 
     "preserve authorization headers for empty REST GET operation requests" in {
+      Given("the prerequisites for preserve authorization headers for empty REST GET operation requests")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app
         .run(HRequest[IO](
           method = Method.GET,
@@ -142,12 +156,14 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("value: \"Bearer authenticated-user\"")
       "value: \"Bearer authenticated-user\"".r.findAllIn(body).length shouldBe 1
     }
 
     "serve GET-backed HEAD responses without response bodies" in {
+      Given("the prerequisites for serve GET-backed HEAD responses without response bodies")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
@@ -179,6 +195,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "keep web demo assist manifest disabled by default" in {
+      Given("the prerequisites for keep web demo assist manifest disabled by default")
       val root = Files.createTempDirectory("http4s-http-server-demo-assist-disabled-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -204,6 +221,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app
         .run(HRequest[IO](
           method = Method.GET,
@@ -211,11 +229,13 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ))
         .unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 404
       response.as[String].unsafeRunSync() should not include ("secret-input")
     }
 
     "serve safe web demo assist manifest when explicitly enabled" in {
+      Given("the prerequisites for serve safe web demo assist manifest when explicitly enabled")
       val root = Files.createTempDirectory("http4s-http-server-demo-assist-enabled-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -243,6 +263,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app
         .run(HRequest[IO](
           method = Method.GET,
@@ -255,6 +276,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val entrykinds = entries.flatMap(_.hcursor.get[String]("kind").toOption).toSet
       val selectors = entries.flatMap(_.hcursor.get[String]("selector").toOption).toSet
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(MediaType.application.json)
       json.hcursor.get[Int]("version") shouldBe Right(1)
@@ -268,6 +290,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "download form result source as CSV attachment" in {
+      Given("the prerequisites for download form result source as CSV attachment")
       val root = Files.createTempDirectory("http4s-http-server-download-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -293,6 +316,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app
         .run(HRequest[IO](
           method = Method.GET,
@@ -301,6 +325,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       response.headers.get(ci"Content-Disposition").map(_.head.value) shouldBe Some("""attachment; filename="echo.csv"""")
       response.contentType.map(_.mediaType) shouldBe MediaType.parse("text/csv").toOption
@@ -311,6 +336,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "download form result source as Excel attachment" in {
+      Given("the prerequisites for download form result source as Excel attachment")
       val root = Files.createTempDirectory("http4s-http-server-download-xlsx-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -336,6 +362,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app
         .run(HRequest[IO](
           method = Method.GET,
@@ -344,6 +371,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .unsafeRunSync()
       val bytes = response.body.compile.to(Array).unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       response.headers.get(ci"Content-Disposition").map(_.head.value) shouldBe Some("""attachment; filename="echo.xlsx"""")
       response.contentType.map(_.mediaType) shouldBe MediaType.parse("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").toOption
@@ -351,6 +379,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "not inject current-session principal attributes into form-api submits" in {
+      Given("the prerequisites for not inject current-session principal attributes into form-api submits")
       val root = Files.createTempDirectory("http4s-http-server-dispatch-auth-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -367,7 +396,9 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         Configuration(
           Map(
             RuntimeConfig.webDescriptorKey ->
-              ConfigurationValue.StringValue(web.toString)
+              ConfigurationValue.StringValue(web.toString),
+            SubsystemUserMode.CONFIGURATION_KEY ->
+              ConfigurationValue.StringValue("multi-user")
           )
         ),
         ConfigurationTrace.empty
@@ -385,6 +416,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       subsystem.add(Vector(_auth_component))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("the documented HTTP dispatch is exercised")
       val response = server
         ._submit_operation_form_api(
           _post_form_request(
@@ -400,6 +432,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         )
         .unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
       body should include("x-textus-session")
@@ -412,6 +445,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "treat empty multipart form-api submits as an empty form record" in {
+      Given("the prerequisites for treat empty multipart form-api submits as an empty form record")
       val root = Files.createTempDirectory("http4s-http-server-empty-multipart-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -440,10 +474,12 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .withEntity(s"--${boundary}--\r\n")
         .withContentType(`Content-Type`.parse(s"multipart/form-data; boundary=${boundary}").toOption.get)
 
+      When("the documented HTTP dispatch is exercised")
       val response = server
         ._submit_operation_form_api(request, "debug", "http", "echo")
         .unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
       body should include("path: \"/debug/http/echo\"")
@@ -451,6 +487,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "enforce protected exposure before dispatching form submits" in {
+      Given("the prerequisites for enforce protected exposure before dispatching form submits")
       val root = Files.createTempDirectory("http4s-http-server-protected-exposure-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -499,6 +536,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "return debug job id header for debug trace-job form-api requests" in {
+      Given("the prerequisites for return debug job id header for debug trace-job form-api requests")
       val root = Files.createTempDirectory("http4s-http-server-debug-trace-job-spec")
       val web = root.resolve("web.yaml")
       Files.writeString(
@@ -523,6 +561,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("the documented HTTP dispatch is exercised")
       val response = server
         ._submit_operation_form_api(
           _post_form_request(
@@ -535,11 +574,13 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         )
         .unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       response.headers.get(ci"X-Textus-Job-Id").map(_.head.value).flatMap(JobId.parse(_).toOption) should not be empty
     }
 
     "render unauthorized operation-result widgets as inline page errors" in {
+      Given("the prerequisites for render unauthorized operation-result widgets as inline page errors")
       val root = Files.createTempDirectory("http4s-http-server-operation-result-forbidden-spec")
       Files.createDirectories(root.resolve("debug-app"))
       Files.writeString(
@@ -577,6 +618,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("the documented HTTP dispatch is exercised")
       val response = server
         ._component_web_app(
           "debug",
@@ -587,12 +629,14 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("Static Form operation-result operation is not authorized")
       body should not include "Debug app sign in required"
     }
 
     "render operation-result widgets without knowledge summary by default" in {
+      Given("the prerequisites for render operation-result widgets without knowledge summary by default")
       val root = Files.createTempDirectory("http4s-http-server-operation-result-default-spec")
       Files.createDirectories(root.resolve("debug-app"))
       Files.writeString(
@@ -622,6 +666,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("the documented HTTP dispatch is exercised")
       val response = server
         ._component_web_app(
           "debug",
@@ -632,11 +677,13 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should not include "KnowledgeSpace"
     }
 
     "dispatch static Web app page aliases below the app root" in {
+      Given("the prerequisites for dispatch static Web app page aliases below the app root")
       val root = Files.createTempDirectory("http4s-http-server-web-page-alias-spec")
       Files.createDirectories(root.resolve("debug-app"))
       Files.writeString(
@@ -677,17 +724,20 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app
         .run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug-app/seed")))
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("Seed Page")
       body should not include ("Debug Home")
     }
 
     "inject subsystem theme into component static Web pages" in {
+      Given("the prerequisites for inject subsystem theme into component static Web pages")
       val root = Files.createTempDirectory("http4s-http-server-theme-spec")
       Files.createDirectories(root.resolve("debug-app"))
       Files.createDirectories(root.resolve("debug-app").resolve("assets").resolve("fonts"))
@@ -762,6 +812,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("the documented HTTP dispatch is exercised")
       val response = server._component_web_app("debug", "debug-app", Vector.empty).unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
       val asset = server._web_global_asset("theme.css").unsafeRunSync()
@@ -771,6 +822,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val generatedpage = server._static_form_app("console", Vector.empty).unsafeRunSync()
       val generatedbody = generatedpage.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("/web/assets/theme.css")
       body should include ("""rel="icon" href="/web/debug/debug-app/assets/favicon.ico"""")
@@ -818,6 +870,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "serve only descriptor-declared component admin pages" in {
+      Given("the prerequisites for serve only descriptor-declared component admin pages")
       val root = Files.createTempDirectory("http4s-http-server-admin-page-spec")
       Files.createDirectories(root.resolve("admin"))
       Files.writeString(
@@ -864,6 +917,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "dispatch system observability drill-down routes" in {
+      Given("the prerequisites for dispatch system observability drill-down routes")
       RuntimeDashboardMetrics.recordValidation(
         "spec.operation",
         Some("ob04_format"),
@@ -902,6 +956,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "dispatch system knowledge admin routes" in {
+      Given("the prerequisites for dispatch system knowledge admin routes")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("knowledge_component", Protocol.empty))
       val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
@@ -931,6 +986,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "dispatch system information admin routes" in {
+      Given("the prerequisites for dispatch system information admin routes")
       Given("a subsystem containing confirmed Information")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
@@ -963,16 +1019,19 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "dispatch app-facing TagSpace routes" in {
+      Given("the prerequisites for dispatch app-facing TagSpace routes")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("the documented HTTP dispatch is exercised")
       val response = app.run(HRequest[IO](
         method = Method.GET,
         uri = Uri.unsafeFromString("/web/tag/tags?tagSpace=information")
       ).putHeaders(org.http4s.Header.Raw(ci"x-textus-session", "forged-session"))).unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("Application TagSpace browser and editor")
       body should include ("TagSpace <span class=\"badge text-bg-secondary\">information</span>")
@@ -985,6 +1044,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "accept JSON-RPC MCP requests over POST" in {
+      Given("the prerequisites for accept JSON-RPC MCP requests over POST")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
@@ -993,8 +1053,10 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .withContentType(`Content-Type`.parse("application/json").toOption.get)
         .putHeaders(org.http4s.Header.Raw(ci"MCP-Protocol-Version", McpProtocolRevision.PREFERRED.print))
 
+      When("the documented HTTP dispatch is exercised")
       val response = app.run(request).unsafeRunSync()
 
+      Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
       body should include (""""id":"tools"""")
@@ -1002,6 +1064,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "preserve MCP Streamable HTTP request and notification lifecycle outcomes" in {
+      Given("the prerequisites for preserve MCP Streamable HTTP request and notification lifecycle outcomes")
       Given("an MCP HTTP route and the shared preferred protocol revision")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -1067,6 +1130,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       unknownnotification.status.code shouldBe 400
       unknownnotification.contentType shouldBe None
       unknownnotification.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+    }
     }
   }
 

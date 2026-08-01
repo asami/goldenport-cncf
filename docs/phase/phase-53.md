@@ -474,3 +474,33 @@ general Factory purity, and CS-06 owns final Component/ArtScene acceptance.
 CS-05 and CS-06 are DONE. CS-07 records final cross-repository validation,
 review, and the verified normative promotion. The deferred work remains
 explicitly unimplemented and receives no Phase 53 behavior credit.
+
+## Post-Completion Maintenance
+
+The CS-01--CS-07 completion record remains historical evidence. Corrective
+work after that closure follows the repository-wide Post-Completion
+Maintenance convention in
+`docs/rules/stage-status-and-checklist-convention.md` and does not reopen or
+renumber a completed CS group.
+
+Maintenance status: CLOSED (`PM-53-01`).
+
+`PM-53-01` corrects the Web-owned application-mode authority established by
+CS-05E. It introduces the Subsystem-scoped `SubsystemUserMode` selected only
+by `textus.subsystem.user-mode`. The topology is `System = N SystemNode`,
+`SystemNode = N Subsystem`, and `Subsystem = N Component`; the current runtime
+realizes one SystemNode per JVM, but each stable Subsystem owns its own user
+mode so future mixed-mode hosting remains possible. Command, REST, and Web
+identify the owning Subsystem before constructing a fixed or authenticated
+ExecutionContext and invoking a mode-free Component. `OperationMode` remains
+an independent axis. Web-specific configuration is presentation-only, and
+former Web application-mode spellings cannot select or override
+`SubsystemUserMode`. No `ApplicationMode`, `RuntimeUserMode`,
+`textus.application-mode`, or JVM-global user mode is admitted. Phase 55
+retains effective binding, precedence, provenance, environment-codec, and
+complete fixed-user field-binding work.
+
+The serialized final framework suite completed on 2026-08-01 with 2,735
+successful tests and no failures. Remaining legacy executable-specification
+prose and naming cleanup is recorded as user-authorized HYG-P53-004; it does
+not alter the admitted Subsystem mode contract or its validation evidence.

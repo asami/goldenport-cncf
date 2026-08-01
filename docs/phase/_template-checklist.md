@@ -192,3 +192,32 @@ Phase 2.85 is complete when:
 - All development items are marked DONE in this document
 - Corresponding checkboxes in `phase-2.85.md` are marked `[x]`
 - No development item remains ACTIVE or SUSPENDED
+
+---
+
+## Post-Completion Maintenance
+
+After this phase closes, corrective work is appended here using the canonical
+`PM-<phase>-<sequence>` identity defined by
+`docs/rules/stage-status-and-checklist-convention.md`. Completed development
+items remain frozen. New capabilities and explicit deferrals move to their
+owning future phase rather than entering this ledger.
+
+Maintenance status: CLOSED
+
+<!--
+## PM-<phase>-01: <corrective maintenance title>
+
+Stage Status:
+- Current status: OPEN
+- Owner: <maintainer>
+- Entry rule: The base phase is CLOSED and the correction is admitted.
+- Completion rule: Every PM checklist and validation/release gate is checked.
+
+- [ ] Admit scope and write executable acceptance.
+- [ ] Plan.
+- [ ] Implement and focused-validate.
+- [ ] Review; conditionally review-fix and re-review.
+- [ ] Full-test affected repositories and cross-repository acceptance.
+- [ ] Update evidence, release-commit, and close maintenance.
+-->

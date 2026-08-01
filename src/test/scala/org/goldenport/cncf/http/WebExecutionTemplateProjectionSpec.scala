@@ -12,13 +12,15 @@ import org.goldenport.record.Record
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 19, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebExecutionTemplateProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _renderer = StaticFormAppRenderer()
+  private val _in_phase53_spec =
+    afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-1,SWEP-2, phase:53")
 
-  "Static Web execution template projection" should {
+  "Static Web execution template projection" must _in_phase53_spec {
     "publish one typed first-render context from the same locale as the HTML semantics" in {
       Given("a Japanese standalone execution projection and a conflicting application template")
       val projection = _projection("ja-JP", Some("利用者"))
@@ -235,6 +237,7 @@ final class WebExecutionTemplateProjectionSpec extends AnyWordSpec with Matchers
       Locale.forLanguageTag(locale),
       ZoneId.of("Asia/Tokyo"),
       WebExecutionProjectionPolicy(),
+      WebApplicationMode.Standalone,
       WebExecutionSubjectProjection.create(displayname.nonEmpty, displayname),
       Vector.empty
     )

@@ -3,11 +3,12 @@ package org.goldenport.cncf.http
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.security.SecuritySubject
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.ResolvedConfiguration
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebExecutionRuntimeRequest(
@@ -29,31 +30,33 @@ object WebExecutionRuntimeProjection {
 
   def resolve(
     configuration: ResolvedConfiguration,
-    executioncontext: ExecutionContext,
+    subsystem: Subsystem,
+    executionContext: ExecutionContext,
     request: WebExecutionRuntimeRequest
   ): Consequence[WebExecutionProjection] =
-    WebExecutionResolutionPolicy.fromConfiguration(configuration).flatMap(
-      resolve(_, executioncontext, request)
+    WebExecutionResolutionPolicy.resolveForSubsystem(configuration, subsystem).flatMap(
+      resolution => resolve(resolution, executionContext, request)
     )
 
-  def resolve(
-    policy: WebExecutionResolutionPolicy,
-    executioncontext: ExecutionContext,
+  private[http] def resolve(
+    resolution: WebExecutionPolicyResolution,
+    executionContext: ExecutionContext,
     request: WebExecutionRuntimeRequest
   ): Consequence[WebExecutionProjection] = {
-    given ExecutionContext = executioncontext
+    given ExecutionContext = executionContext
     val subject = SecuritySubject.current
-    val runtimecontext = executioncontext.runtime.context
+    val runtimecontext = executionContext.runtime.context
     for {
       formatting <- WebExecutionResolver.resolve(
-        policy,
+        resolution.policy,
+        resolution.applicationMode,
         WebExecutionResolutionInput(
           runtimeLocale = Some(runtimecontext.formatting.locale),
           runtimeTimezone = Some(runtimecontext.formatting.timezone),
-          runtimeDateTimeFormatPolicy = Some(executioncontext.core.i18n.dateTimeFormatPolicy),
+          runtimeDateTimeFormatPolicy = Some(executionContext.core.i18n.dateTimeFormatPolicy),
           authenticated = subject.isAuthenticated,
-          userLocale = _attribute(executioncontext, _user_locale_keys),
-          userTimezone = _attribute(executioncontext, _user_timezone_keys),
+          userLocale = _attribute(executionContext, _user_locale_keys),
+          userTimezone = _attribute(executionContext, _user_timezone_keys),
           displayLocale = request.displayLocale,
           displayTimezone = request.displayTimezone,
           acceptLanguage = request.acceptLanguage
@@ -63,6 +66,7 @@ object WebExecutionRuntimeProjection {
       formatting.locale,
       formatting.timezone,
       formatting.projectionPolicy,
+      resolution.applicationMode,
       WebExecutionSubjectProjection.create(subject.isAuthenticated, request.publicDisplayName),
       subject.capabilities
     )

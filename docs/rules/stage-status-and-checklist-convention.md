@@ -67,6 +67,73 @@ and provides a stable reference model for both human maintainers and AI agents.
 - CLOSED: DONE plus any deferred items have explicit relocation targets outside
   the Stage.
 
+## Post-Completion Maintenance Convention
+
+A completed phase will sometimes require a corrective change after its normal
+work groups have closed. Such work MUST use a separate Post-Completion
+Maintenance ledger instead of reopening, renumbering, or modifying a completed
+work group.
+
+### Identity and placement
+
+- The canonical identity is `PM-<phase>-<sequence>`, for example
+  `PM-53-01`.
+- The sequence starts at `01` independently for each phase.
+- A PM section MUST appear after every normal phase work group in the phase
+  checklist.
+- The phase summary MAY append a Post-Completion Maintenance section, but MUST
+  preserve the original completion account as historical evidence.
+- Completed work-group checkboxes and evidence MUST NOT be changed to make room
+  for maintenance work.
+
+### Admission boundary
+
+Work belongs to PM only when it corrects, hardens, or reconciles behavior that
+was delivered or claimed by the completed phase. A new capability, independent
+generalization, or previously explicit deferral MUST remain in its owning
+future phase.
+
+Each PM item MUST record:
+
+- the discovered contradiction or defect;
+- the completed contract or evidence it corrects;
+- admitted repositories and target programs;
+- explicit exclusions and preserved deferrals;
+- executable acceptance and regression evidence; and
+- release and closure evidence.
+
+### Status model
+
+The base phase remains historically CLOSED while maintenance is active. Its
+dashboard MUST additionally report `Maintenance status: OPEN` and the active PM
+identity. The PM item uses the normal stable states `OPEN`, `IN_PROGRESS`,
+`DONE`, and `CLOSED`; unchecked maintenance items prohibit PM closure.
+
+### Required workflow
+
+Every PM item follows this order:
+
+1. ADMIT — classify the issue as correction rather than new scope and freeze
+   repositories, target programs, exclusions, and acceptance criteria.
+2. PLAN — produce a bounded implementation and validation plan.
+3. IMPLEMENT — change only the admitted maintenance scope and add executable
+   regression evidence.
+4. FOCUSED VALIDATE — run compilation and affected executable specifications.
+5. REVIEW — perform a clean read-only review of the complete PM diff.
+6. REVIEW FIX — when actionable findings exist, fix all admitted findings and
+   run a focused clean re-review; skip this step after a clean initial review.
+7. FINAL VALIDATE — full-test every repository modified by the PM item and run
+   any required cross-repository acceptance.
+8. RELEASE COMMIT — update the PM ledger, journal, phase/strategy references,
+   version evidence, and create the release commit.
+9. CLOSE — mark every PM checklist item checked, set the PM item to CLOSED, and
+   restore `Maintenance status: CLOSED` without altering the historical base
+   phase completion.
+
+Only one PM item for a phase may be `IN_PROGRESS` at a time. Later corrections
+use the next PM sequence and never append unchecked work beneath a CLOSED PM
+item.
+
 Optional Progress Detail
 ----------------------------------------------------------------------
 In addition to the mandatory `Current status` field, a Stage MAY include

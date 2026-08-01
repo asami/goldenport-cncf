@@ -10,17 +10,21 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebExecutionProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  "Web execution projection" should {
+  private val _in_phase53_spec =
+    afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-2,SWEP-3, phase:53")
+
+  "Web execution projection" must _in_phase53_spec {
     "publish only the canonical execution context shape" in {
       Given("a standalone anonymous Web execution policy")
       val projection = WebExecutionProjection.create(
         Locale.forLanguageTag("ja-JP"),
         ZoneId.of("Asia/Tokyo"),
         WebExecutionProjectionPolicy(),
+        WebApplicationMode.Standalone,
         WebExecutionSubjectProjection.ANONYMOUS,
         Vector.empty
       )
@@ -53,6 +57,7 @@ final class WebExecutionProjectionSpec extends AnyWordSpec with Matchers with Gi
         Locale.ENGLISH,
         ZoneId.of("UTC"),
         WebExecutionProjectionPolicy(),
+        WebApplicationMode.Standalone,
         subject,
         Vector.empty
       )

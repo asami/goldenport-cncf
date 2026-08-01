@@ -34,7 +34,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 24, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
@@ -56,7 +56,7 @@ object StaticFormAppRendererSupport {
   ) {
     case PublicRevalidate extends PageCachePolicy(
       "public, max-age=0, must-revalidate",
-      Vector("Accept-Language", "Cookie", "Authorization", "X-Textus-Session")
+      Vector("Accept-Language", "Cookie", "Authorization", "X-Textus-Session", "X-CNCF-Session")
     )
     case PrivateNoStore extends PageCachePolicy(
       "private, no-store",

@@ -66,7 +66,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -123,6 +123,8 @@ final class Subsystem(
   private lazy val _spi_invoker: SpiInvoker = SpiInvoker._create(this)
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
   private var _controlled_test_execution: Boolean = false
+  private lazy val _subsystem_user_mode_c: Consequence[SubsystemUserModeResolution] =
+    SubsystemUserMode.resolveForSubsystem(configuration, this)
   private var _user_notification_forwarding_registered: Boolean = false
   private var _service_container_runtime: Option[ServiceContainerRuntime] = None
   private var _mcp_client_runtime: Option[CodexMcpRuntimeAssembly] = None
@@ -161,15 +163,29 @@ final class Subsystem(
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
   def assemblyAdmissionReport: Option[SubsystemAssemblyAdmission.Report] = _assembly_admission_report
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
+  def subsystemUserModeC: Consequence[SubsystemUserModeResolution] = _subsystem_user_mode_c
   def executionProfileC: Consequence[SubsystemExecutionProfile] =
-    if (
-      _controlled_test_execution &&
-        _resolved_security_wiring.authentication.enabledProviders.isEmpty &&
-        _resolved_security_wiring.authentication.localSubject.isEmpty
-    )
-      Consequence.success(SubsystemExecutionProfile.ControlledTest)
-    else
-      _execution_profile
+    subsystemUserModeC.flatMap(resolution => executionProfileForUserModeC(resolution.mode))
+
+  private[cncf] def executionProfileForUserModeC(
+    mode: SubsystemUserMode
+  ): Consequence[SubsystemExecutionProfile] = {
+    val authentication = _resolved_security_wiring.authentication
+    mode match {
+      case SubsystemUserMode.Standalone =>
+        if (authentication.localSubject.nonEmpty)
+          Consequence.success(SubsystemExecutionProfile.Fixed)
+        else
+          _controlled_test_execution_profile_c
+      case SubsystemUserMode.MultiUser =>
+        if (authentication.enabledProviders.nonEmpty)
+          Consequence.success(SubsystemExecutionProfile.Authenticated)
+        else
+          Consequence.securityPermissionDenied(
+            s"${SubsystemUserMode.CONFIGURATION_KEY}=multi-user requires authenticated-user wiring for the Subsystem."
+          )
+    }
+  }
 
   private[cncf] def enableControlledTestExecution(): Subsystem = {
     _controlled_test_execution = true
@@ -2009,16 +2025,17 @@ final class Subsystem(
   private def _not_found(): HttpResponse =
     HttpResponse.notFound()
 
-  private def _execution_profile: Consequence[SubsystemExecutionProfile] = {
-    val authentication = _resolved_security_wiring.authentication
-    if (authentication.enabledProviders.nonEmpty)
-      Consequence.success(SubsystemExecutionProfile.Authenticated)
-    else if (authentication.localSubject.nonEmpty)
-      Consequence.success(SubsystemExecutionProfile.Fixed)
+  private def _controlled_test_execution_profile_c: Consequence[SubsystemExecutionProfile] =
+    if (
+      _controlled_test_execution &&
+      _resolved_security_wiring.authentication.enabledProviders.isEmpty &&
+      _resolved_security_wiring.authentication.localSubject.isEmpty
+    )
+      Consequence.success(SubsystemExecutionProfile.ControlledTest)
     else if (
       _descriptor.isEmpty &&
-        _is_test_runtime &&
-        _allows_controlled_test_web_execution
+      _is_test_runtime &&
+      _allows_controlled_test_execution
     )
       Consequence.success(SubsystemExecutionProfile.ControlledTest)
     else
@@ -2028,7 +2045,6 @@ final class Subsystem(
           "Subsystem execution requires fixed-user or authenticated-user wiring; controlled test execution requires an explicit runtime test descriptor."
         )
       }
-  }
 
   private def _is_test_runtime: Boolean =
     sys.props.get("textus.test").exists { value =>
@@ -2036,11 +2052,7 @@ final class Subsystem(
       normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
     }
 
-  private def _allows_controlled_test_web_execution: Boolean =
-    ConfigurationAccess
-      .getString(configuration, "textus.web.application-mode")
-      .map(_.trim.toLowerCase(java.util.Locale.ROOT))
-      .forall(_ == "multi-user")
+  private def _allows_controlled_test_execution: Boolean = true
 
   private def _request_security_attributes(request: Request): Map[String, String] = {
     val properties = request.properties.foldLeft(Map.empty[String, String]) { (z, property) =>

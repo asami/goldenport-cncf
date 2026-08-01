@@ -13,7 +13,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryModeBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  "ComponentFactory mode boundary" should {
+  private val _in_phase53_spec =
+    afterWord("in spec:component-factory-mode-boundary, example:PM-53-01, rules:PM-53-01, phase:53")
+
+  "ComponentFactory mode boundary" must _in_phase53_spec {
     "keep creation and initialization inputs free of runtime mode and policy carriers" in {
       Given("the current create and initialization factory inputs")
 
@@ -26,6 +29,7 @@ final class ComponentFactoryModeBoundarySpec extends AnyWordSpec with Matchers w
       fieldtypes should not contain "org.goldenport.cncf.subsystem.Subsystem"
       fieldtypes should not contain "org.goldenport.cncf.config.OperationMode"
       fieldtypes should not contain "org.goldenport.cncf.http.WebApplicationMode"
+      fieldtypes should not contain "org.goldenport.cncf.subsystem.SubsystemUserMode"
       fieldtypes should not contain "org.goldenport.cncf.context.RuntimeContext"
       fieldtypes should not contain "org.goldenport.configuration.Configuration"
       classOf[ComponentAssemblyContext].getInterfaces.map(_.getName) should not contain "scala.Product"
@@ -52,6 +56,7 @@ final class ComponentFactoryModeBoundarySpec extends AnyWordSpec with Matchers w
       factoryparametertypes should not contain "org.goldenport.cncf.cli.RunMode"
       factoryparametertypes should not contain "org.goldenport.cncf.config.OperationMode"
       factoryparametertypes should not contain "org.goldenport.cncf.http.WebApplicationMode"
+      factoryparametertypes should not contain "org.goldenport.cncf.subsystem.SubsystemUserMode"
       factoryparametertypes should not contain "org.goldenport.cncf.subsystem.SubsystemExecutionProfile"
     }
 

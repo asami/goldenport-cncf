@@ -18,7 +18,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * @author  ASAMI, Tomoharu
  */
 final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  "Web execution formatting resolution" should {
+  private val _in_phase53_spec =
+    afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-3, phase:53")
+
+  "Web execution formatting resolution" must _in_phase53_spec {
     "formatting precedence" which {
     "prefer standalone application formatting over user and browser values" in {
       Given("a standalone application policy and conflicting user and browser values")
@@ -48,7 +51,6 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
     "prefer authenticated-user formatting in multi-user mode" in {
       Given("a multi-user policy with authenticated-user preferences")
       val policy = WebExecutionResolutionPolicy(
-        applicationMode = WebApplicationMode.MultiUser,
         applicationLocale = Some(Locale.US),
         applicationTimezone = Some(ZoneId.of("UTC")),
         httpLanguageNegotiationEnabled = true
@@ -61,7 +63,7 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       )
 
       When("the first-render formatting is resolved")
-      val result = WebExecutionResolver.resolve(policy, input)
+      val result = WebExecutionResolver.resolve(policy, WebApplicationMode.MultiUser, input)
 
       Then("the authenticated-user values precede application fallback and browser negotiation")
       result.toOption.get.locale shouldBe Locale.JAPAN
@@ -136,11 +138,10 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
     }
 
     "configuration decoding" which {
-    "decode the canonical Web operation key with compatibility formatting keys" in {
-      Given("a runtime configuration with the canonical Web operation key and legacy formatting aliases")
+    "decode presentation keys without selecting a Subsystem user mode" in {
+      Given("a presentation-only runtime configuration with legacy formatting aliases")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("multi-user"),
           "cncf.runtime.web.execution.locale" -> ConfigurationValue.StringValue("ja-JP"),
           "cncf.runtime.web.execution.timezone" -> ConfigurationValue.StringValue("Asia/Tokyo"),
           "cncf.runtime.web.execution.http-language-negotiation.enabled" -> ConfigurationValue.BooleanValue(true),
@@ -152,41 +153,37 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       When("the Web execution policy is decoded")
       val result = WebExecutionResolutionPolicy.fromConfiguration(configuration)
 
-      Then("the canonical Web key and compatibility formatting keys produce the typed policy")
+      Then("only presentation keys produce the typed Web policy")
       result shouldBe a[Consequence.Success[_]]
       val policy = result.toOption.get
-      policy.applicationMode shouldBe WebApplicationMode.MultiUser
       policy.applicationLocale shouldBe Some(Locale.JAPAN)
       policy.applicationTimezone shouldBe Some(ZoneId.of("Asia/Tokyo"))
       policy.httpLanguageNegotiationEnabled shouldBe true
       policy.publicCapabilities shouldBe Vector("knowledge:read", "page_admin")
     }
 
-    "admit only the Phase 53 canonical WebApplicationMode key" in {
-      Given("canonical standalone and multi-user values with conflicting former spellings")
+    "ignore obsolete Web mode keys while decoding Web presentation policy" in {
+      Given("obsolete Web values with conflicting spellings")
       val standalone = _configuration(Map(
-        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone",
         "cncf.web.application-mode" -> "multi-user",
         "cncf.runtime.web.execution.application-mode" -> "multi-user",
         "textus.web.execution.application-mode" -> "multi-user"
       ))
       val multiuser = _configuration(Map(
-        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "multi-user",
         "cncf.web.application-mode" -> "standalone",
         "cncf.runtime.web.execution.application-mode" -> "standalone",
         "textus.web.execution.application-mode" -> "standalone"
       ))
 
-      When("Web application mode is resolved from the configuration")
+      When("Web presentation policy is decoded")
       val resolvedstandalone = WebExecutionResolutionPolicy.fromConfiguration(standalone).toOption.get
       val resolvedmultiuser = WebExecutionResolutionPolicy.fromConfiguration(multiuser).toOption.get
 
-      Then("only the canonical key selects the Web operation")
-      resolvedstandalone.applicationMode shouldBe WebApplicationMode.Standalone
-      resolvedmultiuser.applicationMode shouldBe WebApplicationMode.MultiUser
+      Then("no configuration value selects the Web projection mode")
+      resolvedstandalone shouldBe resolvedmultiuser
     }
 
-    "reject noncanonical WebApplicationMode spellings when the canonical key is absent" in {
+    "ignore noncanonical WebApplicationMode spellings when the Subsystem key is absent" in {
       Given("only former CNCF and execution-scoped spellings")
       val noncanonical = _configuration(Map(
         "cncf.web.application-mode" -> "multi-user",
@@ -194,34 +191,32 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
         "textus.web.execution.application-mode" -> "multi-user"
       ))
 
-      When("Web application mode is resolved without the canonical key")
+      When("Web presentation policy is decoded without a Subsystem")
       val resolved = WebExecutionResolutionPolicy.fromConfiguration(noncanonical)
 
-      Then("former spellings cannot create a duplicate semantic or fallback")
-      resolved shouldBe a[Consequence.Failure[_]]
+      Then("former spellings cannot create a Web mode selector")
+      resolved shouldBe a[Consequence.Success[_]]
     }
 
     "derive standalone only from fixed-user direct-Component capability evidence" in {
-      Given("eligible and ineligible direct Component Subsystems with absent or blank Web-operation input")
+      Given("eligible and ineligible direct Component Subsystems with no canonical user-mode value")
       val eligible = _direct_component_subsystem(fixedcontextcompatible = true, fixeduser = true)
       val incapable = _direct_component_subsystem(fixedcontextcompatible = false, fixeduser = true)
       val explicit = _direct_component_subsystem(fixedcontextcompatible = true, fixeduser = true, implicitlaunch = false)
       val notfixed = _direct_component_subsystem(fixedcontextcompatible = true, fixeduser = false)
       val controlled = DefaultSubsystemFactory.default(mode = None, configuration = _configuration(Map.empty))
-      val blankcanonical = _configuration(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> " "))
 
-      When("the canonical operation key is absent or explicitly malformed")
+      When("the canonical Subsystem user-mode key is absent")
       val derived = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), eligible)
       val missingcapability = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), incapable)
       val explicitlaunch = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), explicit)
       val missingfixeduser = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), notfixed)
       val controlledresult = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), controlled)
-      val blank = WebExecutionResolutionPolicy.resolveForSubsystem(blankcanonical, eligible)
 
-      Then("only an absent key on the eligible direct Component receives the traceable standalone contribution")
+      Then("only an eligible direct Component receives the traceable standalone contribution")
       derived shouldBe a[Consequence.Success[_]]
       val resolution = derived.toOption.get
-      resolution.policy.applicationMode shouldBe WebApplicationMode.Standalone
+      resolution.applicationMode shouldBe WebApplicationMode.Standalone
       resolution.applicationModeTrace.map(_.origin) shouldBe Some(org.goldenport.configuration.ConfigurationOrigin.Default)
       resolution.applicationModeTrace.flatMap(_.sourceType) shouldBe Some("derived-default")
       resolution.applicationModeTrace.flatMap(_.sourceId) shouldBe Some("textus-direct-component-standalone")
@@ -230,7 +225,6 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       missingfixeduser shouldBe a[Consequence.Failure[_]]
       controlledresult shouldBe a[Consequence.Success[_]]
       controlledresult.toOption.get.applicationModeTrace.flatMap(_.sourceType) shouldBe Some("controlled-test")
-      blank shouldBe a[Consequence.Failure[_]]
     }
 
     "reject malformed selected locale timezone format and policy values structurally" in {
@@ -255,10 +249,10 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       badformat shouldBe a[Consequence.Failure[_]]
     }
 
-    "reject malformed Web execution configuration instead of applying fallback values" in {
-      Given("configuration with an unsupported application mode and non-boolean negotiation value")
+    "reject Subsystem user-mode input from the configuration-only presentation API" in {
+      Given("configuration with a Subsystem value and non-boolean negotiation value")
       val badmode = _configuration(Map(
-        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "shared"
+        org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> "shared"
       ))
       val badnegotiation = _configuration(Map(
         WebExecutionResolutionPolicy.HTTP_LANGUAGE_NEGOTIATION_ENABLED_KEY -> "sometimes"
@@ -268,9 +262,29 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       val moderesult = WebExecutionResolutionPolicy.fromConfiguration(badmode)
       val negotiationresult = WebExecutionResolutionPolicy.fromConfiguration(badnegotiation)
 
-      Then("each malformed policy is a structured failure")
+      Then("canonical Subsystem input and malformed Web policy are structured failures")
       moderesult shouldBe a[Consequence.Failure[_]]
       negotiationresult shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject composite and null canonical input from the configuration-only presentation API" in {
+      Given("a canonical key with composite or null configuration values")
+      val values = Vector[ConfigurationValue](
+        ConfigurationValue.ListValue(List(ConfigurationValue.StringValue("standalone"))),
+        ConfigurationValue.ObjectValue(Map("value" -> ConfigurationValue.StringValue("multi-user"))),
+        ConfigurationValue.NullValue
+      )
+
+      When("presentation-only configuration decoding is attempted")
+      val results = values.map { value =>
+        WebExecutionResolutionPolicy.fromConfiguration(ResolvedConfiguration(
+          Configuration(Map(org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> value)),
+          ConfigurationTrace.empty
+        ))
+      }
+
+      Then("every present canonical value requires owning Subsystem resolution")
+      results.foreach(_ shouldBe a[Consequence.Failure[_]])
     }
     }
 

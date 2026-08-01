@@ -2,7 +2,6 @@ package org.goldenport.cncf.cli
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.StandaloneUserProfileResolver
-import org.goldenport.cncf.http.WebExecutionResolutionPolicy
 import org.goldenport.cncf.subsystem.{Subsystem, SubsystemCurrentUserEvidence, SubsystemExecutionProfile}
 
 /*
@@ -51,16 +50,15 @@ private[cli] object RuntimeStandaloneUserProfileAdmission {
     subsystemprofile: SubsystemProfileResolution
   ): Consequence[SubsystemExecutionProfile] =
     if (serverexecution)
-      WebExecutionResolutionPolicy
-        .resolveForSubsystem(subsystem.configuration, subsystem)
+      subsystem.subsystemUserModeC
         .flatMap { resolution =>
           subsystemprofile(subsystem).map {
             case SubsystemExecutionProfile(SubsystemCurrentUserEvidence.ControlledTest) =>
               SubsystemExecutionProfile.ControlledTest
             case _ =>
-              resolution.policy.applicationMode.toSubsystemExecutionProfile
+              resolution.mode.toExecutionProfile
           }.recover {
-            case _ => resolution.policy.applicationMode.toSubsystemExecutionProfile
+            case _ => resolution.mode.toExecutionProfile
           }
         }
     else

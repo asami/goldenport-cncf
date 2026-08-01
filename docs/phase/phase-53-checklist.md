@@ -444,6 +444,80 @@ Evidence:
   profile-ordering, locale/timezone, datastore, and operator presentation
   work remains explicitly deferred to Phase 54/55/58 as recorded above.
 
+## PM-53-01: Transport-Neutral Subsystem User-Mode Admission
+
+Stage Status:
+- Current status: CLOSED
+- Owner: CNCF framework runtime and ingress maintainers
+- Entry rule: CS-07 is DONE.
+- Completion rule: `standalone` / `multi-user` is resolved once per stable
+  Subsystem as `SubsystemUserMode`, Command, REST, and Web consume the owning
+  Subsystem resolution, and no transport, SystemNode/JVM, or Component becomes
+  a competing authority.
+
+- [x] Replace the Web-owned selector with the Subsystem-scoped canonical key
+  `textus.subsystem.user-mode`.
+- [x] Establish `SubsystemUserMode` with canonical values `standalone` and
+  `multi-user`, resolved from the selected stable Subsystem identity.
+- [x] Record `System = N SystemNode`, `SystemNode = N Subsystem`, and
+  `Subsystem = N Component`; current one-JVM/one-SystemNode support must not
+  make user mode JVM-global or prevent future mixed-mode Subsystems.
+- [x] Keep `OperationMode` (`develop` / `production`) as an independent axis.
+- [x] Resolve Subsystem user mode before fixed-user or authenticated-user
+  context selection.
+- [x] Make Command, REST, and Web consume the owning Subsystem's resolved user
+  mode after target Component ownership is identified.
+- [x] In `standalone`, construct the fixed-user ExecutionContext for every
+  transport; in `multi-user`, require the transport-admitted authenticated
+  principal and prohibit fixed-user fallback.
+- [x] Keep Subsystem user mode out of ComponentFactory, Component create/init,
+  generated operation input, ActionCall, and domain results.
+- [x] Restrict Web-owned configuration to presentation concerns such as
+  locale negotiation, formatting, and display override.
+- [x] Prove `textus.web.application-mode`,
+  `textus.web.execution.application-mode`, `cncf.web.application-mode`, and
+  `cncf.runtime.web.execution.application-mode` cannot select or override the
+  Subsystem user mode.
+- [x] Preserve the existing conditional direct-Component `standalone` default
+  under the Subsystem-scoped key.
+- [x] Reject malformed canonical values during bootstrap/admission, including
+  list, object, null, number, and boolean values.
+- [x] Execute the `OperationMode x SubsystemUserMode x Transport` matrix and
+  prove equivalent representative Component semantics for Command, REST, and
+  Web.
+- [x] Re-run affected full validation and clean review, then close PM-53-01
+  without altering the historical CS-01--CS-07 completion record.
+
+Explicit deferral boundary:
+
+- Phase 55 continues to own effective profile precedence, detailed
+  provenance, `ConfigurationBinding`, environment codecs, and complete
+  fixed-user field binding. PM-53-01 changes Subsystem user-mode authority and
+  transport admission only. It excludes `ApplicationMode`, `RuntimeUserMode`,
+  `textus.application-mode`, JVM-global mode, launcher/ArtScene changes,
+  datastore policy, and CML/generator work.
+
+Evidence:
+- Admitted repository: `dev2025/cloud-native-component-framework` only.
+  Launcher and ArtScene worktrees are explicitly excluded and preserved.
+- Target programs: `SubsystemUserMode`, `Subsystem`,
+  `SubsystemExecutionProfile`, `RuntimeStandaloneUserProfileAdmission`,
+  `WebExecutionResolution`, `WebExecutionProjection`, `Http4sHttpServer`,
+  and their listed Subsystem/CLI/HTTP/Component boundary specifications.
+- Corrected historical claim: CS-05E made Web the selector; PM-53-01 moves
+  selection to the stable owning Subsystem without changing CS-01--CS-07.
+- Final validation: serialized `clean; test` exited 0 on 2026-08-01: 2,735
+  tests succeeded, 0 failed, across 388 completed suites. Post-review focused
+  `Test/compile; testOnly` evidence also passed for 406 metadata-target tests,
+  368 style/naming-target tests, and 39 session/dispatch tests. `git diff
+  --check` passed.
+- Clean review: Subsystem ownership, transport admission, Component boundary,
+  Web non-authority, and cache safety passed. The remaining legacy
+  scenario-prose cleanup in HYG-P53-004 is user-authorized deferred hygiene;
+  it carries no PM-53-01 behavior or validation deficit.
+- Controlled-test execution remains an explicit test-only evidence path. It
+  does not make an unauthenticated production multi-user Subsystem valid.
+
 ## Planning Baseline
 
 No runtime, CML generator, launcher, or ArtScene source is modified by this
@@ -465,12 +539,10 @@ recorded ownership or acceptance evidence.
 
 ## Current State
 
-Phase 53 is COMPLETE. CS-01 through CS-07 are DONE. CS-06 adopts the
-accepted CNCF ComponentStyle, canonical Web operation transport, and public
-ExecutionContext boundary while preserving focused ArtScene acceptance. The
-full legacy mode/binding and datastore migration matrix is explicitly deferred
-to Phase 54/55. CS-05L relocates unimplemented binding, fixed-user
-migration/isolation/formatting, provenance/redaction, datastore metadata,
-operator presentation, and Factory-purity work to Phase 55, Phase 54, Phase
-58, and strategy candidate 9.53 respectively; no relocation is Phase 53
-behavior credit.
+Phase 53 base work is COMPLETE: CS-01 through CS-07 are DONE and retain their
+historical evidence.
+
+Maintenance status: CLOSED (`PM-53-01`). The maintenance item corrects the
+Web-owned application-mode authority into one runtime authority shared by
+Command, REST, and Web. Existing Phase 54/55/58 and strategy-candidate
+deferrals are unchanged and receive no Phase 53 maintenance credit.

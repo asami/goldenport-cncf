@@ -23,11 +23,14 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  "Static Web runtime execution projection" should {
+  private val _in_phase53_spec =
+    afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-3, phase:53")
+
+  "Static Web runtime execution projection" must _in_phase53_spec {
     "project configured standalone execution state before the first application render" in {
       Given("a Japanese standalone Static Web app and a conflicting English request language")
       val root = Files.createTempDirectory("static-web-execution-projection-")
@@ -48,7 +51,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       val configuration = ResolvedConfiguration(
         Configuration(Map(
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
-          WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("standalone"),
+          org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("standalone"),
           WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("ja-JP"),
           WebExecutionResolutionPolicy.TIMEZONE_KEY -> ConfigurationValue.StringValue("Asia/Tokyo"),
           WebExecutionResolutionPolicy.PUBLIC_CAPABILITIES_KEY -> ConfigurationValue.StringValue("debug:read")
@@ -108,7 +111,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       val configuration = ResolvedConfiguration(
         Configuration(Map(
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
-          WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("standalone"),
+          org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("standalone"),
           WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("en-US")
         )),
         ConfigurationTrace.empty
@@ -155,7 +158,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       val configuration = ResolvedConfiguration(
         Configuration(Map(
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
-          WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("standalone")
+          org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("standalone")
         )),
         ConfigurationTrace.empty
       )

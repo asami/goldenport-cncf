@@ -94,11 +94,14 @@ sources participate in Web projection resolution.
 - `multi-user` selects authenticated-user preferences, then configured
   application fallbacks, then runtime defaults.
 
-The mode must be selected by explicit Web execution policy. It is not inferred
-from whether one request happens to be authenticated. The compatibility
-default for a Static Web App without that policy is `standalone`.
+The mode is resolved by the owning Subsystem from its canonical
+`SubsystemUserMode` (`textus.subsystem.user-mode`), not by Web execution
+policy. It is not inferred from whether one request happens to be
+authenticated. When the canonical value is absent, the Subsystem's existing
+direct-Component compatibility rule, rather than a Static Web App fallback,
+determines whether `standalone` is available.
 
-Descriptor/configuration syntax for selecting the policy is implemented in
+Descriptor/configuration syntax for presentation policy is implemented in
 SW-02/SW-03. The semantic values above are the stable contract.
 
 ## Locale and Timezone Resolution
@@ -155,10 +158,17 @@ pattern.
 
 ## Web Execution Policy Configuration
 
-The runtime-level policy uses the `textus.web.execution.*` namespace:
+Subsystem user-mode admission is transport-neutral and is not a Web policy.
+The owning stable Subsystem resolves the exact canonical key
+`textus.subsystem.user-mode` to `standalone` or `multi-user` before Command,
+REST, or Web constructs ingress execution context. Web projects that resolved
+mode but cannot select it; `textus.web.application-mode`,
+`textus.web.execution.application-mode`, `cncf.web.application-mode`, and
+`cncf.runtime.web.execution.application-mode` are not selectors.
+
+The Web presentation policy uses the `textus.web.execution.*` namespace:
 
 ```text
-application-mode
 locale
 timezone
 date-format
@@ -168,7 +178,7 @@ http-language-negotiation.enabled
 public-capabilities
 ```
 
-Canonical fully qualified keys therefore start with
+Canonical fully qualified presentation keys therefore start with
 `textus.web.execution.`. Existing Textus runtime and CNCF compatibility
 namespaces are accepted as aliases. The canonical namespace has precedence.
 

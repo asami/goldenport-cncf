@@ -1,23 +1,25 @@
 package org.goldenport.cncf.subsystem
 
-import org.goldenport.cncf.http.WebApplicationMode
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 31, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemExecutionProfileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  "SubsystemExecutionProfile" should {
-    "remain mode-free while Web projects its application modes at the Web boundary" in {
-      Given("the two Web application modes")
+  private val _in_phase53_spec =
+    afterWord("in spec:subsystem-user-mode-admission, example:PM-53-01, rules:PM-53-01, phase:53")
 
-      When("each mode is projected into a Subsystem execution profile")
-      val standalone = WebApplicationMode.Standalone.toSubsystemExecutionProfile
-      val multiuser = WebApplicationMode.MultiUser.toSubsystemExecutionProfile
+  "SubsystemExecutionProfile" must _in_phase53_spec {
+    "remain mode-free while a Subsystem user mode selects its execution profile" in {
+      Given("the two Subsystem user modes")
+
+      When("each Subsystem mode is admitted into a Subsystem execution profile")
+      val standalone = SubsystemUserMode.Standalone.toExecutionProfile
+      val multiuser = SubsystemUserMode.MultiUser.toExecutionProfile
 
       Then("only current-user evidence crosses into the Subsystem contract")
       standalone shouldBe SubsystemExecutionProfile.Fixed
@@ -26,7 +28,7 @@ final class SubsystemExecutionProfileSpec extends AnyWordSpec with Matchers with
       classOf[SubsystemExecutionProfile].getDeclaredFields.map(_.getType.getName).toSet should not contain "org.goldenport.cncf.context.OperationMode"
     }
 
-    "allow controlled tests to select explicit identity evidence without a Web type" in {
+    "allow controlled tests to select explicit identity evidence without a mode type" in {
       Given("the mode-free profile contract")
 
       When("a controlled test profile is selected")

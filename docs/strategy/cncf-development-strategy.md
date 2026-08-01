@@ -669,6 +669,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase: `docs/phase/phase-47.md` with
   `docs/phase/phase-47-checklist.md` (Jul. 22, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
+- Post-completion corrective work uses the formal
+  `PM-<phase>-<sequence>` ledger and ADMIT through CLOSE workflow defined by
+  those status rules. Closed phase work groups remain frozen; new capabilities
+  and explicit deferrals stay in their owning future phases.
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
   gate inherited through `ScopeContext`. It rejects saturated or unconfigured

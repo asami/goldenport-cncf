@@ -54,13 +54,16 @@ Unknown fields MUST NOT be copied from runtime or session objects.
 
 ## SWEP-3: Application Mode
 
-Application mode MUST be selected by explicit Web execution policy.
+`applicationMode` MUST be derived from the owning Subsystem's resolved
+`SubsystemUserMode` (`textus.subsystem.user-mode`).  Web presentation policy
+MUST NOT select or override that mode.
 
 CNCF MUST NOT infer application mode from request authentication state,
 `OperationMode`, or page layout/display mode.
 
-When no Web execution policy selects a mode, Static Web rendering MUST use
-`standalone` for compatibility.
+When the owning Subsystem has no canonical mode value, its existing
+direct-Component compatibility rule determines whether `standalone` is
+available; it is not a Web-owned fallback.
 
 ## SWEP-4: Locale and Timezone Resolution
 
@@ -112,10 +115,16 @@ Execution policy `default` maps to `application-default`. Execution policy
 `localized` and `localized-medium` map to `localized-medium`. Formatter object
 names, patterns, and `toString` output are invalid public identifiers.
 
-The canonical runtime configuration keys are:
+`applicationMode` in the public projection MUST be derived from the owning
+Subsystem's `SubsystemUserMode`, resolved using the exact canonical
+`textus.subsystem.user-mode` value `standalone` or `multi-user`. A
+configuration-only Web policy decoder MUST reject a present user-mode value:
+it lacks the owning Subsystem authority. Web-specific mode spellings MUST NOT
+select or override the projection mode.
+
+The canonical Web presentation configuration keys are:
 
 ```text
-textus.web.execution.application-mode
 textus.web.execution.locale
 textus.web.execution.timezone
 textus.web.execution.date-format
@@ -126,10 +135,10 @@ textus.web.execution.public-capabilities
 ```
 
 The corresponding `textus.runtime.*`, `cncf.*`, and `cncf.runtime.*` forms are
-compatibility aliases. Display override and HTTP language negotiation both
-default to disabled. Invalid configured mode, locale, timezone, format ID, or
-boolean policy MUST produce a structured failure rather than silently selecting
-a fallback.
+compatibility aliases for presentation keys only. Display override and HTTP
+language negotiation both default to disabled. Invalid configured user-mode,
+locale, timezone, format ID, or boolean policy MUST produce a structured
+failure rather than silently selecting a fallback.
 
 ## SWEP-6: Subject Safety
 

@@ -7,6 +7,7 @@ import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, SessionContext}
 import org.goldenport.cncf.security.AuthenticationResult
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, SubsystemUserMode}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -14,11 +15,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebExecutionRuntimeProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  "Web execution runtime projection" should {
+  private val _in_phase53_spec =
+    afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-2,SWEP-3, phase:53")
+
+  "Web execution runtime projection" must _in_phase53_spec {
     "project authenticated-user formatting and only explicitly public security state" in {
       Given("an authenticated user with Japanese preferences, internal security data, and a hostile public display name")
       val internalprincipal = "internal-principal-7981"
@@ -47,7 +51,6 @@ final class WebExecutionRuntimeProjectionSpec extends AnyWordSpec with Matchers 
         authentication.toSecurityContext
       )
       val configuration = _configuration(Map(
-        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "multi-user",
         WebExecutionResolutionPolicy.LOCALE_KEY -> "en-US",
         WebExecutionResolutionPolicy.TIMEZONE_KEY -> "UTC",
         WebExecutionResolutionPolicy.HTTP_LANGUAGE_NEGOTIATION_ENABLED_KEY -> "true",
@@ -56,7 +59,11 @@ final class WebExecutionRuntimeProjectionSpec extends AnyWordSpec with Matchers 
 
       When("runtime projection and first-render template generation execute before application JavaScript")
       val result = WebExecutionRuntimeProjection.resolve(
-        configuration,
+        WebExecutionPolicyResolution(
+          WebExecutionResolutionPolicy.fromConfiguration(configuration).toOption.get,
+          WebApplicationMode.MultiUser,
+          None
+        ),
         executioncontext,
         WebExecutionRuntimeRequest(
           acceptLanguage = Some("fr-FR,fr;q=0.9"),
@@ -101,15 +108,51 @@ final class WebExecutionRuntimeProjectionSpec extends AnyWordSpec with Matchers 
       val request = WebExecutionRuntimeRequest(acceptLanguage = Some("ja-JP"))
 
       When("the same runtime projection is resolved repeatedly")
-      val configuration = _configuration(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone"))
-      val first = WebExecutionRuntimeProjection.resolve(configuration, executioncontext, request)
-      val second = WebExecutionRuntimeProjection.resolve(configuration, executioncontext, request)
+      val configuration = _configuration(Map.empty)
+      val policy = WebExecutionResolutionPolicy.fromConfiguration(configuration).toOption.get
+      val first = WebExecutionResolver.resolve(policy, WebExecutionResolutionInput(
+        runtimeLocale = Some(Locale.CANADA_FRENCH),
+        runtimeTimezone = Some(ZoneId.of("America/Toronto")),
+        acceptLanguage = Some("ja-JP")
+      ))
+      val second = WebExecutionResolver.resolve(policy, WebExecutionResolutionInput(
+        runtimeLocale = Some(Locale.CANADA_FRENCH),
+        runtimeTimezone = Some(ZoneId.of("America/Toronto")),
+        acceptLanguage = Some("ja-JP")
+      ))
 
       Then("both projections retain the same execution-owned fallback values")
       first shouldBe a[Consequence.Success[_]]
       second shouldBe first
-      first.toOption.map(_.locale) shouldBe Some("fr-CA")
-      first.toOption.map(_.timezone) shouldBe Some("America/Toronto")
+      first.toOption.map(_.locale) shouldBe Some(Locale.CANADA_FRENCH)
+      first.toOption.map(_.timezone) shouldBe Some(ZoneId.of("America/Toronto"))
+    }
+
+    "require authenticated-user wiring for canonical multi-user projection" in {
+      Given("a canonical multi-user Subsystem without provider wiring")
+      val configuration = _configuration(Map(
+        SubsystemUserMode.CONFIGURATION_KEY -> "multi-user",
+        WebExecutionResolutionPolicy.LOCALE_KEY -> "en-US"
+      ))
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val executioncontext = ExecutionContext.withSecurityContext(
+        _execution_context(Locale.US, ZoneId.of("UTC")),
+        AuthenticationResult(
+          principalId = PrincipalId("projection-user"),
+          attributes = Map("locale" -> "ja-JP")
+        ).toSecurityContext
+      )
+
+      When("the supported owning-Subsystem projection overload is used")
+      val result = WebExecutionRuntimeProjection.resolve(
+        configuration,
+        subsystem,
+        executioncontext,
+        WebExecutionRuntimeRequest()
+      )
+
+      Then("projection fails closed rather than manufacturing a Web-owned mode")
+      result shouldBe a[Consequence.Failure[_]]
     }
   }
 
