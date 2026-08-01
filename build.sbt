@@ -228,6 +228,16 @@ def cncfRuntimeDescriptorText(
 def sha256Bytes(bytes: Array[Byte]): String =
   MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
+def informationCmlProcessLogger(log: sbt.util.Logger): scala.sys.process.ProcessLogger =
+  scala.sys.process.ProcessLogger(
+    output => log.info(output),
+    output =>
+      if (CncfGenerationBuildContract.isGenerationNotice(output))
+        log.info(output)
+      else
+        log.error(output)
+  )
+
 def runInformationCmlGeneration(
   inputs: CncfGenerationInputs,
   outputDirectory: File,
@@ -246,7 +256,8 @@ def runInformationCmlGeneration(
   log.info(
     s"Generating ${inputs.sourceIdentity}@${inputs.sourceSha256} with Cozy ${inputs.cozyGeneratorVersion} for CNCF ${inputs.cncfTargetVersion} using ${inputs.runtimeDescriptor.getAbsolutePath}"
   )
-  val exitcode = scala.sys.process.Process(command, baseDirectory).!(log)
+  val processlogger = informationCmlProcessLogger(log)
+  val exitcode = scala.sys.process.Process(command, baseDirectory).!(processlogger)
   if (exitcode != 0)
     sys.error(CncfGenerationBuildContract.generationFailure(inputs, exitcode))
   val files =
@@ -260,7 +271,7 @@ def runInformationCmlGeneration(
       identity
     )
   val validationexitcode =
-    scala.sys.process.Process(validationcommand, baseDirectory).!(log)
+    scala.sys.process.Process(validationcommand, baseDirectory).!(processlogger)
   if (validationexitcode != 0)
     sys.error(
       s"failed to validate CNCF Information generation provenance: ${CncfGenerationBuildContract.provenanceFile(outputDirectory).getAbsolutePath}"
@@ -428,6 +439,8 @@ lazy val root = project
       "com.vladsch.flexmark" % "flexmark-ext-gfm-tasklist" % "0.62.2",
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
+      // Route Apache POI's Log4j API through the CNCF SLF4J backend.
+      "org.apache.logging.log4j" % "log4j-to-slf4j" % "2.21.1",
 
       "org.goldenport" %% "goldenport-core" % "0.4.1",
       "org.simplemodeling" %% "simplemodeling-model" % "0.2.1-SNAPSHOT",
@@ -599,7 +612,7 @@ lazy val root = project
     Test / fork := false,
     Test / parallelExecution := false,
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
-    Test / javaOptions += "-Dtextus.test=true",
+    Test / testOnly / javaOptions += "-Dtextus.test=true",
     (Test / test / testOptions) += Tests.Setup(() => System.setProperty("textus.test", "true")),
     (Test / test / testOptions) += Tests.Argument(
       TestFrameworks.ScalaTest,

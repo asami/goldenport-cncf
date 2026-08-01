@@ -22,6 +22,13 @@ final case class CncfGenerationSnapshot(
 object CncfGenerationBuildContract {
   val GENERATION_PROVENANCE_PATH = "target/cozy/generation-provenance.json"
 
+  def isGenerationNotice(message: String): Boolean =
+    Option(message).exists { value =>
+      val normalized = value.trim
+      normalized.startsWith("[cozy.generation.acceptance]") &&
+        normalized.contains(" level=notice ")
+    }
+
   def resolve(
     cozyGeneratorVersion: String,
     cncfTargetVersion: String,

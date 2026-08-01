@@ -12,6 +12,24 @@ import java.util.Comparator
 
 final class Phase51Cv05BuildProvenanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Phase 51 CV-05 CNCF build provenance" should {
+    "preserve Cozy generation notice severity when the build consumes process output" in {
+      Given("a structured Cozy development-pair notice and ordinary stderr diagnostics")
+      val notice =
+        "[cozy.generation.acceptance] boundary=cli level=notice code=MutableDevelopmentPairAccepted message=accepted"
+      val failure =
+        "[cozy.generation.acceptance] boundary=cli code=MissingEvidence message=missing"
+
+      When("the CNCF build classifies Cozy process output")
+      val noticeclassification = CncfGenerationBuildContract.isGenerationNotice(notice)
+      val failureclassification = CncfGenerationBuildContract.isGenerationNotice(failure)
+      val ordinaryclassification = CncfGenerationBuildContract.isGenerationNotice("unexpected stderr")
+
+      Then("only the explicitly structured notice is eligible for info-level logging")
+      noticeclassification shouldBe true
+      failureclassification shouldBe false
+      ordinaryclassification shouldBe false
+    }
+
     "bind generation and validation commands to one exact source snapshot" in {
       Given("a pinned generator, CNCF target, runtime descriptor, and project CML source")
       _with_temp_dir("cncf-phase51-cv05-command") { directory =>
