@@ -19,7 +19,8 @@ final case class WebPageContextRequest(
   routePath: String,
   values: Map[String, String] = Map.empty,
   sessionId: Option[String] = None,
-  authenticated: Boolean = false
+  authenticated: Boolean = false,
+  execution: Option[WebExecutionProjection] = None
 )
 
 final case class WebPageContext(

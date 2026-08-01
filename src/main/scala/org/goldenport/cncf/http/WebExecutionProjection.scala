@@ -6,16 +6,22 @@ import java.util.Locale
 import io.circe.Json
 
 import org.goldenport.cncf.security.SecuritySubject
+import org.goldenport.cncf.subsystem.SubsystemExecutionProfile
 import org.goldenport.record.Record
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 enum WebApplicationMode(val name: String) {
   case Standalone extends WebApplicationMode("standalone")
   case MultiUser extends WebApplicationMode("multi-user")
+
+  def toSubsystemExecutionProfile: SubsystemExecutionProfile = this match {
+    case WebApplicationMode.Standalone => SubsystemExecutionProfile.Fixed
+    case WebApplicationMode.MultiUser => SubsystemExecutionProfile.Authenticated
+  }
 }
 
 object WebApplicationMode {

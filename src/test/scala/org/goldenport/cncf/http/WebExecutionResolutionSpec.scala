@@ -4,6 +4,8 @@ import java.time.ZoneId
 import java.util.Locale
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.{ComponentDescriptor, ComponentStyleCatalog, ComponentStyleId}
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemAuthenticationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -12,11 +14,12 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Web execution formatting resolution" should {
+    "formatting precedence" which {
     "prefer standalone application formatting over user and browser values" in {
       Given("a standalone application policy and conflicting user and browser values")
       val policy = WebExecutionResolutionPolicy(
@@ -130,12 +133,14 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       explicit.projectionPolicy.dateFormat.name shouldBe "localized-short"
       explicit.projectionPolicy.dateTimeFormat.name shouldBe "localized-long"
     }
+    }
 
-    "decode canonical and compatibility configuration keys with strict values" in {
-      Given("a runtime configuration using CNCF compatibility aliases")
+    "configuration decoding" which {
+    "decode the canonical Web operation key with compatibility formatting keys" in {
+      Given("a runtime configuration with the canonical Web operation key and legacy formatting aliases")
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          "cncf.runtime.web.execution.application-mode" -> ConfigurationValue.StringValue("multi-user"),
+          WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("multi-user"),
           "cncf.runtime.web.execution.locale" -> ConfigurationValue.StringValue("ja-JP"),
           "cncf.runtime.web.execution.timezone" -> ConfigurationValue.StringValue("Asia/Tokyo"),
           "cncf.runtime.web.execution.http-language-negotiation.enabled" -> ConfigurationValue.BooleanValue(true),
@@ -147,7 +152,7 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       When("the Web execution policy is decoded")
       val result = WebExecutionResolutionPolicy.fromConfiguration(configuration)
 
-      Then("the aliases produce the canonical typed policy")
+      Then("the canonical Web key and compatibility formatting keys produce the typed policy")
       result shouldBe a[Consequence.Success[_]]
       val policy = result.toOption.get
       policy.applicationMode shouldBe WebApplicationMode.MultiUser
@@ -155,6 +160,77 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       policy.applicationTimezone shouldBe Some(ZoneId.of("Asia/Tokyo"))
       policy.httpLanguageNegotiationEnabled shouldBe true
       policy.publicCapabilities shouldBe Vector("knowledge:read", "page_admin")
+    }
+
+    "admit only the Phase 53 canonical WebApplicationMode key" in {
+      Given("canonical standalone and multi-user values with conflicting former spellings")
+      val standalone = _configuration(Map(
+        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone",
+        "cncf.web.application-mode" -> "multi-user",
+        "cncf.runtime.web.execution.application-mode" -> "multi-user",
+        "textus.web.execution.application-mode" -> "multi-user"
+      ))
+      val multiuser = _configuration(Map(
+        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "multi-user",
+        "cncf.web.application-mode" -> "standalone",
+        "cncf.runtime.web.execution.application-mode" -> "standalone",
+        "textus.web.execution.application-mode" -> "standalone"
+      ))
+
+      When("Web application mode is resolved from the configuration")
+      val resolvedstandalone = WebExecutionResolutionPolicy.fromConfiguration(standalone).toOption.get
+      val resolvedmultiuser = WebExecutionResolutionPolicy.fromConfiguration(multiuser).toOption.get
+
+      Then("only the canonical key selects the Web operation")
+      resolvedstandalone.applicationMode shouldBe WebApplicationMode.Standalone
+      resolvedmultiuser.applicationMode shouldBe WebApplicationMode.MultiUser
+    }
+
+    "reject noncanonical WebApplicationMode spellings when the canonical key is absent" in {
+      Given("only former CNCF and execution-scoped spellings")
+      val noncanonical = _configuration(Map(
+        "cncf.web.application-mode" -> "multi-user",
+        "cncf.runtime.web.execution.application-mode" -> "multi-user",
+        "textus.web.execution.application-mode" -> "multi-user"
+      ))
+
+      When("Web application mode is resolved without the canonical key")
+      val resolved = WebExecutionResolutionPolicy.fromConfiguration(noncanonical)
+
+      Then("former spellings cannot create a duplicate semantic or fallback")
+      resolved shouldBe a[Consequence.Failure[_]]
+    }
+
+    "derive standalone only from fixed-user direct-Component capability evidence" in {
+      Given("eligible and ineligible direct Component Subsystems with absent or blank Web-operation input")
+      val eligible = _direct_component_subsystem(fixedcontextcompatible = true, fixeduser = true)
+      val incapable = _direct_component_subsystem(fixedcontextcompatible = false, fixeduser = true)
+      val explicit = _direct_component_subsystem(fixedcontextcompatible = true, fixeduser = true, implicitlaunch = false)
+      val notfixed = _direct_component_subsystem(fixedcontextcompatible = true, fixeduser = false)
+      val controlled = DefaultSubsystemFactory.default(mode = None, configuration = _configuration(Map.empty))
+      val blankcanonical = _configuration(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> " "))
+
+      When("the canonical operation key is absent or explicitly malformed")
+      val derived = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), eligible)
+      val missingcapability = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), incapable)
+      val explicitlaunch = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), explicit)
+      val missingfixeduser = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), notfixed)
+      val controlledresult = WebExecutionResolutionPolicy.resolveForSubsystem(_configuration(Map.empty), controlled)
+      val blank = WebExecutionResolutionPolicy.resolveForSubsystem(blankcanonical, eligible)
+
+      Then("only an absent key on the eligible direct Component receives the traceable standalone contribution")
+      derived shouldBe a[Consequence.Success[_]]
+      val resolution = derived.toOption.get
+      resolution.policy.applicationMode shouldBe WebApplicationMode.Standalone
+      resolution.applicationModeTrace.map(_.origin) shouldBe Some(org.goldenport.configuration.ConfigurationOrigin.Default)
+      resolution.applicationModeTrace.flatMap(_.sourceType) shouldBe Some("derived-default")
+      resolution.applicationModeTrace.flatMap(_.sourceId) shouldBe Some("textus-direct-component-standalone")
+      missingcapability shouldBe a[Consequence.Failure[_]]
+      explicitlaunch shouldBe a[Consequence.Failure[_]]
+      missingfixeduser shouldBe a[Consequence.Failure[_]]
+      controlledresult shouldBe a[Consequence.Success[_]]
+      controlledresult.toOption.get.applicationModeTrace.flatMap(_.sourceType) shouldBe Some("controlled-test")
+      blank shouldBe a[Consequence.Failure[_]]
     }
 
     "reject malformed selected locale timezone format and policy values structurally" in {
@@ -196,7 +272,9 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       moderesult shouldBe a[Consequence.Failure[_]]
       negotiationresult shouldBe a[Consequence.Failure[_]]
     }
+    }
 
+    "validation and precedence invariants" which {
     "keep configured application locale authoritative for arbitrary conflicting browser languages" in {
       Given("generated application and browser locale pairs")
       val locales = Gen.oneOf("ja-JP", "en-US", "fr-FR", "de-DE")
@@ -218,6 +296,7 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       Then("Accept-Language never overrides configured application locale")
       checked.passed shouldBe true
     }
+    }
   }
 
   private def _configuration(values: Map[String, String]): ResolvedConfiguration =
@@ -225,4 +304,42 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       Configuration(values.view.mapValues(ConfigurationValue.StringValue(_)).toMap),
       ConfigurationTrace.empty
     )
+
+  private def _direct_component_subsystem(
+    fixedcontextcompatible: Boolean,
+    fixeduser: Boolean,
+    implicitlaunch: Boolean = true
+  ) = {
+    val snapshot = ComponentStyleCatalog.default
+      .resolveC(ComponentStyleId.parseC("full-fledged-with-standalone@1").toOption.get)
+      .flatMap(ComponentStyleCatalog.default.expandC)
+      .toOption
+      .get
+    val descriptor = ComponentDescriptor(
+      name = Some("direct-app"),
+      componentName = Some("direct-app"),
+      schemaVersion = Some(2),
+      componentStyleSnapshot = Some(
+        if (fixedcontextcompatible) snapshot
+        else snapshot.copy(effectiveCapabilities = Vector.empty)
+      )
+    )
+    val security =
+      if (fixeduser)
+        Some(GenericSubsystemSecurityBinding(authentication = Some(GenericSubsystemAuthenticationBinding(
+          localSubject = Some(GenericSubsystemLocalSubjectBinding("direct-user"))
+        ))))
+      else
+        None
+    DefaultSubsystemFactory
+      .default(mode = None, configuration = _configuration(Map.empty))
+      .withDescriptor(GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("direct-app.car"),
+        subsystemName = "direct-app",
+        componentBindings = Vector(GenericSubsystemComponentBinding("direct-app")),
+        security = security,
+        componentDescriptorOverrides = Vector(descriptor),
+        implicitRootComponentName = Option.when(implicitlaunch)("direct-app")
+      ))
+  }
 }

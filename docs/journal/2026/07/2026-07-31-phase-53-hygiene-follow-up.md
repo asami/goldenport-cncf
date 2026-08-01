@@ -31,3 +31,18 @@ does not change Phase 53 contracts or completion criteria.
 - Risk: future phase selection can reopen or misclassify a closed Phase 52.
 - Boundary: a standalone Phase 52 documentation-normalization task, with no
   behavior or Phase 53 scope change.
+
+## HYG-P53-003 — CAR fixture component-name coordinate alias
+
+- Status: OPEN
+- Discovery: Phase 53 CS-05C focused re-review, 2026-08-01
+- Repository/path: `cloud-native-component-framework`,
+  `src/test/scala/org/goldenport/cncf/component/testutil/CarArchiveFixture.scala`
+- Evidence: fixture coordinate extraction recognizes serialized `component`
+  and nested `component.name`, but not the accepted `componentName` alias. A
+  fixture with distinct display `name` and `componentName` can therefore emit
+  CAR runtime/ABI evidence that runtime admission rejects.
+- Risk: tests can silently create structurally inconsistent CAR fixtures.
+- Boundary: CNCF test-fixture hygiene. Extend coordinate extraction and add a
+  runtime-admission regression separately; CS-05C uses canonical `component`
+  evidence and does not change fixture infrastructure.

@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -45,6 +45,7 @@ import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.subsystem.SubsystemCurrentUserEvidence
 import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, BlobStoreFactory, BlobStorageRef}
 import org.goldenport.cncf.entity.{
   EntityMutationAdapterDefaults,
@@ -69,7 +70,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 25, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -3051,7 +3052,7 @@ final class Http4sHttpServer(
   private final case class _AdminFormDispatchResult(
     response: HttpResponse,
     defaultSuccessMessage: String
-  ) {
+) {
     def applied: Boolean =
       response.code >= 200 && response.code < 300
 
@@ -3060,6 +3061,11 @@ final class Http4sHttpServer(
         if (applied) defaultSuccessMessage else s"HTTP ${response.code}"
       }
   }
+
+  private final case class WebRequestExecution(
+    executionContext: ExecutionContext,
+    policy: WebExecutionResolutionPolicy
+  )
 
   private def _admin_form_transition_response(
     app: String,
@@ -4545,7 +4551,8 @@ final class Http4sHttpServer(
     req: Option[org.http4s.Request[IO]],
     webappname: String,
     page: Vector[String],
-    executioncontext: Option[ExecutionContext] = None
+    executioncontext: Option[ExecutionContext] = None,
+    execution: Option[WebExecutionProjection] = None
   ): WebPageContext = {
     val sessionid = req.flatMap(_session_id_(_))
     val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
@@ -4575,7 +4582,7 @@ final class Http4sHttpServer(
       "pageContext.app" -> webappname,
       "pageContext.page" -> (if (page.isEmpty) "index" else page.mkString("/"))
     ))
-    base.merge(_page_context_from_providers(req, webappname, page, sessionid, authenticated, executioncontext))
+    base.merge(_page_context_from_providers(req, webappname, page, sessionid, authenticated, executioncontext, execution))
   }
 
   private def _static_page_view_context(
@@ -4589,35 +4596,38 @@ final class Http4sHttpServer(
         Consequence.success(_page_view_context(req, webappname, page))
       case Some(request) =>
         val queryvalues = _query_values(request)
-        for {
-          executioncontext <- _static_request_execution_context(request, componentname.orElse(Some(webappname)))
-          projection <- WebExecutionRuntimeProjection.resolve(
-            engine.runtimeSubsystem.configuration,
-            executioncontext,
+        _static_request_execution_context(request, componentname.orElse(Some(webappname))).flatMap { resolvedexecution =>
+          WebExecutionRuntimeProjection.resolve(
+            resolvedexecution.policy,
+            resolvedexecution.executionContext,
             WebExecutionRuntimeRequest(
               displayLocale = queryvalues.get("lang").orElse(queryvalues.get("locale")),
               displayTimezone = queryvalues.get("timezone").orElse(queryvalues.get("timeZone")),
               acceptLanguage = _request_header_value(request, "Accept-Language")
             )
-          )
-        } yield {
+          ).map { projection =>
           val messages = WebMessageCatalogRuntime.resolve(
             engine.runtimeSubsystem,
             webappname,
             java.util.Locale.forLanguageTag(projection.locale),
-            executioncontext.runtime.context.i18n.locale,
-            executioncontext.runtime.context.i18n.messages
+            resolvedexecution.executionContext.runtime.context.i18n.locale,
+            resolvedexecution.executionContext.runtime.context.i18n.messages
           )
           val flashvalues = _web_flash_context_values(request, componentname.getOrElse(webappname), messages)
           val pagecontext = _page_view_context(
             req,
             webappname,
             page,
-            Some(executioncontext)
+            Some(resolvedexecution.executionContext),
+            Some(projection)
           )
           pagecontext.copy(values = pagecontext.values ++ flashvalues)
             ._with_messages(messages)
             ._with_execution(projection)
+          }
+        }.recover {
+          case _ if _is_unauthenticated_static_page_request(request) =>
+            _page_view_context(Some(request), webappname, page)
         }
     }
 
@@ -4649,6 +4659,15 @@ final class Http4sHttpServer(
     }.getOrElse(Map.empty)
   }
 
+  private def _is_unauthenticated_static_page_request(
+    request: org.http4s.Request[IO]
+  ): Boolean =
+    engine.runtimeSubsystem.executionProfileC.toOption.exists(
+      _.currentUserEvidence == SubsystemCurrentUserEvidence.Authenticated
+    ) &&
+      _session_id_(request).isEmpty &&
+      _request_header_value(request, "Authorization").isEmpty
+
   private def _page_query_context_values(
     req: Option[org.http4s.Request[IO]]
   ): Map[String, String] =
@@ -4675,7 +4694,8 @@ final class Http4sHttpServer(
     page: Vector[String],
     sessionid: Option[String],
     authenticated: Boolean,
-    executioncontext: Option[ExecutionContext] = None
+    executioncontext: Option[ExecutionContext] = None,
+    execution: Option[WebExecutionProjection] = None
   ): WebPageContext =
     req.flatMap { r =>
       executioncontext.orElse(_request_execution_context(r).toOption).map { ctx =>
@@ -4688,7 +4708,8 @@ final class Http4sHttpServer(
             routePath = "/web/" + (webappname +: page).mkString("/"),
             values = _query_values(r),
             sessionId = sessionid,
-            authenticated = authenticated
+            authenticated = authenticated,
+            execution = execution
           )
         )
       }
@@ -5786,8 +5807,8 @@ final class Http4sHttpServer(
   private def _static_request_execution_context(
     req: org.http4s.Request[IO],
     componentname: Option[String]
-  ): Consequence[ExecutionContext] =
-    _request_execution_context(
+  ): Consequence[WebRequestExecution] =
+    _request_execution(
       req,
       componentname,
       Set("locale", "user.locale", "textus.locale")
@@ -5797,7 +5818,14 @@ final class Http4sHttpServer(
     req: org.http4s.Request[IO],
     componentname: Option[String],
     excludedattributekeys: Set[String]
-  ): Consequence[ExecutionContext] = {
+  ): Consequence[ExecutionContext] =
+    _request_execution(req, componentname, excludedattributekeys).map(_.executionContext)
+
+  private def _request_execution(
+    req: org.http4s.Request[IO],
+    componentname: Option[String],
+    excludedattributekeys: Set[String]
+  ): Consequence[WebRequestExecution] = {
     val excluded = excludedattributekeys.map(
       _.trim.toLowerCase(java.util.Locale.ROOT).replace("_", "").replace("-", "")
     )
@@ -5810,7 +5838,21 @@ final class Http4sHttpServer(
       }
       .toMap
     val base = componentname.flatMap(_component).map(_.logic.executionContext()).getOrElse(ExecutionContext.create())
-    IngressSecurityResolver.resolve(base, attributes).map(_.executionContext)
+    WebExecutionResolutionPolicy
+      .resolveForSubsystem(engine.runtimeSubsystem.configuration, engine.runtimeSubsystem)
+      .flatMap { resolution =>
+        engine.runtimeSubsystem.executionProfileC.flatMap { subsystemprofile =>
+          val profile = subsystemprofile.currentUserEvidence match {
+            case SubsystemCurrentUserEvidence.Authenticated | SubsystemCurrentUserEvidence.ControlledTest =>
+              subsystemprofile
+            case SubsystemCurrentUserEvidence.Fixed =>
+              resolution.policy.applicationMode.toSubsystemExecutionProfile
+          }
+          IngressSecurityResolver
+            .resolve(profile, base, attributes)
+            .map(resolved => WebRequestExecution(resolved.executionContext, resolution.policy))
+        }
+      }
   }
 
   private def _request_header_value(

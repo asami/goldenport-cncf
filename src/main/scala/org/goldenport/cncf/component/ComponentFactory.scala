@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -850,7 +850,7 @@ final class ComponentFactory(
     entityspace: EntitySpace
   ): Unit = {
     val names = _aggregate_collection_names(component)
-    val custombindings = component.factory.toVector.flatMap(_.aggregate_collection_bindings(component))
+    val custombindings = component.factory.toVector.flatMap(_.aggregateCollectionBindings(component))
     names.foreach { name =>
       custombindings.find(_.aggregate_name == name) match {
         case _ if aggregatespace.collectionOption[Any](name).isDefined =>
@@ -1471,7 +1471,7 @@ final class ComponentFactory(
       )
       record <- Consequence.fromTry(Try(_entity_to_record(component, entityname, entity)))
       aggregate <- component.factory.map(
-        _.create_aggregate_from_record(entityname, record, _invoke_create_from_record(module, record))
+        _.createAggregateFromRecord(entityname, record, _invoke_create_from_record(module, record))
       ).getOrElse(_invoke_create_from_record(module, record))
     } yield aggregate
 
@@ -2469,7 +2469,7 @@ object ComponentFactory {
   private def _resolve_component_descriptors(
     cwd: Path,
     c: ResolvedConfiguration,
-    _repositorySpecs: Vector[ComponentRepository.Specification]
+    repositoryspecs: Vector[ComponentRepository.Specification]
   ): Vector[ComponentDescriptor] = {
     val explicit =
       _split_paths(ConfigurationAccess.getString(c, _component_descriptor_key)) ++

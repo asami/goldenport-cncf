@@ -149,7 +149,7 @@ import org.goldenport.cncf.processexecution.{
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 28, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -581,7 +581,7 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
 
   protected final def resolve_aggregate_behavior(
   ): Consequence[AggregateBehavior[?]] =
-    component.flatMap(_.factory).flatMap(_.create_aggregate_behavior(action, core)) match {
+    component.flatMap(_.factory).flatMap(_.createAggregateBehavior(action, core)) match {
       case Some(behavior) => Consequence.success(behavior)
       case None => Consequence.operationNotFound(s"AggregateBehavior not found: ${action.name}")
     }
@@ -733,7 +733,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   private def _aggregate_operation_model: ServiceOperationModel = {
     val access = _aggregate_declared_access
     getFactory[org.goldenport.cncf.component.Component.Factory]
-      .flatMap(_.service_operation_model(action, core))
+      .flatMap(_.serviceOperationModel(action, core))
       .orElse(access.flatMap(_.operationModel).map(ServiceOperationModel.parse))
       .getOrElse(ServiceOperationModel.default)
   }
@@ -4210,13 +4210,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       component.flatMap(_.entityRuntimeDescriptor(entityname))
     val entityusage =
       factory
-        .flatMap(_.entity_usage_kind(action, entityname, core))
+        .flatMap(_.entityUsageKind(action, entityname, core))
         .orElse(access.flatMap(_.entityUsage).map(EntityUsageKind.parse))
         .orElse(runtimeentitydescriptor.map(_.usageKind))
         .getOrElse(EntityUsageKind.default)
     val entityoperationkind =
       factory
-        .flatMap(_.entity_operation_kind(action, entityname, core))
+        .flatMap(_.entityOperationKind(action, entityname, core))
         .orElse(access.flatMap(_.entityOperationKind).map(EntityOperationKind.parse))
         .orElse(runtimeentitydescriptor.map(_.effectiveOperationKind))
         .getOrElse(
@@ -4226,7 +4226,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         )
     val entityapplicationdomain =
       factory
-        .flatMap(_.entity_application_domain(action, entityname, core))
+        .flatMap(_.entityApplicationDomain(action, entityname, core))
         .orElse(access.flatMap(_.entityApplicationDomain).map(EntityApplicationDomain.parse))
         .orElse(runtimeentitydescriptor.map(_.applicationDomain))
         .getOrElse(
@@ -4236,12 +4236,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         )
     val operationmodel =
       factory
-        .flatMap(_.service_operation_model(action, core))
+        .flatMap(_.serviceOperationModel(action, core))
         .orElse(access.flatMap(_.operationModel).map(ServiceOperationModel.parse))
         .getOrElse(ServiceOperationModel.default)
     val explicitrelations =
       factory
-        .map(_.entity_access_relations(action, entityname, accesskind, core))
+        .map(_.entityAccessRelations(action, entityname, accesskind, core))
         .getOrElse(Vector.empty) ++
       access.flatMap(_.relation).map(EntityAccessRelation.parseList).getOrElse(Vector.empty)
     val naturalconditions =
@@ -4254,7 +4254,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     )
     val accessmode =
       factory
-        .flatMap(_.entity_access_mode(action, entityname, accesskind, core))
+        .flatMap(_.entityAccessMode(action, entityname, accesskind, core))
         .orElse(access.flatMap(_.mode).map(EntityAccessMode.parse))
         .getOrElse(derivedprofile.accessMode)
     Some(
@@ -4290,13 +4290,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       component.flatMap(_.entityRuntimeDescriptor(entityname))
     val entityusage =
       factory
-        .flatMap(_.entity_usage_kind(action, entityname, core))
+        .flatMap(_.entityUsageKind(action, entityname, core))
         .orElse(access.flatMap(_.entityUsage).map(EntityUsageKind.parse))
         .orElse(runtimeentitydescriptor.map(_.usageKind))
         .getOrElse(EntityUsageKind.default)
     val entityapplicationdomain =
       factory
-        .flatMap(_.entity_application_domain(action, entityname, core))
+        .flatMap(_.entityApplicationDomain(action, entityname, core))
         .orElse(access.flatMap(_.entityApplicationDomain).map(EntityApplicationDomain.parse))
         .orElse(runtimeentitydescriptor.map(_.applicationDomain))
         .getOrElse(

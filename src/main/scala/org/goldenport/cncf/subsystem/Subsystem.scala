@@ -14,6 +14,7 @@ import org.goldenport.cncf.action.{Action, QueryAction}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{
   Component,
+  ComponentCapabilityId,
   ComponentId,
   ComponentInstanceId,
   ComponentSpace
@@ -43,6 +44,7 @@ import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeTestDescriptor}
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.protocol.OperationRequestValidationObserver
@@ -64,7 +66,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 30, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -116,9 +118,11 @@ final class Subsystem(
     "cncf.runtime.site.base-url"
   )
   private var _descriptor: Option[GenericSubsystemDescriptor] = None
+  private var _assembly_admission_report: Option[SubsystemAssemblyAdmission.Report] = None
   private var _component_api_resolver: ComponentApiResolver = ComponentApiResolver.empty
   private lazy val _spi_invoker: SpiInvoker = SpiInvoker._create(this)
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
+  private var _controlled_test_execution: Boolean = false
   private var _user_notification_forwarding_registered: Boolean = false
   private var _service_container_runtime: Option[ServiceContainerRuntime] = None
   private var _mcp_client_runtime: Option[CodexMcpRuntimeAssembly] = None
@@ -155,7 +159,42 @@ final class Subsystem(
   def componentMetrics: ComponentMetricsRegistry = _component_metrics
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
+  def assemblyAdmissionReport: Option[SubsystemAssemblyAdmission.Report] = _assembly_admission_report
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
+  def executionProfileC: Consequence[SubsystemExecutionProfile] =
+    if (
+      _controlled_test_execution &&
+        _resolved_security_wiring.authentication.enabledProviders.isEmpty &&
+        _resolved_security_wiring.authentication.localSubject.isEmpty
+    )
+      Consequence.success(SubsystemExecutionProfile.ControlledTest)
+    else
+      _execution_profile
+
+  private[cncf] def enableControlledTestExecution(): Subsystem = {
+    _controlled_test_execution = true
+    this
+  }
+
+  def directComponentProvides(capability: String): Boolean =
+    ComponentCapabilityId.parseC(capability).toOption.exists { expected =>
+      _descriptor.flatMap { descriptor =>
+        descriptor.implicitRootComponentName.flatMap { rootname =>
+          descriptor.componentBindings
+            .find(_.runtimeComponentName == rootname)
+            .flatMap { rootbinding =>
+              descriptor.componentDescriptorOverrides
+                .find { component =>
+                  GenericSubsystemDescriptor.runtimeComponentName(
+                    component.componentName.orElse(component.name).getOrElse("")
+                  ) == rootbinding.runtimeComponentName
+                }
+                .flatMap(_.componentStyleSnapshot)
+            }
+        }
+      }.exists(_.effectiveCapabilities.exists(_.canonical == expected.canonical))
+    }
+
   def mcpClientServerSetIds: Vector[McpServerSetId] =
     _mcp_client_runtime.toVector.flatMap(_.serverSetIds)
   def operationToolSetIds: Vector[OperationToolSetId] =
@@ -284,9 +323,17 @@ final class Subsystem(
   }
 
   def withDescriptor(descriptor: GenericSubsystemDescriptor): Subsystem = {
+    _controlled_test_execution = false
     _descriptor = Some(descriptor)
     _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, components)
     _ensure_user_notification_event_forwarding()
+    this
+  }
+
+  def withAssemblyAdmissionReport(
+    report: SubsystemAssemblyAdmission.Report
+  ): Subsystem = {
+    _assembly_admission_report = Some(report)
     this
   }
 
@@ -585,9 +632,14 @@ final class Subsystem(
           Consequence.operationNotFound("operation route")
       }
       normalizedrequest <- _prepare_filebundle_parameters(route._3, requestwithhttpproperties)
+      profile <- executionProfileC
       response <- {
         val (component, _, _) = route
-        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedrequest).flatMap { security =>
+        IngressSecurityResolver.resolve(
+          profile,
+          component.logic.executionContext(),
+          _request_security_attributes(normalizedrequest)
+        ).flatMap { security =>
           val executioncontext =
             _with_http_runtime_parameters(security.executionContext, httprequest)
           _execute_resolved_operation(route, normalizedrequest, executioncontext).map { result =>
@@ -1285,8 +1337,14 @@ final class Subsystem(
   def executeAction(action: Action): Consequence[OperationResponse] =
     _resolve_route(action.request) match {
       case Some((component, _, _)) =>
-        IngressSecurityResolver.resolve(component.logic.executionContext(), action.request).flatMap { security =>
-          _execute_action_c(action, security.executionContext)
+        executionProfileC.flatMap { profile =>
+          IngressSecurityResolver.resolve(
+            profile,
+            component.logic.executionContext(),
+            _request_security_attributes(action.request)
+          ).flatMap { security =>
+            _execute_action_c(action, security.executionContext)
+          }
         }
       case None =>
         Consequence.operationNotFound("operation route")
@@ -1950,6 +2008,50 @@ final class Subsystem(
 
   private def _not_found(): HttpResponse =
     HttpResponse.notFound()
+
+  private def _execution_profile: Consequence[SubsystemExecutionProfile] = {
+    val authentication = _resolved_security_wiring.authentication
+    if (authentication.enabledProviders.nonEmpty)
+      Consequence.success(SubsystemExecutionProfile.Authenticated)
+    else if (authentication.localSubject.nonEmpty)
+      Consequence.success(SubsystemExecutionProfile.Fixed)
+    else if (
+      _descriptor.isEmpty &&
+        _is_test_runtime &&
+        _allows_controlled_test_web_execution
+    )
+      Consequence.success(SubsystemExecutionProfile.ControlledTest)
+    else
+      RuntimeTestDescriptor.load(configuration).flatMap {
+        case Some(_) => Consequence.success(SubsystemExecutionProfile.ControlledTest)
+        case None => Consequence.securityPermissionDenied(
+          "Subsystem execution requires fixed-user or authenticated-user wiring; controlled test execution requires an explicit runtime test descriptor."
+        )
+      }
+  }
+
+  private def _is_test_runtime: Boolean =
+    sys.props.get("textus.test").exists { value =>
+      val normalized = value.trim.toLowerCase(java.util.Locale.ROOT)
+      normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
+    }
+
+  private def _allows_controlled_test_web_execution: Boolean =
+    ConfigurationAccess
+      .getString(configuration, "textus.web.application-mode")
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+      .forall(_ == "multi-user")
+
+  private def _request_security_attributes(request: Request): Map[String, String] = {
+    val properties = request.properties.foldLeft(Map.empty[String, String]) { (z, property) =>
+      val value = Option(property.value).map(_.toString).getOrElse("")
+      if (property.name.nonEmpty && value.nonEmpty) z.updated(property.name, value) else z
+    }
+    request.arguments.foldLeft(properties) { (z, argument) =>
+      val value = Option(argument.value).map(_.toString).getOrElse("")
+      if (argument.name.nonEmpty && value.nonEmpty) z.updated(argument.name, value) else z
+    }
+  }
 
   private def _internal_error(): HttpResponse =
     HttpResponse.internalServerError()

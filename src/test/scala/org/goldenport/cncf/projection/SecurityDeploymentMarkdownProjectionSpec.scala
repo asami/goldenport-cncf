@@ -2,7 +2,8 @@ package org.goldenport.cncf.projection
 
 import java.nio.file.Paths
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, SecurityRoleDefinition}
-import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemDescriptor, GenericSubsystemFactory, GenericSubsystemSecurityBinding}
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemAuthorizationBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -22,7 +23,10 @@ final class SecurityDeploymentMarkdownProjectionSpec
       Given("the journal sample descriptor for textus-identity")
       val path = Paths.get("docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
-      val subsystem = GenericSubsystemFactory.default(descriptor)
+      val subsystem = Subsystem(
+        descriptor.subsystemName,
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      ).withDescriptor(descriptor)
 
       When("projecting the security deployment specification as Markdown")
       val markdown = SecurityDeploymentMarkdownProjection.project(subsystem)
@@ -62,7 +66,11 @@ final class SecurityDeploymentMarkdownProjectionSpec
           ))
         ))
       )
-      val subsystem = GenericSubsystemFactory.default(descriptor)
+      val subsystem = Subsystem(
+        descriptor.subsystemName,
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      ).withDescriptor(descriptor)
+      subsystem.add(DefaultSubsystemFactory.builtinComponents(subsystem))
 
       When("projecting the security deployment Markdown")
       val markdown = SecurityDeploymentMarkdownProjection.project(subsystem)

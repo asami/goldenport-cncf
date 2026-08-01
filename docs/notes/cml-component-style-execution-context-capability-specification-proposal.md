@@ -103,13 +103,13 @@ direct Component launch
 
 standalone profile
   -> Subsystem resolves fixed-user evidence
-  -> resolve ~/.textus FixedUserProfile baseline
-  -> apply always-admitted ~/.cncf FixedUserProfile override
+  -> resolve ~/.textus StandaloneUserProfile baseline
+  -> apply always-admitted ~/.cncf StandaloneUserProfile override
   -> fixed-user context provider
   -> SecurityContext + effective formatting
 
 multi-user profile
-  -> ignore both FixedUserProfile documents
+  -> ignore both StandaloneUserProfile documents
   -> Subsystem resolves authenticated-user evidence
   -> authenticated principal/user preferences
   -> SecurityContext + effective formatting
@@ -155,7 +155,7 @@ concept. It controls Web ingress and supplies Web-specific identity evidence
 to the Subsystem. The Subsystem owns user-context-provider resolution.
 `WebApplicationMode` remains inside the WebApplication boundary.
 
-`FixedUserProfile` is stable user identity and preference data used to build
+`StandaloneUserProfile` is stable user identity and preference data used to build
 the current ExecutionContext for standalone or other fixed-user execution.
 
 `ImplicitSubsystemTemplate` is packaged with a directly launchable root
@@ -402,7 +402,7 @@ from the same inputs are semantically identical.
 standalone Web, CLI, job, or other fixed-user ingress
   -> Subsystem user-context-provider resolution
   -> stable Subsystem identity
-  -> FixedUserProfileResolver
+  -> StandaloneUserProfileResolver
        -> ~/.textus common and matching subsystem fields
        -> ~/.cncf common and matching subsystem fields
        -> admitted common environment/argument input
@@ -440,7 +440,7 @@ DataStoreSpace/EntityStoreSpace.
 ## Stable Subsystem identity
 
 The stable Subsystem identifier is established before any subsystem-specific
-FixedUserProfile or Web-operation lookup. Its authority is the containing
+StandaloneUserProfile or Web-operation lookup. Its authority is the containing
 `GenericSubsystemDescriptor.subsystemName`:
 
 - an explicit Subsystem uses its declared `subsystemName`;
@@ -457,7 +457,13 @@ subsystem-qualified profile resolution. Development-directory and packaged-CAR
 descriptors generated from the same CML must project the same stable
 Subsystem identity.
 
-## FixedUserProfile configuration and provenance
+## StandaloneUserProfile configuration and provenance
+
+CS-05A implements only strict document decoding and standalone-only HOME
+admission. It returns `.textus` and `.cncf` documents as ordered typed layers;
+it does not yet select an effective value, bind a user, or establish field
+precedence. Authenticated and controlled-test execution do not read either
+file and cannot use them as fallback.
 
 Normal standalone operation is configured in:
 
@@ -469,7 +475,7 @@ The public typed document is:
 
 ```yaml
 apiVersion: textus/v1
-kind: FixedUserProfile
+kind: StandaloneUserProfile
 
 user:
   id: local-user
@@ -482,7 +488,7 @@ subsystems:
     locale: ja
 ```
 
-`FixedUserProfile` is bootstrap configuration for the fixed current user. It
+`StandaloneUserProfile` is bootstrap configuration for the fixed current user. It
 is distinct from the persisted `UserProfile` domain Entity supplied by
 `textus-user-account`. It contains no WebApplicationMode, OperationMode,
 datastore setting, credential, pool, diagnostic control, or CNCF
@@ -499,7 +505,7 @@ uses the same schema and may be partial:
 
 ```yaml
 apiVersion: textus/v1
-kind: FixedUserProfile
+kind: StandaloneUserProfile
 
 user:
   id: local-development-user
@@ -520,7 +526,7 @@ argument, or artifact coordinate.
 
 The source-admission contract is:
 
-| Source | FixedUserProfile admission |
+| Source | StandaloneUserProfile admission |
 | --- | --- |
 | Contract defaults | Only for fields whose public schema defines a default |
 | `HOME/.textus/user-profile.yaml` | Normal public baseline |
@@ -589,9 +595,9 @@ failed authentication remains an authentication failure.
 
 ## Public Web operation selection
 
-Web operation selection is resolved before FixedUserProfile. It belongs to
+Web operation selection is resolved before StandaloneUserProfile. It belongs to
 the CNCF runtime bootstrap and the implicit or explicit Subsystem
-WebApplication profile, not to FixedUserProfile, ComponentStyle, or a wrapper
+WebApplication profile, not to StandaloneUserProfile, ComponentStyle, or a wrapper
 launcher.
 
 The canonical public parameter is:
@@ -603,7 +609,7 @@ textus.web.application-mode
 An admitted `.textus` source provides the public baseline. `.cncf`,
 environment, arguments, and controlled explicit overrides follow the generic
 source precedence. A subsystem-specific binding uses the same stable Subsystem
-identifier as FixedUserProfile. No parallel
+identifier as StandaloneUserProfile. No parallel
 `cncf.web.application-mode` parameter is introduced.
 
 For normal Textus direct-Component launch, CNCF contributes a traceable
@@ -626,7 +632,7 @@ Component capability that admitted the default.
 
 A `standalone` result starts fixed-user resolution. A `multi-user` result
 requires authenticated-user evidence and does not read or fall back to
-FixedUserProfile.
+StandaloneUserProfile.
 
 ## Textus and CNCF configuration layers
 
@@ -654,7 +660,7 @@ contract defaults
   < explicit runtime/test override
 ```
 
-FixedUserProfile narrows this general order to the HOME-centered admission
+StandaloneUserProfile narrows this general order to the HOME-centered admission
 contract above. Other typed contracts may admit PROJECT or CWD input.
 
 Directory ownership and parameter namespace are independent:
@@ -684,7 +690,7 @@ It may not:
 - change style/provider/bundle identity;
 - add or remove provided user-operation capabilities at runtime;
 - select a user-context provider;
-- read common or subsystem-specific FixedUserProfile configuration;
+- read common or subsystem-specific StandaloneUserProfile configuration;
 - choose Subsystem datastore operation;
 - branch on fixed versus authenticated principal origin; or
 - return mode-specific Component parameters.
@@ -770,7 +776,7 @@ put operating mode into ComponentStyle.
 
 The normal direct-Component `standalone` default is contributed by the CNCF
 runtime under the conditions defined in Public Web operation selection. It is
-not stored in FixedUserProfile and is not ComponentStyle semantics.
+not stored in StandaloneUserProfile and is not ComponentStyle semantics.
 
 Dependency Components do not contribute or merge their own implicit templates.
 Only the direct root template participates, while the resolved Component
@@ -982,7 +988,7 @@ cncf --web-application-mode standalone . server
 ```
 
 When omitted, the traceable direct-Component default defined in Public Web
-operation selection may supply `standalone`. FixedUserProfile does not own
+operation selection may supply `standalone`. StandaloneUserProfile does not own
 that default. Exact CLI spelling is verified during implementation.
 
 ## ArtScene migration and acceptance
@@ -1069,16 +1075,31 @@ Component-side mode selection and branching.
 Temporary migration adapters do not establish compatibility guarantees and do
 not enter normative specification.
 
+## CS-05B Boundary Correction (2026-08-01)
+
+The earlier profile-precedence and provenance passages in this proposal are
+superseded for Phase 53. The owner retained only strict
+`StandaloneUserProfile` decoding, ordered HOME-only admission, multi-user
+exclusion, and the existing trace fields (`key`, `origin`, `sourceType`,
+`sourceId`, and `history`) in this phase.
+
+Effective field binding and precedence, detailed layer/target/subsystem/
+field-path provenance, `ConfigurationOrigin.ExplicitOverride`, ambient
+OS-environment conversion, canonical `textus.fixed-user.*` spelling, and any
+generic metadata carrier move to Phase 55 ConfigurationBinding work. This
+proposal must not be read as evidence that Phase 53 implements those deferred
+contracts or as permission for a parallel profile-provenance API.
+
 ## Implementation ownership
 
 | Repository | Phase 53 responsibility |
 | --- | --- |
 | `cozy` | CML style selection, typed capability model, validation, and descriptor projection |
 | `sbt-cozy` | extend the existing `cozyPrepareRuntime` route with development descriptor/implicit-template evidence and freshness |
-| `simplemodeling-lib` | preserve String-keyed configuration and trace authority; add `ExplicitOverride` and only the minimal source metadata required by Phase 53 |
-| `cloud-native-component-framework` | built-in catalog, capability matching, stable Subsystem identity, FixedUserProfile parsing/semantic resolution, fixed/authenticated ExecutionContext construction, Web operation default contribution, and diagnostics |
+| `simplemodeling-lib` | preserve String-keyed configuration and trace authority; Phase 53 adds no generic provenance, override-origin, or environment-codec API |
+| `cloud-native-component-framework` | built-in catalog, capability matching, stable Subsystem identity, StandaloneUserProfile parsing/semantic resolution, fixed/authenticated ExecutionContext construction, Web operation default contribution, and diagnostics |
 | `cncf-launcher` | runtime artifact selection, exact argument forwarding, and development-directory launch |
-| `textus-launcher` | runtime artifact selection and exact argument forwarding without duplicating FixedUserProfile or Web-operation semantics |
+| `textus-launcher` | runtime artifact selection and exact argument forwarding without duplicating StandaloneUserProfile or Web-operation semantics |
 | `textus-art-scene` | remove mode-aware Component implementation and prove identical mode-free execution |
 
 `simplemodeling` is admitted only if implementation proves that affected
@@ -1092,18 +1113,14 @@ Executable Specifications cover:
 - `domain.full@1` deterministic expansion;
 - generated descriptor determinism and development/packaged parity;
 - forward and reverse capability matching;
-- common fixed-user resolution;
-- subsystem-specific fixed-user field overlay using stable Subsystem identity;
-- always-admitted `~/.textus` baseline followed by field-level `~/.cncf`
-  higher-precedence override during fixed-user resolution;
-- rejection of PROJECT/CWD FixedUserProfile documents;
-- common-field environment/argument precedence and controlled
-  `ConfigurationOrigin.ExplicitOverride`;
-- complete FixedUserProfile exclusion from multi-user resolution;
-- resolved-value provenance through the existing trace authority for source
-  path/input, layer, common/subsystem target, stable Subsystem identity, and
-  field key;
-- canonical `textus.web.application-mode` resolution before FixedUserProfile
+- strict StandaloneUserProfile decoding and ordered HOME-only admission;
+- always-admitted but unmerged `~/.textus` baseline and `~/.cncf` second layer
+  during fixed-user resolution;
+- rejection of PROJECT/CWD StandaloneUserProfile documents;
+- complete StandaloneUserProfile exclusion from multi-user resolution;
+- existing trace evidence limited to key, origin, source type, source identity,
+  and history;
+- canonical `textus.web.application-mode` resolution before StandaloneUserProfile
   and traceable conditional standalone default contribution;
 - stable fixed UserId and locale propagation through SecurityContext and
   RuntimeContext.FormattingContext;

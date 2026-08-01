@@ -6,7 +6,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 28, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SecuritySubject(
@@ -25,9 +25,7 @@ final case class SecuritySubject(
   def isAuthenticated: Boolean =
     authenticationState == SecuritySubject.AuthenticationState.Authenticated
 
-  def isProviderAuthenticated: Boolean =
-    attributes.get(SecuritySubject.AuthenticationProvenanceAttribute)
-      .exists(x => SecuritySubject.normalize(x) == SecuritySubject.ProviderAuthenticationProvenance)
+  def isProviderAuthenticated: Boolean = SecurityAuthenticationProvenance.isProviderAuthenticated(this)
 
   def isAnonymous: Boolean =
     authenticationState == SecuritySubject.AuthenticationState.Anonymous
@@ -111,8 +109,11 @@ final case class SecuritySubject(
 
   def withRoleDefinitions(
     definitions: Iterable[SecurityRoleDefinition]
-  ): SecuritySubject =
-    copy(capabilities = capabilities ++ SecurityRoleDefinition.expandCapabilities(roles, definitions))
+  ): SecuritySubject = {
+    val result = copy(capabilities = capabilities ++ SecurityRoleDefinition.expandCapabilities(roles, definitions))
+    SecurityAuthenticationProvenance.inherit(this, result)
+    result
+  }
 
   private def _has_any(targets: Set[String]): Boolean =
     targets.exists { target =>
@@ -200,7 +201,7 @@ object SecuritySubject {
       security.capabilities.flatMap(x => _capability_tokens(x.name))
     val levelSet =
       splitTokens(security.level.value).map(normalize)
-    SecuritySubject(
+    val result = SecuritySubject(
       subjectId = security.principal.id.value,
       authenticationState = authenticationState,
       accessTokenPresent = accessTokenPresent,
@@ -213,6 +214,9 @@ object SecuritySubject {
       securityLevel = levelSet,
       attributes = attributes
     )
+    if (SecurityAuthenticationProvenance.isProviderAuthenticated(security))
+      SecurityAuthenticationProvenance.providerAuthenticated(result)
+    result
   }
 
   def from(
@@ -426,4 +430,23 @@ object SecuritySubject {
           case None => None
         }
     }
+}
+
+/** Internal provenance is deliberately detached from public security products. */
+private[cncf] object SecurityAuthenticationProvenance {
+  private val _provider_authenticated = java.util.Collections.synchronizedMap(
+    new java.util.WeakHashMap[AnyRef, java.lang.Boolean]()
+  )
+
+  def providerAuthenticated[A <: AnyRef](value: A): A = {
+    _provider_authenticated.put(value, java.lang.Boolean.TRUE)
+    value
+  }
+
+  def isProviderAuthenticated(value: AnyRef): Boolean =
+    _provider_authenticated.containsKey(value)
+
+  def inherit(source: AnyRef, target: AnyRef): Unit =
+    if (isProviderAuthenticated(source))
+      providerAuthenticated(target)
 }

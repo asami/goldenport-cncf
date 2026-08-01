@@ -1251,6 +1251,7 @@ final class BlobComponentSpec
         ))
       ))
     ))
+    subsystem.enableControlledTestExecution()
     subsystem
   }
 

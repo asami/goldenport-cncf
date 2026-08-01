@@ -6,6 +6,7 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import org.goldenport.Consequence
 import org.goldenport.record.Record
+import org.goldenport.cncf.component.{ComponentDescriptor, ComponentStyleCatalog, ComponentStyleId, SubsystemCapabilityId}
 import org.goldenport.cncf.config.RuntimeTestDescriptor
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -15,11 +16,93 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  8, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "GenericSubsystemDescriptor" should {
+    "preserve a component style snapshot when it becomes an implicit subsystem binding" in {
+      Given("a schema-v2 component descriptor with a resolved style")
+      val snapshot = ComponentStyleCatalog.default
+        .resolveC(ComponentStyleId.parseC("full-fledged-with-standalone@1").toOption.get)
+        .flatMap(ComponentStyleCatalog.default.expandC)
+        .toOption
+        .get
+      val source = ComponentDescriptor(
+        name = Some("application"),
+        componentName = Some("application"),
+        schemaVersion = Some(2),
+        componentStyleSnapshot = Some(snapshot)
+      )
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("implicit-subsystem"),
+        subsystemName = "application",
+        componentBindings = Vector(GenericSubsystemComponentBinding("application")),
+        componentDescriptorOverrides = Vector(source)
+      )
+
+      When("the implicit subsystem projects its component descriptors")
+      val projected = descriptor.toComponentDescriptors
+
+      Then("the typed component-style requirement remains available before component materialization")
+      projected shouldBe Vector(source)
+      projected.head.componentStyleSnapshot.map(_.subsystemCapabilities) shouldBe Some(snapshot.subsystemCapabilities)
+    }
+
+    "decode typed subsystem capability provider authority separately from component instance metadata" in {
+      Given("an assembly descriptor with explicit subsystem capability providers")
+      val path = Files.createTempFile("generic-subsystem-capability-providers", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |component: art-scene
+          |capabilities: [html, same-origin]
+          |subsystemCapabilities:
+          |  providers:
+          |    - name: persistent-store
+          |      component: art-scene
+          |      provides: [datastore.persistent@1]
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
+
+      Then("only the dedicated declaration becomes typed subsystem authority")
+      descriptor.componentBindings.head.capabilities shouldBe Vector("html", "same-origin")
+      descriptor.subsystemCapabilityProviders shouldBe Vector(
+        GenericSubsystemCapabilityProviderBinding(
+          "persistent-store",
+          "art-scene",
+          Vector(SubsystemCapabilityId.parseC("datastore.persistent@1").toOption.get)
+        )
+      )
+    }
+
+    "reject a subsystem capability provider without typed capabilities" in {
+      Given("an incomplete provider declaration")
+      val path = Files.createTempFile("generic-subsystem-capability-provider-invalid", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |component: art-scene
+          |subsystemCapabilities:
+          |  providers:
+          |    - name: incomplete
+          |      component: art-scene
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the failure identifies the missing authority declaration")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("subsystemCapabilities.providers[0].provides")
+    }
+
     "manage component instance declarations" which {
     "load named component instance metadata without collapsing duplicate component types" in {
       Given("an assembly descriptor with two configured instances of one component type")
@@ -189,6 +272,43 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
 
       Then("the invalid override fails instead of retaining the base bindings silently")
       result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "apply typed subsystem capability providers from an assembly override" in {
+      Given("a component-CAR default and a SAR provider-authority override")
+      val base = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("art-scene.car"),
+        subsystemName = "art-scene",
+        componentBindings = Vector(GenericSubsystemComponentBinding("art-scene")),
+        subsystemCapabilityProviders = Vector(GenericSubsystemCapabilityProviderBinding(
+          "default-store",
+          "art-scene",
+          Vector(SubsystemCapabilityId.parseC("datastore.memory@1").toOption.get)
+        ))
+      )
+      val overridesource = GenericSubsystemAssemblyDescriptorSource(
+        Record.data(
+          "subsystemCapabilities" -> Record.data(
+            "providers" -> Vector(Record.data(
+              "name" -> "persistent-store",
+              "component" -> "art-scene",
+              "provides" -> Vector("datastore.persistent@1")
+            ))
+          )
+        ),
+        source = "sar",
+        path = Some(java.nio.file.Path.of("art-scene.sar"))
+      )
+
+      When("the assembly override is applied")
+      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridesource)
+
+      Then("the override becomes the capability authority consumed by assembly admission")
+      effective.subsystemCapabilityProviders shouldBe Vector(GenericSubsystemCapabilityProviderBinding(
+        "persistent-store",
+        "art-scene",
+        Vector(SubsystemCapabilityId.parseC("datastore.persistent@1").toOption.get)
+      ))
     }
     }
 

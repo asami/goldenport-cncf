@@ -129,6 +129,14 @@ object ComponentRepository extends GlobalObservable {
     def resolveComponentDescriptor(
       componentName: String
     ): Option[ComponentDescriptor] = None
+    /**
+     * Resolves only descriptor metadata suitable for pre-activation admission.
+     * Implementations must not create a component, class loader, or runtime.
+     */
+    def resolveStaticComponentDescriptor(
+      componentName: String
+    ): Option[ComponentDescriptor] =
+      resolveComponentDescriptor(componentName)
     def resolveComponentArchivePath(
       componentName: String
     ): Option[Path] = None
@@ -417,6 +425,11 @@ object ComponentRepository extends GlobalObservable {
       ): Option[ComponentDescriptor] =
         ComponentRepository.resolveComponentDescriptorFromComponentDir(baseDir, componentName)
 
+      override def resolveStaticComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        ComponentRepository.resolveComponentDescriptorFromComponentDir(baseDir, componentName)
+
       override def resolveComponentArchivePath(
         componentName: String
       ): Option[Path] =
@@ -471,6 +484,14 @@ object ComponentRepository extends GlobalObservable {
           None
 
       override def resolveComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        if (Files.isRegularFile(file))
+          ComponentDescriptorLoader.loadArchive(file).toOption.filter(_matches_component_descriptor(_, componentName))
+        else
+          None
+
+      override def resolveStaticComponentDescriptor(
         componentName: String
       ): Option[ComponentDescriptor] =
         if (Files.isRegularFile(file))
@@ -616,6 +637,12 @@ object ComponentRepository extends GlobalObservable {
             ComponentDevDirRepository.inferComponentDescriptors(baseDir)
               .find(_matches_component_descriptor(_, componentName))
           }
+
+      override def resolveStaticComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        ComponentDevDirRepository.devComponentDescriptors(baseDir)
+          .find(_matches_component_descriptor(_, componentName))
     }
 
     def runtimeClasspathFile(base: Path): Path =

@@ -5,7 +5,7 @@ import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, PrincipalId, ScopeContext, ScopeKind, SecurityLevel, TraceId}
-import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem}
+import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem, SubsystemExecutionProfile}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobId, TaskId}
 import org.goldenport.protocol.{Property, Protocol, Request}
@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 28, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -315,10 +315,110 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       security.level shouldBe SecurityLevel("user")
       security.hasCapability("notification:read") shouldBe true
       security.principal.attributes.get("installation") shouldBe Some("standalone")
-      security.principal.attributes.get("local_subject") shouldBe Some("true")
+      security.principal.attributes should not contain key ("local_subject")
+      security.principal.attributes should not contain key ("subject_kind")
       subject.isAuthenticated shouldBe true
       subject.isProviderAuthenticated shouldBe false
       subject.hasRole("user") shouldBe true
+    }
+
+    "require explicit local-subject evidence for a fixed execution profile" in {
+      Given("a subsystem with a configured local subject")
+      val subsystem = _subsystem(
+        fallbackenabled = true,
+        localsubject = Some(_local_subject)
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      When("a fixed profile receives authentication ingress material")
+      val result = IngressSecurityResolver.resolve(
+        SubsystemExecutionProfile.Fixed,
+        base,
+        Map("access_token" -> "unexpected-token")
+      )
+
+      Then("the profile refuses to switch construction paths")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "construct fixed and authenticated profiles through the same canonical runtime bindings" in {
+      Given("fixed and provider-authenticated subsystem base contexts")
+      val fixedbase = _subsystem(
+        fallbackenabled = false,
+        localsubject = Some(_local_subject)
+      ).components.head.logic.executionContext()
+      val authenticatedbase = _subsystem(
+        fallbackenabled = false,
+        providers = Vector(_provider(
+          "canonical-provider",
+          _ => Consequence.success(Some(AuthenticationResult(PrincipalId("canonical-user"), attributes = Map("locale" -> "ja-JP"))))
+        ))
+      ).components.head.logic.executionContext()
+
+      When("both explicit profiles resolve their current users")
+      val fixed = IngressSecurityResolver.resolve(SubsystemExecutionProfile.Fixed, fixedbase, Map.empty)
+      val authenticated = IngressSecurityResolver.resolve(
+        SubsystemExecutionProfile.Authenticated,
+        authenticatedbase,
+        Map("access_token" -> "canonical-token")
+      )
+
+      Then("security, formatting, datastore, and UnitOfWork stay on canonical execution bindings")
+      fixed shouldBe a[Consequence.Success[_]]
+      authenticated shouldBe a[Consequence.Success[_]]
+      Vector(fixed.toOption.get -> fixedbase, authenticated.toOption.get -> authenticatedbase).foreach { case (resolved, base) =>
+        resolved.executionContext.runtime.dataStoreSpace should be theSameInstanceAs base.runtime.dataStoreSpace
+        resolved.executionContext.runtime.entityStoreSpace should be theSameInstanceAs base.runtime.entityStoreSpace
+        resolved.executionContext.runtime.unitOfWork.executionContext.security.principal.id shouldBe resolved.executionContext.security.principal.id
+      }
+      authenticated.toOption.get.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("ja-JP")
+    }
+
+    "rebind controlled-test request identity onto the supplied runtime context" in {
+      Given("a subsystem base context with production identity wiring")
+      val base = _subsystem(
+        fallbackenabled = false,
+        localsubject = Some(_local_subject),
+        providers = Vector(_provider("unused-provider", _ => Consequence.success(None)))
+      ).components.head.logic.executionContext()
+
+      When("a controlled-test profile resolves request-level identity")
+      val result = IngressSecurityResolver.resolve(
+        SubsystemExecutionProfile.ControlledTest,
+        base,
+        Map("principal.id" -> "controlled-user", "privilege" -> "user")
+      )
+
+      Then("the request identity replaces bootstrap security without discarding canonical runtime bindings")
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get.executionContext
+      resolved.security.principal.id.value shouldBe "controlled-user"
+      resolved.runtime.dataStoreSpace should be theSameInstanceAs base.runtime.dataStoreSpace
+      resolved.runtime.entityStoreSpace should be theSameInstanceAs base.runtime.entityStoreSpace
+      resolved.runtime.unitOfWork.executionContext.security.principal.id shouldBe resolved.security.principal.id
+    }
+
+    "never falls back to a local subject for an unauthenticated profile" in {
+      Given("a subsystem with both a local subject and a provider that declines the request")
+      val subsystem = _subsystem(
+        fallbackenabled = true,
+        localsubject = Some(_local_subject),
+        providers = Vector(
+          _provider("declining-provider", _ => Consequence.success(None))
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      When("an authenticated profile has token evidence but the provider declines it")
+      val result = IngressSecurityResolver.resolve(
+        SubsystemExecutionProfile.Authenticated,
+        base,
+        Map("access_token" -> "unaccepted-token")
+      )
+
+      Then("authentication failure does not use local or privilege fallback")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("did not authenticate")
     }
 
     "prefer a provider-authenticated subject over the configured local subject" in {

@@ -1,7 +1,8 @@
 package org.goldenport.cncf.projection
 
 import java.nio.file.Paths
-import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, GenericSubsystemFactory}
+import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -21,7 +22,10 @@ final class SecurityDeploymentProjectionSpec
       Given("the journal sample descriptor for textus-identity")
       val path = Paths.get("docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
-      val subsystem = GenericSubsystemFactory.default(descriptor)
+      val subsystem = Subsystem(
+        descriptor.subsystemName,
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      ).withDescriptor(descriptor)
 
       When("projecting the security deployment diagram as Mermaid")
       val mermaid = SecurityDeploymentProjection.projectMermaid(subsystem)

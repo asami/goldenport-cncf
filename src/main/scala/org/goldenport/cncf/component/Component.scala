@@ -19,14 +19,13 @@ import scala.reflect.ClassTag
 import org.goldenport.cncf.context.{CorrelationId, EntitySpaceContext, ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBehavior, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.cncf.http.{HttpDriver, WebMessageCatalog, WebPageContextProvider}
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterBootstrap, ComponentParameterKey}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
-import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.cli.renderer.{CliTreeJsonRenderer, CliTreeYamlRenderer}
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateEditContextSpace, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
@@ -57,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul. 22, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -586,7 +585,7 @@ object Component {
       component: Component,
       componentOrigin: ComponentOrigin
     ): Context = {
-      val _core = ScopeContext.Core(
+      val contextcore = ScopeContext.Core(
         kind = ScopeKind.Component,
         name = name,
         parent = Some(parent),
@@ -595,7 +594,7 @@ object Component {
         entityspace = Some(EntitySpaceContext(component.entitySpace))
       )
       Context(
-        core = _core,
+        core = contextcore,
         component = component,
         componentOrigin = componentOrigin
       )
@@ -616,12 +615,12 @@ object Component {
 
   def createScriptCore(protocol: Protocol): org.goldenport.cncf.component.Component.Core = {
     val name = "SCRIPT" // _create_script_component_name()
-    val componentId = ComponentId("script")
-    val instanceId = ComponentInstanceId.default(componentId)
+    val componentid = ComponentId("script")
+    val instanceid = ComponentInstanceId.default(componentid)
     org.goldenport.cncf.component.Component.Core.create(
       name,
-      componentId,
-      instanceId,
+      componentid,
+      instanceid,
       protocol
     )
   }
@@ -733,13 +732,13 @@ object Component {
       protocol: Protocol,
       jobEngine: JobEngine
     ): Core = {
-      val mergedProtocol = _with_default_services(protocol)
+      val mergedprotocol = _with_default_services(protocol)
       Core(
         name,
         componentid,
         instanceid,
-        mergedProtocol,
-        ProtocolLogic(mergedProtocol),
+        mergedprotocol,
+        ProtocolLogic(mergedprotocol),
         None,
         ActionEngine.create(),
         jobEngine,
@@ -773,13 +772,13 @@ object Component {
       actionEngine: ActionEngine,
       jobEngine: JobEngine,
     ): Core = {
-      val mergedProtocol = _with_default_services(protocol)
+      val mergedprotocol = _with_default_services(protocol)
       Core(
         name,
         componentid,
         instanceid,
-        mergedProtocol,
-        ProtocolLogic(mergedProtocol),
+        mergedprotocol,
+        ProtocolLogic(mergedprotocol),
         Some(factory),
         actionEngine,
         jobEngine,
@@ -815,78 +814,91 @@ object Component {
   abstract class Factory {
     def serviceFactory: ServiceFactory = ServiceFactory.empty
 
-    def aggregate_collection_bindings(
+    // Internal aggregate-assembly DSL lookup. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def aggregateCollectionBindings(
       comp: Component
     ): Vector[AggregateCollectionBinding] = Vector.empty
 
-    def aggregate_behavior_bindings(
+    // Internal ActionCall aggregate-selection DSL lookup. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def aggregateBehaviorBindings(
       comp: Component
     ): Vector[AggregateBehaviorBinding] = Vector.empty
 
-    def create_aggregate_from_record(
+    // Internal aggregate reconstruction fallback. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def createAggregateFromRecord(
       entityName: String,
       record: Record,
       default: => Consequence[Any]
     ): Consequence[Any] = default
 
-    def create_aggregate_behavior(
+    // Internal ActionCall aggregate-behavior selection using holder-provided runtime evidence. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def createAggregateBehavior(
       action: Action,
       core: ActionCall.Core
     ): Option[AggregateBehavior[?]] =
       for {
         comp <- core.component
-        binding <- aggregate_behavior_bindings(comp)
+        binding <- aggregateBehaviorBindings(comp)
           .find(_.operation_name == action.request.operation)
       } yield binding.behavior
 
-    def authorize_operation_access(
+    // Internal ActionCall access-authorization extension point for reviewed Component policy.
+    def authorizeOperationAccess(
       action: Action,
       access: CmlOperationAccess,
       core: ActionCall.Core
     ): Option[Consequence[Unit]] = None
 
-    def authorize_operation_entity(
+    // Internal ActionCall entity-authorization extension point for reviewed Component policy.
+    def authorizeOperationEntity(
       action: Action,
       entityName: String,
       core: ActionCall.Core
     ): Option[Consequence[Unit]] = None
 
-    def authorize_unit_of_work(
+    // Internal UnitOfWork authorization extension point for reviewed Component policy.
+    def authorizeUnitOfWork(
       authorization: org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization,
       uow: org.goldenport.cncf.unitofwork.UnitOfWork
     ): Option[Consequence[Unit]] = None
 
-    def entity_usage_kind(
+    // Internal ActionCall entity-usage resolution. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def entityUsageKind(
       action: Action,
       entityName: String,
       core: ActionCall.Core
     ): Option[org.goldenport.cncf.security.EntityUsageKind] = None
 
-    def entity_operation_kind(
+    // Internal ActionCall entity-operation resolution. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def entityOperationKind(
       action: Action,
       entityName: String,
       core: ActionCall.Core
     ): Option[org.goldenport.cncf.security.EntityOperationKind] = None
 
-    def entity_application_domain(
+    // Internal ActionCall entity-domain resolution. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def entityApplicationDomain(
       action: Action,
       entityName: String,
       core: ActionCall.Core
     ): Option[org.goldenport.cncf.security.EntityApplicationDomain] = None
 
-    def service_operation_model(
+    // Internal ActionCall service-operation-model resolution. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def serviceOperationModel(
       action: Action,
       core: ActionCall.Core
     ): Option[org.goldenport.cncf.security.ServiceOperationModel] = None
 
-    def entity_access_mode(
+    // Internal ActionCall entity-access-mode resolution. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def entityAccessMode(
       action: Action,
       entityName: String,
       accessKind: String,
       core: ActionCall.Core
     ): Option[org.goldenport.cncf.security.EntityAccessMode] = None
 
-    def entity_access_relations(
+    // Internal ActionCall entity-access-relation resolution. Keep final until a concrete Component extension needs a narrower reviewed contract.
+    final def entityAccessRelations(
       action: Action,
       entityName: String,
       accessKind: String,
@@ -1253,26 +1265,6 @@ object Component {
   //   Instance(core)
   // }
   
-  final case class Config(
-    httpDriver: Option[String],
-    mode: Option[RunMode]
-  )
-
-  object Config {
-    def from(conf: ResolvedConfiguration): Consequence[Config] = {
-      import cats.syntax.all.*
-
-      val http =
-        conf.get[String]("cncf.component.http.driver")
-
-      val mode =
-        conf.get[String]("cncf.component.mode")
-          .flatMap(_.traverse(RunMode.parse))
-
-      (http, mode).mapN(Config.apply)
-    }
-  }
-
   trait HealthContributor {
     def name: String
     def check(component: Component): HealthCheck
@@ -1302,36 +1294,36 @@ object Component {
   }
 
   private def _with_default_services(protocol: Protocol): Protocol = {
-    val withMetaHelp = _ensure_operation(protocol, _default_meta_service_name, DefaultMetaHelpOperation)
-    val withMetaDescribe = _ensure_operation(withMetaHelp, _default_meta_service_name, DefaultMetaDescribeOperation)
-    val withMetaComponents = _ensure_operation(withMetaDescribe, _default_meta_service_name, DefaultMetaComponentsOperation)
-    val withMetaServices = _ensure_operation(withMetaComponents, _default_meta_service_name, DefaultMetaServicesOperation)
-    val withMetaOperations = _ensure_operation(withMetaServices, _default_meta_service_name, DefaultMetaOperationsOperation)
-    val withMetaSchema = _ensure_operation(withMetaOperations, _default_meta_service_name, DefaultMetaSchemaOperation)
-    val withMetaOpenApi = _ensure_operation(withMetaSchema, _default_meta_service_name, DefaultMetaOpenApiOperation)
-    val withMetaMcp = _ensure_operation(withMetaOpenApi, _default_meta_service_name, DefaultMetaMcpOperation)
-    val withMetaTree = _ensure_operation(withMetaMcp, _default_meta_service_name, DefaultMetaTreeOperation)
-    val withMetaStateMachine = _ensure_operation(withMetaTree, _default_meta_service_name, DefaultMetaStateMachineOperation)
-    val withMetaVersion = _ensure_operation(withMetaStateMachine, _default_meta_service_name, DefaultMetaVersionOperation)
-    val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, DefaultSystemPingOperation)
-    val withSystemHealth = _ensure_operation(withSystemPing, _default_system_service_name, DefaultSystemHealthOperation)
-    _ensure_operation(withSystemHealth, _default_system_service_name, DefaultSystemStatusOperation)
+    val withmetahelp = _ensure_operation(protocol, _default_meta_service_name, DefaultMetaHelpOperation)
+    val withmetadescribe = _ensure_operation(withmetahelp, _default_meta_service_name, DefaultMetaDescribeOperation)
+    val withmetacomponents = _ensure_operation(withmetadescribe, _default_meta_service_name, DefaultMetaComponentsOperation)
+    val withmetaservices = _ensure_operation(withmetacomponents, _default_meta_service_name, DefaultMetaServicesOperation)
+    val withmetaoperations = _ensure_operation(withmetaservices, _default_meta_service_name, DefaultMetaOperationsOperation)
+    val withmetaschema = _ensure_operation(withmetaoperations, _default_meta_service_name, DefaultMetaSchemaOperation)
+    val withmetaopenapi = _ensure_operation(withmetaschema, _default_meta_service_name, DefaultMetaOpenApiOperation)
+    val withmetamcp = _ensure_operation(withmetaopenapi, _default_meta_service_name, DefaultMetaMcpOperation)
+    val withmetatree = _ensure_operation(withmetamcp, _default_meta_service_name, DefaultMetaTreeOperation)
+    val withmetastatemachine = _ensure_operation(withmetatree, _default_meta_service_name, DefaultMetaStateMachineOperation)
+    val withmetaversion = _ensure_operation(withmetastatemachine, _default_meta_service_name, DefaultMetaVersionOperation)
+    val withsystemping = _ensure_operation(withmetaversion, _default_system_service_name, DefaultSystemPingOperation)
+    val withsystemhealth = _ensure_operation(withsystemping, _default_system_service_name, DefaultSystemHealthOperation)
+    _ensure_operation(withsystemhealth, _default_system_service_name, DefaultSystemStatusOperation)
   }
 
   private def _ensure_operation(
     protocol: Protocol,
-    serviceName: String,
+    servicename: String,
     operation: OperationDefinition
   ): Protocol = {
     val exists = protocol.services.services.exists { service =>
-      service.name == serviceName &&
+      service.name == servicename &&
       service.operations.operations.exists(_.name == operation.name)
     }
     if (exists) {
       protocol
     } else {
       protocol.copy(
-        services = protocol.services.addOperation(serviceName, operation)
+        services = protocol.services.addOperation(servicename, operation)
       )
     }
   }
@@ -1901,22 +1893,22 @@ object Component {
     }
 
   private def _resolve_version_record(component: Component): Record = {
-    val configVersion = _configuration_value(component, "component.version")
+    val configversion = _configuration_value(component, "component.version")
     val properties = _component_properties(component)
-    val propertyVersion =
+    val propertyversion =
       properties.get("component.version").orElse(properties.get("version"))
-    val manifestVersion = Option(component.getClass.getPackage)
+    val manifestversion = Option(component.getClass.getPackage)
       .flatMap(p => Option(p.getImplementationVersion))
       .map(_.trim)
       .filter(_.nonEmpty)
 
-    val versionWithSource =
-      configVersion.map(_ -> "config")
-        .orElse(propertyVersion.map(_ -> "resource"))
-        .orElse(manifestVersion.map(_ -> "manifest"))
+    val versionwithsource =
+      configversion.map(_ -> "config")
+        .orElse(propertyversion.map(_ -> "resource"))
+        .orElse(manifestversion.map(_ -> "manifest"))
         .getOrElse(_default_unknown_version -> "default")
 
-    val buildInfo =
+    val buildinfo =
       _configuration_value(component, "component.build")
         .orElse(_configuration_value(component, "component.build.info"))
         .orElse(properties.get("build"))
@@ -1926,10 +1918,10 @@ object Component {
 
     Record.data(
       "component" -> component.name,
-      "version" -> versionWithSource._1,
-      "source" -> versionWithSource._2
+      "version" -> versionwithsource._1,
+      "source" -> versionwithsource._2
     ) ++ Record.dataOption(
-      "build" -> buildInfo
+      "build" -> buildinfo
     )
   }
 
@@ -1993,8 +1985,8 @@ object Component {
     args.headOption match {
       case Some(name) if name.contains(".") =>
         Some(name)
-      case Some(componentName) =>
-        Some(componentName)
+      case Some(componentname) =>
+        Some(componentname)
       case None =>
         request.component
     }
@@ -2003,13 +1995,13 @@ object Component {
   private def _meta_operations_selector(request: Request): Option[String] = {
     val args = _request_argument_values(request)
     args match {
-      case Vector(serviceName, operationName) =>
-        request.component.map(c => s"$c.$serviceName.$operationName")
-      case Vector(serviceName) =>
-        if (serviceName.contains(".")) {
-          Some(serviceName)
+      case Vector(servicename, operationname) =>
+        request.component.map(c => s"$c.$servicename.$operationname")
+      case Vector(servicename) =>
+        if (servicename.contains(".")) {
+          Some(servicename)
         } else {
-          request.component.map(c => s"$c.$serviceName")
+          request.component.map(c => s"$c.$servicename")
         }
       case _ =>
         None
@@ -2070,7 +2062,7 @@ object Component {
       HealthCheck("component.reachable", "ok"),
       HealthCheck("component.runtime", "ok")
     )
-    val contributorChecks = component.healthContributors.map { contributor =>
+    val contributorchecks = component.healthContributors.map { contributor =>
       try {
         contributor.check(component)
       } catch {
@@ -2079,23 +2071,23 @@ object Component {
           HealthCheck(contributor.name, "error", Some(detail))
       }
     }
-    val configuredChecks = _configured_health_check_names(component).filterNot { name =>
-      contributorChecks.exists(_.name == name)
+    val configuredchecks = _configured_health_check_names(component).filterNot { name =>
+      contributorchecks.exists(_.name == name)
     }.map { name =>
       HealthCheck(name, "warning", Some("configured check has no registered contributor"))
     }
-    base ++ contributorChecks ++ configuredChecks
+    base ++ contributorchecks ++ configuredchecks
   }
 
   private def _configured_health_check_names(component: Component): Vector[String] = {
-    val fromConfig = _configuration_value(component, "component.health.checks")
+    val fromconfig = _configuration_value(component, "component.health.checks")
       .map(_comma_separated_values)
       .getOrElse(Vector.empty)
-    val fromResource = _component_properties(component)
+    val fromresource = _component_properties(component)
       .get("component.health.checks")
       .map(_comma_separated_values)
       .getOrElse(Vector.empty)
-    (fromConfig ++ fromResource).distinct
+    (fromconfig ++ fromresource).distinct
   }
 
   private def _comma_separated_values(value: String): Vector[String] =
@@ -2181,13 +2173,30 @@ object ComponentLocator {
   final case class NameLocator(name: String) extends ComponentLocator
 }
 
+private[cncf] final class ComponentAssemblyContext private (
+  private val _subsystem: Subsystem
+) {
+  private[cncf] def subsystem: Subsystem = _subsystem
+}
+
+private[cncf] object ComponentAssemblyContext {
+  def apply(subsystem: Subsystem): ComponentAssemblyContext =
+    new ComponentAssemblyContext(subsystem)
+}
+
+/**
+ * Component factory input. The Subsystem carrier is internal framework
+ * assembly state and is deliberately not part of the Component-facing API.
+ */
 final case class ComponentCreate(
-  subsystem: Subsystem,
+  private[cncf] assembly: ComponentAssemblyContext,
   origin: ComponentOrigin,
   componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
   instanceMetadata: Option[ComponentInstanceMetadata] = None,
   assemblyApiClassLoader: Option[ClassLoader] = None
 ) {
+  private[cncf] def subsystem: Subsystem = assembly.subsystem
+
   def withOrigin(p: ComponentOrigin) = copy(origin = p)
 
   def withComponentDescriptors(p: Vector[ComponentDescriptor]) =
@@ -2200,18 +2209,130 @@ final case class ComponentCreate(
     copy(assemblyApiClassLoader = Some(p))
 
   def toInit(core: Component.Core): ComponentInit =
-    ComponentInit(subsystem, core, origin, componentDescriptors, instanceMetadata = instanceMetadata)
+    ComponentInit(assembly, core, origin, componentDescriptors, instanceMetadata = instanceMetadata)
+}
+
+object ComponentCreate {
+  def apply(
+    subsystem: Subsystem,
+    origin: ComponentOrigin
+  ): ComponentCreate =
+    apply(subsystem, origin, Vector.empty)
+
+  def apply(
+    subsystem: Subsystem,
+    origin: ComponentOrigin,
+    componentDescriptors: Vector[ComponentDescriptor]
+  ): ComponentCreate =
+    apply(subsystem, origin, componentDescriptors, None)
+
+  def apply(
+    subsystem: Subsystem,
+    origin: ComponentOrigin,
+    componentDescriptors: Vector[ComponentDescriptor],
+    instanceMetadata: Option[ComponentInstanceMetadata]
+  ): ComponentCreate =
+    apply(subsystem, origin, componentDescriptors, instanceMetadata, None)
+
+  def apply(
+    subsystem: Subsystem,
+    origin: ComponentOrigin,
+    componentDescriptors: Vector[ComponentDescriptor],
+    instanceMetadata: Option[ComponentInstanceMetadata],
+    assemblyApiClassLoader: Option[ClassLoader]
+  ): ComponentCreate =
+    ComponentCreate(
+      ComponentAssemblyContext(subsystem),
+      origin,
+      componentDescriptors,
+      instanceMetadata,
+      assemblyApiClassLoader
+    )
 }
 
 final case class ComponentInit( // TODO use config
-  subsystem: Subsystem,
+  private[cncf] assembly: ComponentAssemblyContext,
   core: Component.Core,
   origin: ComponentOrigin,
   componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
   participantRole: Component.ParticipantRole = Component.ParticipantRole.Primary,
   instanceMetadata: Option[ComponentInstanceMetadata] = None,
   initializationParameters: ComponentInitializationParameters = ComponentInitializationParameters.empty
-)
+) {
+  private[cncf] def subsystem: Subsystem = assembly.subsystem
+}
+
+object ComponentInit {
+  def apply(
+    subsystem: Subsystem,
+    core: Component.Core,
+    origin: ComponentOrigin
+  ): ComponentInit =
+    apply(subsystem, core, origin, Vector.empty)
+
+  def apply(
+    subsystem: Subsystem,
+    core: Component.Core,
+    origin: ComponentOrigin,
+    componentDescriptors: Vector[ComponentDescriptor]
+  ): ComponentInit =
+    apply(subsystem, core, origin, componentDescriptors, Component.ParticipantRole.Primary)
+
+  def apply(
+    subsystem: Subsystem,
+    core: Component.Core,
+    origin: ComponentOrigin,
+    instanceMetadata: Option[ComponentInstanceMetadata]
+  ): ComponentInit =
+    apply(subsystem, core, origin, Vector.empty, Component.ParticipantRole.Primary, instanceMetadata)
+
+  def apply(
+    subsystem: Subsystem,
+    core: Component.Core,
+    origin: ComponentOrigin,
+    participantRole: Component.ParticipantRole,
+    instanceMetadata: Option[ComponentInstanceMetadata]
+  ): ComponentInit =
+    apply(subsystem, core, origin, Vector.empty, participantRole, instanceMetadata)
+
+  def apply(
+    subsystem: Subsystem,
+    core: Component.Core,
+    origin: ComponentOrigin,
+    componentDescriptors: Vector[ComponentDescriptor],
+    participantRole: Component.ParticipantRole
+  ): ComponentInit =
+    apply(subsystem, core, origin, componentDescriptors, participantRole, None)
+
+  def apply(
+    subsystem: Subsystem,
+    core: Component.Core,
+    origin: ComponentOrigin,
+    componentDescriptors: Vector[ComponentDescriptor],
+    participantRole: Component.ParticipantRole,
+    instanceMetadata: Option[ComponentInstanceMetadata]
+  ): ComponentInit =
+    apply(subsystem, core, origin, componentDescriptors, participantRole, instanceMetadata, ComponentInitializationParameters.empty)
+
+  def apply(
+    subsystem: Subsystem,
+    core: Component.Core,
+    origin: ComponentOrigin,
+    componentDescriptors: Vector[ComponentDescriptor],
+    participantRole: Component.ParticipantRole,
+    instanceMetadata: Option[ComponentInstanceMetadata],
+    initializationParameters: ComponentInitializationParameters
+  ): ComponentInit =
+    ComponentInit(
+      ComponentAssemblyContext(subsystem),
+      core,
+      origin,
+      componentDescriptors,
+      participantRole,
+      instanceMetadata,
+      initializationParameters
+    )
+}
 
 sealed trait ComponentOrigin {
   def label: String

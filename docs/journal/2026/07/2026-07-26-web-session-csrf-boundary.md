@@ -126,3 +126,16 @@ The current Web Session CSRF Unification plan therefore moved to:
 
 Current planning follows Phase 58. Earlier Phase 55, Phase 56, and Phase 57
 assignments in this journal remain chronological history.
+
+## Planning Supersession — 2026-07-31
+
+Component Resource SubComponent Foundation, Component Documentation and AI
+Knowledge Integration, and Component Admin and Documentation Visibility now
+occupy Phases 56 through 58. Information CML Runtime Canonicalization moved to
+Phase 59. The current Web Session CSRF Unification plan therefore moved to:
+
+- `docs/phase/phase-60.md`
+- `docs/phase/phase-60-checklist.md`
+
+Current planning follows Phase 60. Earlier Phase 55 through Phase 58
+assignments in this journal remain chronological history.

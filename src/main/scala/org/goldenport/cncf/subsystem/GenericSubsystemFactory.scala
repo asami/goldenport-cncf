@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -95,7 +95,8 @@ object GenericSubsystemFactory {
   def resolveDescriptorC(
     configuration: ResolvedConfiguration
   ): Consequence[Option[GenericSubsystemDescriptor]] =
-    _or_else(loadDescriptorC(configuration)) {
+    _or_else(_component_dev_descriptor_c(configuration)) {
+      _or_else(loadDescriptorC(configuration)) {
       _or_else(
         subsystemName(configuration) match {
           case Some(name) =>
@@ -135,8 +136,8 @@ object GenericSubsystemFactory {
                   ComponentRepository.ComponentDevDirRepository.validate(path).flatMap { _ =>
                     ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(path).headOption match {
                       case Some(descriptor) =>
-                        Consequence.success(_development_component_descriptor_to_subsystem(path, descriptor))
-                          .flatMap(d => _with_assembly_descriptor_override_c(d, configuration).map(Some(_)))
+                        _development_component_descriptor_to_subsystem_c(path, descriptor)
+                          .map(Some(_))
                       case None =>
                         Consequence.resourceInvalid(
                             s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
@@ -169,6 +170,28 @@ object GenericSubsystemFactory {
           }
         }
       }
+      }
+    }
+
+  private def _component_dev_descriptor_c(
+    configuration: ResolvedConfiguration
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    componentDevDirPath(configuration) match {
+      case Some(path) =>
+        ComponentRepository.ComponentDevDirRepository.validate(path).flatMap { _ =>
+          ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(path).headOption match {
+            case Some(descriptor) =>
+              _development_component_descriptor_to_subsystem_c(path, descriptor).map(Some(_))
+            case None =>
+              Consequence.resourceInvalid(
+                s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                  s"${path.resolve(DevelopmentCarRuntimeAdmission.componentDescriptorIdentity(path))}. " +
+                  s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
+                  "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+              )
+          }
+        }
+      case None => Consequence.success(None)
     }
 
   private def _or_else[A](
@@ -179,76 +202,73 @@ object GenericSubsystemFactory {
       case None => rhs
     }
 
-  private def _component_descriptor_to_subsystem(
-    path: Path,
-    descriptor: ComponentDescriptor
-  ): GenericSubsystemDescriptor =
-    _component_descriptor_to_subsystem_c(path, descriptor).TAKE
-
   private def _component_descriptor_to_subsystem_c(
     path: Path,
     descriptor: ComponentDescriptor
   ): Consequence[GenericSubsystemDescriptor] =
     GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor)
 
-  private def _development_component_descriptor_to_subsystem(
+  private def _development_component_descriptor_to_subsystem_c(
     path: Path,
     descriptor: ComponentDescriptor
-  ): GenericSubsystemDescriptor = {
-    val componentname =
-      descriptor.componentName.orElse(descriptor.name).getOrElse(path.getFileName.toString)
-    GenericSubsystemDescriptor(
-      path = path,
-      subsystemName = descriptor.subsystemName.getOrElse(componentname),
-      version = descriptor.version,
-      componentBindings = Vector(GenericSubsystemComponentBinding(
-        componentName = componentname,
-        version = descriptor.version,
-        coordinate = None,
-        extensionBindings = descriptor.extensionBindings
-      )),
-      extensions = descriptor.extensions,
-      config = descriptor.config
+  ): Consequence[GenericSubsystemDescriptor] =
+    GenericSubsystemDescriptor.fromComponentDescriptor(
+      path,
+      descriptor,
+      includeAssemblyDescriptor = false
     )
-  }
 
   def default(
     subsystemName: String,
     mode: Option[String],
     configuration: ResolvedConfiguration
-  ): Subsystem =
-    defaultWithScope(
-      subsystemName,
-      ScopeContext(
-        kind = ScopeKind.Subsystem,
-        name = subsystemName,
-        parent = None,
-        observabilityContext = ExecutionContext.create().observability
-      ),
-      mode.flatMap(RunMode.from),
-      configuration,
-      GlobalRuntimeContext.current
-        .map(_.aliasResolver)
-        .getOrElse(AliasResolver.empty)
-    )
+  ): Subsystem = {
+    val repositories = _repository_specs(configuration)
+    ComponentRepository.resolveSubsystemDescriptor(repositories, subsystemName) match {
+      case Some(descriptor) =>
+        // Resolve and admit a descriptor before creating the default context;
+        // the latter allocates test datastore/entity-store state.
+        default(descriptor, mode, configuration)
+      case None =>
+        defaultWithScope(
+          subsystemName,
+          ScopeContext(
+            kind = ScopeKind.Subsystem,
+            name = subsystemName,
+            parent = None,
+            observabilityContext = ExecutionContext.create().observability
+          ),
+          mode.flatMap(RunMode.from),
+          configuration,
+          GlobalRuntimeContext.current
+            .map(_.aliasResolver)
+            .getOrElse(AliasResolver.empty)
+        )
+    }
+  }
 
   def default(
     descriptor: GenericSubsystemDescriptor,
     mode: Option[String] = None,
     configuration: ResolvedConfiguration =
       ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
-  ): Subsystem =
+  ): Subsystem = {
+    // Admission is deliberately before even the default scope construction:
+    // ExecutionContext.create() installs test datastore/entity-store state.
+    // An invalid descriptor must not cause that runtime state to exist.
+    val admitteddescriptor = _admit_descriptor_or_raise(descriptor, configuration)
     defaultWithScope(
-      descriptor = descriptor,
+      descriptor = admitteddescriptor,
       context = ScopeContext(
         kind = ScopeKind.Subsystem,
-        name = descriptor.subsystemName,
+        name = admitteddescriptor.subsystemName,
         parent = None,
         observabilityContext = ExecutionContext.create().observability
       ),
       mode = mode.flatMap(RunMode.from),
       configuration = configuration
     )
+  }
 
   def defaultWithScope(
     subsystemName: String,
@@ -317,22 +337,26 @@ object GenericSubsystemFactory {
       .map(_.aliasResolver)
       .getOrElse(AliasResolver.empty)
   ): Subsystem = {
+    val repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
+    val admitteddescriptor = _admit_descriptor_or_raise(descriptor, configuration, repositoryspecs)
+    val admissionreport = _or_raise(SubsystemAssemblyAdmission.evaluateC(admitteddescriptor))
+    val componentdescriptors = admitteddescriptor.toComponentDescriptors
     val runtimeconfig = RuntimeConfig.from(configuration)
     val runmode = mode.getOrElse(runtimeconfig.mode)
     val subsystem =
       Subsystem(
-        name = descriptor.subsystemName,
-        version = descriptor.componentVersion,
+        name = admitteddescriptor.subsystemName,
+        version = admitteddescriptor.componentVersion,
         scopeContext = Some(
           context.kind match {
             case ScopeKind.Runtime =>
-              context.createChildScope(ScopeKind.Subsystem, descriptor.subsystemName)
+              context.createChildScope(ScopeKind.Subsystem, admitteddescriptor.subsystemName)
             case ScopeKind.Subsystem =>
               context
             case _ =>
               ScopeContext(
                 kind = ScopeKind.Subsystem,
-                name = descriptor.subsystemName,
+                name = admitteddescriptor.subsystemName,
                 parent = None,
                 observabilityContext = context.observabilityContext
               )
@@ -342,14 +366,13 @@ object GenericSubsystemFactory {
         configuration = configuration,
         aliasResolver = aliasResolver,
         runMode = runmode
-      ).withDescriptor(descriptor)
-    val componentdescriptors = descriptor.toComponentDescriptors
+      ).withDescriptor(admitteddescriptor)
+        .withAssemblyAdmissionReport(admissionreport)
     val params = ComponentCreate(
       subsystem,
       ComponentOrigin.Repository("subsystem-descriptor"),
       componentdescriptors
     )
-    val repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
     val developmentclaims = ComponentRepository.developmentComponentClaims(repositoryspecs)
     val repositories =
       repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
@@ -360,7 +383,7 @@ object GenericSubsystemFactory {
             componentdescriptors,
             developmentclaims
           )
-        descriptor.componentBindings.zip(componentdescriptors).collect {
+        admitteddescriptor.componentBindings.zip(componentdescriptors).collect {
           case (binding, componentdescriptor) if activedescriptors.contains(componentdescriptor) =>
             spec.build(
               params
@@ -372,14 +395,14 @@ object GenericSubsystemFactory {
     val components0 = _or_raise(
       ComponentRepository.discoverAssemblyC(repositories).flatMap { discovered =>
         val selected = discovered.filter(component =>
-          descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName))
+          admitteddescriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName))
         )
-        materializeComponentInstancesC(selected, descriptor, params)
+        materializeComponentInstancesC(selected, admitteddescriptor, params)
       }
     )
-    val builtins = _builtin_components(subsystem, descriptor)
+    val builtins = _builtin_components(subsystem, admitteddescriptor)
     given ExecutionContext = ExecutionContext.create()
-    val spibindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor) match {
+    val spibindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(admitteddescriptor) match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) =>
         throw new IllegalStateException(conclusion.display)
@@ -474,6 +497,28 @@ object GenericSubsystemFactory {
       componentDevDirPath(configuration).map(ComponentRepository.ComponentDevDirRepository.Specification.apply)
     ).flatten
 
+  private def _admission_repository_specs(
+    configuration: ResolvedConfiguration,
+    repositoryspecs: Vector[ComponentRepository.Specification]
+  ): Vector[ComponentRepository.Specification] =
+    // Static descriptor resolution is side-effect free. Its search domain must
+    // exactly match the repositories that the runtime will subsequently build.
+    repositoryspecs
+
+  private def _admit_descriptor_or_raise(
+    descriptor: GenericSubsystemDescriptor,
+    configuration: ResolvedConfiguration,
+    repositoryspecs: Vector[ComponentRepository.Specification] = Vector.empty
+  ): GenericSubsystemDescriptor = {
+    val specs =
+      if (repositoryspecs.nonEmpty) repositoryspecs
+      else _repository_specs_for_descriptor(configuration, descriptor)
+    _or_raise(SubsystemAssemblyAdmission.resolveC(
+      descriptor,
+      _admission_repository_specs(configuration, specs)
+    ))
+  }
+
   private def _merge_repository_specs(
     primary: Vector[ComponentRepository.Specification],
     secondary: Vector[ComponentRepository.Specification]
@@ -487,8 +532,9 @@ object GenericSubsystemFactory {
     descriptor: GenericSubsystemDescriptor
   ): Boolean = {
     val bindings = descriptor.componentBindings.map(_.componentName).toSet
-    val inferred = ComponentRepository.ComponentDevDirRepository.inferComponentNames(path).toSet
-    bindings.nonEmpty && inferred.nonEmpty && bindings.subsetOf(inferred)
+    val descriptors = ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(path)
+    val names = descriptors.flatMap(x => x.componentName.orElse(x.name)).toSet
+    bindings.nonEmpty && names.nonEmpty && bindings.subsetOf(names)
   }
 
   private def _parse_repository_specs(

@@ -564,26 +564,6 @@ Dashboard and observability projections derive diagnostic keys from these
 `Conclusion` fields. The Entity model does not define or emit separate
 failure-label fields.
 
-## Variation Points
-
-Component factories can provide coarse and fine-grained entity authorization
-defaults through these variation points:
-
-- `entity_usage_kind`;
-- `entity_operation_kind` (legacy `resource` / `task` compatibility context);
-- `entity_application_domain`;
-- `service_operation_model`;
-- `entity_access_mode`;
-- `entity_access_relations`;
-- `authorize_unit_of_work`.
-
-The intended order is:
-
-1. derive defaults from operation kind, application domain, and service operation
-   model;
-2. apply explicit low-level access mode or relation settings when present;
-3. allow component-specific `authorize_unit_of_work` as the final custom hook.
-
 ## Descriptor Support
 
 `EntityRuntimeDescriptor` stores:

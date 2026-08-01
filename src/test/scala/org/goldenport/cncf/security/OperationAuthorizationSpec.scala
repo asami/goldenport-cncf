@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Apr. 18, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationAuthorizationSpec extends AnyWordSpec with Matchers {
@@ -99,11 +99,17 @@ final class OperationAuthorizationSpec extends AnyWordSpec with Matchers {
       else
         ExecutionContext.withSecurityContext(
           base0,
-          base0.security.copy(principal = new Principal {
-            val id: PrincipalId = base0.security.principal.id
-            val attributes: Map[String, String] =
-              base0.security.principal.attributes ++ extraAttributes
-          })
+          _with_authentication_provenance(
+            base0.security.copy(
+              principal = new Principal {
+                val id: PrincipalId = base0.security.principal.id
+                val attributes: Map[String, String] =
+                  base0.security.principal.attributes ++
+                    (extraAttributes - SecuritySubject.AuthenticationProvenanceAttribute)
+              }
+            ),
+            extraAttributes
+          )
         )
     val runtime = new RuntimeContext(
       core = base.runtime.core,
@@ -117,4 +123,13 @@ final class OperationAuthorizationSpec extends AnyWordSpec with Matchers {
     )
     ExecutionContext.withRuntimeContext(base, runtime)
   }
+
+  private def _with_authentication_provenance(
+    security: SecurityContext,
+    attributes: Map[String, String]
+  ): SecurityContext =
+    if (attributes.get(SecuritySubject.AuthenticationProvenanceAttribute).contains(SecuritySubject.ProviderAuthenticationProvenance))
+      SecurityAuthenticationProvenance.providerAuthenticated(security)
+    else
+      security
 }

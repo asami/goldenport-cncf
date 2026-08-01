@@ -2426,20 +2426,25 @@ Future Web/platform development item.
   - public developer portal.
 
 ### 9.23 Component-owned Admin Surface Discovery
-Future Web/platform development item.
+Planned as the Web discovery/presentation subset of Phase 58.
 
 - Design references:
   - `docs/design/management-console.md`
   - `docs/notes/cncf-web-static-form-app-contract.md`
+  - `docs/phase/phase-58.md`
 - Goal: improve discovery and diagnostics for component-owned admin pages
-  beyond explicit Web composition while preserving declared-page authorization.
+  beyond explicit Web composition while preserving declared-page
+  authorization and projecting the common Phase 58 Admin view model.
 - Scope:
   - descriptor/index discovery for component-owned admin pages;
   - application/system admin grouping and audience metadata;
   - component ownership and route diagnostics;
   - authorization metadata projection for admin entries;
   - broken-link/missing-template diagnostics;
-  - admin index rendering that remains operation-centric and descriptor-backed.
+  - admin index rendering that remains operation-centric and
+    descriptor-backed; and
+  - navigation to Phase 56 Resource SubComponent state and Phase 57
+    documentation/model resources without independently scanning artifacts.
 - First implementation direction:
   - add discovery/projection diagnostics for declared admin pages;
   - keep canonical routes under `/web/{component}/admin/{page}`;
@@ -2998,15 +3003,41 @@ after 9.12 and 9.39 move to completed history.
   - use one operator-facing application as the first driver rather than
     inventing a generic merge UI without evidence.
 
-### 9.42 Component Documentation and AI Knowledge Integration
-Planned for Phase 56 after Phase 55 closes.
+### 9.42 Component Resource, Documentation, and Admin Delivery Sequence
+
+The work is split into three ordered phases so physical composition,
+knowledge production, and runtime administration have separate acceptance
+boundaries.
+
+#### Phase 56 - Component Resource SubComponent Foundation
+
+Planned after Phase 55 closes.
+
+- Owns Resource SubComponent identity, primary/release composition, packaging
+  contract, atomic repository visibility, cache/retrieval, offline bundles,
+  integrity, access, resolution precedence, lifecycle, operation-mode
+  resource policy, physical provenance, and common consumer APIs.
+- Introduces the initial non-executable `Documentation` and `SourceCode`
+  resource roles.
+- Keeps publication completeness separate from primary-only runtime
+  activation.
+- Supplies one resolver to Help, AI, CBD Support, BoK, and later Admin; those
+  consumers must not scan physical artifacts or repositories independently.
+- Planning references:
+  - `docs/phase/phase-56.md`;
+  - `docs/phase/phase-56-checklist.md`;
+  - `docs/notes/component-resource-subcomponent-implementation.md`; and
+  - `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`.
+
+#### Phase 57 - Component Documentation and AI Knowledge Integration
+
+Planned after Phase 56 closes.
 
 - Goal:
-  - make each physical Component a one-stop, self-describing execution and
-    knowledge package for humans and AI;
-  - allow large documentation, Scaladoc, source, and media to move to a
-    versioned Documentation Component without changing the logical Component
-    information space;
+  - make each logical Component release a one-stop, self-describing execution,
+    development, and knowledge package for humans and AI;
+  - populate the Phase 56 logical resource space with exact documentation,
+    model, Scaladoc, source, and AI knowledge;
   - provide direct Help/manifest retrieval, primary Textus CBD Support
     detail/usage/review integration, and complementary Textus BoK RAG/MCP
     discovery and retrieval; and
@@ -3017,9 +3048,26 @@ Planned for Phase 56 after Phase 55 closes.
   - User Guide and Reference Manual are the standard hand-written manual axes;
   - SmartDox is the canonical hand-written documentation model and admitted
     Markdown is parsed through SmartDox;
-  - Scaladoc is included in the Component distribution;
-  - source is embedded, moved to a Documentation Component, or explicitly
-    omitted according to disclosure policy;
+  - Scaladoc is included in the logical Component distribution;
+  - release source is embedded or carried by a required SourceCode
+    SubComponent; restricted access is explicit and omission is not a complete
+    Component release profile;
+  - Documentation and SourceCode SubComponents are repository resource
+    artifacts, not runtime Components, Componentlets, or Subsystem
+    participants;
+  - `OperationMode.Develop` automatically resolves and mounts exact
+    Documentation plus the development target's admitted source while
+    Component domain code remains mode-independent;
+  - `OperationMode.Test` uses deterministic explicitly selected local
+    resources without implicit remote retrieval, while Demo and Production do
+    not automatically mount source;
+  - Production retains primary-only activation and resolves authorized
+    Documentation only on demand without changing execution readiness;
+  - a manifest-based development context provides manuals, model metadata and
+    diagrams, APIs, configuration, examples, source, tests, and provenance to
+    AI;
+  - Component model resources cover Entity, Powertype, StateMachine, Value,
+    Datatype, relationships, class diagrams, and state diagrams;
   - Help advertises one JSON Component knowledge manifest;
   - CBD Support uses attributable Component knowledge for exact detail, usage,
     MCP assistance, comparison, and CAR Review;
@@ -3038,20 +3086,28 @@ Planned for Phase 56 after Phase 55 closes.
   - public Skill Catalog metadata supports discovery while actual installable
     Skills remain CAR-owned `SkillBundleManifest` resources.
 - Initial scope:
-  - Component knowledge manifest/resource schema, codec, paths, identity,
-    authority, provenance, integrity, license, and disclosure;
+  - Component composition, knowledge, and model manifest/resource schemas,
+    codecs, paths, identity, authority, provenance, integrity, license, and
+    disclosure;
   - manual authoring/lint and HTML/PDF projection decisions;
+  - portable Component model generation and deterministic class/state diagrams;
   - Scaladoc generation/package and structured symbol/search index;
-  - source filtering and commercial omission;
-  - Documentation Component relationship, resolution, compatibility,
-    precedence, and diagnostics;
+  - filtered release-source capture and restricted-source access;
+  - normalized SBT managed-source capture plus generator inputs, options,
+    identities, digests, and provenance sufficient for later reproduction,
+    investigation, and debugging, without packaging transient `target` state;
+  - Phase 56 resolver integration with exact logical identity, physical
+    provenance, availability, integrity, access, and diagnostics preserved;
+  - manifest-based AI development context with bounded disclosure;
   - unified Help, direct AI manifest/resource access, authorization, and
     production visibility;
   - Textus CBD Support manifest/resource admission, exact detail/usage MCP,
     documentation quality review, and source-aware evidence;
   - Textus BoK admission, semantic evidence model, indexing, RAG, read-only
     MCP, stale detection, disclosure enforcement, and CBD handoff;
-  - embedded, split-documentation, and source-omitted end-to-end acceptance;
+  - embedded, required-SubComponent, restricted-source,
+    production-primary-only, develop-mode, and offline-complete end-to-end
+    acceptance;
   - stable framework product/version/document/section identities shared by
     SimpleModeling.org, Help links, MCP/RAG evidence, and optional framework
     Documentation Components;
@@ -3075,7 +3131,9 @@ Planned for Phase 56 after Phase 55 closes.
   - Textus BoK does not publish mutation/execution Operations through the
     retrieval surface, replace CBD detail/usage ownership, or invent
     unsupported capability/compatibility claims;
-  - proprietary source is not indexed or returned without authorization;
+  - restricted source is not indexed or returned without authorization;
+  - Phase 56 production/development resource policy remains authoritative and
+    does not expose `OperationMode` to Component domain APIs;
   - runtime Help requires no compiler, renderer, PDF, or embedding toolchain;
   - framework Documentation Component absence never blocks Component startup
     or changes Component-specific Help/manual resolution;
@@ -3097,14 +3155,46 @@ Planned for Phase 56 after Phase 55 closes.
   - the implementation note is marked historical and explicitly overridden by
     final design/specification;
   - journal remains chronological history; and
-  - Phase 56 cannot close while the latest contract exists only in notes,
+  - Phase 57 cannot close while the latest contract exists only in notes,
     journal, phase documents, implementation, or tests.
 - Planning references:
-  - `docs/phase/phase-56.md`;
-  - `docs/phase/phase-56-checklist.md`;
+  - `docs/phase/phase-57.md`;
+  - `docs/phase/phase-57-checklist.md`;
   - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`;
-    and
+  - `docs/journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md`; and
   - `docs/notes/component-documentation-knowledge-package-implementation.md`.
+
+#### Phase 58 - Component Admin and Documentation Visibility
+
+Planned after Phase 57 closes.
+
+- Goal:
+  - make the full operational and descriptive state of a loaded Component
+    visible through one Component-owned Admin surface;
+  - combine Phase 55 configuration provenance, Phase 56 resource composition,
+    Phase 57 knowledge/model manifests, and authoritative runtime state; and
+  - provide explicitly authorized management without conflating visibility
+    with authority.
+- Selected direction:
+  - Help is the human/AI knowledge surface and Admin is the operator/runtime
+    surface;
+  - Admin consumes the Phase 56 resolver and Phase 57 manifests and never
+    reconstructs them by scanning files, CARs, repositories, or source;
+  - identity distinguishes Component class, release, instance, Subsystem, and
+    implicit Component Subsystem;
+  - visibility covers effective configuration/provenance, primary and
+    Resource SubComponent composition, Service, Operation, SPI, capability,
+    dependency, Entity/Powertype/StateMachine/Value/Datatype models and
+    diagrams, datastore/schema/collection, lifecycle, health, ClassLoader,
+    manuals, Scaladoc, source availability, and troubleshooting; and
+  - management actions require explicit Operation authorization, lifecycle
+    safety, validation, and audit.
+- Planning references:
+  - `docs/phase/phase-58.md`;
+  - `docs/phase/phase-58-checklist.md`;
+  - `docs/notes/component-admin-documentation-visibility-implementation.md`;
+    and
+  - `docs/journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md`.
 
 ### 9.43 REST and Web Form Transport Idempotency
 Future development item after Phase 50 establishes the Entity revision and
@@ -3176,7 +3266,7 @@ OCC foundation.
   - schedule this item as an independent phase rather than expanding Phase 50.
 
 ### 9.44 Information CML Runtime Canonicalization
-Planned for Phase 57 after Phase 56 closes.
+Planned for Phase 59 after Phase 58 closes.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected
@@ -3185,7 +3275,7 @@ Planned for Phase 57 after Phase 56 closes.
   - Phase 50 proved the generated Information `SimpleEntity` output/input
     revision contract but did not move the operational runtime to that
     generated Entity; and
-  - Phase 57 completes that runtime cutover rather than moving CNCF
+  - Phase 59 completes that runtime cutover rather than moving CNCF
     Information into `simplemodeling-model`.
 - Goal:
   - make the Information CML generated Entity/value/lifecycle family the one
@@ -3240,7 +3330,7 @@ Planned for Phase 57 after Phase 56 closes.
     standard Entity repository;
   - no two public canonical Information models remain after compatibility
     closure; and
-  - unrelated CML Entity or generator redesign remains outside Phase 57.
+  - unrelated CML Entity or generator redesign remains outside Phase 59.
 - Acceptance:
   - InformationSpace and every operational/projection/downstream path use the
     generated canonical Information Entity;
@@ -3255,8 +3345,8 @@ Planned for Phase 57 after Phase 56 closes.
   - final design/specification and Executable Specifications identify exactly
     one canonical runtime model.
 - Planning references:
-  - `docs/phase/phase-57.md`;
-  - `docs/phase/phase-57-checklist.md`;
+  - `docs/phase/phase-59.md`;
+  - `docs/phase/phase-59-checklist.md`;
   - `docs/phase/phase-27-checklist.md`;
   - `docs/phase/phase-50.md`;
   - `src/main/cozy/information.cml`; and
@@ -3341,7 +3431,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - equal numeric versions neither are required nor prove compatibility;
   - Cozy remains a build-time generator and is not a CAR runtime dependency;
   - generator compatibility does not replace CNCF runtime/ABI compatibility;
-  - Information canonicalization remains Phase 57 work;
+  - Information canonicalization remains Phase 59 work;
   - CML semantic redesign and unrelated generator output remain outside Phase
     51;
   - arbitrary business/API Records are not reinterpreted as persisted scalar
@@ -3448,7 +3538,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - `../cozy/docs/spec/car-project-scaffold.md`.
 
 ### 9.46 Web Session CSRF Unification
-Planned for Phase 58 after Phase 57 closes.
+Planned for Phase 60 after Phase 59 closes.
 
 - Historical basis:
   - CNCF already protects normal Form and `/form-api` POST execution with a
@@ -3494,8 +3584,8 @@ Planned for Phase 58 after Phase 57 closes.
     and
   - application-owned token generation or verification.
 - Planning references:
-  - `docs/phase/phase-58.md`;
-  - `docs/phase/phase-58-checklist.md`;
+  - `docs/phase/phase-60.md`;
+  - `docs/phase/phase-60-checklist.md`;
   - `docs/notes/web-session-csrf-unification-implementation.md`; and
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
 
@@ -3710,12 +3800,13 @@ Planned for Phase 53 after Phase 52 closes.
   - `WebApplication` and `WebApplicationMode` remain the Web context model;
     standalone selects a fixed-user provider and multi-user selects an
     authenticated-user provider;
-  - `~/.textus/user-profile.yaml` supplies the normal-operation user-profile
-    baseline and `~/.cncf/user-profile.yaml` supplies a higher-precedence
-    development overlay;
-  - each layer supports global and per-application values, resolves
-    field-by-field, and retains source path/input, scope, application, and
-    logical-key provenance;
+  - `~/.textus/user-profile.yaml` and `~/.cncf/user-profile.yaml` are strict,
+    ordered HOME-only StandaloneUserProfile admissions; Phase 53 does not merge
+    them or assign effective precedence;
+  - Phase 53 retains only existing trace evidence (`key`, `origin`,
+    `sourceType`, `sourceId`, and `history`); effective field binding,
+    precedence, and detailed layer/target/subsystem/field-path provenance are
+    owned by Phase 55 ConfigurationBinding work;
   - fixed and authenticated current users, their locale/timezone,
     authorization, datastore, and UnitOfWork bindings enter Component
     execution only through ExecutionContext;
@@ -3740,8 +3831,9 @@ Planned for Phase 53 after Phase 52 closes.
   - the legacy private mode, mode key, local powertype,
     `local-default`/`external-required` policy, hardcoded standalone UserId,
     and Component mode branches are removed;
-  - standalone uses the resolved Textus/CNCF global/application user-profile
-    overlay and multi-user uses the authenticated request user;
+  - standalone preserves HOME-only ordered profile admission while multi-user
+    uses the authenticated request user; effective Textus/CNCF field binding is
+    owned by Phase 55 ConfigurationBinding work;
   - both paths provide identical Component-facing ExecutionContext contracts;
   - the Subsystem owns local/shared datastore selection; and
   - both source-directory and packaged-CAR launches pass the full
@@ -3773,36 +3865,206 @@ Phase 53 fixes only its direction and extension-ready metadata boundary.
 - Assign a phase only after Phase 53 verifies the built-in contract and exposes
   the concrete extension boundary.
 
-### 9.51 Generic Configuration Framework Extension
+### 9.51 Typed Configuration Binding and Provenance Resolution
 Planned for Phase 55 after Phase 54 closes.
 
 - Driver:
-  - Phase 53 identified possible generic configuration extensions while
-    defining the minimal ComponentStyle, fixed-user, configuration-layering,
-    and provenance contract;
-  - those extensions are intentionally excluded from Phase 53 delivery; and
-  - their specification requires a separate consideration step before any
-    implementation scope is selected.
-- Candidate scope:
-  - typed canonical parameter and binding identities;
-  - a generic qualifier or semantic-scope model;
-  - namespace registration and conflict handling;
-  - candidate-based resolution across qualified contexts;
-  - reversible external binding and environment codecs;
-  - generic alias normalization and removal policy;
-  - typed configuration and trace indexes; and
-  - coherent migration of admitted String-keyed consumers.
+  - Phase 53 deliberately stops at strict StandaloneUserProfile admission and
+    existing trace evidence; effective binding, detailed provenance, explicit
+    override representation, and ambient environment conversion are deferred
+    here for one coherent ConfigurationBinding authority;
+  - parallel resolved-value and trace maps can diverge and do not make one
+    binding the authority for value, provenance, and override history; and
+  - final lookup by a target-qualified key would leak winning-target
+    knowledge to consumers that should receive only resolved values.
+- Selected planning center:
+  - one typed `ConfigurationBinding` carries its parameter, semantic target,
+    typed value, provenance, and direct overridden binding;
+  - initial targets distinguish Global, ComponentClass, SubsystemInstance, and
+    a ComponentInstance qualified by both its containing SubsystemInstanceId
+    and ComponentInstanceId; implicit Component Subsystems use the ordinary
+    stable SubsystemInstance target;
+  - an unresolved candidate collection retains all source/target bindings;
+  - a resolved binding collection contains one winner per canonical parameter
+    identity and is the sole effective-value authority;
+  - typed lookup uses the parameter definition without requiring the caller to
+    know which target won;
+  - trace and `explain-config` are sanitized projections from the winning
+    binding and override chain;
+  - each physical source loads once, same-source target specificity is applied
+    before cross-source precedence, and aliases normalize before binding
+    construction;
+  - `Unqualified` remains external syntax whose target is inferred from its
+    document location, not a semantic target;
+  - `~/.textus/config.yaml` can contain the whole configuration, or equivalent
+    documents can be split under `~/.textus/components/*` and
+    `~/.textus/subsystems/*`; explicit `instances/<instance>` segments select
+    Subsystem and Component instances, and both forms normalize into one
+    binding authority;
+  - Textus/CNCF owns parameter and closed-namespace semantics while
+    `simplemodeling-lib` owns the generic binding framework; and
+  - String forms remain only at explicit file, environment, argument,
+    launcher, migration, and diagnostic boundaries.
+- Planned scope:
+  - inventory and freeze names, invariants, compatibility, redaction, and
+    repository ownership;
+  - failing-first typed parameter/binding/candidate/collection acceptance;
+  - source-once decoding with complete provenance;
+  - deterministic
+    Global/ComponentClass/SubsystemInstance/ComponentInstance resolution and
+    immutable override chains;
+  - one resolved collection with derived trace;
+  - Textus/CNCF parameter catalog and Phase 53 layering adoption;
+  - reversible external/environment codecs;
+  - coherent migration of every admitted String-keyed consumer; and
+  - full regression, clean review, and post-implementation design/spec
+    promotion.
 - Planning boundary:
-  - Phase 55 is currently a scheduling frame, not an approved specification;
-  - the candidate list records discussion without selecting a type model,
-    vocabulary, compatibility policy, repository set, or migration path;
-  - illustrative names in the Phase 53 journal are non-normative;
-  - implementation starts only after a separate specification consideration
-    selects or rejects each candidate and establishes failing-first acceptance;
-    and
+  - public type names, exact heterogeneous storage, compatibility/alias policy,
+    structured outcomes, provenance bounds, and repository set remain GCF-01
+    decisions;
+  - no internal parallel String and typed authorities may remain at closure;
+  - arbitrary User, WebApplication, or multidimensional qualifiers are
+    excluded without a separately proven use case;
   - Phase 55 does not reopen Phase 53 or absorb Metadata Factory
     ComponentStyle contribution.
 - Planning references:
   - `docs/phase/phase-55.md`;
   - `docs/phase/phase-55-checklist.md`; and
+  - `docs/notes/phase-55-configuration-binding-provisional-specification.md`;
+  - `docs/journal/2026/07/2026-07-31-phase-55-configuration-binding-centered-replanning.md`; and
   - `docs/journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md`.
+
+### 9.52 Pure Java Component Binding
+Future development candidate. No phase is assigned yet.
+
+- Goal:
+  - enable ordinary CNCF Component development entirely in Java;
+  - encapsulate existing Java logic as a Component by developing only a pure
+    Java facade, without rewriting that logic or adding Scala source to the
+    Component project;
+  - also support a Scala-facade path for existing Java logic so developers who
+    can use Scala may adapt it through the existing Scala Component API and
+    internal DSL with less binding infrastructure;
+  - target JDK 17 or later for Java Components and Scala 3.9 or later for the
+    CNCF runtime and Scala Components;
+  - provide the full Component lifecycle, CML-generated contracts, procedure
+    implementation surface, internal DSL, packaging, loading, and diagnostics
+    without requiring Java developers to consume Scala APIs; and
+  - preserve one Component/Service/Operation execution model across Java,
+    Scala, in-process, isolated-JVM, container, and remote implementations.
+- Selected direction:
+  - introduce a pure Java binding API with no Scala binary suffix and no
+    required Scala library, Cats, Circe, Scala collection, `Consequence`, or
+    Scala `ExecutionContext` surface;
+  - compile the Java developer API with `--release 17` and keep its ABI stable
+    independently of the Scala 3.9-or-later runtime implementation;
+  - translate the pure Java factory, handler, context, value, and failure
+    surfaces through a Scala-owned bridge into the existing CNCF runtime;
+  - discover a CAR-declared Java factory entrypoint and binding version rather
+    than requiring Java classes to extend Scala `Component`,
+    `Component.Factory`, or `Component.BundleFactory`;
+  - provide a Java-native projection of the CNCF internal DSL over the same
+    UnitOfWork, Capability, ActionEngine, authorization, cancellation, and
+    observability kernel used by Scala;
+  - use procedure semantics only for Java Operation handlers: ordinary
+    sequential calls and returns, with no Java Free Monad, deferred
+    `JavaProgram`, Scala `ExecUowM`, or arbitrary `CompletionStage` execution
+    model;
+  - keep asynchronous execution outside the handler under CNCF Job/Task
+    ownership;
+  - route Scala-to-Java, Java-to-Scala, Java-to-Java, and Scala-to-Scala calls
+    through the generic Component/Service/Operation invocation mechanism;
+  - generate language-specific typed clients and value projections from one
+    language-neutral CML contract without direct Java-class/Scala-class
+    exchange;
+  - convert Java `Exception` outcomes, including explicit Java DSL failures,
+    into structured `Conclusion` values while preserving an existing
+    Conclusion across Java/Scala boundaries; and
+  - leave Java `Error` outcomes on the Scala runtime exception path rather than
+    misrepresenting them as ordinary Component Conclusions.
+- Candidate scope:
+  - pure Java Component factory, lifecycle, handler, context, value, identity,
+    configuration, and failure APIs;
+  - Java procedure DSL coverage for Entity, Aggregate, CQRS, View,
+    StateMachine, Event, Job, HTTP, Resource, Blob, Process Execution, managed
+    service, datastore, Component call, SPI, Capability, authorization,
+    compensation, and observability behavior;
+  - Cozy CML Java generation, typed generic-invocation clients, Java project
+    scaffold, test fixtures, build metadata, lint, CAR packaging, and
+    SourceCode/Documentation SubComponent integration;
+  - Java factory admission, Component-local ClassLoader identity, dependency
+    policy, JDK/binding compatibility, reload, and diagnostics;
+  - CML type, lifecycle, configuration, dependency, UnitOfWork, generic-call,
+    exception, observability, and packaging adapters for existing Java logic
+    behind either a pure Java facade or a Scala facade;
+  - trust and placement admission for existing Java logic whose direct file,
+    network, process, thread, native, or other ambient effects do not pass
+    through CNCF capabilities;
+  - language-neutral invocation envelope and safe ExecutionContext, failure,
+    cancellation, correlation, and artifact projections for isolated JVM,
+    container, and remote placement;
+  - JDK 17-or-later and Scala 3.9-or-later compatibility matrices; and
+  - one end-to-end Java Component that calls a Scala Component through generic
+    invocation and preserves success, Conclusion failure, UnitOfWork, and
+    CallTree behavior.
+- Boundaries:
+  - implementation language and execution placement are independent axes;
+  - ClassLoader isolation is not treated as a hostile-code security sandbox;
+  - wrapping existing Java logic in a facade does not by itself make its direct
+    ambient effects CNCF-governed; trusted in-process, adapted-capability, and
+    isolated-JVM/container/remote profiles remain explicit;
+  - Process Execution remains the one-shot external-program boundary;
+  - Managed Service Container Runtime remains the lifecycle boundary for
+    reusable endpoint-bearing Docker services;
+  - the legacy one-shot Docker adapter and compile-only REST scaffolding do not
+    become the Java binding foundation;
+  - Java and Scala DSLs do not introduce separate interpreters, transaction
+    models, authorization paths, or failure taxonomies;
+  - typed generated clients remain facades over generic Operation invocation,
+    not direct cross-language object calls; and
+  - a compile-only Java class or direct inheritance from Scala Component types
+    is not acceptance evidence for Java Component development.
+- First vertical-slice direction:
+  - generate pure Java input/output types and a typed generic-invocation client
+    from CML;
+  - construct and load one Java procedure Component from a CAR on JDK 17;
+  - execute one Java internal DSL effect through the existing UnitOfWork
+    interpreter;
+  - call one Scala Component through generic invocation;
+  - prove normal return, Conclusion-preserving Exception conversion, Java Error
+    propagation, packaging, ClassLoader activation, and safe diagnostics; and
+  - follow with one existing Java logic module wrapped once by a pure Java
+    facade and once by a Scala facade, proving an equivalent CML contract and
+    observable behavior without changing the logic module.
+- Planning reference:
+  - `docs/journal/2026/07/2026-07-31-java-component-binding-consideration.md`.
+
+### 9.53 ComponentFactory Purity and Capability-Implementation Evidence
+Future development candidate. No phase is assigned yet.
+
+- Driver:
+  - Phase 53 proved typed Component parameters and exclusion of the former
+    mode/configuration carriers, but did not establish general Factory purity
+    or capability-implementation evidence; and
+  - fixed-user/provider/datastore selection remains owned by Phase 54/55, so a
+    Factory policy must not duplicate those authorities.
+- Goal:
+  - freeze a complete ComponentFactory input/output policy that is
+    side-effect-free, mode-free, configuration-source-free, and datastore/
+    user-resolution-free; and
+  - require executable evidence that a declared Component capability has an
+    implementation without exposing runtime selection policy to Component code.
+- Candidate scope:
+  - inventory Factory construction, initialization, capability, and extension
+    hooks;
+  - specify permitted typed parameters and implementation evidence;
+  - reject raw configuration, fixed-user lookup, provider/datastore selection,
+    mode-specific input, and mode-specific output at Factory boundaries; and
+  - add framework and CAR executable acceptance after Phase 54/55 contracts
+    are available.
+- Boundary:
+  - this candidate does not implement datastore ownership, effective binding,
+    UserId migration, or diagnostics; and
+  - it does not reopen Phase 53's accepted mode/configuration-carrier
+    exclusion evidence.

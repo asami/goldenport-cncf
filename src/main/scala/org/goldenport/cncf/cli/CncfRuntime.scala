@@ -66,7 +66,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -476,12 +477,12 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration,
     args: Array[String]
   ): RuntimeFrontParameters = {
-    val (factoryClasses, args2) = _take_component_factory_classes(configuration, args)
+    val (factoryclasses, args2) = _take_component_factory_classes(configuration, args)
     val (discover, args3) = _take_discover_classes(configuration, args2)
     val (workspace, args4) = _take_workspace(configuration, args3)
-    val (forceExit, args5) = _take_force_exit(configuration, args4)
-    val (noExit, rest) = _take_no_exit(configuration, args5)
-    RuntimeFrontParameters(factoryClasses, discover, workspace, forceExit, noExit, rest)
+    val (forceexit, args5) = _take_force_exit(configuration, args4)
+    val (noexit, rest) = _take_no_exit(configuration, args5)
+    RuntimeFrontParameters(factoryclasses, discover, workspace, forceexit, noexit, rest)
   }
 
   private[cncf] def bootstrap(
@@ -1318,18 +1319,18 @@ object CncfRuntime extends GlobalObservable {
     spec: ComponentRepository.Specification
   ): Option[String] =
     spec match {
-      case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
-        Some(s"component-dir:${baseDir}")
+      case ComponentRepository.ComponentDirRepository.Specification(basedir) =>
+        Some(s"component-dir:${basedir}")
       case ComponentRepository.ComponentFileRepository.Specification(file) =>
         Some(s"component-file:${file}")
-      case ComponentRepository.ComponentDevDirRepository.Specification(baseDir) =>
-        Some(s"component-dev-dir:${baseDir}")
-      case ComponentRepository.SubsystemDevDirRepository.Specification(baseDir) =>
-        Some(s"subsystem-dev-dir:${baseDir}")
+      case ComponentRepository.ComponentDevDirRepository.Specification(basedir) =>
+        Some(s"component-dev-dir:${basedir}")
+      case ComponentRepository.SubsystemDevDirRepository.Specification(basedir) =>
+        Some(s"subsystem-dev-dir:${basedir}")
       case ComponentRepository.StandardRepository.Specification(_, baseurl, _) =>
         Some(s"standard-repository:${baseurl}")
-      case ComponentRepository.ScalaCliRepository.Specification(baseDir) =>
-        Some(s"scala-cli:${baseDir}")
+      case ComponentRepository.ScalaCliRepository.Specification(basedir) =>
+        Some(s"scala-cli:${basedir}")
     }
 
   private def _has_component_dir_config_arg(
@@ -1338,8 +1339,8 @@ object CncfRuntime extends GlobalObservable {
   ): Boolean =
     args.contains(s"--${RuntimeConfig.componentDirKey}=${value}") ||
       args.sliding(2).exists {
-        case Array(currentKey, currentValue) =>
-          currentKey == s"--${RuntimeConfig.componentDirKey}" && currentValue == value
+        case Array(currentkey, currentvalue) =>
+          currentkey == s"--${RuntimeConfig.componentDirKey}" && currentvalue == value
         case _ => false
       }
 
@@ -1397,14 +1398,14 @@ object CncfRuntime extends GlobalObservable {
     spec: ComponentRepository.Specification
   ): Option[(String, String)] =
     spec match {
-      case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
-        Some((RuntimeConfig.componentDirKey, baseDir.toString))
+      case ComponentRepository.ComponentDirRepository.Specification(basedir) =>
+        Some((RuntimeConfig.componentDirKey, basedir.toString))
       case ComponentRepository.ComponentFileRepository.Specification(file) =>
         Some((RuntimeConfig.componentFileKey, file.toString))
-      case ComponentRepository.ComponentDevDirRepository.Specification(baseDir) =>
-        Some((RuntimeConfig.componentDevDirKey, baseDir.toString))
-      case ComponentRepository.SubsystemDevDirRepository.Specification(baseDir) =>
-        Some((RuntimeConfig.subsystemDevDirKey, baseDir.toString))
+      case ComponentRepository.ComponentDevDirRepository.Specification(basedir) =>
+        Some((RuntimeConfig.componentDevDirKey, basedir.toString))
+      case ComponentRepository.SubsystemDevDirRepository.Specification(basedir) =>
+        Some((RuntimeConfig.subsystemDevDirKey, basedir.toString))
       case _ =>
         None
     }
@@ -2359,8 +2360,8 @@ object CncfRuntime extends GlobalObservable {
         (selector, tail)
       case Vector("meta", operation) =>
         _default_meta_component_name(subsystem) match {
-          case Some(componentName) =>
-            (s"$componentName.meta.$operation", tail)
+          case Some(componentname) =>
+            (s"$componentname.meta.$operation", tail)
           case None =>
             (selector, tail)
         }
@@ -2998,7 +2999,7 @@ object RunMode {
 
   def parse(p: String): org.goldenport.Consequence[RunMode] =
     from(p) match {
-      case Some(runMode) => org.goldenport.Consequence.success(runMode)
+      case Some(runmode) => org.goldenport.Consequence.success(runmode)
       case None => org.goldenport.Consequence.argumentInvalid(s"invalid run mode: ${p}")
     }
 }
@@ -3477,16 +3478,28 @@ class CncfRuntime() extends GlobalObservable {
       aliasresolver
     )
     val mode = runconfig.mode
-    val subsystem = DefaultSubsystemFactory.defaultWithScope(
+    val subsystem0 = DefaultSubsystemFactory.defaultWithScope(
       _runtime_scope_context(),
       Some(mode),
       configuration,
       aliasresolver
     )
+    val subsystem =
+      if (_is_test_runtime)
+        subsystem0.enableControlledTestExecution()
+      else
+        subsystem0
     observe_trace(
       s"[subsytem] buildSubsystem start mode=${mode.name} componentCount=${subsystem.components.size}"
     )
     GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
+    RuntimeStandaloneUserProfileAdmission
+      .admit(subsystem, serverExecution = mode == RunMode.Server) match {
+        case Consequence.Success(_) =>
+          ()
+        case Consequence.Failure(conclusion) =>
+          throw new IllegalStateException(conclusion.show)
+      }
     val colfactory = CollaboratorFactory.create(configuration)
     val compfactory = ComponentFactory.create(subsystem, colfactory, cwd, configuration)
     if (subsystem.descriptor.nonEmpty && subsystem.components.nonEmpty) {
@@ -3883,9 +3896,9 @@ class CncfRuntime() extends GlobalObservable {
       }
     }
     result match {
-      case Consequence.Success((res, debugTraceJob)) =>
+      case Consequence.Success((res, debugtracejob)) =>
         _print_operation_response(res)
-        if (debugTraceJob)
+        if (debugtracejob)
           _print_debug_job_reference(res)
       case Consequence.Failure(conclusion) =>
         _print_error(conclusion)
@@ -4144,9 +4157,9 @@ class CncfRuntime() extends GlobalObservable {
     val args = Array(operation) ++ params.toArray
     Request.parseArgs(_client_http_request_definition, args).flatMap { parsed =>
       parsed.arguments.headOption match {
-        case Some(pathArgument) =>
+        case Some(pathargument) =>
           Consequence.success((
-            _normalize_path(pathArgument.value.toString),
+            _normalize_path(pathargument.value.toString),
             _canonical_http_properties(params, parsed.properties) ++ _http_tail_properties(parsed.arguments.drop(1))
           ))
         case None =>
@@ -4715,7 +4728,7 @@ class CncfRuntime() extends GlobalObservable {
     args: Array[String],
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
-    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
+    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeoptions, clean) =>
     _selector_and_arguments(clean, mode).flatMap { case (selector0, tail) =>
       val normalized = _normalize_meta_selector(subsystem, selector0, tail.toVector)
       val aliasresolver =
@@ -4723,7 +4736,7 @@ class CncfRuntime() extends GlobalObservable {
         else _alias_resolver
       val rewritten = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
       val (selector, suffixformat) = _extract_selector_format(rewritten)
-      _resolve_selector(subsystem, selector, runtimeOptions, mode) match {
+      _resolve_selector(subsystem, selector, runtimeoptions, mode) match {
         case Consequence.Success((component, service, operation)) =>
           val parsed = for {
             comp <- subsystem.components.find(_.name == component)
@@ -4737,13 +4750,13 @@ class CncfRuntime() extends GlobalObservable {
               Argument(s"arg${index + 1}", value, None)
             }.toList, Nil, Nil)
           }
-          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(p =>
+          val runtimeproperties = _runtime_properties(runtimeoptions, mode).filterNot(p =>
             p.name.equalsIgnoreCase("textus.format") ||
               p.name.equalsIgnoreCase("cncf.format")
           )
           val allproperties = _with_format_property(
             properties ++ runtimeproperties,
-            _resolve_format(runtimeOptions, suffixformat, mode)
+            _resolve_format(runtimeoptions, suffixformat, mode)
           )
           Consequence.success(
             Request.of(
@@ -4906,8 +4919,8 @@ class CncfRuntime() extends GlobalObservable {
         (selector, tail)
       case Vector("meta", operation) =>
         _default_meta_component_name(subsystem) match {
-          case Some(componentName) =>
-            (s"$componentName.meta.$operation", tail)
+          case Some(componentname) =>
+            (s"$componentname.meta.$operation", tail)
           case None =>
             (selector, tail)
         }
@@ -5239,6 +5252,9 @@ class CncfRuntime() extends GlobalObservable {
     val normalized = value.trim.toLowerCase(java.util.Locale.ROOT)
     normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
   }
+
+  private def _is_test_runtime: Boolean =
+    sys.props.get("textus.test").exists(_is_truthy)
 
   private def _print_operation_response(res: OperationResponse): Unit = {
     res match {

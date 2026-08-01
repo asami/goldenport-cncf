@@ -669,3 +669,17 @@ therefore moved to:
 
 Current planning follows Phase 56. Earlier Phase 53, Phase 54, and Phase 55
 assignments in this journal remain chronological history.
+
+## Planning Supersession — 2026-07-31
+
+The Resource SubComponent mechanism was separated into the new Phase 56 so
+physical composition, repository resolution, integrity, and provenance close
+before documentation consumers are built. The current Component Documentation
+and AI Knowledge Integration plan therefore moved to:
+
+- `docs/phase/phase-57.md`
+- `docs/phase/phase-57-checklist.md`
+
+Component Admin and Documentation Visibility is the separate Phase 58
+consumer. Current documentation/AI planning follows Phase 57. Earlier Phase
+53 through Phase 56 assignments in this journal remain chronological history.

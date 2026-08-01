@@ -7,7 +7,7 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
-import org.goldenport.cncf.component.{ComponentDescriptor, ComponentInstanceId, ComponentInstanceMetadata}
+import org.goldenport.cncf.component.{ComponentDescriptor, ComponentInstanceId, ComponentInstanceMetadata, SubsystemCapabilityId}
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
 import org.goldenport.cncf.rule.{RuleSet, RuleSetDescriptor}
@@ -18,7 +18,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul. 20, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -57,6 +57,20 @@ final case class GenericSubsystemMessageDeliveryProviderBinding(
 
 final case class GenericSubsystemMessageDeliveryBinding(
   providers: Vector[GenericSubsystemMessageDeliveryProviderBinding] = Vector.empty
+)
+
+/**
+ * Declares a component instance as an authority for a subsystem capability.
+ *
+ * This is deliberately distinct from `GenericSubsystemComponentBinding.capabilities`.
+ * The latter is instance-selection metadata (for example, `html` or
+ * `same-origin`), whereas this declaration is the typed authority consumed by
+ * component-style assembly admission.
+ */
+final case class GenericSubsystemCapabilityProviderBinding(
+  name: String,
+  component: String,
+  capabilities: Vector[SubsystemCapabilityId] = Vector.empty
 )
 
 final case class GenericSubsystemUserNotificationProviderBinding(
@@ -224,7 +238,10 @@ final case class GenericSubsystemDescriptor(
   security: Option[GenericSubsystemSecurityBinding] = None,
   builtin: Option[GenericSubsystemBuiltinBinding] = None,
   operationAuthorization: Map[String, OperationAuthorizationRule] = Map.empty,
-  ruleSets: Vector[RuleSet] = Vector.empty
+  ruleSets: Vector[RuleSet] = Vector.empty,
+  subsystemCapabilityProviders: Vector[GenericSubsystemCapabilityProviderBinding] = Vector.empty,
+  componentDescriptorOverrides: Vector[ComponentDescriptor] = Vector.empty,
+  implicitRootComponentName: Option[String] = None
 ) {
   def componentVersion: Option[String] =
     version.orElse(componentBindings.headOption.flatMap(_.componentVersion))
@@ -245,7 +262,11 @@ final case class GenericSubsystemDescriptor(
     componentBindings.map(_.runtimeComponentName)
 
   def toComponentDescriptors: Vector[ComponentDescriptor] =
-    componentBindings.map(_.toComponentDescriptor)
+    componentBindings.map { binding =>
+      componentDescriptorOverrides.find { descriptor =>
+        GenericSubsystemDescriptor.runtimeComponentName(descriptor.componentName.orElse(descriptor.name).getOrElse("")) == binding.runtimeComponentName
+      }.getOrElse(binding.toComponentDescriptor)
+    }
 
   def declaredPorts: Vector[Record] =
     componentBindings
@@ -278,7 +299,8 @@ object GenericSubsystemDescriptor {
     security: Option[GenericSubsystemSecurityBinding],
     builtin: Option[GenericSubsystemBuiltinBinding],
     operationAuthorization: Map[String, OperationAuthorizationRule],
-    ruleSets: Vector[RuleSet]
+    ruleSets: Vector[RuleSet],
+    subsystemCapabilityProviders: Vector[GenericSubsystemCapabilityProviderBinding]
   )
 
   private val _canonical_descriptor_files = Vector(
@@ -320,6 +342,7 @@ object GenericSubsystemDescriptor {
       builtin = overrideDescriptor.builtin.orElse(defaults.builtin),
       operationAuthorization = defaults.operationAuthorization ++ overrideDescriptor.operationAuthorization,
       ruleSets = if (overrideDescriptor.ruleSets.nonEmpty) overrideDescriptor.ruleSets else defaults.ruleSets,
+      subsystemCapabilityProviders = if (overrideDescriptor.subsystemCapabilityProviders.nonEmpty) overrideDescriptor.subsystemCapabilityProviders else defaults.subsystemCapabilityProviders,
       assemblyDescriptor = defaults.assemblyDescriptor
     )
 
@@ -335,7 +358,10 @@ object GenericSubsystemDescriptor {
   ): Consequence[GenericSubsystemDescriptor] = {
     val rec = source.record
     _override_bindings_from_record_c(source.path.getOrElse(descriptor.path), rec).flatMap { bindings =>
-      _rule_sets_c(rec).map { rulesets =>
+      for {
+        rulesets <- _rule_sets_c(rec)
+        capabilityproviders <- _subsystem_capability_providers_c(rec)
+      } yield {
         descriptor.copy(
           subsystemName = _string(rec, "subsystem", "subsystemName", "name").getOrElse(descriptor.subsystemName),
           version = _string(rec, "version").orElse(descriptor.version),
@@ -356,6 +382,7 @@ object GenericSubsystemDescriptor {
             .orElse(descriptor.builtin),
           operationAuthorization = descriptor.operationAuthorization ++ _operation_authorization_value(rec),
           ruleSets = if (_has_rule_sets(rec)) rulesets else descriptor.ruleSets,
+          subsystemCapabilityProviders = if (_has_subsystem_capability_providers(rec)) capabilityproviders else descriptor.subsystemCapabilityProviders,
           assemblyDescriptor = Some(_merge_assembly_sources(descriptor.assemblyDescriptor, source))
         )
       }
@@ -698,7 +725,8 @@ object GenericSubsystemDescriptor {
 
   def fromComponentDescriptor(
     path: Path,
-    descriptor: ComponentDescriptor
+    descriptor: ComponentDescriptor,
+    includeAssemblyDescriptor: Boolean = true
   ): Consequence[GenericSubsystemDescriptor] = {
     val componentname =
       descriptor.componentName.orElse(descriptor.name).getOrElse(path.getFileName.toString.stripSuffix(".car"))
@@ -708,31 +736,56 @@ object GenericSubsystemDescriptor {
       coordinate = None,
       extensionBindings = descriptor.extensionBindings
     )
-    _load_assembly_descriptor_consequence(path, "component-car").flatMap { assembly =>
-      _decode_optional_assembly_shape(path, assembly).map { shape =>
-        val bindings =
-          shape.map(_.componentBindings).filter(_.nonEmpty).map { xs =>
-            if (xs.exists(x => runtimeComponentName(x.componentName) == runtimeComponentName(componentname))) xs
-            else primary +: xs
-          }.getOrElse(Vector(primary))
-        GenericSubsystemDescriptor(
-          path = path,
-          subsystemName = shape.map(_.subsystemName).getOrElse(descriptor.subsystemName.getOrElse(componentname)),
-          version = shape.flatMap(_.version).orElse(descriptor.version),
-          componentBindings = bindings,
-          extensions = descriptor.extensions ++ shape.map(_.extensions).getOrElse(Map.empty),
-          config = descriptor.config ++ shape.map(_.config).getOrElse(Map.empty),
-          wiring = shape.map(_.wiring).getOrElse(Record.empty),
-          assemblyDescriptor = assembly,
-          runtime = shape.flatMap(_.runtime),
-          security = shape.flatMap(_.security),
-          builtin = shape.flatMap(_.builtin),
-          operationAuthorization = shape.map(_.operationAuthorization).getOrElse(Map.empty),
-          ruleSets = shape.map(_.ruleSets).getOrElse(Vector.empty)
-        )
+    val assemblyc =
+      if (includeAssemblyDescriptor)
+        _load_assembly_descriptor_consequence(path, "component-car")
+      else
+        Consequence.success(None)
+    assemblyc.flatMap { assembly =>
+      _decode_optional_assembly_shape(path, assembly).flatMap { shape =>
+        _implicit_subsystem_name_c(path, descriptor, shape).map { subsystemname =>
+          val bindings =
+            shape.map(_.componentBindings).filter(_.nonEmpty).map { xs =>
+              if (xs.exists(x => runtimeComponentName(x.componentName) == runtimeComponentName(componentname))) xs
+              else primary +: xs
+            }.getOrElse(Vector(primary))
+          GenericSubsystemDescriptor(
+            path = path,
+            subsystemName = subsystemname,
+            version = shape.flatMap(_.version).orElse(descriptor.version),
+            componentBindings = bindings,
+            extensions = descriptor.extensions ++ shape.map(_.extensions).getOrElse(Map.empty),
+            config = descriptor.config ++ shape.map(_.config).getOrElse(Map.empty),
+            wiring = shape.map(_.wiring).getOrElse(Record.empty),
+            assemblyDescriptor = assembly,
+            runtime = shape.flatMap(_.runtime),
+            security = shape.flatMap(_.security),
+            builtin = shape.flatMap(_.builtin),
+            operationAuthorization = shape.map(_.operationAuthorization).getOrElse(Map.empty),
+            ruleSets = shape.map(_.ruleSets).getOrElse(Vector.empty),
+            subsystemCapabilityProviders = shape.map(_.subsystemCapabilityProviders).getOrElse(Vector.empty),
+            componentDescriptorOverrides = Vector(descriptor),
+            implicitRootComponentName = Some(primary.runtimeComponentName)
+          )
+        }
       }
     }
   }
+
+  private def _implicit_subsystem_name_c(
+    path: Path,
+    descriptor: ComponentDescriptor,
+    assembly: Option[Shape]
+  ): Consequence[String] =
+    assembly.map(_.subsystemName).orElse(
+      descriptor.subsystemName.orElse(descriptor.componentName).orElse(descriptor.name)
+    ).map(_.trim).filter(_.nonEmpty) match {
+      case Some(value) => Consequence.success(value)
+      case None =>
+        Consequence.resourceInvalid(
+          s"implicit Subsystem requires descriptor-owned subsystemName, componentName, or name: $path"
+        )
+    }
 
   def loadAssemblyDescriptor(path: Path): Option[GenericSubsystemAssemblyDescriptorSource] =
     if (!Files.exists(path))
@@ -937,7 +990,8 @@ object GenericSubsystemDescriptor {
         security = s.security,
         builtin = s.builtin,
         operationAuthorization = s.operationAuthorization,
-        ruleSets = s.ruleSets
+        ruleSets = s.ruleSets,
+        subsystemCapabilityProviders = s.subsystemCapabilityProviders
       )
     }.leftMap { c =>
       c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"${c.displayMessage} in ${path}")))
@@ -1053,6 +1107,68 @@ object GenericSubsystemDescriptor {
 
   private def _valid_instance_name(value: String): Boolean =
     value.matches("[A-Za-z0-9][A-Za-z0-9._-]*")
+
+  private def _subsystem_capability_providers_c(
+    rec: Record
+  ): Consequence[Vector[GenericSubsystemCapabilityProviderBinding]] =
+    _record_value(rec, List("subsystemCapabilities", "subsystem_capabilities", "subsystem-capabilities")) match {
+      case Some(capabilities) =>
+        capabilities.getAny("providers") match {
+          case Some(xs: Seq[?]) =>
+            _sequence(xs.toVector.zipWithIndex.map { case (value, index) =>
+              _any_to_record(value) match {
+                case Some(provider) => _subsystem_capability_provider_c(provider, s"subsystemCapabilities.providers[$index]")
+                case None => Consequence.resourceInvalid(s"subsystemCapabilities.providers[$index] must be a provider declaration")
+              }
+            }).flatMap(_validate_subsystem_capability_providers)
+          case Some(xs: java.util.List[?]) =>
+            _sequence(xs.asScala.toVector.zipWithIndex.map { case (value, index) =>
+              _any_to_record(value) match {
+                case Some(provider) => _subsystem_capability_provider_c(provider, s"subsystemCapabilities.providers[$index]")
+                case None => Consequence.resourceInvalid(s"subsystemCapabilities.providers[$index] must be a provider declaration")
+              }
+            }).flatMap(_validate_subsystem_capability_providers)
+          case Some(_) => Consequence.resourceInvalid("subsystemCapabilities.providers must be a list of provider declarations")
+          case None => Consequence.argumentMissing("subsystemCapabilities.providers")
+        }
+      case None => Consequence.success(Vector.empty)
+    }
+
+  private def _has_subsystem_capability_providers(rec: Record): Boolean =
+    _record_value(rec, List("subsystemCapabilities", "subsystem_capabilities", "subsystem-capabilities")).nonEmpty
+
+  private def _subsystem_capability_provider_c(
+    rec: Record,
+    location: String
+  ): Consequence[GenericSubsystemCapabilityProviderBinding] =
+    (_string(rec, "name"), _string(rec, "component", "componentName")) match {
+      case (Some(name), Some(component)) =>
+        val capabilitytexts = _string_vector(rec, List("provides", "capabilities", "capability"))
+        if (capabilitytexts.isEmpty)
+          Consequence.argumentMissing(s"$location.provides")
+        else
+          _sequence(capabilitytexts.map(SubsystemCapabilityId.parseC)).map { capabilities =>
+            GenericSubsystemCapabilityProviderBinding(name, component, capabilities)
+          }
+      case (None, _) => Consequence.argumentMissing(s"$location.name")
+      case (_, None) => Consequence.argumentMissing(s"$location.component")
+    }
+
+  private def _validate_subsystem_capability_providers(
+    providers: Vector[GenericSubsystemCapabilityProviderBinding]
+  ): Consequence[Vector[GenericSubsystemCapabilityProviderBinding]] = {
+    val duplicateprovider = providers.groupBy(_.name).collectFirst { case (name, xs) if xs.size > 1 => name }
+    val duplicatecapability = providers.flatMap { provider =>
+      provider.capabilities.map(capability => (provider.name, capability.canonical))
+    }.groupBy(identity).collectFirst { case ((provider, capability), xs) if xs.size > 1 => s"$provider:$capability" }
+    duplicateprovider match {
+      case Some(name) => Consequence.resourceInvalid(s"duplicate subsystem capability provider name: $name")
+      case None => duplicatecapability match {
+        case Some(identity) => Consequence.resourceInvalid(s"duplicate subsystem capability provider declaration: $identity")
+        case None => Consequence.success(providers)
+      }
+    }
+  }
 
   private def _ports_from_record(rec: Record, key: String): Vector[GenericSubsystemPortBinding] =
     _record_value(rec, List(key)).map { ports =>
@@ -1964,6 +2080,7 @@ object GenericSubsystemDescriptor {
               }
               security <- _security_value(rec)
               rulesets <- _rule_sets_c(rec)
+              capabilityproviders <- _subsystem_capability_providers_c(rec)
             } yield {
               Shape(
                 subsystemName = name,
@@ -1976,7 +2093,8 @@ object GenericSubsystemDescriptor {
                 security = security,
                 builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption),
                 operationAuthorization = _operation_authorization_value(rec),
-                ruleSets = rulesets
+                ruleSets = rulesets,
+                subsystemCapabilityProviders = capabilityproviders
               )
             }
           }

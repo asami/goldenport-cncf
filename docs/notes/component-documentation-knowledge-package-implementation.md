@@ -2,35 +2,46 @@
 
 status = proposed, non-normative
 date = 2026-07-25
-phase = Phase 56
+phase = Phase 57
 
-This note is the working implementation proposal for Phase 56. It is not the
+This note is the working implementation proposal for Phase 57. It is not the
 final Component documentation contract.
 
-During Phase 56, verified decisions and behavior must be promoted to:
+During Phase 57, verified decisions and behavior must be promoted to:
 
 - `docs/design/component-documentation-knowledge-package.md`; and
 - `docs/spec/component-documentation-knowledge-package.md`.
 
 When either canonical document differs from this note, the design and
-specification take precedence. At Phase 56 closure this note must be marked
+specification take precedence. At Phase 57 closure this note must be marked
 historical and must point to the final design/specification instead of
 remaining a competing latest specification.
 
 Consideration history:
 
 - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`
+- `docs/journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md`
+- `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`
 
 ## Purpose
 
 Implement a one-stop, self-describing Component documentation and knowledge
 surface for humans and AI.
 
-A Component must physically carry the Component-specific information needed
-to understand, use, configure, invoke, operate, diagnose, and inspect it. The
-normal case embeds that information in the execution Component. Large material
-may move to a versioned Component-specific Documentation Component while
-remaining logically part of the target Component's information space.
+A Component must logically contain the Component-specific information needed
+to understand, use, configure, invoke, operate, diagnose, inspect, and develop
+it. Physical runtime constraints permit one logical Component release to
+consist of a primary execution CAR plus exact Documentation and SourceCode
+SubComponents. The Component Repository guarantees that every required
+SubComponent remains retrievable for the exact release.
+
+Resource SubComponent identity, composition, publication completeness,
+repository/cache access, resolution precedence, integrity, physical
+provenance, lifecycle, and operation-mode resource policy are Phase 56
+contracts. Phase 57 consumes
+`docs/notes/component-resource-subcomponent-implementation.md` and must not
+build a second physical-resource resolver. Phase 58 Admin is a later consumer
+of the same Phase 56 resource view and the Phase 57 knowledge/model manifests.
 
 Shared CNCF, CML, Cozy, and SmartDox framework/toolchain documentation follows
 a separate distribution rule. SimpleModeling.org is its basic public
@@ -39,31 +50,50 @@ publication generation is packaged as a framework Documentation Component.
 
 ## Implementation Principles
 
-1. Component-specific documentation is part of the Component contract.
-2. The execution Component or its declared Component-specific Documentation
-   Component physically carries every required Component-specific resource.
-3. One Component knowledge manifest is the deterministic machine-readable
-   directory.
-4. Human Help and AI retrieval project the same resolved Component knowledge.
-5. SmartDox is the canonical hand-written document model.
-6. User Guide and Reference Manual are the standard hand-written manual axes.
-7. Component Scaladoc is included in the Component distribution.
-8. Source inclusion is explicit and policy-controlled.
-9. Textus CBD Support is the primary mediated AI integration for exact
+1. Documentation and release source are part of the logical Component
+   contract.
+2. The primary execution CAR and its declared Documentation and SourceCode
+   SubComponents form one exact-version Component release.
+3. SubComponents are repository-managed resource artifacts, not executable
+   Components, Componentlets, or Subsystem participants.
+4. A root composition manifest plus subordinate knowledge/model manifests
+   deterministically index every physical resource without duplicating
+   identity authority.
+5. Human Help and AI retrieval project the Phase 56 resolved Component
+   resources. Phase 58 Admin consumes the same read-only resource and
+   knowledge/model contract.
+6. `OperationMode.Develop` automatically resolves and mounts Documentation and
+   the development target's admitted source without exposing mode to Component
+   domain code.
+7. Publication completeness and runtime activation are distinct: every
+   required SubComponent must exist before release visibility, while
+   production may activate the primary CAR without fetching knowledge
+   artifacts.
+8. SmartDox is the canonical hand-written document model.
+9. User Guide and Reference Manual are the standard hand-written manual axes.
+10. Component Scaladoc is included in the logical Component distribution.
+11. Release source is embedded or packaged as a SourceCode SubComponent;
+    disclosure and authorization govern access rather than logical omission.
+12. Portable model metadata and diagrams cover Entity, Powertype,
+    StateMachine, Value, Datatype, and relationships.
+13. The SourceCode SubComponent retains the release inputs and generated
+    development evidence needed for later reproduction, investigation, and
+    debugging without copying transient build directories.
+14. Textus CBD Support is the primary mediated AI integration for exact
    Component discovery, detail, usage, and review.
-10. Textus BoK provides the complementary terminology and semantic RAG/MCP
+15. Textus BoK provides the complementary terminology and semantic RAG/MCP
     route over admitted Component knowledge.
-11. The exact installed Component manifest remains authoritative over a stale
+16. The exact installed Component manifest remains authoritative over a stale
     BoK snapshot.
-12. SimpleModeling.org is the basic public information surface for shared
+17. SimpleModeling.org is the basic public information surface for shared
     CNCF/CML/Cozy/SmartDox documentation.
-13. Framework Documentation Components are optional versioned snapshots of the
+18. Framework Documentation Components are optional versioned snapshots of the
     same publication generation, not Component-specific documentation owners.
-14. Framework MCP/RAG prefers structured SmartDox/publication projections over
+19. Framework MCP/RAG prefers structured SmartDox/publication projections over
     HTML scraping and preserves immutable product/version evidence.
-15. Public AI Directive guidance is a projection and never overrides the
+20. Public AI Directive guidance is a projection and never overrides the
     mounted authoritative directive.
-16. Public Skill metadata supports discovery only; installable Skills remain
+21. Public Skill metadata supports discovery only; installable Skills remain
     CAR-owned `SkillBundleManifest` resources and require explicit
     installation/activation.
 
@@ -72,27 +102,33 @@ publication generation is packaged as a framework Documentation Component.
 The following layout is provisional:
 
 ```text
-component.car
-├── component/
-├── runtime/
-├── model/
-├── source/
-├── documentation/
+logical Component release
+├── primary component.car
+│   ├── component/
+│   ├── runtime/
+│   ├── runtime-required model/config/schema metadata
+│   ├── composition-manifest.json
+│   ├── minimal help and SubComponent diagnostics
+│   └── provenance/
+├── documentation subcomponent.car
 │   ├── manual/
-│   │   ├── user-guide/
-│   │   └── reference/
+│   ├── model/
+│   ├── diagrams/
 │   ├── scaladoc/
 │   ├── help/
 │   ├── api/
-│   ├── context/
 │   ├── assets/
-│   └── index/
-├── knowledge/
-│   └── manifest.json
-└── provenance/
+│   └── knowledge/manifest.json
+└── source-code subcomponent.car
+    ├── source/
+    ├── generated-source/
+    ├── cml/
+    ├── build/
+    ├── tests/
+    └── provenance/
 ```
 
-Phase 56 must confirm paths against existing CAR source/archive rules before
+Phase 57 must confirm paths against existing CAR source/archive rules before
 making them normative. It must not introduce a second identity source that
 duplicates `project.yaml`, the CAR descriptor, or the existing runtime
 descriptor.
@@ -120,7 +156,7 @@ SmartDox publication source
 
 This framework Documentation Component is a versioned snapshot of the same
 publication generation. It does not create another authoring source or replace
-the Component-specific Documentation Component relationship.
+the Component-specific Documentation/SourceCode SubComponent relationship.
 
 ## Component Knowledge Manifest
 
@@ -134,6 +170,9 @@ The manifest should contain:
 
 - schema version;
 - Component identity, kind, and version;
+- primary artifact coordinate and digest;
+- SubComponent role, exact coordinate, parent relationship, logical version,
+  digest/signature, requiredness, access policy, and repository identity;
 - knowledge revision and manifest digest;
 - contextual framework publication subject, version, generation, and
   canonical base URL when referenced;
@@ -142,7 +181,7 @@ The manifest should contain:
 - authority and stability classification;
 - source availability and disclosure policy;
 - generated-with and compatible-with provenance;
-- Documentation Component references;
+- Documentation and SourceCode SubComponent references;
 - explicit local, installed, cached, online, and unavailable resolution state;
 - Help entry points;
 - optional search and symbol-index resources; and
@@ -204,6 +243,9 @@ Generated resources include:
 - PDF projection when required by the final profile;
 - OpenAPI and schema resources;
 - generated Component/Service/Operation descriptions;
+- portable Entity/Powertype/StateMachine/Value/Datatype and relationship
+  metadata;
+- deterministic Mermaid class diagrams and StateMachine diagrams;
 - Scaladoc;
 - Scaladoc symbol/search index;
 - document search index; and
@@ -212,14 +254,14 @@ Generated resources include:
 The Component distribution must remain useful without a compiler, Scaladoc
 generator, SmartDox renderer, or PDF toolchain installed at runtime.
 
-Phase 56 must decide which HTML and PDF projections are mandatory. Generated
+Phase 57 must decide which HTML and PDF projections are mandatory. Generated
 output must record its source resource and source digest so stale projections
 can be detected.
 
 ## Scaladoc
 
-A Component with a public Scala API packages generated Scaladoc in the
-execution Component or its Documentation Component.
+A Component with a public Scala API packages generated Scaladoc in the primary
+CAR or its Documentation SubComponent.
 
 The implementation should:
 
@@ -237,46 +279,120 @@ A Maven `-javadoc.jar` is not the primary Component documentation contract.
 Candidate source availability values are:
 
 - `embedded`;
-- `documentation-component`; and
-- `omitted`.
+- `source-code-subcomponent`;
+- `development-directory`; and
+- `restricted`.
 
-The manifest records license, disclosure policy, source kinds, and path or
-Documentation Component reference. Source packaging must exclude credentials,
-local configuration, build caches, generated secrets, unrelated test data, and
-host-specific files.
+The manifest records license, disclosure policy, source kinds, and embedded,
+development-directory, or SourceCode SubComponent identity. Source packaging
+must exclude credentials, local configuration, build caches, generated
+secrets, unrelated host files, and other non-release state.
 
 Source improves investigation but remains implementation evidence. It does not
-override public contracts. Commercial Components may declare source omitted
-while still supplying complete manuals, public contracts, examples, and
-Scaladoc.
+override public contracts. Restricted source remains a required logical
+SubComponent with an explicit access policy; it is never claimed as inspected,
+indexed, or available to an unauthorized caller.
 
-## Documentation Component
+The SourceCode SubComponent must preserve the release evidence needed to
+reproduce, investigate, and debug the exact Component version. This includes:
 
-Define a Component-specific Documentation Component as a normal versioned
-physical Component with a declared documentation-for relationship to a target
-Component.
+- hand-written main and admitted test source;
+- CML and other authoritative generator inputs;
+- the public/admitted output of SBT `Compile / managedSources` and, when
+  required for diagnosis, `Test / managedSources`;
+- build definitions and exact dependency/generator identity;
+- compiler and generation options that affect emitted source or behavior;
+- source, generator-input, and generated-output digests; and
+- generation and packaging provenance.
 
-The contract must fix:
+Managed source is collected from build locations such as
+`target/scala-*/src_managed/**`, but is normalized into
+`generated-source/main` or `generated-source/test`. The physical `target`
+layout is not part of the artifact contract. Class files, incremental compiler
+caches, temporary files, logs, downloaded caches, host paths, and other
+transient build state are excluded.
 
-- Documentation Component identity;
-- target Component identity and compatible version range;
-- required versus optional relationship semantics;
+The contract aims for debugging completeness, not a byte-for-byte archive of
+the build workspace. Phase 57 must define executable release-readiness checks
+for evidence that is required to explain or regenerate the released behavior.
+
+## Component SubComponents
+
+Phase 56 defines Documentation and SourceCode SubComponents as versioned
+physical resource artifacts with a declared parent relationship to one exact
+logical Component release. They use Component Repository identity, integrity,
+cache, and retrieval services but are not runtime Components.
+
+The inherited Phase 56 contract fixes:
+
+- SubComponent kind and identity;
+- exact parent Component identity and logical version;
+- required relationship and publication completeness;
 - resolution from development directories, expanded CARs, and repositories;
 - digest and signature validation;
-- precedence between embedded and external Component documentation resources;
+- precedence between embedded, development, and SubComponent resources;
 - duplicate resource identity handling;
-- missing/incompatible dependency diagnostics;
+- local, remote, restricted, unavailable, missing, and incompatible
+  diagnostics;
 - lifecycle and unload behavior; and
 - authorization and production visibility.
 
-The execution Component retains a minimal embedded overview, getting-started
-information, manifest, and dependency diagnostic information. Physical
-splitting must not create a separate user-facing Component documentation
-namespace.
+The primary Component retains runtime-required metadata, a minimal overview,
+the composition manifest, and SubComponent diagnostics. Physical splitting
+must not create separate user-facing Component documentation or source
+namespaces.
 
-The default large Component-package topology is one execution Component and
-one Component-specific Documentation Component. Additional language/media
-Components require explicit need.
+The initial large Component topology is one primary execution CAR, one
+Documentation SubComponent, and one SourceCode SubComponent. Fine-grained
+language/media fragmentation is deferred.
+
+Phase 57 consumes the resulting exact resource inventory, state, content
+handle, and provenance. It does not implement repository publication,
+retrieval, cache, archive walking, or resolution precedence.
+
+### Development Composition
+
+`OperationMode.Develop` selects a Phase 56 runtime-owned development resource
+profile. It does not become a Component-domain mode.
+
+The inherited resolution order is:
+
+```text
+explicit development directory
+  -> development-local documentation/source
+  -> expanded SubComponents
+  -> local Component Repository
+  -> remote Component Repository
+```
+
+The Phase 56 resolver mounts the Documentation SubComponent automatically. The
+development target's checked-out source tree satisfies the SourceCode role;
+otherwise the exact SourceCode SubComponent is resolved subject to access
+policy. Missing, stale, corrupt, or incompatible required development
+resources produce structured `development-resource-incomplete` failure.
+
+The resulting `ComponentDevelopmentContext` contains admitted manuals, model
+metadata and diagrams, Service/Operation/SPI contracts, configuration schema,
+examples, source, generated source, Scaladoc, tests, build/generation
+provenance, and exact dependency documentation. It excludes credentials,
+developer-local configuration, caches, and untracked host state.
+
+### Operation Mode Resource Policy
+
+Operation mode selects a Phase 56 runtime-owned resource-composition policy.
+It never becomes an input to Component domain behavior.
+
+| Operation mode | Documentation resources | Source resources | Implicit remote access |
+| --- | --- | --- | --- |
+| `Develop` | Automatically resolve, verify, and mount exact Documentation resources. | Mount the development target tree; otherwise resolve its exact SourceCode SubComponent. Dependency source requires explicit disclosure authorization. | Allowed by configured development repository policy. |
+| `Test` | Use only explicitly selected, deterministic local fixtures, expanded artifacts, or offline bundles. | Use only explicitly selected deterministic test source resources. | Disabled by default so test results do not depend on network state. |
+| `Demo` | Resolve installed or cached Documentation on demand; remote retrieval requires an explicit demo policy. | Do not automatically resolve or mount source. | Disabled by default. |
+| `Production` | Keep primary-only activation possible; resolve authorized Documentation on demand without changing execution readiness. | Do not automatically resolve, mount, or fetch source. | Documentation only when explicitly configured and authorized; never source. |
+
+An explicit resource request may report a required SubComponent as remote,
+restricted, or unavailable without changing Component execution semantics.
+The launcher/runtime owns these choices and projects the resulting resources
+through the same `ResolvedComponentKnowledge` contract in every mode.
 
 ### Framework Documentation Component
 
@@ -335,7 +451,7 @@ The provisional AI discovery route is:
   -> resolved Component knowledge resources
 ```
 
-Phase 56 must confirm the canonical route and its relationship with existing
+Phase 57 must confirm the canonical route and its relationship with existing
 `/help`, `/man`, OpenAPI, MCP, authorization, and production-mode policies.
 
 Human Help should advertise the manifest with a machine-readable link relation.
@@ -346,8 +462,10 @@ The CNCF runtime needs a provider-neutral resolver model, provisionally:
 
 ```text
 embedded Component resources
-  + resolved Component-specific Documentation Component resources
+  + resolved Documentation SubComponent resources
+  + resolved SourceCode SubComponent or development-directory resources
   -> ResolvedComponentKnowledge
+  -> ComponentDevelopmentContext in develop mode
   -> Help / HTTP manifest / CLI / MCP or other projections
 ```
 
@@ -382,7 +500,7 @@ human `latest` alias as an evidence identity.
 
 ## Textus CBD Support Primary Integration
 
-Phase 56 includes real integration with
+Phase 57 includes real integration with
 `/Users/asami/src/dev2026/textus-cbd-support`.
 
 CBD Support is the primary AI-facing Component use path after direct Help. Its
@@ -390,7 +508,7 @@ existing ownership already includes versions, runtime compatibility,
 dependencies, Operations, artifacts, manuals, examples, reuse guidance, CAR
 Review, and evidence-bearing read-only MCP operations.
 
-Phase 56 extends that contract so CBD Support consumes exact Component
+Phase 57 extends that contract so CBD Support consumes exact Component
 knowledge manifests and resources while preserving canonical
 SimpleModeling.org publication references for broader documentation. It does
 not rely only on catalog links or model-metadata sidecars.
@@ -400,8 +518,8 @@ The integration requires:
 - catalog, local development directory, warehouse CAR, and managed-cache
   observations to retain the exact Component knowledge manifest location and
   digest when available;
-- safe resolution of Component-local resources, Documentation Components, and
-  immutable canonical publication references;
+- safe resolution of Component-local resources, Documentation/SourceCode
+  SubComponents, and immutable canonical publication references;
 - explicit absence when a catalog or artifact does not publish Component
   knowledge;
 - exact Component/version/catalog selection before detailed retrieval;
@@ -427,11 +545,11 @@ rewrite CBD-owned Component facts.
 
 ## Textus BoK Complementary RAG/MCP Integration
 
-Phase 56 also includes real integration with
+Phase 57 also includes real integration with
 `/Users/asami/src/dev2026/textus-bok`.
 
 The current Textus BoK contract treats CAR/SAR references as existence-only and
-hands detailed usage questions to CBD Support. Phase 56 extends the BoK route
+hands detailed usage questions to CBD Support. Phase 57 extends the BoK route
 without reversing that primary ownership:
 
 - Textus BoK owns evidence-bearing indexing, search, and retrieval of admitted
@@ -463,8 +581,8 @@ The integration requires:
   Component-specific BoK source;
 - separate admission of SimpleModeling.org framework publication metadata and
   the equivalent framework Documentation Component snapshot;
-- safe resolution of declared Component-local and Component-specific
-  Documentation Component resources;
+- safe resolution of declared Component-local and Documentation/SourceCode
+  SubComponent resources;
 - deterministic chunk/resource identities;
 - preservation of Component version, resource ID, section ID, source path,
   authority, digest, license, and indexed-at metadata;
@@ -492,23 +610,23 @@ The integration requires:
   verification.
 
 Textus BoK design, specification, strategy, manual, and executable evidence
-must be updated in the Textus BoK repository as part of Phase 56. A CNCF-only
+must be updated in the Textus BoK repository as part of Phase 57. A CNCF-only
 mock is not sufficient acceptance.
 
 ## Repository Responsibilities
 
 | Repository | Responsibility |
 | --- | --- |
-| `cloud-native-component-framework` | Manifest model, Component-local/Documentation Component/online resolution, Help/AI direct surface, authorization, integrity, and executable framework contract |
-| `cozy` / `sbt-cozy` | Authoring validation, publication knowledge, SmartDox/manual projection, Scaladoc generation, source filtering, CAR packaging, and source/archive equivalence |
+| `cloud-native-component-framework` | Knowledge/model manifests, Phase 56 resolver consumption, development context, Help/AI direct surface, authorization, and executable documentation contract |
+| `cozy` / `sbt-cozy` | Authoring validation, model/diagram generation, SmartDox/manual projection, Scaladoc generation, filtered release source, content handoff to Phase 56 packaging, and source/archive equivalence |
 | `smartdox` | SmartDox/Markdown parsing and HTML/PDF/document projection capabilities used by the build toolchain |
 | `simplemodeling-org` | Canonical versioned HTML publication, stable document/section URLs, RDF/JSON-LD/catalog projection, and online human/AI access |
 | `ai-directive` | Authoritative Directive ownership, public-rule identity/visibility, and public-guide projection inputs |
 | `textus-cbd-support` | Primary exact Component discovery/detail/usage/review integration, manifest/resource resolution, evidence-bearing MCP, and documentation quality assessment |
 | `textus-bok` | Complementary terminology/semantic Component knowledge admission, indexing, RAG/MCP retrieval, CBD handoff, and stale/disclosure enforcement |
-| representative Component/sample | End-to-end online-only, local manual, Documentation Component, offline Hub, source-policy, Help discovery, CBD usage/review, and BoK retrieval evidence |
+| representative Component/sample | End-to-end embedded/required-SubComponent, develop-mode, restricted-source, offline-bundle, Help discovery, CBD usage/review, and BoK retrieval evidence |
 
-If a missing capability belongs to one of these repositories, Phase 56 changes
+If a missing capability belongs to one of these repositories, Phase 57 changes
 the owning repository rather than duplicating the capability in CNCF.
 
 ## Implementation Sequence
@@ -516,26 +634,29 @@ the owning repository rather than duplicating the capability in CNCF.
 1. Inventory current Help/Manual/CAR/SimpleModeling.org/ai-directive/Skill
    bundle/CBD Support/Textus BoK contracts and freeze failing-first acceptance
    identities.
-2. Define publication, product, Component, document, section, resource,
-   canonical URL, authority/disclosure, and canonical path identities.
-3. Implement manifest codec, validation, and embedded-resource resolution in
+2. Consume the Phase 56 Component release/resource identities and define
+   publication, document, model, section, canonical URL, and
+   authority/disclosure identities.
+3. Implement knowledge/model manifest codecs and Phase 56 resolver adapters in
    CNCF.
 4. Implement Cozy/SmartDox authoring, lint, SimpleModeling.org HTML and
    structured publication projections, public AI guidance, Skill Catalog,
-   Scaladoc, source, and packaging support.
-5. Implement optional Documentation Component and canonical-online resolution
-   with composed
+   model diagrams, Scaladoc, filtered release source, and content packaging
+   inputs.
+5. Compose Phase 56 resolved Documentation/SourceCode resources into
    `ResolvedComponentKnowledge`.
-6. Implement unified Help and direct manifest/resource access.
-7. Implement Textus CBD Support manifest/resource admission, exact detail,
+6. Implement `ComponentDevelopmentContext` over the Phase 56 develop-mode
+   resource view.
+7. Implement unified Help and direct manifest/resource access.
+8. Implement Textus CBD Support manifest/resource admission, exact detail,
    usage, MCP, and CAR Review integration.
-8. Implement Textus BoK structured-publication admission, indexing, RAG/MCP
+9. Implement Textus BoK structured-publication admission, indexing, RAG/MCP
    retrieval, evidence, CBD handoff, and stale/disclosure behavior.
-9. Prove representative online-only, installed-snapshot, offline-Hub,
-   Component-local, and source-omitted profiles through direct Help, CBD
-   Support, and Textus BoK.
-10. Complete security, compatibility, regression, and downstream validation.
-11. Promote verified behavior to canonical design/specification and mark this
+10. Prove representative embedded, required-SubComponent, develop-mode,
+    restricted-source, production-primary-only, and offline-complete profiles
+    through direct Help, CBD Support, and Textus BoK.
+11. Complete security, compatibility, regression, and downstream validation.
+12. Promote verified behavior to canonical design/specification and mark this
     note historical.
 
 ## Documentation Lifecycle and Closure
@@ -547,7 +668,7 @@ During implementation:
 - phase/checklist documents hold plan, status, and acceptance evidence; and
 - executable specifications determine verified behavior.
 
-At Phase 56 closure:
+At Phase 57 closure:
 
 - `docs/design/component-documentation-knowledge-package.md` describes the
   verified architecture, ownership, flows, and rationale;
@@ -561,5 +682,5 @@ At Phase 56 closure:
 - no current README, design, spec, note, phase, manual, or executable
   specification contradicts the implemented behavior.
 
-Phase 56 cannot close while the latest contract exists only in this note,
+Phase 57 cannot close while the latest contract exists only in this note,
 journal, phase document, or implementation.

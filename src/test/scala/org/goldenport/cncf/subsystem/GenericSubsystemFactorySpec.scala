@@ -38,7 +38,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -262,6 +262,53 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
+    "resolve an equivalent stable Subsystem identity through direct development and packaged inputs" in {
+      Given("equivalent direct component descriptors in prepared development and packaged CAR forms")
+      _with_temp_dir { root =>
+        val developmentdir = root.resolve("identity-development")
+        val classdir = developmentdir.resolve("target").resolve("scala-3.3.8").resolve("classes")
+        _copy_test_package_classes(classOf[devdirsample.DevDirSampleComponent], classdir)
+        _write_runtime_classpath(
+          developmentdir,
+          classdir,
+          "identity-component",
+          "0.1.0-SNAPSHOT",
+          "identity-component"
+        )
+        val packageddescriptor = root.resolve("identity-component-descriptor.json")
+        Files.writeString(
+          packageddescriptor,
+          """{"name":"identity-component","version":"0.1.0-SNAPSHOT","component":"identity-component"}""",
+          StandardCharsets.UTF_8
+        )
+        val packagedcar = root.resolve("identity-component.car")
+        _create_car(
+          packagedcar,
+          Seq("component-descriptor.json" -> packageddescriptor)
+        )
+        val developmentconfiguration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(developmentdir.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+        val packagedconfiguration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.componentCarDirKey -> ConfigurationValue.StringValue(packagedcar.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("both direct runtime inputs resolve their implicit Subsystem descriptor")
+        val development = GenericSubsystemFactory.resolveDescriptorC(developmentconfiguration).toOption.flatten.get
+        val packaged = GenericSubsystemFactory.resolveDescriptorC(packagedconfiguration).toOption.flatten.get
+
+        Then("the descriptor-owned Component identity is stable across the two paths")
+        development.subsystemName shouldBe "identity-component"
+        packaged.subsystemName shouldBe "identity-component"
+      }
+    }
+
     "isolate assembly descriptors across explicit component CARs" in {
       Given("two explicit CARs and one assembly descriptor binding each component")
       _with_temp_dir { root =>
@@ -404,22 +451,31 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       ).toAbsolutePath.normalize
       val descriptor = GenericSubsystemDescriptor.load(descriptorpath).toOption.get
 
-      When("the subsystem is constructed")
-      val subsystem = GenericSubsystemFactory.default(descriptor)
+      _with_temp_dir { repositorydir =>
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.repositoryDirKey ->
+              ConfigurationValue.StringValue(s"component-dir:$repositorydir")
+          )),
+          ConfigurationTrace.empty
+        )
 
-      val wiring = subsystem.resolvedSecurityWiring.authentication
+        When("the subsystem is constructed with an isolated empty repository")
+        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
+        val wiring = subsystem.resolvedSecurityWiring.authentication
 
-      Then("the resolved authentication wiring retains descriptor policy")
-      subsystem.name shouldBe "textus-identity"
-      wiring.conventionEnabled shouldBe true
-      wiring.fallbackPrivilegeEnabled shouldBe false
-      wiring.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
-        ("textus-user-account", "user-account", "Descriptor")
-      )
-      wiring.providers.head.kind shouldBe Some("human")
-      wiring.providers.head.priority shouldBe 100
-      wiring.providers.head.schemes shouldBe Vector("bearer", "refresh-token")
-      wiring.providers.head.provider shouldBe empty
+        Then("the resolved authentication wiring retains descriptor policy")
+        subsystem.name shouldBe "textus-identity"
+        wiring.conventionEnabled shouldBe true
+        wiring.fallbackPrivilegeEnabled shouldBe false
+        wiring.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
+          ("textus-user-account", "user-account", "Descriptor")
+        )
+        wiring.providers.head.kind shouldBe Some("human")
+        wiring.providers.head.priority shouldBe 100
+        wiring.providers.head.schemes shouldBe Vector("bearer", "refresh-token")
+        wiring.providers.head.provider shouldBe empty
+      }
     }
 
     "resolve a subsystem descriptor from component repository using subsystem name only" in {

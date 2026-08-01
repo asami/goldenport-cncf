@@ -1,21 +1,27 @@
 package org.goldenport.cncf.subsystem
 
-import java.nio.file.Path
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
+import java.util.Comparator
 
+import scala.util.Using
+
+import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 30, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Phase 53 stable Subsystem identity" should {
-    "prefer descriptor-owned identities over a path-derived fallback" in {
-      Given("component descriptors with each currently observable identity source")
+    "prefer descriptor-owned identities in strict implicit Subsystem projection" in {
+      Given("component descriptors with each accepted descriptor-owned identity source")
       val path = Path.of("target", "test-tmp", "phase-53", "path-derived.car")
       val declared = ComponentDescriptor(
         name = Some("display-like-name"),
@@ -27,19 +33,96 @@ final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers
         componentName = Some("component-name")
       )
       val name = ComponentDescriptor(name = Some("display-like-name"))
-      val pathderived = ComponentDescriptor()
 
-      When("the existing Component descriptor projection creates implicit Subsystem descriptors")
+      When("the Component descriptor projection creates implicit Subsystem descriptors")
       val declaredresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, declared).toOption.get
       val componentresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, component).toOption.get
       val nameresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, name).toOption.get
-      val pathderivedresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, pathderived).toOption.get
 
-      Then("the descriptor controls the stable identity before any path fallback")
+      Then("the descriptor controls the stable identity")
       declaredresult.subsystemName shouldBe "declared-subsystem"
       componentresult.subsystemName shouldBe "component-name"
       nameresult.subsystemName shouldBe "display-like-name"
-      pathderivedresult.subsystemName shouldBe "path-derived"
+    }
+
+    "prefer an adjacent assembly Subsystem identity over every Component descriptor identity" in {
+      Given("a component CAR whose adjacent assembly and Component descriptor identities differ")
+      _with_work_directory { directory =>
+        val componentdescriptor = directory.resolve("component-descriptor.json")
+        val assemblydescriptor = directory.resolve("assembly-descriptor.yaml")
+        Files.writeString(
+          componentdescriptor,
+          """{"name":"display-name","component":"component-name","componentName":"component-name","subsystemName":"component-subsystem","version":"0.1.0"}""",
+          StandardCharsets.UTF_8
+        )
+        Files.writeString(
+          assemblydescriptor,
+          """subsystem: assembly-subsystem
+            |version: 0.1.0
+            |components:
+            |  - name: component-name
+            |    version: 0.1.0
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val car = directory.resolve("unrelated-path-name.car")
+        CarArchiveFixture.write(
+          car,
+          Seq(
+            "component-descriptor.json" -> componentdescriptor,
+            "assembly-descriptor.yaml" -> assemblydescriptor
+          )
+        )
+
+        When("the direct packaged Component route projects its implicit Subsystem")
+        val result = GenericSubsystemDescriptor.loadComponentArchive(car).toOption.get
+
+        Then("the adjacent assembly declaration is the stable Subsystem identity")
+        result.subsystemName shouldBe "assembly-subsystem"
+      }
+    }
+
+    "reject path-derived identity for strict qualified bootstrap" in {
+      Given("a Component descriptor with no descriptor-owned identity")
+      val path = Path.of("target", "test-tmp", "phase-53", "path-derived.car")
+
+      When("implicit Subsystem projection is requested")
+      val result = GenericSubsystemDescriptor.fromComponentDescriptor(path, ComponentDescriptor())
+
+      Then("the path is not promoted to a stable Subsystem identity")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "retain one stable identity across equivalent development and packaged descriptor paths" in {
+      Given("one descriptor copied into development and packaged locations")
+      val descriptor = ComponentDescriptor(
+        name = Some("display-name"),
+        componentName = Some("component-name"),
+        subsystemName = Some("stable-subsystem")
+      )
+      val developmentpath = Path.of("target", "test-tmp", "development", "component-descriptor.json")
+      val packagedpath = Path.of("target", "test-tmp", "packaged", "component.car")
+
+      When("both runtime routes project their implicit Subsystem descriptors")
+      val development = GenericSubsystemDescriptor.fromComponentDescriptor(developmentpath, descriptor).toOption.get
+      val packaged = GenericSubsystemDescriptor.fromComponentDescriptor(packagedpath, descriptor).toOption.get
+
+      Then("the descriptor-owned identity is independent of runtime path form")
+      development.subsystemName shouldBe "stable-subsystem"
+      packaged.subsystemName shouldBe "stable-subsystem"
+    }
+  }
+
+  private def _with_work_directory[A](body: Path => A): A = {
+    val base = Files.createDirectories(
+      Path.of("target", "phase-53-stable-subsystem-identity-spec", "work").toAbsolutePath.normalize
+    )
+    val directory = Files.createTempDirectory(base, "case-")
+    try body(directory)
+    finally {
+      Using.resource(Files.walk(directory)) { paths =>
+        paths.sorted(Comparator.reverseOrder()).forEach(path => Files.deleteIfExists(path))
+      }
     }
   }
 }

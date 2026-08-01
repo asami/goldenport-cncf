@@ -11,6 +11,7 @@ import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext,
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
+import org.goldenport.cncf.subsystem.{SubsystemCurrentUserEvidence, SubsystemExecutionProfile}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.protocol.Request
 
@@ -21,7 +22,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Jul. 30, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -35,6 +36,11 @@ trait IngressSecurityResolver {
   def resolve(base: ExecutionContext, request: Request): Consequence[ResolvedIngressSecurity]
   def resolve(attributes: Map[String, String]): Consequence[ResolvedIngressSecurity]
   def resolve(base: ExecutionContext, attributes: Map[String, String]): Consequence[ResolvedIngressSecurity]
+  def resolve(
+    profile: SubsystemExecutionProfile,
+    base: ExecutionContext,
+    attributes: Map[String, String]
+  ): Consequence[ResolvedIngressSecurity]
 }
 
 object IngressSecurityResolver {
@@ -51,6 +57,13 @@ object IngressSecurityResolver {
 
   def resolve(base: ExecutionContext, attributes: Map[String, String]): Consequence[ResolvedIngressSecurity] =
     default.resolve(base, attributes)
+
+  def resolve(
+    profile: SubsystemExecutionProfile,
+    base: ExecutionContext,
+    attributes: Map[String, String]
+  ): Consequence[ResolvedIngressSecurity] =
+    default.resolve(profile, base, attributes)
 }
 
 private final class DefaultIngressSecurityResolver extends IngressSecurityResolver {
@@ -141,21 +154,65 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
             else
               _resolve_privilege(attributes).map(_security_context(_, attributes))
         }
-    }.flatMap { security =>
-      val privilege = _resolve_privilege_from_security(security)
-      val ctx0 = ExecutionContext.withSecurityContext(base, security)
-      val ctx1 = _production_runtime_context_from_base(ctx0)
-      val ctx1a = _rebind_runtime_unit_of_work(ctx1, "ingress-security")
-      val ctx2 = _restore_formatting_context(security, attributes, ctx1a)
-      val ctx = _bind_context(attributes, ctx2)
-      if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
-        Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
-      else
-        Consequence.operationIllegal(
-          "security.resolve",
-          s"required capability: ${caps.toVector.sorted.mkString("|")}"
-        )
+    }.flatMap(_resolve_with_security(base, attributes, caps, _))
+  }
+
+  def resolve(
+    profile: SubsystemExecutionProfile,
+    base: ExecutionContext,
+    attributes: Map[String, String]
+  ): Consequence[ResolvedIngressSecurity] = {
+    val caps = _resolve_requested_capabilities(attributes)
+    val request = AuthenticationRequest(attributes)
+    profile.currentUserEvidence match {
+      case SubsystemCurrentUserEvidence.Fixed =>
+        if (_has_local_subject_override_material(request))
+          Consequence.securityPermissionDenied("Fixed user profile does not admit authentication ingress evidence.")
+        else
+          _resolved_local_subject(base)
+            .map(Consequence.success)
+            .getOrElse(Consequence.securityPermissionDenied("Fixed user profile requires a configured local subject."))
+            .flatMap(_resolve_with_security(base, attributes, caps, _))
+      case SubsystemCurrentUserEvidence.Authenticated =>
+        val providers = _resolved_authentication_providers(base)
+        if (providers.isEmpty)
+          Consequence.securityPermissionDenied("Authenticated user profile requires an authentication provider.")
+        else if (!_has_local_subject_override_material(request))
+          Consequence.securityPermissionDenied("Authenticated user profile requires authentication ingress evidence.")
+        else
+          _resolve_authenticated_security(providers, base, request).flatMap {
+            case Some(security) => _resolve_with_security(base, attributes, caps, security)
+            case None => Consequence.securityPermissionDenied("Authentication provider did not authenticate the current user.")
+          }
+      case SubsystemCurrentUserEvidence.ControlledTest =>
+        // Controlled tests deliberately supply only request-level test facts.
+        // They do not inherit a production local/provider identity from the
+        // component's bootstrap context.
+        _resolve_privilege(attributes).flatMap { privilege =>
+          _resolve_with_security(base, attributes, caps, _security_context(privilege, attributes))
+        }
     }
+  }
+
+  private def _resolve_with_security(
+    base: ExecutionContext,
+    attributes: Map[String, String],
+    caps: Set[String],
+    security: SecurityContext
+  ): Consequence[ResolvedIngressSecurity] = {
+    val privilege = _resolve_privilege_from_security(security)
+    val ctx0 = ExecutionContext.withSecurityContext(base, security)
+    val ctx1 = _production_runtime_context_from_base(ctx0)
+    val ctx1a = _rebind_runtime_unit_of_work(ctx1, "ingress-security")
+    val ctx2 = _restore_formatting_context(security, attributes, ctx1a)
+    val ctx = _bind_context(attributes, ctx2)
+    if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
+      Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
+    else
+      Consequence.operationIllegal(
+        "security.resolve",
+        s"required capability: ${caps.toVector.sorted.mkString("|")}"
+      )
   }
 
   private def _bind_context(
@@ -391,14 +448,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private def _provider_authenticated(
     security: SecurityContext
   ): SecurityContext =
-    security.copy(principal = new Principal {
-      val id: PrincipalId = security.principal.id
-      val attributes: Map[String, String] =
-        security.principal.attributes ++ Map(
-          SecuritySubject.AuthenticationProvenanceAttribute ->
-            SecuritySubject.ProviderAuthenticationProvenance
-        )
-    })
+    SecurityAuthenticationProvenance.providerAuthenticated(security)
 
   private def _resolved_authentication_providers(base: ExecutionContext): Vector[AuthenticationProvider] =
     AuthenticationProviderRuntime.providers(base)
@@ -416,11 +466,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           principal = new Principal {
             val id: PrincipalId = PrincipalId(subject.id)
             val attributes: Map[String, String] =
-              subject.attributes ++ roleattributes ++ Map(
-                "authenticated" -> "true",
-                "local_subject" -> "true",
-                "subject_kind" -> "installation"
-              )
+              subject.attributes ++ roleattributes ++ Map("authenticated" -> "true")
           },
           capabilities = subject.capabilities.map(Capability.apply).toSet,
           level = SecurityLevel(subject.securityLevel),

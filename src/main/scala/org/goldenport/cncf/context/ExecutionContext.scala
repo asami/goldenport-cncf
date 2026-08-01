@@ -47,7 +47,7 @@ import cats.~>
  *  version Feb. 25, 2026
  *  version Apr. 25, 2026
  *  version May. 31, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -58,7 +58,7 @@ abstract class ExecutionContext
   def core: CoreExecutionContext.Core
 
   /** CNCF execution-context-specific value */
-  def cncfCore: ExecutionContext.CncfCore
+  private[cncf] def cncfCore: ExecutionContext.CncfCore
 
   def withScope(parent: ScopeContext): ExecutionContext
 
@@ -104,13 +104,16 @@ object ExecutionContext {
 
   object CncfCore {
     trait Holder {
-      def cncfCore: CncfCore
+      private[cncf] def cncfCore: CncfCore
 
       def security: SecurityContext = cncfCore.security
       def observability: ObservabilityContext = cncfCore.observability
-      def runtime: RuntimeContext = cncfCore.runtime
-      def operationMode: OperationMode = runtime.operationMode
+      def formatting: RuntimeContext.FormattingContext = cncfCore.runtime.context.formatting
+      def scope: ScopeContext = cncfCore.scope
+      private[cncf] def runtime: RuntimeContext = cncfCore.runtime
+      private[cncf] def operationMode: OperationMode = runtime.operationMode
       def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork
+      def unitOfWorkInterpreter: UnitOfWorkOp ~> Consequence = runtime.unitOfWorkInterpreter
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def framework: FrameworkParameter = cncfCore.framework
       def idGeneration: IdGenerationContext = cncfCore.idGeneration
@@ -163,13 +166,27 @@ object ExecutionContext {
     *
     * Used by Engine, servers, CLI, and tests inside CNCF.
     */
-  final case class Instance(
-    core: CoreExecutionContext.Core,
-    cncfCore: CncfCore
+  final class Instance(
+    val core: CoreExecutionContext.Core,
+    private[cncf] val cncfCore: CncfCore
   ) extends ExecutionContext {
     def withScope(p: ScopeContext): Instance = {
       copy(cncfCore = cncfCore.withScope(p))
     }
+
+    private[cncf] def copy(
+      core: CoreExecutionContext.Core = this.core,
+      cncfCore: CncfCore = this.cncfCore
+    ): Instance =
+      new Instance(core, cncfCore)
+  }
+
+  object Instance {
+    private[cncf] def apply(
+      core: CoreExecutionContext.Core,
+      cncfCore: CncfCore
+    ): Instance =
+      new Instance(core, cncfCore)
   }
 
   def create(): ExecutionContext =
@@ -483,6 +500,22 @@ object ExecutionContext {
     context: RuntimeContext.Context
   ): ExecutionContext =
     withRuntimeContext(ctx, ctx.runtime.withContext(context))
+
+  def withFormatting(
+    ctx: ExecutionContext,
+    formatting: RuntimeContext.FormattingContext
+  ): ExecutionContext =
+    withRuntimeContextContext(ctx, ctx.runtime.context.copy(formatting = formatting))
+
+  def withLocale(
+    ctx: ExecutionContext,
+    locale: Locale
+  ): ExecutionContext = ctx match {
+    case instance: Instance =>
+      instance.copy(core = instance.core.copy(locale = locale))
+    case _ =>
+      ctx
+  }
 
   def withFrameworkCommandExecutionMode(
     ctx: ExecutionContext,

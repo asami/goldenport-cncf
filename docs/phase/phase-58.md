@@ -1,88 +1,142 @@
-# Phase 58 - Web Session CSRF Unification
+# Phase 58 - Component Admin and Documentation Visibility
 
 status=planned
-planned_at=2026-07-26
+planned_at=2026-07-31
 depends_on=[Phase 57](phase-57.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 58 Checklist](phase-58-checklist.md)
+implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
+planning_journal=[Phase 58 Component Admin and Documentation Visibility Planning](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
 
 ## Purpose
 
-Generalize CNCF's existing Static Form CSRF protection into one Web-session
-ingress contract for `/form-api`, Web-facing REST, and browser JavaScript.
+Provide one Component-owned Admin surface that makes the complete operational
+and descriptive state of a loaded Component visible and, where explicitly
+authorized, manageable.
 
-Phase 58 preserves the CSRF requirement. It closes the gap where application
-JavaScript can call an unsafe CNCF endpoint without a standard way to obtain
-and attach the required token.
+Phase 58 consumes:
+
+- Phase 55 effective configuration values and provenance;
+- Phase 56 resolved Resource SubComponent inventory, state, integrity, and
+  provenance; and
+- Phase 57 Component knowledge and model manifests.
+
+Admin must use those contracts rather than reconstructing Component state by
+scanning CARs, repositories, development directories, source trees, or
+documentation artifacts independently.
 
 ## Dependency
 
 Phase 58 begins after Phase 57 closes.
 
-The relevant foundations are the Static Form/Web contracts, the existing
-stateless `WebCsrf` implementation, Operation authorization, and the planned
-API exposure distinction under strategy item 9.22.
+Phase 56 supplies the physical Resource SubComponent resolver and Phase 57
+supplies the documentation/model knowledge contract. Phase 58 is their
+operator-facing consumer and does not reopen either foundation.
 
 ## Selected Direction
 
-- CSRF policy follows the effective ingress authentication profile, not the
-  `/form-api` or `/rest` path name.
-- Unsafe requests authenticated by a CNCF Web session require CSRF.
-- `/form-api` and Web-facing REST share one issuing, projection, extraction,
-  verification, failure, and diagnostics mechanism.
-- Browser JavaScript uses a CNCF-owned helper or the equivalent explicit
-  canonical token header.
-- External REST using an explicitly admitted non-cookie identity does not
-  require CSRF and remains governed by external API authentication, scope,
-  replay, quota, and gateway policy.
-- CSRF verification never replaces authentication, authorization, validation,
-  idempotency, CORS, CSP, or XSS defenses.
+- Help remains the human and AI knowledge entry point.
+- Admin is the operator-facing runtime inspection and management surface.
+- Both use the same Component identity, resource, integrity, availability,
+  and provenance contracts.
+- Admin distinguishes Component class, loaded Component instance, Subsystem,
+  and implicit Component Subsystem identities.
+- Admin shows effective configuration values together with their typed value,
+  scope, winning binding, overridden bindings, and provenance.
+- Admin exposes Component model metadata for Entity, Powertype, StateMachine,
+  Value, Datatype, and their relationships, including deterministic class and
+  state diagrams supplied by Phase 57.
+- Admin exposes Service, Operation, SPI, capability, dependency, datastore,
+  schema, collection, lifecycle, health, and ClassLoader information where
+  the runtime owns authoritative evidence.
+- Documentation and SourceCode SubComponents are shown as resources of the
+  logical Component release, not as executable Components.
+- Management actions require explicit Operation authorization, audit, and
+  lifecycle safety. Resource discovery never grants management authority.
+- Missing, remote, restricted, unavailable, incompatible, stale, and corrupt
+  resources remain visibly distinct.
+
+## Scope
+
+- Define a versioned Component Admin view model and discovery contract.
+- Present Component class, release, instance, Subsystem, and implicit
+  Component Subsystem identity without conflation.
+- Present primary CAR plus Documentation and SourceCode SubComponent
+  composition, availability, integrity, access state, and provenance through
+  the Phase 56 resolver.
+- Present Phase 57 manuals, Help, Scaladoc, source availability, model
+  metadata, diagrams, schemas, examples, and troubleshooting navigation.
+- Present Phase 55 effective configuration and binding provenance.
+- Present Service, Operation, SPI, capability, dependency, runtime, health,
+  lifecycle, ClassLoader, datastore, schema, collection, and Entity
+  collection information.
+- Define basic read-only inspection separately from authorized management
+  actions.
+- Define HTTP, Web, CLI, and machine-readable Admin projections from one view
+  model.
+- Define authorization, redaction, audit, path safety, integrity, disclosure,
+  caching, multi-instance, and failure behavior.
+- Validate representative standalone and multi-user Subsystem operation
+  without exposing mode branches to Component implementation.
+
+## Non-Goals
+
+- Reimplementing Resource SubComponent resolution or repository access.
+- Reimplementing Help, manuals, AI retrieval, CBD Support, or BoK.
+- Generating documentation, source archives, model metadata, or diagrams.
+- Treating Admin as an alternate configuration authority.
+- Inferring Component metadata from arbitrary source or artifact scanning.
+- Granting management authority because a resource or Operation is visible.
+- Building a general external observability platform.
 
 ## Work Stack
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| CS-01 | Inventory and contract freeze | Current Form, Form API, REST, Web session, token, and JavaScript behavior plus failing-first acceptance identities are fixed. | planned |
-| CS-02 | Ingress security profile | Web-session, external-API, and internal-service credential selection is deterministic and cannot silently choose a weaker CSRF policy. | planned |
-| CS-03 | Common CSRF mechanism | One CNCF Web-session guard owns token issue, projection, extraction, method policy, verification, failures, and diagnostics. | planned |
-| CS-04 | Form API adoption | `/form-api` validation and execution use the common guard while preserving normal HTML form submission. | planned |
-| CS-05 | Web REST adoption | Unsafe session-authenticated REST requests use the common guard; explicit external REST remains separately governed. | planned |
-| CS-06 | JavaScript contract | CNCF provides a safe standard fetch/token path and unsafe JavaScript calls without a token fail before dispatch. | planned |
-| CS-07 | Component and security acceptance | ArtScene and representative Form/REST paths pass real HTTP, authorization, audit, and non-leakage acceptance. | planned |
-| CS-08 | Verification and contract promotion | Full validation passes and verified parameter/behavior contracts are promoted from notes to design/specification. | planned |
+| ADM-01 | Inventory and executable contract freeze | Existing Admin, Help, configuration, model, runtime, and management surfaces plus exact failing-first acceptance identities are fixed. | planned |
+| ADM-02 | Identity and Admin view model | One versioned model distinguishes class, release, instance, Subsystem, implicit Subsystem, and physical resource identities. | planned |
+| ADM-03 | Configuration and composition visibility | Effective typed configuration/provenance and primary/Documentation/SourceCode composition are projected from Phase 55/56 contracts. | planned |
+| ADM-04 | Component contract and model visibility | Service, Operation, SPI, capability, schema, model types, relationships, and Phase 57 diagrams are visible without reconstruction. | planned |
+| ADM-05 | Runtime and datastore visibility | Dependency, ClassLoader, lifecycle, health, datastore, collection, and Entity collection evidence is projected from authoritative runtime state. | planned |
+| ADM-06 | Documentation navigation | Admin links exact manuals, Help, Scaladoc, source availability, examples, and troubleshooting resources through the Phase 57 manifest. | planned |
+| ADM-07 | Authorized management | Explicitly admitted management actions enforce Operation authorization, audit, lifecycle safety, and deterministic failure. | planned |
+| ADM-08 | Surface and security acceptance | Web, HTTP, CLI, machine-readable, standalone, multi-user, multi-instance, redaction, and hostile-input profiles pass. | planned |
+| ADM-09 | Canonical documentation and closure | Verified behavior is promoted to design/specification and all planning records are reconciled. | planned |
 
 ## Acceptance
 
-- `/form-api` and Web-facing REST use one CSRF implementation.
-- Safe methods do not require a token and unsafe Web-session methods do.
-- HTML form-field and JavaScript-header transports follow one verified token
-  contract.
-- JavaScript has a CNCF-owned supported way to attach the token.
-- Missing or invalid tokens fail with structured `403` responses before
-  operation execution.
-- External REST exemption requires an explicit admitted non-cookie ingress
-  profile.
-- Token values never appear in logs, CallTree, metrics, audit payloads, URLs,
-  or error text.
-- ArtScene or another representative component proves the browser path through
-  the real CNCF HTTP boundary.
-- Final accepted header, field, cookie, method, profile, failure, and
-  projection behavior is recorded under `docs/spec` and `docs/design`.
-
-## Non-Goals
-
-- Removing or weakening current CSRF enforcement.
-- Treating CORS or `SameSite` as a complete CSRF replacement.
-- Implementing a full public API gateway, OAuth server, or developer portal.
-- Making external service APIs use browser session cookies.
-- Letting application JavaScript generate or verify CNCF tokens.
-- Solving XSS, CSP, authorization, idempotency, or rate limiting through CSRF.
+- Admin identifies exactly which Component class, release, instance, and
+  Subsystem context is being inspected.
+- Admin consumes the Phase 56 resolver; it does not scan physical resource
+  locations independently.
+- Admin consumes the Phase 57 knowledge/model manifest; it does not regenerate
+  manuals, metadata, or diagrams.
+- Effective configuration shows the winning typed binding, overridden
+  bindings, scope, and provenance without duplicating public `textus` and
+  internal `cncf` parameters.
+- Primary CAR, Documentation SubComponent, and SourceCode SubComponent state
+  is accurate and does not claim remote or restricted content is local.
+- Entity, Powertype, StateMachine, Value, Datatype, relationships, class
+  diagrams, and state diagrams are navigable from the Component.
+- Service, Operation, SPI, capability, dependency, runtime, datastore,
+  schema, collection, health, and lifecycle views use authoritative evidence.
+- Read-only visibility grants no Operation or resource access authority.
+- Management actions require explicit authorization and produce attributable
+  audit evidence.
+- Standalone and multi-user operation project identity through
+  `ExecutionContext`; Component implementation remains mode-independent.
+- Multiple loaded versions and instances do not cross-wire configuration,
+  resources, runtime state, or management actions.
+- Final design/specification and executable evidence agree before closure.
 
 ## Planning References
 
-- [Web Session CSRF Boundary](../journal/2026/07/2026-07-26-web-session-csrf-boundary.md)
-- [Implementation Proposal](../notes/web-session-csrf-unification-implementation.md)
-- [Static Web Application Specification](../spec/static-web-application.md)
-- [Web Layer Design](../design/web-layer.md)
-- [Web Form API Schema](../design/web-form-api-schema.md)
-- [Phase 58 Checklist](phase-58-checklist.md)
+- [Phase 55 - Configuration Binding and Provenance](phase-55.md)
+- [Phase 56 - Component Resource SubComponent Foundation](phase-56.md)
+- [Phase 57 - Component Documentation and AI Knowledge Integration](phase-57.md)
+- [Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
+- [Planning Journal](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
+
+## Current Status
+
+Phase 58 is planned and must not start before Phase 57 closes.

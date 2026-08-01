@@ -31,12 +31,20 @@ object WebExecutionRuntimeProjection {
     configuration: ResolvedConfiguration,
     executioncontext: ExecutionContext,
     request: WebExecutionRuntimeRequest
+  ): Consequence[WebExecutionProjection] =
+    WebExecutionResolutionPolicy.fromConfiguration(configuration).flatMap(
+      resolve(_, executioncontext, request)
+    )
+
+  def resolve(
+    policy: WebExecutionResolutionPolicy,
+    executioncontext: ExecutionContext,
+    request: WebExecutionRuntimeRequest
   ): Consequence[WebExecutionProjection] = {
     given ExecutionContext = executioncontext
     val subject = SecuritySubject.current
     val runtimecontext = executioncontext.runtime.context
     for {
-      policy <- WebExecutionResolutionPolicy.fromConfiguration(configuration)
       formatting <- WebExecutionResolver.resolve(
         policy,
         WebExecutionResolutionInput(

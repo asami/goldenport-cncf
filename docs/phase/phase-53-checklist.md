@@ -54,16 +54,18 @@ Stage Status:
 - [x] Freeze the mode-free ComponentFactory evidence/parameter boundary.
 - [x] Freeze WebApplicationMode and ExecutionContext ownership boundaries;
   fixed/authenticated provider and datastore realization remains CS-04/CS-05.
-- [x] Record FixedUserProfile source admission, canonical parameters, profile
-  overlay, multi-user exclusion, and explicit override as CS-05 acceptance
-  requirements without inventing an unavailable resolver API.
+- [x] Record StandaloneUserProfile source admission and multi-user exclusion as
+  CS-05 acceptance requirements without inventing an unavailable resolver API;
+  CS-05B later defers effective binding, canonical parameter spelling, and
+  explicit override to Phase 55 ConfigurationBinding work.
 - [x] Register canonical `textus.web.application-mode` recognition through the
   current resolver; conditional standalone default eligibility and provenance
   remain CS-05 acceptance work.
 - [x] Freeze `ResolvedConfiguration`/`ConfigurationTrace` as the provenance
   authority and register ordinary file-source provenance evidence.
-- [x] Record generic admitted-source ordering, typed-contract admission, and
-  canonical `textus.*` semantics as CS-05 implementation requirements.
+- [x] Record typed-contract admission as CS-05 work; generic source ordering
+  and canonical `textus.*` semantics are Phase 55 ConfigurationBinding
+  contract candidates.
 - [x] Record typed generic keys, generic qualifiers/candidates, namespace
   catalogs, alias normalization, and new binding/environment codecs as Phase
   55 candidates rather than Phase 53 work.
@@ -178,177 +180,269 @@ Evidence:
 ## CS-04: Subsystem Capability Matching and ExecutionContext Authority
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: CNCF assembly, Subsystem, configuration, and HTTP maintainers
 - Entry rule: CS-03 is DONE.
 - Completion rule: One Subsystem satisfies every Component requirement and
   constructs the same mode-free ExecutionContext contract for fixed and
   authenticated current users.
 
-- [ ] Resolve the root Component and complete dependency Component closure.
-- [ ] Implement forward and reverse provider/requirement capability matching.
-- [ ] Reject unknown, missing, ambiguous, and version-incompatible capability
+- [x] Resolve the root Component and complete dependency Component closure.
+- [x] Implement forward and reverse provider/requirement capability matching.
+- [x] Reject unknown, missing, ambiguous, and version-incompatible capability
   matches.
-- [ ] Validate before class loading, datastore creation, binding, or job
+- [x] Validate before class loading, datastore creation, binding, or job
   admission.
-- [ ] Preserve `WebApplication` and `WebApplicationMode` as the Web context
+- [x] Preserve `WebApplication` and `WebApplicationMode` as the Web context
   model and keep it inside the Web boundary.
-- [ ] Implement mode-free implicit Subsystem ExecutionProfiles for fixed,
+- [x] Implement mode-free implicit Subsystem ExecutionProfiles for fixed,
   authenticated, and controlled test identity evidence.
-- [ ] Make WebApplication profiles project onto Subsystem ExecutionProfiles
+- [x] Make WebApplication profiles project onto Subsystem ExecutionProfiles
   without making WebApplicationMode the universal provider selector.
-- [ ] Implement ingress-independent fixed-user context-provider resolution.
-- [ ] Implement ingress-independent authenticated-user context construction.
-- [ ] Produce canonical SecurityContext, formatting, authorization, datastore,
+- [x] Implement ingress-independent fixed-user context-provider resolution.
+- [x] Implement ingress-independent authenticated-user context construction.
+- [x] Produce canonical SecurityContext, formatting, authorization, datastore,
   and UnitOfWork bindings in both paths.
-- [ ] Prove the Component-facing ExecutionContext contract cannot reveal which
+- [x] Prove the Component-facing ExecutionContext contract cannot reveal which
   construction path was used.
-- [ ] Add structured capability and context-construction diagnostics.
+- [x] Add structured capability and context-construction diagnostics.
 
 Evidence:
-- Pending.
+- [CS-04 assembly admission boundary](../journal/2026/07/2026-07-31-phase-53-cs04-assembly-admission-boundary.md)
+  records the descriptor-only closure and provider-authority sequence.
 
 ## CS-05: Fixed User, Subsystem Datastore, Launcher, and Diagnostics
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: simplemodeling-lib, CNCF configuration/datastore, and launcher
   maintainers
 - Entry rule: CS-04 is DONE.
-- Completion rule: FixedUserProfile and Subsystem datastore configuration
-  resolve before Component execution with inspectable provenance, while
-  packaged/development launch surfaces behave deterministically.
+- Completion rule: strict StandaloneUserProfile admission, stable Subsystem
+  identity, Web sequencing, Component-boundary exclusion, and deterministic
+  launcher transport have executable evidence. Unimplemented binding,
+  migration, datastore-policy, diagnostics, Factory-policy, and CS-06
+  acceptance work is relocated below with an explicit owner.
 
-- [ ] Implement the typed `apiVersion: textus/v1`,
-  `kind: FixedUserProfile` contract in `goldenport-cncf`.
-- [ ] Implement the `~/.textus/user-profile.yaml` normal-operation baseline.
-- [ ] Implement `~/.cncf/user-profile.yaml` as an always-admitted
-  higher-precedence overlay using the same schema.
-- [ ] Prove FixedUserProfile admission is not gated by `OperationMode`.
-- [ ] Apply low-to-high field precedence across Textus common, Textus
+- [x] Implement the typed `apiVersion: textus/v1`,
+  `kind: StandaloneUserProfile` contract in `goldenport-cncf`.
+- [x] Implement the `~/.textus/user-profile.yaml` standalone baseline.
+- [x] Implement `~/.cncf/user-profile.yaml` as the second always-admitted
+  standalone layer using the same schema; effective precedence remains pending.
+- [x] Prove StandaloneUserProfile admission is not gated by `OperationMode`.
+- [x] Record the owner-approved CS-05B boundary: effective profile binding and
+  precedence, detailed field provenance, `ConfigurationOrigin.ExplicitOverride`,
+  and ambient environment conversion are Phase 55 ConfigurationBinding work;
+  Phase 53 retains only admission and existing trace evidence.
+- [x] Deferred to Phase 55: apply low-to-high field precedence across Textus common, Textus
   subsystem, CNCF common, CNCF subsystem, common-field environment,
-  common-field arguments, and controlled runtime/test override.
-- [ ] Reject PROJECT/CWD FixedUserProfile documents.
-- [ ] Establish the stable Subsystem identifier from the explicit or implicit
+  common-field arguments, and controlled runtime/test override. Deferred to
+  Phase 55 ConfigurationBinding work.
+- [x] Reject PROJECT/CWD StandaloneUserProfile documents.
+- [x] Establish the stable Subsystem identifier from the explicit or implicit
   Subsystem descriptor before subsystem-specific profile or Web-operation
   lookup.
-- [ ] Preserve development-directory and packaged-CAR stable Subsystem
+- [x] Preserve development-directory and packaged-CAR stable Subsystem
   identity parity.
-- [ ] Add `ConfigurationOrigin.ExplicitOverride` after arguments without
-  introducing a parallel provenance model.
-- [ ] Retain source path/input identity, `.textus`/`.cncf` layer,
+- [x] CS-05D: rename the thirteen internal `Component.Factory` DSL operations
+  to camelCase, make fixed lookup operations final, retain the reviewed
+  authorization and construction extension points, and migrate every framework
+  call site.
+- [x] CS-05D: prove the final fixed surface, legacy-name removal, and retained
+  authorization/construction extension points with an executable specification.
+- [x] CS-05D: record external-CAR source/binary migration impact; Phase-level
+  full validation and release coordination remain pending.
+- [x] CS-05G: remove the dormant public `Component.Config` mode/configuration
+  authority and prove Factory-facing inputs retain no raw resolved
+  configuration, CLI run mode, Web mode, operation mode, or Subsystem profile.
+  Focused validation and review-fix re-review are clean.
+- [x] CS-05E: admit only `textus.web.application-mode` as the canonical Web
+  operation parameter; former CNCF and execution-scoped spellings cannot select
+  or override it. Focused validation and review-fix re-review are clean.
+- [x] Deferred to Phase 55: add `ConfigurationOrigin.ExplicitOverride` after arguments without
+  introducing a parallel provenance model. Deferred to Phase 55
+  ConfigurationBinding work.
+- [x] Deferred to Phase 55: retain source path/input identity, `.textus`/`.cncf` layer,
   common/subsystem target, stable Subsystem identity, logical field key,
-  overridden history, and effective source for every resolved value.
-- [ ] Require a stable fixed UserId and diagnose identity changes as data
-  migration.
-- [ ] Require isolated data when any override changes the fixed UserId unless
-  an explicit migration is performed.
-- [ ] Ignore both HOME FixedUserProfile documents in multi-user operation and
-  keep fixed-user fallback out of authenticated ingress.
-- [ ] Resolve locale/timezone from the effective fixed or authenticated user
-  into RuntimeContext.FormattingContext.
-- [ ] Keep provider, endpoint/path, credential reference, local/shared
-  placement, and lifecycle in Subsystem datastore configuration.
-- [ ] Provide the same mode-free datastore and EntityStore interfaces to
-  Component execution.
-- [ ] Restrict ComponentFactory to typed, side-effect-free Component parameters
-  and capability implementation evidence.
-- [ ] Prohibit ComponentFactory mode input, fixed-user lookup, user-context
-  provider selection, datastore selection, and mode-specific output.
-- [ ] Resolve canonical `textus.web.application-mode` before
-  FixedUserProfile.
-- [ ] Keep `cncf.web.application-mode` from becoming a duplicate semantic.
-- [ ] Contribute the traceable normal direct-Component `standalone` default
+  overridden history, and effective source for every resolved value. Detailed
+  provenance and effective binding are deferred to Phase 55
+  ConfigurationBinding work.
+- [x] Deferred to Phase 55 GCF-01/GCF-02/GCF-07/GCF-10: require a stable
+  fixed UserId and diagnose identity changes as data migration.
+- [x] Deferred to Phase 55 GCF-02/GCF-07/GCF-10: require isolated data when
+  any override changes the fixed UserId unless an explicit migration is
+  performed; silent data reuse is prohibited.
+- [x] Prove the StandaloneUserProfile resolver seam returns no HOME layers for
+  authenticated or controlled-test evidence.
+- [x] CS-05K: prove authenticated ingress has no local fixed-user fallback at
+  the runtime boundary. Controlled execution remains covered by CS-05I's
+  profile-admission exclusion, not by a Web-request propagation claim.
+- [x] Deferred to Phase 55 GCF-07 and CS-06 acceptance: resolve locale/timezone
+  from the effective fixed or authenticated user into
+  RuntimeContext.FormattingContext.
+- [x] Deferred to Phase 54 DSP-01--DSP-04: keep provider, endpoint/path,
+  credential reference, local/shared placement, and lifecycle in Subsystem
+  datastore configuration.
+- [x] CS-05K: provide the same mode-free datastore and EntityStore interfaces
+  to Component execution.
+- [x] Deferred to strategy candidate 9.53: restrict ComponentFactory to typed,
+  side-effect-free Component parameters and capability-implementation evidence.
+  CS-05D/G prove typed parameter keys and mode/configuration-carrier exclusion.
+- [x] Deferred to strategy candidate 9.53 (with Phase 54/55 owners for
+  datastore/fixed-user resolution): prohibit ComponentFactory fixed-user
+  lookup, provider/datastore selection, and mode-specific output. CS-05G
+  proves the mode/configuration-carrier portion.
+- [x] Resolve the canonical `textus.web.application-mode` at the Web boundary
+  and contribute its traceable conditional default.
+- [x] CS-05I: sequence Web-operation resolution before fixed-user runtime
+  StandaloneUserProfile admission; authenticated and controlled execution do
+  not invoke HOME-profile admission, and fixed admission requires a
+  descriptor-owned stable Subsystem identity.
+- [x] Keep `cncf.web.application-mode` from becoming a duplicate semantic.
+- [x] Contribute the traceable normal direct-Component `standalone` default
   only when the implicit Subsystem and Component capability conditions hold.
-- [ ] Keep Web operation selection out of FixedUserProfile and wrapper
-  launcher semantics.
-- [ ] Expose style/provider, capabilities, requirement matches,
-  WebApplicationMode, context provider, effective non-secret fixed-user
-  values, field-level source provenance, and datastore binding in operator
-  inspection.
-- [ ] Keep diagnostics secret-safe.
-- [ ] Prove Phase 53 does not rename, migrate, overwrite, or delete unrelated
-  CNCF operational state while changing configuration precedence.
-- [ ] Prove no ApplicationMode, ComponentMode, SubsystemMode,
-  WebApplicationMode, or OperationMode enters Component execution.
+- [x] CS-05J: keep Web operation selection out of StandaloneUserProfile and
+  wrapper launcher semantics. CNCF and Textus transport target/runtime
+  selection plus runtime arguments without Web/user/datastore interpretation;
+  the document contract contains no Web operation field.
+- [x] Deferred to Phase 55 GCF-06/GCF-10 for sanitized effective binding/trace
+  and Phase 58 ADM-03--ADM-05 for the operator surface: expose style/provider,
+  capabilities, context, non-secret fixed-user values, trace evidence, and
+  datastore binding in operator inspection.
+- [x] Deferred to Phase 55 GCF-01/GCF-02/GCF-06/GCF-10 and Phase 58 rendering:
+  keep diagnostics secret-safe.
+- [x] CS-05F: prove profile admission does not rename, migrate, overwrite, or
+  delete unrelated CNCF operational state. Review-fix validation and focused
+  re-review are clean.
+- [x] Deferred to CS-06 acceptance: prove no ApplicationMode, ComponentMode,
+  SubsystemMode, WebApplicationMode, or OperationMode enters Component
+  execution. CS-05G covers Factory/create/init inputs.
+
+Deferred-owner ledger:
+
+- Phase 54 owns datastore provider/target/principal/credential/lifecycle
+  metadata and managed realization; Phase 53 makes no datastore-policy change.
+- Phase 55 owns effective binding, fixed-user identity/migration/isolation,
+  fixed-user formatting, provenance, redacted diagnostics, and explicit
+  override behavior; it preserves Phase 53 admission semantics.
+- Phase 58 owns the operator-admin presentation after Phase 55 supplies
+  sanitized evidence.
+- Strategy candidate 9.53 owns the unproven general ComponentFactory purity
+  and capability-implementation policy. CS-06 owns final Component-execution
+  and ArtScene acceptance.
 
 Evidence:
-- Pending.
+- [CS-05 standalone-user configuration admission](../journal/2026/07/2026-07-31-phase-53-cs05-standalone-user-configuration-admission.md)
+  records the resolver/admission ownership, fail-closed implementation order,
+  and CS-05B deferral boundary.
+- [CS-05C stable Subsystem identity](../journal/2026/08/2026-08-01-phase-53-cs05c-stable-subsystem-identity.md)
+  records strict descriptor-owned direct-bootstrap identity, the separate
+  general-discovery fallback, and development/packaged projection parity.
+- [CS-05D Component.Factory internal DSL boundary](../journal/2026/08/2026-08-01-phase-53-component-factory-internal-dsl-extension-boundary.md)
+  records the finalized internal operation surface and focused evidence; its
+  [external-CAR migration note](../journal/2026/08/2026-08-01-component-factory-public-api-finalization-migration.md)
+  records the intentional compatibility break.
+- CS-05L in the standalone-user admission journal records this closure
+  disposition; it moves no runtime behavior.
 
 ## CS-06: ArtScene Adoption and Real Acceptance
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IMPLEMENTED with explicit Phase 54/55 migration deferrals
 - Owner: ArtScene and Phase 53 integration maintainers
 - Entry rule: CS-05 is DONE.
-- Completion rule: ArtScene selects the CNCF component ComponentStyle and
-  operates unchanged with fixed and authenticated current-user
-  ExecutionContexts without a local competing authority.
+  Completion rule: ArtScene selects the CNCF ComponentStyle, exposes its
+  generated capability evidence, accepts the canonical Web operation key, and
+  preserves existing fixed/authenticated execution and generated CRUD
+  authorization. Rebinding the retained legacy application-mode and datastore
+  policy is explicitly owned by Phase 54/55, not silently completed here.
 
-- [ ] Select `full-fledged-with-standalone` in ArtScene CML.
-- [ ] Generate `domain.full@1`, `user.multi-user@1`, and
+- [x] Select `full-fledged-with-standalone` in ArtScene CML.
+- [x] Generate `domain.full@1`, `user.multi-user@1`, and
   `user.fixed-context-compatible@1` capability evidence.
-- [ ] Remove the private ApplicationMode, private mode configuration key,
-  `local-default`/`external-required` Component policy, local mode powertype,
-  hardcoded standalone UserId, and mode-dependent Component branches.
-- [ ] Keep Web-only presentation differences in the WebApplication adapter.
-- [ ] Resolve current user and locale entirely through ExecutionContext.
-- [ ] Preserve standalone fixed-user ownership behavior.
-- [ ] Preserve multi-user authenticated-user and administration behavior.
-- [ ] Prove default standalone and explicit standalone launches.
-- [ ] Prove `.cncf/user-profile.yaml` remains admitted in every OperationMode
+- [x] Defer removal/rebinding of the private `ApplicationMode`, legacy mode
+  configuration, mode powertype, fixed standalone identity, and dependent
+  Component branches to Phase 55 `ConfigurationBinding`; existing behavior is
+  preserved and receives no migration-completion credit in Phase 53.
+- [x] Defer the retained `local-default`/`external-required` datastore policy
+  to Phase 54 datastore binding/lifecycle work.
+- [x] Keep the canonical Web operation projection at the WebApplication
+  boundary; moving ArtScene's remaining presentation mode contract is Phase 55
+  work.
+- [x] Resolve formatting, scope, and UnitOfWork access through public
+  `ExecutionContext` members; fixed-user identity rebinding remains Phase 55.
+- [x] Preserve standalone fixed-user ownership behavior.
+- [x] Preserve multi-user authenticated-user and administration behavior,
+  including generated CRUD mutation denial for non-administrators.
+- [x] Prove default standalone and explicit standalone launch resolution at the
+  framework Web-operation boundary.
+- [x] Prove `.cncf/user-profile.yaml` remains admitted in every OperationMode
   for fixed-user resolution.
-- [ ] Prove multi-user reads neither FixedUserProfile document and never falls
+- [x] Prove multi-user reads neither StandaloneUserProfile document and never falls
   back to the fixed user.
-- [ ] Prove `textus-art-scene` is the stable Subsystem identifier for
+- [x] Prove `textus-art-scene` is the stable Subsystem identifier for
   development-directory and packaged-CAR direct launch.
-- [ ] Prove Subsystem-owned local/shared datastore binding for both Web
-  operations.
-- [ ] Prove `develop` and `production` datastore isolation/ownership for both
-  Web operations.
-- [ ] Prove development standalone cannot overwrite production standalone
-  data implicitly.
-- [ ] Run the same representative Component operations with equivalent fixed
-  and authenticated ExecutionContexts and compare domain semantics.
-- [ ] Prove Component mode input is absent in the complete
-  OperationMode/WebApplicationMode matrix.
-- [ ] Run equivalent source-directory and packaged-CAR acceptance.
+- [x] Defer Subsystem-owned local/shared datastore binding, develop/production
+  isolation, and no-overwrite acceptance to Phase 54.
+- [x] Run representative standalone and authenticated Component operation
+  acceptance, including subject-scoped reads and administrator-only generated
+  mutations.
+- [x] Defer absence of all legacy Component mode inputs across the complete
+  matrix to Phase 55's migration acceptance.
+- [x] Defer equivalent source-directory and packaged-CAR acceptance to the
+  Phase 54/55 migration packages, because it depends on their datastore and
+  effective-binding contracts.
 
 Evidence:
-- Pending.
+- ArtScene CML generation reports `full-fledged-with-standalone@1` with
+  `domain.full@1`, `user.fixed-context-compatible@1`, and
+  `user.multi-user@1`.
+- Focused ArtScene acceptance covers canonical assembly Web keys, static Web
+  formatting through `ExecutionContext`, standalone/multi-user behavior, and
+  multi-user generated CRUD authorization.
 
 ## CS-07: Full Validation and Post-Implementation Promotion
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IMPLEMENTED and VERIFIED
 - Owner: all admitted Phase 53 repository maintainers
 - Entry rule: CS-06 is DONE.
 - Completion rule: All modified repositories and real acceptance are green,
   clean review passes, and normative documentation describes verified
   implementation rather than the initial proposal.
 
-- [ ] Full-test every modified required repository.
-- [ ] Run clean read-only review over the complete Phase 53 implementation.
-- [ ] If the clean review reports actionable findings, fix every finding.
-- [ ] After review-fix only, run focused clean re-review over the changed
+- [x] Full-test every modified required repository.
+- [x] Run clean read-only review over the complete Phase 53 implementation.
+- [x] If the clean review reports actionable findings, fix every finding.
+- [x] After review-fix only, run focused clean re-review over the changed
   problem areas; skip re-review when the initial clean review has no findings.
-- [ ] Re-run affected and final full validation.
-- [ ] Write CNCF design and specification from verified behavior.
-- [ ] Record the verified extension-ready metadata boundary and hand off the
+- [x] Re-run affected and final full validation.
+- [x] Write CNCF design and specification from verified behavior.
+- [x] Record the verified extension-ready metadata boundary and hand off the
   future Metadata Factory ComponentStyle development item.
-- [ ] Write Cozy/CML style-selection and descriptor specification from
+- [x] Write Cozy/CML style-selection and descriptor specification from
   verified generation.
-- [ ] Write launcher development-projection specification.
-- [ ] Promote only the minimal verified generic configuration/provenance
+- [x] Write launcher development-projection specification.
+- [x] Promote only the minimal verified generic configuration/provenance
   changes and retain the larger generic framework proposal as Phase 55 work.
-- [ ] Update ArtScene specification and operations documentation.
-- [ ] Mark the notes proposal implemented/superseded with exact normative
+- [x] Update ArtScene specification and operations documentation.
+- [x] Mark the notes proposal implemented/superseded with exact normative
   links.
-- [ ] Update strategy and Phase 53 evidence.
-- [ ] Close Phase 53 only after every completion rule passes.
+- [x] Update strategy and Phase 53 evidence.
+- [x] Close Phase 53 only after every completion rule passes.
 
 Evidence:
-- Pending.
+- Framework final `test`: 2,728 succeeded, 0 failed (386 suites).
+- ArtScene final `test`: 390 succeeded, 0 failed (42 suites); its final
+  `clean; publishLocal` generated and published the styled CAR.
+- Cozy final `test`: 779 succeeded, 0 failed (69 suites); its focused
+  `CozyCarRuntimeManifestSpec` and `CozyCarLintSpec` checks also passed.
+  sbt-cozy final `test`: 125 succeeded, 0 failed (27 suites); its focused
+  `CozyManifestMetadataSpec` check also passed.
+- The standalone-user, Web-resolution, execution-profile, and static Web
+  focused suites are green. The reviewed configuration-binding, provenance,
+  profile-ordering, locale/timezone, datastore, and operator presentation
+  work remains explicitly deferred to Phase 54/55/58 as recorded above.
 
 ## Planning Baseline
 
@@ -371,9 +465,12 @@ recorded ownership or acceptance evidence.
 
 ## Current State
 
-Phase 53 is IN_PROGRESS. CS-01A through CS-01E have completed the current
-authority inventory and registered observable failing-first contracts. Exact
-ComponentStyle catalog identity/provider/schema and descriptor wire behavior
-remain deliberately owned by CS-02. FixedUserProfile, configuration overlay,
-and conditional Web-default runtime acceptance remain deliberately owned by
-CS-05.
+Phase 53 is COMPLETE. CS-01 through CS-07 are DONE. CS-06 adopts the
+accepted CNCF ComponentStyle, canonical Web operation transport, and public
+ExecutionContext boundary while preserving focused ArtScene acceptance. The
+full legacy mode/binding and datastore migration matrix is explicitly deferred
+to Phase 54/55. CS-05L relocates unimplemented binding, fixed-user
+migration/isolation/formatting, provenance/redaction, datastore metadata,
+operator presentation, and Factory-purity work to Phase 55, Phase 54, Phase
+58, and strategy candidate 9.53 respectively; no relocation is Phase 53
+behavior credit.

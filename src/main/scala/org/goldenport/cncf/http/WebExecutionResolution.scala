@@ -7,11 +7,12 @@ import scala.util.Try
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.ConfigurationAccess
-import org.goldenport.configuration.ResolvedConfiguration
+import org.goldenport.cncf.subsystem.{Subsystem, SubsystemCurrentUserEvidence}
+import org.goldenport.configuration.{ConfigurationOrigin, ConfigurationResolution, ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebExecutionResolutionPolicy(
@@ -25,8 +26,18 @@ final case class WebExecutionResolutionPolicy(
   publicCapabilities: Vector[String] = Vector.empty
 )
 
+final case class WebExecutionPolicyResolution(
+  policy: WebExecutionResolutionPolicy,
+  applicationModeTrace: Option[ConfigurationResolution]
+)
+
 object WebExecutionResolutionPolicy {
-  val APPLICATION_MODE_KEY = "textus.web.execution.application-mode"
+  val APPLICATION_MODE_KEY = "textus.web.application-mode"
+  val DIRECT_COMPONENT_STANDALONE_SOURCE_TYPE = "derived-default"
+  val DIRECT_COMPONENT_STANDALONE_SOURCE_ID = "textus-direct-component-standalone"
+  val CONTROLLED_TEST_STANDALONE_SOURCE_TYPE = "controlled-test"
+  val CONTROLLED_TEST_STANDALONE_SOURCE_ID = "textus-controlled-test-standalone"
+  val FIXED_CONTEXT_COMPATIBLE_CAPABILITY = "user.fixed-context-compatible@1"
   val LOCALE_KEY = "textus.web.execution.locale"
   val TIMEZONE_KEY = "textus.web.execution.timezone"
   val DATE_FORMAT_KEY = "textus.web.execution.date-format"
@@ -37,7 +48,7 @@ object WebExecutionResolutionPolicy {
 
   def fromConfiguration(configuration: ResolvedConfiguration): Consequence[WebExecutionResolutionPolicy] =
     for {
-      applicationmode <- _application_mode(_value(configuration, APPLICATION_MODE_KEY))
+      applicationmode <- _application_mode(ConfigurationAccess.getString(configuration, APPLICATION_MODE_KEY))
       applicationlocale <- _locale(LOCALE_KEY, _value(configuration, LOCALE_KEY))
       applicationtimezone <- _timezone(TIMEZONE_KEY, _value(configuration, TIMEZONE_KEY))
       dateformat <- _format_policy(DATE_FORMAT_KEY, _value(configuration, DATE_FORMAT_KEY))
@@ -54,6 +65,23 @@ object WebExecutionResolutionPolicy {
       httpLanguageNegotiationEnabled = httplanguage.getOrElse(false),
       publicCapabilities = _tokens(_value(configuration, PUBLIC_CAPABILITIES_KEY))
     )
+
+  def resolveForSubsystem(
+    configuration: ResolvedConfiguration,
+    subsystem: Subsystem
+  ): Consequence[WebExecutionPolicyResolution] =
+    ConfigurationAccess.getString(configuration, APPLICATION_MODE_KEY) match {
+      case Some(_) =>
+        fromConfiguration(configuration).map { policy =>
+          WebExecutionPolicyResolution(policy, configuration.trace.get(APPLICATION_MODE_KEY))
+        }
+      case None =>
+        _direct_component_standalone_c(subsystem).flatMap { trace =>
+          _policy(configuration, WebApplicationMode.Standalone).map { policy =>
+            WebExecutionPolicyResolution(policy, Some(trace))
+          }
+        }
+    }
 
   private def _value(configuration: ResolvedConfiguration, key: String): Option[String] =
     _aliases(key).iterator
@@ -72,11 +100,72 @@ object WebExecutionResolutionPolicy {
 
   private def _application_mode(value: Option[String]): Consequence[WebApplicationMode] =
     value match {
-      case None => Consequence.success(WebApplicationMode.Standalone)
+      case None => Consequence.argumentMissing(APPLICATION_MODE_KEY)
       case Some(x) => WebApplicationMode.parse(x)
         .map(Consequence.success)
         .getOrElse(Consequence.argumentFormatError(APPLICATION_MODE_KEY, "standalone or multi-user", x))
     }
+
+  private def _policy(
+    configuration: ResolvedConfiguration,
+    applicationmode: WebApplicationMode
+  ): Consequence[WebExecutionResolutionPolicy] =
+    for {
+      applicationlocale <- _locale(LOCALE_KEY, _value(configuration, LOCALE_KEY))
+      applicationtimezone <- _timezone(TIMEZONE_KEY, _value(configuration, TIMEZONE_KEY))
+      dateformat <- _format_policy(DATE_FORMAT_KEY, _value(configuration, DATE_FORMAT_KEY))
+      datetimeformat <- _format_policy(DATE_TIME_FORMAT_KEY, _value(configuration, DATE_TIME_FORMAT_KEY))
+      displayoverride <- _boolean(DISPLAY_OVERRIDE_ENABLED_KEY, _value(configuration, DISPLAY_OVERRIDE_ENABLED_KEY))
+      httplanguage <- _boolean(HTTP_LANGUAGE_NEGOTIATION_ENABLED_KEY, _value(configuration, HTTP_LANGUAGE_NEGOTIATION_ENABLED_KEY))
+    } yield WebExecutionResolutionPolicy(
+      applicationMode = applicationmode,
+      applicationLocale = applicationlocale,
+      applicationTimezone = applicationtimezone,
+      dateFormat = dateformat,
+      dateTimeFormat = datetimeformat,
+      displayOverrideEnabled = displayoverride.getOrElse(false),
+      httpLanguageNegotiationEnabled = httplanguage.getOrElse(false),
+      publicCapabilities = _tokens(_value(configuration, PUBLIC_CAPABILITIES_KEY))
+    )
+
+  private def _direct_component_standalone_c(
+    subsystem: Subsystem
+  ): Consequence[ConfigurationResolution] =
+    subsystem.executionProfileC.flatMap { profile =>
+      profile.currentUserEvidence match {
+        case SubsystemCurrentUserEvidence.ControlledTest =>
+          _standalone_default(
+            CONTROLLED_TEST_STANDALONE_SOURCE_TYPE,
+            CONTROLLED_TEST_STANDALONE_SOURCE_ID
+          )
+        case SubsystemCurrentUserEvidence.Fixed if subsystem.directComponentProvides(FIXED_CONTEXT_COMPATIBLE_CAPABILITY) =>
+          _standalone_default(
+            DIRECT_COMPONENT_STANDALONE_SOURCE_TYPE,
+            DIRECT_COMPONENT_STANDALONE_SOURCE_ID
+          )
+        case SubsystemCurrentUserEvidence.Fixed =>
+          Consequence.argumentMissing(
+            s"$APPLICATION_MODE_KEY (direct Component requires $FIXED_CONTEXT_COMPATIBLE_CAPABILITY)"
+          )
+        case _ =>
+          Consequence.securityPermissionDenied(
+            "Missing textus.web.application-mode requires fixed-user direct-Component execution evidence."
+          )
+      }
+    }
+
+  private def _standalone_default(
+    sourcetype: String,
+    sourceid: String
+  ): Consequence[ConfigurationResolution] =
+    Consequence.success(ConfigurationResolution(
+      key = APPLICATION_MODE_KEY,
+      finalValue = ConfigurationValue.StringValue(WebApplicationMode.Standalone.name),
+      origin = ConfigurationOrigin.Default,
+      history = Nil,
+      sourceType = Some(sourcetype),
+      sourceId = Some(sourceid)
+    ))
 
   private def _locale(name: String, value: Option[String]): Consequence[Option[Locale]] =
     value match {

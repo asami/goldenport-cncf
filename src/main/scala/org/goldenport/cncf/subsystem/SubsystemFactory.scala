@@ -99,7 +99,7 @@ object DefaultSubsystemFactory {
       ),
       mode = mode.flatMap(RunMode.from),
       configuration = configuration
-    )
+    ).enableControlledTestExecution()
 
   def default(
     extraComponents: Seq[Component],

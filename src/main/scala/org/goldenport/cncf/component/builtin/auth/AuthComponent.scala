@@ -19,7 +19,7 @@ import org.goldenport.schema.DataType
  * @since   Apr. 23, 2026
  *  version Apr. 24, 2026
  *  version May.  8, 2026
- * @version Jun.  5, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthComponent() extends Component {
@@ -172,10 +172,8 @@ object AuthComponent {
 
     private def _security_summary(using ctx: ExecutionContext): Option[SessionSummary] = {
       val security = ctx.security
-      val providerAuthenticated = security.principal.attributes
-        .get(SecuritySubject.AuthenticationProvenanceAttribute)
-        .exists(x => SecuritySubject.normalize(x) == SecuritySubject.ProviderAuthenticationProvenance)
-      if (!providerAuthenticated || security.subjectKind == SubjectKind.Anonymous || security.principal.id.value == "anonymous")
+      val providerauthenticated = SecuritySubject.from(security).isProviderAuthenticated
+      if (!providerauthenticated || security.subjectKind == SubjectKind.Anonymous || security.principal.id.value == "anonymous")
         None
       else
         Some(
@@ -198,10 +196,8 @@ object AuthComponent {
 
     private def _provider_session_id(using ctx: ExecutionContext): Option[String] = {
       val security = ctx.security
-      val providerAuthenticated = security.principal.attributes
-        .get(SecuritySubject.AuthenticationProvenanceAttribute)
-        .exists(x => SecuritySubject.normalize(x) == SecuritySubject.ProviderAuthenticationProvenance)
-      if (providerAuthenticated)
+      val providerauthenticated = SecuritySubject.from(security).isProviderAuthenticated
+      if (providerauthenticated)
         security.session.flatMap(_.sessionId).orElse(security.session.flatMap(_.tokenId))
       else
         None

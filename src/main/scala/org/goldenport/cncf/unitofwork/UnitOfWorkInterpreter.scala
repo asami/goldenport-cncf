@@ -52,7 +52,7 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 29, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1356,7 +1356,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       OperationAccessPolicy.authorizeUnitOfWorkDefault(a, loader).flatMap { _ =>
         _component_option
           .flatMap(_.factoryOption)
-          .flatMap(_.authorize_unit_of_work(a, uow))
+          .flatMap(_.authorizeUnitOfWork(a, uow))
           .getOrElse(Consequence.unit)
       }
     }

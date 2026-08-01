@@ -29,7 +29,7 @@ import org.goldenport.cncf.Program
  *  version Feb. 21, 2026
  *  version Apr. 28, 2026
  *  version May. 23, 2026
- * @version Jul. 15, 2026
+ * @version Aug.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -41,20 +41,20 @@ abstract class ActionCall()
     _authorize_usage().flatMap { _ =>
       _authorize_authentication_requirement()
     }.flatMap { _ =>
-      val delegatedAccess = if (_framework_access_policy.isDefined) None else _declared_access
-      delegatedAccess.fold(
+      val delegatedaccess = if (_framework_access_policy.isDefined) None else _declared_access
+      delegatedaccess.fold(
         _declared_entities match
           case Vector() => Consequence.unit
           case xs =>
             getFactory[Component.Factory].map { factory =>
-              xs.foldLeft(Consequence.unit) { (z, entityName) =>
-                z.flatMap(_ => factory.authorize_operation_entity(action, entityName, core).getOrElse(Consequence.unit))
+              xs.foldLeft(Consequence.unit) { (z, entityname) =>
+                z.flatMap(_ => factory.authorizeOperationEntity(action, entityname, core).getOrElse(Consequence.unit))
               }
             } getOrElse {
               Consequence.serviceUnavailable(s"Operation entity authorization is declared but no factory authorizer is available: ${action.name}")
             }
       ) { access =>
-        getFactory[Component.Factory].flatMap(_.authorize_operation_access(action, access, core)) getOrElse {
+        getFactory[Component.Factory].flatMap(_.authorizeOperationAccess(action, access, core)) getOrElse {
           Consequence.serviceUnavailable(s"Operation access is declared but no factory authorizer is available: ${action.name}")
         }
       }
@@ -115,18 +115,18 @@ abstract class ActionCall()
 
   private def _authorize_usage()(using ExecutionContext): Consequence[Unit] = {
     val subject = SecuritySubject.current
-    val componentName = _component_name
-    val operationName = action.name
-    val componentDecision =
-      componentName match
+    val componentname = _component_name
+    val operationname = action.name
+    val componentdecision =
+      componentname match
         case Some(name) if subject.hasUsageCapability("component", name, "use") => Consequence.unit
         case _ => Consequence.unit
-    val operationDecision =
-      if (operationName.nonEmpty && subject.hasUsageCapability("operation", operationName, "invoke"))
+    val operationdecision =
+      if (operationname.nonEmpty && subject.hasUsageCapability("operation", operationname, "invoke"))
         Consequence.unit
       else
         Consequence.unit
-    componentDecision.flatMap(_ => operationDecision)
+    componentdecision.flatMap(_ => operationdecision)
   }
 
   private def _authorize_authentication_requirement()(using ExecutionContext): Consequence[Unit] =

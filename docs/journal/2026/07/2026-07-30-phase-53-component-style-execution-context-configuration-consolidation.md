@@ -77,7 +77,7 @@ Phase 53 delivers only:
 - fixed-user and authenticated-user ExecutionContext construction without
   Component-visible mode branching;
 - `~/.textus` ordinary configuration with `~/.cncf` development override;
-- common and subsystem-specific FixedUserProfile resolution;
+- common and subsystem-specific StandaloneUserProfile resolution;
 - provenance through the existing generic configuration trace facility;
 - existing WebApplicationMode integration and Subsystem-owned datastore
   selection; and
@@ -314,10 +314,10 @@ The document contract is:
 
 ```yaml
 apiVersion: textus/v1
-kind: FixedUserProfile
+kind: StandaloneUserProfile
 ```
 
-`FixedUserProfile` is bootstrap configuration for the fixed current user used
+`StandaloneUserProfile` is bootstrap configuration for the fixed current user used
 by standalone execution. It is distinct from the persisted `UserProfile`
 domain entity supplied by `textus-user-account`.
 
@@ -329,7 +329,7 @@ The fixed profile supplies stable user-facing values such as:
 - timezone; and
 - other explicitly defined fixed-user preferences.
 
-FixedUserProfile does not admit launcher or runtime operation settings. In
+StandaloneUserProfile does not admit launcher or runtime operation settings. In
 particular, `WebApplicationMode`, `OperationMode`, datastore provider,
 endpoint/path, credentials, pool, diagnostic controls, and CNCF implementation
 parameters do not belong to this document.
@@ -358,9 +358,9 @@ resolving a fixed user. When the selected Web operation is `multi-user`, the
 runtime uses authenticated-user evidence and ignores both
 `~/.textus/user-profile.yaml` and `~/.cncf/user-profile.yaml`.
 
-FixedUserProfile has an explicit source-admission contract:
+StandaloneUserProfile has an explicit source-admission contract:
 
-| Source | FixedUserProfile admission |
+| Source | StandaloneUserProfile admission |
 | --- | --- |
 | Contract defaults | Only for fields whose public schema defines a default |
 | `HOME/.textus/user-profile.yaml` | Normal public baseline |
@@ -388,7 +388,7 @@ contract default
   < explicit runtime/test override
 ```
 
-Environment and argument values address common FixedUserProfile fields only in
+Environment and argument values address common StandaloneUserProfile fields only in
 Phase 53 and override HOME profile values according to source precedence. They
 do not introduce a subsystem-specific transport. A controlled explicit
 runtime/test override targets the selected fixed-user resolution after common
@@ -402,9 +402,9 @@ unless migration is intentional.
 
 ## Public Web Operation Selection
 
-Web operation selection is resolved before FixedUserProfile resolution.
+Web operation selection is resolved before StandaloneUserProfile resolution.
 It belongs to the `goldenport-cncf` runtime bootstrap and implicit or explicit
-Subsystem WebApplication profile, not to a wrapper launcher, FixedUserProfile,
+Subsystem WebApplication profile, not to a wrapper launcher, StandaloneUserProfile,
 or ComponentStyle.
 
 The stable subsystem identifier is established before any subsystem-specific
@@ -425,7 +425,7 @@ If all descriptor-owned identities are absent, subsystem-qualified bootstrap
 fails even if a repository loader can use a path-derived fallback for
 general repository discovery.
 
-The selected value is used consistently by Web operation and FixedUserProfile
+The selected value is used consistently by Web operation and StandaloneUserProfile
 resolution in that bootstrap. Missing, invalid, or conflicting identity fails
 before profile resolution. Development-directory and packaged-CAR descriptors
 must project the same subsystemName; parity acceptance compares that stable
@@ -471,8 +471,8 @@ uses the stable subsystem identifier. No parallel
 `cncf.web.application-mode` parameter is introduced.
 
 The runtime resolves this selection first. A `standalone` result then requires
-FixedUserProfile resolution. A `multi-user` result requires authenticated
-identity evidence and does not read or fall back to FixedUserProfile.
+StandaloneUserProfile resolution. A `multi-user` result requires authenticated
+identity evidence and does not read or fall back to StandaloneUserProfile.
 
 ## Textus and CNCF Configuration Layers
 
@@ -489,7 +489,7 @@ override, not merely a deprecated alias.
 Both directories are always eligible configuration sources; their admission
 is not switched by `OperationMode`. A typed contract may still ignore its
 documents when that contract is irrelevant to the selected operation. In
-particular, `FixedUserProfile` resolution uses both HOME profile documents for
+particular, `StandaloneUserProfile` resolution uses both HOME profile documents for
 standalone/fixed-user execution and uses neither document for multi-user
 execution.
 
@@ -511,7 +511,7 @@ contract defaults
 This is the generic ordering of admitted sources, not a declaration that every
 schema or key accepts every source. Each typed contract defines its
 source-admission policy first, and the generic ordering is then applied only to
-the admitted sources. FixedUserProfile uses the HOME-centered admission table
+the admitted sources. StandaloneUserProfile uses the HOME-centered admission table
 above.
 
 An explicit runtime/test override is an API-level injection used by a
@@ -680,7 +680,7 @@ Subsystem qualification is also contract-checked:
 - a subsystem-qualified binding requires a published
   `ConfigurationParameterDefinition` that admits
   `ConfigurationSemanticScopeKind.Subsystem`;
-- the FixedUserProfile parameters and `textus.web.application-mode` publish
+- the StandaloneUserProfile parameters and `textus.web.application-mode` publish
   both Global and Subsystem as allowed semantic scopes; and
 - an unsupported subsystem-qualified binding fails before merge and trace
   construction.
@@ -942,7 +942,7 @@ Every effective configuration field needs traceable evidence for:
 
 The existing trace already carries key, effective value, origin, and history.
 Phase 53 must verify and complete file-source metadata so `.textus` and
-`.cncf` are distinguishable. FixedUserProfile common values and
+`.cncf` are distinguishable. StandaloneUserProfile common values and
 subsystem-specific overlays remain explainable through that trace. Phase 53
 extends existing trace metadata only where executable acceptance proves that
 the source file, layer, field path, overlay target, or derived-default evidence
@@ -962,8 +962,8 @@ history, or arbitrary configuration access.
 Phase 53 uses the following responsibility split:
 
 - `cloud-native-component-framework`, in the `goldenport-cncf` artifact under
-  `org.goldenport.cncf.fixeduserprofile`, owns the typed public
-  `apiVersion: textus/v1`, `kind: FixedUserProfile` document contract,
+  `org.goldenport.cncf.config`, owns the typed public
+  `apiVersion: textus/v1`, `kind: StandaloneUserProfile` document contract,
   canonical `textus.fixed-user.*` field mappings, validation rules,
   source-admission policy, and common/subsystem overlay contract;
 - `simplemodeling-lib` retains ownership of the existing String-keyed
@@ -975,11 +975,11 @@ Phase 53 uses the following responsibility split:
   validation; generic configuration code does not infer Textus/CNCF semantics;
 - the `goldenport-cncf` runtime bootstrap owns `.textus`/`.cncf` source
   discovery, stable subsystem-identifier establishment,
-  FixedUserProfile parsing and semantic resolution, derived Web-operation
+  StandaloneUserProfile parsing and semantic resolution, derived Web-operation
   default contribution, configuration-resolution orchestration, Web
   operation selection, and Subsystem user-context-provider selection;
 - `textus-launcher` and `cncf-launcher` own runtime artifact selection and
-  exact argument forwarding; they do not parse FixedUserProfile or duplicate
+  exact argument forwarding; they do not parse StandaloneUserProfile or duplicate
   its schema;
 - ingress adapters own authenticated/fixed/test identity evidence, while the
   CNCF runtime constructs `SecurityContext` and `ExecutionContext`; and
@@ -988,7 +988,7 @@ Phase 53 uses the following responsibility split:
 
 Repository/package placement must preserve this split. In particular, CNCF
 must not reimplement the generic trace facility, and `simplemodeling-lib` must
-not acquire FixedUserProfile, WebApplication, Textus/CNCF, or ArtScene-specific
+not acquire StandaloneUserProfile, WebApplication, Textus/CNCF, or ArtScene-specific
 semantics. The wrapper launchers do not add a compile-time dependency on
 `goldenport-cncf`; they select and invoke that runtime.
 
@@ -1082,7 +1082,7 @@ It must:
 - resolve `textus-art-scene` as the same stable subsystem identifier from both
   development-directory and packaged-CAR implicit Subsystem descriptors;
 - receive current user and locale through the resolved ExecutionContext;
-- use the common/subsystem Textus FixedUserProfile with an optional CNCF
+- use the common/subsystem Textus StandaloneUserProfile with an optional CNCF
   development override for standalone;
 - explain the effective `textus-art-scene` subsystem-specific fixed-user
   locale and its `.textus` or `.cncf` source;
@@ -1112,7 +1112,7 @@ Phase 53 must include:
    operational-state ownership affected by this phase;
 2. failing-first evidence for `.textus` baseline and `.cncf` override behavior,
    existing common-field environment/argument precedence, controlled explicit
-   override precedence, and rejection of PROJECT/CWD FixedUserProfile input;
+   override precedence, and rejection of PROJECT/CWD StandaloneUserProfile input;
 3. preservation of the existing String-keyed generic configuration model and
    existing `ResolvedConfiguration`/`ConfigurationTrace` authority;
 4. minimal trace completion for source file, `.textus`/`.cncf` layer, logical
@@ -1121,8 +1121,8 @@ Phase 53 must include:
    `ConfigurationOrigin.ExplicitOverride`;
 5. one canonical public `textus.*` spelling for each Phase 53 user-facing
    parameter and no duplicate `cncf.*` spelling for the same semantic;
-6. the `goldenport-cncf` `org.goldenport.cncf.fixeduserprofile`
-   `FixedUserProfile` schema,
+6. the `goldenport-cncf` `org.goldenport.cncf.config`
+   `StandaloneUserProfile` schema,
    `~/.textus/user-profile.yaml` and `~/.cncf/user-profile.yaml` discovery,
    common/subsystem overlay resolution, and published
    `textus.fixed-user.*` parameters;
@@ -1131,7 +1131,7 @@ Phase 53 must include:
 8. use of the established `cozyPrepareRuntime` development evidence contract,
    without reimplementing it, plus Phase 53 ComponentStyle/implicit Subsystem
    projection and semantic parity with the packaged descriptor route;
-9. resolution of `textus.web.application-mode` before FixedUserProfile and
+9. resolution of `textus.web.application-mode` before StandaloneUserProfile and
    traceable normal standalone default selection;
 10. ComponentStyle catalog, capability expansion, CML projection, and
    requirement matching;
@@ -1149,7 +1149,7 @@ The canonical generic configuration implementation currently lives in
 facility cannot represent the minimal evidence required above. It does not
 perform a generic typed-key migration or admit every current configuration API
 consumer into the phase. CNCF must not reimplement the generic trace facility.
-The public FixedUserProfile schema and semantic resolver remain in
+The public StandaloneUserProfile schema and semantic resolver remain in
 `cloud-native-component-framework`.
 
 ## Documentation Lifecycle
@@ -1219,3 +1219,18 @@ Normative `docs/design` and `docs/spec` remain intentionally excluded from
 this planning synchronization. They are written only after implementation,
 review, and executable acceptance establish the actual contract.
 Implementation begins only after Phase 52 closes and Phase 53 starts.
+
+## 2026-08-01 CS-05B supersession
+
+The owner corrected the selected boundary after this journal's earlier
+future-contract discussion. Phase 53 implements only strict
+`StandaloneUserProfile` decoding and ordered HOME admission, plus the existing
+trace fields (`key`, `origin`, `sourceType`, `sourceId`, and `history`). It does
+not implement effective field binding or precedence, detailed layer/target/
+subsystem/field-path provenance, `ConfigurationOrigin.ExplicitOverride`, an
+ambient OS-environment codec, or a parallel profile-provenance API.
+
+Those items are deferred to Phase 55's ConfigurationBinding work. The
+authoritative state is the Phase 53 checklist and the Phase 55 plan/checklist;
+the earlier precedence and provenance passages in this journal are superseded
+planning discussion, not Phase 53 implementation commitments.

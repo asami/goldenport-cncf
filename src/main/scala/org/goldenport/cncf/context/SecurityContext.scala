@@ -5,7 +5,7 @@ import org.goldenport.id.UniversalId
 
 /*
  * @since   Dec. 21, 2025
- * @version Apr. 25, 2026
+ * @version Jul. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class PrincipalId(

@@ -11,7 +11,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemAuthenticationBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
 import org.goldenport.protocol.Protocol
@@ -55,7 +55,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
         )),
         ConfigurationTrace.empty
       )
-      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val request = Request[IO](
@@ -82,9 +82,10 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       pagecontext.hcursor.downField("execution").get[String]("locale").toOption shouldBe Some("ja-JP")
       pagecontext.hcursor.downField("execution").get[String]("timezone").toOption shouldBe Some("Asia/Tokyo")
       pagecontext.hcursor.downField("execution").get[String]("applicationMode").toOption shouldBe Some("standalone")
-      pagecontext.hcursor.downField("execution").downField("subject").get[Boolean]("authenticated").toOption shouldBe Some(false)
+      pagecontext.hcursor.downField("execution").downField("subject").get[Boolean]("authenticated").toOption shouldBe Some(true)
       pagecontext.hcursor.downField("execution").get[Vector[String]]("capabilities").toOption shouldBe Some(Vector.empty)
       pagecontext.hcursor.downField("view").downField("items").downArray.get[String]("title").toOption shouldBe Some("展示A")
+      pagecontext.hcursor.downField("view").get[String]("provider_application_mode").toOption shouldBe Some("standalone")
     }
 
     "ignore arbitrary request formatting headers when display override is disabled" in {
@@ -107,11 +108,12 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       val configuration = ResolvedConfiguration(
         Configuration(Map(
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+          WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("standalone"),
           WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("en-US")
         )),
         ConfigurationTrace.empty
       )
-      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val request = Request[IO](
@@ -152,11 +154,12 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+          WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("standalone")
         )),
         ConfigurationTrace.empty
       )
-      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val request = Request[IO](
@@ -236,7 +239,8 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
           if (request.app == "debug-app" && request.page.isEmpty)
             Consequence.success(WebPageContext(view = Record.data(
               "items" -> Vector(Record.data("title" -> "展示A", "status" -> "開催中")),
-              "query" -> Record.data(request.values.toSeq*)
+              "query" -> Record.data(request.values.toSeq*),
+              "provider_application_mode" -> request.execution.map(_.applicationMode.name).getOrElse("missing")
             )))
           else
             Consequence.success(WebPageContext.empty)
@@ -249,8 +253,21 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
     val id = ComponentId("static_page_view")
     new StaticPageViewComponent().initialize(ComponentInit(
       subsystem,
-      Component.Core.create("static_page_view", id, ComponentInstanceId.default(id), Protocol.empty),
+      Component.Core.create("debug-app", id, ComponentInstanceId.default(id), Protocol.empty),
       ComponentOrigin.Main
     ))
   }
+
+  private def _static_subsystem(
+    configuration: ResolvedConfiguration
+  ) =
+    DefaultSubsystemFactory
+      .default(None, configuration)
+      .withDescriptor(GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("static-web-test.yaml"),
+        subsystemName = "static-web-test",
+        security = Some(GenericSubsystemSecurityBinding(authentication = Some(GenericSubsystemAuthenticationBinding(
+          localSubject = Some(GenericSubsystemLocalSubjectBinding("static-user"))
+        ))))
+      ))
 }

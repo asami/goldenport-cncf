@@ -33,7 +33,7 @@ object TestComponentFactory {
       configuration = configuration,
       aliasResolver = AliasResolver.empty,
       runMode = RunMode.Command
-    )
+    ).enableControlledTestExecution()
 
   def subsystemWithConfig(
     values: Map[String, ConfigurationValue],

@@ -101,8 +101,9 @@ final class WebExecutionRuntimeProjectionSpec extends AnyWordSpec with Matchers 
       val request = WebExecutionRuntimeRequest(acceptLanguage = Some("ja-JP"))
 
       When("the same runtime projection is resolved repeatedly")
-      val first = WebExecutionRuntimeProjection.resolve(_configuration(Map.empty), executioncontext, request)
-      val second = WebExecutionRuntimeProjection.resolve(_configuration(Map.empty), executioncontext, request)
+      val configuration = _configuration(Map(WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> "standalone"))
+      val first = WebExecutionRuntimeProjection.resolve(configuration, executioncontext, request)
+      val second = WebExecutionRuntimeProjection.resolve(configuration, executioncontext, request)
 
       Then("both projections retain the same execution-owned fallback values")
       first shouldBe a[Consequence.Success[_]]

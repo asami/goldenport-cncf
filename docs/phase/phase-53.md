@@ -181,15 +181,14 @@ contract:
 ```text
 standalone Web, CLI, job, or other fixed-user ingress
   -> Subsystem user-context-provider resolution
-  -> ~/.textus FixedUserProfile common/subsystem baseline
-  -> always-admitted ~/.cncf FixedUserProfile common/subsystem override
+  -> ordered ~/.textus and ~/.cncf StandaloneUserProfile admission layers
   -> SecurityContext + formatting + datastore bindings
   -> ExecutionContext
 
 multi-user Web or another authenticated ingress
   -> authenticated invocation identity
   -> Subsystem user-context-provider resolution
-  -> ignore both FixedUserProfile documents
+  -> ignore both StandaloneUserProfile documents
   -> authenticated user preferences
   -> SecurityContext + formatting + datastore bindings
   -> ExecutionContext
@@ -199,45 +198,54 @@ Standalone therefore retains multi-user domain semantics with one fixed
 current user. Multi-user operation never falls back to fixed-user
 configuration.
 
-`~/.textus/user-profile.yaml` is the normal-operation `FixedUserProfile`
-baseline. `~/.cncf/user-profile.yaml` is an always-admitted
-higher-precedence overlay using the same schema. Admission is not gated by
+`~/.textus/user-profile.yaml` is the standalone-only `StandaloneUserProfile`
+baseline. `~/.cncf/user-profile.yaml` is the second always-admitted layer
+using the same schema. Phase 53 preserves these as distinct ordered admission
+layers; it does not resolve their effective field precedence. Admission is not gated by
 `OperationMode`; both documents participate only in fixed-user resolution and
 are ignored by multi-user operation. Each document supports common values and
-field-by-field `subsystems` overrides keyed by the stable Subsystem identity.
-PROJECT and CWD FixedUserProfile documents are not admitted.
+subsystem-specific `subsystems` values keyed by the stable Subsystem identity.
+PROJECT and CWD StandaloneUserProfile documents are not admitted.
 
-Common-field environment and argument inputs retain their existing precedence.
-A controlled runtime/test injection uses the distinct
-`ConfigurationOrigin.ExplicitOverride`. Resolved fields retain source path or
-input identity, `.textus`/`.cncf` layer, common/subsystem target, stable
-Subsystem identity, logical field, override history, and final source through
-the existing `ResolvedConfiguration`/`ConfigurationTrace` authority.
-Component execution receives only effective values.
+Phase 53 relies only on the existing `ResolvedConfiguration`/
+`ConfigurationTrace` fields: key, origin, source type, source identity, and
+history. Effective field binding and precedence, layer/target/subsystem/field
+provenance, an explicit override origin, and ambient environment conversion
+are owner-deferred to Phase 55's `ConfigurationBinding` work. Phase 53 adds no
+parallel profile-provenance API. Component execution continues to receive only
+resolved values.
 
 The canonical public Web operation parameter is
-`textus.web.application-mode`. It is resolved before FixedUserProfile. For a
-normal direct-Component launch, CNCF contributes a traceable `standalone`
+`textus.web.application-mode`. Server bootstrap resolves that parameter before
+fixed-user `StandaloneUserProfile` admission; authenticated and controlled
+execution never invokes HOME-profile admission. The admission remains unmerged:
+it does not choose effective fields. For a normal direct-Component launch,
+CNCF contributes a traceable `standalone`
 default only when no explicit value wins, the implicit Subsystem has a valid
 standalone ExecutionProfile, and the Component provides
-`user.fixed-context-compatible@1`. FixedUserProfile does not contain the Web
+`user.fixed-context-compatible@1`. StandaloneUserProfile does not contain the Web
 operation selection.
 
-The fixed UserId is stable across restart; changing an ID that owns persisted
-data is a user-data migration. An overriding UserId requires isolated data
-unless migration is intentional.
+Stable fixed UserId change diagnosis, isolation, and migration policy are
+deferred to Phase 55's typed binding intake. Phase 53 neither selects an
+effective fixed identity nor migrates/reuses user data.
 
 ### ComponentFactory, datastore, and migration boundary
 
 ComponentFactory may provide typed, side-effect-free Component parameters and
 implementation evidence for domain capabilities. It may not receive mode,
-choose a user-context provider or datastore, read FixedUserProfile
+choose a user-context provider or datastore, read StandaloneUserProfile
 configuration, or
 return mode-specific parameters.
 
-Datastore placement, provider, endpoint/path, credentials, pool lifecycle, and
-migration lifecycle belong to the Subsystem. Both operation profiles expose
-the same mode-free datastore interfaces to Component execution.
+CS-05D/G prove only typed parameter and mode/configuration-exclusion
+boundaries. General Factory purity and capability-implementation evidence are
+deferred to strategy candidate 9.53.
+
+Both operation profiles expose the same mode-free datastore interfaces to
+Component execution. Provider/target/principal/credential/lifecycle metadata
+and managed realization are deferred to Phase 54; Phase 53 makes no datastore
+selection or binding-policy claim.
 
 Temporary migration adapters, if unavoidable, remain internal and deprecated,
 carry an explicit removal item, and never enter CML, catalog metadata,
@@ -274,8 +282,8 @@ The acceptance matrix is:
 
 | OperationMode | WebApplicationMode | User context | Component mode input | Datastore expectation |
 | --- | --- | --- | --- | --- |
-| `develop` | `standalone` | fixed user with common/subsystem overlay | none | isolated persistent local development binding |
-| `production` | `standalone` | fixed user with common/subsystem overlay | none | user-owned persistent local binding |
+| `develop` | `standalone` | fixed user from admitted profile layers; effective binding deferred to Phase 55 | none | isolated persistent local development binding |
+| `production` | `standalone` | fixed user from admitted profile layers; effective binding deferred to Phase 55 | none | user-owned persistent local binding |
 | `develop` | `multi-user` | authenticated user | none | explicit shared development binding |
 | `production` | `multi-user` | authenticated user | none | explicit shared production binding |
 
@@ -290,7 +298,7 @@ standalone data implicitly.
 | CS-02 | Implement the CNCF built-in style catalog, extension-ready metadata contract, CML style selection, typed model, validation, and deterministic descriptor projection. |
 | CS-03 | Extend the existing `cozyPrepareRuntime` route with coherent development descriptor/implicit-Subsystem evidence and packaged/development parity. |
 | CS-04 | Implement Subsystem capability matching, fixed/authenticated ExecutionContext construction, and the WebApplication boundary. |
-| CS-05 | Implement fixed-user overlays, Subsystem datastore selection, trace provenance, diagnostics, and launcher selection. |
+| CS-05 | Complete strict fixed-user profile admission, stable Subsystem/Web sequencing, Component-boundary exclusion, and launcher transport; relocate binding/migration/diagnostic/datastore-policy closure to their owning phases. |
 | CS-06 | Adopt the CNCF component style in ArtScene and pass the full operating-mode matrix. |
 | CS-07 | Run full cross-repository validation and promote verified behavior into normative design/specification. |
 
@@ -317,8 +325,8 @@ consideration journal, phase documents, or tests.
 | --- | --- |
 | `cozy` | CML selection of CNCF built-in styles, common style metadata consumption, typed model, validation, and descriptor projection |
 | `sbt-cozy` | extension of the existing `cozyPrepareRuntime` descriptor/runtime-evidence and freshness contract |
-| `simplemodeling-lib` | existing String-keyed configuration/trace authority, `ConfigurationOrigin.ExplicitOverride`, and minimal source metadata required by Phase 53 |
-| `cloud-native-component-framework` | built-in style catalog, capability matching, descriptor consumption, stable Subsystem identity, FixedUserProfile parsing/semantic resolution, fixed/authenticated ExecutionContext construction, Web-operation resolution/default contribution, and diagnostics |
+| `simplemodeling-lib` | existing String-keyed configuration/trace authority; Phase 53 makes no generic provenance, override-origin, or environment-codec change |
+| `cloud-native-component-framework` | built-in style catalog, capability matching, descriptor consumption, stable Subsystem identity, StandaloneUserProfile parsing/semantic resolution, fixed/authenticated ExecutionContext construction, Web-operation resolution/default contribution, and diagnostics |
 | `cncf-launcher` | runtime artifact selection, exact argument forwarding, and source-directory launch |
 | `textus-launcher` | runtime artifact selection and exact argument forwarding without duplicating CNCF configuration semantics |
 | `textus-art-scene` | first production-shaped declaration and acceptance consumer |
@@ -338,22 +346,18 @@ In scope:
 - Subsystem requirement/provider capability matching;
 - fixed and authenticated user-context resolution into one ExecutionContext
   contract;
-- `~/.textus` FixedUserProfile baseline and always-admitted field-by-field
-  `~/.cncf` higher-precedence override for fixed-user resolution;
-- common/subsystem overlay using stable Subsystem identity;
-- HOME-only profile-file admission, common-field environment/argument input,
-  and controlled explicit runtime/test override;
-- generic `.textus` baseline followed by `.cncf` override at every admitted
-  HOME/PROJECT/CWD scope, with source admission owned by each typed contract;
-- one canonical `textus.*` spelling for each public Phase 53 semantic even
-  when `.cncf` supplies the winning value, without a duplicate `cncf.*`
-  semantic;
-- existing `ResolvedConfiguration`/`ConfigurationTrace` authority with the
-  minimal provenance completion required by Phase 53;
+- `~/.textus` StandaloneUserProfile baseline and always-admitted, unmerged
+  `~/.cncf` second layer for fixed-user resolution;
+- HOME-only profile-file admission and multi-user exclusion;
+- no PROJECT/CWD profile admission and no Phase 53 profile winner/precedence
+  policy;
+- existing `ResolvedConfiguration`/`ConfigurationTrace` authority without a
+  Phase 53 generic provenance extension;
 - canonical `textus.web.application-mode` resolution and traceable
   conditional direct-Component standalone default;
 - OperationMode and WebApplicationMode exclusion from Component execution;
-- Subsystem-owned datastore selection and configuration trace;
+- mode-free datastore access only, without a Phase 53 datastore-selection or
+  configuration-trace extension;
 - common runtime access and Web projection;
 - launcher selection and stale development-evidence rejection;
 - ArtScene standalone and multi-user adoption; and
@@ -378,7 +382,9 @@ Out of scope:
 - a general component/subsystem/user data migration framework;
 - migration, deletion, or reinterpretation of unrelated CNCF operational state;
 - typed generic configuration keys, generic qualifier/candidate resolution,
-  namespace catalogs, general alias normalization, and new
+  namespace catalogs, effective field binding/precedence, detailed
+  layer/target/subsystem/field provenance, `ConfigurationOrigin.ExplicitOverride`,
+  ambient environment conversion, general alias normalization, and new
   binding/environment codecs planned for Phase 55; and
 - normative design/specification written from unverified proposal behavior.
 
@@ -393,11 +399,11 @@ Phase 53 closes only when:
   evidence;
 - development and packaged descriptors have proven semantic parity;
 - invalid composition fails before component/runtime resource startup;
-- `~/.textus` baseline, always-admitted `~/.cncf` override,
-  common/subsystem target, source-admission rules, and field-level provenance
-  through the existing trace authority are verified;
-- FixedUserProfile is ignored completely by multi-user resolution;
-- `textus.web.application-mode` resolves before FixedUserProfile and the
+- `~/.textus` baseline, always-admitted unmerged `~/.cncf` layer, and
+  HOME-only source-admission rules are verified; effective binding and detailed
+  field provenance are excluded from Phase 53 closure and deferred to Phase 55;
+- StandaloneUserProfile is ignored completely by multi-user resolution;
+- `textus.web.application-mode` resolves before StandaloneUserProfile and the
   conditional direct-Component standalone default is traceable;
 - `WebApplicationMode` remains inside the WebApplication boundary and no
   operating mode reaches Component execution;
@@ -434,4 +440,37 @@ has a focused review-fix for its selected catalog snapshot projection,
 evidence; it is accepted. CS-03 is complete: its v2 styled projection and v1
 style-less legacy projection share explicit evidence identities and runtime
 admission rules, and their source-authority boundaries are covered by focused
-review and full validation. CS-04 is the next implementation slice.
+review and full validation. CS-04 is DONE; CS-05 is the current implementation
+group. CS-05B records the owner-approved Phase 55 configuration-binding
+deferral, and CS-05C completes strict descriptor-owned stable Subsystem
+identity for direct packaged/development bootstrap. CS-05D finalizes the
+camelCase internal Component.Factory DSL operation surface without changing the
+ActionCall.Core holder boundary or adding a Component facade; fixed lookup
+operations are final while reviewed authorization hooks remain available for
+existing Component policy. External CAR migration is recorded for release
+coordination. CS-05E admits only
+`textus.web.application-mode` as the Web-operation selector, and the
+focused-validated follow-up contributes its traceable conditional
+direct-Component `standalone` default; review-fix validation and focused
+re-review are clean. CS-05F adds focused-validated non-destructive profile
+admission evidence; review-fix validation and focused re-review are clean.
+CS-05G removes the dormant public `Component.Config` mode/configuration
+authority and adds focused-validated Component-facing exclusion evidence;
+review-fix re-review is clean. CS-05J adds focused-validated CNCF/Textus
+launcher transport evidence: component target and runtime selection remain
+independent, and the wrappers forward canonical/noncanonical Web keys,
+fixed-user-shaped values, and post-`--` passthrough without semantic
+interpretation. Effective profile ordering is deferred to Phase 55
+ConfigurationBinding work. CS-05K reconciles existing executable evidence:
+authenticated ingress has no local fixed-user fallback, and the CS-05I
+profile-admission boundary excludes authenticated and controlled HOME-profile
+admission. Fixed/authenticated construction keeps the same mode-free datastore
+and EntityStore interfaces at the Component boundary. CS-05L closes the work
+group without new runtime behavior: Phase 54 owns datastore metadata/lifecycle,
+Phase 55 owns effective binding, UserId migration, formatting, provenance and
+redaction, Phase 58 owns operator presentation, strategy candidate 9.53 owns
+general Factory purity, and CS-06 owns final Component/ArtScene acceptance.
+
+CS-05 and CS-06 are DONE. CS-07 records final cross-repository validation,
+review, and the verified normative promotion. The deferred work remains
+explicitly unimplemented and receives no Phase 53 behavior credit.
