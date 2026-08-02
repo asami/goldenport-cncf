@@ -8,6 +8,9 @@ This specification fixes the ownership, model, registry, gateway, and execution
 boundary for long-lived container-backed services managed by CNCF. Lifecycle
 transition orchestration is specified by later Phase 44 work.
 
+Managed SQL pool ownership and shutdown are specified separately in
+[SystemNode Datastore Pool Lifecycle](system-node-datastore-pool-lifecycle.md).
+
 ## Terms
 
 - **service definition**: an admitted declaration of one logical service;

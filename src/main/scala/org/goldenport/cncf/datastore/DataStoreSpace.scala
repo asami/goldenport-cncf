@@ -10,6 +10,8 @@ import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.cncf.config.{ConfigurationAccess, ResolvedParameter}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.observability.CallTreeValueSummary
+import org.goldenport.cncf.datastore.sql.SqlDataStoreIdentity
+import org.goldenport.cncf.subsystem.{SystemNodeDataStoreBinding, SystemNodeResourceLease}
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 
@@ -76,6 +78,25 @@ class DataStoreSpace {
     name: String
   ): Unit =
     ComponentDataStore.resolveForDataStoreSpace(environment, ComponentDataStore.Request(componentName, name)) match {
+      case Some(datastore) => bindDataStore(datastore)
+      case None => clearBoundDataStore()
+    }
+
+  private[cncf] def bindManagedApplicationDataStoreC(
+    environment: ComponentDataStore.Environment,
+    componentName: String,
+    name: String,
+    binding: SystemNodeDataStoreBinding,
+    lease: SystemNodeResourceLease,
+    key: SqlDataStoreIdentity.HmacKey
+  ): Consequence[Unit] =
+    ComponentDataStore.resolveManagedForDataStoreSpaceC(
+      environment,
+      ComponentDataStore.Request(componentName, name),
+      binding,
+      lease,
+      key
+    ).map {
       case Some(datastore) => bindDataStore(datastore)
       case None => clearBoundDataStore()
     }

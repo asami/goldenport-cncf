@@ -315,16 +315,18 @@ object GenericSubsystemFactory {
         aliasResolver = aliasResolver,
         runMode = runmode
       )
-    val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
-    val repositories = repos.map(_.build(params)).toVector
-    val components0 =
-      ComponentRepository.discoverAssembly(repositories)
-        .filter(_matches_named_subsystem(_, subsystemName))
-    val builtins = DefaultSubsystemFactory.builtinComponents(subsystem)
-    val components = _collapse_duplicate_components(builtins ++ components0)
-    subsystem.add(components)
-    _activate_tool_runtimes_or_raise(subsystem, runtimeconfig)
-    subsystem
+    Subsystem.withStartupCleanup(subsystem) {
+      val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
+      val repositories = repos.map(_.build(params)).toVector
+      val components0 =
+        ComponentRepository.discoverAssembly(repositories)
+          .filter(_matches_named_subsystem(_, subsystemName))
+      val builtins = DefaultSubsystemFactory.builtinComponents(subsystem)
+      val components = _collapse_duplicate_components(builtins ++ components0)
+      subsystem.add(components)
+      _activate_tool_runtimes_or_raise(subsystem, runtimeconfig)
+      subsystem
+    }
   }
 
   def defaultWithScope(
@@ -368,14 +370,15 @@ object GenericSubsystemFactory {
         runMode = runmode
       ).withDescriptor(admitteddescriptor)
         .withAssemblyAdmissionReport(admissionreport)
-    val params = ComponentCreate(
-      subsystem,
-      ComponentOrigin.Repository("subsystem-descriptor"),
-      componentdescriptors
-    )
-    val developmentclaims = ComponentRepository.developmentComponentClaims(repositoryspecs)
-    val repositories =
-      repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
+    Subsystem.withStartupCleanup(subsystem) {
+      val params = ComponentCreate(
+        subsystem,
+        ComponentOrigin.Repository("subsystem-descriptor"),
+        componentdescriptors
+      )
+      val developmentclaims = ComponentRepository.developmentComponentClaims(repositoryspecs)
+      val repositories =
+        repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
         val activedescriptors =
           ComponentRepository.descriptorsForSpecification(
             spec,
@@ -391,27 +394,28 @@ object GenericSubsystemFactory {
                 .withInstanceMetadata(binding.instanceMetadata)
             )
         }
-      }.toVector
-    val components0 = _or_raise(
-      ComponentRepository.discoverAssemblyC(repositories).flatMap { discovered =>
+        }.toVector
+      val components0 = _or_raise(
+        ComponentRepository.discoverAssemblyC(repositories).flatMap { discovered =>
         val selected = discovered.filter(component =>
           admitteddescriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName))
         )
         materializeComponentInstancesC(selected, admitteddescriptor, params)
-      }
-    )
-    val builtins = _builtin_components(subsystem, admitteddescriptor)
-    given ExecutionContext = ExecutionContext.create()
-    val spibindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(admitteddescriptor) match {
+        }
+      )
+      val builtins = _builtin_components(subsystem, admitteddescriptor)
+      given ExecutionContext = ExecutionContext.create()
+      val spibindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(admitteddescriptor) match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) =>
         throw new IllegalStateException(conclusion.display)
+      }
+      val resolution = SpiResolver.resolveAssemblyOrRaise(_collapse_duplicate_components(builtins ++ components0), spibindings)
+      subsystem.add(resolution.components)
+      subsystem.withComponentApiResolver(resolution.componentApiResolver)
+      _activate_tool_runtimes_or_raise(subsystem, runtimeconfig)
+      subsystem
     }
-    val resolution = SpiResolver.resolveAssemblyOrRaise(_collapse_duplicate_components(builtins ++ components0), spibindings)
-    subsystem.add(resolution.components)
-    subsystem.withComponentApiResolver(resolution.componentApiResolver)
-    _activate_tool_runtimes_or_raise(subsystem, runtimeconfig)
-    subsystem
   }
 
   private def _activate_tool_runtimes_or_raise(

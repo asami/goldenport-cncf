@@ -82,6 +82,34 @@ class SqlDataStore(
     with EntityConditionalTransitionDataStore {
   import DataStore.*
   private val _record_decoder = new RecordDecoder()
+  @volatile private var _managed_resource: Option[ManagedSqlDataStoreResource] = None
+  @volatile private var _managed_borrow_resource: Option[ManagedSqlDataStoreResource] = None
+  @volatile private var _managed_borrow_admission: Option[() => Consequence[Unit]] = None
+
+  /**
+   * Closes a datasource only when its ownership was explicitly transferred by
+   * a factory or infrastructure caller. Constructor-injected datasources stay
+   * caller-owned for binary and lifecycle compatibility.
+   */
+  def closeC(): Consequence[Unit] =
+    _managed_resource.fold(Consequence.unit)(_.closeC())
+
+  private[sql] def adoptManagedResource(resource: ManagedSqlDataStoreResource): Unit =
+    _managed_resource match {
+      case Some(_) => throw new IllegalStateException("SQL datastore datasource ownership is already assigned")
+      case None => _managed_resource = Some(resource)
+    }
+
+  private[sql] def useManagedResource(
+    resource: ManagedSqlDataStoreResource,
+    admission: () => Consequence[Unit]
+  ): Unit = {
+    _managed_borrow_resource = Some(resource)
+    _managed_borrow_admission = Some(admission)
+  }
+
+  private[cncf] def managedResourceOption: Option[ManagedSqlDataStoreResource] =
+    _managed_borrow_resource.orElse(_managed_resource)
 
   def isAccept(cid: CollectionId): Boolean = true
 
@@ -359,8 +387,14 @@ class SqlDataStore(
   private def _with_conditional_transition[A](
     body: Connection => Consequence[A]
   ): Consequence[A] =
+    _with_managed_datasource(source => _with_conditional_transition(source, body))
+
+  private def _with_conditional_transition[A](
+    source: DataSource,
+    body: Connection => Consequence[A]
+  ): Consequence[A] =
     try {
-      val connection = datasource.getConnection()
+      val connection = source.getConnection()
       try {
         val autocommit = connection.getAutoCommit
         try {
@@ -406,8 +440,14 @@ class SqlDataStore(
   private def _with_versioned_mutation[A](
     body: Connection => Consequence[A]
   ): Consequence[A] =
+    _with_managed_datasource(source => _with_versioned_mutation(source, body))
+
+  private def _with_versioned_mutation[A](
+    source: DataSource,
+    body: Connection => Consequence[A]
+  ): Consequence[A] =
     try {
-      val connection = datasource.getConnection()
+      val connection = source.getConnection()
       try {
         val autocommit = connection.getAutoCommit
         try {
@@ -1163,8 +1203,23 @@ class SqlDataStore(
   private def _with_connection[A](
     f: Connection => Consequence[A]
   ): Consequence[A] =
+    _with_managed_datasource(source => _with_connection(source, f))
+
+  private def _with_managed_datasource[A](
+    f: DataSource => Consequence[A]
+  ): Consequence[A] =
+    _managed_borrow_resource.orElse(_managed_resource) match {
+      case Some(resource) =>
+        _managed_borrow_admission.map(_()).getOrElse(Consequence.unit).flatMap(_ => resource.borrowC(f))
+      case None => f(datasource)
+    }
+
+  private def _with_connection[A](
+    source: DataSource,
+    f: Connection => Consequence[A]
+  ): Consequence[A] =
     Consequence {
-      val conn = datasource.getConnection()
+      val conn = source.getConnection()
       try {
         f(conn)
       } finally {
@@ -1951,7 +2006,20 @@ object SqlDataStore {
     driverClassName: Option[String] = None,
     recorder: CommitRecorder = CommitRecorder.noop,
     config: Config = Config()
-  ): SqlDataStore = {
+  ): SqlDataStore =
+    _or_throw(jdbcC(jdbcUrl, dialect, username, password, driverClassName, recorder, config))
+
+  /** Structured alternative to the legacy throwing JDBC factory. */
+  def jdbcC(
+    jdbcUrl: String,
+    dialect: DialectSelection = Auto,
+    username: Option[String] = None,
+    password: Option[String] = None,
+    driverClassName: Option[String] = None,
+    recorder: CommitRecorder = CommitRecorder.noop,
+    config: Config = Config()
+  ): Consequence[SqlDataStore] =
+    Consequence {
     val resolveddialect = dialect.resolve(jdbcUrl)
     val hikariconfig = new HikariConfig()
     hikariconfig.setJdbcUrl(jdbcUrl)
@@ -1961,14 +2029,23 @@ object SqlDataStore {
     _configure_sqlite_transactions(hikariconfig, resolveddialect)
     hikariconfig.setMaximumPoolSize(4)
     val datasource = new HikariDataSource(hikariconfig)
-    new SqlDataStore(resolveddialect, datasource, recorder, config)
+    _owned(resolveddialect, datasource, recorder, config)
   }
 
   def sqlite(
     path: String,
     recorder: CommitRecorder = CommitRecorder.noop,
     config: Config = Config()
-  ): SqlDataStore = {
+  ): SqlDataStore =
+    _or_throw(sqliteC(path, recorder, config))
+
+  /** Structured alternative to the legacy throwing SQLite factory. */
+  def sqliteC(
+    path: String,
+    recorder: CommitRecorder = CommitRecorder.noop,
+    config: Config = Config()
+  ): Consequence[SqlDataStore] =
+    Consequence {
     val hikariconfig = new HikariConfig()
     val jdbcurl =
       if (path == ":memory:")
@@ -1983,8 +2060,100 @@ object SqlDataStore {
     )
     hikariconfig.setMaximumPoolSize(4)
     val datasource = new HikariDataSource(hikariconfig)
-    new SqlDataStore(SqliteDialectDriver, datasource, recorder, config)
+    _owned(SqliteDialectDriver, datasource, recorder, config)
   }
+
+  /**
+   * Explicit infrastructure ownership transfer for an already-created
+   * datasource. The primary constructor intentionally remains non-owning.
+   */
+  def owning(
+    dialect: SqlDialectDriver,
+    datasource: DataSource,
+    close: () => Unit,
+    recorder: CommitRecorder = CommitRecorder.noop,
+    config: Config = Config()
+  ): SqlDataStore =
+    _owned(dialect, datasource, recorder, config, close)
+
+  /**
+   * Creates an unpublished resource for SystemNode registration.  The caller
+   * transfers it to the registry; a datastore view created from the resource
+   * is deliberately non-owning.
+   */
+  private[cncf] def managedJdbcResourceC(
+    jdbcUrl: String,
+    dialect: DialectSelection = Auto,
+    username: Option[String] = None,
+    password: Option[String] = None,
+    driverClassName: Option[String] = None
+  ): Consequence[ManagedSqlDataStoreResource] =
+    Consequence {
+      val resolveddialect = dialect.resolve(jdbcUrl)
+      val hikariconfig = new HikariConfig()
+      hikariconfig.setJdbcUrl(jdbcUrl)
+      username.foreach(hikariconfig.setUsername)
+      password.foreach(hikariconfig.setPassword)
+      driverClassName.foreach(hikariconfig.setDriverClassName)
+      _configure_sqlite_transactions(hikariconfig, resolveddialect)
+      hikariconfig.setMaximumPoolSize(4)
+      val datasource = new HikariDataSource(hikariconfig)
+      ManagedSqlDataStoreResource.hikari(datasource, () => datasource.close())
+    }
+
+  private[cncf] def managedSqliteResourceC(
+    path: String
+  ): Consequence[ManagedSqlDataStoreResource] =
+    managedJdbcResourceC(
+      jdbcUrl = if (path == ":memory:") "jdbc:sqlite::memory:" else s"jdbc:sqlite:$path",
+      dialect = Sqlite,
+      driverClassName = Some("org.sqlite.JDBC")
+    )
+
+  private[cncf] def managedView(
+    resource: ManagedSqlDataStoreResource,
+    jdbcUrl: String,
+    dialect: DialectSelection,
+    admission: () => Consequence[Unit],
+    recorder: CommitRecorder = CommitRecorder.noop,
+    config: Config = Config()
+  ): SqlDataStore =
+    val store = new SqlDataStore(dialect.resolve(jdbcUrl), resource.datasource, recorder, config)
+    store.useManagedResource(resource, admission)
+    store
+
+  private def _owned(
+    dialect: SqlDialectDriver,
+    datasource: DataSource,
+    recorder: CommitRecorder,
+    config: Config
+  ): SqlDataStore =
+    _owned(dialect, datasource, recorder, config, () => datasource match {
+      case hikari: HikariDataSource => hikari.close()
+      case _ => throw new IllegalStateException("owned SQL datasource requires an explicit close action")
+    })
+
+  private def _owned(
+    dialect: SqlDialectDriver,
+    datasource: DataSource,
+    recorder: CommitRecorder,
+    config: Config,
+    close: () => Unit
+  ): SqlDataStore = {
+    val resource = ManagedSqlDataStoreResource.hikari(datasource, close)
+    ManagedSqlDataStoreResource.closeUnpublished(resource) {
+      val store = new SqlDataStore(dialect, datasource, recorder, config)
+      store.adoptManagedResource(resource)
+      store
+    }
+  }
+
+  private def _or_throw(result: Consequence[SqlDataStore]): SqlDataStore =
+    result match {
+      case Consequence.Success(store) => store
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+    }
 
   private def _configure_sqlite_transactions(
     hikariconfig: HikariConfig,

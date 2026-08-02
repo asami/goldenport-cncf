@@ -367,7 +367,13 @@ final case class ActionTask(
       val core = ActionCall.Core(action, boundctx, component, correlationid)
       action.createCall(core)
     }
-    actionEngine.execute(call) match {
+    val result = component.flatMap(_.subsystem) match {
+      case Some(subsystem) =>
+        subsystem._with_managed_datastore_lease_c(_ => actionEngine.execute(call))
+      case None =>
+        actionEngine.execute(call)
+    }
+    result match {
       case Consequence.Success(res) =>
         TaskSucceeded(res)
       case Consequence.Failure(c) =>
@@ -823,6 +829,8 @@ trait JobEngine {
       ctx: ExecutionContext,
       option: JobSubmitOption
   ): Consequence[JobId]
+  def quiesce(): Unit = shutdown()
+  def forceCancel(): Unit = shutdown()
   def shutdown(): Unit = ()
   def getStatus(jobId: JobId): Option[JobStatus]
   def getResult(jobId: JobId): Option[JobResult]
@@ -965,7 +973,8 @@ final class InMemoryJobEngine(
   private val _state_monitor = new Object
   private val _cancellation_scopes = new ConcurrentHashMap[JobId, JobCancellationScope]()
   private var _execution_scheduling_registration = Option.empty[ExecutionSchedulingRegistration]
-  @volatile private var _shutdown_requested = false
+  @volatile private var _admission_closed = false
+  @volatile private var _force_cancel_requested = false
 
   _rehydrate_delayed_starts()
   _rehydrate_delayed_retries()
@@ -984,13 +993,23 @@ final class InMemoryJobEngine(
   }
 
   override def shutdown(): Unit = {
-      _shutdown_requested = true
-      _worker_pool.shutdownNow()
-      _timer.shutdown()
-      _execution_scheduling_registration.foreach(_.close())
-      _execution_scheduling_registration = None
-      _signal_state_change()
-    }
+    quiesce()
+    forceCancel()
+  }
+
+  override def quiesce(): Unit = {
+    _admission_closed = true
+    _signal_state_change()
+  }
+
+  override def forceCancel(): Unit = {
+    _force_cancel_requested = true
+    _timer.shutdown()
+    _execution_scheduling_registration.foreach(_.close())
+    _execution_scheduling_registration = None
+    _worker_pool.shutdownNow()
+    _signal_state_change()
+  }
 
   private[job] def bind_execution_scheduling(runtime: ExecutionProfileRuntime): Unit =
     _execution_scheduling_registration = Some(
@@ -1021,11 +1040,14 @@ final class InMemoryJobEngine(
     ctx: ExecutionContext,
     option: JobSubmitOption
   ): Consequence[JobId] =
-    _validate_submit_option(option).recoverWith { conclusion =>
-      tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
-      Consequence.Failure(conclusion)
-    }.map { _ =>
-    val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
+    if (_admission_closed)
+      Consequence.serviceUnavailable("JobEngine is quiescing")
+    else {
+      _validate_submit_option(option).recoverWith { conclusion =>
+        tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
+        Consequence.Failure(conclusion)
+      }.map { _ =>
+      val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
     _cancellation_scopes.put(jobid, new JobCancellationScope)
     val now = _now()
     val initialdebug = JobDebugInfo(
@@ -1102,8 +1124,9 @@ final class InMemoryJobEngine(
       case JobRunMode.Sync =>
         _run_job_sync(jobid, tasks, ctx)
     }
-    jobid
-  }
+      jobid
+      }
+    }
 
   def getStatus(jobId: JobId): Option[JobStatus] =
     _get_record(jobId).map(_.status)
@@ -1294,11 +1317,11 @@ final class InMemoryJobEngine(
     }
 
   private def _ensure_scheduler_workers(): Unit =
-    if (!_shutdown_requested && _workers_started.compareAndSet(false, true))
+    if (!_force_cancel_requested && _workers_started.compareAndSet(false, true))
       _start_scheduler_workers()
 
   private def _scheduler_worker_loop(): Unit =
-    while (!_shutdown_requested && !Thread.currentThread().isInterrupted)
+    while (!_force_cancel_requested && !Thread.currentThread().isInterrupted)
       try {
         val work = _work_queue.take()
         _run_scheduler_work(work)
@@ -1944,7 +1967,7 @@ final class InMemoryJobEngine(
   private def _await_if_suspended(jobid: JobId): Boolean = {
     _state_monitor.synchronized {
       var status = _get_record(jobid).map(_.status)
-      while (!_shutdown_requested && status.contains(JobStatus.Suspended)) {
+      while (!_force_cancel_requested && status.contains(JobStatus.Suspended)) {
         try
           _state_monitor.wait()
         catch {
@@ -1974,7 +1997,7 @@ final class InMemoryJobEngine(
         _state_monitor.synchronized {
           var completed = done
           try {
-            while (!completed && !_shutdown_requested && _now().isBefore(deadline)) {
+            while (!completed && !_force_cancel_requested && _now().isBefore(deadline)) {
               val remainingnanos = Duration.between(_now(), deadline).toNanos
               if (remainingnanos > 0L) {
                 val waitmillis = remainingnanos / 1000000L

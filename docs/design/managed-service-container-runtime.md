@@ -13,6 +13,10 @@ This runtime is provider-neutral. Ollama, Fuseki, vector stores, and other
 service products are consumers of the contract rather than CNCF runtime
 concepts.
 
+Managed SQL pools use a separate SystemNode-owned lifecycle: Subsystem cleanup
+releases its logical binding before runtime pool finalization. See
+[SystemNode Datastore Pool Lifecycle](system-node-datastore-pool-lifecycle.md).
+
 ## Canonical Vocabulary
 
 - A **service definition** is the admitted declaration of one logical service,

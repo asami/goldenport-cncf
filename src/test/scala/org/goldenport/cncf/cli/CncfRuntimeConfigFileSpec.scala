@@ -3,6 +3,7 @@ package org.goldenport.cncf.cli
 import java.time.Instant
 import java.nio.file.{Files, Paths}
 import java.util.zip.{ZipEntry, ZipOutputStream}
+import org.goldenport.Consequence
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor}
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.repository.ComponentRepository
@@ -115,12 +116,17 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       When("the resolved launcher invocation initializes the runtime subsystem")
       val runtime = new CncfRuntime()
       try {
-        val subsystem = runtime.initializeForEmbedding(
+        val initialized = runtime.initializeForEmbedding(
           cwd = cwd,
           args = invocation.actualArgs,
           modeHint = Some(RunMode.Server),
           extraComponents = extras
-        ).toOption.get
+        )
+        val subsystem = initialized match {
+          case Consequence.Success(value) => value
+          case Consequence.Failure(conclusion) =>
+            fail(s"assembly runtime initialization failed: ${conclusion.show}")
+        }
 
         Then("the subsystem configuration still owns the assembly Web policy")
         RuntimeConfig.getString(

@@ -3696,38 +3696,44 @@ related-project work.
   - `src/test/scala/org/goldenport/cncf/spi/supervisor/SupervisorSpiSpec.scala`.
   - `docs/phase/phase-50-checklist.md`.
 
-### 9.49 Subsystem Datastore Pool Ownership and Shutdown Closure
-Planned for Phase 54 after Phase 53 closes.
+### 9.49 SystemNode Datastore Pool Ownership and Shutdown Closure
+Phase 54 is closed after DSP-07 final regression, canonical documentation, and
+release closure. It did not broaden datastore ownership or cloud-provider
+scope.
 
 - Driver:
   - a long-running Control Center process accumulated 2,524 Hikari
     housekeeper threads and 10,095 descriptors to one `registry.sqlite`;
   - source inspection found repeated Hikari pool creation during component
-    datastore resolution and no Subsystem-owned pool close path; and
+    datastore resolution and no SystemNode-owned pool close path; and
   - the resource leak is established, while its causal relationship to the
     observed HTTP resets remains unproven.
 - Goal:
-  - make the Subsystem runtime the deterministic owner of managed SQL
+  - make the SystemNode runtime the deterministic owner of managed SQL
     datastore resources;
   - reuse exactly one managed pool for each canonical datastore identity
-    inside one Subsystem; and
+    inside one SystemNode; and
   - stop new admission, drain admitted work, and close every owned pool exactly
-    once during Subsystem shutdown.
+    once during SystemNode shutdown.
 - Selected direction:
   - the cardinality contract is
-    `(subsystem runtime identity, canonical datastore identity) -> one managed pool`;
+    `(system node runtime identity, canonical datastore identity) -> one managed pool`;
+  - each Subsystem owns its logical datastore binding and pool lease, while the
+    SystemNode owns physical pool creation, sharing, and closure;
   - ActionCall, Entity helpers, and UnitOfWork borrow datastore access but do
     not own or create the pool;
   - canonical datastore identity is typed, based on the resolved effective
     provider/target/principal/credential-reference-or-version/pool/transaction
     definition, uses a keyed non-reversible credential fingerprint when no
     stable reference/version exists, and never exposes raw credentials;
-  - one Subsystem execution lease linearizes admission and shutdown across
-    HTTP/Action, Job, nested-call, managed-borrow, and creation paths;
+  - one SystemNode resource lease linearizes pool admission and shutdown across
+    resident Subsystem HTTP/Action, Job, nested-call, managed-borrow, and
+    creation paths;
   - same-key concurrent acquisition is linearizable and single-flight;
   - failed creation publishes no entry, closes partial resources, and permits
     retry;
-  - different datastore identities and different Subsystems remain isolated;
+  - equal canonical identities in one SystemNode may share one pool, while
+    different datastore identities and different SystemNodes remain isolated;
   - registry state is `Running`, `Stopping`, or `Stopped`; no new lease is
     granted after `Stopping`, while a valid pre-`Stopping` lease may finish its
     accounted lazy resolution before close;
@@ -3739,10 +3745,10 @@ Planned for Phase 54 after Phase 53 closes.
 - Initial scope:
   - inventory and failing-first ownership/resource evidence;
   - managed SQL lifecycle and secret-safe canonical datastore identity;
-  - Subsystem-owned single-flight registry;
+  - SystemNode-owned single-flight registry;
   - component/application datastore and ActionCall adoption;
-  - caller-owned direct resolution versus explicit Subsystem-owned managed
-    resolution;
+  - caller-owned direct resolution versus explicit SystemNode-owned managed
+    resolution through a Subsystem binding;
   - shutdown admission, bounded drain, close, and failure aggregation;
   - existing `shutdownC` signature and successful-result compatibility;
   - command, server, startup-failure, embedded, and fixture finalization;
@@ -3750,7 +3756,8 @@ Planned for Phase 54 after Phase 53 closes.
   - full regression plus design/specification promotion.
 - Boundary:
   - no action-, request-, helper-, or UnitOfWork-owned pool cache;
-  - no JVM-global pool shared across unrelated Subsystems;
+  - no JVM-global pool detached from SystemNode identity and no pool sharing
+    across different SystemNodes;
   - no datastore policy, configuration precedence, Entity identity, CRUD,
     OCC, transaction, or UnitOfWork redesign;
   - no silent closure of caller-owned resources;

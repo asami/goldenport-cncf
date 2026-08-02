@@ -73,7 +73,7 @@ object SubsystemTestFixture {
     try {
       body(subsystem)
     } finally {
-      subsystem.shutdown()
+      Subsystem.shutdownOwned(subsystem)
     }
   }
 

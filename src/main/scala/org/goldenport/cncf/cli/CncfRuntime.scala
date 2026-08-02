@@ -343,7 +343,10 @@ object CncfRuntime extends GlobalObservable {
 
   def startServer(args: Array[String]): Unit = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Server), args = args)
-    new CncfRuntime().startServer(subsystem, args)
+    try
+      new CncfRuntime().startServer(subsystem, args)
+    finally
+      Subsystem.shutdownOwned(subsystem)
   }
 
   def startServer(
@@ -351,12 +354,18 @@ object CncfRuntime extends GlobalObservable {
     extracomponents: Subsystem => Seq[Component]
   ): Unit = {
     val subsystem = buildSubsystem(extracomponents, Some(RunMode.Server), args)
-    new CncfRuntime().startServer(subsystem, args)
+    try
+      new CncfRuntime().startServer(subsystem, args)
+    finally
+      Subsystem.shutdownOwned(subsystem)
   }
 
   def executeClient(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = args)
-    new CncfRuntime().executeClient(subsystem, args)
+    try
+      new CncfRuntime().executeClient(subsystem, args)
+    finally
+      Subsystem.shutdownOwned(subsystem)
   }
 
   def executeClient(
@@ -364,12 +373,18 @@ object CncfRuntime extends GlobalObservable {
     extracomponents: Subsystem => Seq[Component]
   ): Int = {
     val subsystem = buildSubsystem(extracomponents, Some(RunMode.Client), args)
-    new CncfRuntime().executeClient(subsystem, args)
+    try
+      new CncfRuntime().executeClient(subsystem, args)
+    finally
+      Subsystem.shutdownOwned(subsystem)
   }
 
   def executeCommand(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
-    new CncfRuntime().executeCommand(subsystem, args)
+    try
+      new CncfRuntime().executeCommand(subsystem, args)
+    finally
+      Subsystem.shutdownOwned(subsystem)
   }
 
   def executeCommand(
@@ -377,7 +392,10 @@ object CncfRuntime extends GlobalObservable {
     extracomponents: Subsystem => Seq[Component]
   ): Int = {
     val subsystem = buildSubsystem(extracomponents, Some(RunMode.Command), args)
-    new CncfRuntime().executeCommand(subsystem, args)
+    try
+      new CncfRuntime().executeCommand(subsystem, args)
+    finally
+      Subsystem.shutdownOwned(subsystem)
   }
 
   def executeServerEmulator(args: Array[String]): Int = {
@@ -389,14 +407,18 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>
-            val engine = new HttpExecutionEngine(buildSubsystem(mode = Some(RunMode.ServerEmulator)))
-            val res = engine.execute(req)
-            if (includeheader) {
-              _print_with_header(res)
-            } else {
-              _print_body(res)
+            val subsystem = buildSubsystem(mode = Some(RunMode.ServerEmulator))
+            try {
+              val res = new HttpExecutionEngine(subsystem).execute(req)
+              if (includeheader) {
+                _print_with_header(res)
+              } else {
+                _print_body(res)
+              }
+              Consequence.success(res)
+            } finally {
+              Subsystem.shutdownOwned(subsystem)
             }
-            Consequence.success(res)
           case Consequence.Failure(conclusion) =>
             _print_error(conclusion)
             Consequence.Failure(conclusion)
@@ -420,14 +442,18 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>
-            val engine = new HttpExecutionEngine(buildSubsystem(extracomponents, Some(RunMode.ServerEmulator)))
-            val res = engine.execute(req)
-            if (includeheader) {
-              _print_with_header(res)
-            } else {
-              _print_body(res)
+            val subsystem = buildSubsystem(extracomponents, Some(RunMode.ServerEmulator))
+            try {
+              val res = new HttpExecutionEngine(subsystem).execute(req)
+              if (includeheader) {
+                _print_with_header(res)
+              } else {
+                _print_body(res)
+              }
+              Consequence.success(res)
+            } finally {
+              Subsystem.shutdownOwned(subsystem)
             }
-            Consequence.success(res)
           case Consequence.Failure(conclusion) =>
             _print_error(conclusion)
             Consequence.Failure(conclusion)
@@ -444,8 +470,12 @@ object CncfRuntime extends GlobalObservable {
     extracomponents: Subsystem => Seq[Component]
   ): Consequence[Response] = {
     val subsystem = buildSubsystem(extracomponents, Some(RunMode.Script))
-    _to_request_script(subsystem, args).flatMap { req =>
-      subsystem.execute(req)
+    try {
+      _to_request_script(subsystem, args).flatMap { req =>
+        subsystem.execute(req)
+      }
+    } finally {
+      Subsystem.shutdownOwned(subsystem)
     }
   }
 
@@ -919,14 +949,24 @@ object CncfRuntime extends GlobalObservable {
             requestmode match {
               case Some(RunMode.Server) =>
                 val subsystem = buildSubsystem(extracomponents, Some(RunMode.Server), args)
-                new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
-                0
+                try {
+                  new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
+                  0
+                } finally {
+                  Subsystem.shutdownOwned(subsystem)
+                }
               case Some(RunMode.Client) =>
                 val subsystem = buildSubsystem(extracomponents, Some(RunMode.Client), args)
-                new CncfRuntime().executeClient(subsystem, launch.domainargs.drop(1))
+                try
+                  new CncfRuntime().executeClient(subsystem, launch.domainargs.drop(1))
+                finally
+                  Subsystem.shutdownOwned(subsystem)
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(extracomponents, Some(RunMode.Command), args)
-                new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
+                try
+                  new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
+                finally
+                  Subsystem.shutdownOwned(subsystem)
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainargs.drop(1), extracomponents)
               case Some(RunMode.Script) =>
@@ -970,17 +1010,27 @@ object CncfRuntime extends GlobalObservable {
             mode match {
               case Some(RunMode.Server) =>
                 val subsystem = buildSubsystem(mode = Some(RunMode.Server), args = args)
-                new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
-                0
+                try {
+                  new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
+                  0
+                } finally {
+                  Subsystem.shutdownOwned(subsystem)
+                }
               case Some(RunMode.Client) =>
                 observe_trace(
                   s"[client:trace] run dispatching to client mode args=${launch.domainargs.drop(1).mkString(" ")}"
                 )
                 val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = args)
-                new CncfRuntime().executeClient(subsystem, (launch.runtimeparse.consumed ++ launch.domainargs.drop(1)).toArray)
+                try
+                  new CncfRuntime().executeClient(subsystem, (launch.runtimeparse.consumed ++ launch.domainargs.drop(1)).toArray)
+                finally
+                  Subsystem.shutdownOwned(subsystem)
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
-                new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
+                try
+                  new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
+                finally
+                  Subsystem.shutdownOwned(subsystem)
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainargs.drop(1))
               case Some(RunMode.Script) =>
@@ -3347,11 +3397,21 @@ class CncfRuntime() extends GlobalObservable {
           else
             executeActionResponse(initializedsubsystem, action)
 
-        def close(): Unit =
-          if (!_is_closed) {
-            _is_closed = true
-            closeEmbedding()
+        def close(): Unit = {
+          val owner = synchronized {
+            if (_is_closed)
+              false
+            else {
+              _is_closed = true
+              true
+            }
           }
+          if (owner)
+            try
+              Subsystem.shutdownOwned(initializedsubsystem)
+            finally
+              closeEmbedding()
+        }
       }
     }
 
@@ -3376,17 +3436,21 @@ class CncfRuntime() extends GlobalObservable {
     }
     Consequence(_initialize(normalizedargs, extracomponents)) match {
       case Consequence.Success(subsystem) =>
-        normalizedargs.headOption.flatMap(RunMode.from) match {
-          case Some(RunMode.Command) =>
-            _execute_command_args(subsystem, normalizedargs.drop(1))
-          case _ =>
-            _runtime_protocol_engine.makeOperationRequest(normalizedargs) match {
-              case Consequence.Success(req) =>
-                _run(subsystem, req)
-              case Consequence.Failure(conclusion) =>
-                _print_error(conclusion)
-                _exit_code(Consequence.Failure(conclusion))
-            }
+        try {
+          normalizedargs.headOption.flatMap(RunMode.from) match {
+            case Some(RunMode.Command) =>
+              _execute_command_args(subsystem, normalizedargs.drop(1))
+            case _ =>
+              _runtime_protocol_engine.makeOperationRequest(normalizedargs) match {
+                case Consequence.Success(req) =>
+                  _run(subsystem, req)
+                case Consequence.Failure(conclusion) =>
+                  _print_error(conclusion)
+                  _exit_code(Consequence.Failure(conclusion))
+              }
+          }
+        } finally {
+          Subsystem.shutdownOwned(subsystem)
         }
       case Consequence.Failure(conclusion) =>
         _print_error(conclusion)
@@ -3484,61 +3548,77 @@ class CncfRuntime() extends GlobalObservable {
       configuration,
       aliasresolver
     )
-    val subsystem =
-      if (_is_test_runtime)
-        subsystem0.enableControlledTestExecution()
-      else
-        subsystem0
-    observe_trace(
-      s"[subsytem] buildSubsystem start mode=${mode.name} componentCount=${subsystem.components.size}"
-    )
-    GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
-    RuntimeStandaloneUserProfileAdmission
-      .admit(subsystem, serverExecution = mode == RunMode.Server) match {
+    _with_startup_cleanup(subsystem0) {
+      val subsystem =
+        if (_is_test_runtime)
+          subsystem0.enableControlledTestExecution()
+        else
+          subsystem0
+      observe_trace(
+        s"[subsytem] buildSubsystem start mode=${mode.name} componentCount=${subsystem.components.size}"
+      )
+      GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
+      RuntimeStandaloneUserProfileAdmission
+        .admit(subsystem, serverExecution = mode == RunMode.Server) match {
+          case Consequence.Success(_) =>
+            ()
+          case Consequence.Failure(conclusion) =>
+            throw new IllegalStateException(conclusion.show)
+        }
+      val colfactory = CollaboratorFactory.create(configuration)
+      val compfactory = ComponentFactory.create(subsystem, colfactory, cwd, configuration)
+      if (subsystem.descriptor.nonEmpty && subsystem.components.nonEmpty) {
+        subsystem.components.foreach(compfactory.bootstrap)
+      } else {
+        subsystem.setup(compfactory)
+      }
+      val runtimespecs =
+        if (subsystem.descriptor.nonEmpty)
+          _merge_component_specs(resolvedactivespecs, resolvedsearchspecs)
+        else
+          resolvedactivespecs
+      val runtimeextras = CncfRuntime.componentExtraFunction(runtimespecs, bootstrap.front)
+      val extras = _collapse_component_duplicates(
+        subsystem.components.toVector,
+        (runtimeextras(subsystem) ++ extracomponents(subsystem)).map(compfactory.bootstrap)
+      )
+      if (extras.nonEmpty) {
+        subsystem.upsert(extras)
+      }
+      if (_apply_component_assembly_defaults(subsystem)) {
+        val inheritedextras = _collapse_component_duplicates(
+          subsystem.components.toVector,
+          runtimeextras(subsystem).map(compfactory.bootstrap)
+        )
+        if (inheritedextras.nonEmpty) {
+          subsystem.upsert(inheritedextras)
+        }
+      }
+      _verify_descriptor_components_available(subsystem, runtimespecs)
+      _resolve_runtime_spi(subsystem)
+      StartupImport.run(cwd, configuration, runconfig, subsystem) match {
         case Consequence.Success(_) =>
           ()
         case Consequence.Failure(conclusion) =>
           throw new IllegalStateException(conclusion.show)
       }
-    val colfactory = CollaboratorFactory.create(configuration)
-    val compfactory = ComponentFactory.create(subsystem, colfactory, cwd, configuration)
-    if (subsystem.descriptor.nonEmpty && subsystem.components.nonEmpty) {
-      subsystem.components.foreach(compfactory.bootstrap)
-    } else {
-      subsystem.setup(compfactory)
+      subsystem
     }
-    val runtimespecs =
-      if (subsystem.descriptor.nonEmpty)
-        _merge_component_specs(resolvedactivespecs, resolvedsearchspecs)
-      else
-        resolvedactivespecs
-    val runtimeextras = CncfRuntime.componentExtraFunction(runtimespecs, bootstrap.front)
-    val extras = _collapse_component_duplicates(
-      subsystem.components.toVector,
-      (runtimeextras(subsystem) ++ extracomponents(subsystem)).map(compfactory.bootstrap)
-    )
-    if (extras.nonEmpty) {
-      subsystem.upsert(extras)
-    }
-    if (_apply_component_assembly_defaults(subsystem)) {
-      val inheritedextras = _collapse_component_duplicates(
-        subsystem.components.toVector,
-        runtimeextras(subsystem).map(compfactory.bootstrap)
-      )
-      if (inheritedextras.nonEmpty) {
-        subsystem.upsert(inheritedextras)
-      }
-    }
-    _verify_descriptor_components_available(subsystem, runtimespecs)
-    _resolve_runtime_spi(subsystem)
-    StartupImport.run(cwd, configuration, runconfig, subsystem) match {
-      case Consequence.Success(_) =>
-        ()
-      case Consequence.Failure(conclusion) =>
-        throw new IllegalStateException(conclusion.show)
-    }
-    subsystem
   }
+
+  private def _with_startup_cleanup[A](subsystem: Subsystem)(f: => A): A =
+    try {
+      f
+    } catch {
+      case e: Throwable =>
+        try {
+          Subsystem.shutdownOwned(subsystem)
+        } catch {
+          case cleanup: Throwable =>
+            e.addSuppressed(cleanup)
+        }
+        throw e
+    }
 
   private def _verify_descriptor_components_available(
     subsystem: Subsystem,
@@ -4644,8 +4724,7 @@ class CncfRuntime() extends GlobalObservable {
       case Left(code) => return code
       case Right(xs) => xs
     }
-    try {
-      val result = _to_request(subsystem, normalizedargs).flatMap { req =>
+    val result = _to_request(subsystem, normalizedargs).flatMap { req =>
         subsystem.executeResponseWithMetadata(req)
       }
       result match {
@@ -4655,10 +4734,7 @@ class CncfRuntime() extends GlobalObservable {
         case Consequence.Failure(conclusion) =>
           _print_error(conclusion)
       }
-      _exit_code(result)
-    } finally {
-      subsystem.shutdown()
-    }
+    _exit_code(result)
   }
 
   private def _command_args_from_request(req: Request): Array[String] = {

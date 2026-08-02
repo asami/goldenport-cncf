@@ -152,9 +152,9 @@ final class ServiceContainerObservabilitySpec extends AnyWordSpec with Matchers 
       val first = subsystem.shutdownC()
       val second = subsystem.shutdownC()
 
-      Then("the service is stopped only once and retained as stopped runtime state")
+      Then("the service is stopped only once and repeated Subsystem shutdown returns its cached result")
       first.toOption.flatMap(_.headOption).map(_.changed) shouldBe Some(true)
-      second.toOption.flatMap(_.headOption).map(_.changed) shouldBe Some(false)
+      second shouldBe first
       gateway.transitions.count(_._1 == ServiceContainerTransition.Stop) shouldBe 1
       registry.get(definition.registryKey).map(_.status) shouldBe Some(ServiceContainerStatus.Stopped)
     }

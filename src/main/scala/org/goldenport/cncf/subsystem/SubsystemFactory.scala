@@ -201,8 +201,11 @@ object DefaultSubsystemFactory {
         aliasResolver = aliasResolver,
         runMode = runmode
       )
-    val comps = builtinComponents(subsystem)
-    subsystem.add(comps)
+    Subsystem.withStartupCleanup(subsystem) {
+      val comps = builtinComponents(subsystem)
+      subsystem.add(comps)
+      subsystem
+    }
   }
 
   private def _resolve_http_driver(

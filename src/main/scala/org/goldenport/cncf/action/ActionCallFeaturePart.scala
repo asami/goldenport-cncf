@@ -474,20 +474,36 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
 
   protected final def ensure_component_application_datastore(
     name: String = "application"
-  ): Unit = {
+  ): Unit =
+    bind_component_application_datastore_c(name) match {
+      case Consequence.Success(_) => ()
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+    }
+
+  protected final def bind_component_application_datastore_c(
+    name: String = "application"
+  ): Consequence[Unit] = {
     val componentname =
       component
         .flatMap(_.coreOption.map(_.name))
         .orElse(action.request.component)
         .getOrElse("component")
-    executionContext.dataStoreSpace.bindApplicationDataStore(
-      ComponentDataStore.Environment(
-        executionContext.runtime.resolvedParameters,
-        _component_configuration
-      ),
-      componentname,
-      name
+    val environment = ComponentDataStore.Environment(
+      executionContext.runtime.resolvedParameters,
+      _component_configuration
     )
+    component.flatMap(_.subsystem) match {
+      case Some(subsystem) =>
+        subsystem.bindManagedApplicationDataStoreC(
+          executionContext.dataStoreSpace,
+          environment,
+          componentname,
+          name
+        )
+      case None =>
+        Consequence(executionContext.dataStoreSpace.bindApplicationDataStore(environment, componentname, name))
+    }
   }
 
   protected final def component_datastore(
@@ -498,13 +514,20 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
         .flatMap(_.coreOption.map(_.name))
         .orElse(action.request.component)
         .getOrElse("component")
-    ComponentDataStore.resolve(
-      ComponentDataStore.Environment(
-        executionContext.runtime.resolvedParameters,
-        _component_configuration
-      ),
-      ComponentDataStore.Request(componentname, name)
+    val environment = ComponentDataStore.Environment(
+      executionContext.runtime.resolvedParameters,
+      _component_configuration
     )
+    component.flatMap(_.subsystem) match {
+      case Some(subsystem) =>
+        subsystem.resolveManagedComponentDataStoreC(environment, componentname, name) match {
+          case Consequence.Success(datastore) => datastore
+          case Consequence.Failure(conclusion) =>
+            throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+        }
+      case None =>
+        ComponentDataStore.resolve(environment, ComponentDataStore.Request(componentname, name))
+    }
   }
 
   protected final def config_int(key: String): Option[Int] =

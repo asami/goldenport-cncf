@@ -96,6 +96,14 @@ final class Subsystem(
       .map(_.executionProfileRuntime.runtimeClock.clock)
       .getOrElse(RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock)
   )
+  // Keep the original public constructor descriptor.  SystemNode creation is
+  // intentionally internal to construction so invalid node configuration
+  // still fails before a binding can be used.
+  private val _system_node = SystemNode.createC(configuration).TAKE
+  private val _datastore_binding = _system_node.bind()
+  private val _active_datastore_lease = new ThreadLocal[SystemNodeResourceLease]()
+
+  private[cncf] def systemNode: SystemNode = _system_node
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
   private val _http_driver: Option[HttpDriver] = httpdriver
@@ -297,10 +305,35 @@ final class Subsystem(
     }
   }
 
+  private var _shutdown_in_progress: Boolean = false
+  private var _shutdown_result: Option[Consequence[Vector[ServiceContainerCleanupOutcome]]] = None
+
   def shutdownC(): Consequence[Vector[ServiceContainerCleanupOutcome]] = {
+    val owner = synchronized {
+      _shutdown_result match {
+        case Some(_) => false
+        case None if _shutdown_in_progress => false
+        case None =>
+          _shutdown_in_progress = true
+          true
+      }
+    }
+    if (owner) {
+      val result = _shutdown_owned_resources_c()
+      synchronized {
+        _shutdown_result = Some(result)
+        _shutdown_in_progress = false
+        notifyAll()
+      }
+      result
+    } else
+      _await_shutdown_c()
+  }
+
+  private def _shutdown_owned_resources_c(): Consequence[Vector[ServiceContainerCleanupOutcome]] = {
     val jobresult =
       try {
-        _job_engine.shutdown()
+        _job_engine.quiesce()
         Consequence.success(())
       } catch {
         case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
@@ -325,7 +358,25 @@ final class Subsystem(
       } catch {
         case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
       }
-    val failures = Vector(jobresult, mcpresult, evaluationresult, serviceresult).collect {
+    // A Subsystem owns its logical binding and its local workers, never the
+    // SystemNode's physical pool.  Node finalization is performed by the
+    // owning runtime adapter after this cleanup has released the binding.
+    val bindingdrainresult = _datastore_binding.drainC(() => _job_engine.forceCancel())
+    val jobterminalresult =
+      try {
+        _job_engine.forceCancel()
+        Consequence.success(())
+      } catch {
+        case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
+      }
+    val bindingresult =
+      try {
+        _datastore_binding.release()
+        Consequence.unit
+      } catch {
+        case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
+      }
+    val failures = Vector(jobresult, mcpresult, evaluationresult, serviceresult, bindingdrainresult, jobterminalresult, bindingresult).collect {
       case Consequence.Failure(conclusion) => conclusion
     }
     failures.reduceOption(_ ++ _) match {
@@ -336,6 +387,12 @@ final class Subsystem(
 
   def shutdown(): Unit = {
     val _ = shutdownC()
+  }
+
+  private def _await_shutdown_c(): Consequence[Vector[ServiceContainerCleanupOutcome]] = synchronized {
+    while (_shutdown_result.isEmpty)
+      wait()
+    _shutdown_result.get
   }
 
   def withDescriptor(descriptor: GenericSubsystemDescriptor): Subsystem = {
@@ -545,6 +602,65 @@ final class Subsystem(
   def executeHttp(req: HttpRequest): HttpResponse =
     executeHttpWithMetadata(req).response
 
+  private[cncf] def bindManagedApplicationDataStoreC(
+    dataStoreSpace: org.goldenport.cncf.datastore.DataStoreSpace,
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment,
+    componentName: String,
+    datastoreName: String
+  ): Consequence[Unit] =
+    _with_managed_datastore_lease_c { lease =>
+      dataStoreSpace.bindManagedApplicationDataStoreC(
+        environment,
+        componentName,
+        datastoreName,
+        _datastore_binding,
+        lease,
+        _system_node.hmacKey
+      )
+    }
+
+  private[cncf] def resolveManagedComponentDataStoreC(
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment,
+    componentName: String,
+    datastoreName: String
+  ): Consequence[org.goldenport.cncf.datastore.DataStore] =
+    Option(_active_datastore_lease.get()) match {
+      case Some(lease) =>
+        _datastore_binding.inheritLeaseC(lease).flatMap { inherited =>
+          org.goldenport.cncf.datastore.ComponentDataStore
+            .resolveManagedForDataStoreSpaceC(
+              environment,
+              org.goldenport.cncf.datastore.ComponentDataStore.Request(componentName, datastoreName),
+              _datastore_binding,
+              inherited,
+              _system_node.hmacKey
+            )
+            .flatMap(_.map(Consequence.success).getOrElse(
+              Consequence.dataStoreUnavailable("component application datastore is unavailable")
+            ))
+        }
+      case None =>
+        Consequence.stateInvalid("managed component datastore access requires an active SystemNode lease")
+    }
+
+  private[cncf] def _with_managed_datastore_lease_c[A](
+    f: SystemNodeResourceLease => Consequence[A]
+  ): Consequence[A] =
+    Option(_active_datastore_lease.get()) match {
+      case Some(lease) =>
+        _datastore_binding.inheritLeaseC(lease).flatMap(f)
+      case None =>
+        _datastore_binding.acquireLeaseC().flatMap { lease =>
+          _active_datastore_lease.set(lease)
+          try {
+            f(lease)
+          } finally {
+            _active_datastore_lease.remove()
+            lease.release()
+          }
+        }
+    }
+
   def executeHttpWithMetadata(req: HttpRequest): HttpExecutionResult = {
     _resolve_route(req) match {
       case Some((component, service, operation)) =>
@@ -688,50 +804,52 @@ final class Subsystem(
     executioncontext: ExecutionContext,
     queryonly: Boolean = false
   ): Consequence[OperationResponse] = {
-    val (component, _, _) = route
-    val domainrequest = _domain_request(request)
-    given ExecutionContext = executioncontext
-    _authorize_operation(route, executioncontext).flatMap { _ =>
-      if (executioncontext.operationEvaluation.invocation.isEmpty)
-        executioncontext.runtime.clearExecutionMetadata()
-      val preparedcontext = _prepare_operation_evaluation_context(route, executioncontext)
-      val attemptcapture = _operation_evaluation_attempt_capture(route)
-      val operationdomainrequest = _operation_business_request(route, domainrequest)
-      val admittedcontext = _resolve_operation_evaluation_admission(route, preparedcontext)
-      val result = admittedcontext.flatMap { activecontext =>
-        val operationrequest = component.logic.makeOperationRequest(operationdomainrequest)
-        _observe_operation_request_validation_failure(
-          route,
-          operationdomainrequest,
-          operationrequest,
-          activecontext
-        )
-        operationrequest.flatMap {
-          case action: QueryAction =>
-            component.logic._execute_action(
-              action,
-              activecontext,
-              _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
-            )
-          case action: Action if !queryonly =>
-            component.logic._execute_action(
-              action,
-              activecontext,
-              _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
-            )
-          case action: Action =>
-            Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")
-          case _ =>
-            Consequence.argumentInvalid("OperationRequest must be Action")
+    _with_managed_datastore_lease_c { _ =>
+      val (component, _, _) = route
+      val domainrequest = _domain_request(request)
+      given ExecutionContext = executioncontext
+      _authorize_operation(route, executioncontext).flatMap { _ =>
+        if (executioncontext.operationEvaluation.invocation.isEmpty)
+          executioncontext.runtime.clearExecutionMetadata()
+        val preparedcontext = _prepare_operation_evaluation_context(route, executioncontext)
+        val attemptcapture = _operation_evaluation_attempt_capture(route)
+        val operationdomainrequest = _operation_business_request(route, domainrequest)
+        val admittedcontext = _resolve_operation_evaluation_admission(route, preparedcontext)
+        val result = admittedcontext.flatMap { activecontext =>
+          val operationrequest = component.logic.makeOperationRequest(operationdomainrequest)
+          _observe_operation_request_validation_failure(
+            route,
+            operationdomainrequest,
+            operationrequest,
+            activecontext
+          )
+          operationrequest.flatMap {
+            case action: QueryAction =>
+              component.logic._execute_action(
+                action,
+                activecontext,
+                _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
+              )
+            case action: Action if !queryonly =>
+              component.logic._execute_action(
+                action,
+                activecontext,
+                _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
+              )
+            case action: Action =>
+              Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")
+            case _ =>
+              Consequence.argumentInvalid("OperationRequest must be Action")
+          }
         }
+        result match {
+          case Consequence.Failure(conclusion) =>
+            attemptcapture._record_admission_failure(conclusion, preparedcontext)
+          case Consequence.Success(_) =>
+            ()
+        }
+        result
       }
-      result match {
-        case Consequence.Failure(conclusion) =>
-          attemptcapture._record_admission_failure(conclusion, preparedcontext)
-        case Consequence.Success(_) =>
-          ()
-      }
-      result
     }
   }
 
@@ -1351,7 +1469,7 @@ final class Subsystem(
     } yield mediatedresponse
 
   def executeAction(action: Action): Consequence[OperationResponse] =
-    _resolve_route(action.request) match {
+    _with_managed_datastore_lease_c { _ => _resolve_route(action.request) match {
       case Some((component, _, _)) =>
         executionProfileC.flatMap { profile =>
           IngressSecurityResolver.resolve(
@@ -1364,37 +1482,37 @@ final class Subsystem(
         }
       case None =>
         Consequence.operationNotFound("operation route")
-    }
+    }}
 
   private[cncf] def _execute_action_c(
     action: Action,
     context: ExecutionContext
   ): Consequence[OperationResponse] =
-    _resolve_route(action.request) match {
+    _with_managed_datastore_lease_c { _ => _resolve_route(action.request) match {
       case Some(route) =>
         _execute_action_c(route, action, context)
       case None =>
         Consequence.operationNotFound("operation route")
-    }
+    }}
 
   private[cncf] def _execute_component_action_c(
     component: Component,
     action: Action,
     context: ExecutionContext
   ): Consequence[OperationResponse] =
-    _resolve_route(action.request) match {
+    _with_managed_datastore_lease_c { _ => _resolve_route(action.request) match {
       case Some(route) =>
         _execute_action_c(route, action, context)
       case None =>
         component.logic._execute_action(action, context, identity)
-    }
+    }}
 
   private def _execute_action_c(
     route: (Component, ServiceDefinition, OperationDefinition),
     action: Action,
     context: ExecutionContext
   ): Consequence[OperationResponse] =
-    _authorize_operation(route, context).flatMap { _ =>
+    _with_managed_datastore_lease_c { _ => _authorize_operation(route, context).flatMap { _ =>
       if (context.operationEvaluation.invocation.isEmpty)
         context.runtime.clearExecutionMetadata()
       val domainrequest = _domain_request(action.request)
@@ -1414,7 +1532,7 @@ final class Subsystem(
           ()
       }
       result
-    }
+    }}
 
   private def _authorize_operation(
     route: (Component, ServiceDefinition, OperationDefinition),
@@ -2124,6 +2242,41 @@ object Subsystem {
     response: Response,
     glueApplied: Record
   )
+
+  // Factories own a newly constructed Subsystem until they return it.  If
+  // assembly/bootstrap work fails, release its logical binding first and then
+  // terminalize the factory-owned SystemNode.
+  private[cncf] def withStartupCleanup[A](subsystem: Subsystem)(f: => A): A =
+    try {
+      f
+    } catch {
+      case e: Throwable =>
+        try {
+          shutdownOwned(subsystem)
+        } catch {
+          case cleanup: Throwable => e.addSuppressed(cleanup)
+        }
+        throw e
+    }
+
+  private[cncf] def shutdownOwned(subsystem: Subsystem): Unit = {
+    var failure: Option[Throwable] = None
+    def capture(result: Consequence[_]): Unit = result match {
+      case Consequence.Success(_) => ()
+      case Consequence.Failure(conclusion) =>
+        val throwable = conclusion.getException.getOrElse(new IllegalStateException(conclusion.show))
+        failure match {
+          case Some(primary) => primary.addSuppressed(throwable)
+          case None => failure = Some(throwable)
+        }
+    }
+    try {
+      capture(subsystem.shutdownC())
+    } finally {
+      capture(subsystem.systemNode.shutdownC())
+    }
+    failure.foreach(throw _)
+  }
 
   // Unused
   final case class Config(

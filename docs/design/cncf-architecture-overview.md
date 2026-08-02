@@ -29,6 +29,55 @@ Subsystem
     Service
       Operation
 
+## System Topology and Deployment
+
+The conceptual runtime topology is:
+
+```text
+System = N SystemNode
+SystemNode = N Subsystem
+Subsystem = N Component
+```
+
+A `SystemNode` is a logical deployment, communication, and shared-runtime-
+resource node in one `System`. A `Subsystem` is the stable application-runtime,
+execution, and binding boundary hosted by a SystemNode. A `Component` is
+installed and executed inside its owning Subsystem.
+
+These conceptual identities are independent of their current process and
+container placement. The supported default deployment is currently:
+
+```text
+1 SystemNode = 1 Subsystem = 1 JVM = 1 container
+1 machine node = N containers/JVMs/SystemNodes
+```
+
+The one-to-one default is an operational constraint, not an identity rule.
+The architecture continues to permit one SystemNode and its JVM to host
+multiple Subsystems without changing Subsystem identity or ownership
+semantics. A Docker container is a deployment envelope, and a machine node is
+physical or virtual compute capacity; neither becomes a Subsystem identity.
+
+Managed connection pools are shared runtime infrastructure owned by the
+SystemNode. A Subsystem owns its logical datastore binding and a lease on the
+SystemNode-managed pool; Components and UnitOfWork-scoped operations borrow
+connections through that binding. The pool cardinality is:
+
+```text
+(system node runtime identity, canonical datastore identity) -> one managed pool
+```
+
+Subsystems in the same SystemNode may share a pool only when their fully
+resolved canonical datastore identities are equal. Different SystemNodes never
+share a pool merely because their datastore definitions are equal. The pool is
+not a JVM-global, container-global, or machine-global singleton detached from
+SystemNode identity. SystemNode shutdown owns deterministic pool closure;
+Subsystem shutdown releases its binding but never directly closes a node-owned
+pool. Any zero-binding reclamation policy remains owned by the SystemNode.
+
+The deployment decision history is recorded in
+`docs/journal/2026/08/2026-08-02-system-node-subsystem-jvm-deployment.md`.
+
 Component runtime capabilities for reusable component code are defined in
 `docs/design/component-runtime-boundary-capabilities.md`. The corresponding
 behavioral contract is

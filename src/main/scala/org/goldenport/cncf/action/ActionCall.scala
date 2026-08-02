@@ -164,10 +164,9 @@ abstract class FunctionalActionCall extends ActionCall {
   protected final def use_component_application_datastore(
     name: String = "application"
   ): ExecUowM[Unit] =
-    ConsequenceT.fromConsequence[[X] =>> Program[UnitOfWorkOp, X], Unit](Consequence {
-      ensure_component_application_datastore(name)
-      ()
-    })
+    ConsequenceT.fromConsequence[[X] =>> Program[UnitOfWorkOp, X], Unit](
+      bind_component_application_datastore_c(name)
+    )
 
   final override def execute(): Consequence[OperationResponse] =
     val datastorespace = executionContext.dataStoreSpace

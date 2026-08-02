@@ -1,8 +1,10 @@
 package org.goldenport.cncf.datastore
 
 import java.nio.file.{Files, Path, Paths}
+import org.goldenport.Consequence
 import org.goldenport.cncf.config.{ConfigurationAccess, ResolvedParameter, ResolvedParameters}
-import org.goldenport.cncf.datastore.sql.SqlDataStore
+import org.goldenport.cncf.datastore.sql.{SqlDataStore, SqlDataStoreIdentity}
+import org.goldenport.cncf.subsystem.{SystemNodeDataStoreBinding, SystemNodeResourceLease}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 
 /*
@@ -96,6 +98,160 @@ object ComponentDataStore {
           ))
     }
   }
+
+  /**
+   * The managed counterpart to `resolveForDataStoreSpace`.  It preserves the
+   * existing selection policy but routes only SQL resources through the
+   * owning SystemNode binding.  The public resolve methods above intentionally
+   * remain direct caller-owned construction surfaces.
+   */
+  private[cncf] def resolveManagedForDataStoreSpaceC(
+    environment: Environment,
+    request: Request,
+    binding: SystemNodeDataStoreBinding,
+    lease: SystemNodeResourceLease,
+    key: SqlDataStoreIdentity.HmacKey
+  ): Consequence[Option[DataStore]] = {
+    val prefixes = _component_datastore_prefixes(request)
+    val managedlocal = () => _managed_local_c(environment, prefixes, request, binding, lease, key)
+    val manageddedicated = () => _managed_sql_c(environment, prefixes, request, binding, lease, key)
+    val managedbasic = () => _managed_sql_c(environment, Vector("textus.datastore", "cncf.datastore"), request, binding, lease, key)
+    _policy(environment, request) match {
+      case Policy.LocalOnly => managedlocal()
+      case Policy.LocalDefault => _or_else_c(manageddedicated())(_or_else_c(managedbasic())(managedlocal()))
+      case Policy.ExternalDefault => _or_else_c(manageddedicated())(managedbasic())
+      case Policy.ExternalRequired =>
+        _or_else_c(manageddedicated())(managedbasic()).flatMap {
+          case some @ Some(_) => Consequence.success(some)
+          case None => Consequence { throw new IllegalArgumentException(
+            s"Persistent datastore is required for component ${request.normalizedComponentName}/${request.normalizedName}"
+          ) }
+        }
+    }
+  }
+
+  private def _managed_local_c(
+    environment: Environment,
+    prefixes: Vector[String],
+    request: Request,
+    binding: SystemNodeDataStoreBinding,
+    lease: SystemNodeResourceLease,
+    key: SqlDataStoreIdentity.HmacKey
+  ): Consequence[Option[DataStore]] =
+    Consequence(_local_path(environment, request).toString).flatMap { path =>
+      Consequence(_ensure_parent(path)).flatMap { _ =>
+        _managed_sqlite_c(path, environment, prefixes ++ Vector("textus.datastore", "cncf.datastore"), request, binding, lease, key, "local")
+          .map(Some(_))
+      }
+    }
+
+  private def _managed_sql_c(
+    environment: Environment,
+    prefixes: Vector[String],
+    request: Request,
+    binding: SystemNodeDataStoreBinding,
+    lease: SystemNodeResourceLease,
+    key: SqlDataStoreIdentity.HmacKey
+  ): Consequence[Option[DataStore]] =
+    Consequence {
+      _first(environment, prefixes.map(_ + ".kind"))
+        .orElse(_first(environment, prefixes.map(_ + ".type")))
+        .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+    }.flatMap { kind =>
+      kind match {
+      case Some("in-memory" | "inmemory" | "memory") => Consequence.success(None)
+      case Some("local" | "sqlite") =>
+        _first(environment, prefixes.flatMap(p => Vector(p + ".path", p + ".sqlite.path"))) match {
+          case Some(path) => Consequence(_ensure_parent(path)).flatMap(_ => _managed_sqlite_c(path, environment, prefixes, request, binding, lease, key, prefixes.head).map(Some(_)))
+          case None => Consequence { throw new IllegalArgumentException(s"${prefixes.head}.path is required when datastore kind is local or sqlite") }
+        }
+      case Some("mysql") => _managed_jdbc_c(environment, prefixes, request, binding, lease, key, SqlDataStore.Mysql, Some("com.mysql.cj.jdbc.Driver"))
+      case Some("jdbc") => _managed_jdbc_c(environment, prefixes, request, binding, lease, key, _jdbc_dialect(environment, prefixes), None)
+      case Some(_) => Consequence.success(None)
+      case None =>
+        _first(environment, prefixes.map(_ + ".sqlite.path")) match {
+          case Some(path) => Consequence(_ensure_parent(path)).flatMap(_ => _managed_sqlite_c(path, environment, prefixes, request, binding, lease, key, prefixes.head).map(Some(_)))
+          case None => _managed_jdbc_c(environment, prefixes, request, binding, lease, key, _jdbc_dialect(environment, prefixes), None)
+        }
+      }
+    }
+
+  private def _managed_sqlite_c(
+    path: String,
+    environment: Environment,
+    prefixes: Vector[String],
+    request: Request,
+    binding: SystemNodeDataStoreBinding,
+    lease: SystemNodeResourceLease,
+    key: SqlDataStoreIdentity.HmacKey,
+    source: String
+  ): Consequence[DataStore] = {
+    val config = _sql_config(environment, prefixes)
+    SqlDataStoreIdentity.sqliteC(
+      path,
+      SqlDataStoreIdentity.Credential.reference("sqlite", "no-credential"),
+      key,
+      properties = _identity_properties(config),
+      provenance = SqlDataStoreIdentity.Provenance(Some(_logical_name(request)), Some(source))
+    ).flatMap { identity =>
+      binding.resolveC(lease, _logical_name(request), identity) {
+        SqlDataStore.managedSqliteResourceC(path)
+      }.map(resource => SqlDataStore.managedView(
+        resource,
+        s"jdbc:sqlite:$path",
+        SqlDataStore.Sqlite,
+        () => binding.inheritLeaseC(lease).map(_ => ()),
+        config = config
+      ))
+    }
+  }
+
+  private def _managed_jdbc_c(
+    environment: Environment,
+    prefixes: Vector[String],
+    request: Request,
+    binding: SystemNodeDataStoreBinding,
+    lease: SystemNodeResourceLease,
+    key: SqlDataStoreIdentity.HmacKey,
+    dialect: SqlDataStore.DialectSelection,
+    defaultdriver: Option[String]
+  ): Consequence[Option[DataStore]] =
+    _first(environment, prefixes.map(_ + ".jdbc.url")) match {
+      case None => Consequence.success(None)
+      case Some(url) =>
+        val username = _first(environment, prefixes.map(_ + ".jdbc.user"))
+        val password = _first(environment, prefixes.map(_ + ".jdbc.password"))
+        val driver = _first(environment, prefixes.map(_ + ".jdbc.driver")).orElse(defaultdriver)
+        val config = _sql_config(environment, prefixes)
+        val identityc = password match {
+          case Some(raw) => SqlDataStoreIdentity.jdbcRawC(url, raw, key, principal = username, properties = _identity_properties(config) ++ driver.map("driver" -> _).toMap, provenance = SqlDataStoreIdentity.Provenance(Some(_logical_name(request)), Some(prefixes.head)))
+          case None => SqlDataStoreIdentity.jdbcC(url, SqlDataStoreIdentity.Credential.reference("jdbc", "no-password"), key, principal = username, properties = _identity_properties(config) ++ driver.map("driver" -> _).toMap, provenance = SqlDataStoreIdentity.Provenance(Some(_logical_name(request)), Some(prefixes.head)))
+        }
+        identityc.flatMap { identity =>
+          binding.resolveC(lease, _logical_name(request), identity) {
+            SqlDataStore.managedJdbcResourceC(url, dialect, username, password, driver)
+          }.map(resource => Some(SqlDataStore.managedView(
+            resource,
+            url,
+            dialect,
+            () => binding.inheritLeaseC(lease).map(_ => ()),
+            config = config
+          )))
+        }
+    }
+
+  private def _or_else_c[A](
+    first: Consequence[Option[A]]
+  )(
+    second: => Consequence[Option[A]]
+  ): Consequence[Option[A]] =
+    first.flatMap(_.map(value => Consequence.success(Some(value))).getOrElse(second))
+
+  private def _logical_name(request: Request): String =
+    s"${request.normalizedComponentName}/${request.normalizedName}"
+
+  private def _identity_properties(config: SqlDataStore.Config): Map[String, String] =
+    Map("normalize-column-names" -> config.normalizeColumnNames.toString)
 
   private def _dedicated(
     environment: Environment,

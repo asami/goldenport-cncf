@@ -404,6 +404,31 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       engine2.shutdown()
     }
 
+    "drain already accepted delayed work after quiesce while rejecting later admission" in {
+      Given("a manually timed delayed job accepted before the engine is quiesced")
+      val state = InMemoryJobEngine.State()
+      val schedule = InMemoryJobEngine.RetrySchedule.default
+      val clock = new ManualJobTimeSource(Instant.parse("2026-08-02T00:00:00Z"))
+      val timer = new InMemoryJobEngine.ManualJobTimer(clock)
+      val jobengine = createManualInMemoryJobEngine(state, schedule, clock, timer)
+      val jobid = _jobid(jobengine.submit(
+        List(_ValueTask("drained-after-quiesce")),
+        ExecutionContext.test(),
+        JobSubmitOption(scheduledStartAt = Some(clock.now().plusMillis(10L)))
+      ))
+
+      When("quiesce closes admission before the already accepted delayed work is due")
+      jobengine.quiesce()
+      val later = jobengine.submit(List(_ValueTask("rejected-after-quiesce")), ExecutionContext.test())
+      timer.advanceBy(Duration.ofMillis(10L)) shouldBe 1
+      jobengine.drainAll()
+
+      Then("the accepted work drains, while later admission fails structurally")
+      awaitResult(jobengine, jobid) shouldBe a[Some[_]]
+      later shouldBe a[Consequence.Failure[_]]
+      jobengine.shutdown()
+    }
+
   }
 
   private def _jobid(p: Consequence[JobId]): JobId =

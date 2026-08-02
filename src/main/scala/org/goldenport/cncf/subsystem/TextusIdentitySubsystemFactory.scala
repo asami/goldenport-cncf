@@ -76,13 +76,16 @@ object TextusIdentitySubsystemFactory {
         aliasResolver = aliasResolver,
         runMode = runMode
       )
-    val params = ComponentCreate(subsystem, ComponentOrigin.Repository("textus-identity"))
-    val repositories = _repository_specs(configuration).map(_.build(params))
-    val components =
-      ComponentRepository.discoverAssembly(repositories)
-        .filter(_matches_descriptor_component(_, descriptor.componentName))
-        .distinctBy(_.name)
-    subsystem.add(components)
+    Subsystem.withStartupCleanup(subsystem) {
+      val params = ComponentCreate(subsystem, ComponentOrigin.Repository("textus-identity"))
+      val repositories = _repository_specs(configuration).map(_.build(params))
+      val components =
+        ComponentRepository.discoverAssembly(repositories)
+          .filter(_matches_descriptor_component(_, descriptor.componentName))
+          .distinctBy(_.name)
+      subsystem.add(components)
+      subsystem
+    }
   }
 
   private def _repository_specs(
