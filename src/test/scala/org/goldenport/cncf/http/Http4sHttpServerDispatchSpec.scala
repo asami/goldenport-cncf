@@ -8,17 +8,17 @@ import cats.effect.unsafe.implicits.global
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, SecurityLevel, SessionContext, SubjectKind}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
-import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, SubsystemUserMode}
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem, SubsystemUserMode}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationBindingResolver, ConfigurationDocument, ConfigurationOrigin, ConfigurationSourceAdmission, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
 import org.http4s.{MediaType, Method, Request as HRequest, Uri}
 import org.http4s.headers.`Content-Type`
@@ -75,7 +75,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
           component = Some("textus-user-account")
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
 
       When("the documented HTTP dispatch is exercised")
       val response = server
@@ -97,7 +97,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     "decode percent-encoded REST query parameters before operation dispatch" in {
       Given("the prerequisites for decode percent-encoded REST query parameters before operation dispatch")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -121,7 +121,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Given("the prerequisites for decode a JSON object body into REST operation arguments")
       Given("a generated REST operation accepting the debug echo body field")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
       val request = HRequest[IO](
         method = Method.POST,
@@ -144,7 +144,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     "preserve authorization headers for empty REST GET operation requests" in {
       Given("the prerequisites for preserve authorization headers for empty REST GET operation requests")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -165,7 +165,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     "serve GET-backed HEAD responses without response bodies" in {
       Given("the prerequisites for serve GET-backed HEAD responses without response bodies")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       val getweb = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web"))).unsafeRunSync()
@@ -218,7 +218,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -260,7 +260,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -313,7 +313,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -359,7 +359,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -414,7 +414,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         )
       )
       subsystem.add(Vector(_auth_component))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
 
       When("the documented HTTP dispatch is exercised")
       val response = server
@@ -468,7 +468,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val boundary = "----WebKitFormBoundaryEmptySpec"
       val request = HRequest[IO](method = Method.POST, uri = Uri.unsafeFromString("/form-api/debug/http/echo"))
         .withEntity(s"--${boundary}--\r\n")
@@ -510,7 +510,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
 
       val htmlresponse = server
         ._submit_operation_form(
@@ -559,7 +559,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
 
       When("the documented HTTP dispatch is exercised")
       val response = server
@@ -616,7 +616,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
 
       When("the documented HTTP dispatch is exercised")
       val response = server
@@ -664,7 +664,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
 
       When("the documented HTTP dispatch is exercised")
       val response = server
@@ -721,7 +721,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -810,7 +810,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
 
       When("the documented HTTP dispatch is exercised")
       val response = server._component_web_app("debug", "debug-app", Vector.empty).unsafeRunSync()
@@ -900,7 +900,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       val applicationadmin = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/admin"))).unsafeRunSync()
@@ -933,7 +933,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ))
       )
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       val home = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability"))).unsafeRunSync()
@@ -966,7 +966,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         case Consequence.Success(_) => ()
         case Consequence.Failure(conclusion) => fail(conclusion.toString)
       }
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       val index = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge"))).unsafeRunSync()
@@ -1003,7 +1003,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       component.informationSpace.validateInformation(record.id)
       component.informationSpace.confirmInformation(record.id)
       When("the system Information index, component detail, and missing component routes are requested")
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       val index = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information"))).unsafeRunSync()
@@ -1021,7 +1021,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     "dispatch app-facing TagSpace routes" in {
       Given("the prerequisites for dispatch app-facing TagSpace routes")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       When("the documented HTTP dispatch is exercised")
@@ -1046,7 +1046,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     "accept JSON-RPC MCP requests over POST" in {
       Given("the prerequisites for accept JSON-RPC MCP requests over POST")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
       val request = HRequest[IO](method = Method.POST, uri = Uri.unsafeFromString("/mcp"))
         .withEntity("""{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{}}""")
@@ -1067,7 +1067,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Given("the prerequisites for preserve MCP Streamable HTTP request and notification lifecycle outcomes")
       Given("an MCP HTTP route and the shared preferred protocol revision")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
       val protocolheader = org.http4s.Header.Raw(
         ci"MCP-Protocol-Version",
@@ -1133,6 +1133,60 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
     }
   }
+
+  private def _server(subsystem: Subsystem): Http4sHttpServer = {
+    _admit_runtime_operation_policy(subsystem)
+    new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+  }
+
+  private def _admit_runtime_operation_policy(subsystem: Subsystem): Unit =
+    if (subsystem.runtimeOperationSecurityPolicyC.isSuccess)
+      ()
+    else {
+      val identity = _take(SubsystemInstanceId.create("platform", "default"))
+      val target = _take(CncfConfigurationTarget.SubsystemInstance.create(identity))
+      val accepted = _operation_security_keys
+      val fields = subsystem.configuration.configuration.values.toVector.collect {
+        case (key, value) if accepted.contains(key) =>
+          ConfigurationDocument.Field(key, ConfigurationDocument.Scalar(value))
+      }
+      val candidates = _take(CncfConfigurationCandidateDecoder.decodeCatalog(Vector(
+        CncfConfigurationDocumentBatch(
+          new CncfConfigurationDocumentLocation.SubsystemInstance(target),
+          _take(ConfigurationSourceAdmission.create(
+            ConfigurationOrigin.Home,
+            "home",
+            "http4s-dispatch-operation-security-spec",
+            10,
+            "http4s-dispatch-operation-security-spec",
+            () => Consequence.success(ConfigurationDocument.Object(fields))
+          ))
+        )
+      )))
+      val context = _take(CncfConfigurationResolutionContext.forSubsystem(identity))
+      val bindings = _take(ConfigurationBindingResolver.resolve(candidates, context.generic))
+      _take(subsystem.admitRuntimeConfigurationBindingsC(bindings))
+    }
+
+  private val _operation_security_keys: Set[String] = {
+    val canonical = Vector(
+      SubsystemUserMode.CONFIGURATION_KEY,
+      RuntimeConfig.operationModeKey,
+      RuntimeConfig.webDevelopAnonymousAdminKey,
+      RuntimeConfig.WEB_DEMO_ASSIST_ENABLED_KEY,
+      RuntimeConfig.webProductionAdminEnabledKey,
+      RuntimeConfig.webProductionAdminSystemRolesKey,
+      RuntimeConfig.webProductionAdminComponentRolesKey,
+      RuntimeConfig.webProductionAdminJobsRolesKey
+    )
+    canonical.flatMap { key =>
+      val suffix = key.stripPrefix("textus.")
+      Vector(key, s"textus.runtime.$suffix", s"cncf.$suffix", s"cncf.runtime.$suffix")
+    }.toSet
+  }
+
+  private def _take[A](result: Consequence[A]): A =
+    result.getOrElse(fail(result.display))
 
   private def _post_form_request(path: String, body: String): HRequest[IO] =
     HRequest[IO](method = Method.POST, uri = Uri.unsafeFromString(path))

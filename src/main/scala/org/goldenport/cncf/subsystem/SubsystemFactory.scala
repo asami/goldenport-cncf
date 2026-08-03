@@ -2,7 +2,7 @@ package org.goldenport.cncf.subsystem
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
+import org.goldenport.cncf.config.{ClientConfig, RepositoryBootstrapPolicy, RuntimeConfig}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
@@ -36,7 +36,7 @@ import org.goldenport.protocol.spec as spec
  *  version Mar. 29, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -165,6 +165,70 @@ object DefaultSubsystemFactory {
         )
     }
   }
+
+  /**
+   * Runtime-only entry point. Repository source selection has already been
+   * admitted at the bootstrap boundary and must not be reconstructed from the
+   * resolved configuration during Subsystem construction.
+   */
+  private[cncf] def runtimeDefaultWithScopeC(
+    context: ScopeContext,
+    mode: Option[RunMode],
+    configuration: ResolvedConfiguration,
+    aliasResolver: AliasResolver,
+    repositoryBootstrapPolicy: Option[RepositoryBootstrapPolicy]
+  ): Consequence[Subsystem] =
+    repositoryBootstrapPolicy match {
+      case Some(policy) =>
+        GenericSubsystemFactory.runtimeResolveDescriptorC(configuration, Some(policy)).flatMap {
+          case Some(descriptor) =>
+            GenericSubsystemFactory.runtimeDefaultWithScopeC(
+              descriptor = descriptor,
+              context = context,
+              mode = mode,
+              configuration = configuration,
+              aliasResolver = aliasResolver,
+              repositoryBootstrapPolicy = Some(policy)
+            )
+          case None =>
+            val subsystemname =
+              RuntimeConfig
+                .getString(configuration, RuntimeConfig.subsystemNameKey)
+                .map(_.trim)
+                .filter(_.nonEmpty)
+                .getOrElse(_subsystem_name)
+            subsystemname match {
+              case "textus-identity" =>
+                TextusIdentitySubsystemFactory.runtimeDefaultWithScopeC(
+                  context = context,
+                  mode = mode,
+                  configuration = configuration,
+                  aliasResolver = aliasResolver,
+                  repositoryBootstrapPolicy = Some(policy)
+                )
+              case name if name != _subsystem_name =>
+                GenericSubsystemFactory.runtimeDefaultWithScopeC(
+                  subsystemName = name,
+                  context = context,
+                  mode = mode,
+                  configuration = configuration,
+                  aliasResolver = aliasResolver,
+                  repositoryBootstrapPolicy = Some(policy)
+                )
+              case _ =>
+                Consequence.success(_default_with_scope(
+                  context = context,
+                  mode = mode,
+                  configuration = configuration,
+                  aliasResolver = aliasResolver
+                ))
+            }
+        }
+      case None =>
+        Consequence.configurationInvalid(
+          "runtime repository bootstrap policy has not been admitted"
+        )
+    }
 
   private def _default_with_scope(
     context: ScopeContext,

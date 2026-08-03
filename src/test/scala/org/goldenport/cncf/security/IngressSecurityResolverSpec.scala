@@ -4,10 +4,12 @@ import java.time.ZoneId
 import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, PrincipalId, ScopeContext, ScopeKind, SecurityLevel, TraceId}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem, SubsystemExecutionProfile}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobId, TaskId}
+import org.goldenport.configuration.{ConfigurationBindingCandidate, ConfigurationBindingCandidates, ConfigurationBindingCollection, ConfigurationBindingResolver, ConfigurationOrigin, ConfigurationParameter, ConfigurationProvenance}
 import org.goldenport.protocol.{Property, Protocol, Request}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -339,6 +341,110 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
 
       Then("the profile refuses to switch construction paths")
       result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "admit a typed fixed-user profile before ingress and keep it authoritative over hostile request values" in {
+      Given("a fixed profile collection and a fixed-user Subsystem with a local subject")
+      val collection = _fixed_user_collection
+      val subsystem = _subsystem(
+        fallbackenabled = false,
+        localsubject = Some(_local_subject)
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      When("the typed collection is admitted for fixed execution before ingress resolution")
+      subsystem.admitRuntimeConfigurationBindingsC(collection, SubsystemExecutionProfile.Fixed).isSuccess shouldBe true
+      val result = IngressSecurityResolver.resolve(
+        SubsystemExecutionProfile.Fixed,
+        base,
+        Map(
+          "principal.id" -> "hostile-user",
+          "subject.displayName" -> "Hostile User",
+          "locale" -> "en-US",
+          "timeZone" -> "America/New_York"
+        )
+      )
+
+      Then("the admitted profile, rather than ingress strings, supplies the fixed principal and formatting")
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get.executionContext
+      resolved.security.principal.id.value shouldBe "fixed-user"
+      resolved.security.principal.attributes.get("displayName") shouldBe Some("Fixed User")
+      resolved.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("ja-JP")
+      resolved.runtime.context.formatting.timezone shouldBe ZoneId.of("Europe/Paris")
+      resolved.runtime.unitOfWork.executionContext.security.principal.id.value shouldBe "fixed-user"
+      resolved.runtime.unitOfWork.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("ja-JP")
+      resolved.runtime.unitOfWork.executionContext.runtime.context.formatting.timezone shouldBe ZoneId.of("Europe/Paris")
+    }
+
+    "keep typed fixed-user admission isolated from authenticated and controlled ingress profiles" in {
+      Given("the same fixed profile collection admitted under each explicit execution profile")
+      val collection = _fixed_user_collection
+      val authenticated = _subsystem(
+        fallbackenabled = false,
+        providers = Vector(_provider(
+          "profile-isolation-provider",
+          _ => Consequence.success(Some(AuthenticationResult(
+            PrincipalId("provider-user"),
+            attributes = Map(
+              "displayName" -> "Provider User",
+              "locale" -> "fr-FR",
+              "timeZone" -> "America/Los_Angeles"
+            )
+          )))
+        ))
+      )
+      val controlled = _subsystem(fallbackenabled = false)
+      val authenticatedbase = authenticated.components.head.logic.executionContext()
+      val controlledbase = controlled.components.head.logic.executionContext()
+
+      When("authenticated and controlled profiles receive the collection")
+      authenticated.admitRuntimeConfigurationBindingsC(collection, SubsystemExecutionProfile.Authenticated).isSuccess shouldBe true
+      controlled.admitRuntimeConfigurationBindingsC(collection, SubsystemExecutionProfile.ControlledTest).isSuccess shouldBe true
+      val authenticatedresult = IngressSecurityResolver.resolve(
+        SubsystemExecutionProfile.Authenticated,
+        authenticatedbase,
+        Map("access_token" -> "provider-token", "locale" -> "en-US", "timeZone" -> "UTC")
+      )
+      val controlledresult = IngressSecurityResolver.resolve(
+        SubsystemExecutionProfile.ControlledTest,
+        controlledbase,
+        Map("principal.id" -> "controlled-user", "subject.displayName" -> "Controlled User", "locale" -> "en-US")
+      )
+
+      Then("neither profile inherits the fixed identity or formatting")
+      authenticated.resolvedStandaloneUserProfile shouldBe None
+      controlled.resolvedStandaloneUserProfile shouldBe None
+      authenticatedresult shouldBe a[Consequence.Success[_]]
+      val authenticatedcontext = authenticatedresult.toOption.get.executionContext
+      authenticatedcontext.security.principal.id.value shouldBe "provider-user"
+      authenticatedcontext.security.principal.attributes.get("displayName") shouldBe Some("Provider User")
+      authenticatedcontext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("fr-FR")
+      authenticatedcontext.runtime.context.formatting.timezone shouldBe ZoneId.of("America/Los_Angeles")
+      controlledresult shouldBe a[Consequence.Success[_]]
+      val controlledcontext = controlledresult.toOption.get.executionContext
+      controlledcontext.security.principal.id.value shouldBe "controlled-user"
+      controlledcontext.security.principal.attributes.get("displayName") shouldBe None
+      controlledcontext.security.principal.attributes.get("subject.displayName") shouldBe Some("Controlled User")
+      controlledcontext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("en-US")
+      controlledcontext.runtime.context.formatting.timezone shouldBe controlledbase.runtime.context.formatting.timezone
+    }
+
+    "reject duplicate and late typed fixed-user profile admission" in {
+      Given("fixed-user Subsystems before and after user-mode evaluation")
+      val collection = _fixed_user_collection
+      val duplicate = _subsystem(fallbackenabled = false, localsubject = Some(_local_subject))
+      val late = _subsystem(fallbackenabled = false, localsubject = Some(_local_subject))
+
+      When("the fixed collection is admitted twice or after user-mode evaluation")
+      duplicate.admitRuntimeConfigurationBindingsC(collection, SubsystemExecutionProfile.Fixed).isSuccess shouldBe true
+      val duplicateadmission = duplicate.admitRuntimeConfigurationBindingsC(collection, SubsystemExecutionProfile.Fixed)
+      late.subsystemUserModeC
+      val lateadmission = late.admitRuntimeConfigurationBindingsC(collection, SubsystemExecutionProfile.Fixed)
+
+      Then("collection admission remains one-shot and must precede user-mode resolution")
+      duplicateadmission shouldBe a[Consequence.Failure[_]]
+      lateadmission shouldBe a[Consequence.Failure[_]]
     }
 
     "construct fixed and authenticated profiles through the same canonical runtime bindings" in {
@@ -786,6 +892,42 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       attributes = Map("installation" -> "standalone"),
       securityLevel = Some("user")
     )
+
+  private def _fixed_user_collection: ConfigurationBindingCollection[CncfConfigurationTarget] = {
+    val candidates = Vector[ConfigurationBindingCandidate[?, CncfConfigurationTarget]](
+      _candidate(CncfConfigurationParameterCatalog.fixedUserId, "fixed-user"),
+      _candidate(CncfConfigurationParameterCatalog.fixedUserDisplayName, "Fixed User"),
+      _candidate(CncfConfigurationParameterCatalog.fixedUserLocale, Locale.forLanguageTag("ja-JP")),
+      _candidate(CncfConfigurationParameterCatalog.fixedUserTimezone, ZoneId.of("Europe/Paris"))
+    )
+    val bindings = ConfigurationBindingCandidates.from(candidates).getOrElse(fail("fixed-user candidates are required"))
+    val context = CncfConfigurationResolutionContext.globalOnly.getOrElse(fail("fixed-user context is required"))
+    ConfigurationBindingResolver.resolve(bindings, context.generic).getOrElse(fail("fixed-user collection is required"))
+  }
+
+  private def _candidate[A](
+    parameter: ConfigurationParameter[A],
+    value: A
+  ): ConfigurationBindingCandidate[A, CncfConfigurationTarget] = {
+    val provenance = ConfigurationProvenance.create(
+      ConfigurationOrigin.Home,
+      "textus",
+      "gcf07g-fixed-user-profile",
+      Some(parameter.id.value),
+      Some(parameter.id.value),
+      1,
+      1,
+      Vector("phase-55: gcf07g"),
+      false,
+      Some("spec")
+    ).getOrElse(fail("fixed-user provenance is required"))
+    ConfigurationBindingCandidate.create(
+      parameter,
+      CncfConfigurationTarget.Global,
+      value,
+      provenance
+    ).getOrElse(fail("fixed-user candidate is required"))
+  }
 
   private def _provider(
     providername: String,

@@ -22,6 +22,12 @@ final class DockerServiceContainerGateway private[servicecontainer] (
 ) extends ServiceContainerGateway {
   import DockerServiceContainerGateway.*
 
+  private[servicecontainer] def configuredExecutable: Option[String] =
+    runner match {
+      case x: LocalDockerServiceContainerCommandRunner => Some(x.configuredExecutable)
+      case _ => None
+    }
+
   def inspectC(
     key: ServiceContainerRegistryKey
   ): Consequence[Option[ServiceContainerInspection]] =
@@ -448,6 +454,8 @@ private[servicecontainer] object DockerServiceContainerCommandRunner {
 private final class LocalDockerServiceContainerCommandRunner(
   executable: String
 ) extends DockerServiceContainerCommandRunner {
+  def configuredExecutable: String = executable
+
   private val _maximum_captured_output_bytes = 1024 * 1024
 
   def runC(

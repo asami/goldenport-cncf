@@ -442,7 +442,7 @@ lazy val root = project
       // Route Apache POI's Log4j API through the CNCF SLF4J backend.
       "org.apache.logging.log4j" % "log4j-to-slf4j" % "2.21.1",
 
-      "org.goldenport" %% "goldenport-core" % "0.4.1",
+      "org.goldenport" %% "goldenport-core" % "0.4.3-SNAPSHOT",
       "org.simplemodeling" %% "simplemodeling-model" % "0.2.1-SNAPSHOT",
       "org.goldenport" % "cncf-collaborator-api" % "0.1.0",
 

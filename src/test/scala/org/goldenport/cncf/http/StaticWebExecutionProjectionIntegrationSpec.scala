@@ -9,10 +9,10 @@ import cats.effect.unsafe.implicits.global
 import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemAuthenticationBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding}
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationBindingCandidate, ConfigurationBindingCandidates, ConfigurationBindingResolver, ConfigurationOrigin, ConfigurationProvenance, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
 import org.goldenport.protocol.Protocol
 import org.http4s.{Header, Method, Request, Uri}
@@ -23,7 +23,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -60,7 +60,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
       val request = Request[IO](
         method = Method.GET,
         uri = Uri.unsafeFromString("/web/debug/debug-app")
@@ -118,7 +118,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
       val request = Request[IO](
         method = Method.GET,
         uri = Uri.unsafeFromString("/web/debug/debug-app")
@@ -164,7 +164,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
       val request = Request[IO](
         method = Method.GET,
         uri = Uri.unsafeFromString("/web/debug/debug-app?date=2026-07-20&timeline_range=current_future")
@@ -263,8 +263,8 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
 
   private def _static_subsystem(
     configuration: ResolvedConfiguration
-  ) =
-    DefaultSubsystemFactory
+  ) = {
+    val subsystem = DefaultSubsystemFactory
       .default(None, configuration)
       .withDescriptor(GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("static-web-test.yaml"),
@@ -273,4 +273,49 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
           localSubject = Some(GenericSubsystemLocalSubjectBinding("static-user"))
         ))))
       ))
+    val identity = SubsystemInstanceId.default(subsystem.name).getOrElse(fail("Subsystem identity is required"))
+    val target = CncfConfigurationTarget.SubsystemInstance.create(identity).getOrElse(fail("Subsystem target is required"))
+    val candidates = Vector[ConfigurationBindingCandidate[?, CncfConfigurationTarget]](
+      _candidate(CncfConfigurationParameterCatalog.subsystemUserMode, org.goldenport.cncf.subsystem.SubsystemUserMode.Standalone, target)
+    ) ++ Vector(
+      CncfConfigurationParameterCatalog.webDescriptor,
+      CncfConfigurationParameterCatalog.webExecutionLocale,
+      CncfConfigurationParameterCatalog.webExecutionTimezone,
+      CncfConfigurationParameterCatalog.webExecutionPublicCapabilities
+    ).flatMap(_configured_candidate(_, configuration, target))
+    val batch = ConfigurationBindingCandidates.from(candidates).getOrElse(fail("Web candidates are required"))
+    val context = CncfConfigurationResolutionContext.forSubsystem(identity).getOrElse(fail("Web context is required"))
+    val bindings = ConfigurationBindingResolver.resolve(batch, context.generic).getOrElse(fail("Web bindings are required"))
+    subsystem.admitRuntimeConfigurationBindingsC(bindings).isSuccess shouldBe true
+    subsystem
+  }
+
+  private def _configured_candidate[A](
+    parameter: org.goldenport.configuration.ConfigurationParameter[A],
+    configuration: ResolvedConfiguration,
+    target: CncfConfigurationTarget.SubsystemInstance
+  ): Option[ConfigurationBindingCandidate[A, CncfConfigurationTarget]] =
+    configuration.configuration.values.get(parameter.id.value).flatMap { value =>
+      parameter.codec.decode(value).toOption.map(_candidate(parameter, _, target))
+    }
+
+  private def _candidate[A](
+    parameter: org.goldenport.configuration.ConfigurationParameter[A],
+    value: A,
+    target: CncfConfigurationTarget.SubsystemInstance
+  ): ConfigurationBindingCandidate[A, CncfConfigurationTarget] = {
+    val provenance = ConfigurationProvenance.create(
+      ConfigurationOrigin.Cwd,
+      "textus",
+      "static-web-integration",
+      Some(parameter.id.value),
+      Some(parameter.id.value),
+      30,
+      1,
+      Vector("phase-55: gcf09b"),
+      false,
+      Some("spec")
+    ).getOrElse(fail("Web provenance is required"))
+    ConfigurationBindingCandidate.create(parameter, target, value, provenance).getOrElse(fail("Web candidate is required"))
+  }
 }

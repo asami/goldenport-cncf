@@ -12,7 +12,7 @@ import org.goldenport.cncf.entity.{
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider, OperationAuthorizationRule}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.RuntimeOperationSecurityPolicy
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.tag.{TagCreate, TagEntityCollections, TagRepository, TagSpace, TagUpdate, TagUsageKind, TaggingWorkflow}
 import org.goldenport.protocol.{Protocol, Request}
@@ -100,8 +100,8 @@ object TagComponent {
   }
 
   private trait TagOperationAuthorization extends OperationAuthorizationProvider {
-    def operationAuthorization(runtimeConfig: RuntimeConfig): OperationAuthorizationRule =
-      AdminAuthorizationPolicy.operationRule("admin.entity", runtimeConfig)
+    def operationAuthorization(policy: RuntimeOperationSecurityPolicy): OperationAuthorizationRule =
+      AdminAuthorizationPolicy.operationRule("admin.entity", policy)
   }
 
   private final class SimpleOperationDefinition(

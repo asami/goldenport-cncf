@@ -397,6 +397,16 @@ object RuntimeConfig {
   ): RuntimeConfig =
     _from(configuration, modeOverride, None)
 
+  def from(
+    configuration: ResolvedConfiguration,
+    modeOverride: Option[RunMode],
+    executionProfile: ResolvedExecutionProfile
+  ): RuntimeConfig =
+    if (executionProfile == null)
+      throw new IllegalArgumentException("runtime execution profile is required")
+    else
+      _from(configuration, modeOverride, Some(executionProfile))
+
   private def _from(
     configuration: ResolvedConfiguration,
     modeoverride: Option[RunMode],

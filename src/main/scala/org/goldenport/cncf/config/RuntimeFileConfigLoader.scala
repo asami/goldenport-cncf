@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.observation.Taxonomy
-import org.goldenport.configuration.{Configuration, ConfigurationValue}
+import org.goldenport.configuration.{Configuration, ConfigurationSourceLoad, ConfigurationValue}
 import org.goldenport.configuration.source.file.{ConfigTextDecoder, FileConfigLoader}
 
 /*
@@ -18,19 +18,27 @@ final class RuntimeFileConfigLoader extends FileConfigLoader {
   override def load(
     path: Path
   ): Consequence[Configuration] =
+    loadSnapshot(path).map(_.value)
+
+  override def loadSnapshot(
+    path: Path
+  ): Consequence[ConfigurationSourceLoad] =
     if (!Files.exists(path)) {
-      Consequence.success(Configuration.empty)
+      Consequence.success(ConfigurationSourceLoad(Configuration.empty))
     } else {
-      _load_record_config(path)
+      _load_record_config_snapshot(path)
     }
 
-  private def _load_record_config(
+  private def _load_record_config_snapshot(
     path: Path
-  ): Consequence[Configuration] =
+  ): Consequence[ConfigurationSourceLoad] =
     try {
-      ConfigTextDecoder.decode(path, Files.readString(path, StandardCharsets.UTF_8)) match {
-        case Consequence.Success(config) =>
-          Consequence.success(_with_flattened_objects(config))
+      ConfigTextDecoder.decodeSnapshot(path, Files.readString(path, StandardCharsets.UTF_8)) match {
+        case Consequence.Success(loaded) =>
+          Consequence.success(ConfigurationSourceLoad(
+            _with_flattened_objects(loaded.value),
+            loaded.rawDocument
+          ))
         case Consequence.Failure(conclusion) =>
           RuntimeFileConfigLoader.configurationFileParseInvalid(
             path,

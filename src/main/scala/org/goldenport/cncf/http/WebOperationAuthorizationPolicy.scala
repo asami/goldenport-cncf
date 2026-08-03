@@ -1,6 +1,6 @@
 package org.goldenport.cncf.http
 
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.RuntimeOperationSecurityPolicy
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider}
 import org.goldenport.cncf.subsystem.Subsystem
 
@@ -13,13 +13,13 @@ object WebOperationAuthorizationPolicy {
   def operationRule(
     subsystem: Subsystem,
     operationSelector: String,
-    runtimeConfig: RuntimeConfig
+    policy: RuntimeOperationSecurityPolicy
   ): Option[WebDescriptor.Authorization] =
     if (operationSelector.startsWith("admin."))
-      Some(_authorization(AdminAuthorizationPolicy.operationRule(operationSelector, runtimeConfig)))
+      Some(_authorization(AdminAuthorizationPolicy.operationRule(operationSelector, policy)))
     else subsystem.resolver.resolveOperationDefinition(operationSelector) match {
       case Some(provider: OperationAuthorizationProvider) =>
-        Some(_authorization(provider.operationAuthorization(runtimeConfig)))
+        Some(_authorization(provider.operationAuthorization(policy)))
       case _ =>
         None
     }

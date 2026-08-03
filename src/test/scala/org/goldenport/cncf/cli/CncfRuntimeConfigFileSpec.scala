@@ -4,10 +4,11 @@ import java.time.Instant
 import java.nio.file.{Files, Paths}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import org.goldenport.Consequence
-import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor}
+import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor, StandaloneUserProfile, StandaloneUserProfileResolver}
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.repository.ComponentRepository
-import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, GenericSubsystemFactory}
+import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemDescriptor, GenericSubsystemFactory, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem, SubsystemUserMode}
+import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -83,6 +84,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       Given("an assembly default consumed after launcher repository resolution")
       val cwd = Files.createTempDirectory("cncf-assembly-web-execution-config")
       val assemblydescriptor = cwd.resolve("assembly.yaml")
+      val testdescriptor = cwd.resolve("test.yaml")
       Files.writeString(
         assemblydescriptor,
         """subsystem: config-target
@@ -93,7 +95,12 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
           |  textus.web.execution.sample-ratio: 1.5
           |""".stripMargin
       )
-      val args = Array(s"--textus.assembly.descriptor=${assemblydescriptor}", "server")
+      Files.writeString(testdescriptor, "kind: test-descriptor\n")
+      val args = Array(
+        s"--textus.assembly.descriptor=${assemblydescriptor}",
+        s"--textus.test.descriptor=${testdescriptor}",
+        "server"
+      )
 
       When("the launcher resolves the assembly descriptor and repository invocation")
       val bootstrap = CncfRuntime.bootstrap(cwd, args)
@@ -562,8 +569,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       System.getProperty("user.home") shouldBe originalhome
     }
 
-    "prefer standard .textus configuration over legacy .cncf configuration" in {
-      Given("both standard .textus and legacy .cncf configuration files")
+    "apply the legacy .cncf compatibility override after baseline .textus configuration" in {
+      Given("both baseline .textus and compatibility-override .cncf configuration files")
       val cwd = Files.createTempDirectory("textus-over-cncf")
       val legacydir = cwd.resolve(".cncf")
       val configdir = cwd.resolve(".textus")
@@ -590,8 +597,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
         Array("--discover=classes", "server")
       )
 
-      Then("the standard .textus value takes precedence")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-textus.yaml")
+      Then("the compatibility override value takes precedence")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-cncf.yaml")
     }
 
     "prefer standard config.yaml over config.conf in the same .textus scope" in {
@@ -776,8 +783,156 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       Then("the repository SAR is appended as the subsystem file")
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.subsystemFileKey}=${sar}")
     }
+
+    "retain snapshot user-mode and HOME fixed-user candidates in the final runtime collection" in {
+      Given("a retained standalone runtime source, a conflicting legacy view, and a HOME fixed-user profile")
+      val cwd = Files.createTempDirectory("gcf07g-runtime-collection")
+      Files.createDirectories(cwd.resolve(".textus"))
+      Files.writeString(cwd.resolve(".textus/config.conf"), "textus.subsystem.user-mode = standalone\n")
+      val subsystem = _fixed_runtime_collection_subsystem()
+      val admittedprofile = Vector(StandaloneUserProfileResolver.Admitted(
+        StandaloneUserProfileResolver.Layer.TextusHome,
+        cwd.resolve("home/.textus/user-profile.yaml"),
+        ConfigurationOrigin.Home,
+        StandaloneUserProfile.Document(Some(StandaloneUserProfile.User(
+          id = Some("runtime-fixed-user"),
+          displayName = Some("Runtime Fixed User"),
+          locale = Some("ja-JP"),
+          timezone = Some("Asia/Tokyo")
+        )))
+      ))
+
+      When("the runtime's snapshot-admission sequence resolves and admits its final collection")
+      val snapshot = CncfRuntime.bootstrap(cwd, Array("command")).configurationSnapshot.getOrElse(
+        fail("runtime configuration snapshot is required")
+      )
+      val admitted = new CncfRuntime()._admit_runtime_configuration_snapshot(
+        snapshot,
+        subsystem,
+        _ => Consequence.success(admittedprofile)
+      )
+
+      Then("the final collection retains both the snapshot user-mode and the typed fixed-user profile")
+      admitted shouldBe a[Consequence.Success[_]]
+      subsystem.subsystemUserModeC.toOption.map(_.mode) shouldBe Some(SubsystemUserMode.Standalone)
+      subsystem.resolvedStandaloneUserProfile.map(_.id) shouldBe Some("runtime-fixed-user")
+      subsystem.resolvedStandaloneUserProfile.flatMap(_.displayName) shouldBe Some("Runtime Fixed User")
+    }
+
+    "project already-loaded assembly Web defaults into the final runtime collection" in {
+      Given("a standalone snapshot, a fixed-user profile, and assembly-only Web defaults")
+      val cwd = Files.createTempDirectory("gcf07h-assembly-web-defaults")
+      val assembly = cwd.resolve("assembly.yaml")
+      Files.createDirectories(cwd.resolve(".textus"))
+      Files.writeString(cwd.resolve(".textus/config.conf"), "textus.subsystem.user-mode = standalone\n")
+      Files.writeString(
+        assembly,
+        """subsystem: gcf07h-runtime
+          |components: []
+          |config:
+          |  textus.web.execution.locale: ja-JP
+          |  textus.web.execution.timezone: Asia/Tokyo
+          |  textus.web.execution.display-override.enabled: true
+          |  textus.web.execution.public-capabilities: browse, report
+          |""".stripMargin
+      )
+      val bootstrap = CncfRuntime.bootstrap(cwd, Array(s"--textus.assembly.descriptor=$assembly", "command"))
+      val snapshot = bootstrap.configurationSnapshot.getOrElse(fail("runtime configuration snapshot is required"))
+      val subsystem = Subsystem("gcf07h-runtime", configuration = bootstrap.configuration).withDescriptor(
+        GenericSubsystemDescriptor(
+          path = assembly,
+          subsystemName = "gcf07h-runtime",
+          security = Some(GenericSubsystemSecurityBinding(authentication = Some(
+            GenericSubsystemAuthenticationBinding(localSubject = Some(GenericSubsystemLocalSubjectBinding("runtime-local-subject")))
+          )))
+        )
+      )
+      val admittedprofile = Vector(StandaloneUserProfileResolver.Admitted(
+        StandaloneUserProfileResolver.Layer.TextusHome,
+        cwd.resolve("home/.textus/user-profile.yaml"),
+        ConfigurationOrigin.Home,
+        StandaloneUserProfile.Document(Some(StandaloneUserProfile.User(id = Some("gcf07h-user"))))
+      ))
+
+      When("bootstrap merges the descriptor contribution before final Subsystem admission")
+      val admitted = new CncfRuntime()._admit_runtime_configuration_snapshot(
+        snapshot,
+        bootstrap.assemblyConfiguration,
+        subsystem,
+        _ => Consequence.success(admittedprofile)
+      )
+
+      Then("the final typed policy retains assembly defaults without a source reload")
+      admitted shouldBe a[Consequence.Success[_]]
+      val policy = subsystem.webExecutionResolutionPolicyC.getOrElse(fail("typed Web policy is required")).getOrElse(fail("typed Web policy must resolve"))
+      policy.displayOverrideEnabled shouldBe true
+      policy.publicCapabilities shouldBe Vector("browse", "report")
+    }
+
+    "select the execution profile from an assembly-only user-mode binding" in {
+      Given("an assembly descriptor that supplies the only standalone user-mode value")
+      val cwd = Files.createTempDirectory("gcf09b-assembly-user-mode")
+      val assembly = cwd.resolve("assembly.yaml")
+      Files.writeString(
+        assembly,
+        """subsystem: gcf09b-runtime
+          |components: []
+          |config:
+          |  textus.subsystem.user-mode: standalone
+          |""".stripMargin
+      )
+      val bootstrap = CncfRuntime.bootstrap(cwd, Array(s"--textus.assembly.descriptor=$assembly", "command"))
+      val snapshot = bootstrap.configurationSnapshot.getOrElse(fail("runtime configuration snapshot is required"))
+      val subsystem = Subsystem("gcf09b-runtime", configuration = bootstrap.configuration).withDescriptor(
+        GenericSubsystemDescriptor(
+          path = assembly,
+          subsystemName = "gcf09b-runtime",
+          security = Some(GenericSubsystemSecurityBinding(authentication = Some(
+            GenericSubsystemAuthenticationBinding(localSubject = Some(GenericSubsystemLocalSubjectBinding("gcf09b-subject")))
+          )))
+        )
+      )
+      val admittedprofile = Vector(StandaloneUserProfileResolver.Admitted(
+        StandaloneUserProfileResolver.Layer.TextusHome,
+        cwd.resolve("home/.textus/user-profile.yaml"),
+        ConfigurationOrigin.Home,
+        StandaloneUserProfile.Document(Some(StandaloneUserProfile.User(id = Some("gcf09b-user"))))
+      ))
+
+      When("runtime profile admission resolves the assembled pre-profile collection")
+      val admitted = new CncfRuntime()._admit_runtime_configuration_snapshot(
+        snapshot,
+        bootstrap.assemblyConfiguration,
+        subsystem,
+        _ => Consequence.success(admittedprofile)
+      )
+
+      Then("the assembly-only mode selects standalone before profile admission and remains final")
+      admitted shouldBe a[Consequence.Success[_]]
+      subsystem.subsystemUserModeC.toOption.map(_.mode) shouldBe Some(SubsystemUserMode.Standalone)
+      subsystem.resolvedStandaloneUserProfile.map(_.id) shouldBe Some("gcf09b-user")
+    }
     }
   }
+
+  private def _fixed_runtime_collection_subsystem(): Subsystem =
+    Subsystem(
+      "gcf07g-runtime",
+      configuration = ResolvedConfiguration(
+        Configuration(Map(SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user"))),
+        ConfigurationTrace.empty
+      )
+    ).withDescriptor(
+      GenericSubsystemDescriptor(
+        path = Paths.get("gcf07g-runtime.car"),
+        subsystemName = "gcf07g-runtime",
+        security = Some(GenericSubsystemSecurityBinding(authentication = Some(
+          GenericSubsystemAuthenticationBinding(
+            localSubject = Some(GenericSubsystemLocalSubjectBinding("runtime-local-subject"))
+          )
+        )))
+      )
+    )
 
   private def _write_zip(path: java.nio.file.Path, entries: Map[String, String]): Unit = {
     val out = new ZipOutputStream(Files.newOutputStream(path))

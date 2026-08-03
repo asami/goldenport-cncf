@@ -6,13 +6,13 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.config.ConfigurationAccess
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, ConfigurationAccess}
 import org.goldenport.cncf.subsystem.{Subsystem, SubsystemUserMode}
-import org.goldenport.configuration.{ConfigurationResolution, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.configuration.{ConfigurationBindingCollection, ConfigurationResolution, ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Jul. 17, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebExecutionResolutionPolicy(
@@ -58,14 +58,35 @@ object WebExecutionResolutionPolicy {
     subsystem: Subsystem
   ): Consequence[WebExecutionPolicyResolution] =
     subsystem.subsystemUserModeC.flatMap { resolution =>
-      _policy(configuration).map { policy =>
+      val policy = subsystem.webExecutionResolutionPolicyC match {
+        case Some(result) => result
+        case None => _policy(configuration)
+      }
+      policy.map { value =>
         WebExecutionPolicyResolution(
-          policy,
+          value,
           WebApplicationMode.fromSubsystemUserMode(resolution.mode),
           Some(resolution.trace)
         )
       }
     }
+
+  /** Resolves an admitted runtime policy without consulting compatibility configuration. */
+  def resolveForRuntimeSubsystem(
+    subsystem: Subsystem
+  ): Consequence[WebExecutionPolicyResolution] =
+    if (subsystem == null)
+      Consequence.configurationInvalid("runtime Web execution Subsystem is required")
+    else
+      subsystem.subsystemUserModeC.flatMap { resolution =>
+        subsystem.runtimeWebExecutionResolutionPolicyC.map { policy =>
+          WebExecutionPolicyResolution(
+            policy,
+            WebApplicationMode.fromSubsystemUserMode(resolution.mode),
+            Some(resolution.trace)
+          )
+        }
+      }
 
   private def _value(configuration: ResolvedConfiguration, key: String): Option[String] =
     _aliases(key).iterator

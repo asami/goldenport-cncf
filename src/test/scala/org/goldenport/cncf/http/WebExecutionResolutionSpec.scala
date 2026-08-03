@@ -5,8 +5,9 @@ import java.util.Locale
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{ComponentDescriptor, ComponentStyleCatalog, ComponentStyleId}
-import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemAuthenticationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding}
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, SubsystemInstanceId}
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemAuthenticationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem, SubsystemUserMode}
+import org.goldenport.configuration.{Configuration, ConfigurationBindingCandidate, ConfigurationBindingCandidates, ConfigurationBindingCollection, ConfigurationBindingResolver, ConfigurationOrigin, ConfigurationProvenance, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -286,6 +287,37 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       Then("every present canonical value requires owning Subsystem resolution")
       results.foreach(_ shouldBe a[Consequence.Failure[_]])
     }
+
+    "use admitted typed Web policy values rather than legacy configuration and keep an admitted absence authoritative" in {
+      Given("two fixed-user Subsystems with conflicting legacy Web configuration")
+      val typed = _web_subsystem("en-US")
+      val absent = _web_subsystem("fr-FR")
+      val typedcollection = _web_collection(includeLocale = true)
+      val absentcollection = _web_collection(includeLocale = false)
+
+      When("a final typed collection is admitted before Web policy resolution")
+      typed.admitRuntimeConfigurationBindingsC(typedcollection).isSuccess shouldBe true
+      absent.admitRuntimeConfigurationBindingsC(absentcollection).isSuccess shouldBe true
+      val typedresult = WebExecutionResolutionPolicy.resolveForRuntimeSubsystem(typed)
+      val absentresult = WebExecutionResolutionPolicy.resolveForRuntimeSubsystem(absent)
+
+      Then("typed values win and an admitted absent value does not revive legacy text")
+      typedresult shouldBe a[Consequence.Success[_]]
+      typedresult.toOption.get.policy.applicationLocale shouldBe Some(Locale.JAPAN)
+      absentresult shouldBe a[Consequence.Success[_]]
+      absentresult.toOption.get.policy.applicationLocale shouldBe None
+    }
+
+    "fail closed for an unadmitted runtime Subsystem rather than reviving legacy Web text" in {
+      Given("a Subsystem with legacy Web configuration but no final typed collection")
+      val subsystem = _web_subsystem("fr-FR")
+
+      When("the runtime-only Web resolver is called")
+      val result = WebExecutionResolutionPolicy.resolveForRuntimeSubsystem(subsystem)
+
+      Then("runtime resolution fails structurally without consulting the legacy locale")
+      result shouldBe a[Consequence.Failure[_]]
+    }
     }
 
     "validation and precedence invariants" which {
@@ -318,6 +350,41 @@ final class WebExecutionResolutionSpec extends AnyWordSpec with Matchers with Gi
       Configuration(values.view.mapValues(ConfigurationValue.StringValue(_)).toMap),
       ConfigurationTrace.empty
     )
+
+  private def _web_subsystem(legacyLocale: String): Subsystem =
+    Subsystem("web-policy", configuration = _configuration(Map(
+      SubsystemUserMode.CONFIGURATION_KEY -> "standalone",
+      WebExecutionResolutionPolicy.LOCALE_KEY -> legacyLocale
+    ))).withDescriptor(GenericSubsystemDescriptor(
+      path = java.nio.file.Path.of("web-policy.car"),
+      subsystemName = "web-policy",
+      security = Some(GenericSubsystemSecurityBinding(authentication = Some(
+        GenericSubsystemAuthenticationBinding(localSubject = Some(GenericSubsystemLocalSubjectBinding("web-policy-user")))
+      )))
+    ))
+
+  private def _web_collection(includeLocale: Boolean): ConfigurationBindingCollection[CncfConfigurationTarget] = {
+    val identity = SubsystemInstanceId.default("web-policy").getOrElse(fail("identity is required"))
+    val target = CncfConfigurationTarget.SubsystemInstance.create(identity).getOrElse(fail("target is required"))
+    val candidates = Vector[ConfigurationBindingCandidate[?, CncfConfigurationTarget]](
+      _candidate(CncfConfigurationParameterCatalog.subsystemUserMode, SubsystemUserMode.Standalone, target)
+    ) ++ Option.when(includeLocale)(_candidate(CncfConfigurationParameterCatalog.webExecutionLocale, Locale.JAPAN, target)).toVector
+    val batch = ConfigurationBindingCandidates.from(candidates).getOrElse(fail("candidates are required"))
+    val context = CncfConfigurationResolutionContext.forSubsystem(identity).getOrElse(fail("context is required"))
+    ConfigurationBindingResolver.resolve(batch, context.generic).getOrElse(fail("collection is required"))
+  }
+
+  private def _candidate[A](
+    parameter: org.goldenport.configuration.ConfigurationParameter[A],
+    value: A,
+    target: CncfConfigurationTarget.SubsystemInstance
+  ): ConfigurationBindingCandidate[A, CncfConfigurationTarget] = {
+    val provenance = ConfigurationProvenance.create(
+      ConfigurationOrigin.Cwd, "textus", "web-policy-typed", Some(parameter.id.value),
+      Some(parameter.id.value), 30, 1, Vector("phase-55: gcf07h"), false, Some("spec")
+    ).getOrElse(fail("provenance is required"))
+    ConfigurationBindingCandidate.create(parameter, target, value, provenance).getOrElse(fail("candidate is required"))
+  }
 
   private def _direct_component_subsystem(
     fixedcontextcompatible: Boolean,

@@ -428,6 +428,26 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       extracted.residual.toVector shouldBe Vector("command")
     }
 
+    "preserve repository-looking tokens after the command sentinel" in {
+      Given("one command sentinel followed by component and repository option spellings")
+
+      When("repository arguments are extracted")
+      val extracted = ComponentRepositorySpace.extractRepositoryArgs(
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+        Array("command", "--", "--component-file=/command-domain-only.car", "--repository-dir=/command-domain-only")
+      )
+
+      Then("no post-sentinel token becomes a repository and the full command tail remains residual")
+      extracted.active shouldBe Right(Vector.empty)
+      extracted.search shouldBe Right(Vector.empty)
+      extracted.residual.toVector shouldBe Vector(
+        "command",
+        "--",
+        "--component-file=/command-domain-only.car",
+        "--repository-dir=/command-domain-only"
+      )
+    }
+
     "reject explicit component development directory without runtime classpath" in {
       Given("a component development directory without its runtime classpath file")
       _with_temp_dir { root =>

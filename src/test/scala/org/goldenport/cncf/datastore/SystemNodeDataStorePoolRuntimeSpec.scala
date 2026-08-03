@@ -5,8 +5,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Callable, CountDownLatch, Executors, TimeUnit}
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.sql.{ManagedSqlDataStoreResource, SqlDataStoreIdentity}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, SystemNodeShutdownConfiguration}
 import org.goldenport.cncf.subsystem.SystemNode
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.configuration.{ConfigurationBindingCollection, ConfigurationValue}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -33,12 +34,9 @@ final class SystemNodeDataStorePoolRuntimeSpec extends AnyWordSpec with Matchers
       "reject the upper-bound violation" in {
       info("Spec: docs/phase/phase-54.md; Rules: DSP01-R1-R7; Example: E1")
       Given("a SystemNode-scoped drain timeout above the configured upper bound")
-      val configuration = _configuration(
-        "textus.system-node.shutdown.drain-timeout-millis" -> "300001"
-      )
+      val result = _create_node_c("300001")
 
-      When("SystemNode construction resolves the canonical configuration")
-      val result = SystemNode.createC(configuration)
+      When("the canonical typed configuration is admitted before SystemNode construction")
 
       Then("it fails structurally with the canonical key and rejected value")
       _failure_display(result) should include ("textus.system-node.shutdown.drain-timeout-millis")
@@ -51,9 +49,7 @@ final class SystemNodeDataStorePoolRuntimeSpec extends AnyWordSpec with Matchers
       info("Spec: docs/phase/phase-54.md; Rules: DSP01-R1-R7; Example: E2")
       Given("sampled canonical drain timeouts above the upper bound")
       val property = Prop.forAll(Gen.chooseNum(300001, 301000)) { value =>
-        SystemNode.createC(_configuration(
-          "textus.system-node.shutdown.drain-timeout-millis" -> value.toString
-        )) match {
+        _create_node_c(value.toString) match {
           case Consequence.Failure(conclusion) =>
             conclusion.display.contains("textus.system-node.shutdown.drain-timeout-millis") &&
               conclusion.display.contains(value.toString)
@@ -370,13 +366,14 @@ final class SystemNodeDataStorePoolRuntimeSpec extends AnyWordSpec with Matchers
       case Consequence.Success(_) => fail("expected structured configuration failure")
     }
 
-  private def _configuration(
-    values: (String, String)*
-  ): ResolvedConfiguration =
-    ResolvedConfiguration(
-      Configuration(values.map { case (key, value) => key -> ConfigurationValue.StringValue(value) }.toMap),
-      ConfigurationTrace.empty
-    )
+  private def _create_node_c(value: String): Consequence[SystemNode] =
+    CncfConfigurationParameterCatalog.systemNodeShutdownDrainTimeoutMillis.codec
+      .decode(ConfigurationValue.StringValue(value))
+      .flatMap(timeout => SystemNodeShutdownConfiguration.from(
+        ConfigurationBindingCollection.empty,
+        Some(timeout)
+      ))
+      .flatMap(configuration => SystemNode.createC(configuration))
 
   private def _pool_report(request: PoolRuntimeRequest): Option[PoolRuntimeReport] =
     PoolRuntimePort.current.observe(request).toOption

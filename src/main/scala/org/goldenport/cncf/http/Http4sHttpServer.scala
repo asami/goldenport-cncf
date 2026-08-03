@@ -44,7 +44,7 @@ import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.config.{OperationMode, RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.subsystem.SubsystemCurrentUserEvidence
 import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, BlobStoreFactory, BlobStorageRef}
 import org.goldenport.cncf.entity.{
@@ -85,6 +85,9 @@ final class Http4sHttpServer(
     operationDispatcherOption.getOrElse(WebOperationDispatcher.create(engine))
   private val _mcp = new McpJsonRpcAdapter(engine.runtimeSubsystem)
   private val _runtime_config = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+  private val _operation_security_policy = engine.runtimeSubsystem.runtimeOperationSecurityPolicyC.getOrElse(
+    throw new IllegalStateException("runtime operation security policy bindings have not been admitted")
+  )
   private val _static_form_app_renderer =
     new StaticFormAppRenderer(_runtime_config.staticFormAppRendererConfig)
   private final case class WebTemplateComposition(
@@ -1838,8 +1841,7 @@ final class Http4sHttpServer(
     widget.capability.map(_.trim).filter(_.nonEmpty) match {
       case None => true
       case Some(capability) =>
-        val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
-        val subject = _web_authorization_subject(Some(req), runtimeconfig)
+        val subject = _web_authorization_subject(Some(req), _operation_security_policy)
         widget.capabilityPolicy.trim.toLowerCase(java.util.Locale.ROOT) match {
           case "authenticated" | "login" | "session" => subject.authenticated
           case _ =>
@@ -4218,7 +4220,7 @@ final class Http4sHttpServer(
       }
 
   private def _configured_component_dev_dirs(): Vector[Path] =
-    Vector(
+    engine.runtimeComponentDevDirs.getOrElse(Vector(
       RuntimeConfig.componentDevDirKey,
       "cncf.component.dev.dir"
     ).flatMap(key => RuntimeConfig.getString(engine.runtimeSubsystem.configuration, key).toVector)
@@ -4231,7 +4233,7 @@ final class Http4sHttpServer(
       }
       .filter(_.nonEmpty)
       .map(path => Paths.get(path).toAbsolutePath.normalize)
-      .distinct
+      .distinct)
 
   private def _configured_component_dev_dir_matches(
     component: org.goldenport.cncf.component.Component,
@@ -4555,8 +4557,7 @@ final class Http4sHttpServer(
     execution: Option[WebExecutionProjection] = None
   ): WebPageContext = {
     val sessionid = req.flatMap(_session_id_(_))
-    val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
-    val subject = req.map(r => _web_authorization_subject(Some(r), runtimeconfig))
+    val subject = req.map(r => _web_authorization_subject(Some(r), _operation_security_policy))
     val authenticated = subject.exists(_.authenticated)
     val capabilities = subject.map(_.normalized.capabilities.toVector.sorted.mkString(",")).getOrElse("")
     val jobcounts =
@@ -4628,7 +4629,7 @@ final class Http4sHttpServer(
         }.recoverWith {
           case _ if _is_unauthenticated_static_page_request(request) =>
             WebExecutionResolutionPolicy
-              .resolveForSubsystem(engine.runtimeSubsystem.configuration, engine.runtimeSubsystem)
+              .resolveForRuntimeSubsystem(engine.runtimeSubsystem)
               .flatMap { resolution =>
                 WebExecutionRuntimeProjection.resolve(
                   resolution,
@@ -5418,8 +5419,9 @@ final class Http4sHttpServer(
     MediaType.parse(value).fold(_ => MediaType.text.plain, identity)
 
   private[http] def _web_descriptor_config_root(): Option[WebResourceRoot] =
-    RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.webDescriptorKey).map { value =>
-      val path = Paths.get(value)
+    engine.webDescriptorConfigurationPathOption
+      .getOrElse(RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.webDescriptorKey).map(Paths.get(_)))
+      .map { path =>
       if (WebResourceRoot.isArchiveFile(path))
         WebResourceRoot.archive(path)
       else if (Files.isDirectory(path))
@@ -5858,7 +5860,7 @@ final class Http4sHttpServer(
       .toMap
     val base = componentname.flatMap(_component).map(_.logic.executionContext()).getOrElse(ExecutionContext.create())
     WebExecutionResolutionPolicy
-      .resolveForSubsystem(engine.runtimeSubsystem.configuration, engine.runtimeSubsystem)
+      .resolveForRuntimeSubsystem(engine.runtimeSubsystem)
       .flatMap { resolution =>
         engine.runtimeSubsystem.executionProfileC.flatMap { subsystemprofile =>
           IngressSecurityResolver
@@ -6103,14 +6105,14 @@ final class Http4sHttpServer(
     operationSelector: Option[String] = None
   ): Boolean = {
     val selector = Vector(app, service, operation).mkString(".")
-    val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
-    val subject = _web_authorization_subject(req, runtimeconfig)
+    val policy = _operation_security_policy
+    val subject = _web_authorization_subject(req, policy)
     val rule = engine.webDescriptor.authorization
       .get(selector)
       .orElse(
         operationSelector
           .orElse(_admin_operation_selector(app, service, operation))
-          .flatMap(WebOperationAuthorizationPolicy.operationRule(engine.runtimeSubsystem, _, runtimeconfig))
+          .flatMap(WebOperationAuthorizationPolicy.operationRule(engine.runtimeSubsystem, _, policy))
       )
     val allowed =
       rule match {
@@ -6118,14 +6120,14 @@ final class Http4sHttpServer(
           WebDescriptorAuthorization.isAllowed(
             rule,
             subject,
-            runtimeconfig.operationMode
+            policy.operationMode
           )
         case None =>
           engine.webDescriptor.exposureOf(selector) match {
             case WebDescriptor.Exposure.Protected =>
               subject.normalized.authenticated ||
                 (
-                  runtimeconfig.operationMode != org.goldenport.cncf.config.OperationMode.Production &&
+                  policy.operationMode != org.goldenport.cncf.config.OperationMode.Production &&
                     app != "debug"
                 )
             case _ =>
@@ -6137,7 +6139,7 @@ final class Http4sHttpServer(
   }
 
   private def _show_runtime_landing: Boolean =
-    RuntimeConfig.from(engine.runtimeSubsystem.configuration).operationMode != org.goldenport.cncf.config.OperationMode.Production
+    _operation_security_policy.operationMode != org.goldenport.cncf.config.OperationMode.Production
 
   private def _is_production_operation_mode: Boolean =
     _operation_mode == org.goldenport.cncf.config.OperationMode.Production
@@ -6181,9 +6183,9 @@ final class Http4sHttpServer(
 
   private def _web_authorization_subject(
     req: Option[org.http4s.Request[IO]],
-    runtimeconfig: RuntimeConfig
+    policy: RuntimeOperationSecurityPolicy
   ): WebDescriptorAuthorization.Subject =
-    if (runtimeconfig.operationMode == OperationMode.Production)
+    if (policy.operationMode == OperationMode.Production)
       req.flatMap(_web_authorization_subject_from_session)
         .getOrElse(WebDescriptorAuthorization.Subject())
     else
@@ -6754,12 +6756,12 @@ final class Http4sHttpServer(
   private def _is_demo_assist_manifest_disabled(
     req: org.http4s.Request[IO]
   ): Boolean =
-    _is_demo_assist_manifest_request(req) && !_runtime_config.webDemoAssistEnabled
+    _is_demo_assist_manifest_request(req) && !_operation_security_policy.webDemoAssistEnabled
 
   private def _demo_assist_manifest_response(
     html: String
   ): IO[HResponse[IO]] =
-    if (!_runtime_config.webDemoAssistEnabled)
+    if (!_operation_security_policy.webDemoAssistEnabled)
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web demo assist manifest is disabled"))
     else {
       val json = WebDemoAssistManifest.fromHtml(html).toJson.noSpaces
@@ -7053,7 +7055,7 @@ final class Http4sHttpServer(
     MediaType.parse("application/yaml").fold(_ => MediaType.text.plain, identity)
 
   private def _operation_mode: OperationMode =
-    RuntimeConfig.from(engine.runtimeSubsystem.configuration).operationMode
+    _operation_security_policy.operationMode
 
   private def _to_plain_form_record(
     req: org.http4s.Request[IO]

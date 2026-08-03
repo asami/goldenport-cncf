@@ -173,6 +173,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
             .map(Consequence.success)
             .getOrElse(Consequence.securityPermissionDenied("Fixed user profile requires a configured local subject."))
             .flatMap(_resolve_with_security(base, attributes, caps, _))
+            .map(_apply_fixed_profile_formatting)
       case SubsystemCurrentUserEvidence.Authenticated =>
         val providers = _resolved_authentication_providers(base)
         if (providers.isEmpty)
@@ -323,6 +324,26 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       )
   }
 
+  private def _apply_fixed_profile_formatting(
+    resolved: ResolvedIngressSecurity
+  ): ResolvedIngressSecurity = {
+    val profile = _subsystem_from_scope(resolved.executionContext.cncfCore.scope).flatMap(_.resolvedStandaloneUserProfile)
+    profile.fold(resolved) { value =>
+      val runtime = resolved.executionContext.runtime.context
+      val formatting = value.locale.map(runtime.formatting.withLocale).getOrElse(runtime.formatting)
+      val updated = value.timezone.map(formatting.withTimezone).getOrElse(formatting)
+      if (updated == runtime.formatting)
+        resolved
+      else {
+        val outer = ExecutionContext.withRuntimeContextContext(
+          resolved.executionContext,
+          runtime.copy(formatting = updated)
+        )
+        resolved.copy(executionContext = _rebind_runtime_unit_of_work(outer, "fixed-user-profile"))
+      }
+    }
+  }
+
   private def _parse_locale(p: String): Option[Locale] = {
     val value = Option(p).map(_.trim).getOrElse("")
     if (value.isEmpty)
@@ -457,16 +478,22 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     base: ExecutionContext
   ): Option[SecurityContext] =
     _subsystem_from_scope(base.cncfCore.scope)
-      .flatMap(_.resolvedSecurityWiring.authentication.localSubject)
-      .map { subject =>
+      .flatMap { subsystem =>
+        subsystem.resolvedSecurityWiring.authentication.localSubject.map(subject => subsystem -> subject)
+      }
+      .map { case (subsystem, subject) =>
         val roleattributes =
           if (subject.roles.isEmpty) Map.empty[String, String]
           else Map("role" -> subject.roles.mkString(" "))
+        val profileattributes = subsystem.resolvedStandaloneUserProfile.toVector.flatMap { profile =>
+          profile.displayName.map("displayName" -> _)
+        }.toMap
+        val principalid = subsystem.resolvedStandaloneUserProfile.map(_.id).getOrElse(subject.id)
         SecurityContext(
           principal = new Principal {
-            val id: PrincipalId = PrincipalId(subject.id)
+            val id: PrincipalId = PrincipalId(principalid)
             val attributes: Map[String, String] =
-              subject.attributes ++ roleattributes ++ Map("authenticated" -> "true")
+              subject.attributes ++ roleattributes ++ profileattributes ++ Map("authenticated" -> "true")
           },
           capabilities = subject.capabilities.map(Capability.apply).toSet,
           level = SecurityLevel(subject.securityLevel),

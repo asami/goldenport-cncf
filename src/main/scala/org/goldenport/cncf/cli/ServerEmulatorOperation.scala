@@ -11,7 +11,8 @@ import org.goldenport.cncf.http.HttpExecutionEngine
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
@@ -19,19 +20,24 @@ class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
 
   def execute(req: Request): Int = {
     val args = make_component_args(req)
-    val (includeHeader, rest) = _include_header(args)
+    val (includeheader, rest) = _include_header(args)
     val result = _normalize_server_emulator_args(rest, server_emulator_base_url) match {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>
-            val engine = new HttpExecutionEngine(subsystem)
-            val res = engine.execute(req)
-            if (includeHeader) {
-              _print_with_header(res)
-            } else {
-              _print_body(res)
+            HttpExecutionEngine.Factory.forRuntime(subsystem) match {
+              case Consequence.Success(engine) =>
+                val res = engine.execute(req)
+                if (includeheader) {
+                  _print_with_header(res)
+                } else {
+                  _print_body(res)
+                }
+                Consequence.success(res)
+              case Consequence.Failure(conclusion) =>
+                print_error(conclusion)
+                Consequence.Failure(conclusion)
             }
-            Consequence.success(res)
           case Consequence.Failure(conclusion) =>
             print_error(conclusion)
             Consequence.Failure(conclusion)
@@ -46,21 +52,21 @@ class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
   private def _include_header(
     args: Array[String]
   ): (Boolean, Seq[String]) = {
-    var includeHeader = false
+    var includeheader = false
     val rest = args.filter { arg =>
       if (arg == "-i" || arg == "--include") {
-        includeHeader = true
+        includeheader = true
         false
       } else {
         true
       }
     }
-    (includeHeader, rest.toIndexedSeq)
+    (includeheader, rest.toIndexedSeq)
   }
 
   private def _normalize_server_emulator_args(
     args: Seq[String],
-    baseUrl: String
+    baseurl: String
   ): Consequence[Seq[String]] = {
     if (args.isEmpty) {
       Consequence.argumentMissing("server-emulator path/url")
@@ -69,18 +75,18 @@ class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
     } else {
       _parse_component_service_operation(args).map {
         case (component, service, operation) =>
-          Seq(_server_emulator_url(baseUrl, component, service, operation))
+          Seq(_server_emulator_url(baseurl, component, service, operation))
       }
     }
   }
 
   private def _server_emulator_url(
-    baseUrl: String,
+    baseurl: String,
     component: String,
     service: String,
     operation: String
   ): String = {
-    val trimmed = if (baseUrl.endsWith("/")) baseUrl.dropRight(1) else baseUrl
+    val trimmed = if (baseurl.endsWith("/")) baseurl.dropRight(1) else baseurl
     s"${trimmed}/${component}/${service}/${operation}"
   }
 
@@ -100,10 +106,10 @@ class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
   private def _print_with_header(
     res: org.goldenport.http.HttpResponse
   ): Unit = {
-    val statusLine = s"HTTP ${res.code}"
-    val contentType = s"Content-Type: ${res.contentType}"
-    Console.out.println(statusLine)
-    Console.out.println(contentType)
+    val statusline = s"HTTP ${res.code}"
+    val contenttype = s"Content-Type: ${res.contentType}"
+    Console.out.println(statusline)
+    Console.out.println(contenttype)
     Console.out.println()
     _print_body(res)
   }

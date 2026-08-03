@@ -13,7 +13,6 @@ import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.knowledge.{KnowledgeNodeId, KnowledgeSpaceProjection}
 import org.goldenport.cncf.metrics.RuntimeMetricPoint
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, DiagnosticPayloadReference}
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, EntityRevisionProjection, HelpProjection, SchemaProjection}
@@ -115,7 +114,9 @@ trait StaticFormAppRendererComponentAdminPart {
     subsystem: Subsystem,
     webDescriptor: WebDescriptor = WebDescriptor()
   ): Page = {
-    val runtime = RuntimeConfig.from(subsystem.configuration)
+    val policy = subsystem.runtimeOperationSecurityPolicyC.getOrElse(
+      throw new IllegalStateException("runtime operation security policy bindings have not been admitted")
+    )
     val appcomponents = subsystem.components.filterNot(_.origin == ComponentOrigin.Builtin)
     val effectivecomponents =
       if (appcomponents.nonEmpty) appcomponents
@@ -174,7 +175,7 @@ trait StaticFormAppRendererComponentAdminPart {
              s"""${admin_table(
                   None,
                   s"""<tr><th>Subsystem</th><td>${escape(subsystem.name)}</td></tr>
-                     |<tr><th>Operation mode</th><td>${escape(runtime.operationMode.name)}</td></tr>
+                     |<tr><th>Operation mode</th><td>${escape(policy.operationMode.name)}</td></tr>
                      |<tr><th>Components</th><td>${effectivecomponents.size}</td></tr>""".stripMargin,
                   tableClass = "table table-sm align-middle mb-0"
                 )}

@@ -1,6 +1,6 @@
 package org.goldenport.cncf.http
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.RuntimeConfig
@@ -10,18 +10,39 @@ import org.goldenport.configuration.ResolvedConfiguration
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 14, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebDescriptorResolver {
+  def resolveForRuntimeSubsystem(
+    subsystem: Subsystem
+  ): Consequence[WebDescriptor] =
+    if (subsystem == null)
+      Consequence.configurationInvalid("runtime Web descriptor Subsystem is required")
+    else
+      for {
+        configured <- subsystem.runtimeWebDescriptorPathC
+        componentdevdirs <- subsystem.runtimeComponentDevDirsC
+        descriptor <- _resolve(subsystem, configured, componentdevdirs)
+      } yield descriptor
+
   def resolve(
     subsystem: Subsystem
+  ): Consequence[WebDescriptor] = {
+    _resolve(subsystem, RuntimeConfig.getString(subsystem.configuration, RuntimeConfig.webDescriptorKey).map(Paths.get(_)), _configuration_component_dev_paths(subsystem.configuration))
+  }
+
+  private def _resolve(
+    subsystem: Subsystem,
+    configured: Option[Path],
+    componentdevdirs: Vector[Path]
   ): Consequence[WebDescriptor] = {
     val descriptorpath = _subsystem_web_descriptor_path(subsystem)
     val exclude = descriptorpath.toSet
     val base = (
       _load_component_web_descriptors(subsystem, exclude) ++
-        _load_configuration_component_dev_web_descriptors(subsystem.configuration, exclude)
+        _load_component_dev_web_descriptors(componentdevdirs, exclude)
     )
       .foldLeft(WebDescriptor.empty)(_.mergeOverride(_))
     val withdescriptor = descriptorpath match {
@@ -32,9 +53,9 @@ object WebDescriptorResolver {
         }
       case None => base
     }
-    RuntimeConfig.getString(subsystem.configuration, RuntimeConfig.webDescriptorKey) match {
+    configured match {
       case Some(path) =>
-        WebDescriptor.load(Paths.get(path)).map(withdescriptor.mergeOverride)
+        WebDescriptor.load(path).map(withdescriptor.mergeOverride)
       case None => Consequence.success(withdescriptor)
     }
   }
@@ -57,13 +78,16 @@ object WebDescriptorResolver {
       WebDescriptor.load(path).toOption
     }
 
-  private def _load_configuration_component_dev_web_descriptors(
-    configuration: ResolvedConfiguration,
+  private def _load_component_dev_web_descriptors(
+    componentdevdirs: Vector[Path],
     exclude: Set[Path]
   ): Vector[WebDescriptor] =
-    _configuration_component_dev_paths(configuration)
+    componentdevdirs
       .filterNot(exclude.contains)
-      .flatMap(path => WebDescriptor.load(path).toOption)
+      .flatMap(path => WebDescriptor.load(_component_dev_descriptor_path(path)).toOption)
+
+  private def _component_dev_descriptor_path(path: Path): Path =
+    if (Files.isDirectory(path)) path.resolve("web.yaml") else path
 
   private def _configuration_component_dev_paths(
     configuration: ResolvedConfiguration

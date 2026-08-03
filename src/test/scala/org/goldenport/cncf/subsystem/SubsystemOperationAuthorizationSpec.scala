@@ -5,11 +5,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationResolutionContext, CncfConfigurationTarget, OperationMode, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.configuration.ConfigurationValue
+import org.goldenport.configuration.{ConfigurationBindingResolver, ConfigurationDocument, ConfigurationOrigin, ConfigurationSourceAdmission, ConfigurationValue}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
@@ -89,6 +89,9 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         ),
         name = "subsystem-operation-authorization-descriptor"
       )
+      _admit_runtime_operation_policy(subsystem, Map(
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
+      ))
       val descriptor = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("<test>"),
         subsystemName = "subsystem-operation-authorization-descriptor",
@@ -129,6 +132,9 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         ),
         name = "subsystem-operation-authorization-cml"
       )
+      _admit_runtime_operation_policy(subsystem, Map(
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
+      ))
       val domain = _cml_component(
         subsystem,
         OperationAuthorizationRule(
@@ -151,16 +157,47 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
     operationMode: OperationMode,
     entries: (String, ConfigurationValue)*
   ): Subsystem = {
-    val subsystem = TestComponentFactory.subsystemWithConfig(
-      Map(
+    val values = Map(
         RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(operationMode.name),
         RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("true")
-      ) ++ entries.toMap,
+      ) ++ entries.toMap
+    val subsystem = TestComponentFactory.subsystemWithConfig(
+      values,
       name = s"subsystem-operation-authorization-${operationMode.name}"
     )
+    _admit_runtime_operation_policy(subsystem, values)
     val admin = AdminComponent.Factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin)).primary
     subsystem.add(admin)
   }
+
+  private def _admit_runtime_operation_policy(
+    subsystem: Subsystem,
+    values: Map[String, ConfigurationValue]
+  ): Unit = {
+    val identity = _take(SubsystemInstanceId.create("platform", "default"))
+    val target = _take(CncfConfigurationTarget.SubsystemInstance.create(identity))
+    val candidates = _take(CncfConfigurationCandidateDecoder.decodeCatalog(Vector(
+      CncfConfigurationDocumentBatch(
+        new CncfConfigurationDocumentLocation.SubsystemInstance(target),
+        _take(ConfigurationSourceAdmission.create(
+          ConfigurationOrigin.Home,
+          "home",
+          "subsystem-operation-authorization-spec",
+          10,
+          "subsystem-operation-authorization-spec",
+          () => Consequence.success(ConfigurationDocument.Object(values.toVector.map { case (key, value) =>
+            ConfigurationDocument.Field(key, ConfigurationDocument.Scalar(value))
+          }))
+        ))
+      )
+    )))
+    val context = _take(CncfConfigurationResolutionContext.forSubsystem(identity))
+    val bindings = _take(ConfigurationBindingResolver.resolve(candidates, context.generic))
+    _take(subsystem.admitRuntimeConfigurationBindingsC(bindings))
+  }
+
+  private def _take[A](result: Consequence[A]): A =
+    result.getOrElse(fail(result.display))
 
   private def _cml_component(
     subsystem: Subsystem,

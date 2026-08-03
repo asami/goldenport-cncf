@@ -6,7 +6,8 @@ import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin, DevelopmentCarRuntimeAdmission}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig, RuntimeTestDescriptor}
+import org.goldenport.cncf.config.{ConfigurationAccess, RepositoryBootstrapPolicy, RuntimeConfig, RuntimeTestDescriptor}
+import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.Consequence
@@ -17,7 +18,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -173,6 +174,118 @@ object GenericSubsystemFactory {
       }
     }
 
+  /**
+   * Runtime-only descriptor resolution. The repository activation values are
+   * consumed from the bootstrap policy, never reparsed from configuration.
+   */
+  private[cncf] def runtimeResolveDescriptorC(
+    configuration: ResolvedConfiguration,
+    repositoryBootstrapPolicy: Option[RepositoryBootstrapPolicy]
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    repositoryBootstrapPolicy match {
+      case Some(policy) => _runtime_resolve_descriptor_c(configuration, policy)
+      case None =>
+        Consequence.configurationInvalid(
+          "runtime repository bootstrap policy has not been admitted"
+        )
+    }
+
+  private def _runtime_resolve_descriptor_c(
+    configuration: ResolvedConfiguration,
+    policy: RepositoryBootstrapPolicy
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    _or_else(_runtime_component_dev_descriptor_c(policy)) {
+      _or_else(_runtime_load_descriptor_c(configuration, policy)) {
+        _or_else(_runtime_named_descriptor_c(configuration, policy)) {
+          _or_else(
+            _runtime_component_archive_path(policy) match {
+              case Some(path) =>
+                GenericSubsystemDescriptor.loadComponentArchive(path)
+                  .flatMap(d => _with_assembly_descriptor_override_c(d, configuration).map(Some(_)))
+              case None => Consequence.success(None)
+            }
+          ) {
+            _or_else(
+              _runtime_component_car_dir_path(policy) match {
+                case Some(path) =>
+                  for
+                    descriptor <- ComponentDescriptorLoader.loadArchive(path)
+                    subsystem <- _component_descriptor_to_subsystem_c(path, descriptor)
+                    resolved <- _with_assembly_descriptor_override_c(subsystem, configuration)
+                  yield
+                    Some(resolved)
+                case None => Consequence.success(None)
+              }
+            ) {
+              RuntimeConfig
+                .getString(configuration, RuntimeConfig.componentNameKey)
+                .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.runtimeComponentNameKey))
+                .map(_.trim)
+                .filter(_.nonEmpty)
+                .map { name =>
+                  _with_assembly_descriptor_override_c(
+                    GenericSubsystemDescriptor(
+                      path = Paths.get(".").toAbsolutePath.normalize,
+                      subsystemName = name,
+                      componentBindings = Vector(GenericSubsystemComponentBinding(name))
+                    ),
+                    configuration
+                  ).map(Some(_))
+                }
+                .getOrElse(Consequence.success(None))
+            }
+          }
+        }
+      }
+    }
+
+  private def _runtime_load_descriptor_c(
+    configuration: ResolvedConfiguration,
+    policy: RepositoryBootstrapPolicy
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    _runtime_descriptor_path(configuration, policy).flatMap { path =>
+      Some(GenericSubsystemDescriptor.load(path).flatMap(_with_assembly_descriptor_override_c(_, configuration)).map(Some(_)))
+    }.getOrElse(Consequence.success(None))
+
+  private def _runtime_named_descriptor_c(
+    configuration: ResolvedConfiguration,
+    policy: RepositoryBootstrapPolicy
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    subsystemName(configuration) match {
+      case Some(name) =>
+        _runtime_search_repository_specs_c(policy).flatMap { repositories =>
+          ComponentRepository.resolveSubsystemDescriptor(repositories, name) match {
+            case Some(descriptor) =>
+              _with_assembly_descriptor_override_c(descriptor, configuration).map(Some(_))
+            case None =>
+              Consequence.success(None)
+          }
+        }
+      case None =>
+        Consequence.success(None)
+    }
+
+  private def _runtime_component_dev_descriptor_c(
+    policy: RepositoryBootstrapPolicy
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    _runtime_component_dev_dir_path(policy) match {
+      case Some(path) =>
+        ComponentRepository.ComponentDevDirRepository.validate(path).flatMap { _ =>
+          ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(path).headOption match {
+            case Some(descriptor) =>
+              _development_component_descriptor_to_subsystem_c(path, descriptor).map(Some(_))
+            case None =>
+              Consequence.resourceInvalid(
+                s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                  s"${path.resolve(DevelopmentCarRuntimeAdmission.componentDescriptorIdentity(path))}. " +
+                  s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
+                  "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+              )
+          }
+        }
+      case None => Consequence.success(None)
+    }
+
   private def _component_dev_descriptor_c(
     configuration: ResolvedConfiguration
   ): Consequence[Option[GenericSubsystemDescriptor]] =
@@ -290,21 +403,32 @@ object GenericSubsystemFactory {
       case None =>
         ()
     }
+    _default_named_with_scope(subsystemName, context, mode, configuration, aliasResolver, repos)
+  }
+
+  private def _default_named_with_scope(
+    subsystemname: String,
+    context: ScopeContext,
+    mode: Option[RunMode],
+    configuration: ResolvedConfiguration,
+    aliasresolver: AliasResolver,
+    repos: Vector[ComponentRepository.Specification]
+  ): Subsystem = {
     val runtimeconfig = RuntimeConfig.from(configuration)
     val runmode = mode.getOrElse(runtimeconfig.mode)
     val subsystem =
       Subsystem(
-        name = subsystemName,
+        name = subsystemname,
         scopeContext = Some(
           context.kind match {
             case ScopeKind.Runtime =>
-              context.createChildScope(ScopeKind.Subsystem, subsystemName)
+              context.createChildScope(ScopeKind.Subsystem, subsystemname)
             case ScopeKind.Subsystem =>
               context
             case _ =>
               ScopeContext(
                 kind = ScopeKind.Subsystem,
-                name = subsystemName,
+                name = subsystemname,
                 parent = None,
                 observabilityContext = context.observabilityContext
               )
@@ -312,7 +436,7 @@ object GenericSubsystemFactory {
         ),
         httpdriver = Some(runtimeconfig.httpDriver),
         configuration = configuration,
-        aliasResolver = aliasResolver,
+        aliasResolver = aliasresolver,
         runMode = runmode
       )
     Subsystem.withStartupCleanup(subsystem) {
@@ -320,7 +444,7 @@ object GenericSubsystemFactory {
       val repositories = repos.map(_.build(params)).toVector
       val components0 =
         ComponentRepository.discoverAssembly(repositories)
-          .filter(_matches_named_subsystem(_, subsystemName))
+          .filter(_matches_named_subsystem(_, subsystemname))
       val builtins = DefaultSubsystemFactory.builtinComponents(subsystem)
       val components = _collapse_duplicate_components(builtins ++ components0)
       subsystem.add(components)
@@ -328,6 +452,72 @@ object GenericSubsystemFactory {
       subsystem
     }
   }
+
+  private[cncf] def runtimeDefaultWithScopeC(
+    subsystemName: String,
+    context: ScopeContext,
+    mode: Option[RunMode],
+    configuration: ResolvedConfiguration,
+    aliasResolver: AliasResolver,
+    repositoryBootstrapPolicy: Option[RepositoryBootstrapPolicy]
+  ): Consequence[Subsystem] =
+    repositoryBootstrapPolicy match {
+      case Some(policy) =>
+        _runtime_repository_specs_c(policy).flatMap { repos =>
+          ComponentRepository.resolveSubsystemDescriptor(repos, subsystemName) match {
+            case Some(descriptor) =>
+              runtimeDefaultWithScopeC(
+                descriptor = descriptor,
+                context = context,
+                mode = mode,
+                configuration = configuration,
+                aliasResolver = aliasResolver,
+                repositoryBootstrapPolicy = Some(policy)
+              )
+            case None =>
+              Consequence.success(
+                _default_named_with_scope(
+                  subsystemName,
+                  context,
+                  mode,
+                  configuration,
+                  aliasResolver,
+                  repos
+                )
+              )
+          }
+        }
+      case None =>
+        Consequence.configurationInvalid(
+          "runtime repository bootstrap policy has not been admitted"
+        )
+    }
+
+  private[cncf] def runtimeDefaultWithScopeC(
+    descriptor: GenericSubsystemDescriptor,
+    context: ScopeContext,
+    mode: Option[RunMode],
+    configuration: ResolvedConfiguration,
+    aliasResolver: AliasResolver,
+    repositoryBootstrapPolicy: Option[RepositoryBootstrapPolicy]
+  ): Consequence[Subsystem] =
+    repositoryBootstrapPolicy match {
+      case Some(policy) =>
+        _runtime_repository_specs_for_descriptor_c(policy).map { repositoryspecs =>
+          _default_with_scope(
+            descriptor,
+            context,
+            mode,
+            configuration,
+            aliasResolver,
+            repositoryspecs
+          )
+        }
+      case None =>
+        Consequence.configurationInvalid(
+          "runtime repository bootstrap policy has not been admitted"
+        )
+    }
 
   def defaultWithScope(
     descriptor: GenericSubsystemDescriptor,
@@ -338,8 +528,24 @@ object GenericSubsystemFactory {
     aliasResolver: AliasResolver = GlobalRuntimeContext.current
       .map(_.aliasResolver)
       .getOrElse(AliasResolver.empty)
+  ): Subsystem =
+    _default_with_scope(
+      descriptor = descriptor,
+      context = context,
+      mode = mode,
+      configuration = configuration,
+      aliasresolver = aliasResolver,
+      repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
+    )
+
+  private def _default_with_scope(
+    descriptor: GenericSubsystemDescriptor,
+    context: ScopeContext,
+    mode: Option[RunMode],
+    configuration: ResolvedConfiguration,
+    aliasresolver: AliasResolver,
+    repositoryspecs: Vector[ComponentRepository.Specification]
   ): Subsystem = {
-    val repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
     val admitteddescriptor = _admit_descriptor_or_raise(descriptor, configuration, repositoryspecs)
     val admissionreport = _or_raise(SubsystemAssemblyAdmission.evaluateC(admitteddescriptor))
     val componentdescriptors = admitteddescriptor.toComponentDescriptors
@@ -366,7 +572,7 @@ object GenericSubsystemFactory {
         ),
         httpdriver = Some(runtimeconfig.httpDriver),
         configuration = configuration,
-        aliasResolver = aliasResolver,
+        aliasResolver = aliasresolver,
         runMode = runmode
       ).withDescriptor(admitteddescriptor)
         .withAssemblyAdmissionReport(admissionreport)
@@ -470,6 +676,99 @@ object GenericSubsystemFactory {
           .getOrElse(_repository_specs(configuration))
     _merge_repository_specs(_active_component_repository_specs(configuration), base)
   }
+
+  private def _runtime_repository_specs_for_descriptor_c(
+    policy: RepositoryBootstrapPolicy
+  ): Consequence[Vector[ComponentRepository.Specification]] =
+    _runtime_repository_specs_c(policy)
+
+  private def _runtime_repository_specs_c(
+    policy: RepositoryBootstrapPolicy
+  ): Consequence[Vector[ComponentRepository.Specification]] =
+    for {
+      active <- _runtime_policy_repository_specs_c(policy, active = true)
+      search <- _runtime_search_repository_specs_c(policy)
+    } yield _merge_repository_specs(active, search)
+
+  private def _runtime_search_repository_specs_c(
+    policy: RepositoryBootstrapPolicy
+  ): Consequence[Vector[ComponentRepository.Specification]] =
+    _runtime_policy_repository_specs_c(policy, active = false).map { repositories =>
+      if (repositories.nonEmpty) repositories else _default_repository_specs
+    }
+
+  private def _runtime_policy_repository_specs_c(
+    policy: RepositoryBootstrapPolicy,
+    active: Boolean
+  ): Consequence[Vector[ComponentRepository.Specification]] = {
+    val extracted = ComponentRepositorySpace.extractAdmittedRepositoryArgs(policy, Array.empty[String])
+    val values = if (active) extracted.active else extracted.search
+    ComponentRepositorySpace.resolveSpecifications(
+      values,
+      policy.baseDirectory,
+      noDefault = true
+    ) match {
+      case Right(specifications) =>
+        Consequence.success(specifications)
+      case Left(message) =>
+        Consequence.configurationInvalid(
+          s"runtime repository bootstrap policy is invalid: $message"
+        )
+    }
+  }
+
+  private def _runtime_descriptor_path(
+    configuration: ResolvedConfiguration,
+    policy: RepositoryBootstrapPolicy
+  ): Option[Path] =
+    RuntimeConfig
+      .getString(configuration, RuntimeConfig.subsystemDescriptorKey)
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.descriptor"))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.subsystemFileKey))
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.file"))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_))
+      .orElse(_runtime_subsystem_dev_dir_path(policy))
+      .orElse(_runtime_subsystem_sar_dir_path(policy))
+
+  private def _runtime_component_archive_path(
+    policy: RepositoryBootstrapPolicy
+  ): Option[Path] =
+    _runtime_path(policy, policy.componentFiles)
+
+  private def _runtime_component_car_dir_path(
+    policy: RepositoryBootstrapPolicy
+  ): Option[Path] =
+    _runtime_path(policy, policy.componentCarDirs)
+
+  private def _runtime_component_dev_dir_path(
+    policy: RepositoryBootstrapPolicy
+  ): Option[Path] =
+    _runtime_path(policy, policy.componentDevDirs)
+
+  private def _runtime_subsystem_dev_dir_path(
+    policy: RepositoryBootstrapPolicy
+  ): Option[Path] =
+    _runtime_path(policy, policy.subsystemDevDirs)
+
+  private def _runtime_subsystem_sar_dir_path(
+    policy: RepositoryBootstrapPolicy
+  ): Option[Path] =
+    _runtime_path(policy, policy.subsystemSarDirs)
+
+  private def _runtime_path(
+    policy: RepositoryBootstrapPolicy,
+    values: Vector[String]
+  ): Option[Path] =
+    values.iterator
+      .map(_.trim)
+      .find(_.nonEmpty)
+      .map(Paths.get(_))
+      .map { path =>
+        if (path.isAbsolute) path.normalize
+        else policy.baseDirectory.resolve(path).normalize
+      }
 
   private def _component_dev_repository_paths(
     configuration: ResolvedConfiguration

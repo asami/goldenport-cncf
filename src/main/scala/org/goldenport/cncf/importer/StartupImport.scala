@@ -6,14 +6,11 @@ import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
-import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{DataStoreContext, EntityStoreContext, ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSeed, DataStoreSeedEntry, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSeed, EntityStoreSeedEntry, EntityStoreSpace}
 import org.goldenport.cncf.entity.runtime.EntityCollection
-import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordDecoder
@@ -23,89 +20,90 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @since   Mar. 27, 2026
  *  version Mar. 28, 2026
  *  version Apr. 14, 2026
- * @version Jul. 28, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object StartupImport {
-  val DataFileKey = "cncf.import.data.file"
-  val EntityFileKey = "cncf.import.entity.file"
-  val DefaultDataDirName = "data.d"
-  val DefaultEntityDirName = "entity.d"
+  val defaultDataDirName = "data.d"
+  val defaultEntityDirName = "entity.d"
   private val _url_source_path = Path.of("startup-import-url")
   private val _data_import_sequence = new AtomicLong(0L)
   private val _record_decoder = RecordDecoder()
-  private sealed trait _ImportSource
-  private object _ImportSource {
-    final case class Local(path: Path) extends _ImportSource
-    final case class Url(url: String) extends _ImportSource
+  private sealed trait ImportSource
+  private object ImportSource {
+    final case class Local(path: Path) extends ImportSource
+    final case class Url(url: String) extends ImportSource
+  }
+
+  trait EntityCollectionResolver {
+    def entityCollection(collectionId: EntityCollectionId): Option[EntityCollection[?]]
   }
 
   def run(
     cwd: Path,
-    configuration: ResolvedConfiguration,
+    configuration: StartupImportConfiguration,
     runtimeConfig: RuntimeConfig,
-    subsystem: Subsystem
+    entityCollectionResolver: EntityCollectionResolver
   ): Consequence[Unit] = {
     val context = _bootstrap_execution_context(runtimeConfig)
     given ExecutionContext = context
     for {
-      _ <- _import_data(cwd, configuration, runtimeConfig.dataStoreSpace)
-      _ <- _import_entity(cwd, configuration, runtimeConfig.entityStoreSpace, subsystem)
+      _ <- _import_data(cwd, configuration.dataSource, runtimeConfig.dataStoreSpace)
+      _ <- _import_entity(cwd, configuration.entitySource, runtimeConfig.entityStoreSpace, entityCollectionResolver)
     } yield ()
   }
 
   private def _import_data(
     cwd: Path,
-    configuration: ResolvedConfiguration,
-    dataStoreSpace: DataStoreSpace
+    configuredsource: Option[String],
+    datastorespace: DataStoreSpace
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _resolve_data_sources(cwd, configuration).flatMap { paths =>
+    _resolve_data_sources(cwd, configuredsource).flatMap { paths =>
       paths.foldLeft(Consequence.unit) { (z, path) =>
-        z.flatMap(_ => _import_data_file(path, dataStoreSpace))
+        z.flatMap(_ => _import_data_file(path, datastorespace))
       }
     }
 
   private def _import_entity(
     cwd: Path,
-    configuration: ResolvedConfiguration,
-    entityStoreSpace: EntityStoreSpace,
-    subsystem: Subsystem
+    configuredsource: Option[String],
+    entitystorespace: EntityStoreSpace,
+    entitycollectionresolver: EntityCollectionResolver
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _resolve_entity_sources(cwd, configuration).flatMap { paths =>
+    _resolve_entity_sources(cwd, configuredsource).flatMap { paths =>
       paths.foldLeft(Consequence.unit) { (z, path) =>
-        z.flatMap(_ => _import_entity_file(path, entityStoreSpace, subsystem))
+        z.flatMap(_ => _import_entity_file(path, entitystorespace, entitycollectionresolver))
       }
     }
 
   private def _resolve_data_sources(
     cwd: Path,
-    configuration: ResolvedConfiguration
-  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] =
-    _resolve_sources(cwd, configuration, DataFileKey, DefaultDataDirName)
+    configuredsource: Option[String]
+  )(using ctx: ExecutionContext): Consequence[Vector[ImportSource]] =
+    _resolve_sources(cwd, configuredsource, defaultDataDirName)
 
   private def _resolve_entity_sources(
     cwd: Path,
-    configuration: ResolvedConfiguration
-  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] =
-    _resolve_sources(cwd, configuration, EntityFileKey, DefaultEntityDirName)
+    configuredsource: Option[String]
+  )(using ctx: ExecutionContext): Consequence[Vector[ImportSource]] =
+    _resolve_sources(cwd, configuredsource, defaultEntityDirName)
 
   private def _resolve_sources(
     cwd: Path,
-    configuration: ResolvedConfiguration,
-    key: String,
-    defaultDirName: String
-  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] = {
-    val explicit = ConfigurationAccess.getString(configuration, key).filter(_.trim.nonEmpty)
-    val default = _default_import_path(cwd, defaultDirName)
+    configuredsource: Option[String],
+    defaultdirname: String
+  )(using ctx: ExecutionContext): Consequence[Vector[ImportSource]] = {
+    val explicit = configuredsource
+    val default = _default_import_path(cwd, defaultdirname)
     (explicit, default) match {
       case (Some(raw), Some(dir)) =>
-        _resolve_source(cwd, raw, allowDirectory = true).flatMap { explicitpaths =>
-          _resolve_source(cwd, dir.toString, allowDirectory = true).map(defaultpaths => (explicitpaths ++ defaultpaths).distinct)
+        _resolve_source(cwd, raw).flatMap { explicitpaths =>
+          _resolve_source(cwd, dir.toString).map(defaultpaths => (explicitpaths ++ defaultpaths).distinct)
         }
       case (Some(raw), None) =>
-        _resolve_source(cwd, raw, allowDirectory = true)
+        _resolve_source(cwd, raw)
       case (None, Some(dir)) =>
-        _resolve_source(cwd, dir.toString, allowDirectory = true)
+        _resolve_source(cwd, dir.toString)
       case (None, None) =>
         Consequence.success(Vector.empty)
     }
@@ -113,53 +111,52 @@ object StartupImport {
 
   private def _resolve_source(
     cwd: Path,
-    raw: String,
-    allowDirectory: Boolean
-  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] =
+    raw: String
+  )(using ctx: ExecutionContext): Consequence[Vector[ImportSource]] =
     if (_is_url(raw))
-      Consequence.success(Vector(_ImportSource.Url(raw.trim)))
+      Consequence.success(Vector(ImportSource.Url(raw.trim)))
     else
-      _resolve_paths(cwd, raw).map(_.map(_ImportSource.Local.apply))
+      _resolve_paths(cwd, raw).map(_.map(ImportSource.Local.apply))
 
   private def _import_data_file(
-    source: _ImportSource,
-    dataStoreSpace: DataStoreSpace
+    source: ImportSource,
+    datastorespace: DataStoreSpace
   )(using ctx: ExecutionContext): Consequence[Unit] =
     source match {
-      case _ImportSource.Local(path) =>
-        _load_data_seed(path).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
-      case _ImportSource.Url(url) =>
-        _load_text_from_url(url).flatMap(text => _decode_data_seed(url, text)).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
+      case ImportSource.Local(path) =>
+        _load_data_seed(path).flatMap(seed => _store_data_seed(datastorespace, seed))
+      case ImportSource.Url(url) =>
+        _load_text_from_url(url).flatMap(text => _decode_data_seed(url, text)).flatMap(seed => _store_data_seed(datastorespace, seed))
     }
 
   private def _import_entity_file(
-    source: _ImportSource,
-    entityStoreSpace: EntityStoreSpace,
-    subsystem: Subsystem
+    source: ImportSource,
+    entitystorespace: EntityStoreSpace,
+    entitycollectionresolver: EntityCollectionResolver
   )(using ctx: ExecutionContext): Consequence[Unit] =
     source match {
-      case _ImportSource.Local(path) =>
-        _load_entity_seed(path).flatMap(seed => _store_entity_seed(path, entityStoreSpace, subsystem, seed))
-      case _ImportSource.Url(url) =>
-        _load_text_from_url(url).flatMap(text => _decode_entity_seed(url, text)).flatMap(seed => _store_entity_seed(_url_source_path, entityStoreSpace, subsystem, seed))
+      case ImportSource.Local(path) =>
+        _load_entity_seed(path).flatMap(seed => _store_entity_seed(path, entitystorespace, entitycollectionresolver, seed))
+      case ImportSource.Url(url) =>
+        _load_text_from_url(url).flatMap(text => _decode_entity_seed(url, text)).flatMap(seed => _store_entity_seed(_url_source_path, entitystorespace, entitycollectionresolver, seed))
     }
 
   private def _store_data_seed(
-    dataStoreSpace: DataStoreSpace,
+    datastorespace: DataStoreSpace,
     seed: DataStoreSeed
   )(using ctx: ExecutionContext): Consequence[Unit] =
     seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
-      z.flatMap(_ => _store_data_entry(dataStoreSpace, entry))
+      z.flatMap(_ => _store_data_entry(datastorespace, entry))
     }
 
   private def _store_data_entry(
-    dataStoreSpace: DataStoreSpace,
+    datastorespace: DataStoreSpace,
     entry: DataStoreSeedEntry
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val cid = entry.collection
     val id = _entry_id(entry.record, cid)
     for {
-      ds <- dataStoreSpace.dataStore(cid)
+      ds <- datastorespace.dataStore(cid)
       r <- ds.save(cid, id, entry.record).recoverWith { case _ =>
         ds.create(cid, id, entry.record)
       }
@@ -173,7 +170,7 @@ object StartupImport {
 
   private def _load_entity_seed(
     path: Path
-  ): Consequence[Vector[_EntityImportEntry]] =
+  ): Consequence[Vector[EntityImportEntry]] =
     _read_text(path).flatMap(text => _decode_entity_seed(path.toString, text))
 
   private def _resolve_paths(
@@ -291,54 +288,54 @@ object StartupImport {
     s.startsWith("http://") || s.startsWith("https://")
 
   private def _decode_data_seed(
-    sourceName: String,
+    sourcename: String,
     content: String
   ): Consequence[DataStoreSeed] =
-    _decode_documents(sourceName, content).flatMap { roots =>
+    _decode_documents(sourcename, content).flatMap { roots =>
       roots.foldLeft(Consequence.success(Vector.empty[DataStoreSeedEntry])) { (z, root) =>
         z.flatMap { xs =>
           _as_map(root) match {
             case None =>
-              Consequence.resourceInvalid(s"startup import root must be a mapping: ${sourceName}")
+              Consequence.resourceInvalid(s"startup import root must be a mapping: ${sourcename}")
             case Some(map) =>
               _parse_data_sections(map).map(xs ++ _)
           }
         }
       }.flatMap { entries =>
         if (entries.isEmpty)
-          Consequence.resourceInvalid(s"startup import file has no datastore entries: ${sourceName}")
+          Consequence.resourceInvalid(s"startup import file has no datastore entries: ${sourcename}")
         else
           Consequence.success(DataStoreSeed(entries))
       }
     }
 
   private def _decode_entity_seed(
-    sourceName: String,
+    sourcename: String,
     content: String
-  ): Consequence[Vector[_EntityImportEntry]] =
-    _decode_documents(sourceName, content).flatMap { roots =>
-      roots.foldLeft(Consequence.success(Vector.empty[_EntityImportEntry])) { (z, root) =>
+  ): Consequence[Vector[EntityImportEntry]] =
+    _decode_documents(sourcename, content).flatMap { roots =>
+      roots.foldLeft(Consequence.success(Vector.empty[EntityImportEntry])) { (z, root) =>
         z.flatMap { xs =>
           _as_map(root) match {
             case None =>
-              Consequence.resourceInvalid(s"startup import root must be a mapping: ${sourceName}")
+              Consequence.resourceInvalid(s"startup import root must be a mapping: ${sourcename}")
             case Some(map) =>
               _parse_entity_sections(map).map(xs ++ _)
           }
         }
       }.flatMap { entries =>
         if (entries.isEmpty)
-          Consequence.resourceInvalid(s"startup import file has no entitystore entries: ${sourceName}")
+          Consequence.resourceInvalid(s"startup import file has no entitystore entries: ${sourcename}")
         else
           Consequence.success(entries)
       }
     }
 
   private def _decode_documents(
-    sourceName: String,
+    sourcename: String,
     content: String
   ): Consequence[Vector[Record]] = {
-    val lower = sourceName.toLowerCase
+    val lower = sourcename.toLowerCase
     if (lower.endsWith(".json")) {
       _record_decoder.jsonAutoRecords(content)
     } else if (lower.endsWith(".xml")) {
@@ -360,8 +357,8 @@ object StartupImport {
         root.get("collection") match {
           case None =>
             Consequence.resourceInvalid("startup import file has no datastore entries")
-          case Some(collectionValue) =>
-            _parse_data_collection_value(collectionValue).map { collection =>
+          case Some(collectionvalue) =>
+            _parse_data_collection_value(collectionvalue).map { collection =>
               Vector(DataStoreSeedEntry(collection, _record_without_key(Record.create(root), "collection")))
             }
         }
@@ -371,15 +368,15 @@ object StartupImport {
 
   private def _parse_entity_sections(
     root: Map[String, Any]
-  ): Consequence[Vector[_EntityImportEntry]] =
+  ): Consequence[Vector[EntityImportEntry]] =
     root.get("entitystore") match {
       case None =>
         root.get("collection") match {
           case None =>
             Consequence.resourceInvalid("startup import file has no entitystore entries")
-          case Some(collectionValue) =>
-            _parse_entity_collection_value(collectionValue).map { collection =>
-              Vector(_EntityImportEntry(collection, _record_without_key(Record.create(root), "collection")))
+          case Some(collectionvalue) =>
+            _parse_entity_collection_value(collectionvalue).map { collection =>
+              Vector(EntityImportEntry(collection, _record_without_key(Record.create(root), "collection")))
             }
         }
       case Some(value) =>
@@ -402,12 +399,12 @@ object StartupImport {
 
   private def _parse_entity_section(
     value: Any
-  ): Consequence[Vector[_EntityImportEntry]] =
+  ): Consequence[Vector[EntityImportEntry]] =
     _as_seq(value) match {
       case None =>
         Consequence.argumentInvalid("entitystore section must be a list")
       case Some(entries) =>
-        entries.foldLeft(Consequence.success(Vector.empty[_EntityImportEntry])) { (acc, entry) =>
+        entries.foldLeft(Consequence.success(Vector.empty[EntityImportEntry])) { (acc, entry) =>
           acc.flatMap { xs =>
             _parse_entity_section_entry(entry).map(xs ++ _)
           }
@@ -431,7 +428,7 @@ object StartupImport {
 
   private def _parse_entity_section_entry(
     value: Any
-  ): Consequence[Vector[_EntityImportEntry]] =
+  ): Consequence[Vector[EntityImportEntry]] =
     _as_map(value) match {
       case None =>
         Consequence.argumentInvalid("entitystore entry must be a mapping")
@@ -441,7 +438,7 @@ object StartupImport {
           collection <- _parse_entity_collection(collectiontext)
           recordsvalue <- _required_value(map, "records")
           records <- _parse_records(recordsvalue)
-        } yield records.map(_EntityImportEntry(collection, _))
+        } yield records.map(EntityImportEntry(collection, _))
     }
 
   private def _parse_records(
@@ -571,40 +568,30 @@ object StartupImport {
 
   private def _store_entity_seed(
     path: Path,
-    entityStoreSpace: EntityStoreSpace,
-    subsystem: Subsystem,
-    seed: Vector[_EntityImportEntry]
+    entitystorespace: EntityStoreSpace,
+    entitycollectionresolver: EntityCollectionResolver,
+    seed: Vector[EntityImportEntry]
   )(using ctx: ExecutionContext): Consequence[Unit] =
     seed.foldLeft(Consequence.unit) { (z, entry) =>
-      z.flatMap(_ => _store_entity_entry(path, entityStoreSpace, subsystem, entry))
+      z.flatMap(_ => _store_entity_entry(path, entitystorespace, entitycollectionresolver, entry))
     }
 
   private def _store_entity_entry(
     path: Path,
-    entityStoreSpace: EntityStoreSpace,
-    subsystem: Subsystem,
-    entry: _EntityImportEntry
+    entitystorespace: EntityStoreSpace,
+    entitycollectionresolver: EntityCollectionResolver,
+    entry: EntityImportEntry
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _resolve_entity_collection(subsystem, entry.collection) match {
+    entitycollectionresolver.entityCollection(entry.collection) match {
       case None =>
         Consequence.resourceNotFound(s"startup entity import collection is not registered: ${entry.collection.print}")
       case Some(collection) =>
-        _import_entity_collection(path, entityStoreSpace, collection, entry.entity)
+        _import_entity_collection(path, entitystorespace, collection, entry.entity)
     }
-
-  private def _resolve_entity_collection(
-    subsystem: Subsystem,
-    collectionId: EntityCollectionId
-  ): Option[EntityCollection[?]] = {
-    subsystem.components.iterator
-      .flatMap(_.entitySpace.entityOption(collectionId))
-      .toSeq
-      .headOption
-  }
 
   private def _import_entity_collection[E](
     path: Path,
-    entityStoreSpace: EntityStoreSpace,
+    entitystorespace: EntityStoreSpace,
     collection: EntityCollection[E],
     record: Record
   )(using ctx: ExecutionContext): Consequence[Unit] = {
@@ -612,7 +599,7 @@ object StartupImport {
     given EntityPersistent[E] = persistent
     persistent.fromRecord(record).flatMap { entity =>
       val seed = EntityStoreSeed(Vector(EntityStoreSeedEntry(entity)))
-      entityStoreSpace.importSeed(seed).map { _ =>
+      entitystorespace.importSeed(seed).map { _ =>
         collection.storage.storeRealm.put(entity)
         collection.storage.memoryRealm.foreach(_.put(entity))
       }
@@ -620,7 +607,7 @@ object StartupImport {
   }
 
   private def _bootstrap_execution_context(
-    runtimeConfig: RuntimeConfig
+    runtimeconfig: RuntimeConfig
   ): ExecutionContext = {
     val observability = ExecutionContext.create().observability
     lazy val context: ExecutionContext = ExecutionContext.create(runtime)
@@ -630,9 +617,9 @@ object StartupImport {
         name = "startup-import",
         parent = None,
         observabilityContext = observability,
-        httpDriverOption = Some(runtimeConfig.httpDriver),
-        datastore = Some(DataStoreContext(runtimeConfig.dataStoreSpace)),
-        entitystore = Some(EntityStoreContext(runtimeConfig.entityStoreSpace))
+        httpDriverOption = Some(runtimeconfig.httpDriver),
+        datastore = Some(DataStoreContext(runtimeconfig.dataStoreSpace)),
+        entitystore = Some(EntityStoreContext(runtimeconfig.entityStoreSpace))
       ),
       unitOfWorkSupplier = () => new UnitOfWork(context),
       unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
@@ -663,7 +650,7 @@ object StartupImport {
         )
     }
 
-  private final case class _EntityImportEntry(
+  private final case class EntityImportEntry(
     collection: EntityCollectionId,
     entity: Record
   )

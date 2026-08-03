@@ -1,6 +1,6 @@
 package org.goldenport.cncf.http
 
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.config.{OperationMode, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.subsystem.Subsystem
@@ -18,7 +18,7 @@ final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matcher
     "derive admin operation authorization parameters from the admin operation selector" in {
       val subsystem = _subsystem_with_admin()
       val rule = WebOperationAuthorizationPolicy
-        .operationRule(subsystem, "admin.entity.create", RuntimeConfig.default)
+        .operationRule(subsystem, "admin.entity.create", RuntimeOperationSecurityPolicy.default)
         .getOrElse(fail("admin operation rule is missing"))
 
       rule.operationModes shouldBe Vector.empty
@@ -32,7 +32,7 @@ final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matcher
         .operationRule(
           subsystem,
           "admin.entity.create",
-          RuntimeConfig.default.copy(webDevelopAnonymousAdmin = false)
+          RuntimeOperationSecurityPolicy.default.copy(webDevelopAnonymousAdmin = false)
         )
         .getOrElse(fail("admin operation rule is missing"))
 
@@ -45,7 +45,7 @@ final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matcher
         .operationRule(
           subsystem,
           "admin.config.show",
-          RuntimeConfig.default.copy(operationMode = OperationMode.Production)
+          RuntimeOperationSecurityPolicy.default.copy(operationMode = OperationMode.Production)
         )
         .getOrElse(fail("admin operation rule is missing"))
 
@@ -58,7 +58,7 @@ final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matcher
         .operationRule(
           subsystem,
           "admin.config.show",
-          RuntimeConfig.default.copy(
+          RuntimeOperationSecurityPolicy.default.copy(
             operationMode = OperationMode.Production,
             webProductionAdminEnabled = true
           )
@@ -77,7 +77,7 @@ final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matcher
         .operationRule(
           subsystem,
           "admin.entity.create",
-          RuntimeConfig.default.copy(
+          RuntimeOperationSecurityPolicy.default.copy(
             operationMode = OperationMode.Production,
             webProductionAdminEnabled = true
           )

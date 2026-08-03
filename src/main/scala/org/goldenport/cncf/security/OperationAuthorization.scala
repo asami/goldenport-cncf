@@ -2,7 +2,7 @@ package org.goldenport.cncf.security
 
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.config.{OperationMode, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.context.{ExecutionContext, SubjectKind}
 import org.goldenport.record.Record
 
@@ -26,10 +26,10 @@ final case class OperationAuthorizationRule(
 
 object OperationAuthorizationRule {
   def developAnonymousAdmin(
-    runtimeConfig: RuntimeConfig
+    policy: RuntimeOperationSecurityPolicy
   ): OperationAuthorizationRule =
     OperationAuthorizationRule(
-      allowAnonymous = runtimeConfig.webDevelopAnonymousAdmin,
+      allowAnonymous = policy.webDevelopAnonymousAdmin,
       anonymousOperationModes = Vector(OperationMode.Develop, OperationMode.Test)
     )
 
@@ -91,7 +91,7 @@ object OperationAuthorizationRule {
 
 trait OperationAuthorizationProvider {
   def operationAuthorization(
-    runtimeConfig: RuntimeConfig
+    policy: RuntimeOperationSecurityPolicy
   ): OperationAuthorizationRule
 }
 

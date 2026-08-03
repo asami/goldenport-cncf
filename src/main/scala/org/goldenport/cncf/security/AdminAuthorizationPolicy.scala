@@ -1,6 +1,6 @@
 package org.goldenport.cncf.security
 
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.config.{OperationMode, RuntimeOperationSecurityPolicy}
 
 /*
  * @since   Apr. 25, 2026
@@ -10,48 +10,48 @@ import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 object AdminAuthorizationPolicy {
   def operationRule(
     selector: String,
-    runtimeConfig: RuntimeConfig
+    policy: RuntimeOperationSecurityPolicy
   ): OperationAuthorizationRule =
-    runtimeConfig.operationMode match {
+    policy.operationMode match {
       case OperationMode.Production =>
-        _production_rule(selector, runtimeConfig)
+        _production_rule(selector, policy)
       case _ =>
-        OperationAuthorizationRule.developAnonymousAdmin(runtimeConfig)
+        OperationAuthorizationRule.developAnonymousAdmin(policy)
     }
 
   private def _production_rule(
     selector: String,
-    runtimeConfig: RuntimeConfig
+    policy: RuntimeOperationSecurityPolicy
   ): OperationAuthorizationRule =
-    if (!runtimeConfig.webProductionAdminEnabled)
+    if (!policy.webProductionAdminEnabled)
       OperationAuthorizationRule(deny = true)
     else if (_is_application_admin(selector))
       OperationAuthorizationRule(
         requireAuthenticated = true,
         requireProviderAuthentication = true,
         minimumPrivilege = Some("operator"),
-        roles = runtimeConfig.webProductionAdminComponentRoles
+        roles = policy.webProductionAdminComponentRoles
       )
     else if (_is_component_admin(selector))
       OperationAuthorizationRule(
         requireAuthenticated = true,
         requireProviderAuthentication = true,
         minimumPrivilege = Some("operator"),
-        roles = runtimeConfig.webProductionAdminComponentRoles
+        roles = policy.webProductionAdminComponentRoles
       )
     else if (_is_jobs_admin(selector))
       OperationAuthorizationRule(
         requireAuthenticated = true,
         requireProviderAuthentication = true,
         minimumPrivilege = Some("system"),
-        roles = runtimeConfig.webProductionAdminJobsRoles
+        roles = policy.webProductionAdminJobsRoles
       )
     else
       OperationAuthorizationRule(
         requireAuthenticated = true,
         requireProviderAuthentication = true,
         minimumPrivilege = Some("system"),
-        roles = runtimeConfig.webProductionAdminSystemRoles
+        roles = policy.webProductionAdminSystemRoles
       )
 
   private def _is_application_admin(

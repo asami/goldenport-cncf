@@ -56,7 +56,7 @@ final class RuntimeParameterParser {
         val consumedVec = _consumed(result)
         val baseUrlOpt = _base_url(result)
         _log.trace(
-          s"[client:parse] runtime args consumed=${consumedVec.mkString(" ")} residual=${residualVec.mkString(" ")}"
+          s"[client:parse] runtime args consumed=${_trace_safe_args(consumedVec).mkString(" ")} residual=${_trace_safe_args(residualVec).mkString(" ")}"
         )
         RuntimeParameterParseResult(consumedVec, residualVec, baseUrlOpt)
       case Consequence.Failure(conclusion) =>
@@ -71,6 +71,11 @@ final class RuntimeParameterParser {
 
   private def _residual(req: Request): Vector[String] =
     req.arguments.map(arg => Option(arg.value).map(_.toString).getOrElse("")).toVector
+
+  private def _trace_safe_args(args: Seq[String]): Seq[String] =
+    args.map { arg =>
+      if (arg.startsWith("--textus.binding=")) "--textus.binding=<redacted>" else arg
+    }
 
   private def _consumed(req: Request): Vector[String] = {
     val builder = Vector.newBuilder[String]

@@ -10,11 +10,12 @@ import org.goldenport.cncf.collaborator.api
 /*
  * @since   Jan. 30, 2026
  *  version Feb.  5, 2026
- * @version Apr. 15, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class CollaboratorRepositorySpace(
-  repositories: Vector[CollaboratorRepository] = Vector.empty
+  repositories: Vector[CollaboratorRepository] = Vector.empty,
+  private[collaborator] val _repository_directories: Vector[Path] = Vector.empty
 ) {
 
   def discover(): Seq[CollaboratorRepository.CollaboratorEntry] =
@@ -24,14 +25,23 @@ class CollaboratorRepositorySpace(
 object CollaboratorRepositorySpace {
   val empty = CollaboratorRepositorySpace()
 
-  def create(c: ResolvedConfiguration): CollaboratorRepositorySpace = {
-    val dirs = _resolve_repository_dirs(c)
-    val apiUrl = _collaborator_api_url
+  /** Compatibility entry point for callers outside the typed runtime path. */
+  def create(configuration: ResolvedConfiguration): CollaboratorRepositorySpace = {
+    val dirs = _resolve_repository_dirs(configuration)
+    _create(dirs)
+  }
+
+  /** Receives only normalized bootstrap paths from the runtime boundary. */
+  def create(paths: Vector[Path]): CollaboratorRepositorySpace =
+    _create(Option(paths).getOrElse(Vector.empty))
+
+  private def _create(dirs: Vector[Path]): CollaboratorRepositorySpace = {
+    val apiurl = _collaborator_api_url
     val repos =
       dirs.filter(dir => Files.isDirectory(dir)).map(dir =>
-        new CollaboratorRepository.CollaboratorDirRepository(dir, apiUrl)
+        new CollaboratorRepository.CollaboratorDirRepository(dir, apiurl)
       )
-    CollaboratorRepositorySpace(repos)
+    CollaboratorRepositorySpace(repos, dirs)
   }
 
   private def _resolve_repository_dirs(

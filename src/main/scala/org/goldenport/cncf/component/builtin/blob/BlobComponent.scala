@@ -12,7 +12,7 @@ import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.cncf.action.{ActionCall, ActionCallEntityStorePart, ActionCallFeaturePart, CommandAction, CommandExecutionMode, FunctionalActionCall, QueryAction}
 import org.goldenport.cncf.association.{Association, AssociationCreate, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInit, ComponentInstanceId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
@@ -485,9 +485,9 @@ object BlobComponent {
 
   private trait BlobAdminOperationAuthorization extends OperationAuthorizationProvider {
     def operationAuthorization(
-      runtimeConfig: RuntimeConfig
+      policy: RuntimeOperationSecurityPolicy
     ): OperationAuthorizationRule =
-      AdminAuthorizationPolicy.operationRule("admin.entity.blob", runtimeConfig)
+      AdminAuthorizationPolicy.operationRule("admin.entity.blob", policy)
   }
 
   private final class AdminListBlobsOperationDefinition(

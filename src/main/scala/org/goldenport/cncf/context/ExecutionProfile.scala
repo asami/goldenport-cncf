@@ -10,7 +10,7 @@ import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.context.{EntropyContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.configuration.ConfigurationValue
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.config.{OperationMode, RuntimeConfig, RuntimeExecutionProfileConfiguration}
 import org.goldenport.record.Record
 
 /*
@@ -471,10 +471,36 @@ object ExecutionProfileResolver {
 
   def resolve(
     configuration: ResolvedConfiguration,
-    operationmode: OperationMode,
-    activationoverride: Option[ExecutionProfileActivation] = None
+    operationMode: OperationMode,
+    activationOverride: Option[ExecutionProfileActivation] = None
   ): Consequence[ResolvedExecutionProfile] =
-    resolve_with_environment(configuration, operationmode, sys.env, activationoverride)
+    resolve_with_environment(configuration, operationMode, sys.env, activationOverride)
+
+  /**
+   * Runtime GCF-09M entry point.  Its caller has already admitted typed
+   * configuration and supplies ambient environment explicitly.
+   */
+  def resolve(
+    configuration: RuntimeExecutionProfileConfiguration,
+    activation: ExecutionProfileActivation,
+    ambientEnvironment: Map[String, String]
+  ): Consequence[ResolvedExecutionProfile] =
+    if (configuration == null || activation == null || ambientEnvironment == null)
+      Consequence.configurationInvalid("runtime execution-profile configuration is invalid")
+    else if (configuration.timeStartAt.zip(configuration.virtualStartAt).exists { case (left, right) => left != right })
+      Consequence.configurationInvalid(s"${RuntimeConfig.EXECUTION_TIME_START_AT_KEY} conflicts with ${RuntimeConfig.CLOCK_VIRTUAL_START_AT_KEY}")
+    else if (configuration.environmentValues.keys.exists(name => !configuration.environmentAllow.contains(name))) {
+      val name = configuration.environmentValues.keys.filterNot(configuration.environmentAllow.contains).toVector.sorted.head
+      Consequence.configurationInvalid(s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.${name} is not declared by ${RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY}")
+    } else {
+      _typed_start_at(configuration.timeMode, configuration.timeStartAt, configuration.virtualStartAt).flatMap { startat =>
+        val config = configuration.toExecutionProfileConfig(activation, ambientEnvironment)
+        _validate(config.copy(startAt = startat), configuration.virtualStartAt.map(_.toString)) match {
+          case Left(message) => Consequence.configurationInvalid(message)
+          case Right(_) => Consequence.success(_resolved(config.copy(startAt = startat)))
+        }
+      }
+    }
 
   private[context] def resolve_with_environment(
     configuration: ResolvedConfiguration,
@@ -574,6 +600,22 @@ object ExecutionProfileResolver {
         case _ => Right(())
       }
     } yield result
+  }
+
+  private def _typed_start_at(
+    mode: ExecutionTimeMode,
+    configured: Option[Instant],
+    compatibility: Option[Instant]
+  ): Consequence[Option[Instant]] = {
+    val result = configured.orElse(compatibility)
+    if (configured.zip(compatibility).exists { case (left, right) => left != right })
+      Consequence.configurationInvalid(s"${RuntimeConfig.EXECUTION_TIME_START_AT_KEY} conflicts with ${RuntimeConfig.CLOCK_VIRTUAL_START_AT_KEY}")
+    else if (mode == ExecutionTimeMode.System && result.nonEmpty)
+      Consequence.configurationInvalid(s"${RuntimeConfig.EXECUTION_TIME_START_AT_KEY} requires offset or manual time mode")
+    else if ((mode == ExecutionTimeMode.Offset || mode == ExecutionTimeMode.Manual) && result.isEmpty)
+      Consequence.configurationInvalid(s"${RuntimeConfig.EXECUTION_TIME_START_AT_KEY} is required for ${mode.name} time mode")
+    else
+      Consequence.success(result)
   }
 
   private def _instant(key: String, value: String): Either[String, Instant] =

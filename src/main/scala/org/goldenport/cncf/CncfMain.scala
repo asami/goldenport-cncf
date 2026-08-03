@@ -3,7 +3,9 @@ package org.goldenport.cncf
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
+import org.goldenport.Consequence
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
+import org.goldenport.cncf.config.RuntimeProcessExitPolicy
 import org.goldenport.cncf.observability.global.GlobalObservable
 
 /*
@@ -30,7 +32,12 @@ object CncfMain extends GlobalObservable {
     }
 
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val bootstrap = CncfRuntime.bootstrap(cwd, args)
+    val bootstrap = CncfRuntime.bootstrapC(cwd, args) match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        Console.err.println(conclusion.displayMessage)
+        return
+    }
 
     val code: Int =
       try {
@@ -51,12 +58,13 @@ object CncfMain extends GlobalObservable {
         case e: CliFailed => e.code
       }
 
-    if (bootstrap.front.forceExit) {
-      sys.exit(code) // CLI adapter may exit only when --force-exit is requested.
-    } else if (bootstrap.front.noExit && code != 0) {
-      throw new CliFailed(code)
-    } else {
-      ()
+    bootstrap.front.processExitPolicy.disposition(code) match {
+      case RuntimeProcessExitPolicy.Disposition.Exit =>
+        sys.exit(code)
+      case RuntimeProcessExitPolicy.Disposition.Fail =>
+        throw new CliFailed(code)
+      case RuntimeProcessExitPolicy.Disposition.Return =>
+        ()
     }
   }
 

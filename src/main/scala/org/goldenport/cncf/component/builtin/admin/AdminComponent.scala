@@ -46,7 +46,7 @@ import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.datastore.{
   DataStore,
   Query as DataStoreQuery,
@@ -125,9 +125,9 @@ object AdminComponent {
 
   private trait AdminOperationAuthorization extends OperationAuthorizationProvider {
     def operationAuthorization(
-      runtimeConfig: RuntimeConfig
+      policy: RuntimeOperationSecurityPolicy
     ): OperationAuthorizationRule =
-      AdminAuthorizationPolicy.operationRule("admin.system", runtimeConfig)
+      AdminAuthorizationPolicy.operationRule("admin.system", policy)
   }
 
   object Factory extends Component.SinglePrimaryBundleFactory {
@@ -873,9 +873,9 @@ object AdminComponent {
 
   private trait AdminAssociationOperationAuthorization extends OperationAuthorizationProvider {
     def operationAuthorization(
-      runtimeConfig: RuntimeConfig
+      policy: RuntimeOperationSecurityPolicy
     ): OperationAuthorizationRule =
-      AdminAuthorizationPolicy.operationRule("admin.entity", runtimeConfig)
+      AdminAuthorizationPolicy.operationRule("admin.entity", policy)
   }
 
   private final class AssociationListOperationDefinition(

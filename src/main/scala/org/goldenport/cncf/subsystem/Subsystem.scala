@@ -1,5 +1,6 @@
 package org.goldenport.cncf.subsystem
 
+import java.nio.file.{Path, Paths}
 import scala.collection.mutable
 import scala.deprecatedName
 import org.goldenport.Consequence
@@ -32,19 +33,20 @@ import org.goldenport.cncf.entity.{
   EntityMutationAdapterDefaults,
   EntityRevisionTransport
 }
-import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult}
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult, WebExecutionResolutionPolicy}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
 import org.goldenport.cncf.usernotification.UserNotificationEventForwarder
 import org.goldenport.cncf.workflow.WorkflowEngine
-import org.goldenport.configuration.ResolvedConfiguration
+import org.goldenport.configuration.{ConfigurationBindingCollection, ResolvedConfiguration}
 import org.goldenport.protocol.{Property, Request, Response}
 
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.cli.RunMode
-import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeTestDescriptor}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, ConfigurationAccess, ResolvedStandaloneUserProfile, RuntimeExecutionProfileConfiguration, RuntimeOperationSecurityPolicy, RuntimeTestDescriptor}
+import org.goldenport.cncf.importer.{StartupImport, StartupImportConfiguration}
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.protocol.OperationRequestValidationObserver
@@ -66,7 +68,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -79,7 +81,8 @@ final class Subsystem(
   @deprecatedName("runMode", "0.5.1")
   runmode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server),
   @deprecatedName("operationEvaluationCrossSinkPolicyOption", "0.5.1")
-  operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None
+  operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None,
+  private[cncf] systemnode: SystemNode = null
 ) {
   final case class ExecutionResult(
     response: OperationResponse,
@@ -96,10 +99,10 @@ final class Subsystem(
       .map(_.executionProfileRuntime.runtimeClock.clock)
       .getOrElse(RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock)
   )
-  // Keep the original public constructor descriptor.  SystemNode creation is
-  // intentionally internal to construction so invalid node configuration
-  // still fails before a binding can be used.
-  private val _system_node = SystemNode.createC(configuration).TAKE
+  // Node configuration is supplied by the runtime factory before this
+  // Subsystem exists. Direct construction deliberately receives only the
+  // typed default and never grants raw ResolvedConfiguration node authority.
+  private val _system_node = Option(systemnode).orElse(SystemNodeConstruction.current).getOrElse(SystemNode.create())
   private val _datastore_binding = _system_node.bind()
   private val _active_datastore_lease = new ThreadLocal[SystemNodeResourceLease]()
 
@@ -131,8 +134,11 @@ final class Subsystem(
   private lazy val _spi_invoker: SpiInvoker = SpiInvoker._create(this)
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
   private var _controlled_test_execution: Boolean = false
-  private lazy val _subsystem_user_mode_c: Consequence[SubsystemUserModeResolution] =
-    SubsystemUserMode.resolveForSubsystem(configuration, this)
+  private var _runtime_configuration_bindings: Option[ConfigurationBindingCollection[CncfConfigurationTarget]] = None
+  private var _runtime_operation_security_policy: Option[RuntimeOperationSecurityPolicy] = None
+  private var _runtime_execution_profile_configuration: Option[RuntimeExecutionProfileConfiguration] = None
+  private var _resolved_standalone_user_profile: Option[ResolvedStandaloneUserProfile] = None
+  private var _subsystem_user_mode_c: Option[Consequence[SubsystemUserModeResolution]] = None
   private var _user_notification_forwarding_registered: Boolean = false
   private var _service_container_runtime: Option[ServiceContainerRuntime] = None
   private var _mcp_client_runtime: Option[CodexMcpRuntimeAssembly] = None
@@ -171,7 +177,142 @@ final class Subsystem(
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
   def assemblyAdmissionReport: Option[SubsystemAssemblyAdmission.Report] = _assembly_admission_report
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
-  def subsystemUserModeC: Consequence[SubsystemUserModeResolution] = _subsystem_user_mode_c
+  def subsystemUserModeC: Consequence[SubsystemUserModeResolution] = synchronized {
+    _subsystem_user_mode_c.getOrElse {
+      val result = _runtime_configuration_bindings.fold(
+        SubsystemUserMode.resolveForSubsystem(configuration, this)
+      )(_.binding(CncfConfigurationParameterCatalog.subsystemUserMode).flatMap {
+        case Some(binding) => SubsystemUserMode.resolveRuntimeBindingForSubsystem(binding, this)
+        case None => SubsystemUserMode.resolveRuntimeBindingAbsentForSubsystem(this)
+      })
+      _subsystem_user_mode_c = Some(result)
+      result
+    }
+  }
+
+  private[cncf] def admitRuntimeConfigurationBindingsC(
+    bindings: ConfigurationBindingCollection[CncfConfigurationTarget]
+  ): Consequence[Unit] = synchronized {
+    if (bindings == null)
+      Consequence.configurationInvalid("runtime Subsystem configuration bindings are required")
+    else if (_subsystem_user_mode_c.nonEmpty || _runtime_configuration_bindings.nonEmpty)
+      Consequence.configurationInvalid("runtime Subsystem user-mode binding is too late")
+    else
+      for {
+        policy <- RuntimeOperationSecurityPolicy.from(bindings)
+        executionprofile <- RuntimeExecutionProfileConfiguration.from(bindings)
+      } yield {
+        _runtime_configuration_bindings = Some(bindings)
+        _runtime_operation_security_policy = Some(policy)
+        _runtime_execution_profile_configuration = Some(executionprofile)
+      }
+  }
+
+  private[cncf] def admitRuntimeConfigurationBindingsC(
+    bindings: ConfigurationBindingCollection[CncfConfigurationTarget],
+    profile: SubsystemExecutionProfile
+  ): Consequence[Unit] = synchronized {
+    if (profile == null)
+      Consequence.configurationInvalid("runtime Subsystem execution profile is required")
+    else if (profile.currentUserEvidence == SubsystemCurrentUserEvidence.Fixed)
+      ResolvedStandaloneUserProfile.resolve(bindings).flatMap { fixed =>
+        admitRuntimeConfigurationBindingsC(bindings).map { _ =>
+          _resolved_standalone_user_profile = Some(fixed)
+        }
+      }
+    else
+      admitRuntimeConfigurationBindingsC(bindings)
+  }
+
+  private[cncf] def resolvedStandaloneUserProfile: Option[ResolvedStandaloneUserProfile] =
+    _resolved_standalone_user_profile
+
+  private[cncf] def webExecutionResolutionPolicyC: Option[Consequence[WebExecutionResolutionPolicy]] = synchronized {
+    _runtime_configuration_bindings.map(_web_execution_resolution_policy)
+  }
+
+  private[cncf] def runtimeWebExecutionResolutionPolicyC: Consequence[WebExecutionResolutionPolicy] = synchronized {
+    _runtime_configuration_bindings.fold[Consequence[WebExecutionResolutionPolicy]](
+      Consequence.configurationInvalid("runtime Web execution policy bindings have not been admitted")
+    )(_web_execution_resolution_policy)
+  }
+
+  private[cncf] def runtimeWebDescriptorPathC: Consequence[Option[Path]] = synchronized {
+    _runtime_configuration_bindings.fold[Consequence[Option[Path]]](
+      Consequence.configurationInvalid("runtime Web descriptor bindings have not been admitted")
+    )(_.value(CncfConfigurationParameterCatalog.webDescriptor).flatMap { value =>
+      try Consequence.success(value.map(path => Paths.get(path).toAbsolutePath.normalize))
+      catch { case _: Throwable => Consequence.configurationInvalid("runtime Web descriptor path is invalid") }
+    })
+  }
+
+  private[cncf] def runtimeComponentDevDirsC: Consequence[Vector[Path]] = synchronized {
+    _runtime_configuration_bindings.fold[Consequence[Vector[Path]]](
+      Consequence.configurationInvalid("runtime component-development bindings have not been admitted")
+    )(_.value(CncfConfigurationParameterCatalog.componentDevDir).flatMap { values =>
+      try Consequence.success(values.getOrElse(Vector.empty).map { value =>
+        val path = if (value.startsWith("component-dev-dir:")) value.stripPrefix("component-dev-dir:").trim else value.trim
+        Paths.get(path).toAbsolutePath.normalize
+      }.filter(_.toString.nonEmpty).distinct)
+      catch { case _: Throwable => Consequence.configurationInvalid("runtime component-development path is invalid") }
+    })
+  }
+
+  private[cncf] def runtimeStartupImportConfigurationC: Consequence[StartupImportConfiguration] = synchronized {
+    _runtime_configuration_bindings.fold[Consequence[StartupImportConfiguration]](
+      Consequence.configurationInvalid("runtime startup-import bindings have not been admitted")
+    )(StartupImportConfiguration.from)
+  }
+
+  private[cncf] def runtimeOperationSecurityPolicyC: Consequence[RuntimeOperationSecurityPolicy] = synchronized {
+    _runtime_operation_security_policy.fold[Consequence[RuntimeOperationSecurityPolicy]](
+      Consequence.configurationInvalid("runtime operation security policy bindings have not been admitted")
+    )(Consequence.success)
+  }
+
+  private[cncf] def runtimeExecutionProfileConfigurationC: Consequence[RuntimeExecutionProfileConfiguration] = synchronized {
+    _runtime_execution_profile_configuration.fold[Consequence[RuntimeExecutionProfileConfiguration]](
+      Consequence.configurationInvalid("runtime execution-profile bindings have not been admitted")
+    )(Consequence.success)
+  }
+
+  private[cncf] def startupImportEntityCollectionResolver: StartupImport.EntityCollectionResolver =
+    new StartupImport.EntityCollectionResolver {
+      override def entityCollection(collectionId: org.simplemodeling.model.datatype.EntityCollectionId): Option[org.goldenport.cncf.entity.runtime.EntityCollection[?]] =
+        components.iterator.flatMap(_.entitySpace.entityOption(collectionId)).toSeq.headOption
+    }
+
+  private def _web_execution_resolution_policy(
+    bindings: ConfigurationBindingCollection[CncfConfigurationTarget]
+  ): Consequence[WebExecutionResolutionPolicy] =
+    for {
+      locale <- bindings.value(CncfConfigurationParameterCatalog.webExecutionLocale)
+      timezone <- bindings.value(CncfConfigurationParameterCatalog.webExecutionTimezone)
+      dateformat <- bindings.value(CncfConfigurationParameterCatalog.webExecutionDateFormat)
+      datetimeformat <- bindings.value(CncfConfigurationParameterCatalog.webExecutionDateTimeFormat)
+      displayoverride <- bindings.value(CncfConfigurationParameterCatalog.webExecutionDisplayOverrideEnabled)
+      httplanguage <- bindings.value(CncfConfigurationParameterCatalog.webExecutionHttpLanguageNegotiationEnabled)
+      capabilities <- bindings.value(CncfConfigurationParameterCatalog.webExecutionPublicCapabilities)
+    } yield WebExecutionResolutionPolicy(
+      applicationLocale = locale,
+      applicationTimezone = timezone,
+      dateFormat = dateformat,
+      dateTimeFormat = datetimeformat,
+      displayOverrideEnabled = displayoverride.getOrElse(false),
+      httpLanguageNegotiationEnabled = httplanguage.getOrElse(false),
+      publicCapabilities = capabilities.getOrElse(Vector.empty)
+    )
+
+  private[cncf] def executionProfileForRuntimeConfigurationBindingsC(
+    bindings: ConfigurationBindingCollection[CncfConfigurationTarget]
+  ): Consequence[SubsystemExecutionProfile] =
+    if (bindings == null)
+      Consequence.configurationInvalid("runtime Subsystem configuration bindings are required")
+    else
+      bindings.binding(CncfConfigurationParameterCatalog.subsystemUserMode).flatMap {
+        case Some(binding) => SubsystemUserMode.resolveRuntimeBindingForSubsystem(binding, this)
+        case None => SubsystemUserMode.resolveRuntimeBindingAbsentForSubsystem(this)
+      }.flatMap(x => executionProfileForUserModeC(x.mode))
   def executionProfileC: Consequence[SubsystemExecutionProfile] =
     subsystemUserModeC.flatMap(resolution => executionProfileForUserModeC(resolution.mode))
 
@@ -233,7 +374,9 @@ final class Subsystem(
     serviceContainerRuntime match {
       case Some(runtime) => Consequence.success(runtime)
       case None =>
-        ServiceContainerRuntimeConfiguration.createC(configuration).flatMap {
+        _runtime_configuration_bindings.fold[Consequence[Option[ServiceContainerRuntime]]](
+          Consequence.configurationInvalid("runtime service-container bindings have not been admitted")
+        )(ServiceContainerRuntimeConfiguration.createForRuntime).flatMap {
           case Some(runtime) =>
             installServiceContainerRuntimeC(runtime).map(_ => ServiceContainerRuntimeObservation.observed(runtime))
           case None => ServiceContainerDiagnostics.gatewayUnavailableC(serviceid)
@@ -241,7 +384,7 @@ final class Subsystem(
     }
   }
 
-  def installServiceContainerRuntimeC(runtime: ServiceContainerRuntime): Consequence[Unit] = synchronized {
+  private[cncf] def installServiceContainerRuntimeC(runtime: ServiceContainerRuntime): Consequence[Unit] = synchronized {
     _service_container_runtime match {
       case None =>
         _service_container_runtime = Some(runtime)
@@ -1219,11 +1362,11 @@ final class Subsystem(
       request
     else {
       val declared = _operation_declared_parameter_names(component, operation)
-      def keep(name: String): Boolean =
+      def _keep_(name: String): Boolean =
         declared.contains(name) || !_is_operation_binding_parameter(component, operation, name)
       request.copy(
-        arguments = request.arguments.filter(arg => keep(arg.name)),
-        properties = request.properties.filter(prop => keep(prop.name))
+        arguments = request.arguments.filter(arg => _keep_(arg.name)),
+        properties = request.properties.filter(prop => _keep_(prop.name))
       )
     }
   }
@@ -1538,24 +1681,25 @@ final class Subsystem(
     route: (Component, ServiceDefinition, OperationDefinition),
     ctx: ExecutionContext
   ): Consequence[Unit] = {
-    val (component, service, operation) = route
-    val selector = s"${component.name}.${service.name}.${operation.name}"
-    val runtimeconfig = RuntimeConfig.from(configuration)
-    val rule = if (component.name == AdminComponent.name)
-      Some(AdminAuthorizationPolicy.operationRule(selector, runtimeconfig))
-    else operation match {
-      case provider: OperationAuthorizationProvider =>
-        Some(provider.operationAuthorization(runtimeconfig))
-      case _ =>
-        _cml_operation_authorization_rule(component, operation.name)
-          .orElse(descriptor.flatMap(_.operationAuthorizationRule(selector)))
-    }
-    rule match {
-      case Some(r) =>
-        given ExecutionContext = _operation_authorization_context(ctx, runtimeconfig)
-        OperationAuthorization.authorize(selector, r)
-      case _ =>
-        Consequence.unit
+    runtimeOperationSecurityPolicyC.flatMap { policy =>
+      val (component, service, operation) = route
+      val selector = s"${component.name}.${service.name}.${operation.name}"
+      val rule = if (component.name == AdminComponent.name)
+        Some(AdminAuthorizationPolicy.operationRule(selector, policy))
+      else operation match {
+        case provider: OperationAuthorizationProvider =>
+          Some(provider.operationAuthorization(policy))
+        case _ =>
+          _cml_operation_authorization_rule(component, operation.name)
+            .orElse(descriptor.flatMap(_.operationAuthorizationRule(selector)))
+      }
+      rule match {
+        case Some(r) =>
+          given ExecutionContext = _operation_authorization_context(ctx, policy)
+          OperationAuthorization.authorize(selector, r)
+        case _ =>
+          Consequence.unit
+      }
     }
   }
 
@@ -1572,7 +1716,7 @@ final class Subsystem(
 
   private def _operation_authorization_context(
     ctx: ExecutionContext,
-    runtimeconfig: RuntimeConfig
+    policy: RuntimeOperationSecurityPolicy
   ): ExecutionContext = {
     val runtime = new RuntimeContext(
       core = ctx.runtime.core,
@@ -1583,7 +1727,7 @@ final class Subsystem(
       disposeAction = _ => (),
       token = "operation-authorization",
       context = ctx.runtime.context,
-      operationMode = runtimeconfig.operationMode,
+      operationMode = policy.operationMode,
       transitionValidationHook = ctx.runtime.transitionValidationHook,
       entityCreateDefaultsPolicy = ctx.runtime.entityCreateDefaultsPolicy
     )
@@ -2261,7 +2405,7 @@ object Subsystem {
 
   private[cncf] def shutdownOwned(subsystem: Subsystem): Unit = {
     var failure: Option[Throwable] = None
-    def capture(result: Consequence[_]): Unit = result match {
+    def _capture_(result: Consequence[_]): Unit = result match {
       case Consequence.Success(_) => ()
       case Consequence.Failure(conclusion) =>
         val throwable = conclusion.getException.getOrElse(new IllegalStateException(conclusion.show))
@@ -2271,9 +2415,9 @@ object Subsystem {
         }
     }
     try {
-      capture(subsystem.shutdownC())
+      _capture_(subsystem.shutdownC())
     } finally {
-      capture(subsystem.systemNode.shutdownC())
+      _capture_(subsystem.systemNode.shutdownC())
     }
     failure.foreach(throw _)
   }

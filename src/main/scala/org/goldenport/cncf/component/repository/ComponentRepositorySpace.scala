@@ -10,7 +10,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{RepositoryBootstrapPolicy, RuntimeConfig}
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*
@@ -19,7 +19,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -178,16 +178,41 @@ object ComponentRepositorySpace {
     configuration: ResolvedConfiguration,
     args: Array[String]
   ): ExtractedArgs = {
+    val policy = RepositoryBootstrapPolicy(
+      repositoryDirs = _config_values(configuration, Vector(RuntimeConfig.repositoryDirKey)),
+      repositoryComponentDevDirs = _config_values(configuration, Vector(RuntimeConfig.repositoryComponentDevDirKey, "cncf.repository.component.dev.dir")),
+      componentDirs = _config_values(configuration, Vector(RuntimeConfig.componentDirKey)),
+      componentDevDirs = _config_values(configuration, Vector(RuntimeConfig.componentDevDirKey, "cncf.component.dev.dir")),
+      componentCarDirs = _config_values(configuration, Vector(RuntimeConfig.componentCarDirKey, "cncf.component.car.dir")),
+      componentFiles = _config_values(configuration, Vector(RuntimeConfig.componentFileKey, RuntimeConfig.runtimeComponentFileKey)),
+      subsystemDevDirs = _config_values(configuration, Vector(RuntimeConfig.subsystemDevDirKey, RuntimeConfig.runtimeSubsystemDevDirKey, "cncf.subsystem.dev.dir", "cncf.runtime.subsystem.dev.dir")),
+      subsystemSarDirs = _config_values(configuration, Vector(RuntimeConfig.subsystemSarDirKey, RuntimeConfig.runtimeSubsystemSarDirKey, "cncf.subsystem.sar.dir", "cncf.runtime.subsystem.sar.dir"))
+    )
+    extractRepositoryArgs(policy, args)
+  }
+
+  def extractRepositoryArgs(
+    policy: RepositoryBootstrapPolicy,
+    args: Array[String]
+  ): ExtractedArgs = {
     val residual = Vector.newBuilder[String]
     val active = Vector.newBuilder[String]
     val search = Vector.newBuilder[String]
-    search ++= _config_search_repository_specs(configuration)
-    active ++= _config_active_repository_specs(configuration)
+    search ++= _config_search_repository_specs(policy)
+    active ++= _config_active_repository_specs(policy)
     var nodefault = false
     var i = 0
+    var aftersentinel = false
     while (i < args.length) {
       val arg = args(i)
-      if (arg == _no_default_components_flag) {
+      if (aftersentinel) {
+        residual += arg
+        i += 1
+      } else if (arg == "--") {
+        residual += arg
+        aftersentinel = true
+        i += 1
+      } else if (arg == _no_default_components_flag) {
         nodefault = true
         i += 1
       } else if (arg.startsWith("--repository-dir=")) {
@@ -325,6 +350,38 @@ object ComponentRepositorySpace {
     )
   }
 
+  /**
+   * Runtime-only policy projection. Value-bearing repository arguments have
+   * already been admitted at bootstrap; only the non-value default control is
+   * interpreted here.
+   */
+  def extractAdmittedRepositoryArgs(
+    policy: RepositoryBootstrapPolicy,
+    args: Array[String]
+  ): ExtractedArgs = {
+    val residual = Vector.newBuilder[String]
+    var nodefault = false
+    var aftersentinel = false
+    args.foreach { arg =>
+      if (aftersentinel) {
+        residual += arg
+      } else if (arg == "--") {
+        residual += arg
+        aftersentinel = true
+      } else if (arg == _no_default_components_flag) {
+        nodefault = true
+      } else {
+        residual += arg
+      }
+    }
+    ExtractedArgs(
+      active = Right(_config_active_repository_specs(policy)),
+      search = Right(_config_search_repository_specs(policy)),
+      residual = residual.result().toArray,
+      noDefault = nodefault
+    )
+  }
+
   // Legacy
   def extractArgs(
     configuration: ResolvedConfiguration,
@@ -337,22 +394,13 @@ object ComponentRepositorySpace {
   private val _no_default_components_flag = "--no-default-components"
 
   private def _config_search_repository_specs(
-    configuration: ResolvedConfiguration
+    policy: RepositoryBootstrapPolicy
   ): Vector[String] = {
-    val repositories = configuration.get[String](RuntimeConfig.repositoryDirKey) match {
-      case Consequence.Success(Some(value)) =>
-        value
-          .split(",")
-          .map(_.trim)
-          .filter(_.nonEmpty)
-          .toVector
-      case _ => Vector.empty
+    val repositories = policy.repositoryDirs.map { value =>
+      if (_is_url(value) || value.startsWith("component-dir:")) value
+      else s"component-dir:${value}"
     }
-    val componentdevrepositories =
-      _config_values(configuration, Vector(
-        RuntimeConfig.repositoryComponentDevDirKey,
-        "cncf.repository.component.dev.dir"
-      )).map(_component_dev_repository_spec)
+    val componentdevrepositories = policy.repositoryComponentDevDirs.map(_component_dev_repository_spec)
     (repositories ++ componentdevrepositories).distinct
   }
 
@@ -362,49 +410,19 @@ object ComponentRepositorySpace {
     else s"component-dev-dir:${value}"
 
   private def _config_active_repository_specs(
-    configuration: ResolvedConfiguration
+    policy: RepositoryBootstrapPolicy
   ): Vector[String] = {
-    val dirs = configuration.get[String](RuntimeConfig.componentDirKey) match {
-      case Consequence.Success(Some(value)) =>
-        value
-          .split(",")
-          .map(_.trim)
-          .filter(_.nonEmpty)
-          .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
-          .toVector
-      case _ => Vector.empty
-    }
-    val devdirs = _config_values(configuration, Vector(RuntimeConfig.componentDevDirKey, "cncf.component.dev.dir"))
-      .map(_component_dev_repository_spec)
-    val cardirs = _config_values(configuration, Vector(RuntimeConfig.componentCarDirKey, "cncf.component.car.dir"))
+    val dirs = policy.componentDirs
       .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
-    val sardirs = _config_values(configuration, Vector(
-      RuntimeConfig.subsystemSarDirKey,
-      RuntimeConfig.runtimeSubsystemSarDirKey,
-      "cncf.subsystem.sar.dir",
-      "cncf.runtime.subsystem.sar.dir"
-    ))
+    val devdirs = policy.componentDevDirs.map(_component_dev_repository_spec)
+    val cardirs = policy.componentCarDirs
       .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
-    val subsystemdevdirs = _config_values(configuration, Vector(
-      RuntimeConfig.subsystemDevDirKey,
-      RuntimeConfig.runtimeSubsystemDevDirKey,
-      "cncf.subsystem.dev.dir",
-      "cncf.runtime.subsystem.dev.dir"
-    ))
+    val sardirs = policy.subsystemSarDirs
+      .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
+    val subsystemdevdirs = policy.subsystemDevDirs
       .map(v => if (v.startsWith("subsystem-dev-dir:")) v else s"subsystem-dev-dir:${v}")
-    val files = Vector(RuntimeConfig.componentFileKey, RuntimeConfig.runtimeComponentFileKey)
-      .flatMap { key =>
-        configuration.get[String](key) match {
-          case Consequence.Success(Some(value)) =>
-            value
-              .split(",")
-              .map(_.trim)
-              .filter(_.nonEmpty)
-              .map(v => if (v.startsWith("component-file:")) v else s"component-file:${v}")
-              .toVector
-          case _ => Vector.empty
-        }
-      }.distinct
+    val files = policy.componentFiles
+      .map(v => if (v.startsWith("component-file:")) v else s"component-file:${v}")
     (dirs ++ devdirs ++ cardirs ++ sardirs ++ subsystemdevdirs ++ files).distinct
   }
 
@@ -528,7 +546,7 @@ object ComponentRepositorySpace {
       ComponentRepository.defaultLocalSubsystemRepositoryDir()
     ).filter(Files.isDirectory(_))
 
-  def component_extra_function(
+  def componentExtraFunction(
     specs: Seq[ComponentRepository.Specification]
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => new ComponentRepositorySpace(_make_repositories(subsystem, specs, Vector.empty).toVector).discover()

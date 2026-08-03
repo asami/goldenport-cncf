@@ -3,8 +3,8 @@ package org.goldenport.cncf.servicecontainer
 import java.util.Locale
 
 import org.goldenport.Consequence
-import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.configuration.{ConfigurationBindingCollection, ResolvedConfiguration}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, RuntimeConfig}
 
 /*
  * @since   Jul. 20, 2026
@@ -28,13 +28,34 @@ object ServiceContainerRuntimeConfiguration {
     "cncf.runtime.service-container.docker.executable"
   )
 
-  def createC(
+  private[servicecontainer] def createC(
     configuration: ResolvedConfiguration
   ): Consequence[Option[ServiceContainerRuntime]] =
-    _value(configuration, _driver_keys).map(_.trim.toLowerCase(Locale.ROOT)).getOrElse("none") match {
+    _create(
+      _value(configuration, _driver_keys),
+      _value(configuration, _docker_executable_keys)
+    )
+
+  def createForRuntime(
+    bindings: ConfigurationBindingCollection[CncfConfigurationTarget]
+  ): Consequence[Option[ServiceContainerRuntime]] =
+    if (bindings == null)
+      Consequence.configurationInvalid("runtime service-container configuration bindings are required")
+    else
+      for {
+        driver <- bindings.value(CncfConfigurationParameterCatalog.serviceContainerDriver)
+        executable <- bindings.value(CncfConfigurationParameterCatalog.serviceContainerDockerExecutable)
+        runtime <- _create(driver, executable)
+      } yield runtime
+
+  private def _create(
+    driver: Option[String],
+    configuredexecutable: Option[String]
+  ): Consequence[Option[ServiceContainerRuntime]] =
+    driver.map(_.trim.toLowerCase(Locale.ROOT)).getOrElse("none") match {
       case "none" | "disabled" => Consequence.success(None)
       case "docker" =>
-        _docker_executable_c(configuration).map { executable =>
+        _docker_executable_c(configuredexecutable).map { executable =>
           Some(ServiceContainerRuntime.create(
             ServiceContainerRegistry.inMemory(),
             DockerServiceContainerGateway.create(executable)
@@ -45,9 +66,9 @@ object ServiceContainerRuntimeConfiguration {
     }
 
   private def _docker_executable_c(
-    configuration: ResolvedConfiguration
+    configuredexecutable: Option[String]
   ): Consequence[String] = {
-    val executable = _value(configuration, _docker_executable_keys).map(_.trim).getOrElse("docker")
+    val executable = configuredexecutable.map(_.trim).getOrElse("docker")
     if (
       executable.isEmpty ||
       executable.length > 1024 ||

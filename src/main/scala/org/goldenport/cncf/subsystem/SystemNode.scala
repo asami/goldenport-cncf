@@ -3,8 +3,8 @@ package org.goldenport.cncf.subsystem
 import java.security.SecureRandom
 import java.util.UUID
 import org.goldenport.Consequence
+import org.goldenport.cncf.config.SystemNodeShutdownConfiguration
 import org.goldenport.cncf.datastore.sql.{ManagedSqlDataStoreResource, SqlDataStoreIdentity, SystemNodeSqlDataStoreRegistry}
-import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Aug.  2, 2026
@@ -14,9 +14,9 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 final class SystemNode private (
   val runtimeIdentity: String,
   val hmacKey: SqlDataStoreIdentity.HmacKey,
-  onFlightWait: () => Unit,
+  onflightwait: () => Unit,
   val drainTimeoutMillis: Long,
-  drainRuntime: SystemNode.DrainRuntime
+  drainruntime: SystemNode.DrainRuntime
 ) {
   import SystemNode.*
 
@@ -26,7 +26,7 @@ final class SystemNode private (
   private var _bindings: Set[SystemNodeDataStoreBinding] = Set.empty
   private var _shutdown_in_progress: Boolean = false
   private var _shutdown_result: Option[Consequence[Unit]] = None
-  private val _registry = new SystemNodeSqlDataStoreRegistry(_is_lease_admitted, onFlightWait)
+  private val _registry = new SystemNodeSqlDataStoreRegistry(_is_lease_admitted, onflightwait)
 
   def state: State = synchronized(_state)
 
@@ -150,12 +150,12 @@ final class SystemNode private (
     onTimeout: () => Unit
   ): Consequence[Unit] =
     Consequence {
-      val deadline = drainRuntime.nanoTime() + drainTimeoutMillis * 1000000L
+      val deadline = drainruntime.nanoTime() + drainTimeoutMillis * 1000000L
       val timedout = synchronized {
-        while (_active_leases.exists(predicate) && drainRuntime.nanoTime() < deadline) {
-          val remaining = deadline - drainRuntime.nanoTime()
+        while (_active_leases.exists(predicate) && drainruntime.nanoTime() < deadline) {
+          val remaining = deadline - drainruntime.nanoTime()
           val millis = math.max(1L, remaining / 1000000L)
-          drainRuntime.await(this, millis)
+          drainruntime.await(this, millis)
         }
         _active_leases.exists(predicate)
       }
@@ -197,20 +197,32 @@ object SystemNode {
     case Stopped
   }
 
-  def create(): SystemNode = {
+  def create(): SystemNode =
+    create(SystemNodeShutdownConfiguration.default)
+
+  def create(configuration: SystemNodeShutdownConfiguration): SystemNode = {
+    val timeout = _validate_drain_timeout(configuration)
     val bytes = new Array[Byte](32)
     new SecureRandom().nextBytes(bytes)
-    new SystemNode(UUID.randomUUID().toString, SqlDataStoreIdentity.HmacKey(bytes), () => (), DEFAULT_DRAIN_TIMEOUT_MILLIS, DrainRuntime.system)
+    new SystemNode(UUID.randomUUID().toString, SqlDataStoreIdentity.HmacKey(bytes), () => (), timeout, DrainRuntime.system)
   }
 
   def createC(
-    configuration: ResolvedConfiguration,
+    configuration: SystemNodeShutdownConfiguration,
     drainTimeoutOverride: Option[Long] = None
   ): Consequence[SystemNode] =
-    _drain_timeout_c(configuration, drainTimeoutOverride).map { timeout =>
-      val bytes = new Array[Byte](32)
-      new SecureRandom().nextBytes(bytes)
-      new SystemNode(UUID.randomUUID().toString, SqlDataStoreIdentity.HmacKey(bytes), () => (), timeout, DrainRuntime.system)
+    if (configuration == null || drainTimeoutOverride == null)
+      Consequence.configurationInvalid("SystemNode shutdown configuration is required")
+    else {
+      val effective = drainTimeoutOverride.fold[Consequence[SystemNodeShutdownConfiguration]](
+        Consequence.success(configuration)
+      )(SystemNodeShutdownConfiguration.overrideC)
+      effective.map { shutdownconfiguration =>
+        val timeout = _validate_drain_timeout(shutdownconfiguration)
+        val bytes = new Array[Byte](32)
+        new SecureRandom().nextBytes(bytes)
+        new SystemNode(UUID.randomUUID().toString, SqlDataStoreIdentity.HmacKey(bytes), () => (), timeout, DrainRuntime.system)
+      }
     }
 
   private[cncf] def withHmacKey(key: SqlDataStoreIdentity.HmacKey): SystemNode =
@@ -246,29 +258,29 @@ object SystemNode {
     }
   }
 
-  private def _drain_timeout_c(
-    configuration: ResolvedConfiguration,
-    overridevalue: Option[Long]
-  ): Consequence[Long] =
-    overridevalue match {
-      case Some(value) => _validate_drain_timeout_c(value.toString, "typed per-SystemNode override")
-      case None =>
-        configuration.configuration.values.get(DRAIN_TIMEOUT_KEY) match {
-          case Some(ConfigurationValue.StringValue(value)) => _validate_drain_timeout_c(value, "SystemNode-scoped resolved configuration")
-          case Some(value) => Consequence { throw new IllegalArgumentException(s"$DRAIN_TIMEOUT_KEY has unsupported value $value") }
-          case None => Consequence.success(DEFAULT_DRAIN_TIMEOUT_MILLIS)
-        }
-    }
+  private def _validate_drain_timeout(configuration: SystemNodeShutdownConfiguration): Long =
+    Option(configuration).filter(x => x.drainTimeoutMillis >= 1L && x.drainTimeoutMillis <= MAXIMUM_DRAIN_TIMEOUT_MILLIS)
+      .map(_.drainTimeoutMillis)
+      .getOrElse(throw new IllegalArgumentException(s"$DRAIN_TIMEOUT_KEY requires an integer in 1..$MAXIMUM_DRAIN_TIMEOUT_MILLIS"))
+}
 
-  private def _validate_drain_timeout_c(value: String, source: String): Consequence[Long] =
-    Consequence {
-      val timeout = Option(value).map(_.trim).flatMap(_.toLongOption).getOrElse(
-        throw new IllegalArgumentException(s"$DRAIN_TIMEOUT_KEY requires an integer in 1..$MAXIMUM_DRAIN_TIMEOUT_MILLIS; rejected value: $value")
-      )
-      if (timeout < 1 || timeout > MAXIMUM_DRAIN_TIMEOUT_MILLIS)
-        throw new IllegalArgumentException(s"$DRAIN_TIMEOUT_KEY requires an integer in 1..$MAXIMUM_DRAIN_TIMEOUT_MILLIS; rejected value: $value")
-      timeout
-    }
+/** Transfers one already-constructed node across the factory construction
+ *  boundary. It carries no configuration and is cleared before factory work
+ *  can return to callers. */
+private[cncf] object SystemNodeConstruction {
+  private val _node = new ThreadLocal[SystemNode]()
+
+  def withNode[A](node: SystemNode)(f: => A): A = {
+    if (node == null)
+      throw new IllegalArgumentException("SystemNode construction node is required")
+    if (_node.get != null)
+      throw new IllegalStateException("SystemNode construction is already active")
+    _node.set(node)
+    try f
+    finally _node.remove()
+  }
+
+  def current: Option[SystemNode] = Option(_node.get)
 }
 
 private[cncf] final class SystemNodeResourceLease private[subsystem] (

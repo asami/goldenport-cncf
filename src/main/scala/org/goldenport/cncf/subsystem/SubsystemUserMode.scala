@@ -1,15 +1,15 @@
 package org.goldenport.cncf.subsystem
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.config.ConfigurationAccess
-import org.goldenport.configuration.{ConfigurationOrigin, ConfigurationResolution, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, ConfigurationAccess}
+import org.goldenport.configuration.{ConfigurationBinding, ConfigurationOrigin, ConfigurationResolution, ConfigurationValue, ResolvedConfiguration}
 
 /*
  * The user-context admission mode belongs to one stable Subsystem.  It is
  * neither a Web selector nor a SystemNode/JVM-wide execution setting.
  *
  * @since   Aug.  1, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 enum SubsystemUserMode(val name: String) {
@@ -52,29 +52,66 @@ object SubsystemUserMode {
     subsystem: Subsystem
   ): Consequence[SubsystemUserModeResolution] =
     canonicalConfigurationValue(configuration) match {
-      case Some(ConfigurationValue.StringValue(value)) =>
-        parse(value)
-          .map(mode => _validate(mode, subsystem).map(_ => SubsystemUserModeResolution(
-            mode,
-            configuration.trace.get(CONFIGURATION_KEY).getOrElse(_trace(mode))
-          )))
-          .getOrElse(Consequence.argumentFormatError(CONFIGURATION_KEY, "standalone or multi-user", value))
-      case Some(value) => Consequence.argumentFormatError(
-        CONFIGURATION_KEY,
-        "string standalone or multi-user",
-        value.toString
+      case Some(value) => _resolve_catalog_value(
+        value,
+        configuration.trace.get(CONFIGURATION_KEY),
+        subsystem
       )
       case None => ConfigurationAccess.getString(configuration, CONFIGURATION_KEY) match {
-        case Some(value) =>
-          parse(value)
-            .map(mode => _validate(mode, subsystem).map(_ => SubsystemUserModeResolution(
-              mode,
-              configuration.trace.get(CONFIGURATION_KEY).getOrElse(_trace(mode))
-            )))
-            .getOrElse(Consequence.argumentFormatError(CONFIGURATION_KEY, "standalone or multi-user", value))
+        case Some(value) => _resolve_catalog_value(
+          ConfigurationValue.StringValue(value),
+          configuration.trace.get(CONFIGURATION_KEY),
+          subsystem
+        )
         case None => _direct_component_standalone_c(subsystem)
       }
     }
+
+  def resolveRuntimeBindingForSubsystem(
+    binding: ConfigurationBinding[SubsystemUserMode, CncfConfigurationTarget],
+    subsystem: Subsystem
+  ): Consequence[SubsystemUserModeResolution] =
+    if (binding == null)
+      Consequence.configurationInvalid("runtime Subsystem user-mode binding is required")
+    else
+      _validate(binding.value, subsystem).flatMap { _ =>
+        binding.parameter.codec.encode(binding.value).map { value =>
+          SubsystemUserModeResolution(
+            binding.value,
+            _runtime_binding_trace(binding, value)
+          )
+        }
+      }
+
+  private[cncf] def resolveRuntimeBindingAbsentForSubsystem(
+    subsystem: Subsystem
+  ): Consequence[SubsystemUserModeResolution] =
+    _direct_component_standalone_c(subsystem)
+
+  private def _resolve_catalog_value(
+    value: ConfigurationValue,
+    trace: Option[ConfigurationResolution],
+    subsystem: Subsystem
+  ): Consequence[SubsystemUserModeResolution] =
+    CncfConfigurationParameterCatalog.subsystemUserMode.codec.decode(value).flatMap { mode =>
+      _validate(mode, subsystem).map(_ => SubsystemUserModeResolution(
+        mode,
+        trace.getOrElse(_trace(mode))
+      ))
+    }
+
+  private def _runtime_binding_trace(
+    binding: ConfigurationBinding[SubsystemUserMode, CncfConfigurationTarget],
+    value: ConfigurationValue
+  ): ConfigurationResolution =
+    ConfigurationResolution(
+      CONFIGURATION_KEY,
+      value,
+      binding.provenance.origin,
+      binding.overridden.toList.map(x => _runtime_binding_trace(x, x.parameter.codec.encode(x.value).TAKE)),
+      binding.provenance.sourceType,
+      Some(binding.provenance.sourceIdentity)
+    )
 
   private def _canonical_configuration_value(
     values: Map[String, ConfigurationValue],

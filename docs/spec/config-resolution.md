@@ -28,8 +28,9 @@ It provides:
     - deterministic merge semantics
     - a single evaluated configuration result
 
-Source discovery belongs to source assembly (`ConfigSources.standard`)
-rather than resolver execution.
+Source discovery belongs to runtime source assembly. The generic resolver
+receives ordered `org.goldenport.configuration.source.ConfigurationSource`
+instances rather than discovering them itself.
 
 It does NOT:
 
@@ -42,12 +43,16 @@ Important principle:
 
 config resolution != config semantics
 
-Status note:
+The authoritative runtime path is `org.goldenport.configuration.*`:
 
-    - `org.goldenport.cncf.config.ConfigResolver` is deprecated (Phase 2.8).
-    - Runtime uses `org.goldenport.configuration.ConfigurationResolver`.
-    - The primary product namespace is `textus`.
-    - `cncf` remains as a compatibility namespace.
+    - `ConfigurationResolver.resolveSnapshot` loads each selected physical
+      source once and returns an immutable `ConfigurationResolutionSnapshot`.
+    - `ResolvedConfiguration` is the compatibility map projection of that
+      snapshot, not a second resolution authority.
+    - CNCF decodes retained per-source values into typed configuration binding
+      candidates, then resolves those candidates for their declared targets.
+    - The primary product namespace is `textus`; `cncf` is admitted only as an
+      explicitly registered compatibility spelling.
 
 
 ----------------------------------------------------------------------
@@ -119,43 +124,39 @@ must be available as:
 
 3.3 Primary and Compatibility Directories
 
-For a given HOME / PROJECT / CWD scope, compatibility `.cncf` files are loaded
-before primary `.textus` files.
+For a given HOME / PROJECT / CWD scope, primary `.textus` files are assembled
+before compatibility `.cncf` files. Because later sources overwrite earlier
+values, `.cncf` is the established compatibility override in the current
+runtime.
 
 This means:
 
-    .cncf/config.yaml      compatibility fallback
-    .textus/config.yaml    primary value
+    .textus/config.yaml    primary baseline
+    .cncf/config.yaml      compatibility override
 
-If both define the same key, `.textus` wins.
+If both define the same key, `.cncf` wins. This precedence is compatibility
+behavior, not a recommendation for new configuration spellings.
 
 
 ----------------------------------------------------------------------
-4. Project Root Resolution (Legacy Effective Behavior)
+4. Project Root Resolution
 ----------------------------------------------------------------------
 
-The deprecated CNCF-local resolver does not perform upward project-root
-detection.
+The runtime source assembler uses
+`org.goldenport.configuration.source.ProjectRootFinder` to determine the
+project root before constructing Project and CWD source entries. Textus uses
+`textus` as its primary application directory and evaluates `cncf` only as the
+documented compatibility application directory.
 
-4.1 Effective Rule (as implemented)
+The source assembler records origins and ranks; the generic resolver does not
+guess roots or mutate discovery decisions while resolving values.
 
-`org.goldenport.cncf.config.ConfigSource.project(cwd)` and
-`ConfigSource.cwd(cwd)` both resolve to:
+4.1 Design Rationale
 
-    ${CWD}/.cncf/config.conf
-
-No `.git` or parent-directory probing is executed in this legacy path.
-Project source and CWD source are distinct origins with the same location.
-
-The current runtime path uses `org.goldenport.configuration.ProjectRootFinder`.
-For Textus runtime configuration, project discovery uses the primary
-application name `textus` and keeps `cncf` as a compatibility application name.
-
-4.2 Design Rationale
-
-    - keep legacy behavior deterministic and backward-compatible
-    - avoid introducing new root-discovery semantics in deprecated layer
-    - move richer discovery policy to current configuration package
+    - keep discovery explicit and reproducible
+    - make project-root policy independent from resolution and binding semantics
+    - retain the established compatibility-directory override order without
+      treating it as a new canonical vocabulary
 
 This mechanism must never guess.
 
@@ -178,8 +179,8 @@ Later sources overwrite earlier ones.
 
 This order is foundational and must remain stable.
 
-Within HOME, PROJECT, and CWD, `.cncf` compatibility sources are weaker than
-`.textus` primary sources.
+Within HOME, PROJECT, and CWD, `.cncf` compatibility sources are assembled
+after `.textus` primary sources and therefore override duplicate values.
 
 Explicit config file arguments use the following compatibility rule:
 
@@ -243,30 +244,31 @@ result.
 7. Public API Contract
 ----------------------------------------------------------------------
 
-Consumers interact with this mechanism through source-based entry points.
+Consumers interact with the generic source and snapshot APIs.
 
-    trait ConfigResolver {
+    trait ConfigurationResolver {
       def resolve(
-        sources: Seq[ConfigSource]
-      ): Consequence[ResolvedConfig]
+        sources: Seq[ConfigurationSource]
+      ): Consequence[ResolvedConfiguration]
 
-      def resolve(
-        sources: ConfigSources
-      ): Consequence[ResolvedConfig]
+      def resolveSnapshot(
+        sources: Seq[ConfigurationSource]
+      ): Consequence[ConfigurationResolutionSnapshot]
     }
 
-Typical source assembly:
-
-    ConfigSources.standard(
-      cwd = cwd,
-      args = args,
-      env = env
-    )
+The runtime may make a preliminary generic resolution pass to locate a test
+descriptor. It then assembles the final ordered source list and invokes
+`ConfigurationResolver.resolveSnapshot` once for that final list. CNCF
+configuration admission decodes the final snapshot's retained source values
+through the closed catalog into typed `ConfigurationBindingCandidate` values.
+The target-aware `ConfigurationBindingResolver` is the sole authority for a
+final typed binding collection. Components receive resolved values or narrow
+capabilities, never raw source maps, aliases, candidates, or trace authority.
 
 API Principles:
 
     - no global mutable state in resolver
-    - caller supplies sources explicitly (or via `ConfigSources.standard`)
+    - caller supplies already selected sources explicitly
     - safe for Docker, CI, tests, and embedded usage
     - errors are explicit (`Consequence.Failure`)
 
@@ -296,14 +298,17 @@ This layer must not:
 
 Consumers must:
 
-    - call the current configuration API (`org.goldenport.configuration.*`)
-    - treat this legacy resolver as compatibility-only
+    - call the current generic configuration API
+      (`org.goldenport.configuration.*`)
+    - perform target-specific CNCF admission through the closed parameter
+      catalog and typed binding resolver
 
 Consumers must not:
 
     - bypass discovery logic
     - re-implement merge semantics
-    - depend on internal classes of this layer
+    - create a second local resolver, map merge, source discovery, or trace
+      authority
 
 This layer is not application-specific.
 
@@ -312,12 +317,14 @@ This layer is not application-specific.
 10. Testing Expectations
 ----------------------------------------------------------------------
 
-Unit tests should cover:
+Executable specifications must cover:
 
-    - fixed-path project/cwd source behavior
-    - precedence ordering
-    - merge behavior
-    - empty and missing configuration handling
+    - one-load-per-source snapshot behavior and source rank/ordinal precedence
+    - typed canonical parameter decoding, target admission, collisions, and
+      override history
+    - resolved collection and sanitized trace derivation from the same effective
+      binding authority
+    - empty/missing source handling and structural configuration failure
 
 Tests must avoid:
 
@@ -325,14 +332,7 @@ Tests must avoid:
     - SIE-specific assumptions
     - persistent filesystem coupling
 
-Temporary directories are acceptable.
-
-Legacy executable-check note (2026-03-21):
-
-    - `src/test/scala/org/goldenport/cncf/config/source/**` remains pending-only.
-    - Owner: cncf-runtime
-    - TODO: replace pending specs with concrete checks for fixed-path
-      `ConfigSource.project(cwd)` / `ConfigSource.cwd(cwd)` behavior.
+Temporary test fixtures must be target-owned and cleaned after use.
 
 
 ----------------------------------------------------------------------

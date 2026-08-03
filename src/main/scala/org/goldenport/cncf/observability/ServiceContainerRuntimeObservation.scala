@@ -35,6 +35,9 @@ object ServiceContainerRuntimeObservation {
     runtime: ServiceContainerRuntime,
     context: ExecutionContext
   ) extends ServiceContainerRuntime {
+    override private[cncf] def configuredDockerExecutable: Option[String] =
+      runtime.configuredDockerExecutable
+
     def resolveC(
       definition: ServiceContainerDefinition
     ): Consequence[ServiceContainerResolution] = {

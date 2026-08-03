@@ -32,6 +32,8 @@ final case class ServiceContainerCleanupOutcome(
 )
 
 abstract class ServiceContainerRuntime {
+  private[cncf] def configuredDockerExecutable: Option[String] = None
+
   def resolveC(
     definition: ServiceContainerDefinition
   ): Consequence[ServiceContainerResolution]
@@ -63,6 +65,12 @@ final class DefaultServiceContainerRuntime(
   registry: ServiceContainerRegistry,
   gateway: ServiceContainerGateway
 ) extends ServiceContainerRuntime {
+  override private[cncf] def configuredDockerExecutable: Option[String] =
+    gateway match {
+      case x: DockerServiceContainerGateway => x.configuredExecutable
+      case _ => None
+    }
+
   def resolveC(
     definition: ServiceContainerDefinition
   ): Consequence[ServiceContainerResolution] =

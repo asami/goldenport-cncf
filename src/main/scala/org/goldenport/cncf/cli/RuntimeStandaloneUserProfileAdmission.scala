@@ -24,6 +24,22 @@ private[cli] object RuntimeStandaloneUserProfileAdmission {
   ): Consequence[Vector[StandaloneUserProfileResolver.Admitted]] =
     admit(subsystem, serverExecution, StandaloneUserProfileResolver.resolve, _.executionProfileC)
 
+  def admit(
+    subsystem: Subsystem,
+    profile: SubsystemExecutionProfile
+  ): Consequence[Vector[StandaloneUserProfileResolver.Admitted]] =
+    admit(subsystem, profile, StandaloneUserProfileResolver.resolve)
+
+  private[cli] def admit(
+    subsystem: Subsystem,
+    profile: SubsystemExecutionProfile,
+    profileAdmission: ProfileAdmission
+  ): Consequence[Vector[StandaloneUserProfileResolver.Admitted]] =
+    if (subsystem == null || profile == null)
+      Consequence.configurationInvalid("StandaloneUserProfile runtime admission is invalid")
+    else
+      _admit(subsystem, profile, profileAdmission)
+
   private[cli] def admit(
     subsystem: Subsystem,
     serverExecution: Boolean,
@@ -37,7 +53,16 @@ private[cli] object RuntimeStandaloneUserProfileAdmission {
     profileAdmission: ProfileAdmission,
     subsystemProfile: SubsystemProfileResolution
   ): Consequence[Vector[StandaloneUserProfileResolver.Admitted]] =
-    _execution_profile(subsystem, serverExecution, subsystemProfile).flatMap {
+    _execution_profile(subsystem, serverExecution, subsystemProfile).flatMap(profile => _admit(subsystem, profile, profileAdmission))
+
+  private def _admit(
+    subsystem: Subsystem,
+    profile: SubsystemExecutionProfile,
+    profileAdmission: ProfileAdmission
+  ): Consequence[Vector[StandaloneUserProfileResolver.Admitted]] =
+    if (profileAdmission == null)
+      Consequence.configurationInvalid("StandaloneUserProfile runtime profile admission is required")
+    else profile match {
       case profile @ SubsystemExecutionProfile(SubsystemCurrentUserEvidence.Fixed) =>
         _require_descriptor_owned_identity(subsystem).flatMap(_ => profileAdmission(profile))
       case SubsystemExecutionProfile(SubsystemCurrentUserEvidence.Authenticated | SubsystemCurrentUserEvidence.ControlledTest) =>

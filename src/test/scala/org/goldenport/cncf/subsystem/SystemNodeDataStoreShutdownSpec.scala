@@ -2,7 +2,8 @@ package org.goldenport.cncf.subsystem
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.sql.{ManagedSqlDataStoreResource, SqlDataStoreIdentity}
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, SystemNodeShutdownConfiguration}
+import org.goldenport.configuration.{ConfigurationBindingCollection, ConfigurationValue}
 import java.util.concurrent.{Callable, CountDownLatch, Executors, TimeUnit}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -30,12 +31,9 @@ final class SystemNodeDataStoreShutdownSpec extends AnyWordSpec with Matchers wi
     "which records the SystemNode lifecycle contract in docs/phase/phase-54.md" that {
     _example("E1", "reject a non-positive canonical drain timeout before any Subsystem is constructed") {
       Given("a zero SystemNode-scoped drain timeout")
-      val configuration = _configuration(
-        "textus.system-node.shutdown.drain-timeout-millis" -> "0"
-      )
+      val result = _create_node_c("0")
 
-      When("SystemNode construction resolves the canonical configuration")
-      val result = SystemNode.createC(configuration)
+      When("the canonical typed configuration is admitted before SystemNode construction")
 
       Then("it fails structurally with the canonical key and rejected value")
       _failure_display(result) should include ("textus.system-node.shutdown.drain-timeout-millis")
@@ -44,12 +42,9 @@ final class SystemNodeDataStoreShutdownSpec extends AnyWordSpec with Matchers wi
 
     _example("E2", "reject a negative canonical drain timeout before any Subsystem is constructed") {
       Given("a negative SystemNode-scoped drain timeout")
-      val configuration = _configuration(
-        "textus.system-node.shutdown.drain-timeout-millis" -> "-1"
-      )
+      val result = _create_node_c("-1")
 
-      When("SystemNode construction resolves the canonical configuration")
-      val result = SystemNode.createC(configuration)
+      When("the canonical typed configuration is admitted before SystemNode construction")
 
       Then("it fails structurally with the canonical key and rejected value")
       _failure_display(result) should include ("textus.system-node.shutdown.drain-timeout-millis")
@@ -58,12 +53,9 @@ final class SystemNodeDataStoreShutdownSpec extends AnyWordSpec with Matchers wi
 
     _example("E3", "reject a non-numeric canonical drain timeout before any Subsystem is constructed") {
       Given("a non-numeric SystemNode-scoped drain timeout")
-      val configuration = _configuration(
-        "textus.system-node.shutdown.drain-timeout-millis" -> "thirty-seconds"
-      )
+      val result = _create_node_c("thirty-seconds")
 
-      When("SystemNode construction resolves the canonical configuration")
-      val result = SystemNode.createC(configuration)
+      When("the canonical typed configuration is admitted before SystemNode construction")
 
       Then("it fails structurally with the canonical key and rejected value")
       _failure_display(result) should include ("textus.system-node.shutdown.drain-timeout-millis")
@@ -73,9 +65,7 @@ final class SystemNodeDataStoreShutdownSpec extends AnyWordSpec with Matchers wi
     _example("E4", "reject every sampled non-positive canonical drain timeout with keyed structured evidence") {
       Given("sampled zero and negative SystemNode-scoped drain timeouts")
       val property = Prop.forAll(Gen.chooseNum(-300000, 0)) { value =>
-        SystemNode.createC(_configuration(
-          "textus.system-node.shutdown.drain-timeout-millis" -> value.toString
-        )) match {
+        _create_node_c(value.toString) match {
           case Consequence.Failure(conclusion) =>
             conclusion.display.contains("textus.system-node.shutdown.drain-timeout-millis") &&
               conclusion.display.contains(value.toString)
@@ -491,12 +481,13 @@ final class SystemNodeDataStoreShutdownSpec extends AnyWordSpec with Matchers wi
       case Consequence.Success(_) => fail("expected structured configuration failure")
     }
 
-  private def _configuration(
-    values: (String, String)*
-  ): ResolvedConfiguration =
-    ResolvedConfiguration(
-      Configuration(values.map { case (key, value) => key -> ConfigurationValue.StringValue(value) }.toMap),
-      ConfigurationTrace.empty
-    )
+  private def _create_node_c(value: String): Consequence[SystemNode] =
+    CncfConfigurationParameterCatalog.systemNodeShutdownDrainTimeoutMillis.codec
+      .decode(ConfigurationValue.StringValue(value))
+      .flatMap(timeout => SystemNodeShutdownConfiguration.from(
+        ConfigurationBindingCollection.empty,
+        Some(timeout)
+      ))
+      .flatMap(configuration => SystemNode.createC(configuration))
 
 }

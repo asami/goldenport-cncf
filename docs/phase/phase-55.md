@@ -1,6 +1,6 @@
 # Phase 55 - Typed Configuration Binding and Provenance Resolution
 
-status=planned
+status=in-progress
 planned_at=2026-07-30
 replanned_at=2026-07-31
 depends_on=[Phase 54](phase-54.md)
@@ -85,7 +85,8 @@ The planned model has these properties:
 - no final implementation retains parallel authoritative String-keyed and
   typed-keyed configuration models.
 
-Exact public names remain provisional until GCF-01 freezes the contract.
+The GCF-01 name, ownership, namespace, alias, and diagnostic decisions are
+frozen in the [GCF-01 inventory and binding-contract record](../notes/phase-55-gcf01-inventory-and-binding-contract-freeze.md).
 
 ## Planned Core Objects
 
@@ -94,16 +95,16 @@ The provisional object roles are:
 - `CanonicalParameterId`: validated semantic identity;
 - `ConfigurationParameter[A]`: identity, admitted value type, and codec;
 - `SubsystemInstanceId`: validated Subsystem identity plus instance name;
-- `ConfigurationTarget`: initially Global, ComponentClass,
+- `CncfConfigurationTarget`: CNCF-owned initially Global, ComponentClass,
   SubsystemInstance, or a ComponentInstance qualified by both its containing
   SubsystemInstanceId and ComponentInstanceId;
 - `ConfigurationProvenance`: physical source, layer, input spelling/path,
   ordering position, and bounded evidence;
-- `ConfigurationBinding[A]`: parameter, target, typed value, provenance, and
+- `ConfigurationBinding[A, T]`: parameter, target, typed value, provenance, and
   direct overridden binding;
-- `ConfigurationBindingCandidates`: unresolved bindings from every admitted
+- `ConfigurationBindingCandidates[T]`: unresolved bindings from every admitted
   source; and
-- `ConfigurationBindingCollection`: resolved effective binding indexed by
+- `ConfigurationBindingCollection[T]`: resolved effective binding indexed by
   canonical parameter identity.
 
 `ConfigurationTrace` remains an external and diagnostic projection. It does
@@ -114,15 +115,15 @@ effective binding collection.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| GCF-01 | Inventory and binding-contract freeze | Existing constructors, lookups, source loading, aliases, trace consumers, repositories, names, compatibility, redaction, and lifecycle invariants are fixed. | planned |
-| GCF-02 | Failing-first typed binding contract | Executable specifications fix parameter/value typing, provenance, candidate/resolved separation, override-chain, conflict, lookup, and redaction behavior. | planned |
-| GCF-03 | Typed parameter and binding core | Generic parameter, target, provenance, binding, factory, and typed lookup contracts are implemented without CNCF-specific semantics. | planned |
-| GCF-04 | Source decoding and candidate construction | Each admitted source loads once and produces validated immutable candidates with canonical identity and complete provenance. | planned |
-| GCF-05 | Deterministic resolution and override history | Global, ComponentClass, SubsystemInstance, and fully qualified ComponentInstance target selection plus source precedence produce one winner per parameter with an exact override chain. | planned |
-| GCF-06 | Resolved collection and trace projection | Typed lookup and sanitized trace are derived from one effective binding authority. | planned |
-| GCF-07 | Textus/CNCF parameter catalog adoption | Closed `textus.*` and `cncf.*` contracts, Phase 53 layering, StandaloneUserProfile, and runtime resolution use the generic binding model. | planned |
-| GCF-08 | External codecs and boundary adapters | File, environment, argument, launcher, and diagnostic String forms round-trip through explicit codecs without becoming an internal authority. | planned |
-| GCF-09 | Admitted consumer migration | Every frozen direct consumer migrates coherently; temporary internal String adapters are removed before closure. | planned |
+| GCF-01 | Inventory and binding-contract freeze | Existing constructors, lookups, source loading, aliases, trace consumers, repositories, names, compatibility, redaction, and lifecycle invariants are fixed. | done |
+| GCF-02 | Failing-first typed binding contract | Generic target-parametrized scenario SPI and CNCF specialization register parameter/value typing, provenance, candidate/resolved separation, override-chain, conflict, lookup, alias, fixed-user, and redaction behavior; only structured `NotImplemented` is implemented. | done |
+| GCF-03 | Typed parameter and binding core | Generic parameter, provenance, candidate/effective binding, collection, and typed lookup contracts plus CNCF's four validated targets are implemented; source/resolution/catalog behavior remains deferred. | done |
+| GCF-04 | Source decoding and candidate construction | Each admitted source loads once and produces validated immutable candidates with canonical identity and complete provenance. | done |
+| GCF-05 | Deterministic resolution and override history | Global, ComponentClass, SubsystemInstance, and fully qualified ComponentInstance target selection plus source precedence produce one winner per parameter with an exact override chain. | done |
+| GCF-06 | Resolved collection and trace projection | Generic typed lookup and sanitized trace projection are derived from one effective binding authority. | done |
+| GCF-07 | Textus/CNCF parameter catalog adoption | Closed `textus.*` and `cncf.*` contracts, Phase 53 layering, StandaloneUserProfile, Web execution policy, and runtime resolution use the generic binding model. GCF-07A–I establish catalog witnesses, a single-load runtime source projection, final fixed-standalone collection admission, fixed-only identity/formatting projection, typed Web policy/assembly-default adoption, and value-only runtime projections. | done |
+| GCF-08 | External codecs and boundary adapters | GCF-08A–L complete canonical/environment/argv codecs, argv and environment partitioning, raw-preserving consolidated/split-file admission, opaque launcher envelope transport, and serialized trace diagnostics. | done |
+| GCF-09 | Admitted consumer migration | Every frozen direct consumer migrates coherently; temporary internal String adapters are removed before closure. GCF-09A makes repository bootstrap selection a Global value-only typed policy; GCF-09B/C make runtime Web policy and descriptor/root resolution use admitted Subsystem values; GCF-09D makes the service-container driver and Docker executable Subsystem-scoped admitted values; GCF-09E makes runtime component-development Web paths admitted values; GCF-09F closes runtime repository/bootstrap projection, including legacy argv admission, component discovery, identity, and bootstrap-relative path resolution; GCF-09H makes the SystemNode shutdown timeout an admitted typed Subsystem value; GCF-09I makes startup-import sources admitted Subsystem values; GCF-09J makes collaborator repository discovery consume only Global typed bootstrap paths; GCF-09N projects the paired process-exit controls from the same resolved Global collection and has completed its review-fix validation. | in progress |
 | GCF-10 | Regression, review, and normative closure | Full validation, independent review, resource-safe diagnostics, design/spec promotion, and release evidence close the phase. | planned |
 
 ## Resolution Contract
@@ -167,8 +168,10 @@ a repository for mutation.
 - Internal typed parameter and binding APIs become the sole authority.
 - A temporary String adapter may sequence compilation but must be explicitly
   non-authoritative and removed or reduced to a boundary codec before closure.
-- Permanent aliases are not assumed. GCF-01 inventories current aliases and
-  either removes them or records a bounded owner-defined migration condition.
+- Canonical external names are `textus.*`. `textus.runtime.*`, `cncf.*`, and
+  `cncf.runtime.*` are decode-only aliases, rejected when co-present with the
+  canonical spelling for one `(collisionDomain, parameter, target)` identity;
+  GCF-09 removes admitted internal alias consumers.
 - The same semantic is never published independently as both `textus.foo` and
   `cncf.foo`.
 
@@ -236,10 +239,129 @@ implementation and validation.
 - A heterogeneous general-purpose object graph merge language.
 - Permanent dual String-keyed and typed-keyed authorities.
 - Entity or collection identity.
-- Subsystem datastore pool lifecycle owned by Phase 54.
+- SystemNode datastore pool lifecycle and Subsystem datastore bindings owned by
+  Phase 54.
 - Speculative migration of repositories not admitted by GCF-01.
 
 ## Current Status
 
-Phase 55 is planned. The ConfigurationBinding-centered direction is recorded;
-GCF-01 has not started and no implementation repository set is frozen.
+Phase 55 is in progress. GCF-01 through GCF-07 are complete: the generic/CNCF
+ownership split, typed parameter/binding core, source/candidate construction,
+deterministic resolution, resolved collection/trace projection, and the CNCF
+catalog/runtime adoption have passed their recorded independent reviews and
+focused validation. GCF-07's final runtime projection leaves Components and
+ExecutionContext without binding, candidate, target, source, layer, or trace
+authority; its former `ResolvedConfiguration` consumers are GCF-09 migration
+work, not open GCF-07 work.
+
+GCF-08 is complete. GCF-08A–L completed the canonical binding-string,
+environment-name, argv-envelope/admission, candidate bridge, runtime argv and
+environment boundaries, raw-preserving consolidated and canonical Textus
+split-file admission, opaque envelope transport through both launchers, and
+the serialized diagnostic boundary. Generic file-source snapshots retain YAML
+mapping-member multiplicity and order, and CNCF rejects duplicate canonical
+bindings from that retained document without rereading the physical source.
+
+GCF-09 remains in progress. GCF-09A–F have migrated repository bootstrap,
+runtime Web policy and descriptor roots, service-container configuration,
+component-development Web paths, and runtime repository/bootstrap projection
+to admitted typed values. GCF-09H adds the canonical,
+SubsystemInstance-only `textus.system-node.shutdown.drain-timeout-millis`
+binding: it is a positive bounded millisecond `Long` with no aliases, resolves
+to the 30000-ms default only when absent, and is selected before the runtime
+constructs its SystemNode. The remaining direct consumers and temporary
+adapters, normative specification and guidance updates, and exact closure
+evidence must complete before GCF-10 regression, final review, and release
+closure can begin.
+
+GCF-09I registers `textus.import.data.file` and
+`textus.import.entity.file` as optional, String-typed,
+SubsystemInstance-only values. Their three established compatibility spellings
+are decode-only aliases. The final admitted collection projects only normalized
+optional source strings into `StartupImportConfiguration`; the importer never
+reads `ResolvedConfiguration`, bindings, candidates, aliases, or provenance.
+For entity seed import, it receives only the entity-collection resolver
+capability, not the enclosing `Subsystem`.
+An admitted blank or missing value leaves the existing `data.d` / `entity.d`
+fallback intact, while missing runtime admission fails structurally. This slice
+does not change `application-mode`: it remains presentation-only vocabulary;
+its removal is separately planned compatibility and CML work.
+
+GCF-09J registers `textus.collaborator.repositories` as an optional,
+comma-separated `Vector[String]` value admitted only at Global scope. The
+established `textus.runtime.*`, `cncf.*`, and `cncf.runtime.*` spellings are
+decode-only aliases. Outer path whitespace is trimmed, interior whitespace is
+preserved, and only commas split values. `RepositoryBootstrapPolicy` resolves
+relative values against its bootstrap directory, normalizes and deduplicates
+them, and supplies only those paths to collaborator discovery. Missing or
+blank values select `<bootstrap-directory>/collaborator.d`; an explicit missing
+directory remains an empty discovery set and never revives that fallback. The
+raw `ResolvedConfiguration` collaborator overload remains compatibility-only,
+outside the runtime bootstrap path. `application-mode` remains presentation-only
+vocabulary and its removal remains separate compatibility/CML work.
+
+GCF-09K retires the isolated deprecated CNCF `config.model`, `config.source`,
+`config.trace`, resolver, merge, and resolved-value stack together with its
+self-contained tests. The live runtime uses the generic configuration binding,
+candidate, resolution, and trace stack instead. This deletion does not alter
+canonical runtime admission, compatibility contracts, `application-mode`, or
+the Phase 54 ownership topology.
+
+GCF-09L implements the runtime operation and Web-authorization policy
+projection. It admits the existing operation-mode, anonymous-admin,
+demo-assist, production-admin, and three production-admin-role values at
+`SubsystemInstance` scope, then project one value-only policy through
+`Subsystem` atomically with final binding admission to its operation
+authorization and HTTP consumers. The canonical
+keys retain only their established `textus.runtime.*`, `cncf.*`, and
+`cncf.runtime.*` decode-only aliases; malformed input must fail during
+admission, while absence selects the current defaults without reviving raw
+configuration. The slice does not remove `application-mode`, alter CML,
+expand the generic SPI, alter Phase 54 ownership, or migrate the unrelated
+RuntimeConfig families. Independent review required public default HTTP factory
+admission; REVIEW_FIX admits the empty final collection before it returns an
+engine, server, or loopback runtime. Focused re-review required the public
+factory regression to leave the Phase 53 dispatch spec; the dedicated GCF-09L
+executable specification is now in place and second focused re-review is
+clean.
+
+GCF-09M implements the runtime execution-profile configuration projection.
+It admits the complete existing execution determinism family at
+`SubsystemInstance` scope—profile, clock/time, random, id, scheduler,
+ordering, locale/timezone/charset, line separator, math context, i18n, and
+environment controls—and project one value-only configuration into execution
+profile resolution before `GlobalRuntimeContext` construction. The selected
+descriptor identity, candidate set, and resolved collection must be produced
+once and carried from this pre-Subsystem boundary through final admission;
+there must be no Global duplicate or raw execution-family fallback.
+Established `textus.runtime.*`, `cncf.*`, and `cncf.runtime.*` spellings remain
+decode-only aliases. `application-mode`, CML, Phase 54 ownership, generic SPI,
+launchers, and unrelated RuntimeConfig families remain outside this slice.
+The pre-Subsystem result now constructs the typed execution profile before
+`RuntimeConfig` and `GlobalRuntimeContext`, then carries its candidates into
+final fixed-user admission. Catalog/projection/bootstrap acceptance validation
+is green. Independent review found typed time/start validation and typed
+test-operation-mode activation gaps; REVIEW_FIX now restores structured
+time/start failures and enables the already-authorized controlled profile for
+typed test operation mode. Focused re-review remains required before the slice
+is accepted. The first focused re-review found only a residual parameter
+indentation P3 and missing manual-without-start regression. REVIEW_FIX corrects
+both.
+Final focused re-review is clean, so GCF-09M is accepted in the current
+GCF-09 Step accumulator.
+
+GCF-09N implements the smallest remaining direct-consumer slice: it admits
+`textus.force-exit` and `textus.no-exit` as Global Boolean values, then
+projects them with direct CLI-flag overrides into one value-only runtime
+process-exit policy. One resolved Global collection feeds both repository
+bootstrap and process-exit policy; the process-exit path no longer reads raw
+`ResolvedConfiguration`. Existing force-exit precedence, `noExit` failure
+behavior, and external `--force-exit`/`--no-exit` adapter controls are
+preserved. Review-fix validation is green: wrong-target split files and
+malformed/colliding Global values now remain structured bootstrap failures,
+and auto-archive enrichment retains the already resolved Global policy rather
+than resolving it again; the auto-archive executable specification now counts
+that Global-policy projection and requires exactly one occurrence. A fresh
+focused re-review remains the acceptance gate. `application-mode` and CML
+deletion remain separate compatibility work;
+unrelated front controls and RuntimeConfig families are excluded.
