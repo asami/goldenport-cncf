@@ -39,13 +39,13 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
 import org.goldenport.cncf.usernotification.UserNotificationEventForwarder
 import org.goldenport.cncf.workflow.WorkflowEngine
-import org.goldenport.configuration.{ConfigurationBindingCollection, ResolvedConfiguration}
+import org.goldenport.configuration.{ConfigurationBindingCollection, ConfigurationBindingTrace, ResolvedConfiguration}
 import org.goldenport.protocol.{Property, Request, Response}
 
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.cli.RunMode
-import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, ConfigurationAccess, ResolvedStandaloneUserProfile, RuntimeExecutionProfileConfiguration, RuntimeOperationSecurityPolicy, RuntimeTestDescriptor}
+import org.goldenport.cncf.config.{CncfConfigurationBindingDiagnosticCodec, CncfConfigurationParameterCatalog, CncfConfigurationTarget, ConfigurationAccess, ResolvedStandaloneUserProfile, RuntimeExecutionProfileConfiguration, RuntimeOperationSecurityPolicy, RuntimeTestDescriptor}
 import org.goldenport.cncf.importer.{StartupImport, StartupImportConfiguration}
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
@@ -274,6 +274,12 @@ final class Subsystem(
     _runtime_execution_profile_configuration.fold[Consequence[RuntimeExecutionProfileConfiguration]](
       Consequence.configurationInvalid("runtime execution-profile bindings have not been admitted")
     )(Consequence.success)
+  }
+
+  private[cncf] def runtimeConfigurationBindingDiagnosticC: Consequence[String] = synchronized {
+    _runtime_configuration_bindings.fold[Consequence[String]](
+      Consequence.configurationInvalid("runtime configuration diagnostic bindings have not been admitted")
+    )(bindings => ConfigurationBindingTrace.from(bindings).flatMap(CncfConfigurationBindingDiagnosticCodec.encode))
   }
 
   private[cncf] def startupImportEntityCollectionResolver: StartupImport.EntityCollectionResolver =

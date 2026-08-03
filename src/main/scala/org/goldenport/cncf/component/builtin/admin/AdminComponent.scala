@@ -4,7 +4,6 @@ import cats.data.NonEmptyVector
 import java.net.URI
 import java.nio.file.FileSystems
 import java.nio.file.Files
-import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
@@ -41,10 +40,6 @@ import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.component.ComponentLogic
 import org.goldenport.cncf.component.DescriptorRecordLoader
-import org.goldenport.configuration.ConfigurationResolver
-import org.goldenport.configuration.ConfigurationValue
-import org.goldenport.configuration.ConfigurationSources
-import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.datastore.{
@@ -114,7 +109,8 @@ import org.simplemodeling.model.datatype.{
  *  version Feb. 19, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {}
@@ -996,8 +992,8 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _config_snapshot().map { text =>
-        OperationResponse.Scalar(text)
+      subsystem.runtimeConfigurationBindingDiagnosticC.map { diagnostic =>
+        OperationResponse.Scalar(diagnostic)
       }
     }
 
@@ -1812,8 +1808,8 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _config_snapshot().map { text =>
-        OperationResponse.Scalar(_variation_lines(text))
+      subsystem.runtimeConfigurationBindingDiagnosticC.map { diagnostic =>
+        OperationResponse.Scalar(_variation_lines(diagnostic))
       }
     }
 
@@ -1885,52 +1881,14 @@ object AdminComponent {
     lines.result().mkString("\n").trim
   }
 
-  private def _config_snapshot(): Consequence[String] = {
-    val cwd = Paths.get("").toAbsolutePath.normalize
-    val sources = _standard_configuration_sources(cwd)
-    ConfigurationResolver.default.resolve(sources).map { resolved =>
-      val lines = Vector.newBuilder[String]
-      lines += "Config Snapshot"
-      lines += ""
-      resolved.configuration.values.toVector.sortBy(_._1).foreach {
-        case (key, value) =>
-          val source = resolved.trace.get(key).map(r => _origin(r.origin)).getOrElse("unknown")
-          lines += s"${key} = ${_value(value)}"
-          lines += s"  source: ${source}"
-          lines += ""
-      }
-      lines.result().mkString("\n").trim
-    }
-  }
-
-  private def _standard_configuration_sources(cwd: java.nio.file.Path): ConfigurationSources = {
-    val compatibility = ConfigurationSources.standard(cwd, applicationname = "cncf")
-    val primary = ConfigurationSources.standard(cwd, applicationname = "textus")
-    ConfigurationSources(compatibility.sources ++ primary.sources)
-  }
-
   private def _variation_lines(
-      configsnapshot: String
+      diagnostic: String
   ): String = {
     val lines = Vector.newBuilder[String]
     lines += "Variation Points"
     lines += ""
-    configsnapshot.split("\n").foreach { line =>
-      if (line.trim.nonEmpty && !line.startsWith("Config Snapshot")) {
-        if (!line.startsWith("  ")) {
-          val parts = line.split("=", 2)
-          if (parts.length == 2) {
-            val key = parts(0).trim
-            val value = parts(1).trim
-            lines += s"- ${key}"
-            lines += s"  value : ${value}"
-          }
-        } else if (line.trim.startsWith("source:")) {
-          lines += s"  ${line.trim}"
-          lines += ""
-        }
-      }
-    }
+    lines += diagnostic
+    lines += ""
     lines += ""
     lines += "Declared Runtime Variation Points"
     lines += ""
@@ -4015,25 +3973,4 @@ object AdminComponent {
   ): Boolean =
     conclusion.observation.taxonomy.symptom == org.goldenport.observation.Taxonomy.Symptom.NotImplemented
 
-  private def _value(value: ConfigurationValue): String =
-    value match {
-      case ConfigurationValue.StringValue(v) => v
-      case ConfigurationValue.NumberValue(v) => v.toString
-      case ConfigurationValue.BooleanValue(v) => v.toString
-      case ConfigurationValue.ListValue(vs) => vs.map(_value).mkString("[", ", ", "]")
-      case ConfigurationValue.ObjectValue(vs) =>
-        vs.map { case (k, v) => s"${k}=${_value(v)}" }.mkString("{", ", ", "}")
-      case ConfigurationValue.NullValue => "null"
-    }
-
-  private def _origin(origin: ConfigurationOrigin): String =
-    origin match {
-      case ConfigurationOrigin.Arguments => "cli"
-      case ConfigurationOrigin.Environment => "env"
-      case ConfigurationOrigin.Default => "default"
-      case ConfigurationOrigin.Home => "file"
-      case ConfigurationOrigin.Project => "file"
-      case ConfigurationOrigin.Cwd => "file"
-      case ConfigurationOrigin.Resource => "resource"
-    }
   }

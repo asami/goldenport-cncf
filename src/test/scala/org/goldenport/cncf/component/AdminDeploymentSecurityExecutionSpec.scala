@@ -3,28 +3,54 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.configuration.{ConfigurationBindingCollection, ConfigurationBindingResolver, ConfigurationDocument, ConfigurationOrigin, ConfigurationSourceAdmission, ConfigurationValue}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.protocol.Argument
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  9, 2026
  *  version Apr.  9, 2026
  *  version Apr. 11, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminDeploymentSecurityExecutionSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
 
   "AdminComponent" should {
+    "render admitted visible values and redact confidential bindings" in {
+      Given("a visible execution profile and a confidential random seed")
+      val secret = "admin-diagnostic-secret"
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val bindings = _take(_collection(Vector(
+        CncfConfigurationParameterCatalog.EXECUTION_PROFILE_KEY -> ConfigurationValue.StringValue("seeded"),
+        CncfConfigurationParameterCatalog.EXECUTION_RANDOM_SEED_KEY -> ConfigurationValue.StringValue(secret)
+      )))
+      _take(subsystem.admitRuntimeConfigurationBindingsC(bindings))
+      val admin = _admin_component(subsystem)
+
+      When("both Admin diagnostic endpoints execute against the admitted collection")
+      Vector("admin.config.show", "admin.variation.list").foreach { selector =>
+        val text = _take(_execute(admin, _build_request(subsystem.resolver, selector))).asInstanceOf[OperationResponse.Scalar[String]].value
+
+        Then("the visible value is retained and the confidential value is redacted")
+        text should include ("textus.execution.profile")
+        text should include ("seeded")
+        text should include ("\"state\":\"redacted\"")
+        text should not include secret
+      }
+    }
     "execute admin.deployment.securityMermaid requests" in {
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val adminComponent = _admin_component(subsystem)
@@ -57,16 +83,26 @@ final class AdminDeploymentSecurityExecutionSpec
       }
     }
 
-    "execute variation list and describe requests" in {
+    "execute binding-derived configuration, variation list, and variation describe requests" in {
+      Given("an Admin Subsystem with an admitted empty binding collection")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      subsystem.admitRuntimeConfigurationBindingsC(ConfigurationBindingCollection.empty[CncfConfigurationTarget]).isSuccess shouldBe true
       val adminComponent = _admin_component(subsystem)
       val listRequest = _build_request(subsystem.resolver, "admin.variation.list")
+      val showrequest = _build_request(subsystem.resolver, "admin.config.show")
       val describeRequest = _build_request(subsystem.resolver, "admin.variation.describe").copy(
         arguments = List(Argument("key", RuntimeConfig.executionHistoryRecentLimitKey))
       )
 
-      _execute(adminComponent, listRequest) match {
+      When("the Admin configuration and variation operations execute")
+      val listresponse = _execute(adminComponent, listRequest)
+      val showresponse = _execute(adminComponent, showrequest)
+      val describeresponse = _execute(adminComponent, describeRequest)
+
+      Then("the diagnostic boundary and declared variation points remain available")
+      listresponse match {
         case Consequence.Success(OperationResponse.Scalar(text: String)) =>
+          text should include ("textus.configuration-binding-diagnostic.v1")
           text should include (s"key  : ${RuntimeConfig.executionHistoryRecentLimitKey}")
           text should include ("brief: Recent execution history size.")
           text should not include ("detail: Number of most recent action execution records")
@@ -74,7 +110,15 @@ final class AdminDeploymentSecurityExecutionSpec
           fail(s"expected variation list scalar but got $other")
       }
 
-      _execute(adminComponent, describeRequest) match {
+      showresponse match {
+        case Consequence.Success(OperationResponse.Scalar(text: String)) =>
+          text should include ("textus.configuration-binding-diagnostic.v1")
+          text should not include ("Config Snapshot")
+        case other =>
+          fail(s"expected configuration diagnostic scalar but got $other")
+      }
+
+      describeresponse match {
         case Consequence.Success(OperationResponse.RecordResponse(record)) =>
           record.getString("key") shouldBe Some(RuntimeConfig.executionHistoryRecentLimitKey)
           record.getString("brief") shouldBe Some("Recent execution history size.")
@@ -116,4 +160,18 @@ final class AdminDeploymentSecurityExecutionSpec
       case other =>
         fail(s"resolver failed for $selector: $other")
     }
+
+  private def _collection(entries: Vector[(String, ConfigurationValue)]) =
+    for {
+      candidates <- CncfConfigurationCandidateDecoder.decodeCatalog(Vector(CncfConfigurationDocumentBatch(
+        new CncfConfigurationDocumentLocation.SubsystemInstance(_target),
+        _take(ConfigurationSourceAdmission.create(ConfigurationOrigin.Home, "home", "admin-diagnostic", 10, "admin-diagnostic", () => Consequence.success(ConfigurationDocument.Object(entries.map { case (key, value) => ConfigurationDocument.Field(key, ConfigurationDocument.Scalar(value)) }))))
+      )))
+      context <- CncfConfigurationResolutionContext.forSubsystem(_identity)
+      collection <- ConfigurationBindingResolver.resolve(candidates, context.generic)
+    } yield collection
+
+  private def _identity: SubsystemInstanceId = _take(SubsystemInstanceId.create("platform", "default"))
+  private def _target: CncfConfigurationTarget.SubsystemInstance = _take(CncfConfigurationTarget.SubsystemInstance.create(_identity))
+  private def _take[A](result: Consequence[A]): A = result.getOrElse(fail(result.display))
 }
