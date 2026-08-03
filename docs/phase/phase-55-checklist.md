@@ -583,7 +583,7 @@ Stage Status:
   policy; its phase-traceability review-fix is complete and second focused
   re-review clean; GCF-09M runtime execution-profile configuration projection
   accepted after final focused re-review; GCF-09N runtime process-exit policy
-  projection second review-fix validated and awaiting focused re-review,
+  projection accepted after final focused re-review,
   2026-08-04)
 - Owner: assigned from the GCF-01 repository inventory
 - Entry rule: the GCF-08 canonical/environment/argv/file/launcher/diagnostic
@@ -638,12 +638,13 @@ Stage Status:
   configuration before GlobalRuntimeContext construction, and carry the same
   descriptor-selected collection into final admission without a raw or Global
   duplicate authority. Final focused re-review is clean.
-- [ ] GCF-09N: admit `textus.force-exit` and `textus.no-exit` at Global scope;
+- [x] GCF-09N: admit `textus.force-exit` and `textus.no-exit` at Global scope;
   project one value-only process-exit policy from the same resolved collection
   as repository bootstrap, preserving direct CLI overrides and force-exit
   precedence without raw configuration revival. Second review-fix validation
-  is green, including an exact one-resolution auto-archive regression; focused
-  re-review remains required.
+  is green, including an exact one-resolution auto-archive regression. Final
+  focused re-review is clean with no actionable findings at accepted clean
+  implementation baseline `61fc63ea09fce0c13b9a366393948cda20a19d07`.
 - [ ] Migrate remaining direct constructors and map access.
 - [ ] Migrate resolver, merge, and trace consumers.
 - [ ] Migrate admitted runtime and launcher boundary consumers.
@@ -866,5 +867,5 @@ Phase 55 is IN PROGRESS. GCF-01 through GCF-08 are DONE. GCF-08A–L completed
 canonical/environment/argv admission, raw-preserving consolidated/split-file
 admission, opaque launcher transport, and serialized trace diagnostics.
 GCF-09 is IN_PROGRESS with
-GCF-09A–F and GCF-09H–L complete; its remaining consumer and adapter
+GCF-09A–F and GCF-09H–N complete; its remaining consumer and adapter
 migrations are still required before GCF-10 can start.
