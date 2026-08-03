@@ -64,7 +64,7 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
           .add(Vector(TestComponentFactory.create("dev_component", Protocol.empty)))
 
         When("the runtime server resolves component Web and manual roots")
-        val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime engine is required")))
+        val server = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime engine is required")))
         val webroots = server._component_web_roots("dev-component").map(_.name)
         val manualroots = server._component_manual_roots("dev-component").map(_.name)
 
@@ -82,7 +82,7 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
           .add(Vector(TestComponentFactory.create("dev_component", Protocol.empty)))
 
         When("the runtime server resolves component roots")
-        val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime engine is required")))
+        val server = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime engine is required")))
         val webroots = server._component_web_roots("dev-component").map(_.name)
         val manualroots = server._component_manual_roots("dev-component").map(_.name)
 
@@ -100,7 +100,7 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
         ))
 
         When("a direct compatibility engine constructs the HTTP server")
-        val rootresult = new Http4sHttpServer(new HttpExecutionEngine(subsystem))._web_descriptor_config_root()
+        val rootresult = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))._web_descriptor_config_root()
 
         Then("the legacy static root remains available from raw configuration")
         rootresult.map(_.name) shouldBe Some(root.toString)
@@ -116,7 +116,7 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
         subsystem.admitRuntimeConfigurationBindingsC(ConfigurationBindingCollection.empty[CncfConfigurationTarget]).isSuccess shouldBe true
 
         When("the runtime server resolves its descriptor static root")
-        val rootresult = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime engine is required")))._web_descriptor_config_root()
+        val rootresult = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime engine is required")))._web_descriptor_config_root()
 
         Then("admitted descriptor absence blocks raw static-root fallback")
         rootresult shouldBe None
@@ -129,7 +129,7 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
           .add(Vector(TestComponentFactory.create("dev_component", Protocol.empty)))
 
         When("the direct compatibility server resolves component roots")
-        val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+        val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
         val webroots = server._component_web_roots("dev-component").map(_.name)
         val manualroots = server._component_manual_roots("dev-component").map(_.name)
 

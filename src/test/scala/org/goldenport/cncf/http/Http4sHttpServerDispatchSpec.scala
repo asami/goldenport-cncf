@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, SecurityLevel, SessionContext, SubjectKind}
-import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
@@ -18,7 +18,7 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem, Subsys
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
-import org.goldenport.configuration.{Configuration, ConfigurationBindingResolver, ConfigurationDocument, ConfigurationOrigin, ConfigurationSourceAdmission, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
 import org.http4s.{MediaType, Method, Request as HRequest, Uri}
 import org.http4s.headers.`Content-Type`
@@ -33,7 +33,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1134,56 +1134,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
   }
 
-  private def _server(subsystem: Subsystem): Http4sHttpServer = {
-    _admit_runtime_operation_policy(subsystem)
-    new Http4sHttpServer(new HttpExecutionEngine(subsystem))
-  }
-
-  private def _admit_runtime_operation_policy(subsystem: Subsystem): Unit =
-    if (subsystem.runtimeOperationSecurityPolicyC.isSuccess)
-      ()
-    else {
-      val identity = _take(SubsystemInstanceId.create("platform", "default"))
-      val target = _take(CncfConfigurationTarget.SubsystemInstance.create(identity))
-      val accepted = _operation_security_keys
-      val fields = subsystem.configuration.configuration.values.toVector.collect {
-        case (key, value) if accepted.contains(key) =>
-          ConfigurationDocument.Field(key, ConfigurationDocument.Scalar(value))
-      }
-      val candidates = _take(CncfConfigurationCandidateDecoder.decodeCatalog(Vector(
-        CncfConfigurationDocumentBatch(
-          new CncfConfigurationDocumentLocation.SubsystemInstance(target),
-          _take(ConfigurationSourceAdmission.create(
-            ConfigurationOrigin.Home,
-            "home",
-            "http4s-dispatch-operation-security-spec",
-            10,
-            "http4s-dispatch-operation-security-spec",
-            () => Consequence.success(ConfigurationDocument.Object(fields))
-          ))
-        )
-      )))
-      val context = _take(CncfConfigurationResolutionContext.forSubsystem(identity))
-      val bindings = _take(ConfigurationBindingResolver.resolve(candidates, context.generic))
-      _take(subsystem.admitRuntimeConfigurationBindingsC(bindings))
-    }
-
-  private val _operation_security_keys: Set[String] = {
-    val canonical = Vector(
-      SubsystemUserMode.CONFIGURATION_KEY,
-      RuntimeConfig.operationModeKey,
-      RuntimeConfig.webDevelopAnonymousAdminKey,
-      RuntimeConfig.WEB_DEMO_ASSIST_ENABLED_KEY,
-      RuntimeConfig.webProductionAdminEnabledKey,
-      RuntimeConfig.webProductionAdminSystemRolesKey,
-      RuntimeConfig.webProductionAdminComponentRolesKey,
-      RuntimeConfig.webProductionAdminJobsRolesKey
-    )
-    canonical.flatMap { key =>
-      val suffix = key.stripPrefix("textus.")
-      Vector(key, s"textus.runtime.$suffix", s"cncf.$suffix", s"cncf.runtime.$suffix")
-    }.toSet
-  }
+  private def _server(subsystem: Subsystem): Http4sHttpServer =
+    HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
   private def _take[A](result: Consequence[A]): A =
     result.getOrElse(fail(result.display))

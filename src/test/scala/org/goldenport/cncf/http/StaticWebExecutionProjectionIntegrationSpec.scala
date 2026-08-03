@@ -23,7 +23,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Aug.  3, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -60,7 +60,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
-      val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
+      val server = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
       val request = Request[IO](
         method = Method.GET,
         uri = Uri.unsafeFromString("/web/debug/debug-app")
@@ -118,7 +118,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
-      val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
+      val server = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
       val request = Request[IO](
         method = Method.GET,
         uri = Uri.unsafeFromString("/web/debug/debug-app")
@@ -164,7 +164,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       val subsystem = _static_subsystem(configuration)
       subsystem.add(_static_page_view_component(subsystem))
-      val server = new Http4sHttpServer(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
+      val server = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
       val request = Request[IO](
         method = Method.GET,
         uri = Uri.unsafeFromString("/web/debug/debug-app?date=2026-07-20&timeline_range=current_future")

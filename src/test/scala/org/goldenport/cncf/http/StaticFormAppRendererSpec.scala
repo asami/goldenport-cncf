@@ -62,7 +62,6 @@ import org.goldenport.cncf.information.*
 import org.goldenport.cncf.knowledge.*
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{PrepareResult, TransactionContext}
@@ -75,7 +74,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -88,7 +87,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "provide dashboard, system administration, Blob, and documentation contracts" which {
     "render subsystem dashboard state contract" in {
       Given("the prerequisites for render subsystem dashboard state contract")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
 
       val json = _dashboard_state_json(subsystem, None)
       When("render subsystem dashboard state contract is exercised")
@@ -127,7 +126,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component dashboard state contract" in {
       Given("the prerequisites for render component dashboard state contract")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val componentname = subsystem.components.headOption.map(_.name).getOrElse(fail("component is missing"))
 
       val json = _dashboard_state_json(subsystem, Some(componentname))
@@ -161,7 +160,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render dashboard pages with Bootstrap health hierarchy without changing links" in {
       Given("the prerequisites for render dashboard pages with Bootstrap health hierarchy without changing links")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
 
       When("render dashboard pages with Bootstrap health hierarchy without changing links is exercised")
       val html = _renderer.renderSubsystemDashboard(subsystem).body
@@ -191,7 +190,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render system admin configuration detail page" in {
       Given("the prerequisites for render system admin configuration detail page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
 
       When("render system admin configuration detail page is exercised")
       val html = _renderer.renderSystemAdmin(subsystem).body
@@ -266,7 +265,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render system admin jobs list and detail pages" in {
       Given("the prerequisites for render system admin jobs list and detail pages")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val action = RendererJobAction(GRequest.of(
         component = "renderer",
         service = "job",
@@ -306,7 +305,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render system admin knowledge pages" in {
       Given("the prerequisites for render system admin knowledge pages")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       subsystem.add(TestComponentFactory.create("knowledge_component", Protocol.empty))
       val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
       val ext = ExternalKnowledgeIdentifier.entity("customer", "customer-1")
@@ -425,7 +424,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render system admin information pages" in {
       Given("a subsystem containing published Information")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
       val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
       given ExecutionContext = component.logic.executionContext()
@@ -459,7 +458,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render Blob admin read-only pages" in {
       Given("the prerequisites for render Blob admin read-only pages")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
         Property("sourceMode", "external_url", None),
@@ -522,7 +521,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render unsafe external Blob URLs as text on admin pages" in {
       Given("the prerequisites for render unsafe external Blob URLs as text on admin pages")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val id = _create_legacy_external_blob(subsystem, "unsafe.png", "javascript:alert(1)")
 
       When("render unsafe external Blob URLs as text on admin pages is exercised")
@@ -537,7 +536,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "serve Blob admin read-only pages from Web routes" in {
       Given("the prerequisites for serve Blob admin read-only pages from Web routes")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
         Property("sourceMode", "external_url", None),
@@ -547,7 +546,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("externalUrl", "https://example.test/manual.pdf", None)
       ))))
       val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val home = server.routes(null).orNotFound.run(_get_request("/web/blob/admin")).unsafeRunSync()
       val list = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs")).unsafeRunSync()
@@ -572,7 +571,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "serve managed Blob payloads and GET-backed HEAD through the CNCF content route" in {
       Given("the prerequisites for serve managed Blob payloads and GET-backed HEAD through the CNCF content route")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val bytes = "route image".getBytes(StandardCharsets.UTF_8)
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -585,7 +584,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ))))
       val displayurl = blob.getString("displayPath").getOrElse(fail("displayPath is missing"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val contenteventsbefore = RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total
 
       val inline = server.routes(null).orNotFound.run(_get_request(displayurl)).unsafeRunSync()
@@ -688,7 +687,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "serve structured Blob content errors when managed payload is missing" in {
       Given("the prerequisites for serve structured Blob content errors when managed payload is missing")
       val root = Files.createTempDirectory("cncf-blob-content-missing-payload-spec")
-      val subsystem = DefaultSubsystemFactory.default(
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(
         Some("server"),
         ResolvedConfiguration(
           Configuration(Map(
@@ -713,7 +712,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val key = storageref.stripPrefix("local://default/")
       val payloadpath = root.resolve("default").resolve(key)
       Files.delete(payloadpath)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(_get_request(displaypath)).unsafeRunSync()
       When("serve structured Blob content errors when managed payload is missing is exercised")
@@ -732,7 +731,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "serve Blob admin mutation routes" in {
       Given("the prerequisites for serve Blob admin mutation routes")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val first = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
         Property("sourceMode", "external_url", None),
@@ -751,7 +750,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("externalUrl", "https://example.test/attach-me.pdf", None)
       ))))
       val secondid = second.getString("id").getOrElse(fail("Blob id is missing"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val sourceid = _notice_entity_id_from_shortid("product_1").value
 
       val attach = server.routes(null).orNotFound.run(_post_form_request(
@@ -802,7 +801,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render structured Blob admin delete failure and allow forced delete" in {
       Given("the prerequisites for render structured Blob admin delete failure and allow forced delete")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
         Property("sourceMode", "external_url", None),
@@ -819,7 +818,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("id", id, None),
         Property("role", "mainImage", None)
       )))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val rejected = server.routes(null).orNotFound.run(_post_form_request(
         s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete",
@@ -841,8 +840,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "serve structured Blob admin errors instead of missing-page fallbacks" in {
       Given("the prerequisites for serve structured Blob admin errors instead of missing-page fallbacks")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs/missing-blob")).unsafeRunSync()
       When("serve structured Blob admin errors instead of missing-page fallbacks is exercised")
@@ -857,14 +856,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "deny anonymous Blob admin subroutes in production operation mode" in {
       Given("the prerequisites for deny anonymous Blob admin subroutes in production operation mode")
-      val subsystem = DefaultSubsystemFactory.default(
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(
         Some("server"),
         ResolvedConfiguration(
           Configuration(Map(RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"))),
           ConfigurationTrace.empty
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs")).unsafeRunSync()
       val mutation = server.routes(null).orNotFound.run(_post_form_request("/web/blob/admin/associations/attach", "sourceEntityId=x&id=y&role=z")).unsafeRunSync()
@@ -915,7 +914,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render resolved Web Descriptor summary on system admin page" in {
       Given("the prerequisites for render resolved Web Descriptor summary on system admin page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val descriptor = WebDescriptor(
         assets = WebDescriptor.Assets(
           autoComplete = false,
@@ -1080,7 +1079,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component admin configuration detail page" in {
       Given("the prerequisites for render component admin configuration detail page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentlets = Vector(
         ComponentletDescriptor(
@@ -1151,7 +1150,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component-scoped Web Descriptor drill-down page" in {
       Given("the prerequisites for render component-scoped Web Descriptor drill-down page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
@@ -1311,7 +1310,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       operationhtml should not include ("admin entity")
       operationhtml should not include ("method=\"post\"")
 
-      val blobsubsystem = DefaultSubsystemFactory.default(Some("server"))
+      val blobsubsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val blobattachhtml = _renderer.renderComponentManualOperation(blobsubsystem, "blob", "blob", "admin-attach-blob-to-entity").map(_.body).getOrElse(fail("blob attach specification is missing"))
       blobattachhtml should include ("Image Binding")
       blobattachhtml should include ("existing Blob id")
@@ -1361,7 +1360,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "serve generated help and packaged manual routes through standard and compatibility paths" in {
       Given("a subsystem with aggregate componentlet metadata")
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("generated help and packaged manual routes are requested")
       val manualresponse = server
@@ -1450,7 +1449,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         component = Some("notice-board"),
         archivePath = Some(archive.toString)
       ))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the component manual index and canonical reference manual are requested")
       val indexresponse = server.routes(null).orNotFound.run(_get_request("/man/notice-board")).unsafeRunSync()
@@ -1472,7 +1471,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val descriptor = WebDescriptor(authorization = Map(
         "system.help.openapi" -> WebDescriptor.Authorization(deny = true)
       ))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       When("the canonical and compatibility Help OpenAPI routes are requested")
       val canonicalresponse = server.routes(null).orNotFound.run(_get_request("/openapi.json")).unsafeRunSync()
@@ -1488,7 +1487,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets(
         Configuration(Map(RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("generated help, packaged manuals, and compatibility document routes are requested")
       val helpresponse = server.routes(null).orNotFound.run(_get_request("/help/notice-board")).unsafeRunSync()
@@ -1522,7 +1521,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "provide entity administration and mutation contracts" which {
     "render component entity administration page" in {
       Given("the prerequisites for render component entity administration page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
@@ -1550,7 +1549,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component entity type list page contract" in {
       Given("the prerequisites for render component entity type list page contract")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
@@ -1575,7 +1574,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "reject a scalar component entity detail and edit route before it can render actions" in {
       Given("a component entity route with an old scalar ID")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
       When("detail and edit pages are rendered")
@@ -2089,7 +2088,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordentityid = collection.storage.storeRealm.values.head.id
       val recordid = recordentityid.value
@@ -2122,7 +2121,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val canonicalid = _new_notice_entity_id().value
       val storedid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
@@ -2181,7 +2180,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val dispatcher =
         new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server =
-        new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection =
         _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val entityid = collection.storage.storeRealm.values.head.id
@@ -2231,7 +2230,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val dispatcher =
         new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server =
-        new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection =
         _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val entity = collection.storage.storeRealm.values.head
@@ -2278,7 +2277,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
@@ -2315,7 +2314,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("invalid entity update", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
@@ -2343,7 +2342,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
@@ -2389,7 +2388,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val edit = _renderer
@@ -2428,7 +2427,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
@@ -2458,7 +2457,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val before = collection.storage.storeRealm.values.size
       val id = _new_notice_entity_id()
@@ -2711,7 +2710,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val filename = s"web-admin-${java.util.UUID.randomUUID().toString.replace("-", "")}.png"
       val id = _new_notice_entity_id()
@@ -3030,7 +3029,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .getOrElse(fail("component entity form definition JSON is invalid"))
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity](entitypath)
       val before = collection.storage.storeRealm.values.size
       val req = _post_form_request(
@@ -3066,7 +3065,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val id = _new_notice_entity_id()
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
@@ -3101,7 +3100,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val id = _new_notice_entity_id()
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
@@ -3128,7 +3127,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for define Static Form Web App template lookup precedence as route-local before common templates")
       val subsystem = _management_console_fixture_subsystem()
       When("define Static Form Web App template lookup precedence as route-local before common templates is exercised")
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       Then("the observable contract for define Static Form Web App template lookup precedence as route-local before common templates holds")
       server._form_result_template_candidates("notice-board", "notice", "post-notice", 200) shouldBe Vector(
@@ -3162,7 +3161,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       When("load Static Form Web App result templates from the descriptor root with route-local precedence is exercised")
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       Then("the observable contract for load Static Form Web App result templates from the descriptor root with route-local precedence holds")
       server._web_resource_roots().map(_.name) shouldBe Vector(root.toString)
@@ -3195,7 +3194,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("compose Static Form Web App result templates with WEB-INF layouts is exercised")
       val template = server._form_result_static_template("notice-board", "notice", "post-notice", 200).getOrElse(fail("template is missing"))
@@ -3216,7 +3215,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._web_app_asset("notice-board", "notice-board", "app.css")
@@ -3243,7 +3242,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val index = server._component_web_app("notice-board", "notice-board", Vector.empty).unsafeRunSync()
       val about = server._component_web_app("notice-board", "notice-board", Vector("about")).unsafeRunSync()
@@ -3278,7 +3277,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val app = server.routes(null).orNotFound
 
       // When
@@ -3321,7 +3320,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val app = server.routes(null).orNotFound
 
       // When
@@ -3375,7 +3374,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val app = server.routes(null).orNotFound
 
       // When
@@ -3419,7 +3418,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val app = server.routes(null).orNotFound
 
       // When
@@ -3458,7 +3457,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val app = server.routes(null).orNotFound
 
       // When
@@ -3499,7 +3498,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val app = server.routes(null).orNotFound
 
       // When
@@ -3546,7 +3545,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val index = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
       val page = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
@@ -3621,7 +3620,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs?noticeKind=import"))).unsafeRunSync()
       val html = response.as[String].unsafeRunSync()
@@ -3681,7 +3680,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
       When("render page context in a partial included by a full HTML Static Form page is exercised")
@@ -3771,7 +3770,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(notificationroot.toString))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/textus-knowledge-editor/dashboard"))).unsafeRunSync()
       When("prefer the route target component layout for standalone app pages is exercised")
@@ -3841,7 +3840,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val articleresponse = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
       val articlehtml = articleresponse.as[String].unsafeRunSync()
@@ -3937,7 +3936,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       subsystem.components.find(_.name == "editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "editor", "0.1.0", component = Some("editor"), archivePath = Some(editorroot.toString))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
       When("render article-capable component pages standalone when no subsystem shell is available is exercised")
@@ -4009,9 +4008,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "second-shell", "0.1.0", archivePath = Some(secondroot.toString))
       )
 
-      val singleserver = new Http4sHttpServer(new HttpExecutionEngine(singlesubsystem))
+      val singleserver = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(singlesubsystem))
       When("limit deemed-subsystem shell fallback to a single component Web root is exercised")
-      val multiserver = new Http4sHttpServer(new HttpExecutionEngine(multisubsystem))
+      val multiserver = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(multisubsystem))
 
       Then("the observable contract for limit deemed-subsystem shell fallback to a single component Web root holds")
       singleserver._subsystem_shell_web_roots().map(_.name) should contain (singleroot.resolve("src").resolve("main").resolve("web").toString)
@@ -4054,7 +4053,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(mainroot.toString)))
       ).add(Vector(maincomponent, carcomponent))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the component Web roots are resolved")
       val roots = server._component_web_roots("textus-knowledge-editor").map(_.name)
@@ -4131,7 +4130,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
       When("compose child component article pages with an explicit subsystem shell owner is exercised")
@@ -4213,7 +4212,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("compose child component form result templates through the route Web app shell is exercised")
       val html = server._prepared_form_result_template(
@@ -4272,7 +4271,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
       When("fail when explicit subsystem shell owner has no component Web root is exercised")
@@ -4324,7 +4323,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val articlehtml = server._prepared_form_result_template("notice-board", "notice", "post-notice", 200).toOption.flatten.getOrElse(fail("article result is missing"))
       When("compose form result templates into a subsystem shell when app composition is article is exercised")
@@ -4411,7 +4410,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
       When("fail deterministically when an explicit Static Form layout is missing is exercised")
@@ -4443,7 +4442,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       When("fail form result layout composition as a Consequence failure is exercised")
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       Then("the observable contract for fail form result layout composition as a Consequence failure holds")
       server._prepared_form_result_template("notice-board", "notice", "post-notice", 200) match {
@@ -4491,7 +4490,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val appb = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/b"))).unsafeRunSync()
       val assetb = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/b/assets/app.css"))).unsafeRunSync()
@@ -4539,7 +4538,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val index = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
       val indexslash = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/"))).unsafeRunSync()
@@ -4568,7 +4567,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("develop")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
@@ -4611,7 +4610,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
       val componentalias = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
@@ -4632,7 +4631,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
       When("redirect / to /web and keep /web strict in production when no default web route is configured is exercised")
@@ -4647,7 +4646,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "redirect /rest to the latest stable REST namespace" in {
       Given("the prerequisites for redirect /rest to the latest stable REST namespace")
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("redirect /rest to the latest stable REST namespace is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/rest?mode=test"))).unsafeRunSync()
@@ -4660,7 +4659,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "redirect versionless REST requests to /rest/v1 with method-preserving redirects" in {
       Given("the prerequisites for redirect versionless REST requests to /rest/v1 with method-preserving redirects")
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("redirect versionless REST requests to /rest/v1 with method-preserving redirects is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.POST, Uri.unsafeFromString("/rest/admin/system/ping?mode=test"))).unsafeRunSync()
@@ -4673,7 +4672,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "dispatch canonical REST requests through /rest/v1" in {
       Given("the prerequisites for dispatch canonical REST requests through /rest/v1")
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/rest/v1/admin/system/ping"))).unsafeRunSync()
       When("dispatch canonical REST requests through /rest/v1 is exercised")
@@ -4687,7 +4686,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "return not found for implicit top-level REST routes once /rest/v1 is canonical" in {
       Given("the prerequisites for return not found for implicit top-level REST routes once /rest/v1 is canonical")
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("return not found for implicit top-level REST routes once /rest/v1 is canonical is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/admin/system/ping"))).unsafeRunSync()
@@ -4699,7 +4698,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "leave /api unsupported" in {
       Given("the prerequisites for leave /api unsupported")
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("leave /api unsupported is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/api/v1/admin/system/ping"))).unsafeRunSync()
@@ -4729,7 +4728,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).add(Vector(component))
       val engine = new HttpExecutionEngine(subsystem)
       When("not infer public routes for a single component Web app is exercised")
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       // When
       Then("the observable contract for not infer public routes for a single component Web app holds")
@@ -4766,7 +4765,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem)
       When("load Static Form Web App descriptor, templates, and assets from a CAR archive Web root is exercised")
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       Then("the observable contract for load Static Form Web App descriptor, templates, and assets from a CAR archive Web root holds")
       engine.webDescriptor.apps.map(_.name) should contain ("notice-board")
@@ -4845,7 +4844,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component entity new page contract" in {
       Given("the prerequisites for render component entity new page contract")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
@@ -4907,7 +4906,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val component = TestComponentFactory
         .create("notice_board", Protocol.empty)
         .withComponentDescriptors(Vector(descriptor))
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
 
       When("render component entity new page from CML schema descriptor without WebDescriptor is exercised")
       val html = _renderer.renderComponentAdminEntityNew(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity new admin is missing"))
@@ -4945,7 +4944,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           ))
         )))
       val bootstrapped = new ComponentFactory().bootstrap(component)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(bootstrapped))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(bootstrapped))
 
       When("render component entity new page from generated companion schema is exercised")
       val html = _renderer.renderComponentAdminEntityNew(subsystem, "generated_schema_component", "order").map(_.body).getOrElse(fail("component entity new admin is missing"))
@@ -5065,8 +5064,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val component = TestComponentFactory
         .create("notice_board", Protocol.empty)
         .withComponentDescriptors(Vector(descriptor))
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._submit_component_admin_entity_create(
@@ -5104,7 +5103,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ))
       val subsystem = _management_console_fixture_subsystem(schema = schema)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val recordid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id.value
 
       val createresponse = server
@@ -5244,7 +5243,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component data administration page" in {
       Given("the prerequisites for render component data administration page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
       When("render component data administration page is exercised")
@@ -5383,7 +5382,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         _with_global_runtime(fixture.runtime) {
         val engine = new HttpExecutionEngine(fixture.subsystem)
         val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
         val updatereq = _post_form_request(
           "/form/notice-board/admin/data/audit/audit_1/update",
           "action=updated&actor=bob"
@@ -5433,7 +5432,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         val engine = new HttpExecutionEngine(fixture.subsystem, Some(descriptor))
         val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
         val req = _post_form_request(
           "/form/notice-board/admin/data/audit/create",
           "fields=id%3Daudit_3%0Aaction%3Dcreated%0Aactor%3Dbob"
@@ -5472,7 +5471,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             Bag.text("invalid data create", StandardCharsets.UTF_8)
           )
         )
-        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
         val req = _post_form_request(
           "/form/notice-board/admin/data/audit/create",
           "fields=id%3Daudit_bad%0Aaction%3Dcreated%0Aactor%3Dbob"
@@ -5507,7 +5506,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         val descriptor = _data_schema_web_descriptor()
         val engine = new HttpExecutionEngine(fixture.subsystem, Some(descriptor))
         val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
         val req = _post_form_request(
           "/form/notice-board/admin/data/audit/create",
           "id=audit_invalid&action=created&actor="
@@ -5598,7 +5597,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "provide view, aggregate, and operation-action contracts" which {
     "render component view administration page" in {
       Given("the prerequisites for render component view administration page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
       When("render component view administration page is exercised")
@@ -5802,7 +5801,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component aggregate administration page" in {
       Given("the prerequisites for render component aggregate administration page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
       When("render component aggregate administration page is exercised")
@@ -6225,7 +6224,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _aggregate_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val before = RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total
 
       val createhtml = server
@@ -6263,7 +6262,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _aggregate_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       server
         ._submit_operation_form(
@@ -6293,7 +6292,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _aggregate_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       server
         ._submit_operation_form(
@@ -6348,7 +6347,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("preserve hidden form context for result templates without dispatching it as operation arguments is exercised")
       val html = server
@@ -6403,7 +6402,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("created:notice_1", StandardCharsets.UTF_8)
         )
       ))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("await asynchronous command job result through the form job route is exercised")
       val html = server
@@ -6436,7 +6435,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("created:notice_1", StandardCharsets.UTF_8)
         )
       ))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("preserve componentlet alias when awaiting asynchronous command job result through the form job route is exercised")
       val html = server
@@ -6487,7 +6486,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("created:notice_1", StandardCharsets.UTF_8)
         )
       ))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("render awaited job result through descriptor result template when static template is absent is exercised")
       val html = server
@@ -6517,7 +6516,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "execute aggregate create/update actions through an HTTP ingress-capable component" in {
       Given("the prerequisites for execute aggregate create/update actions through an HTTP ingress-capable component")
       val subsystem = _aggregate_http_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val createhtml = server
         ._submit_operation_form(
@@ -6617,7 +6616,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -6657,7 +6656,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -6697,7 +6696,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -6725,7 +6724,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Internal))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val htmlform = _renderer.renderOperationForm(
         subsystem,
@@ -6762,7 +6761,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("bad request from operation", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -6802,7 +6801,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("bad request from operation", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -6845,7 +6844,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -6872,7 +6871,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render resolved Web Descriptor summary on component admin page" in {
       Given("the prerequisites for render resolved Web Descriptor summary on component admin page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
@@ -6893,7 +6892,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render system performance detail page" in {
       Given("the prerequisites for render system performance detail page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/system/dashboard", 200, 12L)
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/missing", 404, 34L)
       RuntimeDashboardMetrics.recordAuthorizationDecision(denied = true, Some("capability"))
@@ -6944,7 +6943,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render structured observability metrics page" in {
       Given("the prerequisites for render structured observability metrics page")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/test", 200, 15L)
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/missing", 404, 25L)
       RuntimeDashboardMetrics.recordActionCall(error = false, Some(7L))
@@ -6988,7 +6987,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render structured observability drill-down pages" in {
       Given("the prerequisites for render structured observability drill-down pages")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val previous = Record.dataAuto(
         "diagnosticKey" -> "storage_missing",
         "taxonomy" -> "resource.not-found",
@@ -7060,7 +7059,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render document and console entry pages without inline operation execution" in {
       Given("the prerequisites for render document and console entry pages without inline operation execution")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
 
       val manual = _renderer.render(subsystem, "document").map(_.body).getOrElse(fail("documents page is missing"))
       When("render document and console entry pages without inline operation execution is exercised")
@@ -7083,7 +7082,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "keep system documents and console available while filtering component app entries by WebDescriptor apps" in {
       Given("the prerequisites for keep system documents and console available while filtering component app entries by WebDescriptor apps")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val descriptor = WebDescriptor(
         apps = Vector(WebDescriptor.App("document", "/web/document", "document"))
       )
@@ -7103,7 +7102,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "allow component dashboard app entries by descriptor path" in {
       Given("the prerequisites for allow component dashboard app entries by descriptor path")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
@@ -7122,7 +7121,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "provide HTML operation form and typed-update contracts" which {
     "render component HTML form operation index" in {
       Given("the prerequisites for render component HTML form operation index")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
       When("render component HTML form operation index is exercised")
@@ -7141,7 +7140,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render component HTML operation form" in {
       Given("the prerequisites for render component HTML operation form")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
@@ -7175,7 +7174,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render operation form UX profile metadata" in {
       Given("the prerequisites for render operation form UX profile metadata")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
@@ -7208,7 +7207,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "append development debug panel to operation form error redisplay" in {
       Given("the prerequisites for append development debug panel to operation form error redisplay")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
@@ -7264,7 +7263,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "ignore external debug panel flags on operation form input pages" in {
       Given("the prerequisites for ignore external debug panel flags on operation form input pages")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
@@ -7285,7 +7284,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "apply app-scoped assets to the component HTML form index" in {
       Given("the prerequisites for apply app-scoped assets to the component HTML form index")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
@@ -7318,7 +7317,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "apply app and form scoped assets to operation input forms" in {
       Given("the prerequisites for apply app and form scoped assets to operation input forms")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
@@ -7365,7 +7364,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "filter HTML form operations by WebDescriptor form controls" in {
       Given("the prerequisites for filter HTML form operations by WebDescriptor form controls")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
@@ -7390,7 +7389,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "allow exposed HTML form operations when no explicit form control exists" in {
       Given("the prerequisites for allow exposed HTML form operations when no explicit form control exists")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
@@ -7497,7 +7496,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val response = server
         ._operation_form_api_definition(
@@ -7561,8 +7560,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val response = server
         ._operation_form_api_definition(
           _get_request("/form-api/notice-board/notice/update-notice"),
@@ -7619,7 +7618,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )))
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
       val dispatcher = new RecordingWebOperationDispatcher(new StaticWebOperationDispatcher(
         HttpResponse.Text(
           HttpStatus.Ok,
@@ -7627,7 +7626,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("updated", StandardCharsets.UTF_8)
         )
       ))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem), operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem), operationDispatcherOption = Some(dispatcher))
 
       When("URL-encoded and multipart forms submit adaptive clear and an explicit empty value")
       val urlencoded = server.routes(null).orNotFound.run(
@@ -7697,8 +7696,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
         _initialize_component("notice_board", component, protocol)
-        val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-        val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+        val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
+        val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
         When("Form API submits explicit empty, adaptive clear, and adaptive null carriers")
         val explicit = server.routes(null).orNotFound.run(
@@ -7761,8 +7760,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val beforeactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
       val beforeauthorization = RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total
       val beforevalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
@@ -7848,7 +7847,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
 
       val html = _renderer.renderOperationForm(
         subsystem,
@@ -7912,7 +7911,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
 
       When("hide disallowed image binding input modes from operation forms is exercised")
       val html = _renderer.renderOperationForm(
@@ -7961,7 +7960,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
 
       val html = _renderer.renderOperationForm(
         subsystem,
@@ -8022,7 +8021,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
 
       val valid = _renderer.validateOperationForm(
         subsystem,
@@ -8078,7 +8077,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
 
       val html = _renderer.renderOperationForm(
         subsystem,
@@ -8132,7 +8131,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
 
       val html = _renderer.renderOperationForm(
         subsystem,
@@ -8185,8 +8184,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val component = TestComponentFactory
         .create("notice_board", Protocol.empty)
         .withComponentDescriptors(Vector(descriptor))
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._component_admin_entity_form_api_definition(
@@ -8225,7 +8224,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "create" -> Vector("title", "author")
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._component_admin_entity_update_form_api_definition(
@@ -8254,7 +8253,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "allow anonymous admin form API by the develop anonymous admin default" in {
       Given("the prerequisites for allow anonymous admin form API by the develop anonymous admin default")
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("allow anonymous admin form API by the develop anonymous admin default is exercised")
       val response = server
@@ -8276,7 +8275,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._component_admin_entity_form_api_definition(
@@ -8304,7 +8303,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val request = _get_request("/form-api/notice-board/admin/entities/notice")
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Accept"), "text/plain"))
 
@@ -8334,7 +8333,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("deny anonymous admin form API in production operation mode is exercised")
       val response = server
@@ -8356,7 +8355,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         .routes(null)
@@ -8386,7 +8385,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("deny forged query/header admin identity in production operation mode is exercised")
       val response = server
@@ -8418,7 +8417,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("strip forged authorization fields before resolving the production admin session is exercised")
       val response = server
@@ -8455,7 +8454,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("allow component operator session to use component admin in production when explicitly enabled is exercised")
       val response = server
@@ -8487,7 +8486,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("deny system admin role when production privilege ceiling is only user is exercised")
       val response = server
@@ -8519,7 +8518,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         .routes(null)
@@ -8563,7 +8562,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val jobs = server
         .routes(null)
@@ -8595,7 +8594,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("allow authenticated admin form API when develop anonymous admin is disabled is exercised")
       val response = server
@@ -8619,7 +8618,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("deny anonymous admin entity create POST in production operation mode before dispatch is exercised")
       val response = server
@@ -8659,7 +8658,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("allow component operator admin entity create POST in production operation mode is exercised")
       val response = server
@@ -8696,8 +8695,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             maxEntitiesPerPartition = 100
           ))
         )))
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(new ComponentFactory().bootstrap(component)))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(new ComponentFactory().bootstrap(component)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._component_admin_entity_form_api_definition(
@@ -8728,7 +8727,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "serve admin entity form definition API from merged Schema and WebDescriptor controls" in {
       Given("the prerequisites for serve admin entity form definition API from merged Schema and WebDescriptor controls")
       val (subsystem, descriptor) = _entity_schema_web_descriptor_fixture()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val response = server
         ._component_admin_entity_form_api_definition(
@@ -8766,7 +8765,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       locally {
         Then("the observable contract for serve admin data form definition API from inferred data fields holds")
         _with_global_runtime(fixture.runtime) {
-        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+        val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(fixture.subsystem))
 
         val response = server
           ._component_admin_data_form_api_definition(
@@ -8797,7 +8796,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       locally {
         Then("the observable contract for serve admin data update form definition API from inferred data fields holds")
         _with_global_runtime(fixture.runtime) {
-        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+        val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(fixture.subsystem))
 
         val response = server
           ._component_admin_data_update_form_api_definition(
@@ -8831,7 +8830,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val descriptor = _data_schema_web_descriptor(includenote = false)
       Then("the observable contract for serve admin data form definition API from merged inferred data fields and WebDescriptor controls holds")
       _with_global_runtime(fixture.runtime) {
-        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem, Some(descriptor)))
+        val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(fixture.subsystem, Some(descriptor)))
 
         val response = server
           ._component_admin_data_form_api_definition(
@@ -8861,7 +8860,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "serve admin view form definition API from entity schema when the view name carries the view suffix" in {
       Given("the prerequisites for serve admin view form definition API from entity schema when the view name carries the view suffix")
       val subsystem = _view_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._component_admin_view_form_api_definition(
@@ -8894,7 +8893,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val response = server
         ._component_admin_view_form_api_definition(
@@ -8928,7 +8927,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "serve admin aggregate form definition API from entity schema when the aggregate name carries the aggregate suffix" in {
       Given("the prerequisites for serve admin aggregate form definition API from entity schema when the aggregate name carries the aggregate suffix")
       val subsystem = _aggregate_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._component_admin_aggregate_form_api_definition(
@@ -8961,7 +8960,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val response = server
         ._component_admin_aggregate_form_api_definition(
@@ -9001,7 +9000,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val descriptor = WebDescriptor(
         expose = Map(selector -> WebDescriptor.Exposure.Protected)
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val invalid = server
         ._validate_operation_form_api(
@@ -9060,7 +9059,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
       val selector = "notice-board.notice.validate-fields"
       val descriptor = WebDescriptor(
         expose = Map(selector -> WebDescriptor.Exposure.Protected),
@@ -9071,7 +9070,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val invalid = server
         ._validate_operation_form_api(
@@ -9117,7 +9116,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "serve and validate operation form validation hints" in {
       Given("the prerequisites for serve and validate operation form validation hints")
       val (subsystem, descriptor) = _validation_hints_fixture()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val definition = server
         ._operation_form_api_definition(
@@ -9175,7 +9174,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "keep Schema validation constraints when WebDescriptor attempts to relax them" in {
       Given("the prerequisites for keep Schema validation constraints when WebDescriptor attempts to relax them")
       val (subsystem, descriptor) = _validation_hints_fixture()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val invalid = server
         ._validate_operation_form_api(
@@ -9214,7 +9213,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("DISPATCHED", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -9297,7 +9296,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       val redirected = server
         ._submit_operation_form(
@@ -9346,7 +9345,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       When("render operation form result through descriptor result template is exercised")
       val html = server
@@ -9397,7 +9396,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("created:notice_1", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("render operation form result route through descriptor result template when static template is absent is exercised")
       val html = server
@@ -9662,7 +9661,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       unresolvedhtml should not include ("data-textus-widget=\"textus:operation-form\"")
 
       And("submitting the rendered form dispatches the aggregate command and redirects with GET")
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
       val response = server._submit_operation_form(
         _post_form_request(
           "/form/notice-board/notice-aggregate/approve-notice-aggregate",
@@ -9716,7 +9715,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           )
         )
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       When("the command succeeds and the browser follows the redirect")
       val redirect = server._submit_operation_form(
@@ -9801,7 +9800,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("the browser loads the page")
       val getrequest = _get_request("/web/notice-board/planning-app/detail")
@@ -9913,7 +9912,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Some(org.goldenport.cncf.subsystem.SubsystemUserMode.MultiUser)
       multisubsystem.resolvedSecurityWiring.authentication.enabledProviders.map(_.name) shouldBe
         Vector("static-web-authentication")
-      val multiserver = new Http4sHttpServer(new HttpExecutionEngine(multisubsystem))
+      val multiserver = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(multisubsystem))
       def _header_(response: org.http4s.Response[IO], name: String): Option[String] =
         response.headers.get(org.typelevel.ci.CIString(name)).map(_.head.value)
 
@@ -9986,7 +9985,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
       ))
       val standalonesubsystem = _aggregate_http_fixture_subsystem(standaloneconfiguration)
-      val standaloneserver = new Http4sHttpServer(new HttpExecutionEngine(standalonesubsystem))
+      val standaloneserver = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(standalonesubsystem))
       val standaloneresponse = standaloneserver._component_web_app(
         "notice-board",
         "planning-app",
@@ -10015,7 +10014,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("sensitive operation failure detail", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -10101,7 +10100,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       When("render operation form result through static success template convention before descriptor template is exercised")
       val html = server
@@ -10151,7 +10150,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("prefer page-local static result template when textus form page is submitted is exercised")
       val html = server
@@ -10241,7 +10240,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       When("prefer exact static status result template over static success template is exercised")
       val html = server
@@ -10280,7 +10279,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       When("render operation form result through static status template convention is exercised")
       val html = server
@@ -10320,7 +10319,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       When("render operation form result through common static status template convention is exercised")
       val html = server
@@ -10371,7 +10370,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       val page1 = server
         ._submit_operation_form(
@@ -10444,7 +10443,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       val page1 = server
         ._submit_operation_form(
@@ -10512,7 +10511,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       val page1 = server
         ._submit_operation_form(
@@ -10597,7 +10596,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("invalid approval", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("render operation failure through exact static status template before error template is exercised")
       val html = server
@@ -10656,7 +10655,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("aggregate service failed", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("render operation failure through common static error template when status template is absent is exercised")
       val html = server
@@ -10706,7 +10705,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._static_form_app("notice-board", Vector("missing"))
@@ -10737,7 +10736,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           ).resolve("web.yaml").toString)
         ))
       )
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val response = server
         ._static_form_app("notice-board", Vector("missing"))
@@ -10844,7 +10843,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("invalid approval", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("redisplay the operation form with submitted values when stayOnError is enabled is exercised")
       val html = server
@@ -10879,7 +10878,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Bag.text("DISPATCHED", StandardCharsets.UTF_8)
         )
       )
-      val server = new Http4sHttpServer(
+      val server = HttpRuntimeBindingAdmissionFixture.server(
         new HttpExecutionEngine(subsystem, Some(descriptor)),
         operationDispatcherOption = Some(dispatcher)
       )
@@ -10915,7 +10914,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _aggregate_http_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
-      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
 
       When("merge schema-driven form fields with additional fields on submit is exercised")
       val html = server._submit_operation_form(
@@ -11834,7 +11833,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render application user job list and detail pages" in {
       Given("the prerequisites for render application user job list and detail pages")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val action = RendererJobAction(GRequest.of(
         component = "notice-board",
         service = "notice",
@@ -13736,7 +13735,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render descriptor-declared component admin pages on component admin home" in {
       Given("the prerequisites for render descriptor-declared component admin pages on component admin home")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
@@ -13767,7 +13766,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "render Application Admin separately from System Admin diagnostics" in {
       Given("the prerequisites for render Application Admin separately from System Admin diagnostics")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
@@ -13835,7 +13834,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "keep WEB-10 built-in pages offline-ready and responsive" in {
       Given("the prerequisites for keep WEB-10 built-in pages offline-ready and responsive")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       When("keep WEB-10 built-in pages offline-ready and responsive is exercised")
@@ -14087,7 +14086,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       AliasResolver.empty
     )
     val component = TestComponentFactory.create("notice_board", Protocol.empty)
-    val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
     DataFixture(subsystem, runtime, datastorespace)
   }
 
@@ -14316,7 +14315,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       totalCountCapabilityValue = totalcountcapability
     )
     component.viewSpace.register("notice_view", collection, browser)
-    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
   }
 
   private def _aggregate_fixture_subsystem(
@@ -14377,7 +14376,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         totalCountCapabilityValue = totalcountcapability
       )
     )
-    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
   }
 
   private def _aggregate_protocol(): Protocol =
@@ -14401,7 +14400,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private def _form_type_fixture_subsystem(): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {}
     _initialize_component("notice_board", component, _form_type_protocol())
-    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
   }
 
   private def _validation_hints_fixture(): (Subsystem, WebDescriptor) = {
@@ -14421,7 +14420,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
     )
     _initialize_component("notice_board", component, protocol)
-    val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
     val selector = "notice-board.notice.validate-hints"
     val descriptor = WebDescriptor(
       expose = Map(selector -> WebDescriptor.Exposure.Protected),
@@ -14482,6 +14481,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     )
     ownersubsystem = Some(subsystem)
     subsystem.add(Vector(component))
+    HttpRuntimeBindingAdmissionFixture.admit(subsystem)
+    subsystem
   }
 
   private def _with_multi_user_authentication(subsystem: Subsystem): Subsystem = {
@@ -14728,7 +14729,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       "notice",
       _notice_collection(notices)
     )
-    val subsystem = DefaultSubsystemFactory.defaultWithScope(
+    val subsystem = HttpRuntimeBindingAdmissionFixture.defaultWithScope(
       runtime,
       Some(org.goldenport.cncf.cli.RunMode.Server),
       resolvedconfiguration
@@ -14849,7 +14850,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         EntityStorage(store, Some(memory))
       )
     )
-    DefaultSubsystemFactory
+    HttpRuntimeBindingAdmissionFixture
       .defaultWithScope(
         runtime,
         Some(org.goldenport.cncf.cli.RunMode.Server),
@@ -14897,7 +14898,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     val component = TestComponentFactory
       .create("notice_board", Protocol.empty)
       .withComponentDescriptors(Vector(descriptor))
-    val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
     val webdescriptor = WebDescriptor(admin = Map(
       "notice-board.entity.notice" -> WebDescriptor.AdminSurface(fields = Vector(
         WebDescriptor.AdminField("id"),

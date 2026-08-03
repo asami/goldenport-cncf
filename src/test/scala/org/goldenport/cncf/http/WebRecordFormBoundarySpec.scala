@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebRecordFormBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -41,7 +42,7 @@ final class WebRecordFormBoundarySpec extends AnyWordSpec with Matchers with Giv
     "decode a submitted JSON object before operation dispatch" in {
       Given("a form API endpoint configured with a JSON record control")
       val fixture = _fixture()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(fixture.subsystem))
       val metadata = URLEncoder.encode("{\"source\":\"admin\",\"attempt\":2}", StandardCharsets.UTF_8)
 
       When("the JSON form field is submitted")
@@ -64,7 +65,7 @@ final class WebRecordFormBoundarySpec extends AnyWordSpec with Matchers with Giv
     "reject malformed JSON before operation dispatch" in {
       Given("a form API endpoint configured with a JSON record control")
       val fixture = _fixture()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(fixture.subsystem))
       val malformed = URLEncoder.encode("{source:admin", StandardCharsets.UTF_8)
 
       When("malformed JSON is submitted")

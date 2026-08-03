@@ -24,7 +24,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 23, 2026
  *  version May. 10, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -37,7 +37,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("a Subsystem with a login-capable session provider")
       val provider = new SessionProvider(Map("alice" -> "secret"), Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the built-in login endpoint receives Alice's credentials")
       val login = server.routes(null).orNotFound.run(
@@ -77,7 +77,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("an authenticated session with its Subsystem-scoped cookie")
       val provider = new SessionProvider(Map("alice" -> "secret"), Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val _ = server.routes(null).orNotFound.run(
         _post_form_request(
@@ -118,7 +118,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
         )
       )
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the session endpoint receives both transports")
       val response = server.routes(null).orNotFound.run(
@@ -175,7 +175,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
         useraccountids = Map(internalid -> internalid)
       )
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the session is resolved through Web and built-in auth")
       val response = server.routes(null).orNotFound.run(
@@ -211,7 +211,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       val oversized = "s" * (SessionId.LENGTH_MAX + 1)
       val provider = new SessionProvider(Map.empty, Map(oversized -> "alice"))
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the session endpoint receives the oversized cookie")
       val response = server.routes(null).orNotFound.run(
@@ -256,7 +256,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
         )
       )
       val subsystem = _subsystem(provider, Some(webroot.resolve("web.yaml")))
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the exact alias route is requested")
       val response = server.routes(null).orNotFound.run(
@@ -272,7 +272,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("a built-in login request carrying a local returnTo target")
       val provider = new SessionProvider(Map("alice" -> "secret"), Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("valid credentials are posted to that login request")
       val login = server.routes(null).orNotFound.run(
@@ -291,7 +291,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("the same candidate session id in header, cookie, form, and query")
       val provider = new SessionProvider(Map.empty, Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val query = org.goldenport.record.Record.create(Vector("x-textus-session" -> "query-session"))
       val form = org.goldenport.record.Record.create(Vector("x-textus-session" -> "form-session"))
@@ -316,7 +316,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("a composed Web app request with its app-scoped cookie")
       val provider = new SessionProvider(Map.empty, Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       val request = _get_request("/web/notifications").putHeaders(
         Header.Raw(ci"Cookie", "textus-session-notifications=notification-session")
@@ -332,7 +332,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("an invalid long cookie and a valid form session")
       val provider = new SessionProvider(Map.empty, Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val stalesession = "s" * 72
       val request = _post_form_request("/form-api/cwitter/timeline/create-post", "body=hello")
         .putHeaders(Header.Raw(ci"Cookie", s"${_cookie_name(subsystem)}=${stalesession}"))
@@ -348,7 +348,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("a form-api request with only a form session value")
       val provider = new SessionProvider(Map.empty, Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val request = _post_form_request("/form-api/cwitter/timeline/create-post", "body=hello")
       When("the authentication header record is assembled")
       val headers = server._request_header_record(
@@ -365,7 +365,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("an invalid header session and a valid form candidate")
       val provider = new SessionProvider(Map.empty, Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val stalesession = "s" * 72
       val request = _post_form_request("/form-api/cwitter/timeline/create-post", "body=hello")
         .putHeaders(Header.Raw(ci"x-textus-session", stalesession))
@@ -382,7 +382,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       Given("a Web request carrying a session cookie")
       val provider = new SessionProvider(Map.empty, Map.empty)
       val subsystem = _subsystem(provider)
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       val request = _get_request("/web/cwitter/session").putHeaders(
         Header.Raw(ci"Cookie", s"${_cookie_name(subsystem)}=cookie-session")
       )
@@ -433,6 +433,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
     )
     val subsystem = DefaultSubsystemFactory.default(None, configuration)
     subsystem.add(Vector(component))
+    HttpRuntimeBindingAdmissionFixture.admit(subsystem)
     subsystem
   }
 

@@ -8,7 +8,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.goldenport.Consequence
 import org.goldenport.cncf.cli.CncfRuntime
-import org.goldenport.cncf.http.{Http4sHttpServer, HttpExecutionEngine}
+import org.goldenport.cncf.http.{Http4sHttpServer, HttpExecutionEngine, HttpRuntimeBindingAdmissionFixture}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
@@ -32,7 +32,7 @@ import org.typelevel.ci.CIString
  * Component operation, which returns its received ExecutionContext principal.
  *
  * @since   Aug.  1, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -82,7 +82,7 @@ final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matc
         val response = new CncfRuntime().executeCommandResponse(fixture.subsystem, args).toOption.getOrElse(fail("command execution failed"))
         Observed(200, response.print)
       case "rest" =>
-        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+        val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(fixture.subsystem))
         val request = _authenticated(HRequest[IO](
           method = Method.GET,
           uri = Uri.unsafeFromString("/rest/v1/probe/identity/whoami")
@@ -105,7 +105,7 @@ final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matc
             StandardCharsets.UTF_8
           )
           val webfixture = _fixture(operationmode, mode, Some(root.resolve("web.yaml").toString))
-          val server = new Http4sHttpServer(new HttpExecutionEngine(webfixture.subsystem))
+          val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(webfixture.subsystem))
           val request = _authenticated(HRequest[IO](
             method = Method.POST,
             uri = Uri.unsafeFromString("/form-api/probe/identity/whoami")
@@ -168,6 +168,7 @@ final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matc
       subsystemName = mode.name,
       security = Some(GenericSubsystemSecurityBinding(authentication = Some(authentication)))
     ))
+    HttpRuntimeBindingAdmissionFixture.admit(subsystem)
     Fixture(subsystem)
   }
 

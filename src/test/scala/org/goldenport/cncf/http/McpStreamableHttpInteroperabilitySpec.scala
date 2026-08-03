@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Streamable HTTP client boundaries.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpStreamableHttpInteroperabilitySpec
@@ -36,7 +36,7 @@ final class McpStreamableHttpInteroperabilitySpec
       Given("the production MCP route and production JDK Streamable HTTP client on a real loopback socket")
       val subsystem = DefaultSubsystemFactory.default(Some("mcp-loopback-interoperability"))
       subsystem.components.find(_.name == "admin").foreach(_.withMcpReadyServices(Set("system")))
-      val route = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val route = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(
         ExecutionContext.create(),
         enabled = true

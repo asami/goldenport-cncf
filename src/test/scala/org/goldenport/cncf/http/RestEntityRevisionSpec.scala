@@ -20,7 +20,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RestEntityRevisionSpec
@@ -257,7 +257,7 @@ final class RestEntityRevisionSpec
   }
 
   private def _server: Http4sHttpServer =
-    new Http4sHttpServer(
+    HttpRuntimeBindingAdmissionFixture.server(
       HttpExecutionEngine.Factory.engine()
     )
 

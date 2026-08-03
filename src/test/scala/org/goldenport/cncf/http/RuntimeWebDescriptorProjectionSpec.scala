@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeWebDescriptorProjectionSpec
@@ -42,7 +42,7 @@ final class RuntimeWebDescriptorProjectionSpec
 
         When("the runtime-only HTTP engine is created")
         val engine = HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required"))
-        val root = new Http4sHttpServer(engine)._web_descriptor_config_root().getOrElse(fail("Typed static root is required"))
+        val root = HttpRuntimeBindingAdmissionFixture.server(engine)._web_descriptor_config_root().getOrElse(fail("Typed static root is required"))
 
         Then("both descriptor semantics and static resources come only from the admitted path")
         engine.webDescriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
