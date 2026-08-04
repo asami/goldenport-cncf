@@ -9,9 +9,8 @@ import org.goldenport.configuration.ResolvedConfiguration
 
 /*
  * @since   Apr. 14, 2026
- *  version Apr. 14, 2026
  *  version Jul. 30, 2026
- * @version Aug.  3, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebDescriptorResolver {
@@ -87,7 +86,10 @@ object WebDescriptorResolver {
       .flatMap(path => WebDescriptor.load(_component_dev_descriptor_path(path)).toOption)
 
   private def _component_dev_descriptor_path(path: Path): Path =
-    if (Files.isDirectory(path)) path.resolve("web.yaml") else path
+    if (Files.isDirectory(path)) {
+      val direct = path.resolve("web.yaml")
+      if (Files.isRegularFile(direct)) direct else path
+    } else path
 
   private def _configuration_component_dev_paths(
     configuration: ResolvedConfiguration

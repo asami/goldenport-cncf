@@ -3,7 +3,7 @@ package org.goldenport.cncf.testutil
 import org.goldenport.Consequence
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
+import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.context.{GlobalRuntimeContext, ScopeContext}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem, SubsystemUserMode}
@@ -45,11 +45,12 @@ object RuntimeBindingAdmissionFixture {
     ))
 
   def admit(subsystem: Subsystem): Subsystem = {
+    subsystem.enableControlledTestExecution()
     if (subsystem.runtimeOperationSecurityPolicyC.isFaillure) {
       val identity = _take(SubsystemInstanceId.create("platform", "default"))
       val target = _take(CncfConfigurationTarget.SubsystemInstance.create(identity))
       val fields = subsystem.configuration.configuration.values.toVector.collect {
-        case (key, value) if _operation_security_keys.contains(key) =>
+        case (key, value) if _runtime_binding_keys.contains(key) =>
           ConfigurationDocument.Field(key, ConfigurationDocument.Scalar(value))
       }
       val bindings =
@@ -79,7 +80,7 @@ object RuntimeBindingAdmissionFixture {
     subsystem
   }
 
-  private val _operation_security_keys: Set[String] = {
+  private val _runtime_binding_keys: Set[String] = {
     val canonical = Vector(
       SubsystemUserMode.CONFIGURATION_KEY,
       RuntimeConfig.operationModeKey,
@@ -88,7 +89,14 @@ object RuntimeBindingAdmissionFixture {
       RuntimeConfig.webProductionAdminEnabledKey,
       RuntimeConfig.webProductionAdminSystemRolesKey,
       RuntimeConfig.webProductionAdminComponentRolesKey,
-      RuntimeConfig.webProductionAdminJobsRolesKey
+      RuntimeConfig.webProductionAdminJobsRolesKey,
+      CncfConfigurationParameterCatalog.WEB_EXECUTION_LOCALE_KEY,
+      CncfConfigurationParameterCatalog.WEB_EXECUTION_TIMEZONE_KEY,
+      CncfConfigurationParameterCatalog.WEB_EXECUTION_DATE_FORMAT_KEY,
+      CncfConfigurationParameterCatalog.WEB_EXECUTION_DATE_TIME_FORMAT_KEY,
+      CncfConfigurationParameterCatalog.WEB_EXECUTION_DISPLAY_OVERRIDE_ENABLED_KEY,
+      CncfConfigurationParameterCatalog.WEB_EXECUTION_HTTP_LANGUAGE_NEGOTIATION_ENABLED_KEY,
+      CncfConfigurationParameterCatalog.WEB_EXECUTION_PUBLIC_CAPABILITIES_KEY
     )
     canonical.flatMap { key =>
       val suffix = key.stripPrefix("textus.")

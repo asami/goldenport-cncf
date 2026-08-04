@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul. 31, 2026
+ *  version Jul. 31, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -680,8 +681,11 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
         Array("--discover=classes", "server")
       )
 
-      Then("the project CAR becomes the component file")
-      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.componentFileKey) shouldBe Some(car.toString)
+      Then("the project CAR is retained by the typed repository policy and selected for startup")
+      bootstrap.repositoryBootstrapPolicy.componentFiles shouldBe Vector(car.toString)
+      bootstrap.repositories.activeRepositories.toOption.get should contain (
+        ComponentRepository.ComponentFileRepository.Specification(car)
+      )
     }
 
     "resolve a named component from the standard repository for server startup" in {

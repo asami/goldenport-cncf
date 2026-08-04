@@ -4,15 +4,17 @@ import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import org.goldenport.cncf.job.JobId
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.protocol.Property
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import scala.util.Try
 
 /*
  * @since   Apr. 25, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpDriverSpec
@@ -186,20 +188,21 @@ final class HttpDriverSpec
       val driver = new UrlConnectionHttpDriver("http://127.0.0.1:9")
 
       When("the request reaches URL connection admission")
+      val thrown = Try(driver.get(
+        "/internal",
+        properties = Vector(Property("http.public-network-only", "true", None))
+      )).failed.toOption
+
       Then("the private target is rejected before a connection is opened")
-      an[java.io.IOException] shouldBe thrownBy {
-        driver.get(
-          "/internal",
-          properties = Vector(Property("http.public-network-only", "true", None))
-        )
-      }
+      thrown should not be empty
+      thrown.get shouldBe a[java.io.IOException]
     }
   }
 
   "LoopbackHttpDriver" should {
     "preserve debug job metadata as a response header" in {
       Given("a loopback server backed by the default subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
       val driver = new LoopbackHttpDriver(
         LoopbackHttpServer.fromEngine(new HttpExecutionEngine(subsystem))
       )
@@ -214,7 +217,7 @@ final class HttpDriverSpec
 
     "let debug job metadata override an existing job header case-insensitively" in {
       Given("a loopback server whose operation response already carries a stale job header")
-      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
       val driver = new LoopbackHttpDriver(
         LoopbackHttpServer.fromEngine(new HttpExecutionEngine(subsystem))
       )
