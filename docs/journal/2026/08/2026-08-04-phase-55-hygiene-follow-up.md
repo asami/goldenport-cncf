@@ -54,3 +54,26 @@
   blocks and removes them or updates any retained example to generic
   configuration terminology.
 - Resolution reference: none.
+
+## HYG-P55-004 — ArtScene test-support public parameter naming
+
+- Status: OPEN (discovered 2026-08-04 during GCF-10D RE_REVIEW)
+- Repository and location: `textus-art-scene`,
+  `src/test/scala/org/simplemodeling/textus/artscene/ArtSceneTestSupport.scala`,
+  public `componentUnderTest` and `fixture` parameter labels and their named
+  callers.
+- Evidence: public helper labels including `subsystemname`, `datastorepath`,
+  `facilitymasterrecords`, `notificationhandoff`, `httpdriver`,
+  `securitycontext`, and `runtimecontext` do not use canonical camelCase;
+  named-argument callers extend beyond the frozen GCF-10D target set.
+- Category and risk: test-support naming/compatibility hygiene; renaming only
+  the helper declarations would break source-level named arguments across the
+  wider ArtScene specification suite.
+- Phase boundary: GCF-10D repaired runtime subject/admission behavior in a
+  seven-file corrective Step. Completing this naming migration requires a
+  coordinated cross-file caller update that is not needed for Phase 55
+  behavior or trustworthy release validation.
+- Proposed boundary: a dedicated ArtScene test-support naming migration that
+  inventories every named caller, renames the complete public helper surface,
+  and validates the full ArtScene specification suite.
+- Resolution reference: none.

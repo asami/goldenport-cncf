@@ -1,6 +1,6 @@
 # Phase 55 - Typed Configuration Binding and Provenance Resolution
 
-status=in-progress
+status=closed
 planned_at=2026-07-30
 replanned_at=2026-07-31
 depends_on=[Phase 54](phase-54.md)
@@ -128,7 +128,7 @@ effective binding collection.
 | GCF-07 | Textus/CNCF parameter catalog adoption | Closed `textus.*` and `cncf.*` contracts, Phase 53 layering, StandaloneUserProfile, Web execution policy, and runtime resolution use the generic binding model. GCF-07A–I establish catalog witnesses, a single-load runtime source projection, final fixed-standalone collection admission, fixed-only identity/formatting projection, typed Web policy/assembly-default adoption, and value-only runtime projections. | done |
 | GCF-08 | External codecs and boundary adapters | GCF-08A–L complete canonical/environment/argv codecs, argv and environment partitioning, raw-preserving consolidated/split-file admission, opaque launcher envelope transport, and serialized trace diagnostics. | done |
 | GCF-09 | Admitted consumer migration | Every frozen direct consumer migrates coherently; GCF-09A–R are accepted and the Step validation/commit evidence is recorded. | DONE |
-| GCF-10 | Regression, review, and normative closure | Full validation, independent review, resource-safe diagnostics, and release evidence remain required for closure. | in progress |
+| GCF-10 | Regression, review, and normative closure | Full validation, independent review, resource-safe diagnostics, and release evidence close the phase. | DONE |
 | GCF-10A | Normative documentation promotion | Promote verified implementation behavior into the generic/CNCF design, specification, developer guidance, migration guide, phase ledger, checklist, and journal; add focused executable evidence for empty selected-source-set handling; and repair runtime projection so a genuinely empty admitted source set becomes canonical empty candidates without weakening decoder or supplemental-source validation. | DONE |
 
 ## Resolution Contract
@@ -252,7 +252,7 @@ claim Phase-wide suites, independent review, release, or phase closure.
 
 ## Current Status
 
-Phase 55 is in progress. GCF-01 through GCF-07 are complete: the generic/CNCF
+Phase 55 is CLOSED. GCF-01 through GCF-07 are complete: the generic/CNCF
 ownership split, typed parameter/binding core, source/candidate construction,
 deterministic resolution, resolved collection/trace projection, and the CNCF
 catalog/runtime adoption have passed their recorded independent reviews and
@@ -286,10 +286,13 @@ convergence is clean; generic focused validation passed 40/40 with three
 intentional pending scenarios, CNCF configuration validation passed 180/180,
 and focused runtime/consumer validation passed 431/431.
 
-GCF-10 remains in progress. The complete Step accumulator review is clean after
-three bounded review-fix passes and focused re-review; Step commit validation,
-full Phase-wide validation, release evidence, and Phase 55 closure remain
-pending.
+GCF-10 is DONE. The complete Step accumulator review is clean after three
+bounded review-fix passes and focused re-review. Final runtime-admission
+corrections were committed as CNCF `262b1007c8526882cf5d43bf8f4885630e3d51d0`
+and ArtScene `deb0806567d2e613347cb735a09ee7beb35b9385` after their focused Step
+gates passed. Phase-wide validation passed at the frozen release heads:
+simplemodeling-lib 429/429, CNCF 2,929/2,929, both launcher suites, and
+ArtScene 391/391 with no failed or aborted suite.
 
 Earlier GCF-09A–F migrated repository bootstrap,
 runtime Web policy and descriptor roots, service-container configuration,
@@ -301,9 +304,8 @@ to the 30000-ms default only when absent, and is selected before the runtime
 constructs its SystemNode. The remainder of this paragraph records the
 historical GCF-09H expectation that direct consumers, temporary adapters,
 documentation updates, and closure evidence would follow. GCF-09 is now DONE;
-GCF-10A is accepted, and GCF-10 is IN PROGRESS with the complete Step
-accumulator review clean. Step commit validation, full validation, release
-evidence, and Phase closure are still pending.
+GCF-10A is accepted, and GCF-10 is DONE with clean review convergence, Step
+commit validation, and final Phase-wide release evidence.
 
 GCF-09I registers `textus.import.data.file` and
 `textus.import.entity.file` as optional, String-typed,

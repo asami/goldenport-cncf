@@ -1,6 +1,6 @@
 # Phase 55 Checklist - Typed Configuration Binding and Provenance Resolution
 
-status=in-progress
+status=closed
 phase=[Phase 55 - Typed Configuration Binding and Provenance Resolution](phase-55.md)
 provisional_specification=[Configuration Binding Provisional Specification](../notes/phase-55-configuration-binding-provisional-specification.md)
 normative_design=[Phase 55 Configuration Binding](../design/configuration-binding.md)
@@ -918,9 +918,9 @@ Evidence:
 ## GCF-10: Regression, Review, and Normative Closure
 
 Stage Status:
-- Current status: IN_PROGRESS
-- Current step: GCF-10 Step accumulator review is clean; Step commit validation
-  is pending
+- Current status: DONE
+- Current step: completed 2026-08-04 after final Phase-wide validation and
+  release evidence
 - Owner: configuration, CNCF runtime, documentation, and release maintainers
 - Entry rule: GCF-09 is DONE.
 - Completion rule: Phase-wide full validation, independent review, and release
@@ -936,17 +936,17 @@ Stage Status:
   no source/loader/resource handle, and cannot reload or open resources.
 - [x] Run fixed-user identity-change, migration/isolation, formatting, and
   secret-safe diagnostic specifications.
-- [ ] Run `simplemodeling-lib` focused and full tests.
-- [ ] Run CNCF focused and full tests.
-- [ ] Run every admitted consumer's applicable full tests.
+- [x] Run `simplemodeling-lib` focused and full tests.
+- [x] Run CNCF focused and full tests.
+- [x] Run every admitted consumer's applicable full tests.
 - [x] Run naming, executable-specification, and `git diff --check` gates.
 - [x] Perform independent read-only review.
 - [x] Apply every actionable review finding.
 - [x] Perform focused re-review only when fixes were required.
-- [ ] Record exact test, review, migration, and release evidence.
-- [ ] Apply the mechanical strategy/final Phase/checklist status update only
+- [x] Record exact test, review, migration, and release evidence.
+- [x] Apply the mechanical strategy/final Phase/checklist status update only
   after all GCF-10 closure gates pass.
-- [ ] Close Phase 55 only after all completion rules pass.
+- [x] Close Phase 55 only after all completion rules pass.
 
 Evidence:
 - The complete GCF-10 Step accumulator received an independent read-only review.
@@ -960,8 +960,24 @@ Evidence:
   remains 40/40 generic specifications with three intentional pending
   scenarios, 180/180 CNCF configuration specifications, and 431/431 focused
   runtime/consumer specifications.
-- No full suite ran. Step commit validation, Phase-wide full suites, release
-  evidence, strategy update, and Phase closure remain pending.
+- GCF-10B–D repaired the runtime-admission fixture boundary without adding
+  production auto-admission. The final corrective ArtScene Step commit is
+  `deb0806567d2e613347cb735a09ee7beb35b9385`; its `Test/compile` passed at
+  `99915-20260804T112527Z`, and its 10-suite integration acceptance passed
+  60/60 at `816-20260804T112605Z`.
+- The final Phase gate passed at the recorded release heads. The unchanged
+  upstream repositories retained their exact successful tree identities:
+  simplemodeling-lib 429/429 at `54623-20260804T095940Z`, followed by
+  `publishLocal` at `55038-20260804T100022Z`; CNCF 2,929/2,929 at
+  `55344-20260804T100101Z`, followed by `publishLocal` at
+  `56449-20260804T100310Z`; cncf-launcher passed at
+  `56865-20260804T100354Z`; and textus-launcher passed at
+  `57377-20260804T100430Z`. Every serialized invocation completed with exit
+  zero and `lock=released`.
+- ArtScene's corrected full suite passed 391/391 across 42 completed suites,
+  with zero failures or aborts, at `2767-20260804T112922Z`. Normal CAR lint
+  passed with publication-readiness and documentation warnings retained as
+  separate follow-up work.
 
 ## GCF-10A: Normative Documentation Promotion
 
@@ -1017,15 +1033,16 @@ Evidence:
 - `git diff --check`, canonical Stage Status token, executable-document link,
   diagnostic resource-safety dependency, naming, metadata, and production-scope
   gates passed. HYG-P55-001–003 remain separate and unchanged.
-- No full suite ran. GCF-10 Step commit, Phase-wide full validation, release
-  evidence, strategy update, and Phase closure remain pending.
+- At GCF-10A acceptance, no full suite had run; GCF-10 subsequently supplied
+  the Step commits, Phase-wide full validation, release evidence, strategy
+  update, and Phase closure recorded above.
 
 ## Current Status
 
-Phase 55 is IN PROGRESS. GCF-01 through GCF-09 are DONE. GCF-08A–L completed
+Phase 55 is CLOSED. GCF-01 through GCF-10 are DONE. GCF-08A–L completed
 canonical/environment/argv admission, raw-preserving consolidated/split-file
 admission, opaque launcher transport, and serialized trace diagnostics.
 GCF-09 is DONE with GCF-09A–R accepted and final Step review/integration
-validation clean. GCF-10A is accepted and the complete GCF-10 Step accumulator
-review is clean; Step commit validation is pending. Full validation, release
-evidence, and Phase closure remain pending.
+validation clean. GCF-10A is accepted; the final GCF-10 corrective Step and
+Phase-wide release validation are complete. HYG-P55-001–004 remain explicitly
+outside the closed phase behavior boundary.
