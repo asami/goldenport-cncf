@@ -8,7 +8,7 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemD
 
 /*
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object SubsystemTestFixture {
@@ -70,6 +70,18 @@ object SubsystemTestFixture {
     params: Params = Params()
   )(body: Subsystem => A): A = {
     val subsystem = startup.create(params)
+    try {
+      body(subsystem)
+    } finally {
+      Subsystem.shutdownOwned(subsystem)
+    }
+  }
+
+  def withAdmittedSubsystem[A](
+    startup: Startup = Startup.Empty,
+    params: Params = Params()
+  )(body: Subsystem => A): A = {
+    val subsystem = RuntimeBindingAdmissionFixture.admit(startup.create(params))
     try {
       body(subsystem)
     } finally {

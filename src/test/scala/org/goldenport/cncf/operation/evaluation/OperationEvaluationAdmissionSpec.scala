@@ -25,6 +25,7 @@ import org.goldenport.cncf.spi.evaluation.{
   DeterministicCorpusEvaluationSink
 }
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.http.{HttpPath, HttpRequest}
 import org.goldenport.protocol.{Protocol, Request}
@@ -40,7 +41,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for declared operation-evaluation admission.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAdmissionSpec
@@ -583,6 +584,7 @@ final class OperationEvaluationAdmissionSpec
       aliasResolver = AliasResolver.empty,
       runMode = RunMode.Command
     )
+    RuntimeBindingAdmissionFixture.admit(subsystem)
     _subsystems = _subsystems :+ subsystem
     val operation = AdmissionOperation("evaluate", events)
     val protocol = Protocol(services =

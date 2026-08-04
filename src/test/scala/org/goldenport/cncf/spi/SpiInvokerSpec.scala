@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 11, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiInvokerSpec
@@ -53,7 +53,7 @@ final class SpiInvokerSpec
 
     "inject a binding-aware component API into a required socket" in {
       Given("a generated-style provider and consumer socket in the same subsystem")
-      val subsystem = TestComponentFactory.emptySubsystem("spi_bound_socket")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("spi_bound_socket")
       val provider = InvocationFixture.addProvider(subsystem, "primary", Vector("official-site"))
       val (consumer, socket) = InvocationFixture.addBoundConsumer(subsystem, "bound_consumer", "scraper")
       given ExecutionContext = ExecutionContext.create()
@@ -70,7 +70,7 @@ final class SpiInvokerSpec
 
     "resolve a standard SPI and component API from the same provider without ambiguity" in {
       Given("one provider publishing both a standard typed SPI and a generated-style component API")
-      val subsystem = TestComponentFactory.emptySubsystem("spi_dual_contract")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("spi_dual_contract")
       val provider = InvocationFixture.addProvider(subsystem, "primary", Vector("official-site"))
       val (standardconsumer, standardsocket) = InvocationFixture.addConsumer(subsystem, "standard_consumer", "standard")
       val (apiconsumer, apisocket) = InvocationFixture.addBoundConsumer(subsystem, "api_consumer", "component-api")
@@ -154,7 +154,7 @@ final class SpiInvokerSpec
   "SpiInvoker provider resolution" should {
     "select a provider by abstract purpose before invocation" in {
       Given("two provider instances with different purposes")
-      val subsystem = TestComponentFactory.emptySubsystem("spi_invoker_purpose")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("spi_invoker_purpose")
       val static = InvocationFixture.addProvider(subsystem, "static", Vector("official-site"))
       val dynamic = InvocationFixture.addProvider(subsystem, "dynamic", Vector("javascript-heavy-site"))
       InvocationFixture.installResolver(subsystem, Vector(static, dynamic))
@@ -174,7 +174,7 @@ final class SpiInvokerSpec
 
     "restrict socket invocation to its assembly-bound providers" in {
       Given("one socket bound to the static provider while a dynamic provider is also assembly-admitted")
-      val subsystem = TestComponentFactory.emptySubsystem("spi_invoker_socket_boundary")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("spi_invoker_socket_boundary")
       val static = InvocationFixture.addProvider(subsystem, "static", Vector("official-site"))
       val dynamic = InvocationFixture.addProvider(subsystem, "dynamic", Vector("javascript-heavy-site"))
       val (consumer, socket) = InvocationFixture.addConsumer(subsystem, "consumer", "catalog")
@@ -235,11 +235,11 @@ final class SpiInvokerSpec
       Given("independent resolver fixtures for each provider selection failure")
       given ExecutionContext = ExecutionContext.create()
       val unavailablefixture = InvocationFixture.create("spi_failure_unavailable")
-      val ambiguoussubsystem = TestComponentFactory.emptySubsystem("spi_failure_ambiguous")
+      val ambiguoussubsystem = TestComponentFactory.admittedEmptySubsystem("spi_failure_ambiguous")
       val ambiguousfirst = InvocationFixture.addProvider(ambiguoussubsystem, "first", Vector("official-site"))
       val ambiguoussecond = InvocationFixture.addProvider(ambiguoussubsystem, "second", Vector("official-site"))
       InvocationFixture.installResolver(ambiguoussubsystem, Vector(ambiguousfirst, ambiguoussecond))
-      val unhealthysubsystem = TestComponentFactory.emptySubsystem("spi_failure_unhealthy")
+      val unhealthysubsystem = TestComponentFactory.admittedEmptySubsystem("spi_failure_unhealthy")
       val unhealthy = InvocationFixture.addProvider(unhealthysubsystem, "offline", Vector("official-site"))
       unhealthy.registerHealthContributor(new Component.HealthContributor {
         def name: String = "provider"
@@ -553,7 +553,7 @@ private object InvocationFixture {
   )
 
   def create(name: String = "spi_invoker"): Fixture = {
-    val subsystem = TestComponentFactory.emptySubsystem(name)
+    val subsystem = TestComponentFactory.admittedEmptySubsystem(name)
     val provider = addProvider(subsystem, "primary", Vector("official-site"))
     val evaluationsink = DeterministicCorpusEvaluationSink
       .createC("test_provider", "evaluation_capture")

@@ -37,7 +37,7 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 30, 2026
  *  version May. 18, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ChildEntityBindingWorkflowSpec
@@ -302,7 +302,7 @@ final class ChildEntityBindingWorkflowSpec
   }
 
   private def _runtime_component(): (Component, ExecutionContext) = {
-    val subsystem = TestComponentFactory.emptySubsystem("child_entity_binding_spec")
+    val subsystem = TestComponentFactory.admittedEmptySubsystem("child_entity_binding_spec")
     val component = _component(subsystem)
     subsystem.add(component)
     val runtime = subsystem.findComponent(component.name).getOrElse(fail("component missing"))

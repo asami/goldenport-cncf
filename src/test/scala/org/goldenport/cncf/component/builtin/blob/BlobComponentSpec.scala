@@ -1,5 +1,7 @@
 package org.goldenport.cncf.component.builtin.blob
 
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -11,7 +13,6 @@ import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy}
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.datatype.ContentType
@@ -33,7 +34,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
  *  version Apr. 29, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec
@@ -43,7 +44,7 @@ final class BlobComponentSpec
   "Builtin Blob component" should {
     "be installed in the default subsystem" in {
       Given("the default command-mode subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
       When("looking up the Blob component")
       val component = subsystem.findComponent("blob")
@@ -63,7 +64,7 @@ final class BlobComponentSpec
 
       When("the default subsystem installs builtin components")
       val failure = intercept[ConsequenceException] {
-        DefaultSubsystemFactory.default(Some("command"), configuration)
+        RuntimeBindingAdmissionFixture.default(Some("command"), configuration)
       }
 
       Then("the BlobStore configuration error is raised at component creation time")
@@ -72,7 +73,7 @@ final class BlobComponentSpec
 
     "expose public request and response metadata for Blob operations" in {
       Given("the default command-mode subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val blob = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
 
       When("reading the protocol metadata for user-facing Blob operations")
@@ -138,7 +139,7 @@ final class BlobComponentSpec
 
     "publish Blob as a reusable SimpleEntity admin surface" in {
       Given("the default command-mode subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val blob = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
 
       When("reading the Blob component entity metadata")
@@ -152,7 +153,7 @@ final class BlobComponentSpec
 
     "register, read, and describe a managed Blob payload" in {
       Given("a default subsystem and a managed Blob registration request")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val bytes = "managed image".getBytes(StandardCharsets.UTF_8)
       val register = _request(
         "register_blob",
@@ -226,7 +227,7 @@ final class BlobComponentSpec
 
     "attach, list, and detach Blob metadata through generic associations" in {
       Given("a default subsystem and two registered Blob payloads")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val blob1 = _record(_success(subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("image one".getBytes(StandardCharsets.UTF_8)))),
@@ -424,7 +425,7 @@ final class BlobComponentSpec
 
     "reject user-facing Blob attachment when sourceEntityId is not an EntityId" in {
       Given("a default subsystem and a registered Blob")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val blob = _record(_success(subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("image".getBytes(StandardCharsets.UTF_8)))),
@@ -451,7 +452,7 @@ final class BlobComponentSpec
 
     "register external URL Blob metadata without payload storage" in {
       Given("a default subsystem and an external URL Blob registration request")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val url = "https://example.test/manual.pdf"
       val register = _request(
         "register_blob",
@@ -488,7 +489,7 @@ final class BlobComponentSpec
       read shouldBe a[Consequence.Failure[_]]
 
       Given("a subsystem with zero managed Blob byte allowance")
-      val zeroLimitSubsystem = DefaultSubsystemFactory.default(
+      val zeroLimitSubsystem = RuntimeBindingAdmissionFixture.default(
         Some("command"),
         ResolvedConfiguration(
           Configuration(Map(RuntimeConfig.blobMaxByteSizeKey -> ConfigurationValue.StringValue("0"))),
@@ -515,7 +516,7 @@ final class BlobComponentSpec
 
     "validate managed Blob expected size and digest metadata" in {
       Given("a default subsystem and explicit expected metadata")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val bytes = "validated payload".getBytes(StandardCharsets.UTF_8)
       val expectedDigest = _sha256(bytes)
 
@@ -541,7 +542,7 @@ final class BlobComponentSpec
 
     "default managed Blob content type when not provided" in {
       Given("a default subsystem and a managed payload without contentType")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
       When("register_blob is executed")
       val registered = _record(_success(subsystem.executeOperationResponse(_request(
@@ -560,7 +561,7 @@ final class BlobComponentSpec
 
     "reject invalid Blob content type metadata" in {
       Given("a default subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val failuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("content_type", 0L)
       val requestValidationBefore = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("content_type", 0L)
       val validationBefore = RuntimeDashboardMetrics.validationDiagnosticCounts.getOrElse("content_type", 0L)
@@ -712,7 +713,7 @@ final class BlobComponentSpec
       postStore.deletedRefs shouldBe postStore.putRefs
 
       Given("a default subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val successfulBlobOperationsBefore = RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total
 
       When("image and video Blob registrations use compatible MIME types")
@@ -799,7 +800,7 @@ final class BlobComponentSpec
 
     "reject unsafe external URL Blob registrations" in {
       Given("a default subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val externalUrlFailuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("external_url", 0L)
       val unsafeUrls = Vector(
         "javascript:alert(1)",
@@ -836,7 +837,7 @@ final class BlobComponentSpec
 
     "reject external URL Blob payload validation fields" in {
       Given("a default subsystem and an external URL Blob request with payload validation fields")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
       When("register_blob receives expectedByteSize or expectedDigest for external_url")
       val withSize = subsystem.executeOperationResponse(_request(
@@ -865,7 +866,7 @@ final class BlobComponentSpec
 
     "expose read-only admin Blob diagnostics" in {
       Given("a default subsystem with Blob metadata and associations")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val blob1 = _record(_success(subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("admin one".getBytes(StandardCharsets.UTF_8)))),
@@ -992,7 +993,7 @@ final class BlobComponentSpec
 
     "reject a canonical foreign id before admin Blob deletion" in {
       Given("a managed Blob and a same-shaped exact id from the image collection")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val registered = _record(_success(subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("foreign delete".getBytes(StandardCharsets.UTF_8)))),
@@ -1023,7 +1024,7 @@ final class BlobComponentSpec
 
     "reject admin Blob delete while attached unless forced" in {
       Given("a default subsystem with an attached managed Blob")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val registered = _record(_success(subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("delete attached".getBytes(StandardCharsets.UTF_8)))),
@@ -1058,7 +1059,7 @@ final class BlobComponentSpec
 
     "force admin Blob delete cascades Blob associations and removes metadata" in {
       Given("a default subsystem with an attached external URL Blob")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val registered = _record(_success(subsystem.executeOperationResponse(_request(
         "register_blob",
         Property("sourceMode", "external_url", None),
@@ -1127,7 +1128,7 @@ final class BlobComponentSpec
 
     "fail deterministically for invalid registration metadata and missing Blob ids" in {
       Given("a default subsystem")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
       When("register_blob receives an unsupported kind")
       val invalidKind = subsystem.executeOperationResponse(_request(
@@ -1214,14 +1215,14 @@ final class BlobComponentSpec
     store: BlobStore,
     maxByteSize: Long = BlobStoreConfig.DefaultMaxByteSize
   ) = {
-    val subsystem = DefaultSubsystemFactory.default(Some("command"))
+    val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
     val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
     component.withPort(org.goldenport.cncf.component.Component.Port.of(new BlobComponent.DefaultBlobService(store, maxByteSize)))
     subsystem
   }
 
   private def _subsystem_with_blob_authorization() = {
-    val subsystem = DefaultSubsystemFactory.default(Some("command"))
+    val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
     subsystem.withDescriptor(GenericSubsystemDescriptor(
       path = java.nio.file.Path.of("<blob-authz>"),
       subsystemName = "blob-authz",

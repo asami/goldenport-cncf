@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 28, 2026
  *  version Apr. 22, 2026
- * @version Jul. 17, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemSharedJobEngineSpec
@@ -23,7 +23,7 @@ final class SubsystemSharedJobEngineSpec
   "Subsystem shared JobEngine" should {
     "share one JobEngine across administrative components" in {
       Given("a subsystem with command support")
-      SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
+      SubsystemTestFixture.withAdmittedSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
         val admin = subsystem.components.find(_.name == "admin").get
         val jobControl = subsystem.components.find(_.name == "job_control").get
         val submitCtx = ExecutionContext.create()
@@ -54,7 +54,7 @@ final class SubsystemSharedJobEngineSpec
 
     "suspend a running Job through the subsystem operation" in {
       Given("a submitted Job whose task has entered and remains controlled by the specification")
-      SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
+      SubsystemTestFixture.withAdmittedSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
         val admin = subsystem.components.find(_.name == "admin").get
         val jobControl = subsystem.components.find(_.name == "job_control").get
         val submitCtx = ExecutionContext.test()

@@ -19,14 +19,14 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Job worker correlation in automatic capture.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationJobCaptureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Job-managed automatic operation evaluation capture" should {
     "correlate the worker attempt with the JobId returned by JobAsync" in {
       Given("a JobAsync command component with a deterministic Corpus sink")
-      val subsystem = TestComponentFactory.emptySubsystem("evaluation_job")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("evaluation_job")
       val sink = _success(DeterministicCorpusEvaluationSink.createC("evaluation_job", "test-corpus"))
       val operation = EvaluationJobOperation("jobAsync")
       val service = spec.ServiceDefinition(

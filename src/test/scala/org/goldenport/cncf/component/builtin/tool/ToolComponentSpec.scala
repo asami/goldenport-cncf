@@ -1,5 +1,7 @@
 package org.goldenport.cncf.component.builtin.tool
 
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+
 import java.nio.file.Path
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
@@ -21,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -42,7 +44,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "read bounded text only through the execution-context ResourceAccess" must _resource_metadata {
       "when an admitted logical URN is supplied" in {
         Given("a runtime with one explicit in-memory URN provider")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val profile = ResourceAccessTestProfile(
           urnProviders = Vector(new InMemoryUrnResourceProvider(
             "example",
@@ -71,7 +73,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "preserve reference parsing and provider admission as structured failures" must _resource_metadata {
       "when a relative reference and an unconfigured absolute reference are supplied" in {
         Given("the normal runtime without an arbitrary resource provider")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
         When("both values cross the normal Operation boundary")
         val relative = subsystem.executeOperationResponse(
@@ -90,7 +92,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject content above the builtin tool projection limit" must _resource_metadata {
       "when an admitted provider returns more than one MiB" in {
         Given("a deterministic provider whose logical resource exceeds the tool response budget")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val access = new ResourceAccess {
           def read(reference: ResourceReference): Consequence[ResourceContent] =
             Consequence.success(ResourceContent(reference, Vector.fill(1024 * 1024 + 1)('a'.toByte)))
@@ -113,7 +115,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
       "when the caller selects an admitted IANA timezone" in {
         Given("a controlled CNCF runtime clock and the normal builtin Operation route")
         val instant = Instant.parse("2026-07-21T01:02:03.456Z")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         given ExecutionContext = ExecutionContext.create(Clock.fixed(instant, ZoneOffset.UTC))
 
         When("tool.time.now is executed for Asia/Tokyo")
@@ -134,7 +136,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject a timezone outside the bounded IANA contract" must _time_metadata {
       "when an offset-shaped timezone is supplied" in {
         Given("a time Operation request with a non-region timezone")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
         When("the request is parsed through normal Operation dispatch")
         val result = subsystem.executeOperationResponse(
@@ -151,7 +153,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "fetch text and project HEAD metadata through one admitted read path" must _web_metadata {
       "when a public HTTPS target is explicitly configured" in {
         Given("a public literal target and deterministic configured HTTPS provider")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val access = ResourceAccess.url(
           ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
           Vector(new StaticWebUrlResourceProvider {
@@ -189,7 +191,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject private-network targets before ResourceAccess" must _web_metadata {
       "when loopback and private literal targets are requested" in {
         Given("a provider that would reveal any request crossing admission")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         var reads = 0
         val access = new ResourceAccess {
           def read(reference: ResourceReference): Consequence[ResourceContent] = {
@@ -215,7 +217,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject non-textual content before projecting a Web result" must _web_metadata {
       "when an admitted provider returns image content" in {
         Given("a public target whose configured provider returns a binary media type")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val access = ResourceAccess.url(
           ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
           Vector(new StaticWebUrlResourceProvider {
@@ -243,7 +245,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "query only the runtime-installed provider and return bounded safe results" must _web_search_metadata {
       "when a provider-neutral WebSearch SPI is installed" in {
         Given("the builtin tool component with one deterministic runtime-owned search provider")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
         var observed: Option[WebSearchRequest] = None
         tool.withWebSearch(new WebSearch {
@@ -272,10 +274,10 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "preserve missing providers and invalid provider output as structured failures" must _web_search_metadata {
       "when providers emit unsafe duplicate or blank result fields" in {
         Given("subsystems for missing unsafe duplicate and blank provider outcomes")
-        val missing = DefaultSubsystemFactory.default(Some("command"))
-        val invalid = DefaultSubsystemFactory.default(Some("command"))
-        val duplicate = DefaultSubsystemFactory.default(Some("command"))
-        val blank = DefaultSubsystemFactory.default(Some("command"))
+        val missing = RuntimeBindingAdmissionFixture.default(Some("command"))
+        val invalid = RuntimeBindingAdmissionFixture.default(Some("command"))
+        val duplicate = RuntimeBindingAdmissionFixture.default(Some("command"))
+        val blank = RuntimeBindingAdmissionFixture.default(Some("command"))
         invalid.findComponent("tool").get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
           def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] =
             Consequence.success(WebSearchResponse(Vector(
@@ -322,7 +324,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "enforce query limit result-count bounds and the default result limit" must _web_search_metadata {
       "when request and provider values meet or cross their declared boundaries" in {
         Given("a provider that records admitted requests and returns two safe results")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
         var observed: Vector[WebSearchRequest] = Vector.empty
         tool.withWebSearch(new WebSearch {
@@ -375,7 +377,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "calculate exact bounded decimal values without floating-point conversion" must _decimal_metadata {
       "when bounded add, subtract, and multiply inputs are generated" in {
         Given("integer coefficients rendered as exact decimal strings")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val property = Prop.forAll(
           Gen.chooseNum(-1000000L, 1000000L),
           Gen.chooseNum(-1000000L, 1000000L),
@@ -410,7 +412,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "reject expression and oversized decimal input" must _decimal_metadata {
       "when callers attempt an undeclared expression operator or oversized operand" in {
         Given("the closed deterministic decimal Operation contract")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
         When("an expression-shaped operator and oversized decimal are dispatched")
         val expression = subsystem.executeOperationResponse(
@@ -431,7 +433,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "publish the same normal Operations with typed string inputs" must _decimal_metadata {
       "when the default subsystem MCP catalog is projected" in {
         Given("the builtin tool component with MCP-ready resource, Web, time, and decimal services")
-        val subsystem = DefaultSubsystemFactory.default(Some("server"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
 
         When("the existing MCP server catalog projects normal Operations")
         val tools = McpToolCatalog.toolsForSubsystem(subsystem)
@@ -465,7 +467,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "enforce descriptor authorization before invoking a runtime provider" must _framework_boundary_metadata {
       "when a normal operation authorization rule denies Web search" in {
         Given("the builtin tool component with a provider and a descriptor-level deny rule")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
         var providercalled = false
         tool.withWebSearch(new WebSearch {
@@ -503,7 +505,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "record normal ActionCall CallTree and dashboard metrics" must _framework_boundary_metadata {
       "when a builtin Query succeeds and another request fails during parameter validation" in {
         Given("an enabled framework CallTree and baseline ActionCall and validation metrics")
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
         val context = ExecutionContext.withFrameworkCallTreeEnabled(
           ExecutionContext.create(),
           enabled = true
@@ -539,7 +541,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     "publish only the bounded safe builtin capability set" must _framework_boundary_metadata {
       "when the tool component MCP catalog is projected" in {
         Given("the default builtin tool component without optional automation Components")
-        val subsystem = DefaultSubsystemFactory.default(Some("server"))
+        val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
         val tool = subsystem.findComponent("tool").get
 
         When("the existing MCP projection reads the component's admitted Operations")

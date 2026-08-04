@@ -12,11 +12,11 @@ import org.goldenport.cncf.path.AliasResolver
  *  version Jan. 14, 2026
  *  version Feb. 15, 2026
  *  version Apr. 15, 2026
- * @version May.  4, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object TestComponentFactory {
-  private val emptyConfiguration =
+  private val _empty_configuration =
     ResolvedConfiguration(
       Configuration.empty,
       ConfigurationTrace.empty
@@ -25,7 +25,7 @@ object TestComponentFactory {
   def emptySubsystem(
     name: String = "test",
     version: Option[String] = None,
-    configuration: ResolvedConfiguration = emptyConfiguration
+    configuration: ResolvedConfiguration = _empty_configuration
   ): Subsystem =
     Subsystem(
       name = name,
@@ -49,6 +49,20 @@ object TestComponentFactory {
       )
     )
 
+  def admittedEmptySubsystem(
+    name: String = "test",
+    version: Option[String] = None,
+    configuration: ResolvedConfiguration = _empty_configuration
+  ): Subsystem =
+    RuntimeBindingAdmissionFixture.admit(emptySubsystem(name, version, configuration))
+
+  def admittedSubsystemWithConfig(
+    values: Map[String, ConfigurationValue],
+    name: String = "test",
+    version: Option[String] = None
+  ): Subsystem =
+    RuntimeBindingAdmissionFixture.admit(subsystemWithConfig(values, name, version))
+
   def withSubsystem[A](
     startup: SubsystemTestFixture.Startup = SubsystemTestFixture.Startup.Empty,
     params: SubsystemTestFixture.Params = SubsystemTestFixture.Params()
@@ -58,9 +72,28 @@ object TestComponentFactory {
   def withEmptySubsystem[A](
     name: String = "test",
     version: Option[String] = None,
-    configuration: ResolvedConfiguration = emptyConfiguration
+    configuration: ResolvedConfiguration = _empty_configuration
   )(body: Subsystem => A): A =
     withSubsystem(
+      params = SubsystemTestFixture.Params(
+        name = name,
+        version = version,
+        configuration = configuration
+      )
+    )(body)
+
+  def withAdmittedSubsystem[A](
+    startup: SubsystemTestFixture.Startup = SubsystemTestFixture.Startup.Empty,
+    params: SubsystemTestFixture.Params = SubsystemTestFixture.Params()
+  )(body: Subsystem => A): A =
+    SubsystemTestFixture.withAdmittedSubsystem(startup, params)(body)
+
+  def withAdmittedEmptySubsystem[A](
+    name: String = "test",
+    version: Option[String] = None,
+    configuration: ResolvedConfiguration = _empty_configuration
+  )(body: Subsystem => A): A =
+    withAdmittedSubsystem(
       params = SubsystemTestFixture.Params(
         name = name,
         version = version,
@@ -74,8 +107,8 @@ object TestComponentFactory {
     serviceFactoryOpt: Option[Component.ServiceFactory] = None,
     subsystem: Subsystem = emptySubsystem("test")
   ): Component = {
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
+    val componentid = ComponentId(name)
+    val instanceid = ComponentInstanceId.default(componentid)
     val factory: Component.SinglePrimaryBundleFactory = new Component.SinglePrimaryBundleFactory {
       override def serviceFactory: Component.ServiceFactory =
         serviceFactoryOpt.getOrElse(Component.ServiceFactory.empty)
@@ -89,8 +122,8 @@ object TestComponentFactory {
       ): Component.Core =
         Component.Core.create(
           name,
-          componentId,
-          instanceId,
+          componentid,
+          instanceid,
           protocol,
           this
         )
@@ -98,8 +131,8 @@ object TestComponentFactory {
 
     val core = Component.Core.create(
       name,
-      componentId,
-      instanceId,
+      componentid,
+      instanceid,
       protocol,
       factory
     )

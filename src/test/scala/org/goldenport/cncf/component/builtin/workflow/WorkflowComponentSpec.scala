@@ -1,5 +1,7 @@
 package org.goldenport.cncf.component.builtin.workflow
 
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import cats.data.NonEmptyVector
@@ -14,7 +16,6 @@ import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, E
 import org.goldenport.cncf.event.{ReceptionInput, ReceptionOutcome}
 import org.goldenport.cncf.job.JobStatus
 import org.goldenport.cncf.operation.CmlOperationDefinition
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.protocol.{Argument, Protocol, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
@@ -29,7 +30,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowComponentSpec
@@ -60,7 +61,7 @@ final class WorkflowComponentSpec
             )
           )
         ),
-        entities = Vector(_SalesOrder(_entity_id("approved_definition"), "approved"))
+        entities = Vector(SalesOrder(_entity_id("approved_definition"), "approved"))
       )
 
       When("workflow builtin operations are invoked")
@@ -107,7 +108,7 @@ final class WorkflowComponentSpec
             )
           )
         ),
-        entities = Vector(_SalesOrder(_entity_id("approved_instance"), "approved"))
+        entities = Vector(SalesOrder(_entity_id("approved_instance"), "approved"))
       )
 
       val entityid = fixture.entities.head.id
@@ -125,30 +126,30 @@ final class WorkflowComponentSpec
       _await_job_completion(fixture.subsystem, instance.relatedJobIds.head)
 
       When("workflow instance and history surfaces are queried")
-      val listInstances = _execute(fixture.subsystem, "workflow.workflow.list_workflow_instances")
-      val getInstance = _execute(
+      val listinstances = _execute(fixture.subsystem, "workflow.workflow.list_workflow_instances")
+      val getinstance = _execute(
         fixture.subsystem,
         "workflow.workflow.get_workflow_instance",
         arguments = List(Argument("id", instance.id.value))
       )
-      val loadHistory = _execute(
+      val loadhistory = _execute(
         fixture.subsystem,
         "workflow.workflow.load_workflow_history",
         arguments = List(Argument("id", instance.id.value))
       )
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val jobStatus = fixture.subsystem.components
+      val jobstatus = fixture.subsystem.components
         .find(_.name == "job_control")
         .flatMap(_.port.get[JobControlComponent.JobService])
         .getOrElse(fail("job_control service missing"))
         .getJobStatus(instance.relatedJobIds.head)
 
       Then("workflow shows orchestration state and cross-links to job ids without duplicating job schema")
-      val instances = _records_from_key(listInstances, "instances")
+      val instances = _records_from_key(listinstances, "instances")
       instances.nonEmpty shouldBe true
       instances.head.getString("instance-id") shouldBe Some(instance.id.value)
 
-      val loaded = _record(getInstance)
+      val loaded = _record(getinstance)
       loaded.getString("registration-name") shouldBe Some("approval")
       loaded.getString("last-action") shouldBe Some(s"${fixture.component.name}.workflow.advanceOrder")
       loaded.getAny("related-job-ids").collect { case xs: Seq[?] => xs.map(_.toString) }.getOrElse(fail("related-job-ids missing")) shouldBe Vector(instance.relatedJobIds.head.value)
@@ -162,41 +163,41 @@ final class WorkflowComponentSpec
       loaded.asMap.contains("job-status") shouldBe false
       loaded.asMap.contains("job-result") shouldBe false
 
-      val history = _records_from_key(loadHistory, "history")
+      val history = _records_from_key(loadhistory, "history")
       history.head.getString("message") shouldBe Some("instance-created")
       history.last.getString("selected-action") shouldBe Some(s"${fixture.component.name}.workflow.advanceOrder")
       history.last.getString("related-job-id") shouldBe Some(instance.relatedJobIds.head.value)
 
       And("job_control remains the authoritative job surface for the same execution")
-      jobStatus.toOption.map(_.jobId.value) shouldBe Some(instance.relatedJobIds.head.value)
-      jobStatus.toOption.map(_.status).exists(Set(JobStatus.Succeeded, JobStatus.Running, JobStatus.Submitted).contains) shouldBe true
+      jobstatus.toOption.map(_.jobId.value) shouldBe Some(instance.relatedJobIds.head.value)
+      jobstatus.toOption.map(_.status).exists(Set(JobStatus.Succeeded, JobStatus.Running, JobStatus.Submitted).contains) shouldBe true
     }
   }
 
-  private final case class _Fixture(
+  private final case class Fixture(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     component: Component,
-    entities: Vector[_SalesOrder]
+    entities: Vector[SalesOrder]
   )
 
   private def _fixture(
     workflowDefinitions: Vector[WorkflowDefinition],
-    entities: Vector[_SalesOrder]
-  ): _Fixture = {
-    given EntityPersistent[_SalesOrder] = _persistent
-    val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+    entities: Vector[SalesOrder]
+  ): Fixture = {
+    given EntityPersistent[SalesOrder] = _persistent
+    val subsystem = RuntimeBindingAdmissionFixture.default(mode = Some("command"))
     val component = _component(subsystem, workflowDefinitions, entities)
     val bootstrapped = new ComponentFactory().bootstrap(component)
     subsystem.add(bootstrapped)
-    _Fixture(subsystem, bootstrapped, entities)
+    Fixture(subsystem, bootstrapped, entities)
   }
 
   private def _component(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     definitions: Vector[WorkflowDefinition],
-    entities: Vector[_SalesOrder]
+    entities: Vector[SalesOrder]
   ): Component = {
-    given EntityPersistent[_SalesOrder] = _persistent
+    given EntityPersistent[SalesOrder] = _persistent
     val trace = ArrayBuffer.empty[String]
     val protocol = Protocol(
       services = spec.ServiceDefinitionGroup(
@@ -205,7 +206,7 @@ final class WorkflowComponentSpec
             name = "workflow",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _WorkflowOperation("advanceOrder", trace)
+                WorkflowOperation("advanceOrder", trace)
               )
             )
           )
@@ -227,25 +228,25 @@ final class WorkflowComponentSpec
     }
     component.entitySpace.registerEntity("salesOrder", _collection(entities))
     val name = s"workflow_projection_component_${_seed.incrementAndGet()}"
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
-    val core = Component.Core.create(name, componentId, instanceId, protocol)
+    val componentid = ComponentId(name)
+    val instanceid = ComponentInstanceId.default(componentid)
+    val core = Component.Core.create(name, componentid, instanceid, protocol)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 
   private def _collection(
-    entities: Vector[_SalesOrder]
-  )(using EntityPersistent[_SalesOrder]): EntityCollection[_SalesOrder] = {
+    entities: Vector[SalesOrder]
+  )(using EntityPersistent[SalesOrder]): EntityCollection[SalesOrder] = {
     val entitymap = entities.map(x => x.id -> x).toMap
-    val storerealm = new EntityRealm[_SalesOrder](
+    val storerealm = new EntityRealm[SalesOrder](
       entityName = "salesOrder",
       loader = EntityLoader(id => entitymap.get(id)),
-      state = new _IdRef[EntityRealmState[_SalesOrder]](EntityRealmState(Map.empty))
+      state = new IdRef[EntityRealmState[SalesOrder]](EntityRealmState(Map.empty))
     )
     entities.foreach(storerealm.put)
-    val descriptor = EntityDescriptor[_SalesOrder](
+    val descriptor = EntityDescriptor[SalesOrder](
       collectionId = _collection_id,
-      plan = EntityRuntimePlan[_SalesOrder](
+      plan = EntityRuntimePlan[SalesOrder](
         entityName = "salesOrder",
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
         workingSet = None,
@@ -253,9 +254,9 @@ final class WorkflowComponentSpec
         maxPartitions = 4,
         maxEntitiesPerPartition = 16
       ),
-      persistent = summon[EntityPersistent[_SalesOrder]]
+      persistent = summon[EntityPersistent[SalesOrder]]
     )
-    new EntityCollection[_SalesOrder](
+    new EntityCollection[SalesOrder](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, None)
     )
@@ -263,11 +264,11 @@ final class WorkflowComponentSpec
 
   private def _await_job_completion(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
-    jobId: org.goldenport.cncf.job.JobId
+    jobid: org.goldenport.cncf.job.JobId
   ): Unit = {
     val deadline = System.currentTimeMillis() + 3000L
     while ({
-      subsystem.jobEngine.query(jobId).exists(m => m.status == JobStatus.Submitted || m.status == JobStatus.Running) &&
+      subsystem.jobEngine.query(jobid).exists(m => m.status == JobStatus.Submitted || m.status == JobStatus.Running) &&
       System.currentTimeMillis() < deadline
     }) {
       Thread.sleep(10L)
@@ -344,17 +345,17 @@ final class WorkflowComponentSpec
   ): EntityId =
     EntityId("workflow", entropy, _collection_id)
 
-  private def _persistent: EntityPersistent[_SalesOrder] = new EntityPersistent[_SalesOrder] {
-    def id(e: _SalesOrder): EntityId = e.id
-    def toRecord(e: _SalesOrder): Record = e.toRecord()
-    def fromRecord(r: Record): Consequence[_SalesOrder] =
+  private def _persistent: EntityPersistent[SalesOrder] = new EntityPersistent[SalesOrder] {
+    def id(e: SalesOrder): EntityId = e.id
+    def toRecord(e: SalesOrder): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[SalesOrder] =
       Consequence.notImplemented("not used in WorkflowComponentSpec")
   }
 
   private val _seed = new AtomicInteger(0)
 }
 
-private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+private final class IdRef[A](initial: A) extends Ref[cats.Id, A] {
   private var _value: A = initial
 
   def get: A = synchronized { _value }
@@ -413,7 +414,7 @@ private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
   }
 }
 
-private final case class _SalesOrder(
+private final case class SalesOrder(
   id: EntityId,
   status: String
 ) {
@@ -424,7 +425,7 @@ private final case class _SalesOrder(
     )
 }
 
-private final case class _WorkflowOperation(
+private final case class WorkflowOperation(
   opname: String,
   trace: ArrayBuffer[String]
 ) extends spec.OperationDefinition {
@@ -436,19 +437,19 @@ private final case class _WorkflowOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_WorkflowAction(req, opname, trace))
+    Consequence.success(WorkflowAction(req, opname, trace))
 }
 
-private final case class _WorkflowAction(
+private final case class WorkflowAction(
   request: Request,
   opname: String,
   trace: ArrayBuffer[String]
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _WorkflowActionCall(core, opname, trace)
+    WorkflowActionCall(core, opname, trace)
 }
 
-private final case class _WorkflowActionCall(
+private final case class WorkflowActionCall(
   core: ActionCall.Core,
   opname: String,
   trace: ArrayBuffer[String]

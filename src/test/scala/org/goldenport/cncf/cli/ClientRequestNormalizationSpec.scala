@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 10, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 20, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -44,7 +44,7 @@ class ClientRequestNormalizationSpec
 
   "Client HTTP request normalization" should {
     "normalize canonical http get/post forms" in {
-      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("client-request-normalization")
       val table = Table(
         ("args", "operation", "path", "body"),
         (
@@ -119,7 +119,7 @@ class ClientRequestNormalizationSpec
     }
 
     "preserve dotted framework query names in explicit HTTP paths" in {
-      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("client-request-normalization")
       Given("client http arguments with a framework query on the path")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
@@ -141,6 +141,7 @@ class ClientRequestNormalizationSpec
     }
 
     "append client query with ampersand when the path already has a query" in {
+      Given("a client request whose path already contains a query string")
       val req = Request(
         component = Some("client"),
         service = Some("http"),
@@ -150,15 +151,18 @@ class ClientRequestNormalizationSpec
         properties = List(Property("id", "job-1", None))
       )
 
+      When("the client properties are appended to the request URL")
       val url = CncfRuntime._append_client_query(
         "http://localhost:19083/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager",
         req
       )
 
+      Then("the additional property is joined with an ampersand")
       url shouldBe "http://localhost:19083/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager&id=job-1"
     }
 
     "encode client query values before appending them to the request URL" in {
+      Given("a client request with query values requiring URL encoding")
       val req = Request(
         component = Some("client"),
         service = Some("http"),
@@ -171,11 +175,13 @@ class ClientRequestNormalizationSpec
         )
       )
 
+      When("the client properties are appended to the request URL")
       val url = CncfRuntime._append_client_query(
         "http://localhost:19083/rest/v1/debug/http/echo",
         req
       )
 
+      Then("the URL contains encoded query values")
       url should include ("title=Knowledge+Import+Paper")
       url should include ("url=https%3A%2F%2Fexample.test%2Fa+b")
       url should not include ("Knowledge Import Paper")
@@ -183,18 +189,18 @@ class ClientRequestNormalizationSpec
     }
 
     "resolve -d @file into Bag at request construction time" in {
-      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
       Given("a local file referenced via -d @path")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("client-request-normalization")
       val file = Files.createTempFile("cncf-client-body", ".txt")
       val _ = Files.writeString(file, "pong", StandardCharsets.UTF_8)
 
       try {
+        When("the file reference is normalized into a client Request")
         val request = CncfRuntime.parseClientArgs(
           subsystem,
           Array("http", "post", "/admin/system/ping", "-d", s"@${file}")
         )
 
-        When("the arguments are normalized into a Request")
         request should be_success
 
         Then("the http.body property is a Bag created from the file content")
@@ -214,7 +220,7 @@ class ClientRequestNormalizationSpec
     }
 
     "include explicit baseurl overrides" in {
-      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("client-request-normalization")
       Given("client http arguments with an explicit baseurl")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
@@ -376,6 +382,7 @@ class ClientRequestNormalizationSpec
     }
 
     "reject missing, invalid, and empty zip filebundle paths deterministically" in {
+      Given("missing, invalid, and empty ZIP filebundle paths for one declared parameter")
       val operation = _filebundle_operation("tree")
       val missing = Files.createTempDirectory("cncf-client-filebundle-missing").resolve("missing.zip")
       val invalid = Files.createTempFile("cncf-client-filebundle-invalid", ".zip")
@@ -400,13 +407,17 @@ class ClientRequestNormalizationSpec
           properties = List(Property("tree", path.toString, None))
         )
 
-        CncfRuntime._prepare_filebundle_parameters(operation, req) shouldBe a[Consequence.Failure[_]]
+        When("the table path is prepared as a filebundle parameter")
+        val result = CncfRuntime._prepare_filebundle_parameters(operation, req)
+
+        Then("the malformed ZIP path is rejected")
+        result shouldBe a[Consequence.Failure[_]]
       }
     }
 
     "prepare filebundle parameters for direct command requests" in {
       Given("a command request whose operation parameter is declared as filebundle")
-      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization-command")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("client-request-normalization-command")
       val operation = _filebundle_operation("tree")
       val service = spec.ServiceDefinition(
         name = "post",
@@ -511,7 +522,7 @@ class ClientRequestNormalizationSpec
 
     "normalize uploaded filebundle MimeBody before operation execution" in {
       Given("an operation whose parameter is declared as filebundle")
-      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization-http-filebundle")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("client-request-normalization-http-filebundle")
       val seen = new AtomicReference[String]("")
       val operation = _capturing_filebundle_operation("tree", seen)
       val service = spec.ServiceDefinition(
@@ -542,7 +553,7 @@ class ClientRequestNormalizationSpec
   }
 
   private def _subsystem_with_admin() = {
-    val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
+    val subsystem = TestComponentFactory.admittedEmptySubsystem("client-request-normalization")
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
     val admin = AdminComponent.Factory.create(params).primary
     subsystem.add(admin)
@@ -611,7 +622,7 @@ class ClientRequestNormalizationSpec
             req.properties.collect { case Property(`parameterName`, value, _) => value }
         val kind = values.collectFirst { case bundle: FileBundle => bundle.kind }.getOrElse("not-filebundle")
         seen.set(kind)
-        org.goldenport.Consequence.success(_FileBundleCaptureAction(req, kind))
+        org.goldenport.Consequence.success(FileBundleCaptureAction(req, kind))
       }
     }
 
@@ -680,15 +691,15 @@ class ClientRequestNormalizationSpec
   }
 }
 
-private final case class _FileBundleCaptureAction(
+private final case class FileBundleCaptureAction(
   request: Request,
   kind: String
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _FileBundleCaptureActionCall(core, kind)
+    FileBundleCaptureActionCall(core, kind)
 }
 
-private final case class _FileBundleCaptureActionCall(
+private final case class FileBundleCaptureActionCall(
   core: ActionCall.Core,
   kind: String
 ) extends ProcedureActionCall {

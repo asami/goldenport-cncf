@@ -41,7 +41,7 @@ import org.scalatest.matchers.should.Matchers
  * @since   Jan.  1, 2026
  *  version Apr. 11, 2026
  *  version May. 11, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -116,9 +116,9 @@ private object TestQueryOperation extends spec.OperationDefinition {
               core: ActionCall.Core
             ): ActionCall = {
               val actionself = this
-              val _core_ = core
+              val actioncore = core
               new ActionCall {
-                override val core: ActionCall.Core = _core_
+                override val core: ActionCall.Core = actioncore
                 override def action: Action = actionself
                 override def execute(): org.goldenport.Consequence[OperationResponse] =
                   org.goldenport.Consequence.Success(
@@ -152,7 +152,7 @@ private object TestStringEgress extends Egress[String] {
 }
 
 private object TestProtocol {
-  private val serviceDef =
+  private val _service_def =
     spec.ServiceDefinition(
       name = "test",
       operations =
@@ -161,14 +161,14 @@ private object TestProtocol {
         )
     )
 
-  private val services =
+  private val _services =
     spec.ServiceDefinitionGroup(
-      services = Vector(serviceDef)
+      services = Vector(_service_def)
     )
 
   val protocol: Protocol =
     Protocol(
-      services = services,
+      services = _services,
       handler =
         ProtocolHandler(
           ingresses =
@@ -223,7 +223,7 @@ private def _with_test_component[A](
 )(
   body: Component => A
 ): A = {
-  val subsystem = TestComponentFactory.emptySubsystem("test")
+  val subsystem = TestComponentFactory.admittedEmptySubsystem("test")
   val component =
     TestComponentFactory.create(
       "test",

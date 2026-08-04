@@ -1,5 +1,7 @@
 package org.goldenport.cncf.tag
 
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
@@ -11,7 +13,6 @@ import org.goldenport.cncf.entity.{
 }
 import org.goldenport.cncf.entity.runtime.{WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.IngressSecurityResolver
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -25,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for hierarchical Tag master and TagAttachment.
  *
  * @since   May.  5, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagModelSpec
@@ -219,7 +220,7 @@ final class TagModelSpec
 
     "publish master descriptor with tag-specific resident tree handled outside entity working set" in {
       Given("the default subsystem with its built-in Tag component")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val tag = subsystem.findComponent(TagComponent.name).getOrElse(fail("Tag component is missing"))
 
       When("the Tag runtime descriptor is inspected")
@@ -302,7 +303,7 @@ final class TagModelSpec
 
     "load visible source entities through generic tag_search_entities" in {
       Given("a canonical source Tag associated with a classifier Tag")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val source = _record(_success(subsystem.executeOperationResponse(_tag_request(
         "tag_create",
         Argument("key", "tag-search-source"),
@@ -350,7 +351,7 @@ final class TagModelSpec
 
     "reject noncanonical Entity IDs at Tag operation ingress" in {
       Given("a Tag service with a classifier Tag and scalar Entity ID inputs")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val classifier = _record(_success(subsystem.executeOperationResponse(_tag_request(
         "tag_create",
         Argument("key", "tag-ingress-classifier"),
@@ -399,7 +400,7 @@ final class TagModelSpec
 
     "reject a same-name foreign canonical id at generic tag source ingress" in {
       Given("a Tag association whose source id has the tag collection name but a foreign namespace")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val source = _record(_success(subsystem.executeOperationResponse(_tag_request(
         "tag_create",
         Argument("key", "tag-search-foreign-source"),
@@ -446,7 +447,7 @@ final class TagModelSpec
 
     "scope tag_update and tag_move by requested tagSpace" in {
       Given("ambiguous Tag paths in blog and operational spaces")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val tagcomponent =
         subsystem
           .findComponent(TagComponent.name)

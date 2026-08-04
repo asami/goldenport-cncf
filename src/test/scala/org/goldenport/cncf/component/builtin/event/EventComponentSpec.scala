@@ -1,5 +1,7 @@
 package org.goldenport.cncf.component.builtin.event
 
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
@@ -7,10 +9,10 @@ import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobRunMode, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded, TaskFailed}
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.conclusion.Disposition
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -18,22 +20,23 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 28, 2026
  *  version Apr. 22, 2026
  *  version May. 11, 2026
- * @version Jul.  1, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
-final class EventComponentSpec extends AnyWordSpec with Matchers {
+final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "EventComponent" should {
     "expose event read and job event observation routes" in {
-      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      Given("an admitted command subsystem with an observed job")
+      val subsystem = RuntimeBindingAdmissionFixture.default(mode = Some("command"))
       val admin = subsystem.components.find(_.name == "admin").get
       val ctx = ExecutionContext.create()
-      val jobId = admin.logic.submitJob(
+      val jobid = admin.logic.submitJob(
         List(SleepTask(ActionId.generate(), 10L)),
         ctx,
         JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("event-component"))
       ).toOption.get
 
-      val searchReq = Request(
+      val searchreq = Request(
         component = Some("event"),
         service = Some("event"),
         operation = "search_event",
@@ -41,7 +44,11 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
         switches = Nil,
         properties = Nil
       )
-      subsystem.execute(searchReq) match {
+      When("the event search request is executed")
+      val searchresult = subsystem.execute(searchreq)
+
+      Then("the search response includes the submitted job event")
+      searchresult match {
         case Consequence.Success(res) =>
           val value = res.toString
           value should include ("job.submitted")
@@ -49,27 +56,32 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           fail(conclusion.show)
       }
 
-      val loadReq = Request(
+      val loadreq = Request(
         component = Some("event"),
         service = Some("event_admin"),
         operation = "load_job_events",
-        arguments = List(Argument("id", jobId.value)),
+        arguments = List(Argument("id", jobid.value)),
         switches = Nil,
         properties = Nil
       )
-      subsystem.execute(loadReq) match {
+      When("the job event load request is executed")
+      val loadresult = subsystem.execute(loadreq)
+
+      Then("the load response includes the submitted job event")
+      loadresult match {
         case Consequence.Success(res) =>
           val value = res.toString
           value should include ("job.submitted")
-          value should include (jobId.value)
+          value should include (jobid.value)
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
       }
     }
 
     "expose selected policy and source/target metadata on event inspection surfaces" in {
-      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
-      val eventStore = subsystem.eventStore
+      Given("a stored event with source, target, and policy metadata")
+      val subsystem = RuntimeBindingAdmissionFixture.default(mode = Some("command"))
+      val eventstore = subsystem.eventStore
       val record = EventRecord(
         id = EventId.generate(),
         name = "person.created",
@@ -97,9 +109,9 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
         status = EventRecord.Status.Stored,
         lane = EventLane.Transactional
       )
-      eventStore.append(Seq(record)) shouldBe a[Consequence.Success[_]]
+      eventstore.append(Seq(record)) shouldBe a[Consequence.Success[_]]
 
-      val loadReq = Request(
+      val loadreq = Request(
         component = Some("event"),
         service = Some("event"),
         operation = "load_event",
@@ -108,7 +120,11 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
         properties = Nil
       )
 
-      subsystem.execute(loadReq) match {
+      When("the stored event is loaded through its inspection surface")
+      val result = subsystem.execute(loadreq)
+
+      Then("the projection includes its selected event metadata")
+      result match {
         case Consequence.Success(res) =>
           val value = res.toString
           value should include ("crm")
@@ -126,11 +142,12 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
     }
 
     "expose dead-letter and poison metadata for event-triggered failures" in {
-      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      Given("an admitted command subsystem with a retryable failed job")
+      val subsystem = RuntimeBindingAdmissionFixture.default(mode = Some("command"))
       val admin = subsystem.components.find(_.name == "admin").get
       val ctx = ExecutionContext.create()
-      val jobId = admin.logic.submitJob(
-        List(_FailureTask(
+      val jobid = admin.logic.submitJob(
+        List(FailureTask(
           ActionId.generate(),
           Conclusion.simple("retry-now").copy(disposition = Disposition(Disposition.UserAction.RetryNow))
         )),
@@ -144,17 +161,21 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           )
         )
       ).toOption.get
-      _await_job(admin.jobEngine, jobId)
+      _await_job(admin.jobEngine, jobid)
 
-      val loadReq = Request(
+      val loadreq = Request(
         component = Some("event"),
         service = Some("event_admin"),
         operation = "load_job_events",
-        arguments = List(Argument("id", jobId.value)),
+        arguments = List(Argument("id", jobid.value)),
         switches = Nil,
         properties = Nil
       )
-      subsystem.execute(loadReq) match {
+      When("the job event inspection request is executed")
+      val result = subsystem.execute(loadreq)
+
+      Then("the projection includes dead-letter recovery metadata")
+      result match {
         case Consequence.Success(res) =>
           val value = res.toString
           value should include ("retry_exhausted")
@@ -177,7 +198,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
     }
   }
 
-  private final case class _FailureTask(
+  private final case class FailureTask(
     actionId: ActionId,
     conclusion: Conclusion
   ) extends JobTask {
@@ -189,17 +210,17 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
 
   private def _await_job(
     engine: org.goldenport.cncf.job.JobEngine,
-    jobId: JobId,
+    jobid: JobId,
     timeoutMillis: Long = 4000L
   ): Unit = {
     val deadline = System.currentTimeMillis() + timeoutMillis
-    var status = engine.getStatus(jobId)
+    var status = engine.getStatus(jobid)
     while (
       status.forall(s => s != org.goldenport.cncf.job.JobStatus.Failed && s != org.goldenport.cncf.job.JobStatus.Succeeded) &&
       System.currentTimeMillis() < deadline
     ) {
       Thread.sleep(10L)
-      status = engine.getStatus(jobId)
+      status = engine.getStatus(jobid)
     }
     status should contain (org.goldenport.cncf.job.JobStatus.Failed)
   }

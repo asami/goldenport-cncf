@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version Apr. 29, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ServiceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -22,22 +22,28 @@ class ServiceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Service" should {
 
     "satisfy basic properties" in {
+      Given("the reserved Service semantic contract")
+      When("the pending basic-property specification is evaluated")
+      Then("the contract remains explicitly pending")
       pending
     }
 
     "preserve invariants" in {
+      Given("the reserved Service invariant contract")
+      When("the pending invariant specification is evaluated")
+      Then("the contract remains explicitly pending")
       pending
     }
 
     "observe direct request construction failures through common diagnostics" in {
       Given("a directly invoked Service installed in its owning subsystem")
-      val operation = _InvalidRequestOperation()
+      val operation = InvalidRequestOperation()
       val service = spec.ServiceDefinition(
         name = "media",
         operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation))
       )
       val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
-      val subsystem = TestComponentFactory.emptySubsystem("direct-service-validation")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("direct-service-validation")
       val component = TestComponentFactory.create("direct_service_validation", protocol, subsystem = subsystem)
       subsystem.add(component)
       try {
@@ -61,7 +67,7 @@ class ServiceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   }
 }
 
-private final case class _InvalidRequestOperation() extends spec.OperationDefinition {
+private final case class InvalidRequestOperation() extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
       name = "upload",

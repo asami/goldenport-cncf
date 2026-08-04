@@ -29,7 +29,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
- * @version Jul.  1, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -126,26 +126,26 @@ final class JclJobControlComponentSpec
           |""".stripMargin
 
       When("describe_job_definition is invoked with explicit JCL formats")
-      val jsonResponse = _execute(
+      val jsonresponse = _execute(
         fixture.subsystem,
         "job_control.job.describe_job_definition",
         arguments = List(Argument("body", json), Argument("jclFormat", "json"))
       )
-      val xmlResponse = _execute(
+      val xmlresponse = _execute(
         fixture.subsystem,
         "job_control.job.describe_job_definition",
         arguments = List(Argument("body", xml), Argument("jclFormat", "xml"))
       )
-      val hoconResponse = _execute(
+      val hoconresponse = _execute(
         fixture.subsystem,
         "job_control.job.describe_job_definition",
         arguments = List(Argument("body", hocon), Argument("jclFormat", "hocon"))
       )
 
       Then("both inputs are normalized to the same JCL record surface")
-      _records(_record(jsonResponse).asMap("jobs")).head.getString("name") shouldBe Some("json-first")
-      _record(xmlResponse).getRecord("job").flatMap(_.getString("name")) shouldBe Some("xml-first")
-      _records(_record(hoconResponse).asMap("jobs")).head.getString("name") shouldBe Some("hocon-first")
+      _records(_record(jsonresponse).asMap("jobs")).head.getString("name") shouldBe Some("json-first")
+      _record(xmlresponse).getRecord("job").flatMap(_.getString("name")) shouldBe Some("xml-first")
+      _records(_record(hoconresponse).asMap("jobs")).head.getString("name") shouldBe Some("hocon-first")
       }
     }
 
@@ -236,16 +236,16 @@ final class JclJobControlComponentSpec
     "reject invalid workflow-like or malformed YAML shapes" in {
       Given("invalid JCL payloads")
       _with_fixture() { fixture =>
-      val missingJobs =
+      val missingjobs =
         """job:
           |  name: invalid
           |""".stripMargin
-      val bothRoots =
+      val bothroots =
         """job:
           |  name: invalid
           |jobs: []
           |""".stripMargin
-      val bothTargetKinds =
+      val bothtargetkinds =
         """jobs:
           |  - name: invalid
           |    target:
@@ -254,21 +254,21 @@ final class JclJobControlComponentSpec
           |        definition: sales-order-approval
           |        registration: approval
           |""".stripMargin
-      val workflowMissingRegistration =
+      val workflowmissingregistration =
         """jobs:
           |  - name: invalid
           |    target:
           |      workflow:
           |        definition: sales-order-approval
           |""".stripMargin
-      val branchShape =
+      val branchshape =
         """jobs:
           |  - name: invalid
           |    target:
           |      action: jcl_fixture.command.ok
           |      branch: x
           |""".stripMargin
-      val invalidProfile =
+      val invalidprofile =
         """job:
           |  name: invalid
           |  target:
@@ -282,12 +282,12 @@ final class JclJobControlComponentSpec
           |""".stripMargin
 
       When("describe is invoked with unsupported payloads")
-      val r1 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", missingJobs)
-      val r2 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", bothTargetKinds)
-      val r3 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", branchShape)
-      val r4 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", workflowMissingRegistration)
-      val r5 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", bothRoots)
-      val r6 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", invalidProfile)
+      val r1 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", missingjobs)
+      val r2 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", bothtargetkinds)
+      val r3 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", branchshape)
+      val r4 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", workflowmissingregistration)
+      val r5 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", bothroots)
+      val r6 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", invalidprofile)
 
       Then("the payloads fail deterministically")
       Vector(r1, r2, r3, r4, r5, r6).foreach {
@@ -341,18 +341,18 @@ final class JclJobControlComponentSpec
       )
 
       Then("the definition is a versioned active management record")
-      val createdRecord = _record(created)
-      createdRecord.getString("key") shouldBe Some("nightly-ok")
-      createdRecord.getString("definitionStatus") shouldBe Some("active")
-      createdRecord.getInt("version") shouldBe Some(1)
-      createdRecord.getString("hash").exists(_.nonEmpty) shouldBe true
-      createdRecord.getString("flow").exists(_.nonEmpty) shouldBe true
-      createdRecord.getString("onEvent").exists(_.nonEmpty) shouldBe true
+      val createdrecord = _record(created)
+      createdrecord.getString("key") shouldBe Some("nightly-ok")
+      createdrecord.getString("definitionStatus") shouldBe Some("active")
+      createdrecord.getInt("version") shouldBe Some(1)
+      createdrecord.getString("hash").exists(_.nonEmpty) shouldBe true
+      createdrecord.getString("flow").exists(_.nonEmpty) shouldBe true
+      createdrecord.getString("onEvent").exists(_.nonEmpty) shouldBe true
       _records(_record(searched).asMap("jobDefinitions")).map(_.getString("key")) should contain (Some("nightly-ok"))
 
       And("the submitted Job keeps an immutable definition snapshot")
-      val jobId = _strings(_record(submitted), "submitted-job-ids").head
-      val model = fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobId).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
+      val jobid = _strings(_record(submitted), "submitted-job-ids").head
+      val model = fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobid).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
       model.debug.jobDefinitionSnapshot.map(_.key) shouldBe Some("nightly-ok")
       model.debug.jobDefinitionSnapshot.map(_.version) shouldBe Some(1)
       model.debug.parameters.get("jcl.jobDefinition.key") shouldBe Some("nightly-ok")
@@ -396,8 +396,8 @@ final class JclJobControlComponentSpec
 
       Then("the managed Job carries the JobDefinition snapshot")
       response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
-      val jobId = ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))
-      val model = component.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobId).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
+      val jobid = ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))
+      val model = component.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobid).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
       model.debug.jobDefinitionSnapshot.map(_.key) shouldBe Some("op-bound-ok")
       model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
       }
@@ -435,15 +435,16 @@ final class JclJobControlComponentSpec
       }.getOrElse(fail("action missing"))
       val ctx = component.logic.executionContext()
       val response = component.logic.executeAction(action, ctx)
-      val jobId = org.goldenport.cncf.job.JobId.parse(ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))).toOption.get
+      val jobid = org.goldenport.cncf.job.JobId.parse(ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))).toOption.get
       val failed = new org.goldenport.cncf.job.JobTask {
-        val actionId = org.goldenport.cncf.job.ActionId.generate()
+        val actionid = org.goldenport.cncf.job.ActionId.generate()
+        override def actionId: org.goldenport.cncf.job.ActionId = actionid
         override def operationName: Option[String] = Some("same-job-failure")
         def run(ctx: ExecutionContext): org.goldenport.cncf.job.TaskOutcome =
           org.goldenport.cncf.job.TaskFailed(Conclusion.simple("same-job-failure: forced"))
       }
-      val _ = component.jobEngine.runTaskInJobSync(jobId, failed, ctx)
-      val model = component.jobEngine.queryVisible(jobId)(using ctx).toOption.flatten.getOrElse(fail("job missing"))
+      val _ = component.jobEngine.runTaskInJobSync(jobid, failed, ctx)
+      val model = component.jobEngine.queryVisible(jobid)(using ctx).toOption.flatten.getOrElse(fail("job missing"))
 
       Then("the root task carries and runs the JobDefinition compensation action")
       response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
@@ -478,11 +479,11 @@ final class JclJobControlComponentSpec
         "job_control.job.submit_job_definition",
         arguments = List(Argument("body", body))
       )
-      val jobId = _strings(_record(response), "submitted-job-ids").head
+      val jobid = _strings(_record(response), "submitted-job-ids").head
       val comparison = _execute(
         fixture.subsystem,
         "job_control.job.compare_job_profile",
-        arguments = List(Argument("id", jobId))
+        arguments = List(Argument("id", jobid))
       )
 
       Then("the declared profile is attached and no error difference is reported")
@@ -515,16 +516,16 @@ final class JclJobControlComponentSpec
         "job_control.job.submit_job_definition",
         arguments = List(Argument("body", body))
       )
-      val jobId = _strings(_record(response), "submitted-job-ids").head
+      val jobid = _strings(_record(response), "submitted-job-ids").head
       val comparison = _execute(
         fixture.subsystem,
         "job_control.job.compare_job_profile",
-        arguments = List(Argument("id", jobId))
+        arguments = List(Argument("id", jobid))
       )
       val reconstructed = _execute(
         fixture.subsystem,
         "job_control.job.reconstruct_job_profile",
-        arguments = List(Argument("id", jobId))
+        arguments = List(Argument("id", jobid))
       )
 
       Then("comparison reports an error-level status mismatch")
@@ -577,30 +578,30 @@ final class JclJobControlComponentSpec
       JobBatchDefinition.parseYaml(batch).toOption.map(_.jobs.size) shouldBe Some(3)
 
       When("submit_job_definition and submit_job_batch are invoked")
-      val singleResponse = _execute(
+      val singleresponse = _execute(
         fixture.subsystem,
         "job_control.job.submit_job_definition",
         arguments = List(Argument("body", single))
       )
-      val batchResponse = _execute(
+      val batchresponse = _execute(
         fixture.subsystem,
         "job_control.job.submit_job_batch",
         arguments = List(Argument("body", batch))
       )
 
       Then("single submission returns one visible job id")
-      val singleRecord = _record(singleResponse)
-      val singleIds = _strings(singleRecord, "submitted-job-ids")
-      singleIds.size shouldBe 1
-      fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(singleIds.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(singleIds.head)
+      val singlerecord = _record(singleresponse)
+      val singleids = _strings(singlerecord, "submitted-job-ids")
+      singleids.size shouldBe 1
+      fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(singleids.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(singleids.head)
 
       And("batch submission is sequential fail-fast and runs the failure hook")
-      val batchRecord = _record(batchResponse)
-      batchRecord.getBoolean("success") shouldBe Some(false)
-      _strings(batchRecord, "submitted-job-ids").size shouldBe 2
-      batchRecord.getInt("stopped-at-index") shouldBe Some(1)
-      batchRecord.getString("stopped-at-name") shouldBe Some("fail")
-      batchRecord.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
+      val batchrecord = _record(batchresponse)
+      batchrecord.getBoolean("success") shouldBe Some(false)
+      _strings(batchrecord, "submitted-job-ids").size shouldBe 2
+      batchrecord.getInt("stopped-at-index") shouldBe Some(1)
+      batchrecord.getString("stopped-at-name") shouldBe Some("fail")
+      batchrecord.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
 
       And("the third job is not executed")
       val trace = fixture.trace.toVector
@@ -632,7 +633,7 @@ final class JclJobControlComponentSpec
             )
           )
         ),
-        entities = Vector(_SalesOrder(entityid, "approved"))
+        entities = Vector(SalesOrder(entityid, "approved"))
       ) { fixture =>
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
       val body =
@@ -659,15 +660,15 @@ final class JclJobControlComponentSpec
       )
 
       Then("the workflow target is preserved in normalized output")
-      val describedJob = _records(_record(described).asMap("jobs")).head
-      describedJob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("definition")) shouldBe Some("sales-order-approval")
-      describedJob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("registration")) shouldBe Some("approval")
+      val describedjob = _records(_record(described).asMap("jobs")).head
+      describedjob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("definition")) shouldBe Some("sales-order-approval")
+      describedjob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("registration")) shouldBe Some("approval")
 
       And("submission returns the workflow-triggered managed job id")
       val record = _record(response)
       record.getBoolean("success") shouldBe Some(true)
-      val submittedIds = _strings(record, "submitted-job-ids")
-      submittedIds.size shouldBe 1
+      val submittedids = _strings(record, "submitted-job-ids")
+      submittedids.size shouldBe 1
       awaitCondition {
         fixture.trace.contains("workflow.advanceOrder")
       } shouldBe true
@@ -675,22 +676,22 @@ final class JclJobControlComponentSpec
 
       val instance = fixture.subsystem.workflowEngine.instances.headOption.getOrElse(fail("workflow instance missing"))
       instance.registrationName shouldBe "approval"
-      instance.relatedJobIds.head.value shouldBe submittedIds.head
+      instance.relatedJobIds.head.value shouldBe submittedids.head
 
-      val workflowInstance = _execute(
+      val workflowinstance = _execute(
         fixture.subsystem,
         "workflow.workflow.get_workflow_instance",
         arguments = List(Argument("id", instance.id.value))
       )
-      _record(workflowInstance).getAny("related-job-ids").collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty) should contain (submittedIds.head)
-      fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(submittedIds.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(submittedIds.head)
+      _record(workflowinstance).getAny("related-job-ids").collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty) should contain (submittedids.head)
+      fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(submittedids.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(submittedids.head)
       }
     }
 
     "submit mixed action and workflow batches sequentially and fail-fast on workflow non-progression" in {
       Given("a fixture component with one progressable and one non-progressable workflow target")
-      val approvedId = _entity_id("workflow_batch_ok")
-      val pendingId = _entity_id("workflow_batch_pending")
+      val approvedid = _entity_id("workflow_batch_ok")
+      val pendingid = _entity_id("workflow_batch_pending")
       _with_fixture(
         definitions = Vector(
           WorkflowDefinition(
@@ -709,8 +710,8 @@ final class JclJobControlComponentSpec
           )
         ),
         entities = Vector(
-          _SalesOrder(approvedId, "approved"),
-          _SalesOrder(pendingId, "pending")
+          SalesOrder(approvedid, "approved"),
+          SalesOrder(pendingid, "pending")
         )
       ) { fixture =>
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -727,14 +728,14 @@ final class JclJobControlComponentSpec
            |        definition: sales-order-approval
            |        registration: approval
            |    parameters:
-           |      orderId: ${approvedId.value}
+           |      orderId: ${approvedid.value}
            |  - name: wf-no-progress
            |    target:
            |      workflow:
            |        definition: sales-order-approval
            |        registration: approval
            |    parameters:
-           |      orderId: ${pendingId.value}
+           |      orderId: ${pendingid.value}
            |    onFailure:
            |      action: jcl_fixture.command.hook
            |      parameters:
@@ -779,7 +780,7 @@ final class JclJobControlComponentSpec
     }
   }
 
-  private final case class _Fixture(
+  private final case class Fixture(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     component: Component,
     trace: ArrayBuffer[String]
@@ -787,28 +788,28 @@ final class JclJobControlComponentSpec
 
   private def _with_fixture[A](
     definitions: Vector[WorkflowDefinition] = Vector.empty,
-    entities: Vector[_SalesOrder] = Vector.empty,
+    entities: Vector[SalesOrder] = Vector.empty,
     operationExecution: Map[String, String] = Map.empty,
     operationJobDefinitionRefs: Map[String, String] = Map.empty
-  )(body: _Fixture => A): A =
-    SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-      given EntityPersistent[_SalesOrder] = _persistent
+  )(body: Fixture => A): A =
+    SubsystemTestFixture.withAdmittedSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
+      given EntityPersistent[SalesOrder] = _persistent
       val trace = ArrayBuffer.empty[String]
       val component = _component(subsystem, trace, definitions, entities, operationExecution, operationJobDefinitionRefs)
       val bootstrapped = new ComponentFactory().bootstrap(component)
       subsystem.add(bootstrapped)
-      body(_Fixture(subsystem, bootstrapped, trace))
+      body(Fixture(subsystem, bootstrapped, trace))
     }
 
   private def _component(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     trace: ArrayBuffer[String],
     definitions: Vector[WorkflowDefinition],
-    entities: Vector[_SalesOrder],
+    entities: Vector[SalesOrder],
     operationExecution: Map[String, String],
     operationJobDefinitionRefs: Map[String, String]
   ): Component = {
-    given EntityPersistent[_SalesOrder] = _persistent
+    given EntityPersistent[SalesOrder] = _persistent
     val component = new Component() {
       override def workflowDefinitions: Vector[WorkflowDefinition] = definitions
       override def operationDefinitions: Vector[CmlOperationDefinition] =
@@ -831,10 +832,10 @@ final class JclJobControlComponentSpec
             name = "command",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _Operation("ok", trace, fail = false),
-                _Operation("fail", trace, fail = true),
-                _Operation("hook", trace, fail = false),
-                _Operation("compensate", trace, fail = false)
+                JclOperation("ok", trace, fail = false),
+                JclOperation("fail", trace, fail = true),
+                JclOperation("hook", trace, fail = false),
+                JclOperation("compensate", trace, fail = false)
               )
             )
           ),
@@ -842,7 +843,7 @@ final class JclJobControlComponentSpec
             name = "workflow",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _WorkflowOperation("advanceOrder", trace)
+                WorkflowOperation("advanceOrder", trace)
               )
             )
           )
@@ -850,25 +851,25 @@ final class JclJobControlComponentSpec
       )
     )
     component.entitySpace.registerEntity("salesOrder", _collection(entities))
-    val componentId = ComponentId("jcl_fixture")
-    val instanceId = ComponentInstanceId.default(componentId)
-    val core = Component.Core.create("jcl_fixture", componentId, instanceId, protocol)
+    val componentid = ComponentId("jcl_fixture")
+    val instanceid = ComponentInstanceId.default(componentid)
+    val core = Component.Core.create("jcl_fixture", componentid, instanceid, protocol)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 
   private def _collection(
-    entities: Vector[_SalesOrder]
-  )(using EntityPersistent[_SalesOrder]): EntityCollection[_SalesOrder] = {
+    entities: Vector[SalesOrder]
+  )(using EntityPersistent[SalesOrder]): EntityCollection[SalesOrder] = {
     val entitymap = entities.map(x => x.id -> x).toMap
-    val storerealm = new EntityRealm[_SalesOrder](
+    val storerealm = new EntityRealm[SalesOrder](
       entityName = "salesOrder",
       loader = EntityLoader(id => entitymap.get(id)),
-      state = new _IdRef[EntityRealmState[_SalesOrder]](EntityRealmState(Map.empty))
+      state = new IdRef[EntityRealmState[SalesOrder]](EntityRealmState(Map.empty))
     )
     entities.foreach(storerealm.put)
-    val descriptor = EntityDescriptor[_SalesOrder](
+    val descriptor = EntityDescriptor[SalesOrder](
       collectionId = _collection_id,
-      plan = EntityRuntimePlan[_SalesOrder](
+      plan = EntityRuntimePlan[SalesOrder](
         entityName = "salesOrder",
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
         workingSet = None,
@@ -876,9 +877,9 @@ final class JclJobControlComponentSpec
         maxPartitions = 4,
         maxEntitiesPerPartition = 16
       ),
-      persistent = summon[EntityPersistent[_SalesOrder]]
+      persistent = summon[EntityPersistent[SalesOrder]]
     )
-    new EntityCollection[_SalesOrder](
+    new EntityCollection[SalesOrder](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, None)
     )
@@ -889,19 +890,19 @@ final class JclJobControlComponentSpec
     selector: String,
     arguments: List[Argument]
   ): OperationResponse =
-    _executeResult(subsystem, selector, arguments) match {
+    _execute_result(subsystem, selector, arguments) match {
       case Consequence.Success(response) => response
       case Consequence.Failure(conclusion) => fail(conclusion.show)
     }
 
-  private def _executeResult(
+  private def _execute_result(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     selector: String,
     body: String
   ): Consequence[OperationResponse] =
-    _executeResult(subsystem, selector, List(Argument("body", body)))
+    _execute_result(subsystem, selector, List(Argument("body", body)))
 
-  private def _executeResult(
+  private def _execute_result(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     selector: String,
     arguments: List[Argument]
@@ -965,17 +966,17 @@ final class JclJobControlComponentSpec
   ): EntityId =
     EntityId("jcl", entropy, _collection_id)
 
-  private def _persistent: EntityPersistent[_SalesOrder] = new EntityPersistent[_SalesOrder] {
-    def id(e: _SalesOrder): EntityId = e.id
-    def toRecord(e: _SalesOrder): Record = e.toRecord()
-    def fromRecord(r: Record): Consequence[_SalesOrder] =
+  private def _persistent: EntityPersistent[SalesOrder] = new EntityPersistent[SalesOrder] {
+    def id(e: SalesOrder): EntityId = e.id
+    def toRecord(e: SalesOrder): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[SalesOrder] =
       Consequence.notImplemented("not used in JclJobControlComponentSpec")
   }
 
   private val _seed = new AtomicInteger(0)
 }
 
-private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+private final class IdRef[A](initial: A) extends Ref[cats.Id, A] {
   private var _value: A = initial
 
   def get: A = synchronized { _value }
@@ -1034,7 +1035,7 @@ private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
   }
 }
 
-private final case class _SalesOrder(
+private final case class SalesOrder(
   id: EntityId,
   status: String
 ) {
@@ -1045,7 +1046,7 @@ private final case class _SalesOrder(
     )
 }
 
-private final case class _Operation(
+private final case class JclOperation(
   opname: String,
   trace: ArrayBuffer[String],
   fail: Boolean
@@ -1058,20 +1059,20 @@ private final case class _Operation(
     )
 
   override def createOperationRequest(req: Request): Consequence[org.goldenport.protocol.operation.OperationRequest] =
-    Consequence.success(_Action(req, opname, trace, fail))
+    Consequence.success(JclAction(req, opname, trace, fail))
 }
 
-private final case class _Action(
+private final case class JclAction(
   request: Request,
   opname: String,
   trace: ArrayBuffer[String],
   fail: Boolean
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _ActionCall(core, opname, trace, fail)
+    JclActionCall(core, opname, trace, fail)
 }
 
-private final case class _ActionCall(
+private final case class JclActionCall(
   core: ActionCall.Core,
   opname: String,
   trace: ArrayBuffer[String],
@@ -1087,7 +1088,7 @@ private final case class _ActionCall(
   }
 }
 
-private final case class _WorkflowOperation(
+private final case class WorkflowOperation(
   opname: String,
   trace: ArrayBuffer[String]
 ) extends spec.OperationDefinition {
@@ -1099,19 +1100,19 @@ private final case class _WorkflowOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[org.goldenport.protocol.operation.OperationRequest] =
-    Consequence.success(_WorkflowAction(req, opname, trace))
+    Consequence.success(WorkflowAction(req, opname, trace))
 }
 
-private final case class _WorkflowAction(
+private final case class WorkflowAction(
   request: Request,
   opname: String,
   trace: ArrayBuffer[String]
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _WorkflowActionCall(core, opname, trace)
+    WorkflowActionCall(core, opname, trace)
 }
 
-private final case class _WorkflowActionCall(
+private final case class WorkflowActionCall(
   core: ActionCall.Core,
   opname: String,
   trace: ArrayBuffer[String]

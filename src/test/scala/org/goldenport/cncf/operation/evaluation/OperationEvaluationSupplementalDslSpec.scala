@@ -61,7 +61,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for transaction-aware supplemental evaluation DSL.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationSupplementalDslSpec
@@ -508,7 +508,7 @@ final class OperationEvaluationSupplementalDslSpec
   private def _corpus_fixture(
     additionaloperations: Vector[spec.OperationDefinition] = Vector.empty
   ): CorpusFixture = {
-    val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-supplemental-corpus"))
+    val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-supplemental-corpus"))
     val sink = _success(DeterministicCorpusEvaluationSink.createC("evaluation_corpus", "test-corpus"))
     val commitstates = new AtomicReference(Vector.empty[Boolean])
     val observingsink = CommitObservingCorpusEvaluationSink(sink, commitstates)
@@ -535,7 +535,7 @@ final class OperationEvaluationSupplementalDslSpec
   }
 
   private def _experiment_fixture(): ExperimentFixture = {
-    val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-supplemental-experiment"))
+    val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-supplemental-experiment"))
     val sink = _success(DeterministicExperimentEvaluationSink.createC(
       "evaluation_experiment",
       "test-experiment"

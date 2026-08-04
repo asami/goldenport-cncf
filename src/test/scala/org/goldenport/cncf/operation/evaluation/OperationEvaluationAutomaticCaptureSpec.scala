@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * chokepoint.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAutomaticCaptureSpec
@@ -251,7 +251,7 @@ final class OperationEvaluationAutomaticCaptureSpec
           Consequence.operationInvalid("not used")
       }
       val connected = _fixture(failing)
-      val disconnectedsubsystem = _track(TestComponentFactory.emptySubsystem("evaluation-disconnected"))
+      val disconnectedsubsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-disconnected"))
       disconnectedsubsystem.add(_component(disconnectedsubsystem, None))
 
       When("both components execute the same successful operation")
@@ -271,7 +271,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
     "emit no fact when operation authorization rejects the request" in {
       Given("a production subsystem whose descriptor denies anonymous operation use")
-      val subsystem = _track(TestComponentFactory.subsystemWithConfig(
+      val subsystem = _track(TestComponentFactory.admittedSubsystemWithConfig(
         Map(RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)),
         name = "evaluation-authorization"
       ))
@@ -446,7 +446,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
     "deliver a cross-component prepared task only to the target component sink" in {
       Given("source and target components with distinct Corpus sinks in one subsystem")
-      val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-cross-component"))
+      val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-cross-component"))
       val sourcesink = _success(
         DeterministicCorpusEvaluationSink.createC("evaluationsource", "source-corpus")
       )
@@ -538,7 +538,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
     "preserve interruption raised by an auxiliary canonical-outcome observer" in {
       Given("a synchronous Job task whose auxiliary observer is interrupted")
-      val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-observer-interruption"))
+      val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-observer-interruption"))
       val context = ExecutionContext.create()
       val task = new JobTask {
         override val actionId = ActionId.generate()
@@ -699,7 +699,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
     "retain target component ownership when a detached compensation task runs" in {
       Given("source and target components with separate sinks and a target compensation task")
-      val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-cross-component-compensation"))
+      val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-cross-component-compensation"))
       val sourcesink = _success(
         DeterministicCorpusEvaluationSink.createC("evaluationsource", "source-corpus")
       )
@@ -963,7 +963,7 @@ final class OperationEvaluationAutomaticCaptureSpec
   )
 
   private def _fixture(): Fixture = {
-    val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-automatic"))
+    val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-automatic"))
     val sink = _success(DeterministicCorpusEvaluationSink.createC("evaluation", "test-corpus"))
     val component = _component(subsystem, Some(sink))
     subsystem.add(component)
@@ -971,14 +971,14 @@ final class OperationEvaluationAutomaticCaptureSpec
   }
 
   private def _fixture(sink: CorpusEvaluationSink): Fixture = {
-    val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-provider-failure"))
+    val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-provider-failure"))
     val component = _component(subsystem, Some(sink))
     subsystem.add(component)
     Fixture(subsystem, _success(DeterministicCorpusEvaluationSink.createC("unused", "unused")), component)
   }
 
   private def _fixture(operation: spec.OperationDefinition): Fixture = {
-    val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-cancellation"))
+    val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-cancellation"))
     val sink = _success(DeterministicCorpusEvaluationSink.createC("evaluation", "test-corpus"))
     val component = _component(subsystem, Some(sink), Vector(operation))
     subsystem.add(component)

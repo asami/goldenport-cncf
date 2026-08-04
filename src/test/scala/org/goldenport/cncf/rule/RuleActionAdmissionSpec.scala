@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * must be admitted through the existing component, event, and job boundaries.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuleActionAdmissionSpec
@@ -52,7 +52,7 @@ final class RuleActionAdmissionSpec
       )
       val operationexecuted = AtomicBoolean(false)
       val eventpublished = AtomicBoolean(false)
-      val subsystem = TestComponentFactory.emptySubsystem("rule-admission")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("rule-admission")
       _subsystem = Some(subsystem)
       val component = TestComponentFactory.create(
         "orders",
@@ -131,7 +131,7 @@ final class RuleActionAdmissionSpec
         ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager),
         enabled = true
       )
-      val subsystem = TestComponentFactory.emptySubsystem("rule-admission-failure")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("rule-admission-failure")
       _subsystem = Some(subsystem)
       val evaluation = RuleEvaluationResult(
         RuleSetIdentity(RuleSetId("orders"), RuleSetVersion("1")),
@@ -179,7 +179,7 @@ final class RuleActionAdmissionSpec
         )
 
       def createOperationRequest(request: Request): Consequence[OperationRequest] =
-        Consequence.success(_AdmissionAction(request, executed))
+        Consequence.success(AdmissionAction(request, executed))
     }
 
   private def _await(condition: () => Boolean): Boolean = {
@@ -195,15 +195,15 @@ final class RuleActionAdmissionSpec
     value.toOption.getOrElse(fail(s"expected success: $value"))
 }
 
-private final case class _AdmissionAction(
+private final case class AdmissionAction(
   request: Request,
   executed: AtomicBoolean
 ) extends QueryAction {
   def createCall(core: ActionCall.Core): ActionCall =
-    _AdmissionActionCall(core, executed)
+    AdmissionActionCall(core, executed)
 }
 
-private final case class _AdmissionActionCall(
+private final case class AdmissionActionCall(
   core: ActionCall.Core,
   executed: AtomicBoolean
 ) extends ProcedureActionCall {

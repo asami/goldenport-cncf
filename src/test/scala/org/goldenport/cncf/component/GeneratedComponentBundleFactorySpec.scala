@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 22, 2026
  *  version May. 15, 2026
- * @version Jul. 13, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedComponentBundleFactorySpec
@@ -33,7 +33,7 @@ final class GeneratedComponentBundleFactorySpec
   "Generated-style bundle factory" should {
     "apply named instance identity and local properties during construction" in {
       Given("a generated component factory and named instance metadata")
-      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val metadata = ComponentInstanceMetadata(
         componentName = "textus-scraper",
         instance = "dynamic-playwright",
@@ -50,7 +50,7 @@ final class GeneratedComponentBundleFactorySpec
       ).withInstanceMetadata(metadata)
 
       When("the named instance is created")
-      val component = _generated_bundle_factory.PrimaryFactory.createPrimary(params)
+      val component = GeneratedBundleFactory.PrimaryFactory.createPrimary(params)
       val resolved = component.logic.executionContext().runtime.resolvedParameters.get("scraper.mode")
       val packaged = component.logic.executionContext().runtime.resolvedParameters.get("scraper.timeout")
 
@@ -64,10 +64,10 @@ final class GeneratedComponentBundleFactorySpec
 
     "resolve entity runtime descriptors declared by generated components" in {
       Given("a generated component override supplies CML entity descriptors")
-      val subsystem = TestComponentFactory.emptySubsystem("generated-descriptor")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-descriptor")
 
       When("the component is created without separately injected descriptors")
-      val component = _generated_bundle_factory.PrimaryFactory.createPrimary(
+      val component = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
       )
 
@@ -82,12 +82,12 @@ final class GeneratedComponentBundleFactorySpec
 
     "keep named instances in component space and select the declared default by name" in {
       Given("two instances created from one component factory")
-      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
-      val static = _generated_bundle_factory.PrimaryFactory.createPrimary(
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
+      val static = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
           .withInstanceMetadata(ComponentInstanceMetadata("domain", "static", isDefault = true))
       )
-      val dynamic = _generated_bundle_factory.PrimaryFactory.createPrimary(
+      val dynamic = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
           .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic-playwright"))
       )
@@ -105,12 +105,12 @@ final class GeneratedComponentBundleFactorySpec
 
     "reject canonical component instance identity collisions in component space" in {
       Given("two components whose raw instance names normalize to one stable identity")
-      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
-      val hyphenated = _generated_bundle_factory.PrimaryFactory.createPrimary(
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
+      val hyphenated = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
           .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic-playwright"))
       )
-      val underscored = _generated_bundle_factory.PrimaryFactory.createPrimary(
+      val underscored = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
           .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic_playwright"))
       )
@@ -126,11 +126,11 @@ final class GeneratedComponentBundleFactorySpec
 
     "separate primary and componentlets at construction time" in {
       Given("generated-style bundle factory")
-      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
 
       When("bundle is created")
-      val bundle = _generated_bundle_factory.create(params)
+      val bundle = GeneratedBundleFactory.create(params)
 
       Then("primary and componentlets are explicit and initialized separately")
       bundle.primary.name shouldBe "domain"
@@ -138,16 +138,16 @@ final class GeneratedComponentBundleFactorySpec
       bundle.componentlets.map(_.name) shouldBe Vector("notice-admin")
       bundle.componentlets.forall(_.isComponentletParticipant) shouldBe true
       bundle.participants.size shouldBe 2
-      bundle.primary.core.factory shouldBe Some(_generated_bundle_factory.PrimaryFactory)
-      bundle.componentlets.head.core.factory shouldBe Some(_generated_bundle_factory.NoticeAdminFactory)
+      bundle.primary.core.factory shouldBe Some(GeneratedBundleFactory.PrimaryFactory)
+      bundle.componentlets.head.core.factory shouldBe Some(GeneratedBundleFactory.NoticeAdminFactory)
     }
 
     "dispatch same-subsystem sync reception on generated componentlet with runtime identity" in {
       Given("bootstrapped generated runtime participants")
-      _generated_bundle_factory.clearCalls()
-      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      GeneratedBundleFactory.clearCalls()
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
-      val bundle = _generated_bundle_factory.create(params)
+      val bundle = GeneratedBundleFactory.create(params)
       val factory = new ComponentFactory()
       val components = bundle.participants.map(factory.bootstrap)
       subsystem.add(components)
@@ -176,17 +176,17 @@ final class GeneratedComponentBundleFactorySpec
           persisted = false
         )
       )
-      _generated_bundle_factory.calls.toVector shouldBe Vector("notice-admin")
+      GeneratedBundleFactory.calls.toVector shouldBe Vector("notice-admin")
     }
 
     "reject malformed bundle outputs deterministically" in {
       Given("bundle factory with duplicate participant names")
-      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
 
       When("bundle is created")
       val ex = intercept[IllegalArgumentException] {
-        _invalid_bundle_factory.create(params)
+        InvalidBundleFactory.create(params)
       }
 
       Then("construction fails before bootstrap")
@@ -194,7 +194,7 @@ final class GeneratedComponentBundleFactorySpec
     }
   }
 
-  private object _generated_bundle_factory extends Component.BundleFactory {
+  private object GeneratedBundleFactory extends Component.BundleFactory {
     private val _calls = ArrayBuffer.empty[String]
 
     def calls: ArrayBuffer[String] = _calls
@@ -323,7 +323,7 @@ final class GeneratedComponentBundleFactorySpec
             )
 
           def createOperationRequest(req: Request): Consequence[OperationRequest] =
-            Consequence.success(_SyncNoticeAction(req))
+            Consequence.success(SyncNoticeAction(req))
         }
         val service = spec.ServiceDefinition(
           name = "notice",
@@ -343,14 +343,14 @@ final class GeneratedComponentBundleFactorySpec
         )
       }
 
-      private final case class _SyncNoticeAction(
+      private final case class SyncNoticeAction(
         request: Request
       ) extends QueryAction {
         def createCall(core: ActionCall.Core): ActionCall =
-          _SyncNoticeActionCall(core)
+          SyncNoticeActionCall(core)
       }
 
-      private final case class _SyncNoticeActionCall(
+      private final case class SyncNoticeActionCall(
         core: ActionCall.Core
       ) extends ProcedureActionCall {
         def execute(): Consequence[OperationResponse] = {
@@ -367,7 +367,7 @@ final class GeneratedComponentBundleFactorySpec
       Vector(NoticeAdminFactory)
   }
 
-  private object _invalid_bundle_factory extends Component.BundleFactory {
+  private object InvalidBundleFactory extends Component.BundleFactory {
     object PrimaryFactory extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
         new Component() {}

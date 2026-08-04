@@ -1,5 +1,7 @@
 package org.goldenport.cncf.association
 
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+
 import cats.data.NonEmptyVector
 import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
@@ -19,7 +21,6 @@ import org.goldenport.cncf.operation.{
   CmlOperationDefinition,
   CmlOperationImageBinding
 }
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.protocol.{Argument, Protocol, Property, Request}
@@ -35,7 +36,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Executable specification for BI-04 operation-level Association binding.
  *
  * @since   Apr. 30, 2026
- * @version Jul. 29, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AssociationBindingWorkflowSpec
@@ -314,7 +315,7 @@ final class AssociationBindingWorkflowSpec
   "Subsystem operation association binding adapter" must _in_phase52_spec {
     "attach existing target ids after an operation returns entity_id" in {
       Given("a component operation with associationBinding metadata")
-      val subsystem = TestComponentFactory.emptySubsystem("association_binding_adapter_spec")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("association_binding_adapter_spec")
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
@@ -357,7 +358,7 @@ final class AssociationBindingWorkflowSpec
 
     "reject image uploads when imageBinding only accepts existing Blob ids" in {
       Given("an operation whose imageBinding metadata does not accept uploads")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
@@ -385,7 +386,7 @@ final class AssociationBindingWorkflowSpec
 
     "reject existing Blob ids when imageBinding only accepts uploads" in {
       Given("an operation whose imageBinding metadata does not accept existing Blob ids")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
@@ -419,7 +420,7 @@ final class AssociationBindingWorkflowSpec
 
     "register upload payloads through imageBinding after an operation returns entity_id" in {
       Given("a component operation with imageBinding metadata")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
@@ -465,7 +466,7 @@ final class AssociationBindingWorkflowSpec
 
     "compensate Association bindings when later image binding fails" in {
       Given("an operation that creates an Association before image binding fails")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
@@ -511,7 +512,7 @@ final class AssociationBindingWorkflowSpec
   "AdminComponent generic Association operations" must _in_phase52_spec {
     "attach, reuse, list, and detach non-image Associations" in {
       Given("existing source and target Entity records")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val admin     = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
       given ExecutionContext = admin.logic.executionContext()
       val source             = _article_id("admin_source_1")
@@ -582,7 +583,7 @@ final class AssociationBindingWorkflowSpec
 
     "reject missing source, missing target, and targetKind mismatch" in {
       Given("an admin Association attach request")
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val admin     = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
       given ExecutionContext = admin.logic.executionContext()
       val source             = _article_id("admin_source_2")

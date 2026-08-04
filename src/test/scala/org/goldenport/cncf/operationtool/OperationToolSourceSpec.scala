@@ -1,5 +1,7 @@
 package org.goldenport.cncf.operationtool
 
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+
 import java.time.{Clock, Instant, ZoneOffset}
 import java.nio.file.Path
 
@@ -19,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the provider-neutral internal Operation source.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationToolSourceSpec
@@ -49,7 +51,7 @@ final class OperationToolSourceSpec
   "Internal Operation tool catalog" should {
     "remain empty when runtime admission contains no Operation identity" in {
       Given("an assembled subsystem and an explicit empty tool-set admission")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-empty"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-empty"))
       val admission = _admission(Vector.empty)
 
       When("the runtime constructs the internal catalog")
@@ -61,7 +63,7 @@ final class OperationToolSourceSpec
 
     "project only admitted Operations in deterministic order with typed input" in {
       Given("two builtin Operations admitted in reverse lexical order")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-catalog"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-catalog"))
       val admission = _admission(Vector(
         _identity("tool.time.now"),
         _identity("tool.decimal.calculate")
@@ -87,7 +89,7 @@ final class OperationToolSourceSpec
 
     "reject an admitted identity that is unavailable in the assembled subsystem" in {
       Given("an admission naming an Operation absent from the runtime")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-unavailable"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-unavailable"))
       val admission = _admission(Vector(_identity("missing.service.operation")))
 
       When("catalog construction resolves exact runtime routes")
@@ -100,7 +102,7 @@ final class OperationToolSourceSpec
 
     "reject a runtime Operation whose names cannot form one exact identity" in {
       Given("an assembled Operation and a component name containing the identity separator")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-invalid-identity"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-invalid-identity"))
       val component = subsystem.findComponent("tool").getOrElse(fail("tool component is unavailable"))
       val service = component.protocol.services.services
         .find(_.name == "time").getOrElse(fail("time service is unavailable"))
@@ -121,7 +123,7 @@ final class OperationToolSourceSpec
 
     "install one exact runtime-owned tool set into a consumer socket" in {
       Given("a consumer socket requiring one admitted internal tool set")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-socket"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-socket"))
       val admission = _admission(Vector(_identity("tool.time.now")))
       val registry = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
       val socket = _success(OperationToolSocket.createC(Vector(
@@ -143,7 +145,7 @@ final class OperationToolSourceSpec
   "Internal Operation tool invocation" should {
     "execute through the Subsystem with the caller ExecutionContext" in {
       Given("an admitted runtime-clock Operation and a deterministic caller clock")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-execution"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-execution"))
       val admission = _admission(Vector(_identity("tool.time.now")))
       val registry = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
       val service = _success(registry.resolve(admission.toolSetId))
@@ -173,7 +175,7 @@ final class OperationToolSourceSpec
 
     "reject unknown and malformed calls before business Operation execution" in {
       Given("one admitted Operation with required typed parameters")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-denial"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-denial"))
       val admission = _admission(Vector(_identity("tool.decimal.calculate")))
       val service = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
         .resolve(admission.toolSetId).toOption.getOrElse(fail("tool service is unavailable"))
@@ -196,7 +198,7 @@ final class OperationToolSourceSpec
 
     "preserve normal Subsystem operation authorization" in {
       Given("an admitted internal tool denied by the subsystem authorization descriptor")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-authorization"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-authorization"))
       subsystem.withDescriptor(GenericSubsystemDescriptor(
         path = Path.of("<operation-tool-authorization>"),
         subsystemName = subsystem.name,
@@ -225,7 +227,7 @@ final class OperationToolSourceSpec
 
     "enforce invocation input and call-count limits before dispatch" in {
       Given("an admitted Operation with a one-call invocation budget")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-limits"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-limits"))
       val strictlimits = _success(OperationToolLimits.createC(1, 1024L, 65536L, 1))
       val admission = _success(OperationToolAdmission.createC(
         _tool_set_id,
@@ -252,7 +254,7 @@ final class OperationToolSourceSpec
 
     "enforce input size before dispatch and result size before boundary return" in {
       Given("separate tool sets with byte ceilings smaller than the encoded request or result")
-      val subsystem = DefaultSubsystemFactory.default(Some("operation-tool-byte-limits"))
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-byte-limits"))
       val inputset = _success(OperationToolSetId.parseC("input-limited"))
       val resultset = _success(OperationToolSetId.parseC("result-limited"))
       val identity = _identity("tool.time.now")
