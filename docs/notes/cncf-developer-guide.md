@@ -13,6 +13,22 @@ internal DSLs, and `UnitOfWork` own execution context interpretation,
 configuration lookup, authorization metadata, lifecycle behavior, and low-level
 storage/runtime effects.
 
+## Phase 55 configuration binding
+
+Use the registered typed catalog and one resolved binding collection as the
+configuration authority. Component code must not scan String keys, read raw
+`ResolvedConfiguration`, merge local maps, resolve aliases, or construct a
+parallel trace. Source loading and resource ownership remain runtime concerns.
+
+The migration route is: use the original parameter witness, admit only
+catalog-registered candidates, resolve once for the selected target context,
+then pass a narrow value-only projection into component logic. Compatibility
+spellings are accepted only at admitted file/environment/argument boundaries;
+they are never a second internal key authority. Fixed-user/profile values use
+the admitted typed profile and explicit identity-change rules. Secret and
+confidential values are opaque or unavailable and remain redacted in
+diagnostics, traces, responses, and exceptions.
+
 ## Start Here
 
 Read these documents in this order:

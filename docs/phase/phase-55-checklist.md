@@ -3,6 +3,10 @@
 status=in-progress
 phase=[Phase 55 - Typed Configuration Binding and Provenance Resolution](phase-55.md)
 provisional_specification=[Configuration Binding Provisional Specification](../notes/phase-55-configuration-binding-provisional-specification.md)
+normative_design=[Phase 55 Configuration Binding](../design/configuration-binding.md)
+normative_specification=[Configuration Resolution](../spec/config-resolution.md)
+migration_guide=[Phase 55 Configuration Binding Migration Guide](../notes/phase-55-configuration-binding-migration-guide.md)
+gcf10a_journal=[GCF-10A Normative Configuration Binding Promotion](../journal/2026/08/2026-08-04-phase-55-gcf10a-normative-configuration-binding-promotion.md)
 
 This checklist is the authoritative Phase 55 state ledger after Phase 55
 starts. A later stage may be `IN_PROGRESS` while an earlier stage remains open
@@ -14,7 +18,8 @@ the admitted contract and repository set.
 ## GCF-01: Inventory and Binding-Contract Freeze
 
 Stage Status:
-- Current status: DONE (2026-08-02)
+- Current status: DONE
+- Current step: completed 2026-08-02
 - Owner: generic configuration and CNCF runtime maintainers
 - Entry rule: Phase 54 is closed.
 - Completion rule: Existing behavior, selected names, invariants,
@@ -66,7 +71,8 @@ Evidence:
 ## GCF-02: Failing-First Typed Binding Contract
 
 Stage Status:
-- Current status: DONE (2026-08-02)
+- Current status: DONE
+- Current step: completed 2026-08-02
 - Owner: `simplemodeling-lib` configuration maintainers
 - Entry rule: GCF-01 is DONE.
 - Completion rule: Executable specifications fail for every selected binding,
@@ -96,7 +102,8 @@ Evidence:
 ## GCF-03: Typed Parameter and Binding Core
 
 Stage Status:
-- Current status: DONE (2026-08-02)
+- Current status: DONE
+- Current step: completed 2026-08-02
 - Owner: `simplemodeling-lib` configuration maintainers
 - Entry rule: GCF-02 is DONE.
 - Completion rule: Generic typed parameters, targets, provenance, bindings,
@@ -170,7 +177,8 @@ Evidence:
 ## GCF-05: Deterministic Resolution and Override History
 
 Stage Status:
-- Current status: DONE (2026-08-03)
+- Current status: DONE
+- Current step: completed 2026-08-03
 - Owner: generic resolver maintainers
 - Entry rule: GCF-04 is DONE.
 - Completion rule: One immutable candidate collection resolves independently
@@ -203,7 +211,8 @@ Evidence:
 ## GCF-06: Resolved Collection and Trace Projection
 
 Stage Status:
-- Current status: DONE (2026-08-03)
+- Current status: DONE
+- Current step: completed 2026-08-03
 - Owner: generic configuration, trace, and diagnostics maintainers
 - Entry rule: GCF-05 is DONE.
 - Completion rule: The resolved binding collection is the sole effective-value
@@ -238,7 +247,8 @@ Evidence:
 ## GCF-07: Textus/CNCF Parameter Catalog Adoption
 
 Stage Status:
-- Current status: DONE (GCF-07I boundary closure complete, 2026-08-03)
+- Current status: DONE
+- Current step: GCF-07I boundary closure complete, 2026-08-03
 - Owner: CNCF configuration, StandaloneUserProfile, and runtime maintainers
 - Entry rule: GCF-06 is DONE.
 - Completion rule: Phase 53 Textus/CNCF layering and typed profile semantics
@@ -373,7 +383,8 @@ Evidence:
 ## GCF-08: External Codecs and Boundary Adapters
 
 Stage Status:
-- Current status: DONE (GCF-08A–L canonical/environment/argv codecs, runtime argv/environment admission, raw-preserving consolidated/split-file admission, opaque launcher transport, and serialized trace diagnostics complete, 2026-08-03)
+- Current status: DONE
+- Current step: GCF-08A–L canonical/environment/argv codecs, runtime argv/environment admission, raw-preserving consolidated/split-file admission, opaque launcher transport, and serialized trace diagnostics complete, 2026-08-03
 - Owner: generic codec, CNCF runtime, and launcher maintainers
 - Entry rule: GCF-07 is DONE.
 - Completion rule: Every admitted String boundary round-trips through an
@@ -570,7 +581,8 @@ Evidence:
 ## GCF-09: Admitted Consumer Migration
 
 Stage Status:
-- Current status: DONE (GCF-09A repository bootstrap policy, GCF-09B
+- Current status: DONE
+- Current step: GCF-09A repository bootstrap policy, GCF-09B
   runtime Web policy, GCF-09C runtime Web descriptor migration, GCF-09D
   service-container runtime policy migration, GCF-09E component-development
   Web runtime projection, GCF-09F repository/bootstrap runtime projection,
@@ -591,7 +603,7 @@ Stage Status:
   operation-mode projection accepted after two review-fix rounds and final
   focused re-review; final Step review and changed-repository integration
   validation clean,
-  2026-08-04)
+  2026-08-04
 - Owner: assigned from the GCF-01 repository inventory
 - Entry rule: the GCF-08 canonical/environment/argv/file/launcher/diagnostic
   admission capability is complete (satisfied for this migration).
@@ -906,41 +918,114 @@ Evidence:
 ## GCF-10: Regression, Review, and Normative Closure
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
+- Current step: GCF-10 Step accumulator review is clean; Step commit validation
+  is pending
 - Owner: configuration, CNCF runtime, documentation, and release maintainers
 - Entry rule: GCF-09 is DONE.
-- Completion rule: Full validation and clean review pass, and verified behavior
-  is promoted to normative design/spec.
+- Completion rule: Phase-wide full validation, independent review, and release
+  evidence pass; GCF-10A documentation promotion is complete.
 
-- [ ] Run typed parameter, binding, candidate, resolution, trace, and codec
+- [x] Run typed parameter, binding, candidate, resolution, trace, and codec
   specifications.
-- [ ] Run source-precedence and
+- [x] Run source-precedence and
   Global/ComponentClass/SubsystemInstance/ComponentInstance resolution
   matrices.
-- [ ] Run confidential-value redaction specifications.
-- [ ] Run fixed-user identity-change, migration/isolation, formatting, and
+- [x] Run confidential-value redaction specifications.
+- [x] Verify serialized diagnostics accept only a sanitized resolved trace, own
+  no source/loader/resource handle, and cannot reload or open resources.
+- [x] Run fixed-user identity-change, migration/isolation, formatting, and
   secret-safe diagnostic specifications.
 - [ ] Run `simplemodeling-lib` focused and full tests.
 - [ ] Run CNCF focused and full tests.
 - [ ] Run every admitted consumer's applicable full tests.
-- [ ] Run naming, executable-specification, and `git diff --check` gates.
-- [ ] Perform independent read-only review.
-- [ ] Apply every actionable review finding.
-- [ ] Perform focused re-review only when fixes were required.
-- [ ] Create or update normative generic-configuration design documentation.
-- [ ] Create or update normative generic-configuration specification.
-- [ ] Update strategy, phase, checklist, developer, and migration guidance.
+- [x] Run naming, executable-specification, and `git diff --check` gates.
+- [x] Perform independent read-only review.
+- [x] Apply every actionable review finding.
+- [x] Perform focused re-review only when fixes were required.
 - [ ] Record exact test, review, migration, and release evidence.
+- [ ] Apply the mechanical strategy/final Phase/checklist status update only
+  after all GCF-10 closure gates pass.
 - [ ] Close Phase 55 only after all completion rules pass.
 
 Evidence:
-- Pending.
+- The complete GCF-10 Step accumulator received an independent read-only review.
+  Three actionable findings (highest severity P2) were repaired in three
+  bounded review-fix passes: unknown-name normative scope, temporary-fixture
+  cleanup, and executable rule/example traceability. Focused re-review confirms
+  all three findings resolved, no new P1–P4 finding, synchronized R1–R11 and
+  E1–E12 identities, E4/E5 mapped to R4, and E8 mapped to R7.
+- Final post-fix projection validation passed 12/12 at serialized invocation
+  `89498-20260804T081900Z`. The earlier complete GCF-10A focused evidence
+  remains 40/40 generic specifications with three intentional pending
+  scenarios, 180/180 CNCF configuration specifications, and 431/431 focused
+  runtime/consumer specifications.
+- No full suite ran. Step commit validation, Phase-wide full suites, release
+  evidence, strategy update, and Phase closure remain pending.
+
+## GCF-10A: Normative Documentation Promotion
+
+Stage Status:
+- Current status: DONE
+- Current step: accepted 2026-08-04 after independent review convergence and
+  focused validation
+- Owner: configuration and CNCF documentation maintainers
+- Entry rule: GCF-09 is DONE with accepted GCF-09A–R and recorded Step
+  validation/commit evidence.
+- Completion rule: verified implementation behavior is reflected in the
+  generic/CNCF design and specification, developer index/guide, migration
+  guide, provisional-note supersession marker, phase/checklist ledger, and
+  journal, and the empty selected-source-set requirement in
+  `docs/spec/config-resolution.md` has focused executable evidence (E12), and
+  a genuinely empty admitted source set maps to canonical empty candidates
+  after supplemental-source validation. This Slice does not claim Phase-wide
+  suites, independent review, release, or Phase 55 closure.
+
+- [x] Promote the generic typed-binding design and specification in
+  `simplemodeling-lib`.
+- [x] Align CNCF configuration design/spec with the closed catalog, four
+  targets, retained-source candidates, one final collection, value-only
+  projections, and sanitized diagnostics.
+- [x] Update developer index/guide and add practical migration guidance for
+  typed witnesses, admitted candidates, fixed-user/profile rules, and secret
+  safety.
+- [x] Mark the provisional note superseded for normative purposes while
+  retaining its historical implementation evidence.
+- [x] Update Phase 55 and this checklist without changing strategy status or
+  claiming closure.
+- [x] Add E12 focused executable evidence for graceful empty selected-source-set
+  handling at the CNCF projection boundary.
+- [x] Implement the bounded runtime projection repair that maps a genuinely
+  empty admitted source set to canonical empty candidates after
+  supplemental-source validation.
+- [x] Perform independent read-only review; perform focused re-review only if
+  review fixes are required.
+- [x] Accept GCF-10A only after independent review and focused validation pass.
+
+Evidence:
+- Independent review and the required repair/re-review convergence completed;
+  the final focused re-review is clean with no P1–P4 finding. Whole-file
+  compliance was confirmed for the production projection and executable
+  specification, including precise E12 scope and 2026-08-04 version headers.
+- `simplemodeling-lib` `Test/compile` passed at serialized invocation
+  `36754-20260804T064749Z`; ten focused generic suites passed 40/40 with three
+  intentional pending scenarios at `37076-20260804T064832Z`.
+- CNCF `Test/compile` passed at serialized invocation
+  `58155-20260804T072716Z`; all 34 configuration suites passed 180/180 at
+  `58488-20260804T072752Z`; 13 focused runtime/consumer suites passed 431/431
+  at `59399-20260804T072854Z`.
+- `git diff --check`, canonical Stage Status token, executable-document link,
+  diagnostic resource-safety dependency, naming, metadata, and production-scope
+  gates passed. HYG-P55-001–003 remain separate and unchanged.
+- No full suite ran. GCF-10 Step commit, Phase-wide full validation, release
+  evidence, strategy update, and Phase closure remain pending.
 
 ## Current Status
 
-Phase 55 is IN PROGRESS. GCF-01 through GCF-08 are DONE. GCF-08A–L completed
+Phase 55 is IN PROGRESS. GCF-01 through GCF-09 are DONE. GCF-08A–L completed
 canonical/environment/argv admission, raw-preserving consolidated/split-file
 admission, opaque launcher transport, and serialized trace diagnostics.
 GCF-09 is DONE with GCF-09A–R accepted and final Step review/integration
-validation clean. GCF-10 has not started, and Phase-wide full validation and
-Phase closure remain pending.
+validation clean. GCF-10A is accepted and the complete GCF-10 Step accumulator
+review is clean; Step commit validation is pending. Full validation, release
+evidence, and Phase closure remain pending.

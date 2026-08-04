@@ -1,5 +1,13 @@
 # Phase 55 Configuration Binding Provisional Specification
 
+> **Historical implementation evidence.** For normative purposes this note is
+> superseded by [`docs/design/configuration-binding.md`](../design/configuration-binding.md),
+> [`docs/spec/config-resolution.md`](../spec/config-resolution.md), and the
+> generic [`simplemodeling-lib` binding design](https://github.com/asami/goldenport-core/blob/main/docs/design/configuration-binding.md)
+> and [`simplemodeling-lib` binding specification](https://github.com/asami/goldenport-core/blob/main/docs/spec/configuration-binding.md).
+> It is retained to preserve the implementation chronology and recorded
+> validation evidence; its provisional wording does not override those docs.
+
 Date: 2026-07-31
 
 Status: provisional planning contract

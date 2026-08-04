@@ -185,7 +185,8 @@ Examples:
 
 Characteristics:
 
-- Built from `ResolvedConfiguration`
+- Built from the final typed binding projection; a pre-admission
+  `ResolvedConfiguration` is only a raw compatibility input
 - Applicative style (error accumulation)
 - Lives as `Subsystem.Config`
 - Subsystem is the **root of semantic configuration**
@@ -223,17 +224,22 @@ Characteristics:
 
 #### ResolvedConfiguration
 
-- Produced by `ConfigurationResolver`
-- Flat key/value store with trace
-- No semantics, no validation
+- Produced by `ConfigurationResolver` as the raw compatibility map/trace
+  projection of one immutable source snapshot
+- No typed parameter, target, alias, or domain semantics
+- Never the final typed authority
 
 #### Semantic Builders
 
-Runtime and subsystem assembly may define CNCF-owned semantic builders over
-the raw resolved configuration:
+Runtime and subsystem assembly may define CNCF-owned semantic builders only
+after typed admission; they do not treat the raw resolved configuration as
+their final authority:
 
-```scala
-Subsystem.Config.from(conf: ResolvedConfiguration): Consequence[Subsystem.Config]
+Semantic builders consume an admitted value-only projection, not a raw map:
+
+```text
+source snapshot -> closed catalog candidates -> one target-aware resolved
+collection -> Subsystem-owned value-only policy/configuration
 ```
 
 Component initialization is not another raw semantic builder. CNCF first
@@ -378,8 +384,11 @@ order and stops at the first present value. Decoding happens after selection,
 so an invalid higher-layer value is an error rather than permission to reuse a
 lower default.
 
-The runtime slot is a value-only projection from `ResolvedConfiguration`; its
-trace and physical source identity do not enter resolver state. The test slot
+The runtime slot is a value-only projection after typed binding admission. A
+merged/value-only `ResolvedConfiguration` is not converted into the
+retained-source typed collection; source retention happens earlier in
+`ConfigurationResolutionSnapshot` admission. The runtime slot's trace and
+physical source identity do not enter resolver state. The test slot
 is projected separately from an explicitly loaded `RuntimeTestDescriptor` and
 is empty otherwise. It is not merged into the runtime slot for initialization
 parameter provenance. The fixed-slot type has no position for request/action
@@ -1079,3 +1088,11 @@ Examples to avoid for new primary keys:
 - `textus.runtime.logging.file.path`
 
 Compatibility aliases may still accept older keys where they already exist.
+
+## Phase 55 binding routing (non-normative)
+
+The dedicated Phase 55 binding contract is maintained in the normative
+[`configuration-binding.md`](configuration-binding.md) design and the
+[`config-resolution.md`](../spec/config-resolution.md) specification. This
+legacy configuration-model document remains draft platform-compilation context;
+its historical material must not be read as the typed binding authority.

@@ -41,8 +41,14 @@ Read these first when starting component development:
 9. `docs/design/server-port-allocation.md`
    - CAR/SAR local server port ranges, automatic allocation, and explicit
      override precedence.
+10. `docs/design/configuration-binding.md` and `docs/spec/config-resolution.md`
+   - Normative Phase 55 source-snapshot, closed-catalog, target-aware binding,
+     and value-only consumer boundary.
 
 After these, choose the task-specific section below.
+
+For configuration migration, also read
+`docs/notes/phase-55-configuration-binding-migration-guide.md`.
 
 ## Modeling A Component
 

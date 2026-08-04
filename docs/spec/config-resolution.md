@@ -13,7 +13,9 @@ Its purpose is to prevent accidental coupling between components,
 applications, and runtime environments.
 
 This document is normative for runtime configuration source discovery,
-precedence, and compatibility behavior.
+precedence, and compatibility behavior. Typed binding authority is specified by
+the Phase 55 catalog/binding boundary below; this raw resolver is not that
+authority.
 
 
 ----------------------------------------------------------------------
@@ -219,15 +221,18 @@ Schema validation belongs to higher layers.
 
 6.5 Component Initialization Projection Boundary
 
-`ResolvedConfiguration` MAY be supplied as one explicit input to CNCF
-component initialization parameter resolution. The configuration source
-resolver defined by this specification MUST NOT:
+`ResolvedConfiguration` is retained only as a pre-admission compatibility
+projection. CNCF MUST decode the retained per-source snapshot through its
+closed catalog and pass component initialization a narrow value-only typed
+snapshot. The configuration source resolver defined by this specification MUST
+NOT:
 
     - select a component or component instance
     - interpret a component parameter declaration
     - decode a component-domain value
     - merge assembly metadata into `ResolvedConfiguration`
-    - expose its raw map to component initialization code
+    - expose its raw map, sources, candidates, aliases, provenance, or trace
+      authority to component initialization code
 
 Assembly, subsystem component-instance settings, packaged defaults, and
 explicit test overlays remain separate admitted inputs to the higher-level
@@ -324,7 +329,18 @@ Executable specifications must cover:
       override history
     - resolved collection and sanitized trace derivation from the same effective
       binding authority
-    - empty/missing source handling and structural configuration failure
+    - empty selected-source-set handling and structural configuration failure
+
+Executable evidence:
+
+- [Phase55ConfigurationBindingContractSpec](../../src/test/scala/org/goldenport/cncf/config/Phase55ConfigurationBindingContractSpec.scala)
+- [CncfConfigurationTargetSpec](../../src/test/scala/org/goldenport/cncf/config/CncfConfigurationTargetSpec.scala)
+- [CncfConfigurationParameterCatalogSpec](../../src/test/scala/org/goldenport/cncf/config/CncfConfigurationParameterCatalogSpec.scala)
+- [CncfConfigurationCandidateDecoderSpec](../../src/test/scala/org/goldenport/cncf/config/CncfConfigurationCandidateDecoderSpec.scala)
+- [CncfRuntimeConfigurationProjectionSpec](../../src/test/scala/org/goldenport/cncf/config/CncfRuntimeConfigurationProjectionSpec.scala)
+- [CncfConfigurationBindingResolverSpec](../../src/test/scala/org/goldenport/cncf/config/CncfConfigurationBindingResolverSpec.scala)
+- [CncfConfigurationBindingTraceSpec](../../src/test/scala/org/goldenport/cncf/config/CncfConfigurationBindingTraceSpec.scala)
+- [CncfConfigurationBindingDiagnosticCodecSpec](../../src/test/scala/org/goldenport/cncf/config/CncfConfigurationBindingDiagnosticCodecSpec.scala)
 
 Tests must avoid:
 
@@ -350,7 +366,165 @@ Those concerns belong to higher layers.
 
 
 ----------------------------------------------------------------------
-12. Final Note
+12. Phase 55 typed binding boundary
+----------------------------------------------------------------------
+
+After one immutable `ConfigurationResolutionSnapshot` is available, CNCF
+admission is normative under the following local rule registry. The `R<n>` and
+`E<n>` identifiers are local to `config-resolution`; historical `slice:` tags
+remain contextual and are not normative identifiers.
+
+### Normative rule registry
+
+#### R1 Closed catalog admission
+
+The closed catalog maps canonical `textus.*` identities to the original generic
+parameter witnesses. Registered `textus.runtime.*`, `cncf.*`, and
+`cncf.runtime.*` forms are decode-only aliases. An unknown catalog member
+presented inside a catalog-owned/consolidated document, malformed values, wrong
+target scopes, and canonical-plus-alias collisions fail structurally. At a
+generic flat source boundary, unrelated or unregistered keys are filtered or
+preserved outside CNCF binding admission rather than being reinterpreted as
+catalog members or causing catalog rejection.
+
+#### R2 Semantic targets
+
+The four targets are exactly `Global`, `ComponentClass`, `SubsystemInstance`,
+and fully qualified `ComponentInstance`. Unqualified external syntax receives
+its target from document location and is not a semantic target.
+
+#### R3 Retained physical batches
+
+Nonempty retained physical sources decode without reload into immutable typed
+candidates that preserve source provenance, rank, and ordinal. Candidate
+admission rejects duplicate canonical parameter/target identities. Deterministic
+resolution selects one most-specific target per source, rejects same-source
+ties, folds source winners by rank and ordinal, and yields one effective
+collection.
+
+#### R4 Supplemental admission
+
+Already-admitted argv, environment, and profile bindings join the matching
+retained source/candidate graph before one resolution. Same-source canonical
+collisions fail, while distinct target bindings preserve their provenance.
+
+#### R5 Native typed values
+
+Retained native values remain typed through decoding and resolution and preserve
+source precedence and override history without a `String` round-trip.
+
+#### R6 Consolidated hierarchy
+
+Only reserved consolidated file snapshots receive global/subsystem hierarchy
+interpretation. Generic non-file flat sources do not gain hierarchy or target
+semantics.
+
+#### R7 Equivalent-form collision
+
+Consolidated and canonical split forms in one layer that define the same
+canonical parameter/target are structural duplicates, not overrides.
+
+#### R8 Source precedence
+
+Separate conventional Textus and CNCF sources retain normal source-precedence
+override semantics.
+
+#### R9 Split path binding
+
+A canonical split document remains bound to its path-selected target;
+hierarchy-looking content cannot retarget it.
+
+#### R10 Raw member multiplicity
+
+Retained raw YAML preserves duplicate member evidence, and candidate admission
+rejects a duplicate canonical binding without rereading the physical file.
+
+#### R11 Empty selected-source set
+
+After supplemental-source validation, a genuinely empty admitted physical-source
+batch yields canonical empty candidates and an empty effective collection. A
+nonempty admitted batch retains decoder validation. This rule does not cover
+missing or unreadable files.
+
+### Executable example registry
+
+#### E1 resolve catalog candidates from the same single-load runtime snapshots
+
+Rules: R3. The projection resolves baseline and override snapshots without
+reloading a physical source and retains the higher-precedence binding's
+override history.
+
+#### E2 compose retained runtime and already-admitted HOME profile candidates before final resolution
+
+Rules: R4. The projection composes runtime and admitted HOME profile candidates
+before one final resolution while preserving their typed witnesses.
+
+#### E3 accept native boolean runtime values and retain their higher-precedence winner
+
+Rules: R5. Native boolean values decode as typed values and the higher-
+precedence source remains the winner with its override history.
+
+#### E4 attach typed argv bindings to the one existing argument source batch
+
+Rules: R4. Typed argv bindings join the retained argument source;
+same-target collisions fail and distinct targets retain shared argv provenance.
+
+#### E5 attach typed environment bindings to the one existing environment source batch
+
+Rules: R4. Typed environment bindings join the retained environment source;
+same-target collisions fail and distinct targets retain environment provenance.
+
+#### E6 decode one already-loaded consolidated file document into Global and selected Subsystem bindings
+
+Rules: R2, R3, R6. A consolidated file snapshot supplies Global and selected
+Subsystem bindings with one-load provenance and reserved hierarchy
+interpretation.
+
+#### E7 reserve consolidated hierarchy interpretation for file snapshots
+
+Rules: R1, R6. A non-file resource or ordinary argument key does not acquire
+consolidated hierarchy or target semantics.
+
+#### E8 reject same-layer canonical duplicates across consolidated and split file forms
+
+Rules: R7. Consolidated and canonical split forms defining one same-layer
+binding are rejected as structural duplicates.
+
+#### E9 retain normal CNCF override semantics beside a canonical Textus consolidated file
+
+Rules: R8. Separate Textus and CNCF consolidated sources retain their normal
+precedence, with CNCF overriding Textus.
+
+#### E10 keep a canonical split file path-bound when its content looks consolidated
+
+Rules: R9. A canonical split path retains its selected target even when its
+content looks like a foreign hierarchy.
+
+#### E11 reject duplicate canonical bindings from one retained raw YAML split-file document
+
+Rules: R10. Duplicate raw YAML members remain observable and candidate
+admission rejects the duplicate without rereading the file.
+
+#### E12 handle an empty runtime source snapshot gracefully at the CNCF projection boundary
+
+Rules: R11. An empty admitted source set yields canonical empty candidates and
+an empty effective collection, while missing or unreadable files remain outside
+this rule.
+
+- `ResolvedConfiguration` remains only the raw compatibility projection of the
+  source snapshot. Components and runtime consumers receive value-only
+  projections and no raw sources, candidates, aliases, provenance, or trace
+  authority.
+- Trace and serialized diagnostics are derived only from the effective
+  collection and bounded override chain. Confidential values/history are
+  redacted and diagnostics cannot reload or open resources.
+
+The owning CNCF catalog and runtime design define parameter names, aliases,
+defaults, and value-only projections. This generic source specification owns
+neither those semantics nor source/resource ownership.
+
+----------------------------------------------------------------------
+13. Final Note
 ----------------------------------------------------------------------
 
 This configuration mechanism exists to be:

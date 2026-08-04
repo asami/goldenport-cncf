@@ -1,6 +1,7 @@
 package org.goldenport.cncf.config
 
 import java.nio.file.{Files, Path, Paths}
+import java.util.Comparator
 
 import org.goldenport.Consequence
 import org.goldenport.configuration.{Configuration, ConfigurationBindingCandidates, ConfigurationBindingResolver, ConfigurationOrigin, ConfigurationResolver, ConfigurationValue}
@@ -12,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigurationProjectionSpec
@@ -20,43 +21,46 @@ final class CncfRuntimeConfigurationProjectionSpec
     with Matchers
     with GivenWhenThen {
   private val _e1 = afterWord(
-    "in spec:phase-55-gcf07c-runtime-source-projection, example:E1, rules:GCF07C-R1,R2,R3, phase:55, slice:GCF-07C"
+    "in spec:config-resolution, example:E1, rules:R3, phase:55, slice:GCF-07C"
   )
   private val _e2 = afterWord(
-    "in spec:phase-55-gcf07f-final-standalone-configuration-binding-collection, example:E2, rules:GCF07F-R1,R2,R3, phase:55, slice:GCF-07F"
+    "in spec:config-resolution, example:E2, rules:R4, phase:55, slice:GCF-07F"
   )
   private val _e3 = afterWord(
-    "in spec:phase-55-gcf07h-typed-web-execution-policy-adoption, example:E3, rules:GCF07H-R1,R2, phase:55, slice:GCF-07H"
+    "in spec:config-resolution, example:E3, rules:R5, phase:55, slice:GCF-07H"
   )
   private val _e4 = afterWord(
-    "in spec:phase-55-argv-binding-runtime-adoption, example:E4, rules:GCF08F-R3,R4,R5, phase:55, slice:GCF-08F"
+    "in spec:config-resolution, example:E4, rules:R4, phase:55, slice:GCF-08F"
   )
   private val _e5 = afterWord(
-    "in spec:phase-55-environment-binding-runtime-admission, example:E3, rules:GCF08G-R2,R3,R5, phase:55, slice:GCF-08G"
+    "in spec:config-resolution, example:E5, rules:R4, phase:55, slice:GCF-08G"
   )
   private val _e6 = afterWord(
-    "in spec:phase-55-consolidated-file-binding-admission, example:E1, rules:GCF08H-R1,R2,R3, phase:55, slice:GCF-08H"
+    "in spec:config-resolution, example:E6, rules:R2,R3,R6, phase:55, slice:GCF-08H"
   )
   private val _e7 = afterWord(
-    "in spec:phase-55-consolidated-file-binding-admission, example:E2, rules:GCF08H-R1,R4, phase:55, slice:GCF-08H"
+    "in spec:config-resolution, example:E7, rules:R1,R6, phase:55, slice:GCF-08H"
   )
   private val _e8 = afterWord(
-    "in spec:phase-55-canonical-split-file-binding-admission, example:E2, rules:GCF08I-R1,R4, phase:55, slice:GCF-08I"
+    "in spec:config-resolution, example:E8, rules:R7, phase:55, slice:GCF-08I"
   )
   private val _e9 = afterWord(
-    "in spec:phase-55-canonical-split-file-binding-admission, example:E3, rules:GCF08I-R4, phase:55, slice:GCF-08I"
+    "in spec:config-resolution, example:E9, rules:R8, phase:55, slice:GCF-08I"
   )
   private val _e10 = afterWord(
-    "in spec:phase-55-canonical-split-file-binding-admission, example:E4, rules:GCF08I-R2, phase:55, slice:GCF-08I"
+    "in spec:config-resolution, example:E10, rules:R9, phase:55, slice:GCF-08I"
   )
   private val _e11 = afterWord(
-    "in spec:phase-55-gcf08l-raw-yaml-duplicate-member-admission, example:E11, rules:GCF08L-R1,R2,R3, phase:55, slice:GCF-08L"
+    "in spec:config-resolution, example:E11, rules:R10, phase:55, slice:GCF-08L"
+  )
+  private val _e12 = afterWord(
+    "in spec:config-resolution, example:E12, rules:R11, phase:55, slice:GCF-10A"
   )
 
   "CNCF runtime configuration projection" should {
     "E1 resolve catalog candidates from the same single-load runtime snapshots" must _e1 {
       "when baseline and override file sources supply a Subsystem user-mode" in {
-        Given("counting Textus baseline and CNCF override sources for one stable Subsystem identity")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R3; Example: E1; counting Textus baseline and CNCF override sources for one stable Subsystem identity")
         var textusloads = 0
         var cncfsloads = 0
         val textus = _file_source(".textus/config.conf", ConfigurationSource.Rank.Home, "standalone", () => textusloads += 1)
@@ -77,7 +81,7 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E2 compose retained runtime and already-admitted HOME profile candidates before final resolution" must _e2 {
       "when a fixed standalone Subsystem has one runtime user-mode and both HOME profile layers" in {
-        Given("one loaded runtime source, one stable Subsystem identity, and parsed HOME profile documents")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R4; Example: E2; one loaded runtime source, one stable Subsystem identity, and parsed HOME profile documents")
         val loads = scala.collection.mutable.ArrayBuffer.empty[String]
         val runtime = _file_source(".textus/config.conf", ConfigurationSource.Rank.Home, "standalone", () => loads += "runtime")
         val snapshot = _take(ConfigurationResolver.default.resolveSnapshot(Vector(runtime)))
@@ -114,7 +118,7 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E3 accept native boolean runtime values and retain their higher-precedence winner" must _e3 {
       "when a project boolean overrides an assembly-default-compatible lower source" in {
-        Given("two loaded runtime sources whose selected Web boolean is native rather than text")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R5; Example: E3; two loaded runtime sources whose selected Web boolean is native rather than text")
         val low = _source(
           ".textus/config.conf",
           ConfigurationSource.Rank.Home,
@@ -141,7 +145,7 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E4 attach typed argv bindings to the one existing argument source batch" must _e4 {
       "when direct and typed argv values name the same or different Subsystem targets" in {
-        Given("one argv runtime snapshot and canonical command binding envelopes")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R4; Example: E4; one argv runtime snapshot and canonical command binding envelopes")
         val source = ConfigurationSource.Args(Map(
           "textus.subsystem.user-mode" -> "multi-user"
         ))
@@ -169,7 +173,7 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E5 attach typed environment bindings to the one existing environment source batch" must _e5 {
       "when direct and typed environment values name the same or different Subsystem targets" in {
-        Given("one residual environment snapshot and canonical environment binding names")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R4; Example: E5; one residual environment snapshot and canonical environment binding names")
         val codec = _take(CncfConfigurationEnvironmentBindingCodec.create(CncfConfigurationParameterCatalog.closed))
         val subsystem = _take(SubsystemInstanceId.create("platform", "default"))
         val target = _take(CncfConfigurationTarget.SubsystemInstance.create(subsystem))
@@ -221,7 +225,7 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E6 decode one already-loaded consolidated file document into Global and selected Subsystem bindings" must _e6 {
       "when a canonical YAML-shaped configuration tree supplies one Global and two Subsystem values" in {
-        Given("a counting file source retaining the consolidated global/subsystems hierarchy")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R2,R3,R6; Example: E6; a counting file source retaining the consolidated global/subsystems hierarchy")
         var loads = 0
         val source = ConfigurationSource.File(
           ConfigurationOrigin.Home,
@@ -274,32 +278,34 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E7 reserve consolidated hierarchy interpretation for file snapshots" must _e7 {
       "when resource and argument sources contain global-shaped values" in {
-        Given("a hierarchical non-file resource source and an ordinary global argument key")
-        val resourcepath = Files.createTempFile("gcf08h-resource", ".yaml")
-        Files.writeString(
-          resourcepath,
-          s"""global:
-             |  config:
-             |    ${CncfConfigurationParameterCatalog.REPOSITORY_DIR_KEY}: must-not-be-admitted
-             |""".stripMargin
-        )
-        val resource = ResourceConfigurationSource("gcf08h-resource.yaml", resourcepath.toUri.toURL)
-        val arguments = ConfigurationSource.Args(Map("global" -> "not-a-consolidated-document"))
-        val snapshot = _take(ConfigurationResolver.default.resolveSnapshot(Vector(resource, arguments)))
-        val subsystem = _take(SubsystemInstanceId.create("platform", "default"))
+        Given("Spec: docs/spec/config-resolution.md; Rules: R1,R6; Example: E7; a hierarchical non-file resource source and an ordinary global argument key")
+        _with_fixture_root("gcf08h-resource") { workroot =>
+          val resourcepath = Files.createTempFile(workroot, "resource", ".yaml")
+          Files.writeString(
+            resourcepath,
+            s"""global:
+               |  config:
+               |    ${CncfConfigurationParameterCatalog.REPOSITORY_DIR_KEY}: must-not-be-admitted
+               |""".stripMargin
+          )
+          val resource = ResourceConfigurationSource("gcf08h-resource.yaml", resourcepath.toUri.toURL)
+          val arguments = ConfigurationSource.Args(Map("global" -> "not-a-consolidated-document"))
+          val snapshot = _take(ConfigurationResolver.default.resolveSnapshot(Vector(resource, arguments)))
+          val subsystem = _take(SubsystemInstanceId.create("platform", "default"))
 
-        When("the runtime projection preserves non-file sources as their existing flat boundary")
-        val collection = _take(CncfRuntimeConfigurationProjection.forSubsystem(snapshot, subsystem))
+          When("the runtime projection preserves non-file sources as their existing flat boundary")
+          val collection = _take(CncfRuntimeConfigurationProjection.forSubsystem(snapshot, subsystem))
 
-        Then("neither non-file source gains consolidated target semantics")
-        collection.value(CncfConfigurationParameterCatalog.repositoryDir).toOption.flatten shouldBe None
-        collection.value(CncfConfigurationParameterCatalog.subsystemUserMode).toOption.flatten shouldBe None
+          Then("neither non-file source gains consolidated target semantics")
+          collection.value(CncfConfigurationParameterCatalog.repositoryDir).toOption.flatten shouldBe None
+          collection.value(CncfConfigurationParameterCatalog.subsystemUserMode).toOption.flatten shouldBe None
+        }
       }
     }
 
     "E8 reject same-layer canonical duplicates across consolidated and split file forms" must _e8 {
       "when both physical forms define one Subsystem parameter for the same target" in {
-        Given("one consolidated Textus YAML source and one canonical split Subsystem source at the same rank")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R7; Example: E8; one consolidated Textus YAML source and one canonical split Subsystem source at the same rank")
         val subsystem = _take(SubsystemInstanceId.create("platform", "default"))
         val consolidated = ConfigurationSource.File(
           ConfigurationOrigin.Home,
@@ -340,7 +346,7 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E9 retain normal CNCF override semantics beside a canonical Textus consolidated file" must _e9 {
       "when equally-ranked Textus and CNCF consolidated files set one Subsystem parameter" in {
-        Given("a canonical Textus consolidated file and a same-rank CNCF consolidated file")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R8; Example: E9; a canonical Textus consolidated file and a same-rank CNCF consolidated file")
         val subsystem = _take(SubsystemInstanceId.create("platform", "default"))
         val textus = _consolidated_subsystem_source(
           ".textus/config.yaml",
@@ -365,7 +371,7 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E10 keep a canonical split file path-bound when its content looks consolidated" must _e10 {
       "when a split Subsystem file contains both its flat value and a foreign hierarchy" in {
-        Given("a canonical split path whose flat value targets default while hierarchy names another target")
+        Given("Spec: docs/spec/config-resolution.md; Rules: R9; Example: E10; a canonical split path whose flat value targets default while hierarchy names another target")
         val subsystem = _take(SubsystemInstanceId.create("platform", "default"))
         val split = _source(
           ".textus/subsystems/platform/instances/default/config.yaml",
@@ -397,34 +403,53 @@ final class CncfRuntimeConfigurationProjectionSpec
 
     "E11 reject duplicate canonical bindings from one retained raw YAML split-file document" must _e11 {
       "when the same binding member occurs twice in the physical file" in {
-        Given("a real canonical split YAML file with two user-mode members")
-        val root = Files.createTempDirectory("cncf-gcf08l-raw-yaml")
-        val path = root.resolve(".textus/subsystems/default/instances/default/config.yaml")
-        Files.createDirectories(path.getParent)
-        Files.writeString(
-          path,
-          """textus:
-            |  subsystem:
-            |    user-mode: standalone
-            |    user-mode: multi-user
-            |""".stripMargin
-        )
-        val source = ConfigurationSource.File(
-          ConfigurationOrigin.Home,
-          path,
-          ConfigurationSource.Rank.Home,
-          new RuntimeFileConfigLoader
-        )
-        val snapshot = _take(ConfigurationResolver.default.resolveSnapshot(Vector(source)))
-        val subsystem = _take(SubsystemInstanceId.create("default", "default"))
+        Given("Spec: docs/spec/config-resolution.md; Rules: R10; Example: E11; a real canonical split YAML file with two user-mode members")
+        _with_fixture_root("cncf-gcf08l-raw-yaml") { workroot =>
+          val path = workroot.resolve(".textus/subsystems/default/instances/default/config.yaml")
+          Files.createDirectories(path.getParent)
+          Files.writeString(
+            path,
+            """textus:
+              |  subsystem:
+              |    user-mode: standalone
+              |    user-mode: multi-user
+              |""".stripMargin
+          )
+          val source = ConfigurationSource.File(
+            ConfigurationOrigin.Home,
+            path,
+            ConfigurationSource.Rank.Home,
+            new RuntimeFileConfigLoader
+          )
+          val snapshot = _take(ConfigurationResolver.default.resolveSnapshot(Vector(source)))
+          val subsystem = _take(SubsystemInstanceId.create("default", "default"))
 
-        When("the CNCF projection builds candidates without reloading the file")
-        val result = CncfRuntimeConfigurationProjection.candidates(snapshot, subsystem)
+          When("the CNCF projection builds candidates without reloading the file")
+          val result = CncfRuntimeConfigurationProjection.candidates(snapshot, subsystem)
 
-        Then("duplicate canonical binding admission fails structurally rather than silently selecting one")
-        result.isSuccess shouldBe false
-        result.display.toLowerCase(java.util.Locale.ROOT) should include ("duplicate")
-        snapshot.sources.head.rawDocument.map(_.fields.map(_.name)) shouldBe Some(Vector("textus"))
+          Then("duplicate canonical binding admission fails structurally rather than silently selecting one")
+          result.isSuccess shouldBe false
+          result.display.toLowerCase(java.util.Locale.ROOT) should include ("duplicate")
+          snapshot.sources.head.rawDocument.map(_.fields.map(_.name)) shouldBe Some(Vector("textus"))
+        }
+      }
+    }
+
+    "E12 handle an empty runtime source snapshot gracefully at the CNCF projection boundary" must _e12 {
+      "when no optional configuration sources are provided for a valid Subsystem instance" in {
+        Given("Spec: docs/spec/config-resolution.md; Rules: R11; Example: E12; an empty runtime source snapshot and one valid Subsystem identity")
+        val snapshot = _take(ConfigurationResolver.default.resolveSnapshot(Vector.empty[ConfigurationSource]))
+        val subsystem = _take(SubsystemInstanceId.create("platform", "default"))
+
+        When("the CNCF projection resolves the empty snapshot for that Subsystem")
+        val collection = _take(CncfRuntimeConfigurationProjection.forSubsystem(snapshot, subsystem))
+        val binding = _take(collection.binding(CncfConfigurationParameterCatalog.subsystemUserMode))
+        val value = _take(collection.value(CncfConfigurationParameterCatalog.subsystemUserMode))
+
+        Then("the source snapshot and typed projection remain empty without a subsystem user-mode binding or value")
+        snapshot.sources shouldBe Vector.empty
+        binding shouldBe None
+        value shouldBe None
       }
     }
   }
@@ -486,6 +511,23 @@ final class CncfRuntimeConfigurationProjectionSpec
           Consequence.success(Configuration(values))
       }
     )
+
+  private val _fixture_work_root = Paths.get("target", "cncf-runtime-configuration-projection-spec")
+
+  private def _with_fixture_root[A](prefix: String)(body: Path => A): A = {
+    Files.createDirectories(_fixture_work_root)
+    val workroot = Files.createTempDirectory(_fixture_work_root, prefix)
+    try body(workroot)
+    finally _delete_recursively(workroot)
+  }
+
+  private def _delete_recursively(path: Path): Unit = {
+    if (Files.exists(path)) {
+      val stream = Files.walk(path)
+      try stream.sorted(Comparator.reverseOrder()).forEach(entry => Files.deleteIfExists(entry))
+      finally stream.close()
+    }
+  }
 
   private def _take[A](result: Consequence[A]): A =
     result.getOrElse(fail(result.display))

@@ -12,7 +12,7 @@ import org.goldenport.configuration.source.ConfigurationSource
  * never loads a physical source and must not receive a merged configuration.
  *
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntimeConfigurationProjection {
@@ -41,7 +41,7 @@ object CncfRuntimeConfigurationProjection {
       for {
         batches <- _batches(snapshot, CncfConfigurationDocumentLocation.Global)
         additions <- _binding_additions(batches, argumentBindings, environmentBindings)
-        candidates <- CncfConfigurationCandidateDecoder.decodeCatalogSnapshots(batches.map(x => x._2 -> x._3), additions)
+        candidates <- _decode_candidates(batches, additions)
       } yield candidates
 
   def subsystemUserMode(
@@ -88,8 +88,17 @@ object CncfRuntimeConfigurationProjection {
         target <- CncfConfigurationTarget.SubsystemInstance.create(subsystem)
         batches <- _batches(snapshot, new CncfConfigurationDocumentLocation.SubsystemInstance(target))
         additions <- _binding_additions(batches, argumentBindings, environmentBindings)
-        candidates <- CncfConfigurationCandidateDecoder.decodeCatalogSnapshots(batches.map(x => x._2 -> x._3), additions)
+        candidates <- _decode_candidates(batches, additions)
       } yield candidates
+
+  private def _decode_candidates(
+    batches: Vector[(ConfigurationRuntimeSourceSnapshot, CncfConfigurationDocumentBatch, ConfigurationDocument)],
+    additions: Vector[Vector[ConfigurationBindingCandidateInput[CncfConfigurationTarget]]]
+  ): Consequence[ConfigurationBindingCandidates[CncfConfigurationTarget]] =
+    if (batches.isEmpty)
+      Consequence.success(ConfigurationBindingCandidates.empty[CncfConfigurationTarget])
+    else
+      CncfConfigurationCandidateDecoder.decodeCatalogSnapshots(batches.map(x => x._2 -> x._3), additions)
 
   private def _batches(
     snapshot: ConfigurationResolutionSnapshot,
