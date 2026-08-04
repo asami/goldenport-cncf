@@ -14,6 +14,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationBindingCollecti
  * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
+/** Explicit downstream test support packaged in the main artifact; it never auto-admits production Subsystems. */
 object RuntimeBindingAdmissionFixture {
   def default(
     mode: Option[String] = None,
