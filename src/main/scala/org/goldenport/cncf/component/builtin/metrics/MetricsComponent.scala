@@ -19,7 +19,7 @@ import org.goldenport.schema.DataType
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
@@ -66,26 +66,29 @@ object MetricsComponent {
       comp.withPort(Component.Port.of(new DefaultMetricsService(
         params.subsystem.entityAccessMetrics,
         params.subsystem.componentMetrics,
-        runtimeConfig
+        runtimeConfig,
+        () => params.subsystem.runtimeOperationSecurityPolicyC
       )))
       val instanceId = ComponentInstanceId.default(componentId)
       Component.Core.create(name, componentId, instanceId, protocol)
     }
   }
 
-  private final class DefaultMetricsService(
+  private[cncf] final class DefaultMetricsService(
     registry: EntityAccessMetricsRegistry,
     componentmetrics: ComponentMetricsRegistry,
-    runtimeConfig: RuntimeConfig
+    runtimeConfig: RuntimeConfig,
+    operationModeSupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
   ) extends MetricsService {
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
 
     def loadRuntimeMetrics(): Consequence[Record] = {
       val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry, componentmetrics)
+      val operationmode = MetricsComponent.operationMode(operationModeSupplier())
       val exportResult = OpenTelemetryExporter(
-        runtimeConfig.openTelemetryExportConfig,
-        runtimeConfig.operationMode
+        runtimeConfig.openTelemetryExportConfig.forOperationMode(operationmode),
+        operationmode
       ).exportMetrics(snapshot)
       Consequence.success(snapshot.toRecord ++ Record.dataAuto(
         "otel_export" -> Record.dataOption(
@@ -100,6 +103,11 @@ object MetricsComponent {
     def loadMetricsCatalog(): Consequence[Record] =
       Consequence.success(RuntimeDashboardMetrics.metricsCatalogRecord)
   }
+
+  private[cncf] def operationMode(
+    policy: Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
+  ): org.goldenport.cncf.config.OperationMode =
+    policy.toOption.map(_.operationMode).getOrElse(RuntimeConfig.defaultOperationMode)
 
   private final class LoadEntityAccessMetricsOperationDefinition(
     request: spec.RequestDefinition,

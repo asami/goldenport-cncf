@@ -11,7 +11,7 @@ import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.blob.{BlobKind, BlobPutRequest, BlobStorageRef, BlobStoreConfig, BlobStoreFactory}
-import org.goldenport.cncf.config.{OperationMode, ResolvedParameter, ResolvedParameters}
+import org.goldenport.cncf.config.{OperationMode, ResolvedParameter, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.datatype.ContentType
 import org.goldenport.record.Record
@@ -21,7 +21,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 11, 2026
- * @version May. 11, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class DiagnosticPayloadExternalizationConfig(
@@ -35,8 +35,18 @@ final case class DiagnosticPayloadExternalizationConfig(
   allowRequestOverride: Boolean = false,
   unsafeOpaquePayloads: Boolean = false,
   retentionDays: Option[Int] = None,
-  validationError: Option[String] = None
+  validationError: Option[String] = None,
+  private[cncf] allowRequestOverrideUsesModeDefault: Boolean = false
 ) {
+  def forOperationMode(operationMode: OperationMode): DiagnosticPayloadExternalizationConfig =
+    copy(
+      allowRequestOverride = if (allowRequestOverrideUsesModeDefault)
+        operationMode != OperationMode.Production
+      else
+        allowRequestOverride,
+      validationError = DiagnosticPayloadExternalizationConfig._validation_error(this, operationMode)
+    )
+
   def normalizedDestination(operationMode: OperationMode): Option[String] =
     destination.map(DiagnosticPayloadExternalizationConfig.normalizeDestination).orElse {
       if (enabled && operationMode != OperationMode.Production)
@@ -107,18 +117,29 @@ object DiagnosticPayloadExternalizationConfig {
       operationContains = operationContains.map(_.trim).filter(_.nonEmpty),
       allowRequestOverride = allowRequestOverride.getOrElse(operationMode != OperationMode.Production),
       unsafeOpaquePayloads = unsafeOpaquePayloads.getOrElse(false),
-      retentionDays = retentionDays.filter(_ >= 0)
+      retentionDays = retentionDays.filter(_ >= 0),
+      allowRequestOverrideUsesModeDefault = allowRequestOverride.isEmpty
     )
-    val error =
-      if (config.isProductionDestinationMissing(operationMode))
-        Some("textus.observability.payload.externalization.destination is required when externalization is enabled in production")
-      else
-        normalizedDestination.collect {
-          case other if other != DestinationLocalFile && other != DestinationBlobStore =>
-            s"unknown diagnostic payload externalization destination: $other"
-        }
-    config.copy(validationError = error)
+    config.forOperationMode(operationMode)
   }
+
+  private def _static_validation_error(
+    config: DiagnosticPayloadExternalizationConfig
+  ): Option[String] =
+    config.destination.map(normalizeDestination).filter(_.nonEmpty).collect {
+      case other if other != DestinationLocalFile && other != DestinationBlobStore =>
+        s"unknown diagnostic payload externalization destination: $other"
+    }
+
+  private def _validation_error(
+    config: DiagnosticPayloadExternalizationConfig,
+    operationMode: OperationMode
+  ): Option[String] =
+    _static_validation_error(config).orElse {
+      Option.when(config.isProductionDestinationMissing(operationMode))(
+        "textus.observability.payload.externalization.destination is required when externalization is enabled in production"
+      )
+    }
 }
 
 object DiagnosticPayloadReferenceCodec {
@@ -156,6 +177,7 @@ final case class DiagnosticPayloadWriteResult(
 object DiagnosticPayloadExternalizer {
   private final case class Scope(
     operation: String,
+    operationMode: OperationMode,
     overrideConfig: Option[RequestOverride] = None
   )
   private final case class RequestOverride(
@@ -170,7 +192,7 @@ object DiagnosticPayloadExternalizer {
   )(
     body: => A
   ): A =
-    withOperation(operation, None)(body)
+    withOperation(operation, None, RuntimeConfig.defaultOperationMode)(body)
 
   def withOperation[A](
     operation: String,
@@ -178,16 +200,34 @@ object DiagnosticPayloadExternalizer {
   )(
     body: => A
   ): A =
-    withOperation(operation, Some(params))(body)
+    withOperation(operation, Some(params), RuntimeConfig.defaultOperationMode)(body)
+
+  def withOperation[A](
+    operation: String,
+    params: ResolvedParameters,
+    operationMode: OperationMode
+  )(
+    body: => A
+  ): A =
+    withOperation(operation, Some(params), operationMode)(body)
+
+  def withOperation[A](
+    operation: String,
+    operationMode: OperationMode
+  )(
+    body: => A
+  ): A =
+    withOperation(operation, None, operationMode)(body)
 
   private def withOperation[A](
     operation: String,
-    params: Option[ResolvedParameters]
+    params: Option[ResolvedParameters],
+    operationMode: OperationMode
   )(
     body: => A
   ): A = {
     val previous = Option(_scope.get())
-    _scope.set(Scope(operation, params.flatMap(_request_override)))
+    _scope.set(Scope(operation, operationMode, params.flatMap(_request_override)))
     try body
     finally {
       previous match {
@@ -200,14 +240,20 @@ object DiagnosticPayloadExternalizer {
   def currentOperation: Option[String] =
     Option(_scope.get()).map(_.operation).filter(_.nonEmpty)
 
+  private[cncf] def currentOperationMode: Option[OperationMode] =
+    Option(_scope.get()).map(_.operationMode)
+
   private def currentOverride: Option[RequestOverride] =
     Option(_scope.get()).flatMap(_.overrideConfig)
 
   def fromGlobal: DiagnosticPayloadExternalizer =
+    fromGlobal(Option(_scope.get()).map(_.operationMode).getOrElse(RuntimeConfig.defaultOperationMode))
+
+  def fromGlobal(operationMode: OperationMode): DiagnosticPayloadExternalizer =
     org.goldenport.cncf.context.GlobalRuntimeContext.current
       .map(global => DiagnosticPayloadExternalizer(
-        global.config.diagnosticPayloadExternalizationConfig,
-        global.config.operationMode,
+        global.config.diagnosticPayloadExternalizationConfig.forOperationMode(operationMode),
+        operationMode,
         global.config.blobStoreConfig
       ))
       .getOrElse(DiagnosticPayloadExternalizer.disabled)

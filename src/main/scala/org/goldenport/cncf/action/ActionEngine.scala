@@ -33,7 +33,7 @@ import org.goldenport.schema.DataConfidentiality
  *  version Apr. 25, 2026
  *  version May. 17, 2026
  *  version Jun. 18, 2026
- * @version Jul. 24, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -88,7 +88,7 @@ class ActionEngine(
     }.flatMap { _ =>
       Consequence run {
         val params = _build_resolved_parameters(call)
-        DiagnosticPayloadExternalizer.withOperation(call.action.name, params) {
+        DiagnosticPayloadExternalizer.withOperation(call.action.name, params, ec.runtime.operationMode) {
         val actionstartedatnanos = System.nanoTime()
         runtime.setResolvedParameters(params)
         val inputattributes = _calltree_input_attributes(call, params)
@@ -245,7 +245,7 @@ class ActionEngine(
                       (actionendedatnanos - actionstartedatnanos) / 1000000L
                     )
                   )
-                  OpenTelemetryExporter.fromGlobal.exportActionTrace(
+                  OpenTelemetryExporter.fromGlobal(ec.runtime.operationMode).exportActionTrace(
                     operation = call.action.name,
                     calltree = builtcalltree,
                     jobId = ec.jobContext.jobId.map(_.value),

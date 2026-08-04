@@ -34,7 +34,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -687,9 +687,9 @@ case class ComponentLogic(
         ()
       },
       token = "component-runtime-context",
-      operationMode = global
-        .map(_.config.operationMode)
-        .getOrElse(RuntimeConfig.defaultOperationMode),
+      operationMode = ComponentLogic.runtimeOperationMode(
+        component.subsystem.map(_.runtimeOperationSecurityPolicyC)
+      ),
       transitionValidationHook = new PlannedTransitionValidationHook(
         component.stateMachinePlannerProvider
       )
@@ -747,6 +747,12 @@ case class ComponentLogic(
 }
 
 object ComponentLogic {
+  private[cncf] def runtimeOperationMode(
+    policy: Option[Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]]
+  ): org.goldenport.cncf.config.OperationMode =
+    policy.flatMap(_.toOption.map(_.operationMode))
+      .getOrElse(RuntimeConfig.defaultOperationMode)
+
   private enum OperationKind {
     case Query
     case Command

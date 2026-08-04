@@ -54,7 +54,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 25, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -1679,7 +1679,7 @@ final class InMemoryJobEngine(
       } else if (save) {
         ctx.observability.callTreeContext.build() match {
           case Some(tree) =>
-            _save_calltree(jobid, ObservabilityEngine.callTreeRecord(tree, Some(jobid.value)))
+            _save_calltree(jobid, ctx.runtime.operationMode, ObservabilityEngine.callTreeRecord(tree, Some(jobid.value)))
           case None =>
             _mark_calltree_not_saved(jobid, "not_captured")
         }
@@ -1690,11 +1690,12 @@ final class InMemoryJobEngine(
 
   private def _save_calltree(
     jobid: JobId,
+    operationMode: org.goldenport.cncf.config.OperationMode,
     record: Record
   ): Unit = {
     val json = RecordEncoder.json(record)
     val bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-    val externalizer = DiagnosticPayloadExternalizer.fromGlobal
+    val externalizer = DiagnosticPayloadExternalizer.fromGlobal(operationMode)
     val externalsummary =
       externalizer.externalizeText(
         operation = _job_operation_fqn(jobid),

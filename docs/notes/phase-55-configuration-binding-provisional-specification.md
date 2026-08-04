@@ -867,7 +867,7 @@ the remaining slice acceptance gate. Its first pass found only a formatting
 detail and missing manual-without-start executable regression; both are now
 corrected. Final focused re-review is clean and accepts GCF-09M.
 
-## GCF-09N Runtime Process-Exit Policy Projection (review-fix validated; focused re-review pending 2026-08-04)
+## GCF-09N Runtime Process-Exit Policy Projection (accepted after final focused re-review 2026-08-04)
 
 GCF-09N replaces the runtime process-exit path's direct
 `ResolvedConfiguration` reads with one Global, value-only
@@ -894,8 +894,9 @@ argument envelope while reusing the already resolved Global collection and its
 two value policies. Serialized `Test/compile` and the catalog/policy/bootstrap
 focused suites pass. The auto-archive regression observes and requires one
 Global-policy projection, so a recursive bootstrap restart cannot pass only by
-producing the same final repository policy. A fresh focused re-review remains
-required.
+producing the same final repository policy. Final focused re-review is clean
+and accepts GCF-09N; GCF-09 Step closure is complete, while GCF-10 and Phase 55
+closure remain pending.
 
 ## Ownership
 

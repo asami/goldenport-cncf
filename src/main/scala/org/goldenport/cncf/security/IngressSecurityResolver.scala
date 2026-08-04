@@ -22,7 +22,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -359,30 +359,12 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     global: GlobalRuntimeContext
   ): RuntimeContext.Context = {
     val assumptions = global.executionProfile.environmentAssumptions
-    val base = RuntimeContext.Context.default.copy(
+    RuntimeContext.Context.default.copy(
       formatting = RuntimeContext.FormattingContext.default
         .withLocale(assumptions.locale)
         .withTimezone(assumptions.timezone)
     )
-    val formatting0 = base.formatting
-    val formatting1 = _config_string(global, Vector("textus.locale", "cncf.locale"))
-      .flatMap(_parse_locale)
-      .map(formatting0.withLocale)
-      .getOrElse(formatting0)
-    val formatting2 = _config_string(global, Vector("textus.timeZone", "textus.timezone", "cncf.timeZone", "cncf.timezone"))
-      .flatMap(_parse_timezone)
-      .map(formatting1.withTimezone)
-      .getOrElse(formatting1)
-    base.copy(formatting = formatting2)
   }
-
-  private def _config_string(
-    global: GlobalRuntimeContext,
-    keys: Vector[String]
-  ): Option[String] =
-    keys.iterator
-      .flatMap(key => RuntimeConfig.getString(global.resolvedConfiguration, key))
-      .find(_.trim.nonEmpty)
 
   private def _is_truthy(p: String): Boolean = {
     val lower = Option(p).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
@@ -572,7 +554,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           disposeAction = _ => (),
           token = "ingress-security",
           context = _runtime_context_from_config(global),
-          operationMode = global.config.operationMode
+          operationMode = RuntimeConfig.defaultOperationMode
         )
         context
       case None =>

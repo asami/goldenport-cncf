@@ -8,7 +8,7 @@ import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.util.control.NonFatal
 import io.circe.Json
-import org.goldenport.cncf.config.OperationMode
+import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.{RuntimeMetricPoint, RuntimeMetricsSnapshot}
 import org.goldenport.record.Record
@@ -16,7 +16,7 @@ import org.goldenport.observation.calltree.CallTree
 
 /*
  * @since   May. 11, 2026
- * @version May. 11, 2026
+ * @version Aug.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OpenTelemetryExportConfig(
@@ -28,6 +28,9 @@ final case class OpenTelemetryExportConfig(
   logsEnabled: Boolean = false,
   validationError: Option[String] = None
 ) {
+  def forOperationMode(operationMode: OperationMode): OpenTelemetryExportConfig =
+    copy(validationError = OpenTelemetryExportConfig._validation_error(this, operationMode))
+
   def normalizedEndpoint(operationMode: OperationMode): Option[String] =
     endpoint.map(_.trim).filter(_.nonEmpty).orElse {
       Option.when(enabled && operationMode != OperationMode.Production)(
@@ -61,15 +64,27 @@ object OpenTelemetryExportConfig {
       metricsEnabled = metricsEnabled.getOrElse(true),
       logsEnabled = logsEnabled.getOrElse(false)
     )
-    val error =
-      if (enabled && normalizedProtocol != ProtocolOtlpHttp)
-        Some(s"unsupported OpenTelemetry protocol: $normalizedProtocol")
-      else if (enabled && operationMode == OperationMode.Production && config.normalizedEndpoint(operationMode).isEmpty)
-        Some("textus.observability.otel.endpoint is required when OpenTelemetry export is enabled in production")
-      else
-        None
-    config.copy(validationError = error)
+    config.forOperationMode(operationMode)
   }
+
+  private def _static_validation_error(
+    config: OpenTelemetryExportConfig
+  ): Option[String] =
+    Option.when(config.enabled && config.protocol != ProtocolOtlpHttp)(
+      s"unsupported OpenTelemetry protocol: ${config.protocol}"
+    )
+
+  private def _validation_error(
+    config: OpenTelemetryExportConfig,
+    operationMode: OperationMode
+  ): Option[String] =
+    _static_validation_error(config).orElse {
+      Option.when(
+        config.enabled && operationMode == OperationMode.Production && config.normalizedEndpoint(operationMode).isEmpty
+      )(
+        "textus.observability.otel.endpoint is required when OpenTelemetry export is enabled in production"
+      )
+    }
 }
 
 final case class OpenTelemetryExportResult(
@@ -81,8 +96,11 @@ final case class OpenTelemetryExportResult(
 
 object OpenTelemetryExporter {
   def fromGlobal: OpenTelemetryExporter =
+    fromGlobal(RuntimeConfig.defaultOperationMode)
+
+  def fromGlobal(operationMode: OperationMode): OpenTelemetryExporter =
     org.goldenport.cncf.context.GlobalRuntimeContext.current
-      .map(global => OpenTelemetryExporter(global.config.openTelemetryExportConfig, global.config.operationMode))
+      .map(global => OpenTelemetryExporter(global.config.openTelemetryExportConfig.forOperationMode(operationMode), operationMode))
       .getOrElse(OpenTelemetryExporter.disabled)
 
   val disabled: OpenTelemetryExporter =

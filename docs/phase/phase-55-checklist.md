@@ -570,7 +570,7 @@ Evidence:
 ## GCF-09: Admitted Consumer Migration
 
 Stage Status:
-- Current status: IN_PROGRESS (GCF-09A repository bootstrap policy, GCF-09B
+- Current status: DONE (GCF-09A repository bootstrap policy, GCF-09B
   runtime Web policy, GCF-09C runtime Web descriptor migration, GCF-09D
   service-container runtime policy migration, GCF-09E component-development
   Web runtime projection, GCF-09F repository/bootstrap runtime projection,
@@ -583,7 +583,14 @@ Stage Status:
   policy; its phase-traceability review-fix is complete and second focused
   re-review clean; GCF-09M runtime execution-profile configuration projection
   accepted after final focused re-review; GCF-09N runtime process-exit policy
-  projection accepted after final focused re-review,
+  projection accepted after final focused re-review; GCF-09G ArtScene consumer
+  migration, GCF-09O runtime formatting authority closure, and GCF-09Q direct
+  ingress operation-mode authority closure accepted after focused review-fix
+  and final re-review; GCF-09P final consumer/adapter closure ledger accepted
+  after second focused re-review; GCF-09R normal Component and observability
+  operation-mode projection accepted after two review-fix rounds and final
+  focused re-review; final Step review and changed-repository integration
+  validation clean,
   2026-08-04)
 - Owner: assigned from the GCF-01 repository inventory
 - Entry rule: the GCF-08 canonical/environment/argv/file/launcher/diagnostic
@@ -614,6 +621,11 @@ Stage Status:
   ArtScene Phase 12 baseline into the coordinated direct-consumer migration;
   `DescribeApplication.mode` and CML `ApplicationMode` remain presentation-only
   reporting vocabulary and never become Component configuration authority.
+- [x] GCF-09G: migrate the three frozen ArtScene direct consumers to generic
+  Subsystem datastore binding, capability-derived subject/authorization, and
+  ExecutionContext formatting; keep application mode presentation-only and
+  remove stale operator/specification claims of Component configuration
+  authority. Focused review-fix validation and final re-review are clean.
 - [x] GCF-09H: admit the canonical SystemNode shutdown drain timeout as a
   SubsystemInstance-only `Long` value; validate it before Node construction,
   apply typed override > resolved binding > default precedence, and prevent raw
@@ -645,12 +657,74 @@ Stage Status:
   is green, including an exact one-resolution auto-archive regression. Final
   focused re-review is clean with no actionable findings at accepted clean
   implementation baseline `61fc63ea09fce0c13b9a366393948cda20a19d07`.
-- [ ] Migrate remaining direct constructors and map access.
-- [ ] Migrate resolver, merge, and trace consumers.
-- [ ] Migrate admitted runtime and launcher boundary consumers.
-- [ ] Remove or confine temporary String adapters to external codecs.
-- [ ] Validate every admitted repository with focused and full tests.
-- [ ] Record deferred, unadmitted consumers without speculative mutation.
+- [x] GCF-09O: remove runtime formatting's raw `textus.locale` / `cncf.locale`
+  and timezone second authority from ingress and operation-response consumers;
+  both must use the locale/timezone already resolved by the admitted typed
+  execution profile, while explicit authenticated/fixed-user formatting
+  overlays retain their established precedence.
+- [x] GCF-09P: freeze the final consumer/adapter closure ledger across every
+  admitted repository; prove that remaining String access is confined to the
+  generic resolver core, external launcher codecs, explicit direct-call
+  compatibility APIs, diagnostics/protocol parsing, or named unadmitted
+  parameter families, and record those deferred families without speculative
+  catalog or runtime mutation.
+- [x] GCF-09Q: remove the raw operation-mode authority from the global-only
+  ingress compatibility constructor; admitted Subsystem execution continues
+  to carry the GCF-09L typed operation policy, while a direct no-Subsystem
+  ingress call receives the framework default rather than reviving raw
+  `RuntimeConfig.operationMode`.
+- [x] GCF-09R: project the GCF-09L typed operation mode into the normal
+  Component runtime and observability decisions; component execution,
+  OpenTelemetry, diagnostic-payload externalization, and Metrics export must
+  not consult raw `RuntimeConfig.operationMode`, including under conflicting
+  typed/raw values. Review-fix closes implicit diagnostic override and
+  pre-admission Metrics capture failures; final focused re-review is clean.
+
+GCF-09G/O/P/Q/R accepted-slice evidence:
+- GCF-09G ArtScene review-fix focused validation passed 18/18 across
+  `ArtSceneApplicationModeSpec`, `ArtSceneLauncherAssemblySpec`, and
+  `ArtScenePersistenceSpec` at serialized invocation
+  `19313-20260804T023727Z`; final focused re-review is clean.
+- GCF-09O runtime formatting authority validation passed 42/42 across
+  `IngressSecurityResolverSpec` and `OperationResponseFormatterSpec` at
+  serialized invocation `39653-20260804T031007Z`; final focused re-review is
+  clean after executable-specification structure repair.
+- GCF-09Q direct global ingress operation-mode validation passed 35/35 in
+  `IngressSecurityResolverSpec` at serialized invocation
+  `50937-20260804T033457Z`; final focused re-review is clean.
+- GCF-09P records all remaining raw/String access under one exclusive boundary
+  class, including admitted-family direct compatibility decoders and complete
+  deferred `RuntimeConfig` families. Reproducible `rg` audits and
+  `git diff --check` pass; second focused re-review is clean. No SBT was
+  required for this documentation-only Slice.
+- GCF-09R `Test/compile` passed at serialized invocation
+  `81686-20260804T043852Z`; focused Component/observability, raw-config,
+  formatter, and ingress validation passed 111/111 across five suites at
+  `82089-20260804T043943Z`. Direct-constructor diagnostic override coverage
+  passed 4/4 at `84123-20260804T044428Z`; final focused re-review is clean.
+- [x] Migrate remaining direct constructors and map access.
+- [x] Migrate resolver, merge, and trace consumers.
+- [x] Migrate admitted runtime and launcher boundary consumers.
+- [x] Remove or confine temporary String adapters to external codecs.
+- [x] Validate both changed repositories with `Test/compile` and
+  behavior-focused Step acceptance tests; reserve Phase-wide full validation
+  for GCF-10/Phase closure.
+- [x] Record deferred, unadmitted consumers without speculative mutation.
+
+GCF-09 Step closure evidence:
+- Final independent Step review is clean after correcting the stale formatter
+  spec name and accepted-Slice range in this checklist. Strategy and Phase 55
+  specification remain unchanged.
+- CNCF `Test/compile` passed at serialized invocation
+  `81686-20260804T043852Z`; the final five-suite Component/observability,
+  runtime-config, formatter, and ingress integration set passed 111/111 at
+  `90332-20260804T045730Z`.
+- ArtScene `Test/compile` passed at serialized invocation
+  `89779-20260804T045627Z`; the final three-suite consumer acceptance set
+  passed 18/18 at `90032-20260804T045651Z`.
+- Phase-wide full validation is intentionally not claimed by this Step; it
+  remains a GCF-10/Phase closure gate.
+- `docs/journal/2026/08/2026-08-04-phase-55-gcf09-admitted-consumer-migration.md`.
 
 GCF-09J evidence:
 - GCF-09J `Test/compile` passed at serial invocation
@@ -716,7 +790,8 @@ GCF-09M accepted-slice evidence:
   controlled Subsystem profile, and corrects the local naming/spec details.
   Serialized `Test/compile` passed at `49811-20260803T185335Z`; focused
   catalog/projection/bootstrap validation passed 25/25 at
-  `50287-20260803T185422Z`. Focused re-review is pending.
+  `50287-20260803T185422Z`. At that validation point, focused re-review
+  remained pending.
   The first focused re-review admitted only a residual indentation P3 and
   missing manual-without-start regression assertion. REVIEW_FIX corrected both;
   serialized `Test/compile` passed at `53110-20260803T185922Z` and focused
@@ -866,6 +941,6 @@ Evidence:
 Phase 55 is IN PROGRESS. GCF-01 through GCF-08 are DONE. GCF-08A–L completed
 canonical/environment/argv admission, raw-preserving consolidated/split-file
 admission, opaque launcher transport, and serialized trace diagnostics.
-GCF-09 is IN_PROGRESS with
-GCF-09A–F and GCF-09H–N complete; its remaining consumer and adapter
-migrations are still required before GCF-10 can start.
+GCF-09 is DONE with GCF-09A–R accepted and final Step review/integration
+validation clean. GCF-10 has not started, and Phase-wide full validation and
+Phase closure remain pending.
