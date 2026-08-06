@@ -75,6 +75,11 @@ The CLI form should use the same key:
 
 This override is intended for debugging, experiments, and temporary cases where the operator needs to test a descriptor outside the packaged SAR.
 
+An explicitly configured assembly descriptor is strict: a missing, empty,
+unreadable, or malformed source is configuration-invalid and startup must fail
+structurally. Absence remains valid only when no assembly descriptor path was
+configured, or when a valid CAR has no component-local assembly descriptor.
+
 Effective assembly precedence is:
 
 1. component CAR `assembly-descriptor.*` defaults

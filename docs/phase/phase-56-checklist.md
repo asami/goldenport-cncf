@@ -1,6 +1,7 @@
 # Phase 56 Checklist - Namespace-qualified Component Identity and Derived Coordinates
 
-status=planned
+status=in-progress
+started_at=2026-08-06
 phase=[Phase 56 - Namespace-qualified Component Identity and Derived Coordinates](phase-56.md)
 planning_journal=[Phase 56 Identity Planning and Phase Renumbering](../journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md)
 entry_handoff=[Current Work Closeout before Phase 56](../journal/2026/08/2026-08-06-current-work-closeout-before-phase-56.md)
@@ -10,10 +11,16 @@ starts. Only one stage may be `IN_PROGRESS` at a time. No implementation stage
 starts until the current work described by the entry handoff reaches its
 bounded stopping point.
 
+Entry evidence: the [closed entry handoff](../journal/2026/08/2026-08-06-current-work-closeout-before-phase-56.md)
+records the accepted pre-documentation baseline accumulator diff SHA-256
+`da02ef464cb73e745f02a3439975318793375b7dbcf7945ab75e9ad40173e6eb` at HEAD
+`e9b00c9ba0f209e2969947c4e454ce769366d625`; this is not the eventual Step
+commit hash.
+
 ## CID-01: Inventory and Executable Contract Freeze
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: CNCF, Cozy/sbt-cozy, CAR, repository, launcher, CBD, and BoK maintainers
 - Entry rule: Phase 55 and its admitted closeout work are closed.
 - Completion rule: Existing authorities, projections, ambiguities, and exact

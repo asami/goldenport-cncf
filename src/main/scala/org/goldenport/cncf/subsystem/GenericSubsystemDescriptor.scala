@@ -4,6 +4,7 @@ import java.net.URI
 import java.nio.file.{FileSystems, Files, Path}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
@@ -18,7 +19,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -359,6 +360,9 @@ object GenericSubsystemDescriptor {
     val rec = source.record
     _override_bindings_from_record_c(source.path.getOrElse(descriptor.path), rec).flatMap { bindings =>
       for {
+        runtime <- _optional_runtime_c(rec)
+        security <- _security_value(rec)
+        builtin <- _optional_builtin_c(rec)
         rulesets <- _rule_sets_c(rec)
         capabilityproviders <- _subsystem_capability_providers_c(rec)
       } yield {
@@ -369,17 +373,9 @@ object GenericSubsystemDescriptor {
           extensions = descriptor.extensions ++ _string_map_value(rec, List("extension", "extensions")),
           config = descriptor.config ++ _string_map_value(rec, List("config")),
           wiring = _merge_record(descriptor.wiring, _wiring_value(rec)),
-          runtime = _merge_runtime(
-            descriptor.runtime,
-            _record_value(rec, List("runtime")).flatMap(r => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).toOption)
-          ),
-          security = _merge_security(
-            descriptor.security,
-            _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption)
-          ),
-          builtin = _record_value(rec, List("builtin", "builtins"))
-            .flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption)
-            .orElse(descriptor.builtin),
+          runtime = _merge_runtime(descriptor.runtime, runtime),
+          security = _merge_security(descriptor.security, security),
+          builtin = builtin.orElse(descriptor.builtin),
           operationAuthorization = descriptor.operationAuthorization ++ _operation_authorization_value(rec),
           ruleSets = if (_has_rule_sets(rec)) rulesets else descriptor.ruleSets,
           subsystemCapabilityProviders = if (_has_subsystem_capability_providers(rec)) capabilityproviders else descriptor.subsystemCapabilityProviders,
@@ -797,6 +793,29 @@ object GenericSubsystemDescriptor {
     else
       _load_record(path, "config")
 
+  /**
+   * Loads an explicitly configured assembly descriptor. Unlike the
+   * compatibility Option loader, a missing, empty, unreadable, or malformed
+   * configured source is an invalid configuration rather than an absence.
+   */
+  def loadAssemblyDescriptorC(
+    path: Path
+  ): Consequence[GenericSubsystemAssemblyDescriptorSource] =
+    if (path == null)
+      Consequence.configurationInvalid("assembly descriptor path is invalid")
+    else if (!Files.exists(path))
+      Consequence.resourceNotFound(s"assembly descriptor path does not exist: ${path}")
+    else
+      try {
+        _load_assembly_descriptor_consequence(path, "config").flatMap {
+          case Some(source) => Consequence.success(source)
+          case None => Consequence.resourceNotFound(s"assembly descriptor not found: ${path}")
+        }
+      } catch {
+        case NonFatal(_) =>
+          Consequence.resourceInvalid(s"assembly descriptor cannot be loaded: ${path}")
+      }
+
   def loadAdjacentAssemblyDescriptor(path: Path): Option[GenericSubsystemAssemblyDescriptorSource] =
     if (!Files.exists(path))
       None
@@ -902,6 +921,24 @@ object GenericSubsystemDescriptor {
       }
     }
 
+  private def _optional_runtime_c(
+    rec: Record
+  ): Consequence[Option[GenericSubsystemRuntimeBinding]] =
+    _optional_record_decode_c(
+      rec,
+      List("runtime"),
+      "runtime"
+    )(summon[RecordDecoder[GenericSubsystemRuntimeBinding]])
+
+  private def _optional_builtin_c(
+    rec: Record
+  ): Consequence[Option[GenericSubsystemBuiltinBinding]] =
+    _optional_record_decode_c(
+      rec,
+      List("builtin", "builtins"),
+      "builtin"
+    )(summon[RecordDecoder[GenericSubsystemBuiltinBinding]])
+
   private def _load_assembly_descriptor_from_archive(
     path: Path,
     source: String
@@ -949,12 +986,9 @@ object GenericSubsystemDescriptor {
         case Some(file) =>
           DescriptorRecordLoader.load(file).flatMap { records =>
             records.headOption.map { rec =>
-              val assemblydescriptor = _resolve_assembly_descriptor_file(root).flatMap { file =>
-                DescriptorRecordLoader.load(file).toOption.flatMap(_.headOption).map { record =>
-                  GenericSubsystemAssemblyDescriptorSource(record, "sar", Some(path))
-                }
+              _load_assembly_descriptor_consequence(root, "sar").flatMap { assemblydescriptor =>
+                _from_record(path, rec, assemblydescriptor.map(_.copy(path = Some(path))))
               }
-              _from_record(path, rec, assemblydescriptor)
             }.getOrElse(Consequence.resourceInvalid(s"subsystem descriptor is empty in archive: ${path}"))
           }
         case None =>
@@ -1512,6 +1546,31 @@ object GenericSubsystemDescriptor {
       case Some(_) => Consequence.resourceInvalid(s"${label} must be a record or list of records")
     }
 
+  private def _decode_records_c[A](
+    value: Option[Any],
+    label: String
+  )(
+    decoder: RecordDecoder[A]
+  ): Consequence[Vector[A]] =
+    _records_value_c(value, label).flatMap(records => _sequence(records.map(decoder.fromRecord)))
+
+  private def _optional_record_decode_c[A](
+    rec: Record,
+    keys: List[String],
+    label: String
+  )(
+    decoder: RecordDecoder[A]
+  ): Consequence[Option[A]] =
+    keys.iterator.map(rec.getAny).collectFirst { case Some(value) => value } match {
+      case Some(value) =>
+        _any_to_record(value) match {
+          case Some(record) => decoder.fromRecord(record).map(Some(_))
+          case None => Consequence.resourceInvalid(s"${label} must be a record")
+        }
+      case None =>
+        Consequence.success(None)
+    }
+
   private def _has_rule_sets(rec: Record): Boolean =
     List("ruleSets", "rule_sets", "rule-sets").exists(rec.getAny(_).nonEmpty)
 
@@ -1761,22 +1820,23 @@ object GenericSubsystemDescriptor {
 
   given RecordDecoder[GenericSubsystemAuthenticationBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemAuthenticationBinding] = {
-      val providers = rec.getAny("providers") match {
-        case Some(xs: Seq[?]) =>
-          xs.toVector.flatMap(_any_to_record).flatMap(r => summon[RecordDecoder[GenericSubsystemAuthenticationProviderBinding]].fromRecord(r).toOption)
-        case _ =>
-          Vector.empty
-      }
-      Consequence.success(
+      for {
+        providers <- _decode_records_c(
+          rec.getAny("providers"),
+          "authentication.providers"
+        )(summon[RecordDecoder[GenericSubsystemAuthenticationProviderBinding]])
+        localsubject <- _optional_record_decode_c(
+          rec,
+          List("local_subject", "localSubject"),
+          "authentication.local_subject"
+        )(summon[RecordDecoder[GenericSubsystemLocalSubjectBinding]])
+      } yield
         GenericSubsystemAuthenticationBinding(
           convention = _string(rec, "convention"),
           fallbackPrivilege = _string(rec, "fallback_privilege", "fallbackPrivilege"),
-          localSubject = _record_value(rec, List("local_subject", "localSubject")).flatMap { subject =>
-            summon[RecordDecoder[GenericSubsystemLocalSubjectBinding]].fromRecord(subject).toOption
-          },
+          localSubject = localsubject,
           providers = providers
         )
-      )
     }
 
   given RecordDecoder[GenericSubsystemLocalSubjectBinding] with
@@ -1819,17 +1879,11 @@ object GenericSubsystemDescriptor {
 
   given RecordDecoder[GenericSubsystemMessageDeliveryBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemMessageDeliveryBinding] = {
-      val providers = rec.getAny("providers") match {
-        case Some(xs: Seq[?]) =>
-          xs.toVector.flatMap(_any_to_record).flatMap(r => summon[RecordDecoder[GenericSubsystemMessageDeliveryProviderBinding]].fromRecord(r).toOption)
-        case _ =>
-          Vector.empty
-      }
-      Consequence.success(
-        GenericSubsystemMessageDeliveryBinding(
-          providers = providers
-        )
-      )
+      _decode_records_c(
+        rec.getAny("providers"),
+        "message-delivery.providers"
+      )(summon[RecordDecoder[GenericSubsystemMessageDeliveryProviderBinding]])
+        .map(GenericSubsystemMessageDeliveryBinding.apply)
     }
 
   given RecordDecoder[GenericSubsystemUserNotificationProviderBinding] with
@@ -1878,12 +1932,10 @@ object GenericSubsystemDescriptor {
 
   given RecordDecoder[GenericSubsystemUserNotificationBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemUserNotificationBinding] = {
-      val providers = rec.getAny("providers") match {
-        case Some(xs: Seq[?]) =>
-          xs.toVector.flatMap(_any_to_record).flatMap(r => summon[RecordDecoder[GenericSubsystemUserNotificationProviderBinding]].fromRecord(r).toOption)
-        case _ =>
-          Vector.empty
-      }
+      val providers = _decode_records_c(
+        rec.getAny("providers"),
+        "user-notification.providers"
+      )(summon[RecordDecoder[GenericSubsystemUserNotificationProviderBinding]])
       val eventforwarding = rec.getAny("eventForwarding").orElse(rec.getAny("event_forwarding")) match {
         case Some(xs: Seq[?]) =>
           _sequence(xs.toVector.map { x =>
@@ -1899,22 +1951,24 @@ object GenericSubsystemDescriptor {
         case None =>
           Consequence.success(Vector.empty)
       }
-      eventforwarding.map { eventforwarding =>
+      for {
+        providers0 <- providers
+        eventforwarding0 <- eventforwarding
+      } yield {
         GenericSubsystemUserNotificationBinding(
-          providers = providers,
-          eventForwarding = eventforwarding
+          providers = providers0,
+          eventForwarding = eventforwarding0
         )
       }
     }
 
   given RecordDecoder[GenericSubsystemRuntimeBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemRuntimeBinding] =
-      (_record_value(rec, List("user_notification", "userNotification")) match {
-        case Some(r) =>
-          summon[RecordDecoder[GenericSubsystemUserNotificationBinding]].fromRecord(r).map(Some(_))
-        case None =>
-          Consequence.success(None)
-      }).map { userNotification =>
+      _optional_record_decode_c(
+        rec,
+        List("user_notification", "userNotification"),
+        "runtime.user_notification"
+      )(summon[RecordDecoder[GenericSubsystemUserNotificationBinding]]).map { userNotification =>
         GenericSubsystemRuntimeBinding(
           userNotification = userNotification
         )
@@ -2043,18 +2097,23 @@ object GenericSubsystemDescriptor {
 
   given RecordDecoder[GenericSubsystemSecurityBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemSecurityBinding] = {
-      val auth = _record_value(rec, List("authentication"))
-        .flatMap(r => summon[RecordDecoder[GenericSubsystemAuthenticationBinding]].fromRecord(r).toOption)
-      val messagedelivery = _record_value(rec, List("message_delivery", "messageDelivery", "notification"))
-        .flatMap(r => summon[RecordDecoder[GenericSubsystemMessageDeliveryBinding]].fromRecord(r).toOption)
-      val authorization =
-        _record_value(rec, List("authorization")) match {
-          case Some(r) =>
-            summon[RecordDecoder[GenericSubsystemAuthorizationBinding]].fromRecord(r).map(Some(_))
-          case None =>
-            Consequence.success(None)
-        }
-      authorization.map(a => GenericSubsystemSecurityBinding(auth, messagedelivery, a))
+      for {
+        auth <- _optional_record_decode_c(
+          rec,
+          List("authentication"),
+          "security.authentication"
+        )(summon[RecordDecoder[GenericSubsystemAuthenticationBinding]])
+        messagedelivery <- _optional_record_decode_c(
+          rec,
+          List("message_delivery", "messageDelivery", "notification"),
+          "security.message_delivery"
+        )(summon[RecordDecoder[GenericSubsystemMessageDeliveryBinding]])
+        authorization <- _optional_record_decode_c(
+          rec,
+          List("authorization"),
+          "security.authorization"
+        )(summon[RecordDecoder[GenericSubsystemAuthorizationBinding]])
+      } yield GenericSubsystemSecurityBinding(auth, messagedelivery, authorization)
     }
 
   given RecordDecoder[GenericSubsystemBuiltinBinding] with
@@ -2074,11 +2133,9 @@ object GenericSubsystemDescriptor {
             if (bindings.isEmpty)
               Consequence.argumentMissing("component bindings")
             else for {
-              runtime <- _record_value(rec, List("runtime")) match {
-                case Some(r) => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).map(Some(_))
-                case None => Consequence.success(None)
-              }
+              runtime <- _optional_runtime_c(rec)
               security <- _security_value(rec)
+              builtin <- _optional_builtin_c(rec)
               rulesets <- _rule_sets_c(rec)
               capabilityproviders <- _subsystem_capability_providers_c(rec)
             } yield {
@@ -2091,7 +2148,7 @@ object GenericSubsystemDescriptor {
                 wiring = _wiring_value(rec),
                 runtime = runtime,
                 security = security,
-                builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption),
+                builtin = builtin,
                 operationAuthorization = _operation_authorization_value(rec),
                 ruleSets = rulesets,
                 subsystemCapabilityProviders = capabilityproviders
@@ -2106,10 +2163,9 @@ object GenericSubsystemDescriptor {
   private def _security_value(
     rec: Record
   ): Consequence[Option[GenericSubsystemSecurityBinding]] =
-    _record_value(rec, List("security")) match {
-      case Some(r) =>
-        summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).map(Some(_))
-      case None =>
-        Consequence.success(None)
-    }
+    _optional_record_decode_c(
+      rec,
+      List("security"),
+      "security"
+    )(summon[RecordDecoder[GenericSubsystemSecurityBinding]])
 }

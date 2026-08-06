@@ -18,7 +18,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Aug.  3, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -151,22 +151,7 @@ object GenericSubsystemFactory {
                 case None => Consequence.success(None)
               }
             ) {
-              RuntimeConfig
-                .getString(configuration, RuntimeConfig.componentNameKey)
-                .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.runtimeComponentNameKey))
-                .map(_.trim)
-                .filter(_.nonEmpty)
-                .map { name =>
-                  _with_assembly_descriptor_override_c(
-                    GenericSubsystemDescriptor(
-                      path = Paths.get(".").toAbsolutePath.normalize,
-                      subsystemName = name,
-                      componentBindings = Vector(GenericSubsystemComponentBinding(name))
-                    ),
-                    configuration
-                  ).map(Some(_))
-                }
-                .getOrElse(Consequence.success(None))
+              _terminal_configured_component_or_assembly_descriptor_c(configuration)
             }
           }
         }
@@ -194,7 +179,7 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration,
     policy: RepositoryBootstrapPolicy
   ): Consequence[Option[GenericSubsystemDescriptor]] =
-    _or_else(_runtime_component_dev_descriptor_c(policy)) {
+    _or_else(_runtime_component_dev_descriptor_c(configuration, policy)) {
       _or_else(_runtime_load_descriptor_c(configuration, policy)) {
         _or_else(_runtime_named_descriptor_c(configuration, policy)) {
           _or_else(
@@ -217,22 +202,7 @@ object GenericSubsystemFactory {
                 case None => Consequence.success(None)
               }
             ) {
-              RuntimeConfig
-                .getString(configuration, RuntimeConfig.componentNameKey)
-                .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.runtimeComponentNameKey))
-                .map(_.trim)
-                .filter(_.nonEmpty)
-                .map { name =>
-                  _with_assembly_descriptor_override_c(
-                    GenericSubsystemDescriptor(
-                      path = Paths.get(".").toAbsolutePath.normalize,
-                      subsystemName = name,
-                      componentBindings = Vector(GenericSubsystemComponentBinding(name))
-                    ),
-                    configuration
-                  ).map(Some(_))
-                }
-                .getOrElse(Consequence.success(None))
+              _terminal_configured_component_or_assembly_descriptor_c(configuration)
             }
           }
         }
@@ -266,6 +236,7 @@ object GenericSubsystemFactory {
     }
 
   private def _runtime_component_dev_descriptor_c(
+    configuration: ResolvedConfiguration,
     policy: RepositoryBootstrapPolicy
   ): Consequence[Option[GenericSubsystemDescriptor]] =
     _runtime_component_dev_dir_path(policy) match {
@@ -273,7 +244,9 @@ object GenericSubsystemFactory {
         ComponentRepository.ComponentDevDirRepository.validate(path).flatMap { _ =>
           ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(path).headOption match {
             case Some(descriptor) =>
-              _development_component_descriptor_to_subsystem_c(path, descriptor).map(Some(_))
+              _development_component_descriptor_to_subsystem_c(path, descriptor)
+                .flatMap(_with_assembly_descriptor_override_c(_, configuration))
+                .map(Some(_))
             case None =>
               Consequence.resourceInvalid(
                 s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
@@ -294,7 +267,9 @@ object GenericSubsystemFactory {
         ComponentRepository.ComponentDevDirRepository.validate(path).flatMap { _ =>
           ComponentRepository.ComponentDevDirRepository.devComponentDescriptors(path).headOption match {
             case Some(descriptor) =>
-              _development_component_descriptor_to_subsystem_c(path, descriptor).map(Some(_))
+              _development_component_descriptor_to_subsystem_c(path, descriptor)
+                .flatMap(_with_assembly_descriptor_override_c(_, configuration))
+                .map(Some(_))
             case None =>
               Consequence.resourceInvalid(
                 s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
@@ -306,6 +281,60 @@ object GenericSubsystemFactory {
         }
       case None => Consequence.success(None)
     }
+
+  private def _assembly_descriptor_c(
+    configuration: ResolvedConfiguration
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    _assembly_descriptor_path(configuration) match {
+      case Some(path) =>
+        GenericSubsystemDescriptor.loadAssemblyDescriptorC(path).flatMap { source =>
+          GenericSubsystemDescriptor.applyAssemblyOverrideC(
+            GenericSubsystemDescriptor(
+              path = path.toAbsolutePath.normalize,
+              subsystemName = "configured-assembly"
+            ),
+            source
+          ).flatMap { descriptor =>
+            if (descriptor.componentBindings.nonEmpty)
+              Consequence.success(Some(descriptor))
+            else
+              RuntimeTestDescriptor.load(configuration).flatMap {
+                case Some(_) => Consequence.success(Some(descriptor))
+                case None =>
+                  Consequence.configurationInvalid(
+                    "configured assembly descriptor requires a component name or non-empty components binding"
+                  )
+              }
+          }
+        }
+      case None => Consequence.success(None)
+    }
+
+  private def _terminal_configured_component_or_assembly_descriptor_c(
+    configuration: ResolvedConfiguration
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    _configured_component_name(configuration) match {
+      case Some(name) =>
+        _with_assembly_descriptor_override_c(
+          GenericSubsystemDescriptor(
+            path = Paths.get(".").toAbsolutePath.normalize,
+            subsystemName = name,
+            componentBindings = Vector(GenericSubsystemComponentBinding(name))
+          ),
+          configuration
+        ).map(Some(_))
+      case None =>
+        _assembly_descriptor_c(configuration)
+    }
+
+  private def _configured_component_name(
+    configuration: ResolvedConfiguration
+  ): Option[String] =
+    RuntimeConfig
+      .getString(configuration, RuntimeConfig.componentNameKey)
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.runtimeComponentNameKey))
+      .map(_.trim)
+      .filter(_.nonEmpty)
 
   private def _or_else[A](
     lhs: Consequence[Option[A]]
@@ -512,6 +541,22 @@ object GenericSubsystemFactory {
             aliasResolver,
             repositoryspecs
           )
+        }
+      case None =>
+        Consequence.configurationInvalid(
+          "runtime repository bootstrap policy has not been admitted"
+        )
+    }
+
+  private[cncf] def runtimeAdmitDescriptorC(
+    descriptor: GenericSubsystemDescriptor,
+    configuration: ResolvedConfiguration,
+    repositoryBootstrapPolicy: Option[RepositoryBootstrapPolicy]
+  ): Consequence[GenericSubsystemDescriptor] =
+    repositoryBootstrapPolicy match {
+      case Some(policy) =>
+        _runtime_repository_specs_for_descriptor_c(policy).flatMap { repositoryspecs =>
+          _admit_descriptor_c(descriptor, configuration, repositoryspecs)
         }
       case None =>
         Consequence.configurationInvalid(
@@ -812,15 +857,50 @@ object GenericSubsystemFactory {
     descriptor: GenericSubsystemDescriptor,
     configuration: ResolvedConfiguration,
     repositoryspecs: Vector[ComponentRepository.Specification] = Vector.empty
-  ): GenericSubsystemDescriptor = {
+  ): GenericSubsystemDescriptor =
+    _or_raise(_admit_descriptor_c(descriptor, configuration, repositoryspecs))
+
+  private def _admit_descriptor_c(
+    descriptor: GenericSubsystemDescriptor,
+    configuration: ResolvedConfiguration,
+    repositoryspecs: Vector[ComponentRepository.Specification]
+  ): Consequence[GenericSubsystemDescriptor] = {
     val specs =
       if (repositoryspecs.nonEmpty) repositoryspecs
       else _repository_specs_for_descriptor(configuration, descriptor)
-    _or_raise(SubsystemAssemblyAdmission.resolveC(
-      descriptor,
-      _admission_repository_specs(configuration, specs)
-    ))
+    _with_primary_component_defaults_c(descriptor, specs).flatMap { effective =>
+      SubsystemAssemblyAdmission.resolveC(
+        effective,
+        _admission_repository_specs(configuration, specs)
+      )
+    }
   }
+
+  private def _with_primary_component_defaults_c(
+    descriptor: GenericSubsystemDescriptor,
+    repositoryspecs: Vector[ComponentRepository.Specification]
+  ): Consequence[GenericSubsystemDescriptor] =
+    descriptor.componentBindings.headOption
+      .map { primary =>
+        repositoryspecs.foldLeft(Consequence.success(Option.empty[GenericSubsystemDescriptor])) { (z, repository) =>
+          z.flatMap {
+            case some @ Some(_) => Consequence.success(some)
+            case None => repository.resolveComponentSubsystemDefaultsC(primary.componentName, primary.version)
+          }
+        }.flatMap {
+          defaults =>
+            val base = defaults
+              .map(GenericSubsystemDescriptor.mergeComponentDefaults(_, descriptor))
+              .getOrElse(descriptor)
+            descriptor.assemblyDescriptor
+              .filterNot(source => defaults.exists(default => source.path.exists(
+                _.toAbsolutePath.normalize == default.path.toAbsolutePath.normalize
+              )))
+              .map(GenericSubsystemDescriptor.applyAssemblyOverrideC(base, _))
+              .getOrElse(Consequence.success(base))
+        }
+      }
+      .getOrElse(Consequence.success(descriptor))
 
   private def _merge_repository_specs(
     primary: Vector[ComponentRepository.Specification],
@@ -856,11 +936,12 @@ object GenericSubsystemFactory {
     descriptor: GenericSubsystemDescriptor,
     configuration: ResolvedConfiguration
   ): Consequence[GenericSubsystemDescriptor] = {
-    val assemblydescriptor = _assembly_descriptor_path(configuration)
-      .flatMap(GenericSubsystemDescriptor.loadAssemblyDescriptor)
-    val assemblydescriptorc = assemblydescriptor match {
-      case Some(record) => GenericSubsystemDescriptor.applyAssemblyOverrideC(descriptor, record)
-      case None => Consequence.success(descriptor)
+    val assemblydescriptorc = _assembly_descriptor_path(configuration) match {
+      case Some(path) =>
+        GenericSubsystemDescriptor.loadAssemblyDescriptorC(path)
+          .flatMap(GenericSubsystemDescriptor.applyAssemblyOverrideC(descriptor, _))
+      case None =>
+        Consequence.success(descriptor)
     }
     assemblydescriptorc.flatMap { effectiveassemblydescriptor =>
       RuntimeTestDescriptor.load(configuration).flatMap {

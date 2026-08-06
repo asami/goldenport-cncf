@@ -102,8 +102,12 @@ an identity value, profile path, or descriptor `local_subject` value.
 
 The resolver never moves data, selects a datastore, creates a marker, or
 automatically migrates any record. A clean isolated datastore with one effective
-new identity is admissible. Descriptor `local_subject` remains capability wiring
-and is not a second fixed-user identity authority.
+new identity is admissible. In fixed/standalone execution with zero admitted HOME
+profiles, descriptor `security.authentication.local_subject.id` supplies a
+bounded, non-secret default fixed-user candidate. Any admitted HOME profile is
+the sole explicit authority and suppresses the descriptor fallback; conflicting
+HOME identities still fail before the fallback can be considered. The fallback
+does not apply to authenticated or multi-user execution.
 
 ## Compatibility and ownership boundaries
 

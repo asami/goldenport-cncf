@@ -4076,7 +4076,11 @@ class CncfRuntime() extends GlobalObservable {
         for {
           profile <- subsystem.executionProfileForRuntimeConfigurationBindingsC(preflight.bindings)
           admitted <- RuntimeStandaloneUserProfileAdmission.admit(subsystem, profile, profileadmission)
-          profilecandidates <- StandaloneUserProfileBindingProjection.candidates(admitted, preflight.identity)
+          profilecandidates <- StandaloneUserProfileBindingProjection.runtimeCandidates(
+            admitted,
+            preflight.identity,
+            _fixed_profile_local_subject_id(profile, subsystem.descriptor)
+          )
           candidates <- ConfigurationBindingCandidates.from(preflight.candidates.bindings ++ profilecandidates.bindings)
           context <- CncfConfigurationResolutionContext.forSubsystem(preflight.identity)
           collection <- ConfigurationBindingResolver.resolve(candidates, context.generic)
@@ -4132,7 +4136,11 @@ class CncfRuntime() extends GlobalObservable {
       case Some(SubsystemExecutionProfile.Fixed) =>
         for {
           admitted <- StandaloneUserProfileResolver.resolve(SubsystemExecutionProfile.Fixed)
-          profilecandidates <- StandaloneUserProfileBindingProjection.candidates(admitted, preflight.identity)
+          profilecandidates <- StandaloneUserProfileBindingProjection.runtimeCandidates(
+            admitted,
+            preflight.identity,
+            _local_subject_id(descriptor)
+          )
           candidates <- ConfigurationBindingCandidates.from(preflight.candidates.bindings ++ profilecandidates.bindings)
           context <- CncfConfigurationResolutionContext.forSubsystem(preflight.identity)
           bindings <- ConfigurationBindingResolver.resolve(candidates, context.generic)
@@ -4158,6 +4166,25 @@ class CncfRuntime() extends GlobalObservable {
         }
       case None => Consequence.success(None)
     }
+
+  private def _local_subject_id(
+    descriptor: Option[GenericSubsystemDescriptor]
+  ): Option[String] =
+    descriptor
+      .flatMap(_.security)
+      .flatMap(_.authentication)
+      .flatMap(_.localSubject)
+      .map(_.id.trim)
+      .filter(_.nonEmpty)
+
+  private def _fixed_profile_local_subject_id(
+    profile: SubsystemExecutionProfile,
+    descriptor: Option[GenericSubsystemDescriptor]
+  ): Option[String] =
+    if (profile == SubsystemExecutionProfile.Fixed)
+      _local_subject_id(descriptor)
+    else
+      None
 
   private def _execution_profile_activation(
     configuration: ResolvedConfiguration,

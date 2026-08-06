@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
  *  version Jul. 31, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -945,6 +945,46 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       admitted shouldBe a[Consequence.Success[_]]
       subsystem.subsystemUserModeC.toOption.map(_.mode) shouldBe Some(SubsystemUserMode.Standalone)
       subsystem.resolvedStandaloneUserProfile.map(_.id) shouldBe Some("gcf09b-user")
+    }
+
+    "default a missing standalone HOME profile from the assembly local subject" in {
+      Given("an assembly-only standalone mode, a local subject, and no admitted HOME profile")
+      val cwd = Files.createTempDirectory("standalone-default-user-profile")
+      val assembly = cwd.resolve("assembly.yaml")
+      Files.writeString(
+        assembly,
+        """subsystem: standalone-default-runtime
+          |components: []
+          |config:
+          |  textus.subsystem.user-mode: standalone
+          |""".stripMargin
+      )
+      val bootstrap = CncfRuntime.bootstrap(cwd, Array(s"--textus.assembly.descriptor=$assembly", "command"))
+      val snapshot = bootstrap.configurationSnapshot.getOrElse(fail("runtime configuration snapshot is required"))
+      val subsystem = Subsystem("standalone-default-runtime", configuration = bootstrap.configuration).withDescriptor(
+        GenericSubsystemDescriptor(
+          path = assembly,
+          subsystemName = "standalone-default-runtime",
+          security = Some(GenericSubsystemSecurityBinding(authentication = Some(
+            GenericSubsystemAuthenticationBinding(
+              localSubject = Some(GenericSubsystemLocalSubjectBinding("standalone-local"))
+            )
+          )))
+        )
+      )
+
+      When("runtime admission resolves an empty HOME profile set")
+      val admitted = new CncfRuntime()._admit_runtime_configuration_snapshot(
+        snapshot,
+        bootstrap.assemblyConfiguration,
+        subsystem,
+        _ => Consequence.success(Vector.empty)
+      )
+
+      Then("the typed fixed-user profile uses the assembly local-subject id")
+      admitted shouldBe a[Consequence.Success[_]]
+      subsystem.subsystemUserModeC.toOption.map(_.mode) shouldBe Some(SubsystemUserMode.Standalone)
+      subsystem.resolvedStandaloneUserProfile.map(_.id) shouldBe Some("standalone-local")
     }
     }
   }

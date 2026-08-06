@@ -137,6 +137,25 @@ object ComponentRepository extends GlobalObservable {
       componentName: String
     ): Option[ComponentDescriptor] =
       resolveComponentDescriptor(componentName)
+    /**
+     * Resolves component-owned assembly defaults without activating a component
+     * or creating a class loader. A repository without the requested CAR is a
+     * successful absence; a selected CAR that cannot be loaded is a failure.
+     */
+    def resolveComponentSubsystemDefaultsC(
+      componentName: String
+    ): Consequence[Option[GenericSubsystemDescriptor]] =
+      resolveComponentSubsystemDefaultsC(componentName, None)
+    def resolveComponentSubsystemDefaultsC(
+      componentName: String,
+      version: Option[String]
+    ): Consequence[Option[GenericSubsystemDescriptor]] =
+      resolveComponentArchivePath(componentName, version) match {
+        case Some(path) =>
+          GenericSubsystemDescriptor.loadComponentArchive(path).map(Some(_))
+        case None =>
+          Consequence.success(None)
+      }
     def resolveComponentArchivePath(
       componentName: String
     ): Option[Path] = None
@@ -430,6 +449,12 @@ object ComponentRepository extends GlobalObservable {
       ): Option[ComponentDescriptor] =
         ComponentRepository.resolveComponentDescriptorFromComponentDir(baseDir, componentName)
 
+      override def resolveComponentSubsystemDefaultsC(
+        componentName: String,
+        version: Option[String]
+      ): Consequence[Option[GenericSubsystemDescriptor]] =
+        ComponentRepository.resolveComponentSubsystemDefaultsFromComponentDirC(baseDir, componentName, version)
+
       override def resolveComponentArchivePath(
         componentName: String
       ): Option[Path] =
@@ -482,6 +507,20 @@ object ComponentRepository extends GlobalObservable {
           GenericSubsystemDescriptor.loadComponentArchive(file).toOption.filter(_matches_subsystem_descriptor(_, subsystemName))
         else
           None
+
+      override def resolveComponentSubsystemDefaultsC(
+        componentName: String,
+        version: Option[String]
+      ): Consequence[Option[GenericSubsystemDescriptor]] =
+        if (Files.isRegularFile(file))
+          ComponentDescriptorLoader.loadArchive(file).flatMap { descriptor =>
+            if (_matches_component_descriptor(descriptor, componentName, version))
+              GenericSubsystemDescriptor.loadComponentArchive(file).map(Some(_))
+            else
+              Consequence.success(None)
+          }
+        else
+          Consequence.success(None)
 
       override def resolveComponentDescriptor(
         componentName: String
@@ -651,6 +690,19 @@ object ComponentRepository extends GlobalObservable {
       ): Option[ComponentDescriptor] =
         ComponentDevDirRepository.devComponentDescriptors(baseDir)
           .find(_matches_component_descriptor(_, componentName))
+
+      override def resolveComponentSubsystemDefaultsC(
+        componentName: String,
+        version: Option[String]
+      ): Consequence[Option[GenericSubsystemDescriptor]] =
+        resolveStaticComponentDescriptor(componentName) match {
+          case Some(descriptor) if _matches_component_descriptor(descriptor, componentName, version) =>
+            GenericSubsystemDescriptor
+              .fromComponentDescriptor(baseDir.resolve("src/main/car"), descriptor)
+              .map(Some(_))
+          case _ =>
+            Consequence.success(None)
+        }
     }
 
     def runtimeClasspathFile(base: Path): Path =
@@ -1182,6 +1234,51 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
+  def resolveComponentSubsystemDefaultsFromComponentDirC(
+    baseDir: Path,
+    componentName: String,
+    version: Option[String]
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    if (!Files.isDirectory(baseDir))
+      Consequence.success(None)
+    else
+      _resolve_requested_component_artifact(baseDir, componentName, version)
+        .filter(artifact => artifact.kind == ArtifactKind.Car || artifact.kind == ArtifactKind.CarDir)
+        .foldLeft(Consequence.success(Option.empty[GenericSubsystemDescriptor])) { (z, artifact) =>
+          z.flatMap {
+            case some @ Some(_) => Consequence.success(some)
+            case None => _component_subsystem_defaults_c(artifact, componentName, version)
+          }
+        }
+
+  private def _component_subsystem_defaults_c(
+    artifact: Artifact,
+    componentname: String,
+    version: Option[String]
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    artifact match {
+      case Artifact(path, ArtifactKind.Car) =>
+        ComponentDescriptorLoader.loadArchive(path).flatMap { descriptor =>
+          if (_matches_component_descriptor(descriptor, componentname, version))
+            GenericSubsystemDescriptor.loadComponentArchive(path).map(Some(_))
+          else
+            Consequence.success(None)
+        }
+      case Artifact(path, ArtifactKind.CarDir) =>
+        ComponentDescriptorLoader.load(path).flatMap { descriptors =>
+          descriptors.headOption match {
+            case Some(descriptor) if _matches_component_descriptor(descriptor, componentname, version) =>
+              GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor).map(Some(_))
+            case Some(_) =>
+              Consequence.success(None)
+            case None =>
+              Consequence.resourceInvalid(s"component descriptor is empty: ${path}")
+          }
+        }
+      case _ =>
+        Consequence.success(None)
+    }
+
   def resolveComponentArchivePathFromComponentDir(
     baseDir: Path,
     componentName: String
@@ -1239,7 +1336,7 @@ object ComponentRepository extends GlobalObservable {
     version: Option[String]
   ): Boolean =
     _matches_component_descriptor(descriptor, componentname) &&
-      version.forall(v => descriptor.version.forall(_ == v))
+      version.forall(descriptor.version.contains)
 
   private def _component_descriptors_for_artifact(
     params: ComponentCreate,

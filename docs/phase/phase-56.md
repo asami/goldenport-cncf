@@ -1,6 +1,7 @@
 # Phase 56 - Namespace-qualified Component Identity and Derived Coordinates
 
-status=planned
+status=in-progress
+started_at=2026-08-06
 planned_at=2026-08-06
 depends_on=[Phase 55](phase-55.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -150,7 +151,7 @@ not silently infer a namespace or rewrite project metadata.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| CID-01 | Inventory and contract freeze | Every authored/derived name, identity type, descriptor field, coordinate, path, alias, and consumer is inventoried; the exact SNAPSHOT migration cohort and non-SNAPSHOT deferral ledger are frozen with failing-first acceptance identities. | planned |
+| CID-01 | Inventory and contract freeze | Every authored/derived name, identity type, descriptor field, coordinate, path, alias, and consumer is inventoried; the exact SNAPSHOT migration cohort and non-SNAPSHOT deferral ledger are frozen with failing-first acceptance identities. | in-progress |
 | CID-02 | Typed identity and derivation core | Namespace, local ID, qualified Component ID, instance ID, and one shared projection library are implemented with validation and collision behavior. | planned |
 | CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | planned |
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. | planned |

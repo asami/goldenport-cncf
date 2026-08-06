@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  5, 2026
- * @version Aug.  5, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class FixedUserIdentitySafetyRuntimeSpec
@@ -23,9 +23,9 @@ final class FixedUserIdentitySafetyRuntimeSpec
     afterWord(s"in spec:phase-55-fixed-user-runtime-safety, example:$example, rules:$rules, phase:55, slice:GCF-07G")
 
   "Fixed-user runtime identity safety" should {
-    "E1 use the resolved standalone profile identity instead of descriptor local_subject" must _metadata("E1", "GCF07G-R1") {
+    "E1 prefer the resolved standalone profile identity to the descriptor local-subject fallback" must _metadata("E1", "GCF07G-R1") {
       "when one canonical Textus HOME profile is admitted for a standalone Subsystem" in {
-        Given("a descriptor local_subject that differs from the admitted profile identity")
+        Given("a descriptor fallback identity that differs from the admitted HOME profile identity")
         val cwd = _runtime_cwd()
         val subsystem = _subsystem("descriptor-local-subject")
 
@@ -36,16 +36,16 @@ final class FixedUserIdentitySafetyRuntimeSpec
           _ => Consequence.success(Vector(_profile(cwd, StandaloneUserProfileResolver.Layer.TextusHome, "profile-fixed-user")))
         )
 
-        Then("the resolved profile identity wins and the descriptor identity remains capability wiring only")
+        Then("the resolved HOME profile identity wins over the lower-authority descriptor fallback")
         result shouldBe a[Consequence.Success[_]]
         subsystem.resolvedStandaloneUserProfile.map(_.id) shouldBe Some("profile-fixed-user")
         subsystem.resolvedStandaloneUserProfile.map(_.id) should not contain "descriptor-local-subject"
       }
     }
 
-    "E2 reject conflicting HOME fixed identities before Subsystem binding or local_subject fallback" must _metadata("E2", "GCF07G-R2") {
+    "E2 reject conflicting HOME fixed identities before Subsystem binding or local-subject fallback" must _metadata("E2", "GCF07G-R2") {
       "when canonical Textus and CNCF HOME profiles carry different identities" in {
-        Given("a standalone descriptor with a non-authoritative local_subject")
+        Given("a standalone descriptor with a lower-authority local-subject fallback")
         val cwd = _runtime_cwd()
         val subsystem = _subsystem("descriptor-local-subject")
 
@@ -59,7 +59,7 @@ final class FixedUserIdentitySafetyRuntimeSpec
           ))
         )
 
-        Then("admission fails value-safely before a resolved profile or descriptor fallback is installed")
+        Then("admission fails value-safely before a resolved profile or fallback is installed")
         result shouldBe a[Consequence.Failure[_]]
         result.display should include ("explicit data migration")
         result.display should include ("isolated datastore")
@@ -69,6 +69,25 @@ final class FixedUserIdentitySafetyRuntimeSpec
         result.display.contains("descriptor-local-subject") shouldBe false
         result.display.contains("user-profile.yaml") shouldBe false
         subsystem.resolvedStandaloneUserProfile shouldBe None
+      }
+    }
+
+    "E3 admit the descriptor local-subject id only when no HOME profile is admitted" must _metadata("E3", "GCF07G-R3") {
+      "when a standalone Subsystem has a local subject and an empty HOME profile set" in {
+        Given("a fixed standalone descriptor with no admitted HOME profile")
+        val cwd = _runtime_cwd()
+        val subsystem = _subsystem("descriptor-local-subject")
+
+        When("runtime snapshot admission resolves the typed binding collection")
+        val result = new CncfRuntime()._admit_runtime_configuration_snapshot(
+          _snapshot(cwd),
+          subsystem,
+          _ => Consequence.success(Vector.empty)
+        )
+
+        Then("the descriptor local-subject id becomes the fixed-user fallback identity")
+        result shouldBe a[Consequence.Success[_]]
+        subsystem.resolvedStandaloneUserProfile.map(_.id) shouldBe Some("descriptor-local-subject")
       }
     }
   }

@@ -330,12 +330,16 @@ does not reveal identities, profile paths, or `local_subject` values.
 
 Resolution never moves data, selects a datastore, writes an identity marker, or
 performs automatic migration. A clean isolated datastore with one effective new
-identity is admissible. The descriptor `local_subject` is capability wiring,
-not a fallback fixed-user identity authority.
+identity is admissible. For fixed/standalone execution only, when zero HOME
+`StandaloneUserProfile` documents are admitted, descriptor
+`security.authentication.local_subject.id` supplies the default fixed-user
+candidate with bounded, non-secret descriptor-default provenance. An admitted
+HOME profile remains the sole explicit identity authority and suppresses that
+fallback; distinct HOME identities remain rejected before fallback admission.
 
 
 ----------------------------------------------------------------------
-10. Testing Expectations
+11. Testing Expectations
 ----------------------------------------------------------------------
 
 Executable specifications must cover:
@@ -368,7 +372,7 @@ Temporary test fixtures must be target-owned and cleaned after use.
 
 
 ----------------------------------------------------------------------
-11. What Is Intentionally Deferred
+12. What Is Intentionally Deferred
 ----------------------------------------------------------------------
 
 This document does not define:
@@ -382,7 +386,7 @@ Those concerns belong to higher layers.
 
 
 ----------------------------------------------------------------------
-12. Phase 55 typed binding boundary
+13. Phase 55 typed binding boundary
 ----------------------------------------------------------------------
 
 After one immutable `ConfigurationResolutionSnapshot` is available, CNCF
@@ -540,7 +544,7 @@ defaults, and value-only projections. This generic source specification owns
 neither those semantics nor source/resource ownership.
 
 ----------------------------------------------------------------------
-13. Final Note
+14. Final Note
 ----------------------------------------------------------------------
 
 This configuration mechanism exists to be:

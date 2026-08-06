@@ -14,6 +14,7 @@ final class StandaloneUserProfileBindingProjectionSpec extends AnyWordSpec with 
   private val _e1 = afterWord("in spec:phase-55-gcf07e-standalone-user-profile-catalog-projection, example:E1, rules:GCF07E-R1,R2,R3, phase:55, slice:GCF-07E")
   private val _e2 = afterWord("in spec:phase-55-gcf07e-standalone-user-profile-catalog-projection, example:E2, rules:GCF07E-R1,R4, phase:55, slice:GCF-07E")
   private val _e3 = afterWord("in spec:phase-55-gcf07e-standalone-user-profile-catalog-projection, example:E3, rules:GCF07E-R2,R3, phase:55, slice:GCF-07E")
+  private val _e4 = afterWord("in spec:standalone-runtime-default-user-profile, example:E4, rules:SRD-R1,R2, phase:55, slice:GCF-07E")
 
   "StandaloneUserProfile binding projection" should {
     "E1 project admitted HOME documents without rereading and resolve layer/target precedence" must _e1 {
@@ -117,6 +118,53 @@ final class StandaloneUserProfileBindingProjectionSpec extends AnyWordSpec with 
         CncfConfigurationParameterCatalog.fixedUserLocale.codec.decode(org.goldenport.configuration.ConfigurationValue.StringValue("en-US-")).isSuccess shouldBe false
         CncfConfigurationParameterCatalog.fixedUserTimezone.codec.decode(org.goldenport.configuration.ConfigurationValue.StringValue("Asia/Tokyo")).toOption shouldBe Some(ZoneId.of("Asia/Tokyo"))
         CncfConfigurationParameterCatalog.fixedUserTimezone.codec.decode(org.goldenport.configuration.ConfigurationValue.StringValue("not/a-timezone")).isSuccess shouldBe false
+      }
+    }
+
+    "E4 default missing HOME profiles from the standalone descriptor identity" must _e4 {
+      "when runtime projection receives no HOME profile and one local subject" in {
+        Given("a standalone Subsystem with no admitted HOME profile")
+        val subsystem = SubsystemInstanceId.create("art-scene", "default").getOrElse(fail("identity"))
+
+        When("runtime projection supplies the descriptor local-subject default")
+        val candidates = StandaloneUserProfileBindingProjection
+          .runtimeCandidates(Vector.empty, subsystem, Some("standalone-local"))
+          .getOrElse(fail("runtime candidates"))
+        val context = CncfConfigurationResolutionContext.forSubsystem(subsystem).getOrElse(fail("context"))
+        val resolved = ConfigurationBindingResolver.resolve(candidates, context.generic).getOrElse(fail("resolved"))
+        val profile = ResolvedStandaloneUserProfile.resolve(resolved).getOrElse(fail("profile"))
+
+        Then("the local-subject id becomes the typed fixed-user identity with default provenance")
+        profile.id shouldBe "standalone-local"
+        val binding = resolved.binding(CncfConfigurationParameterCatalog.fixedUserId).toOption.flatten.getOrElse(fail("binding"))
+        binding.provenance.origin shouldBe ConfigurationOrigin.Default
+        binding.provenance.layer shouldBe "subsystem-local-subject-default"
+        binding.provenance.sourceType shouldBe Some("descriptor-default")
+      }
+
+      "when one HOME profile is admitted beside a different local subject" in {
+        Given("an explicit HOME identity and a descriptor fallback identity")
+        val subsystem = SubsystemInstanceId.create("art-scene", "default").getOrElse(fail("identity"))
+        val home = Path.of("runtime-default-home").toAbsolutePath.normalize
+        val admitted = Vector(
+          StandaloneUserProfileResolver.Admitted(
+            StandaloneUserProfileResolver.Layer.TextusHome,
+            home.resolve(".textus/user-profile.yaml"),
+            ConfigurationOrigin.Home,
+            StandaloneUserProfile.Document(Some(StandaloneUserProfile.User(id = Some("profile-user"))))
+          )
+        )
+
+        When("runtime projection resolves candidates")
+        val candidates = StandaloneUserProfileBindingProjection
+          .runtimeCandidates(admitted, subsystem, Some("standalone-local"))
+          .getOrElse(fail("runtime candidates"))
+        val context = CncfConfigurationResolutionContext.forSubsystem(subsystem).getOrElse(fail("context"))
+        val resolved = ConfigurationBindingResolver.resolve(candidates, context.generic).getOrElse(fail("resolved"))
+        val profile = ResolvedStandaloneUserProfile.resolve(resolved).getOrElse(fail("profile"))
+
+        Then("the explicit HOME profile remains authoritative")
+        profile.id shouldBe "profile-user"
       }
     }
   }

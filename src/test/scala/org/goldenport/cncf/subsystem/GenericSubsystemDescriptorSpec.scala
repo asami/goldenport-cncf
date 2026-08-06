@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  8, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -406,6 +406,92 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       provider.isDefault shouldBe Some(true)
     }
 
+    "strict nested assembly decoding" which {
+    "reject semantically invalid nested assembly defaults instead of dropping them" in {
+      Given("invalid local-subject, authentication-provider, message-delivery-provider, and builtin declarations")
+      val localsubject = Files.createTempFile("invalid-local-subject", ".yaml")
+      Files.writeString(
+        localsubject,
+        """subsystem: invalid-local-subject
+          |components:
+          |  - name: invalid-local-subject
+          |security:
+          |  authentication:
+          |    local_subject:
+          |      roles: [user]
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val authenticationprovider = Files.createTempFile("invalid-authentication-provider", ".yaml")
+      Files.writeString(
+        authenticationprovider,
+        """subsystem: invalid-authentication-provider
+          |components:
+          |  - name: invalid-authentication-provider
+          |security:
+          |  authentication:
+          |    providers:
+          |      - name: incomplete
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val messagedelivery = Files.createTempFile("invalid-message-delivery-provider", ".yaml")
+      Files.writeString(
+        messagedelivery,
+        """subsystem: invalid-message-delivery-provider
+          |components:
+          |  - name: invalid-message-delivery-provider
+          |security:
+          |  message_delivery:
+          |    providers:
+          |      - name: incomplete
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val builtincar = Files.createTempFile("invalid-builtin-default", ".car")
+      _write_zip(
+        builtincar,
+        Map(
+          "component-descriptor.json" -> """{"name":"invalid-builtin-default","version":"1.0.0","component":"invalid-builtin-default"}""",
+          "assembly-descriptor.yaml" ->
+            """subsystem: invalid-builtin-default
+              |components:
+              |  - name: invalid-builtin-default
+              |builtin: invalid
+              |""".stripMargin
+        )
+      )
+
+      When("strict descriptor and component-CAR loading decodes each nested declaration")
+      val results = Vector(
+        GenericSubsystemDescriptor.load(localsubject),
+        GenericSubsystemDescriptor.load(authenticationprovider),
+        GenericSubsystemDescriptor.load(messagedelivery),
+        GenericSubsystemDescriptor.loadComponentArchive(builtincar)
+      )
+      val overridebase = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("invalid-assembly-override"),
+        subsystemName = "invalid-assembly-override",
+        componentBindings = Vector(GenericSubsystemComponentBinding("invalid-assembly-override"))
+      )
+      val overrideresults = Vector(
+        Record.data("runtime" -> "invalid"),
+        Record.data("runtime" -> Record.data("user_notification" -> "invalid")),
+        Record.data("runtime" -> Record.data("user_notification" -> Record.data(
+          "providers" -> Vector(Record.data("name" -> "incomplete"))
+        ))),
+        Record.data("builtin" -> "invalid")
+      ).map(record => GenericSubsystemDescriptor.applyAssemblyOverrideC(
+        overridebase,
+        GenericSubsystemAssemblyDescriptorSource(record, "invalid-override")
+      ))
+
+      Then("each present malformed semantic declaration remains a structured failure")
+      results.foreach(_ shouldBe a[Consequence.Failure[_]])
+      overrideresults.foreach(_ shouldBe a[Consequence.Failure[_]])
+    }
+    }
+
     "load operation authorization rules from the formal YAML schema" in {
       Given("a descriptor with anonymous and production authorization rules")
       val path = Files.createTempFile("generic-subsystem-operation-authorization", ".yaml")
@@ -776,6 +862,21 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
         case Consequence.Failure(_) => succeed
         case Consequence.Success(value) => fail(s"expected invalid assembly descriptor failure but got ${value}")
       }
+    }
+
+    "reject missing and malformed explicitly configured assembly descriptors" in {
+      Given("one absent assembly path and one malformed configured assembly descriptor")
+      val missing = Files.createTempDirectory("missing-configured-assembly").resolve("assembly.yaml")
+      val malformed = Files.createTempFile("malformed-configured-assembly", ".yaml")
+      Files.writeString(malformed, "subsystem: [unterminated", StandardCharsets.UTF_8)
+
+      When("the explicit assembly descriptor loader reads each configured path")
+      val missingresult = GenericSubsystemDescriptor.loadAssemblyDescriptorC(missing)
+      val malformedresult = GenericSubsystemDescriptor.loadAssemblyDescriptorC(malformed)
+
+      Then("both configured-source failures remain structured instead of becoming absent defaults")
+      missingresult shouldBe a[Consequence.Failure[_]]
+      malformedresult shouldBe a[Consequence.Failure[_]]
     }
 
     "let a SAR descriptor inherit authentication provider defaults from a component CAR assembly descriptor" in {

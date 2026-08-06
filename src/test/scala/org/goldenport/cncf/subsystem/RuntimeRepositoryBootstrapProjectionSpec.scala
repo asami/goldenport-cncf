@@ -107,6 +107,93 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
         developmentempty.isSuccess shouldBe true
       }
 
+      "when component development and assembly descriptor sources are both admitted" in {
+        Given("a prepared development Component and an assembly-owned standalone security binding")
+        val root = _fixture_root("gcf09f-runtime-development-assembly-")
+        val development = _development_fixture(root.resolve("development"), "development-assembly")
+        Files.writeString(
+          development.resolve("src/main/car/assembly-descriptor.yaml"),
+          """subsystem: development-assembly
+            |subsystemCapabilities:
+            |  providers:
+            |    - name: runtime-facilities
+            |      component: development-assembly
+            |      provides:
+            |        - datastore.persistent@1
+            |components:
+            |  - name: development-assembly
+            |    version: 1.0.0
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val assembly = root.resolve("assembly.yaml")
+        Files.writeString(
+          assembly,
+          """subsystem: development-assembly
+            |components:
+            |  - name: development-assembly
+            |    version: 1.0.0
+            |config:
+            |  textus.subsystem.user-mode: standalone
+            |security:
+            |  authentication:
+            |    local_subject:
+            |      id: standalone-local
+            |      capabilities:
+            |        - user
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val configuration = _configuration(Map(
+          RuntimeConfig.assemblyDescriptorKey -> assembly.toString
+        ))
+        val policy = RepositoryBootstrapPolicy(componentDevDirs = Vector(development.toString))
+        val assemblydrivenpolicy = RepositoryBootstrapPolicy(
+          repositoryComponentDevDirs = Vector(development.toString)
+        )
+
+        When("runtime descriptor resolution starts from the admitted development directory")
+        val resolved = GenericSubsystemFactory.runtimeResolveDescriptorC(configuration, Some(policy))
+        val assemblydriven = GenericSubsystemFactory.runtimeResolveDescriptorC(
+          configuration,
+          Some(assemblydrivenpolicy)
+        )
+        val constructed = DefaultSubsystemFactory.runtimeDefaultWithScopeC(
+          _runtime_context,
+          Some(RunMode.Server),
+          configuration,
+          AliasResolver.empty,
+          Some(policy)
+        )
+        val assemblydrivenconstructed = DefaultSubsystemFactory.runtimeDefaultWithScopeC(
+          _runtime_context,
+          Some(RunMode.Server),
+          configuration,
+          AliasResolver.empty,
+          Some(assemblydrivenpolicy)
+        )
+
+        Then("the resolved descriptor and constructed Subsystem retain the assembly-owned local subject")
+        resolved shouldBe a[org.goldenport.Consequence.Success[_]]
+        val descriptor = resolved.toOption.flatten.getOrElse(fail("runtime descriptor"))
+        descriptor.assemblyDescriptor.flatMap(_.path).map(_.toAbsolutePath.normalize) shouldBe
+          Some(assembly.toAbsolutePath.normalize)
+        descriptor.security.flatMap(_.authentication).flatMap(_.localSubject).map(_.id) shouldBe Some("standalone-local")
+        assemblydriven.toOption.flatten
+          .flatMap(_.security)
+          .flatMap(_.authentication)
+          .flatMap(_.localSubject)
+          .map(_.id) shouldBe Some("standalone-local")
+        constructed shouldBe a[org.goldenport.Consequence.Success[_]]
+        constructed.toOption.flatMap(_.resolvedSecurityWiring.authentication.localSubject).map(_.id) shouldBe
+          Some("standalone-local")
+        assemblydrivenconstructed shouldBe a[org.goldenport.Consequence.Success[_]]
+        val assemblydrivendescriptor = assemblydrivenconstructed.toOption.flatMap(_.descriptor).getOrElse(fail("assembly-driven runtime descriptor"))
+        assemblydrivendescriptor.security.flatMap(_.authentication).flatMap(_.localSubject).map(_.id) shouldBe
+          Some("standalone-local")
+        assemblydrivendescriptor.subsystemCapabilityProviders.map(_.name) should contain ("runtime-facilities")
+      }
+
       "when a policy repository path is relative to the bootstrap directory" in {
         Given("a repository under an explicit bootstrap directory and a conflicting raw path")
         val root = _fixture_root("gcf09f-runtime-relative-")
@@ -141,6 +228,236 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
 
         Then("the component archive directory is resolved from the bootstrap directory")
         resolved.toOption.flatten.map(_.subsystemName) shouldBe Some("policy-relative-component")
+      }
+
+      "when a packaged CAR supplies defaults to a SAR descriptor through repository admission" in {
+        Given("a packaged CAR default assembly and a SAR assembly that overrides one default field")
+        val root = _fixture_root("gcf09f-packaged-defaults-")
+        val componentname = "packaged-defaults"
+        val repository = Files.createDirectories(root.resolve("repository")).toAbsolutePath.normalize
+        val unrequestedcar = repository.resolve(s"$componentname-1.0.0.car")
+        _write_archive(
+          unrequestedcar,
+          Map(
+            "component-descriptor.json" -> s"""{"name":"$componentname","version":"1.0.0","component":"$componentname"}""",
+            "assembly-descriptor.yaml" ->
+              s"""subsystem: $componentname
+                 |components:
+                 |  - name: $componentname
+                 |    version: 1.0.0
+                 |config:
+                 |  component.default: wrong-version
+                 |  wrong.version: selected
+                 |""".stripMargin
+          )
+        )
+        val car = repository.resolve(s"$componentname-2.0.0.car")
+        _write_archive(
+          car,
+          Map(
+            "component-descriptor.json" -> s"""{"name":"$componentname","version":"2.0.0","component":"$componentname"}""",
+            "assembly-descriptor.yaml" ->
+              s"""subsystem: $componentname
+                 |components:
+                 |  - name: $componentname
+                 |    version: 2.0.0
+                 |config:
+                 |  component.default: retained
+                 |  shared.value: component
+                 |""".stripMargin
+          )
+        )
+        val sar = root.resolve(s"$componentname.sar")
+        _write_archive(
+          sar,
+          Map(
+            "subsystem-descriptor.yaml" ->
+              s"""subsystem: $componentname
+                 |components:
+                 |  - name: $componentname
+                 |    version: 2.0.0
+                 |""".stripMargin,
+            "assembly-descriptor.yaml" ->
+              s"""subsystem: $componentname
+                 |config:
+                 |  shared.value: sar
+                 |  sar.override: retained
+                 |""".stripMargin
+          )
+        )
+        val descriptor = GenericSubsystemDescriptor.load(sar).getOrElse(fail("SAR descriptor"))
+        val policy = RepositoryBootstrapPolicy(repositoryDirs = Vector(repository.toString), baseDirectory = root)
+        val specification = ComponentRepository.ComponentDirRepository.Specification(repository)
+
+        When("the packaged repository resolves component-owned CAR defaults before factory admission")
+        val defaultsresult = specification.resolveComponentSubsystemDefaultsC(componentname, Some("2.0.0"))
+
+        Then("the repository boundary returns the retained component default")
+        defaultsresult shouldBe a[org.goldenport.Consequence.Success[_]]
+        val defaults = defaultsresult.toOption.flatten.getOrElse(fail("packaged CAR defaults are required"))
+        defaults.config should contain ("component.default" -> "retained")
+
+        When("the runtime factory admits the SAR descriptor against the packaged repository")
+        val result = GenericSubsystemFactory.runtimeAdmitDescriptorC(
+          descriptor,
+          _configuration(Map.empty),
+          Some(policy)
+        )
+
+        Then("CAR defaults are retained while SAR assembly values override the same fields")
+        result shouldBe a[org.goldenport.Consequence.Success[_]]
+        val effective = result.getOrElse(fail("effective descriptor"))
+        effective.config should contain ("component.default" -> "retained")
+        effective.config should contain ("sar.override" -> "retained")
+        effective.config should contain ("shared.value" -> "sar")
+        effective.config should not contain key("wrong.version")
+      }
+
+      "when a matching packaged CAR contains a malformed assembly default" in {
+        Given("a repository CAR with a valid component descriptor and malformed assembly descriptor")
+        val root = _fixture_root("gcf09f-malformed-packaged-default-")
+        val repository = Files.createDirectories(root.resolve("repository"))
+        val componentname = "malformed-packaged-default"
+        _write_archive(
+          repository.resolve(s"$componentname.car"),
+          Map(
+            "component-descriptor.json" -> _component_descriptor(componentname),
+            "assembly-descriptor.yaml" -> "subsystem: [unterminated"
+          )
+        )
+        val specification = ComponentRepository.ComponentDirRepository.Specification(repository)
+
+        When("pre-activation default resolution selects the matching CAR")
+        val result = specification.resolveComponentSubsystemDefaultsC(componentname)
+
+        Then("the malformed selected default remains a structured failure")
+        result shouldBe a[org.goldenport.Consequence.Failure[_]]
+      }
+
+      "when an expanded CAR directory supplies defaults to a versioned SAR descriptor" in {
+        Given("a canonical expanded CAR directory and a SAR assembly override")
+        val root = _fixture_root("gcf09f-expanded-defaults-")
+        val componentname = "expanded-defaults"
+        val repository = Files.createDirectories(root.resolve("repository")).toAbsolutePath.normalize
+        _write_archive(repository.resolve("unrelated-malformed.car"), "component-descriptor.json", "{ invalid")
+        val cardir = Files.createDirectories(repository.resolve(s"$componentname-3.0.0"))
+        Files.writeString(
+          cardir.resolve("component-descriptor.json"),
+          s"""{"name":"$componentname","version":"3.0.0","component":"$componentname"}""",
+          StandardCharsets.UTF_8
+        )
+        Files.writeString(
+          cardir.resolve("assembly-descriptor.yaml"),
+          s"""subsystem: $componentname
+             |components:
+             |  - name: $componentname
+             |    version: 3.0.0
+             |config:
+             |  directory.default: retained
+             |  shared.value: directory
+             |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        _write_empty_jar(cardir.resolve("component").resolve("main.jar"))
+        val sar = root.resolve(s"$componentname.sar")
+        _write_archive(
+          sar,
+          Map(
+            "subsystem-descriptor.yaml" ->
+              s"""subsystem: $componentname
+                 |components:
+                 |  - name: $componentname
+                 |    version: 3.0.0
+                 |""".stripMargin,
+            "assembly-descriptor.yaml" ->
+              s"""subsystem: $componentname
+                 |config:
+                 |  shared.value: sar
+                 |  sar.override: retained
+                 |""".stripMargin
+          )
+        )
+        val descriptor = GenericSubsystemDescriptor.load(sar).getOrElse(fail("SAR descriptor"))
+        val policy = RepositoryBootstrapPolicy(repositoryDirs = Vector(repository.toString), baseDirectory = root)
+
+        When("runtime descriptor admission resolves the expanded CAR defaults")
+        val result = GenericSubsystemFactory.runtimeAdmitDescriptorC(
+          descriptor,
+          _configuration(Map.empty),
+          Some(policy)
+        )
+
+        Then("directory-owned defaults are retained while SAR values retain precedence")
+        result shouldBe a[org.goldenport.Consequence.Success[_]]
+        val effective = result.getOrElse(fail("effective descriptor"))
+        effective.config should contain ("directory.default" -> "retained")
+        effective.config should contain ("sar.override" -> "retained")
+        effective.config should contain ("shared.value" -> "sar")
+      }
+
+      "when a versioned expanded CAR default request finds an unversioned descriptor" in {
+        Given("a classified expanded CAR directory whose name matches but descriptor omits the requested version")
+        val root = _fixture_root("gcf09f-unversioned-expanded-default-")
+        val componentname = "unversioned-expanded-default"
+        val requestedversion = "4.0.0"
+        val repository = Files.createDirectories(root.resolve("repository")).toAbsolutePath.normalize
+        val cardir = Files.createDirectories(repository.resolve(s"$componentname-$requestedversion"))
+        Files.writeString(
+          cardir.resolve("component-descriptor.json"),
+          s"""{"name":"$componentname","component":"$componentname"}""",
+          StandardCharsets.UTF_8
+        )
+        Files.writeString(
+          cardir.resolve("assembly-descriptor.yaml"),
+          s"""subsystem: $componentname
+             |components:
+             |  - name: $componentname
+             |config:
+             |  wrong.default: unversioned
+             |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        _write_empty_jar(cardir.resolve("component").resolve("main.jar"))
+        val specification = ComponentRepository.ComponentDirRepository.Specification(repository)
+
+        When("version-aware default resolution evaluates the named expanded candidate")
+        val result = specification.resolveComponentSubsystemDefaultsC(componentname, Some(requestedversion))
+
+        Then("the unversioned descriptor remains a successful nonmatch")
+        result shouldBe a[org.goldenport.Consequence.Success[_]]
+        result.toOption.flatten shouldBe None
+      }
+
+      "when an explicitly selected component-file CAR has an invalid component descriptor" in {
+        Given("a configured CAR file whose component descriptor cannot be decoded")
+        val root = _fixture_root("gcf09f-invalid-component-file-default-")
+        val car = root.resolve("invalid-component-file.car")
+        _write_archive(car, "component-descriptor.json", "{ invalid")
+        val specification = ComponentRepository.ComponentFileRepository.Specification(car)
+
+        When("version-aware pre-activation default resolution selects the configured file")
+        val result = specification.resolveComponentSubsystemDefaultsC("invalid-component-file", Some("1.0.0"))
+
+        Then("the invalid selected component descriptor remains a structured failure")
+        result shouldBe a[org.goldenport.Consequence.Failure[_]]
+      }
+
+      "when an explicitly configured assembly descriptor is missing or malformed" in {
+        Given("one missing configured path and one malformed configured descriptor")
+        val root = _fixture_root("gcf09f-explicit-assembly-")
+        val missing = root.resolve("missing-assembly.yaml")
+        val malformed = root.resolve("malformed-assembly.yaml")
+        Files.writeString(malformed, "subsystem: [unterminated", StandardCharsets.UTF_8)
+        val policy = RepositoryBootstrapPolicy(baseDirectory = root)
+        val configurations = Vector(missing, malformed).map { path =>
+          _configuration(Map(RuntimeConfig.assemblyDescriptorKey -> path.toString))
+        }
+
+        When("runtime descriptor resolution reaches the configured assembly boundary")
+        val results = configurations.map(GenericSubsystemFactory.runtimeResolveDescriptorC(_, Some(policy)))
+
+        Then("each explicit source failure remains structural rather than becoming descriptor absence")
+        results.foreach(_ shouldBe a[org.goldenport.Consequence.Failure[_]])
       }
 
       "when repository parameters use a distinct caller working directory" in {
@@ -310,11 +627,28 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
     s"""{"name":"$componentname","version":"1.0.0","component":"$componentname"}"""
 
   private def _write_archive(path: Path, entry: String, contents: String): Unit = {
+    _write_archive(path, Map(entry -> contents))
+  }
+
+  private def _write_archive(path: Path, entries: Map[String, String]): Unit = {
     Option(path.getParent).foreach(Files.createDirectories(_))
     val output = new ZipOutputStream(Files.newOutputStream(path))
     try {
-      output.putNextEntry(new java.util.zip.ZipEntry(entry))
-      output.write(contents.getBytes(StandardCharsets.UTF_8))
+      entries.foreach { case (entry, contents) =>
+        output.putNextEntry(new java.util.zip.ZipEntry(entry))
+        output.write(contents.getBytes(StandardCharsets.UTF_8))
+        output.closeEntry()
+      }
+    } finally output.close()
+  }
+
+  private def _write_empty_jar(path: Path): Unit = {
+    Option(path.getParent).foreach(Files.createDirectories(_))
+    val output = new ZipOutputStream(Files.newOutputStream(path))
+    try {
+      output.putNextEntry(new java.util.zip.ZipEntry(
+        "org/goldenport/cncf/component/builtin/specification/SpecificationComponent$Factory.class"
+      ))
       output.closeEntry()
     } finally output.close()
   }

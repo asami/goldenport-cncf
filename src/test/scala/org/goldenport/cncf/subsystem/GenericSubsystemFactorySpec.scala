@@ -11,7 +11,7 @@ import scala.util.Using
 
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationValue
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{RepositoryBootstrapPolicy, RuntimeConfig}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
@@ -38,7 +38,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -306,6 +306,127 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         Then("the descriptor-owned Component identity is stable across the two paths")
         development.subsystemName shouldBe "identity-component"
         packaged.subsystemName shouldBe "identity-component"
+      }
+    }
+
+    "retain a configured component binding when an assembly overlay declares empty components" in {
+      Given("a configured component name and an assembly descriptor with empty components plus config")
+      _with_temp_dir { root =>
+        val componentname = "configured-component"
+        val assembly = root.resolve("empty-components-assembly.yaml")
+        Files.writeString(
+          assembly,
+          """subsystem: configured-component
+            |components: []
+            |config:
+            |  assembly.overlay: retained
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.componentNameKey -> ConfigurationValue.StringValue(componentname),
+            RuntimeConfig.assemblyDescriptorKey -> ConfigurationValue.StringValue(assembly.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("static and runtime descriptor resolution apply the configured component before the assembly overlay")
+        val staticresult = GenericSubsystemFactory.resolveDescriptorC(configuration)
+        val runtimeresult = GenericSubsystemFactory.runtimeResolveDescriptorC(
+          configuration,
+          Some(RepositoryBootstrapPolicy())
+        )
+
+        Then("both descriptors retain the configured binding and overlay config")
+        staticresult shouldBe a[org.goldenport.Consequence.Success[_]]
+        runtimeresult shouldBe a[org.goldenport.Consequence.Success[_]]
+        val staticdescriptor = staticresult.toOption.flatten.getOrElse(fail("static descriptor"))
+        val runtimedescriptor = runtimeresult.toOption.flatten.getOrElse(fail("runtime descriptor"))
+        staticdescriptor.componentBindings shouldBe Vector(GenericSubsystemComponentBinding(componentname))
+        runtimedescriptor.componentBindings shouldBe Vector(GenericSubsystemComponentBinding(componentname))
+        staticdescriptor.config should contain ("assembly.overlay" -> "retained")
+        runtimedescriptor.config should contain ("assembly.overlay" -> "retained")
+      }
+    }
+
+    "reject an empty configured assembly when no component name or binding is available" in {
+      Given("an assembly descriptor with empty components and no configured component name")
+      _with_temp_dir { root =>
+        val assembly = root.resolve("unbound-empty-components-assembly.yaml")
+        Files.writeString(
+          assembly,
+          """subsystem: unbound-empty-components
+            |components: []
+            |config:
+            |  assembly.overlay: retained
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.assemblyDescriptorKey -> ConfigurationValue.StringValue(assembly.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("static and runtime descriptor resolution reach the unbound assembly boundary")
+        val staticresult = GenericSubsystemFactory.resolveDescriptorC(configuration)
+        val runtimeresult = GenericSubsystemFactory.runtimeResolveDescriptorC(
+          configuration,
+          Some(RepositoryBootstrapPolicy())
+        )
+
+        Then("both boundaries return structured configuration failure")
+        staticresult shouldBe a[org.goldenport.Consequence.Failure[_]]
+        runtimeresult shouldBe a[org.goldenport.Consequence.Failure[_]]
+      }
+    }
+
+    "accept an empty configured assembly with a valid explicit test descriptor" in {
+      Given("an assembly descriptor with empty components and a controlled-test descriptor")
+      _with_temp_dir { root =>
+        val assembly = root.resolve("controlled-test-empty-components-assembly.yaml")
+        val testdescriptor = root.resolve("test.yaml")
+        Files.writeString(
+          assembly,
+          """subsystem: controlled-test-assembly
+            |components: []
+            |config:
+            |  assembly.overlay: retained
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        Files.writeString(
+          testdescriptor,
+          """kind: test-descriptor
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.assemblyDescriptorKey -> ConfigurationValue.StringValue(assembly.toString),
+            RuntimeConfig.TEST_DESCRIPTOR_KEY -> ConfigurationValue.StringValue(testdescriptor.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("static and runtime descriptor resolution admit the validated controlled-test assembly")
+        val staticresult = GenericSubsystemFactory.resolveDescriptorC(configuration)
+        val runtimeresult = GenericSubsystemFactory.runtimeResolveDescriptorC(
+          configuration,
+          Some(RepositoryBootstrapPolicy())
+        )
+
+        Then("both descriptors retain empty bindings and assembly config")
+        staticresult shouldBe a[org.goldenport.Consequence.Success[_]]
+        runtimeresult shouldBe a[org.goldenport.Consequence.Success[_]]
+        val staticdescriptor = staticresult.toOption.flatten.getOrElse(fail("static descriptor"))
+        val runtimedescriptor = runtimeresult.toOption.flatten.getOrElse(fail("runtime descriptor"))
+        staticdescriptor.componentBindings shouldBe Vector.empty
+        runtimedescriptor.componentBindings shouldBe Vector.empty
+        staticdescriptor.config should contain ("assembly.overlay" -> "retained")
+        runtimedescriptor.config should contain ("assembly.overlay" -> "retained")
       }
     }
 

@@ -8,6 +8,20 @@ import org.goldenport.configuration.source.ConfigurationSource
  *  It never reads a profile path and leaves runtime collection admission to GCF-07F.
  */
 object StandaloneUserProfileBindingProjection {
+  def runtimeCandidates(
+    admitted: Vector[StandaloneUserProfileResolver.Admitted],
+    subsystem: SubsystemInstanceId,
+    localSubjectId: Option[String]
+  ): Consequence[ConfigurationBindingCandidates[CncfConfigurationTarget]] =
+    if (admitted == null || localSubjectId == null)
+      Consequence.configurationInvalid("standalone runtime user-profile projection is invalid")
+    else if (admitted.nonEmpty)
+      candidates(admitted, subsystem)
+    else
+      localSubjectId
+        .map(_default_candidates(_, subsystem))
+        .getOrElse(candidates(Vector.empty, subsystem))
+
   def candidates(
     admitted: Vector[StandaloneUserProfileResolver.Admitted],
     subsystem: SubsystemInstanceId
@@ -25,6 +39,37 @@ object StandaloneUserProfileBindingProjection {
         }
         result <- ConfigurationBindingCandidates.from(values)
       } yield result
+
+  private def _default_candidates(
+    localsubjectid: String,
+    subsystem: SubsystemInstanceId
+  ): Consequence[ConfigurationBindingCandidates[CncfConfigurationTarget]] =
+    for {
+      localtarget <- CncfConfigurationTarget.SubsystemInstance.create(subsystem)
+      target: CncfConfigurationTarget = localtarget
+      value <- CncfConfigurationParameterCatalog.fixedUserId.codec.decode(
+        ConfigurationValue.StringValue(localsubjectid)
+      )
+      provenance <- ConfigurationProvenance.create(
+        ConfigurationOrigin.Default,
+        "subsystem-local-subject-default",
+        subsystem.subsystem,
+        Some("security.authentication.local_subject.id"),
+        Some(CncfConfigurationParameterCatalog.fixedUserId.id.value),
+        0,
+        0,
+        Vector("standalone runtime default from descriptor local_subject"),
+        false,
+        Some("descriptor-default")
+      )
+      candidate <- ConfigurationBindingCandidate.create(
+        CncfConfigurationParameterCatalog.fixedUserId,
+        target,
+        value,
+        provenance
+      )
+      result <- ConfigurationBindingCandidates.from(Vector(candidate))
+    } yield result
 
   private def _candidates(
     entry: StandaloneUserProfileResolver.Admitted,
