@@ -16,7 +16,8 @@ import scala.util.control.NonFatal
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version May.  2, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -319,11 +320,13 @@ object DataStore {
             )
           nextrevision <- actual.nextC
           updated =
-            EntityNativeMutationSupport.updatedRecord(
-              existing,
-              plan.revisionField,
-              plan.changes,
-              nextrevision
+            InMemoryDataStore._normalize_record(
+              EntityNativeMutationSupport.updatedRecord(
+                existing,
+                plan.revisionField,
+                plan.changes,
+                nextrevision
+              )
             )
         } yield {
           rootcollection._replace_entries(
@@ -372,11 +375,13 @@ object DataStore {
             else
               actual.nextC.map { nextrevision =>
                 val updated =
-                  EntityNativeMutationSupport.updatedRecord(
-                    existing,
-                    plan.revisionField,
-                    plan.changes,
-                    nextrevision
+                  InMemoryDataStore._normalize_record(
+                    EntityNativeMutationSupport.updatedRecord(
+                      existing,
+                      plan.revisionField,
+                      plan.changes,
+                      nextrevision
+                    )
                   )
                 rootcollection._replace_entries(
                   rootcollection._entries_snapshot.updated(
@@ -529,10 +534,12 @@ object DataStore {
           }
           .toMap
       val rootrecord =
-        EntityVersionedMutationSupport.applyRootMutation(
-          existing,
-          plan,
-          nextrevision
+        InMemoryDataStore._normalize_record(
+          EntityVersionedMutationSupport.applyRootMutation(
+            existing,
+            plan,
+            nextrevision
+          )
         )
       val rooted =
         initialstates.updated(
@@ -601,7 +608,10 @@ object DataStore {
               Consequence.success(
                 states.updated(
                   collectionkey,
-                  entries.updated(entryid.print, record)
+                  entries.updated(
+                    entryid.print,
+                    InMemoryDataStore._normalize_record(record)
+                  )
                 )
               )
             case EntityVersionedSideEffect.Delete(_, entryid) =>
@@ -742,6 +752,15 @@ object DataStore {
     }
   }
   object InMemoryDataStore {
+    private[datastore] def _normalize_record(record: Record): Record =
+      Record(record.fields.filterNot(_is_set_null_marker))
+
+    private[datastore] def _is_set_null_marker(field: Field): Boolean =
+      field.value.single match {
+        case org.simplemodeling.model.directive.Update.SetNull => true
+        case _ => false
+      }
+
     class Collection(val id: CollectionId) {
       def collectionName = id.collectionName
 
@@ -786,7 +805,7 @@ object DataStore {
 
       def save(id: EntryId, record: Record): Consequence[Unit] =
         to_entry_key(id).map { key =>
-          _entries = _entries.updated(key, record)
+          _entries = _entries.updated(key, _normalize_record(record))
         }
 
       def update(id: EntryId, changes: Record): Consequence[Unit] = {
@@ -796,7 +815,7 @@ object DataStore {
             _entries.get(key) match {
               case Some(existing) => Consequence {
                 val changedkeys = changes.fields.map(_.key).toSet
-                val effectivechanges = changes.fields.filterNot(_is_set_null_marker)
+                val effectivechanges = _normalize_record(changes).fields
                 val merged = Record(
                   existing.fields.filterNot(f => changedkeys.contains(f.key)) ++ effectivechanges
                 )
@@ -808,12 +827,6 @@ object DataStore {
           }
         } yield ()
       }
-
-      private def _is_set_null_marker(field: Field): Boolean =
-        field.value.single match {
-          case org.simplemodeling.model.directive.Update.SetNull => true
-          case _ => false
-        }
 
       def delete(id: EntryId): Consequence[Unit] = {
         for {

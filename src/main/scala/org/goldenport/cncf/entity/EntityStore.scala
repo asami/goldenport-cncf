@@ -55,7 +55,8 @@ import org.simplemodeling.model.value.NominalScalar
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
  *  version May. 17, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {

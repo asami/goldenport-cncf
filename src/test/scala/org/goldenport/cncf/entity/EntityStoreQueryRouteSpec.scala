@@ -38,7 +38,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 16, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 29, 2026
+ *  version Jul. 29, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -668,6 +669,108 @@ final class EntityStoreQueryRouteSpec
       )
       loaded.map(_.map(_.name)) shouldBe Consequence.success(Some("hanako"))
       loaded.map(_.map(_.age)) shouldBe Consequence.success(Some(20))
+    }
+
+    "clear only the set-null field for an unversioned patch update" in {
+      Given("a seeded entity with name and age")
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[PersonEntity]      = _person_persistent
+      given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
+
+      val id     = EntityId("test", "set_null", _cid)
+      val entity = PersonEntity(id, "taro", 20)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            EntityRevisionFixture.entitySeed(
+              DataStore.CollectionId.EntityStore(_cid),
+              entity.toRecord()
+            )
+          )
+        )
+      )
+
+      When("updating the name with an explicit SetNull patch")
+      val updated = entitystorespace.updateByIdUnversioned(
+        UnitOfWorkOp.EntityStoreUpdateByIdUnversioned(
+          id = id,
+          patch = PersonPatch(
+            name = Update.setNull[String],
+            age = Update.noop[Int]
+          ),
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistentUpdate[PersonPatch]],
+          authorization = None
+        )
+      )
+      val loaded = for {
+        _    <- updated
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
+      } yield rec
+
+      Then("the target field is absent while the unrelated field remains")
+      updated shouldBe a[Consequence.Success[_]]
+      loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(None)
+      loaded.map(_.flatMap(_.getAny("age"))) shouldBe Consequence.success(Some(20))
+    }
+
+    "clear SQL columns through an unversioned set-null patch" in {
+      Given("a SQLite-backed entity with name and age")
+      val path = Files.createTempFile("cncf-entity-store-set-null", ".db")
+      val datastore = SqlDataStore.sqlite(path.toString)
+      try {
+        val datastorespace   = new DataStoreSpace().addDataStore(datastore)
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+        given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
+
+        val id = EntityId("test", "sqlite_set_null", _cid)
+        val entity = PersonEntity(id, "taro", 20)
+        val created = entitystorespace.create(
+          UnitOfWorkOp.EntityStoreCreate(
+            entity,
+            _person_create_persistent
+          )
+        )
+
+        When("an unversioned patch sets name to null")
+        val updated = created.flatMap(_ =>
+          entitystorespace.updateByIdUnversioned(
+            UnitOfWorkOp.EntityStoreUpdateByIdUnversioned(
+              id = id,
+              patch = PersonPatch(
+                name = Update.setNull[String],
+                age = Update.noop[Int]
+              ),
+              purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+              tc = summon[EntityPersistentUpdate[PersonPatch]],
+              authorization = None
+            )
+          )
+        )
+        val loaded = for {
+          _ <- updated
+          cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+          entryid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+          record <- datastore.load(cid, entryid)
+        } yield record
+
+        Then("the SQL null clears name while retaining age")
+        updated shouldBe a[Consequence.Success[_]]
+        loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(None)
+        loaded.map(_.flatMap(_.getAny("age"))) shouldBe Consequence.success(Some(20))
+      } finally {
+        try {
+          val _ = datastore.closeC()
+        } finally {
+          val _ = Files.deleteIfExists(path)
+        }
+      }
     }
 
     "apply patch update by id through EntityPersistentUpdate.toStoreRecord" in {
@@ -1564,6 +1667,13 @@ private def _person_persistent: EntityPersistent[PersonEntity] =
           Consequence.argumentInvalid("invalid person record")
       }
     }
+  }
+
+private def _person_create_persistent: EntityPersistentCreate[PersonEntity] =
+  new EntityPersistentCreate[PersonEntity] {
+    def id(entity: PersonEntity): Option[EntityId] = Some(entity.id)
+    def collection(entity: PersonEntity): EntityCollectionId = entity.id.collection
+    def toRecord(entity: PersonEntity): Record = entity.toRecord()
   }
 
 private def _person_patch_persistent: EntityPersistentUpdate[PersonPatch] =

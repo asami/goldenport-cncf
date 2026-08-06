@@ -13,7 +13,8 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityVersionedMutationSpec
@@ -121,6 +122,54 @@ final class EntityVersionedMutationSpec
       }
     }
 
+    "E3 clear explicit patch fields through guarded versioned fallback" must _e3_metadata {
+      "when a content update clears another existing domain field" in {
+        Given(
+          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R5,R11-R14,R17; Example: E3; one Entity with content and a source URL"
+        )
+        val fixture = _fixture()
+        given ExecutionContext = fixture.context
+        val id = _id("guarded_set_null")
+        val initial =
+          fixture.entitystore
+            .create(
+              TestEntity(
+                id,
+                "created",
+                content = Some("initial content"),
+                sourceurl = Some("https://example.com/initial")
+              )
+            )
+            .flatMap(_ => fixture.entitystore.loadDetached[TestEntity](id))
+
+        When("a content patch uses the guarded versioned fallback and clears the source URL")
+        val patched = initial.flatMap {
+          case Some(snapshot) =>
+            fixture.entitystore.updateByIdDetached(
+              id,
+              ContentPatch(
+                content = Update.set("replacement content"),
+                sourceurl = Update.setNull[String]
+              ),
+              Some(snapshot.revision),
+              _optimistic_policy
+            )
+          case None =>
+            Consequence.entityNotFound(id.print)
+        }
+        val stored = _raw_record(fixture, id)
+
+        Then("the source URL is absent, replacement content is retained, and revision advances")
+        patched.map(_.revision.value) shouldBe Consequence.success(2L)
+        patched.map(_.entity.getString("content")) shouldBe
+          Consequence.success(Some("replacement content"))
+        stored.map(_.flatMap(_.getString("source_url"))) shouldBe
+          Consequence.success(None)
+        stored.map(_.flatMap(_.getString("content"))) shouldBe
+          Consequence.success(Some("replacement content"))
+      }
+    }
+
     "E4 reject stale mutations with structured revision diagnostics" must _e4_metadata {
       "when two mutations reuse one admitted revision" in {
         Given(
@@ -179,7 +228,9 @@ final class EntityVersionedMutationSpec
 
   private final case class TestEntity(
     id: EntityId,
-    name: String
+    name: String,
+    content: Option[String] = None,
+    sourceurl: Option[String] = None
   )
 
   private final case class TestPatch(
@@ -187,6 +238,17 @@ final class EntityVersionedMutationSpec
   ) extends EntityPersistableUpdate {
     def toRecord(): Record =
       Record.dataAuto("name" -> name)
+  }
+
+  private final case class ContentPatch(
+    content: Update[String],
+    sourceurl: Update[String]
+  ) extends EntityPersistableUpdate {
+    def toRecord(): Record =
+      Record.dataAuto(
+        "content" -> content,
+        "source_url" -> sourceurl
+      )
   }
 
   private given EntityPersistentCreate[TestEntity] =
@@ -208,6 +270,12 @@ final class EntityVersionedMutationSpec
     }
 
   private given EntityPersistentUpdate[TestPatch] =
+    EntityPersistentUpdate.derived(
+      _ => Consequence.argumentInvalid("patch decoding is not used"),
+      _collection_id
+    )
+
+  private given EntityPersistentUpdate[ContentPatch] =
     EntityPersistentUpdate.derived(
       _ => Consequence.argumentInvalid("patch decoding is not used"),
       _collection_id
@@ -249,6 +317,9 @@ final class EntityVersionedMutationSpec
     Record.dataAuto(
       "id" -> entity.id,
       "name" -> entity.name
+    ) ++ Record.dataOption(
+      "content" -> entity.content,
+      "source_url" -> entity.sourceurl
     )
 
   private def _entity(
