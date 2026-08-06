@@ -1,7 +1,11 @@
 package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
-import org.goldenport.id.UniversalId
+import org.goldenport.cncf.component.identity.{
+  ComponentId => SharedComponentId,
+  ComponentIdentityResult,
+  ComponentInstanceId => SharedComponentInstanceId
+}
 import org.goldenport.record.Record
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.logic.ProtocolLogic
@@ -804,7 +808,7 @@ object Component {
 
     def validate(): Bundle = {
       val names = participants.map(_.name)
-      val duplicated = names.groupBy(identity).collectFirst { case (name, xs) if xs.size > 1 => name }
+      val duplicated = names.groupBy(x => x).collectFirst { case (name, xs) if xs.size > 1 => name }
       require(!componentlets.exists(_ eq primary), "primary component must not appear in componentlets")
       require(duplicated.isEmpty, s"duplicate participant name in bundle: ${duplicated.getOrElse("")}")
       this
@@ -2119,37 +2123,130 @@ object Component {
     }
 }
 
-final case class ComponentId(
-  name: String
-) extends UniversalId("cncf", name, "component")
-
-final case class ComponentInstanceId(
-  name: String,
-  instance: String
-) extends UniversalId(
-  "cncf",
-  ComponentInstanceId.normalizeLabel(name),
-  "component_instance",
-  ComponentInstanceId.normalizeLabel(instance),
-  Some(org.goldenport.id.UniversalId.StableTimestamp),
-  Some(org.goldenport.id.UniversalId.StableEntropy)
+final class ComponentId private (
+  val sharedIdentity: SharedComponentId
 ) {
-  def canonicalKey: String = value
+  def name: String = sharedIdentity.qualifiedName()
+
+  def namespace = sharedIdentity.namespace()
+
+  def localId = sharedIdentity.localId()
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: ComponentId => sharedIdentity.equals(that.sharedIdentity)
+      case _ => false
+    }
+
+  override def hashCode(): Int = sharedIdentity.hashCode()
+
+  override def toString: String = sharedIdentity.toString()
+}
+
+object ComponentId {
+  def parseC(qualifiedId: String): Consequence[ComponentId] =
+    _to_consequence(SharedComponentId.parse(qualifiedId))(_from_shared)
+
+  def apply(qualifiedId: String): ComponentId =
+    _require(SharedComponentId.parse(qualifiedId))(_from_shared)
+
+  private[component] def fromShared(sharedIdentity: SharedComponentId): ComponentId =
+    _from_shared(sharedIdentity)
+
+  private def _from_shared(sharedidentity: SharedComponentId): ComponentId =
+    new ComponentId(sharedidentity)
+
+  private def _to_consequence[A, B](
+    result: ComponentIdentityResult[A]
+  )(f: A => B): Consequence[B] =
+    if (result.isSuccess())
+      Consequence(f(result.value().get()))
+    else
+      Consequence.componentInvalid(_error_message(result.error().get()))
+
+  private def _require[A, B](
+    result: ComponentIdentityResult[A]
+  )(f: A => B): B =
+    if (result.isSuccess())
+      f(result.value().get())
+    else
+      throw new IllegalArgumentException(_error_message(result.error().get()))
+
+  private def _error_message(error: ComponentIdentityResult.Error): String =
+    s"${error.code()}: ${error.message()}"
+}
+
+final class ComponentInstanceId private (
+  val sharedIdentity: SharedComponentInstanceId
+) {
+  def componentId: ComponentId = ComponentId.fromShared(sharedIdentity.componentId())
+
+  def name: String = sharedIdentity.componentId().qualifiedName()
+
+  def instance: String = sharedIdentity.label()
+
+  def canonicalKey: String = sharedIdentity.toString()
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: ComponentInstanceId => sharedIdentity.equals(that.sharedIdentity)
+      case _ => false
+    }
+
+  override def hashCode(): Int = sharedIdentity.hashCode()
+
+  override def toString: String = sharedIdentity.toString()
 }
 
 object ComponentInstanceId {
-  private[component] def normalizeLabel(value: String): String = {
-    val normalized = value.map { ch =>
-      if (ch.isLetterOrDigit || ch == '_') ch else '_'
-    }
-    normalized.headOption match {
-      case Some(ch) if ch.isLetter => normalized
-      case _ => s"id_${normalized}"
-    }
-  }
+  def createC(
+    componentId: ComponentId,
+    label: String
+  ): Consequence[ComponentInstanceId] =
+    _to_consequence(SharedComponentInstanceId.of(_shared_component_id(componentId), label))
+
+  def createC(
+    qualifiedId: String,
+    label: String
+  ): Consequence[ComponentInstanceId] =
+    ComponentId.parseC(qualifiedId).flatMap(createC(_, label))
+
+  def apply(
+    componentId: ComponentId,
+    label: String
+  ): ComponentInstanceId =
+    _require(SharedComponentInstanceId.of(_shared_component_id(componentId), label))
+
+  def apply(
+    qualifiedId: String,
+    label: String
+  ): ComponentInstanceId =
+    apply(ComponentId(qualifiedId), label)
 
   def default(componentId: ComponentId): ComponentInstanceId =
-    ComponentInstanceId(componentId.name, "default")
+    _require(SharedComponentInstanceId.defaultInstance(_shared_component_id(componentId)))
+
+  private def _shared_component_id(componentid: ComponentId): SharedComponentId =
+    if (componentid == null) null else componentid.sharedIdentity
+
+  private def _to_consequence(
+    result: ComponentIdentityResult[SharedComponentInstanceId]
+  ): Consequence[ComponentInstanceId] =
+    if (result.isSuccess())
+      Consequence(new ComponentInstanceId(result.value().get()))
+    else
+      Consequence.componentInvalid(_error_message(result.error().get()))
+
+  private def _require(
+    result: ComponentIdentityResult[SharedComponentInstanceId]
+  ): ComponentInstanceId =
+    if (result.isSuccess())
+      new ComponentInstanceId(result.value().get())
+    else
+      throw new IllegalArgumentException(_error_message(result.error().get()))
+
+  private def _error_message(error: ComponentIdentityResult.Error): String =
+    s"${error.code()}: ${error.message()}"
 }
 
 final case class ComponentInstanceMetadata(

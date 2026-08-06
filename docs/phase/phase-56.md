@@ -166,7 +166,10 @@ not silently infer a namespace or rewrite project metadata.
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | CID-01 | Inventory and contract freeze | Every authored/derived name, identity type, descriptor field, coordinate, path, alias, and consumer is inventoried; the exact SNAPSHOT migration cohort and non-SNAPSHOT deferral ledger are frozen with failing-first acceptance identities. | done |
-| CID-02 | Typed identity and derivation core | Namespace, local ID, qualified Component ID, instance ID, and one shared projection library are implemented with validation and collision behavior. | in-progress |
+| CID-02 | Typed identity and derivation core | Namespace, local ID, qualified Component ID, instance ID, and one shared projection library are implemented with validation and collision behavior. | done |
+| CID-02A | Shared Java identity/projection core | `cncf-collaborator-api` owns the Scala-version-neutral Java identity/projection ABI. | accepted/reviewed |
+| CID-02B | CNCF adoption | CNCF runtime semantics and adapters adopt the shared ABI. | accepted/reviewed |
+| CID-02C | Cozy adoption | Cozy and sbt-cozy consume the shared ABI through package-private Java-ABI adapters; project schema/generation remains CID-03, coordinate/repository/publication wiring CID-04, and lint CID-07. | accepted/reviewed |
 | CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | planned |
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. | planned |
 | CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | planned |
@@ -176,6 +179,10 @@ not silently infer a namespace or rewrite project metadata.
 
 ## Repository Ownership
 
+- `cncf-collaborator-api` owns the Scala-version-neutral Java identity/projection
+  ABI. `cloud-native-component-framework` owns runtime semantics and adapters;
+  `cozy` and `sbt-cozy` consume the ABI without reimplementing identity
+  validation, tokenization, or projections.
 - `simplemodeling-lib` owns a generic validated namespace/local-ID and naming
   transformation foundation only if existing generic identity facilities are
   insufficient.

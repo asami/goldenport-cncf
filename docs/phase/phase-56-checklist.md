@@ -92,19 +92,76 @@ does not claim implementation, migration, or Phase 56 completion.
 ## CID-02: Typed Identity and Derivation Core
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Entry rule: CID-01 is complete.
 - Completion rule: One validated typed identity produces every naming
   projection through one tested implementation.
 
-- [ ] Implement or admit `ComponentNamespace` and `ComponentLocalId`.
-- [ ] Make `ComponentId` namespace-qualified and make instance identity carry
+- [x] Implement or admit `ComponentNamespace` and `ComponentLocalId`.
+- [x] Make `ComponentId` namespace-qualified and make instance identity carry
   that exact Component ID.
-- [ ] Implement one deterministic projection API for qualified name, artifact,
+- [x] Implement one deterministic projection API for qualified name, artifact,
   Maven group/artifact, JVM package, generated class, and path segments.
-- [ ] Test validation, normalization rejection, acronym/digit boundaries,
+- [x] Test validation, normalization rejection, acronym/digit boundaries,
   namespace-leaf collisions, and round trips.
-- [ ] Prevent display metadata and version from entering identity equality.
+- [x] Prevent display metadata and version from entering identity equality.
+
+CID-02 Slice ledger:
+
+| Slice | Scope | Status |
+| --- | --- | --- |
+| CID-02A | Shared Scala-version-neutral Java identity/projection core in `cncf-collaborator-api`. | ACCEPTED/REVIEWED |
+| CID-02B | CNCF runtime semantics and adapter adoption of the shared ABI. | ACCEPTED/REVIEWED |
+| CID-02C | Cozy and sbt-cozy package-private Java-ABI adapters consume shared validation, projection, and collision behavior; project schema/generation remains CID-03, coordinate/repository/publication wiring CID-04, and lint CID-07. | ACCEPTED/REVIEWED |
+
+CID-02 Step feature-test evidence:
+
+All nine serialized invocations completed in dependency order with
+`lock=released`:
+
+1. `cncf-collaborator-api` `ComponentIdentityTest`, invocation
+   `42569-20260806T195014Z`: 18 passed, 0 pending, 0 failed; PASS;
+   `lock=released`.
+2. `cncf-collaborator-api` `Test/compile`, invocation
+   `42743-20260806T195026Z`: PASS; `lock=released`.
+3. `cncf-collaborator-api` `publishLocal`, invocation
+   `42897-20260806T195037Z`: PASS; this published the Java-17
+   `0.2.0-SNAPSHOT` producer before consumer tests; `lock=released`.
+4. CNCF `Phase56ComponentIdentityContractSpec`, invocation
+   `43047-20260806T195048Z`: 2 passed, 2 deferred pending, 0 failed; PASS;
+   `lock=released`.
+5. CNCF `Test/compile`, invocation `43563-20260806T195154Z`: PASS;
+   `lock=released`.
+6. Cozy `Phase56ProjectIdentityContractSpec`, invocation
+   `43778-20260806T195211Z`: 4 passed, 3 deferred pending, 0 failed; PASS;
+   `lock=released`.
+7. Cozy `Test/compile`, invocation `44023-20260806T195229Z`: PASS;
+   `lock=released`.
+8. sbt-cozy `Phase56CarCoordinateContractSpec`, invocation
+   `44193-20260806T195240Z`: 6 passed, 3 deferred pending, 0 failed; PASS;
+   `lock=released`.
+9. sbt-cozy `Test/compile`, invocation `44354-20260806T195251Z`: PASS;
+   `lock=released`.
+
+CID-02 review-fix revalidation evidence:
+
+- CNCF focused revalidation invocation `54471-20260806T202132Z` exposed one
+  already-passing E4 namespace-isolation property still wrapped in
+  `pendingUntilFixed`: 6 passed, 2 deferred pending, 1 failed; `sbt_exit=1`,
+  `wrapper_exit=1`, `lock=released`. The repair promoted that property to an
+  active assertion without changing production behavior.
+- CNCF `Phase56ComponentIdentityContractSpec`, superseding invocation
+  `55362-20260806T202347Z`: 7 passed, 2 deferred pending, 0 failed; PASS;
+  `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+- CNCF `Test/compile`, invocation `55620-20260806T202410Z`: PASS;
+  `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+- sbt-cozy `Phase56CarCoordinateContractSpec`, invocation
+  `55833-20260806T202427Z`: 6 passed, 3 deferred pending, 0 failed; PASS;
+  `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+- sbt-cozy `Test/compile`, invocation `56001-20260806T202440Z`: PASS;
+  `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+
+Repository-wide full suites and scripted validation remain Phase-release-only.
 
 ## CID-03: Cozy Project Schema and Generation
 

@@ -444,7 +444,7 @@ lazy val root = project
 
       "org.goldenport" %% "goldenport-core" % "0.4.3-SNAPSHOT",
       "org.simplemodeling" %% "simplemodeling-model" % "0.2.1-SNAPSHOT",
-      "org.goldenport" % "cncf-collaborator-api" % "0.1.0",
+      "org.goldenport" % "cncf-collaborator-api" % "0.2.0-SNAPSHOT",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test,
