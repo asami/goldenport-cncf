@@ -166,21 +166,53 @@ Repository-wide full suites and scripted validation remain Phase-release-only.
 ## CID-03: Cozy Project Schema and Generation
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Entry rule: CID-02 is complete.
 - Completion rule: A CAR project authors identity once and generation produces
   consistent source, build, and descriptor outputs.
 
-- [ ] Add canonical `project.namespace` and `project.id` schema fields.
-- [ ] Remove or deprecate independently authored component name, class name,
+CID-03 Slice ledger:
+
+| Slice | Scope | Status |
+| --- | --- | --- |
+| CID-03A | Canonical Cozy project identity schema/admission. | ACCEPTED/REVIEWED |
+| CID-03B | Cozy scaffold and generated Scala/package projection. | ACCEPTED/REVIEWED |
+| CID-03C | sbt-cozy canonical build/descriptor metadata, compatibility disagreement rejection, and upgrade/lint evidence exposure. | ACCEPTED/REVIEWED |
+
+- [x] Add canonical `project.namespace` and `project.id` schema fields.
+- [x] Remove or deprecate independently authored component name, class name,
   Scala package, artifact name, and organization fields.
-- [ ] Derive SBT/Maven metadata, JVM package, generated API class, descriptor,
+- [x] Derive SBT/Maven metadata, JVM package, generated API class, descriptor,
   and CAR filename from the canonical identity plus version.
-- [ ] Reject explicitly supplied derived values that disagree during the
+- [x] Reject explicitly supplied derived values that disagree during the
   compatibility window.
-- [ ] Add scaffold, regeneration, and upgrade tests in Cozy and sbt-cozy.
-- [ ] Expose enough canonical/legacy and effective-version evidence for CAR
+- [x] Add scaffold, regeneration, and upgrade tests in Cozy and sbt-cozy.
+- [x] Expose enough canonical/legacy and effective-version evidence for CAR
   lint to classify migration status without guessing identity.
+
+CID-03 Step validation and feature-test evidence:
+
+1. Cozy `Phase56ProjectIdentityContractSpec`, invocation
+   `15681-20260806T225917Z`: 12 passed, 1 deferred pending, 0 failed; PASS;
+   `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+2. Cozy `ModelerScaffoldSpec`, invocation `15874-20260806T225932Z`:
+   14 passed, 0 failed; PASS; `sbt_exit=0`, `wrapper_exit=0`,
+   `lock=released`.
+3. Cozy `Test/compile`, invocation `16093-20260806T225944Z`: PASS;
+   `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+4. sbt-cozy `Phase56CarCoordinateContractSpec`, invocation
+   `21614-20260806T231120Z`: 9 passed, 1 deferred pending, 0 failed; PASS;
+   `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+5. sbt-cozy `Test/compile`, invocation `21804-20260806T231133Z`: PASS;
+   `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+6. sbt-cozy scripted `cozy/project-yaml-canonical-identity`, invocation
+   `23773-20260806T231616Z`: 1 of 1 case passed; PASS; `sbt_exit=0`,
+   `wrapper_exit=0`, `lock=released`.
+
+The remaining Cozy E7 lint assertion belongs to CID-07, and the remaining
+sbt-cozy E9 repository/publication assertion belongs to CID-04. They remain
+the sole deferred pending properties in their respective Phase 56 focused
+specifications and do not weaken CID-03 closure.
 
 ## CID-04: CAR, Maven, and Repository Coordinates
 

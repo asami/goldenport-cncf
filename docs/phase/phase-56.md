@@ -170,7 +170,7 @@ not silently infer a namespace or rewrite project metadata.
 | CID-02A | Shared Java identity/projection core | `cncf-collaborator-api` owns the Scala-version-neutral Java identity/projection ABI. | accepted/reviewed |
 | CID-02B | CNCF adoption | CNCF runtime semantics and adapters adopt the shared ABI. | accepted/reviewed |
 | CID-02C | Cozy adoption | Cozy and sbt-cozy consume the shared ABI through package-private Java-ABI adapters; project schema/generation remains CID-03, coordinate/repository/publication wiring CID-04, and lint CID-07. | accepted/reviewed |
-| CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | planned |
+| CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | accepted/reviewed |
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. | planned |
 | CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | planned |
 | CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | planned |
