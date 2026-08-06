@@ -20,37 +20,79 @@ commit hash.
 ## CID-01: Inventory and Executable Contract Freeze
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF, Cozy/sbt-cozy, CAR, repository, launcher, CBD, and BoK maintainers
 - Entry rule: Phase 55 and its admitted closeout work are closed.
 - Completion rule: Existing authorities, projections, ambiguities, and exact
   failing-first acceptance identities are recorded before implementation.
 
-- [ ] Inventory `ComponentId`, `ComponentInstanceId`, `Component.Core.name`,
+- [x] Inventory `ComponentId`, `ComponentInstanceId`, `Component.Core.name`,
   descriptor models/codecs, project schemas, generators, and runtime loaders.
-- [ ] Inventory SBT organization/name/version, Maven group/artifact/version,
+- [x] Inventory SBT organization/name/version, Maven group/artifact/version,
   CAR filenames, repository/index/cache keys, and dependency declarations.
-- [ ] Inventory JVM packages, generated class names, CML Component names,
+- [x] Inventory JVM packages, generated class names, CML Component names,
   display names, titles, paths, Help/Admin identities, and diagnostics.
-- [ ] Inventory every accepted bare, kebab-case, `textus-`-prefixed, and
+- [x] Inventory every accepted bare, kebab-case, `textus-`-prefixed, and
   qualified spelling and identify whether it is canonical or compatibility.
-- [ ] Inventory every admitted CAR repository and freeze its effective
+- [x] Inventory every admitted CAR repository and freeze its effective
   version, SNAPSHOT/release status, identity shape, derived coordinates, and
   migration owner.
-- [ ] Freeze the mandatory Phase 56 migration cohort to CARs whose effective
+- [x] Freeze the mandatory Phase 56 migration cohort to CARs whose effective
   version is SNAPSHOT and record every non-SNAPSHOT legacy CAR in a separate
   next-version deferral ledger.
-- [ ] Freeze `namespace`, local `id`, qualified ID, release version, and
+- [x] Freeze `namespace`, local `id`, qualified ID, release version, and
   presentation metadata boundaries.
-- [ ] Freeze word splitting, acronym/digit, package, artifact, filename, and
+- [x] Freeze word splitting, acronym/digit, package, artifact, filename, and
   path projection algorithms and collision behavior.
-- [ ] Register failing-first cross-repository acceptance for the canonical
+- [x] Register failing-first cross-repository acceptance for the canonical
   User Account example and same-local-ID/different-namespace isolation.
+
+CID-01 closure evidence (2026-08-07):
+
+- [Inventory and failing-first contract](../notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md)
+  and [CAR migration ledger](../notes/phase-56-cid01-car-migration-ledger.yaml) are
+  the exact implementation-freeze artifacts. The inventory note is the
+  authoritative Phase-56 working specification until CID-08 normative
+  promotion; it is not the final normative design, and executable leaves remain
+  target pending.
+- The ledger contains exactly 18 eligible CAR repositories: 14
+  `SNAPSHOT` records in the mandatory migration cohort and four current-release
+  deferrals (`textus-corpus` 0.1.0, `textus-experiment` 0.1.0,
+  `textus-georesolver` 0.2.1, and `textus-sanpomap` 0.2.1). The machine-precise
+  release deferral rule is: `effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required.`
+- The E1-E10 registry paths are frozen as follows:
+
+  | Identity | Stable rules | Owning executable/specification or production path |
+  | --- | --- | --- |
+  | CNCF E1 | `CID01-R1,R2` | `src/test/scala/org/goldenport/cncf/component/Phase56ComponentIdentityContractSpec.scala`; `src/main/scala/org/goldenport/cncf/component/Component.scala` |
+  | CNCF E2 | `CID01-R1,R3` | `src/test/scala/org/goldenport/cncf/component/Phase56ComponentIdentityContractSpec.scala`; `src/main/scala/org/goldenport/cncf/component/Component.scala` |
+  | CNCF E3 | `CID01-R4,R5` | `src/test/scala/org/goldenport/cncf/component/Phase56ComponentIdentityContractSpec.scala`; `src/main/scala/org/goldenport/cncf/component/Component.scala` |
+  | CNCF E4 | `CID01-R6,R7` | `src/test/scala/org/goldenport/cncf/component/Phase56ComponentIdentityContractSpec.scala`; `src/main/scala/org/goldenport/cncf/subsystem/SubsystemAssemblyAdmission.scala`, `GenericSubsystemDescriptor.scala`, `GenericSubsystemFactory.scala`, and `Subsystem.scala` |
+  | Cozy E5 | `CID01-R1,R2` | `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/scaffold/CozyScaffold.scala`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/archive/CozyArchivePackager.scala`, and `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/CozyCarPublisher.scala` |
+  | Cozy E6 | `CID01-R3,R4` | `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/scaffold/CozyScaffold.scala`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyCarLint.scala`, and scenario-only `NotImplemented` `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/modeler/ProjectIdentityContractScenarioSpi.scala` |
+  | Cozy E7 | `CID01-R5,R6` | `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyCarLint.scala`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyRepositoryLint.scala`, and `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyBuildLint.scala` |
+  | sbt-cozy E8 | `CID01-R1,R2,R3` | `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CozyPlugin.scala` and scenario-only `NotImplemented` `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala` |
+  | sbt-cozy E9 | `CID01-R4,R5,R6` | `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarDependencyResolver.scala`, `CozyPlugin.scala` repository destinations, and scenario-only `NotImplemented` `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala` |
+  | sbt-cozy E10 | `CID01-R7,R8,R9` | `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CozyPlugin.scala`, bridge/manifest generation, and scenario-only `NotImplemented` `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala` |
+- E1-E4 are documentary target contracts: each Given names the exact note path,
+  applicable domain rules, and example; each executable leaf has one terminal
+  `pendingUntilFixed` block and does not assert contradictory current behavior.
+  Cozy and sbt-cozy SPI paths are scenario-only deferred boundaries, not
+  identity algorithms or API behavior. Pending behavior belongs to CID-02
+  through CID-07; no pending behavior is claimed as implemented here.
+- Evidence is read-only from the authoritative current worktrees: CNCF HEAD
+  `5841a3f55a2676c88a5503fa7944110b02d2472b` was clean at plan freeze, and
+  each CAR record carries full HEAD, clean/dirty boolean, project.yaml
+  SHA-256, project.yaml dirty boolean, effective-version source, and explicit
+  derived-value divergence. No CAR was mutated.
+
+CID-01 completion evidence: the nine CID-01 boxes above are checked; CID-01
+does not claim implementation, migration, or Phase 56 completion.
 
 ## CID-02: Typed Identity and Derivation Core
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Entry rule: CID-01 is complete.
 - Completion rule: One validated typed identity produces every naming
   projection through one tested implementation.

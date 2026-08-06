@@ -1,0 +1,785 @@
+schema: cncf.phase56.car-migration-ledger.v1
+frozen_at: "2026-08-07"
+current_worktree_is_authority: true
+discovery:
+  roots:
+    - /Users/asami/src/dev2025
+    - /Users/asami/src/dev2026
+  rule: "top-level Git repository under /Users/asami/src/dev2025 or /Users/asami/src/dev2026 with top-level project.yaml declaring project.kind=car or packaging.kind=car"
+  excludes:
+    - fixtures
+    - target output
+    - SAR projects
+    - sample projects
+    - library-only projects
+    - launcher-only projects
+  eligible_repository_count: 18
+snapshot_required_migration_cohort:
+  - textus-ai
+  - textus-art-scene
+  - textus-aws
+  - textus-blog
+  - textus-bok
+  - textus-cbd-support
+  - textus-control-center
+  - textus-knowledge-editor
+  - textus-scraper
+  - textus-semantic-integration-engine
+  - textus-supervisor
+  - textus-toolchain-runner
+  - textus-user-account
+  - textus-user-notification
+deferred_current_release_cohort:
+  - repository_name: textus-corpus
+    current_release: "0.1.0"
+    owner: textus-corpus
+    next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+  - repository_name: textus-experiment
+    current_release: "0.1.0"
+    owner: textus-experiment
+    next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+  - repository_name: textus-georesolver
+    current_release: "0.2.1"
+    owner: textus-georesolver
+    next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+  - repository_name: textus-sanpomap
+    current_release: "0.2.1"
+    owner: textus-sanpomap
+    next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+records:
+  - repository_name: textus-ai
+    repository: /Users/asami/src/dev2026/textus-ai
+    head: 4e7d3f10343441d3e5f44c5ce5477076b80a73df
+    clean: true
+    project_yaml_sha256: 8a15c63829b17d6ffa914977a96252195517fd76513fa1ee8288c3eb3ee815a2
+    project_yaml_dirty: false
+    effective_version: 0.2.1-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-ai-runtime
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.ai
+      component:
+        name: textus-ai-runtime
+        className: TextusAi
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-ai
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: AiRuntime
+      qualified_id: org.simplemodeling.textus.AiRuntime
+      maven_group: org.simplemodeling.textus
+      artifact: textus-ai-runtime
+      maven_artifact: textus-ai-runtime_3
+      jvm_package: org.simplemodeling.textus.airuntime
+      generated_class: AiRuntimeComponent
+      local_path: ai-runtime
+      car_filename: textus-ai-runtime-0.2.1-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-ai-runtime_3:0.2.1-SNAPSHOT
+      web_alias: /web/textus-ai-runtime/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: project.scalaPackage
+        current: org.simplemodeling.textus.ai
+        expected: org.simplemodeling.textus.airuntime
+      - field: component.className
+        current: TextusAi
+        expected: AiRuntimeComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-art-scene
+    repository: /Users/asami/src/dev2026/textus-art-scene
+    head: 8ec99b10829e5b91853d0b02d6d9ecd784bd0b7d
+    clean: false
+    project_yaml_sha256: d6955b9cf60fa8b6cf02686f5c2930fd4ba7c7a26986c91a976bb07f2bc1f8f1
+    project_yaml_dirty: false
+    effective_version: 0.1.2-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-art-scene
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.artscene
+      component:
+        name: textus-art-scene
+        className: ArtScene
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-art-scene
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: ArtScene
+      qualified_id: org.simplemodeling.textus.ArtScene
+      maven_group: org.simplemodeling.textus
+      artifact: textus-art-scene
+      maven_artifact: textus-art-scene_3
+      jvm_package: org.simplemodeling.textus.artscene
+      generated_class: ArtSceneComponent
+      local_path: art-scene
+      car_filename: textus-art-scene-0.1.2-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-art-scene_3:0.1.2-SNAPSHOT
+      web_alias: /web/textus-art-scene/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+    classification: snapshot-required-migration
+
+  - repository_name: textus-aws
+    repository: /Users/asami/src/dev2026/textus-aws
+    head: 39d52f0ebcfb4dc73d6602356e19c90430a1cbd6
+    clean: false
+    project_yaml_sha256: 55fbf9cf035b49cc97720e8c5cf515454c6e31e9a30a321dd10b68a4b543c24f
+    project_yaml_dirty: true
+    effective_version: 0.0.1-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-aws
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.aws
+      component:
+        name: aws-component
+        className: Aws
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-aws
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Aws
+      qualified_id: org.simplemodeling.textus.Aws
+      maven_group: org.simplemodeling.textus
+      artifact: textus-aws
+      maven_artifact: textus-aws_3
+      jvm_package: org.simplemodeling.textus.aws
+      generated_class: AwsComponent
+      local_path: aws
+      car_filename: textus-aws-0.0.1-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-aws_3:0.0.1-SNAPSHOT
+      web_alias: /web/textus-aws/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.name
+        current: aws-component
+        expected: textus-aws
+      - field: component.className
+        current: Aws
+        expected: AwsComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-blog
+    repository: /Users/asami/src/dev2026/textus-blog
+    head: 646a5a7c23fa8c46a381889bf7b27cf0ee1d4bc8
+    clean: false
+    project_yaml_sha256: 9c7098c43423fe940ea8ebaa772d4543dcf2ee90ca32baf6f8af206eb7ce990e
+    project_yaml_dirty: true
+    effective_version: 0.0.3-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-blog
+      organization: org.textus
+      scalaPackage: null
+      component:
+        name: textus-blog
+        className: Blog
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-blog
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Blog
+      qualified_id: org.simplemodeling.textus.Blog
+      maven_group: org.simplemodeling.textus
+      artifact: textus-blog
+      maven_artifact: textus-blog_3
+      jvm_package: org.simplemodeling.textus.blog
+      generated_class: BlogComponent
+      local_path: blog
+      car_filename: textus-blog-0.0.3-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-blog_3:0.0.3-SNAPSHOT
+      web_alias: /web/textus-blog/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: project.scalaPackage
+        current: absent
+        expected: org.simplemodeling.textus.blog
+      - field: component.className
+        current: Blog
+        expected: BlogComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-bok
+    repository: /Users/asami/src/dev2026/textus-bok
+    head: 7871ec3e143a55be81267c5c1ef5c44049b99040
+    clean: false
+    project_yaml_sha256: def655e5a68d37bd133a045391fc40ace178d60580bad00b16b0858d8170b5d9
+    project_yaml_dirty: false
+    effective_version: 0.1.0-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-bok
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.bok
+      component:
+        name: textus-bok
+        className: Bok
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-bok
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Bok
+      qualified_id: org.simplemodeling.textus.Bok
+      maven_group: org.simplemodeling.textus
+      artifact: textus-bok
+      maven_artifact: textus-bok_3
+      jvm_package: org.simplemodeling.textus.bok
+      generated_class: BokComponent
+      local_path: bok
+      car_filename: textus-bok-0.1.0-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-bok_3:0.1.0-SNAPSHOT
+      web_alias: /web/textus-bok/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: Bok
+        expected: BokComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-cbd-support
+    repository: /Users/asami/src/dev2026/textus-cbd-support
+    head: 5b5987ca94dcd03c587506510530ea6deb3f35b0
+    clean: false
+    project_yaml_sha256: c947f74ed36675ca44f80b545f784cac18e15cc7c84344515e9c068053b88dc3
+    project_yaml_dirty: true
+    effective_version: 0.1.0-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-cbd-support
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.cbdsupport
+      component:
+        name: textus-cbd-support
+        className: CbdSupport
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-cbd-support
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: CbdSupport
+      qualified_id: org.simplemodeling.textus.CbdSupport
+      maven_group: org.simplemodeling.textus
+      artifact: textus-cbd-support
+      maven_artifact: textus-cbd-support_3
+      jvm_package: org.simplemodeling.textus.cbdsupport
+      generated_class: CbdSupportComponent
+      local_path: cbd-support
+      car_filename: textus-cbd-support-0.1.0-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-cbd-support_3:0.1.0-SNAPSHOT
+      web_alias: /web/textus-cbd-support/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: CbdSupport
+        expected: CbdSupportComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-control-center
+    repository: /Users/asami/src/dev2026/textus-control-center
+    head: 9cf5bc617acd59c8182f7e20132879c89a00b9dc
+    clean: false
+    project_yaml_sha256: d297a0545491fa26b20f8cd4d6b42c3f3b36ecdcf3af0152c7cb4b130951c00c
+    project_yaml_dirty: false
+    effective_version: 0.1.0-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-control-center
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.controlcenter
+      component:
+        name: textus-control-center
+        className: TextusControlCenter
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-control-center
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: ControlCenter
+      qualified_id: org.simplemodeling.textus.ControlCenter
+      maven_group: org.simplemodeling.textus
+      artifact: textus-control-center
+      maven_artifact: textus-control-center_3
+      jvm_package: org.simplemodeling.textus.controlcenter
+      generated_class: ControlCenterComponent
+      local_path: control-center
+      car_filename: textus-control-center-0.1.0-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-control-center_3:0.1.0-SNAPSHOT
+      web_alias: /web/textus-control-center/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: TextusControlCenter
+        expected: ControlCenterComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-corpus
+    repository: /Users/asami/src/dev2026/textus-corpus
+    head: 03cf4cbc8f9bdc812bb92b7fe93c0202434ed91d
+    clean: false
+    project_yaml_sha256: 8d030b3009d1b1c7b06c3b3c727674ee3b67fad63f5285bbaf70ee41954f52ae
+    project_yaml_dirty: false
+    effective_version: 0.1.0
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-corpus
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.corpus
+      component:
+        name: textus-corpus
+        className: Corpus
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-corpus
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Corpus
+      qualified_id: org.simplemodeling.textus.Corpus
+      maven_group: org.simplemodeling.textus
+      artifact: textus-corpus
+      maven_artifact: textus-corpus_3
+      jvm_package: org.simplemodeling.textus.corpus
+      generated_class: CorpusComponent
+      local_path: corpus
+      car_filename: textus-corpus-0.1.0.car
+      maven_coordinate: org.simplemodeling.textus:textus-corpus_3:0.1.0
+      web_alias: /web/textus-corpus/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: Corpus
+        expected: CorpusComponent
+    classification: current-release-deferred
+    deferral:
+      current_release: 0.1.0
+      owner: textus-corpus
+      next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+
+  - repository_name: textus-experiment
+    repository: /Users/asami/src/dev2026/textus-experiment
+    head: 2b17b0e40b099346795b748e0a1e5913a937dbce
+    clean: false
+    project_yaml_sha256: 283ca26790cc06e6065f28ec518a75f3674df34c51c779cb000e8c668c388557
+    project_yaml_dirty: false
+    effective_version: 0.1.0
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-experiment
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.experiment
+      component:
+        name: textus-experiment
+        className: Experiment
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-experiment
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Experiment
+      qualified_id: org.simplemodeling.textus.Experiment
+      maven_group: org.simplemodeling.textus
+      artifact: textus-experiment
+      maven_artifact: textus-experiment_3
+      jvm_package: org.simplemodeling.textus.experiment
+      generated_class: ExperimentComponent
+      local_path: experiment
+      car_filename: textus-experiment-0.1.0.car
+      maven_coordinate: org.simplemodeling.textus:textus-experiment_3:0.1.0
+      web_alias: /web/textus-experiment/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: Experiment
+        expected: ExperimentComponent
+    classification: current-release-deferred
+    deferral:
+      current_release: 0.1.0
+      owner: textus-experiment
+      next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+
+  - repository_name: textus-georesolver
+    repository: /Users/asami/src/dev2026/textus-georesolver
+    head: e4382b1fca5a307e4a2642789ecac978c90c3b8f
+    clean: false
+    project_yaml_sha256: 67c0d86bd09a31ddce749c112555bdf3529c7007a2d431d0e3d476fcb9631e0c
+    project_yaml_dirty: false
+    effective_version: 0.2.1
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-georesolver
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.georesolver
+      component:
+        name: textus-georesolver
+        className: GeoResolver
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-georesolver
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: GeoResolver
+      qualified_id: org.simplemodeling.textus.GeoResolver
+      maven_group: org.simplemodeling.textus
+      artifact: textus-geo-resolver
+      maven_artifact: textus-geo-resolver_3
+      jvm_package: org.simplemodeling.textus.georesolver
+      generated_class: GeoResolverComponent
+      local_path: geo-resolver
+      car_filename: textus-geo-resolver-0.2.1.car
+      maven_coordinate: org.simplemodeling.textus:textus-geo-resolver_3:0.2.1
+      web_alias: /web/textus-geo-resolver/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: project.name
+        current: textus-georesolver
+        expected: textus-geo-resolver
+      - field: component.name
+        current: textus-georesolver
+        expected: textus-geo-resolver
+      - field: component.className
+        current: GeoResolver
+        expected: GeoResolverComponent
+      - field: local_path
+        current: georesolver
+        expected: geo-resolver
+    classification: current-release-deferred
+    deferral:
+      current_release: 0.2.1
+      owner: textus-georesolver
+      next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+
+  - repository_name: textus-knowledge-editor
+    repository: /Users/asami/src/dev2026/textus-knowledge-editor
+    head: 7c3031df7996b9c4e4409954f4b32b21cf79424e
+    clean: false
+    project_yaml_sha256: be62b0a362bd5253c776bf6820e5308775eb6b2e6e8844585b5851ffbb86111a
+    project_yaml_dirty: true
+    effective_version: 0.1.3-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-knowledge-editor
+      organization: org.goldenport
+      scalaPackage: org.goldenport.textus.knowledge.editor
+      component:
+        name: textus-knowledge-editor
+        className: TextusKnowledgeEditor
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-knowledge-editor
+    target:
+      namespace: org.goldenport.textus
+      local_id: KnowledgeEditor
+      qualified_id: org.goldenport.textus.KnowledgeEditor
+      maven_group: org.goldenport.textus
+      artifact: textus-knowledge-editor
+      maven_artifact: textus-knowledge-editor_3
+      jvm_package: org.goldenport.textus.knowledgeeditor
+      generated_class: KnowledgeEditorComponent
+      local_path: knowledge-editor
+      car_filename: textus-knowledge-editor-0.1.3-SNAPSHOT.car
+      maven_coordinate: org.goldenport.textus:textus-knowledge-editor_3:0.1.3-SNAPSHOT
+      web_alias: /web/textus-knowledge-editor/...
+    divergence:
+      - field: project.organization
+        current: org.goldenport
+        expected: org.goldenport.textus
+      - field: project.scalaPackage
+        current: org.goldenport.textus.knowledge.editor
+        expected: org.goldenport.textus.knowledgeeditor
+      - field: component.className
+        current: TextusKnowledgeEditor
+        expected: KnowledgeEditorComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-sanpomap
+    repository: /Users/asami/src/dev2026/textus-sanpomap
+    head: 0b167e4f94679f1ad25984e2a1e03974d2552867
+    clean: false
+    project_yaml_sha256: d4fb0c1bbfc90c6dc2c4c2265f7d60a003ba5eba10e61c9f5039bca126583ea9
+    project_yaml_dirty: false
+    effective_version: 0.2.1
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-sanpomap
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.sanpomap
+      component:
+        name: textus-sanpomap
+        className: Sanpomap
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-sanpomap
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Sanpomap
+      qualified_id: org.simplemodeling.textus.Sanpomap
+      maven_group: org.simplemodeling.textus
+      artifact: textus-sanpomap
+      maven_artifact: textus-sanpomap_3
+      jvm_package: org.simplemodeling.textus.sanpomap
+      generated_class: SanpomapComponent
+      local_path: sanpomap
+      car_filename: textus-sanpomap-0.2.1.car
+      maven_coordinate: org.simplemodeling.textus:textus-sanpomap_3:0.2.1
+      web_alias: /web/textus-sanpomap/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: Sanpomap
+        expected: SanpomapComponent
+    classification: current-release-deferred
+    deferral:
+      current_release: 0.2.1
+      owner: textus-sanpomap
+      next_version_trigger: "effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required."
+
+  - repository_name: textus-scraper
+    repository: /Users/asami/src/dev2026/textus-scraper
+    head: 77198ad4b65b39e0d3a287fa8d8e99eade90bd57
+    clean: true
+    project_yaml_sha256: 8bce2f644fc3194d7833a172017c840527d67035484004d26d184f9b2a22fe20
+    project_yaml_dirty: false
+    effective_version: 0.1.1-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-scraper
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.scraper
+      component:
+        name: textus-scraper
+        className: Scraper
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-scraper
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Scraper
+      qualified_id: org.simplemodeling.textus.Scraper
+      maven_group: org.simplemodeling.textus
+      artifact: textus-scraper
+      maven_artifact: textus-scraper_3
+      jvm_package: org.simplemodeling.textus.scraper
+      generated_class: ScraperComponent
+      local_path: scraper
+      car_filename: textus-scraper-0.1.1-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-scraper_3:0.1.1-SNAPSHOT
+      web_alias: /web/textus-scraper/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: Scraper
+        expected: ScraperComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-semantic-integration-engine
+    repository: /Users/asami/src/dev2026/textus-semantic-integration-engine
+    head: 36efb4f7d5bd371a48879ce0a166f32d018c3c37
+    clean: false
+    project_yaml_sha256: 4d4a63fcd61336460ef9967e09c0f2991fb1c9b943be061ae4d5888e2cdaaefa
+    project_yaml_dirty: true
+    effective_version: 0.2.0-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-semantic-integration-engine
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.semanticintegration
+      component:
+        name: textus-semantic-integration-engine
+        className: SemanticIntegrationEngine
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-semantic-integration-engine
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: SemanticIntegrationEngine
+      qualified_id: org.simplemodeling.textus.SemanticIntegrationEngine
+      maven_group: org.simplemodeling.textus
+      artifact: textus-semantic-integration-engine
+      maven_artifact: textus-semantic-integration-engine_3
+      jvm_package: org.simplemodeling.textus.semanticintegrationengine
+      generated_class: SemanticIntegrationEngineComponent
+      local_path: semantic-integration-engine
+      car_filename: textus-semantic-integration-engine-0.2.0-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-semantic-integration-engine_3:0.2.0-SNAPSHOT
+      web_alias: /web/textus-semantic-integration-engine/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: project.scalaPackage
+        current: org.simplemodeling.textus.semanticintegration
+        expected: org.simplemodeling.textus.semanticintegrationengine
+      - field: component.className
+        current: SemanticIntegrationEngine
+        expected: SemanticIntegrationEngineComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-supervisor
+    repository: /Users/asami/src/dev2026/textus-supervisor
+    head: 5827ce7d5b348d05a1bd5790d9b94c1f8db9dc41
+    clean: false
+    project_yaml_sha256: 01d2da6d014a864360b9fa6a4a885be32226899379580c368af8d5d809583d84
+    project_yaml_dirty: false
+    effective_version: 0.1.0-SNAPSHOT
+    effective_version_source: "build.sbt literal"
+    current:
+      project_name: textus-supervisor
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.supervisor
+      component:
+        name: textus-supervisor
+        className: TextusSupervisor
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-supervisor
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: Supervisor
+      qualified_id: org.simplemodeling.textus.Supervisor
+      maven_group: org.simplemodeling.textus
+      artifact: textus-supervisor
+      maven_artifact: textus-supervisor_3
+      jvm_package: org.simplemodeling.textus.supervisor
+      generated_class: SupervisorComponent
+      local_path: supervisor
+      car_filename: textus-supervisor-0.1.0-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-supervisor_3:0.1.0-SNAPSHOT
+      web_alias: /web/textus-supervisor/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: TextusSupervisor
+        expected: SupervisorComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-toolchain-runner
+    repository: /Users/asami/src/dev2026/textus-toolchain-runner
+    head: 6be5cbc389b33d7ed2681862ed924931af21415d
+    clean: true
+    project_yaml_sha256: 430a25cba9c8a5e0ab1bd0bccb481c55c36eda6d4163c5479bb279a56a4d2411
+    project_yaml_dirty: false
+    effective_version: 0.2.1-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-toolchain-runner
+      organization: org.simplemodeling.textus
+      scalaPackage: org.simplemodeling.textus.toolchainrunner
+      component:
+        name: textus-toolchain-runner
+        className: ToolchainRunner
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-toolchain-runner
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: ToolchainRunner
+      qualified_id: org.simplemodeling.textus.ToolchainRunner
+      maven_group: org.simplemodeling.textus
+      artifact: textus-toolchain-runner
+      maven_artifact: textus-toolchain-runner_3
+      jvm_package: org.simplemodeling.textus.toolchainrunner
+      generated_class: ToolchainRunnerComponent
+      local_path: toolchain-runner
+      car_filename: textus-toolchain-runner-0.2.1-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-toolchain-runner_3:0.2.1-SNAPSHOT
+      web_alias: /web/textus-toolchain-runner/...
+    divergence: []
+    divergence_note: current values happen to match target projections but remain independently authored legacy fields
+    classification: snapshot-required-migration
+
+  - repository_name: textus-user-account
+    repository: /Users/asami/src/dev2026/textus-user-account
+    head: afbc9e22e22f66f98beec95ff2484f42ce1dc35a
+    clean: true
+    project_yaml_sha256: acdb74e925b7041c5617347e79c01f4356d82d5fea53e904ba97c044c898bb94
+    project_yaml_dirty: false
+    effective_version: 0.6.0-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-user-account
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.useraccount
+      component:
+        name: UserAccount
+        className: UserAccount
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-user-account
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: UserAccount
+      qualified_id: org.simplemodeling.textus.UserAccount
+      maven_group: org.simplemodeling.textus
+      artifact: textus-user-account
+      maven_artifact: textus-user-account_3
+      jvm_package: org.simplemodeling.textus.useraccount
+      generated_class: UserAccountComponent
+      local_path: user-account
+      car_filename: textus-user-account-0.6.0-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-user-account_3:0.6.0-SNAPSHOT
+      web_alias: /web/textus-user-account/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.name
+        current: UserAccount
+        expected: textus-user-account
+      - field: component.className
+        current: UserAccount
+        expected: UserAccountComponent
+    classification: snapshot-required-migration
+
+  - repository_name: textus-user-notification
+    repository: /Users/asami/src/dev2026/textus-user-notification
+    head: 44ab37dde283d97b3dab07b9f60ddba0e98e52c7
+    clean: true
+    project_yaml_sha256: 61df84c87781b02faa230bc6cbe76983066575aa17c930a6e9162325fe0d0973
+    project_yaml_dirty: false
+    effective_version: 0.6.0-SNAPSHOT
+    effective_version_source: "project.component.version used by build.sbt"
+    current:
+      project_name: textus-user-notification
+      organization: org.textus
+      scalaPackage: org.simplemodeling.textus.usernotification
+      component:
+        name: textus-user-notification
+        className: UserNotification
+      identity_shape: legacy-independent-derived-fields
+    migration_owner: textus-user-notification
+    target:
+      namespace: org.simplemodeling.textus
+      local_id: UserNotification
+      qualified_id: org.simplemodeling.textus.UserNotification
+      maven_group: org.simplemodeling.textus
+      artifact: textus-user-notification
+      maven_artifact: textus-user-notification_3
+      jvm_package: org.simplemodeling.textus.usernotification
+      generated_class: UserNotificationComponent
+      local_path: user-notification
+      car_filename: textus-user-notification-0.6.0-SNAPSHOT.car
+      maven_coordinate: org.simplemodeling.textus:textus-user-notification_3:0.6.0-SNAPSHOT
+      web_alias: /web/textus-user-notification/...
+    divergence:
+      - field: project.organization
+        current: org.textus
+        expected: org.simplemodeling.textus
+      - field: component.className
+        current: UserNotification
+        expected: UserNotificationComponent
+    classification: snapshot-required-migration

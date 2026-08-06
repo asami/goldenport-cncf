@@ -50,9 +50,18 @@ The canonical authoring shape is provisionally:
 project:
   namespace: org.simplemodeling.textus
   id: UserAccount
-  version: 0.6.0-SNAPSHOT
-  displayName: Textus User Account
+  component:
+    version: 0.6.0-SNAPSHOT
+    displayName: Textus User Account
 ```
+
+CID-01 freeze artifacts: [identity inventory and failing-first contract](../notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md)
+and [CAR migration ledger](../notes/phase-56-cid01-car-migration-ledger.yaml).
+
+The CID-01 inventory note is the authoritative Phase-56 working specification
+until CID-08 normative promotion. It is implementation-free working authority,
+not the final normative identity design; executable leaves remain target
+pending until their owning stage implements them.
 
 Only `namespace` and `id` determine names and identifiers. `version` selects
 a release. `displayName`, summaries, and localized titles are descriptive and
@@ -129,6 +138,8 @@ republished during Phase 56 solely for this identity change. Its current
 release remains loadable through the compatibility adapter, and migration is
 required when development of its next version begins.
 
+The machine-precise release deferral rule is: `effective_version == current_release (exact release equality) => deferred; semantically comparable and effective_version > current_release while legacy identity remains => migration-required; effective_version < current_release OR versions are uncomparable OR effective_version is malformed => separate version/inventory error, never deferred or migration-required.`
+
 CAR lint makes this boundary executable:
 
 - canonical `namespace + id` with consistent projections passes;
@@ -139,6 +150,9 @@ CAR lint makes this boundary executable:
 - when that CAR advances beyond the release version recorded in the deferral
   ledger—normally to its next SNAPSHOT, but also if it advances directly to a
   release version—the condition becomes migration-required and fails lint;
+- a lower, uncomparable, or malformed effective version is a separate
+  version/inventory error and is never classified as deferred or
+  migration-required;
   and
 - a declared or materialized derived value that disagrees with the canonical
   identity fails lint for both SNAPSHOT and release versions.
@@ -151,8 +165,8 @@ not silently infer a namespace or rewrite project metadata.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| CID-01 | Inventory and contract freeze | Every authored/derived name, identity type, descriptor field, coordinate, path, alias, and consumer is inventoried; the exact SNAPSHOT migration cohort and non-SNAPSHOT deferral ledger are frozen with failing-first acceptance identities. | in-progress |
-| CID-02 | Typed identity and derivation core | Namespace, local ID, qualified Component ID, instance ID, and one shared projection library are implemented with validation and collision behavior. | planned |
+| CID-01 | Inventory and contract freeze | Every authored/derived name, identity type, descriptor field, coordinate, path, alias, and consumer is inventoried; the exact SNAPSHOT migration cohort and non-SNAPSHOT deferral ledger are frozen with failing-first acceptance identities. | done |
+| CID-02 | Typed identity and derivation core | Namespace, local ID, qualified Component ID, instance ID, and one shared projection library are implemented with validation and collision behavior. | in-progress |
 | CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | planned |
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. | planned |
 | CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | planned |
