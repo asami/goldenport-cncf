@@ -139,3 +139,15 @@ Phase 59. The current Web Session CSRF Unification plan therefore moved to:
 
 Current planning follows Phase 60. Earlier Phase 55 through Phase 58
 assignments in this journal remain chronological history.
+
+## 2026-08-06 Namespace-qualified Identity Phase Insertion
+
+Namespace-qualified Component identity became the new Phase 56, shifting Web
+Session CSRF Unification to Phase 61. Current planning follows:
+
+- `docs/phase/phase-61.md`
+- `docs/phase/phase-61-checklist.md`
+
+All earlier phase assignments in this journal remain chronological history.
+The authoritative mapping is
+`docs/journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md`.

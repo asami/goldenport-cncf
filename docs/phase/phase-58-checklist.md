@@ -1,108 +1,499 @@
-# Phase 58 Checklist - Component Admin and Documentation Visibility
+# Phase 58 Checklist - Component Documentation and AI Knowledge Integration
 
 status=planned
-phase=[Phase 58 - Component Admin and Documentation Visibility](phase-58.md)
-implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
-planning_journal=[Phase 58 Component Admin and Documentation Visibility Planning](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
+phase=[Phase 58 - Component Documentation and AI Knowledge Integration](phase-58.md)
+implementation_note=[Component Documentation Knowledge Package Implementation Proposal](../notes/component-documentation-knowledge-package-implementation.md)
+composition_journal=[Component SubComponent and Development Composition Decision](../journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md)
+phase_split_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
 
 This checklist is the authoritative Phase 58 state ledger after Phase 58
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
 Phase 57 closes.
 
-## ADM-01: Inventory and Executable Contract Freeze
+## DOC-01: Inventory and Executable Acceptance
 
+Stage Status:
 - Current status: PLANNED
-- [ ] Inventory existing Admin, Help, configuration, runtime, datastore,
-  Component model, and management surfaces.
-- [ ] Record class/release/instance/Subsystem identity ambiguities.
-- [ ] Record every direct CAR, repository, source, or documentation scan.
-- [ ] Fix Help as the knowledge surface and Admin as the operator surface.
-- [ ] Register exact failing-first acceptance identities.
+- Owner: CNCF, Cozy/SmartDox, SimpleModeling.org, ai-directive, Skill/Launcher,
+  Textus CBD Support, Textus BoK, and representative Component maintainers
+- Entry rule: Phase 57 is closed.
+- Completion rule: Existing contracts, conflicts, ownership boundaries, and
+  exact failing-first acceptance identities are recorded before implementation.
 
-## ADM-02: Identity and Admin View Model
+- [ ] Inventory CNCF Help, Manual, `/man`, OpenAPI, MCP, Web, CAR resource,
+  production-visibility, and authorization contracts.
+- [ ] Inventory Cozy CAR documentation lint, source/archive projection,
+  Scaladoc, and publication behavior.
+- [ ] Inventory SmartDox/Markdown parsing and HTML/PDF projection behavior.
+- [ ] Inventory SimpleModeling.org versioned HTML, RDF/JSON-LD, ontology,
+  schema, glossary, catalog, and canonical URL publication behavior.
+- [ ] Inventory authoritative `ai-directive` core/profile/sample authority,
+  versioning, visibility, and project-local extension boundaries.
+- [ ] Inventory `SkillBundleManifest`, CAR Skill ownership, Cozy projection,
+  Launcher installation, MCP requirements, and non-activation boundaries.
+- [ ] Inventory Textus CBD Support exact retrieval, usage, MCP, CAR Review,
+  catalog, local artifact, and BoK evidence contracts.
+- [ ] Inventory Textus BoK existence-only, SIE federation, CBD handoff, RAG,
+  and MCP contracts.
+- [ ] Fix CBD Support as the primary exact Component-use integration and
+  Textus BoK as the complementary semantic route.
+- [ ] Fix SimpleModeling.org as the basic public information surface for
+  shared CNCF/CML/Cozy/SmartDox knowledge and framework Documentation
+  Components as optional versioned publication snapshots.
+- [ ] Preserve Component-specific documentation ownership while fixing
+  separate framework product, document, section, resource, canonical URL, and
+  content-hash identities.
+- [ ] Fix exact Component Help/resource authority separately from framework
+  installed-snapshot, online-publication, and RAG-snapshot authority.
+- [ ] Fix public AI guidance as a projection that cannot override the mounted
+  directive.
+- [ ] Fix public Skill metadata as discovery information that cannot install,
+  activate, execute, configure, or grant authority.
+- [ ] Fix mandatory resource/manual/projection profiles.
+- [ ] Admit the Phase 57 logical release, Resource SubComponent, resolver,
+  integrity, and provenance contract as an input that Phase 58 does not
+  reimplement.
+- [ ] Fix source filtering, license, and restricted-access profiles without a
+  source-omitted logical release.
+- [ ] Fix develop-mode automatic Documentation composition and AI development
+  context requirements.
+- [ ] Fix the `Develop`, `Test`, `Demo`, and `Production` runtime resource
+  policy matrix without exposing `OperationMode` to Component domain code.
+- [ ] Fix Component model coverage for Entity, Powertype, StateMachine, Value,
+  Datatype, relationships, class diagrams, and state diagrams.
+- [ ] Fix Help and AI as Phase 58 consumers and Phase 59 Admin as a later
+  consumer of the same resource and knowledge/model contracts.
+- [ ] Prohibit independent CAR, repository, cache, development-directory, or
+  SubComponent scanning by Help, AI, CBD Support, BoK, or Admin.
+- [ ] Register failing-first Executable Specification identities for every
+  Phase 58 acceptance group.
 
+Evidence:
+- Pending.
+
+## DOC-02: Knowledge and Model Resource Contracts
+
+Stage Status:
 - Current status: PLANNED
-- [ ] Define a versioned Component Admin view model.
-- [ ] Distinguish Component class, logical release, loaded instance,
-  Subsystem, and implicit Component Subsystem.
-- [ ] Preserve exact source/provenance for every projected field.
-- [ ] Define unavailable, forbidden, stale, incompatible, and corrupt states.
-- [ ] Add codec, compatibility, ambiguity, and multi-instance specifications.
+- Owner: CNCF Component/CAR contract maintainers
+- Entry rule: DOC-01 is DONE.
+- Completion rule: Versioned knowledge and Component-model manifests bind
+  content to Phase 57 resource identity and provenance without duplicating
+  Component identity or physical resolution.
 
-## ADM-03: Configuration and Composition Visibility
+- [ ] Consume the Phase 57 composition manifest and
+  `ResolvedComponentResources` or accepted equivalent.
+- [ ] Define the knowledge and model manifest schema/version and canonical
+  resource paths.
+- [ ] Define resource identity, kind, role, language, media type, size, and
+  digest.
+- [ ] Define contextual framework canonical publication URL, publication
+  generation, document and section identity, and local/online availability
+  metadata without replacing Component resource identity.
+- [ ] Define authority, stability, source, license, disclosure, and provenance
+  metadata.
+- [ ] Define generated-from and stale-projection detection.
+- [ ] Bind each Documentation and SourceCode knowledge entry to a Phase 57
+  logical resource identity while preserving physical provenance.
+- [ ] Define portable Component model resources for Entity, Powertype,
+  StateMachine, Value, Datatype, and relationships.
+- [ ] Define deterministic class-diagram and StateMachine-diagram resource
+  identities and provenance.
+- [ ] Define framework Documentation Component references without making them
+  execution dependencies or independent authoring sources.
+- [ ] Define public Directive projection identity, originating
+  directive/profile/rule version, authority, visibility, source digest, and
+  redaction metadata.
+- [ ] Define public Skill Catalog metadata for Skill/bundle identity, owner,
+  purpose, trigger, requirements, permissions, side effects, MCP requirements,
+  installation reference, visibility, and digest.
+- [ ] Implement JSON codec and deterministic validation.
+- [ ] Define the stable read-only consumer contract later used by Phase 59
+  Admin.
+- [ ] Reject unsafe paths, duplicate identities, invalid media/role
+  combinations, and digest mismatch.
+- [ ] Preserve forward-compatible unknown fields according to an explicit rule.
+- [ ] Add property-based manifest and hostile-path specifications.
 
+Evidence:
+- Pending.
+
+## DOC-03: Authoring and Content Packaging Toolchain
+
+Stage Status:
 - Current status: PLANNED
-- [ ] Consume Phase 55 `ConfigurationBindingCollection` and provenance.
-- [ ] Show effective typed values, winning and overridden bindings, scope,
-  source location, and selection trace.
-- [ ] Consume Phase 56 `ResolvedComponentResources` or its accepted
-  equivalent.
-- [ ] Show primary, Documentation, and SourceCode artifact identity,
-  availability, integrity, access, and physical provenance.
-- [ ] Verify Admin performs no independent physical-resource scan.
+- Owner: Cozy/sbt-cozy and SmartDox maintainers
+- Entry rule: DOC-02 is DONE.
+- Completion rule: Required manuals, model projections, diagrams, Scaladoc,
+  and filtered release source are validated and handed to the Phase 57
+  packaging contract through their owning toolchains.
 
-## ADM-04: Component Contract and Model Visibility
+- [ ] Define User Guide and Reference Manual entry-point conventions.
+- [ ] Define optional manual role extension.
+- [ ] Validate SmartDox and admitted Markdown parsing.
+- [ ] Generate stable framework document/section metadata shared by Web, Help
+  references, framework Documentation Components, MCP, and RAG.
+- [ ] Generate SimpleModeling.org framework HTML and structured
+  RDF/JSON-LD/catalog projections from the same publication generation.
+- [ ] Generate a general-public AI Development Guide only from explicitly
+  admitted public Directive projections.
+- [ ] Generate a public Skill Catalog from admitted Skill metadata without
+  copying restricted raw `SKILL.md` content.
+- [ ] Decide compatibility treatment of existing Asciidoc/HTML sources.
+- [ ] Decide and implement mandatory HTML/PDF profiles.
+- [ ] Generate and package Component Scaladoc.
+- [ ] Generate portable Component model metadata and deterministic Mermaid
+  class/state diagrams from CML/generated metadata rather than reflection.
+- [ ] Generate and publish CNCF/Cozy/SmartDox Scaladoc with an optional
+  framework Documentation Component projection.
+- [ ] Generate the selected structured Scaladoc symbol/search index.
+- [ ] Implement public/internal Scaladoc exposure policy.
+- [ ] Implement source include/exclude/license/disclosure and restricted-access
+  policy without an omitted-source logical release.
+- [ ] Exclude secrets, local configuration, caches, and unrelated files.
+- [ ] Package exact authored/generated release source, CML, build definitions,
+  tests, dependency evidence, and generation provenance in the primary or
+  SourceCode SubComponent.
+- [ ] Collect admitted `Compile / managedSources` and diagnostically required
+  `Test / managedSources` output into normalized `generated-source/main` and
+  `generated-source/test` resources.
+- [ ] Preserve generator inputs, identities, versions, options, dependency
+  evidence, digests, and provenance needed to reproduce, investigate, and
+  debug the exact release.
+- [ ] Exclude raw `target` layout, class files, incremental compiler caches,
+  temporary files, logs, downloaded caches, and host-specific state.
+- [ ] Add release-readiness checks for missing or stale debugging evidence and
+  generated-source/input digest mismatch.
+- [ ] Generate Documentation and SourceCode content inventories, resource
+  digests, and provenance for Phase 57 packaging.
+- [ ] Prove SimpleModeling.org and framework Documentation Component
+  projections retain the same publication generation, document/section
+  identities, and hashes.
+- [ ] Prove public Directive and Skill projections retain origin
+  version/identity/digest and cannot be mistaken for active contracts.
+- [ ] Prove development-source and packaged-CAR manifest/resource equivalence.
+- [ ] Extend normal and strict Cozy CAR documentation lint.
 
+Evidence:
+- Pending.
+
+## DOC-04: Knowledge and Development Context Composition
+
+Stage Status:
 - Current status: PLANNED
-- [ ] Show Service, Operation, SPI, capability, and dependency contracts.
-- [ ] Show Entity, Powertype, StateMachine, Value, Datatype, and relationships.
-- [ ] Consume Phase 57 class/state diagrams and schema/model metadata.
-- [ ] Preserve contract authority and distinguish generated projections.
-- [ ] Verify visibility grants no invocation or management authority.
+- Owner: CNCF Help, development-context, knowledge, and assembly consumers
+- Entry rule: DOC-03 is DONE.
+- Completion rule: Phase 57 resolved resources compose into one attributed
+  knowledge and AI development context while framework Documentation
+  Components remain separate publication snapshots.
 
-## ADM-05: Runtime and Datastore Visibility
+- [ ] Consume local, remote, restricted, unavailable, corrupt, incompatible,
+  and stale states exactly as returned by Phase 57.
+- [ ] Preserve logical identity, physical provenance, access, disclosure,
+  integrity, and resolution trace in `ResolvedComponentKnowledge` or the
+  accepted equivalent.
+- [ ] Build `ComponentDevelopmentContext` from admitted manuals, models, APIs,
+  configuration, examples, source, generated source, Scaladoc, tests, and
+  provenance.
+- [ ] Never walk development directories, expanded artifacts, caches, or
+  repositories outside the Phase 57 resolver.
+- [ ] Preserve Phase 57 operation-mode policy without exposing
+  `OperationMode` to Component domain APIs.
+- [ ] Map incomplete Phase 57 development resources to structured,
+  attributable development-context failure.
+- [ ] Define framework Documentation Component subject/product/version and
+  publication-generation identity separately from target-Component
+  relationships.
+- [ ] Allow framework Documentation Components to carry the public AI
+  Development Guide and Skill Catalog without carrying authoritative project
+  directives or installable Skill authority.
+- [ ] Validate framework canonical URL, publication generation, resource
+  hashes, and optional installation semantics.
+- [ ] Prove absence of framework Documentation Components never prevents
+  Component startup or access to Component-specific Help/manuals.
+- [ ] Define a closed-network Documentation Hub SAR composition profile.
 
+Evidence:
+- Pending.
+
+## DOC-05: Unified Help and Direct AI Access
+
+Stage Status:
 - Current status: PLANNED
-- [ ] Show lifecycle, health, runtime, dependency, and ClassLoader state.
-- [ ] Show datastore, schema, collection, Entity ID, and collection ID
-  evidence through their authoritative runtime contracts.
-- [ ] Distinguish configured, resolved, active, degraded, and failed state.
-- [ ] Keep instance state isolated across versions and Subsystems.
-- [ ] Add standalone and multi-user `ExecutionContext` acceptance.
+- Owner: CNCF Help, HTTP, CLI, Web, and security maintainers
+- Entry rule: DOC-04 is DONE.
+- Completion rule: Humans and AI reach the same resolved Component resources;
+  develop mode provides a complete, attributed development context, and the
+  stable manifest/resource consumer contract is ready for Phase 59 Admin.
 
-## ADM-06: Documentation Navigation
-
-- Current status: PLANNED
-- [ ] Consume the Phase 57 Component knowledge manifest.
-- [ ] Link exact User Guide, Reference Manual, Help, Scaladoc, model diagrams,
-  examples, source availability, and troubleshooting resources.
-- [ ] Show local, cached, remote, restricted, unavailable, and incompatible
-  resource state accurately.
-- [ ] Keep Help navigation and Admin operational context mutually linked
-  without duplicating ownership.
-- [ ] Verify Admin generates or scans no documentation itself.
-
-## ADM-07: Authorized Management
-
-- Current status: PLANNED
-- [ ] Inventory current Component-owned management Operations.
-- [ ] Define the admitted management-action catalog separately from ordinary
-  Component Operations.
-- [ ] Enforce explicit authorization, validation, lifecycle preconditions,
-  idempotency where required, and audit.
-- [ ] Prevent read-only resource visibility from granting management access.
-- [ ] Add forbidden, conflict, unavailable, stale-instance, and retry
+- [ ] Define the canonical Help manifest discovery route.
+- [ ] Advertise the manifest from human Help with a stable relation/media type.
+- [ ] Integrate User Guide, Reference, configuration, Operations, schemas,
+  OpenAPI, Scaladoc, source, troubleshooting, and provenance navigation.
+- [ ] Integrate Entity, Powertype, StateMachine, Value, Datatype, class
+  diagram, and state diagram navigation.
+- [ ] Build a manifest-based `ComponentDevelopmentContext` with manuals,
+  models, APIs, configuration, examples, source, generated source, Scaladoc,
+  tests, and provenance.
+- [ ] Make develop-mode Documentation composition automatic rather than
+  requiring a separate manual fetch.
+- [ ] Project mounted/local/remote/restricted/unavailable/incompatible/stale/
+  corrupt resource state from Phase 57 for Help and the later Admin surface.
+- [ ] Provide structured manifest/resource HTTP retrieval.
+- [ ] Provide CLI manifest/resource inspection.
+- [ ] Reconcile `/help`, `/man`, OpenAPI, Web, and compatibility routes.
+- [ ] Make `/help/system` describe the running runtime and `/man/system`
+  resolve matching CNCF documentation locally or online.
+- [ ] Put CML/Cozy documentation under explicit developer/toolchain
+  navigation rather than ordinary operator Help.
+- [ ] Show active directive version/profile/digest and its public-guide
+  reference without exposing restricted rule bodies.
+- [ ] Show Component-associated Skill metadata, availability, compatibility,
+  and installation state without installing or activating the Skill.
+- [ ] Show framework documentation installed, cached, online, unavailable, and
+  version-mismatch states without changing Component manual resolution.
+- [ ] Keep human `latest` links separate from immutable evidence URLs.
+- [ ] Apply authorization and production visibility deliberately.
+- [ ] Prevent physical Documentation/SourceCode SubComponent boundaries from
+  leaking into ordinary navigation.
+- [ ] Publish the exact read-only resource and knowledge/model API consumed by
+  Phase 59; do not implement Admin runtime views or management actions here.
+- [ ] Verify exact Component/version selection under multiple loaded versions
+  or instances.
+- [ ] Add hostile content, content type, caching, and disclosure
   specifications.
+- [ ] Verify framework documentation online failure does not prevent execution
+  or misreport remote content as local.
 
-## ADM-08: Surface and Security Acceptance
+Evidence:
+- Pending.
 
+## DOC-06: Textus CBD Support Primary Integration
+
+Stage Status:
 - Current status: PLANNED
-- [ ] Project one view model through Web, HTTP, CLI, and machine-readable
-  surfaces.
-- [ ] Verify redaction, source disclosure, path safety, integrity, and
-  authorization.
-- [ ] Verify multiple Components, versions, instances, Subsystems, and users.
-- [ ] Verify hostile metadata/resources cannot inject unsafe Admin content.
-- [ ] Run focused, full, and representative downstream validation.
-- [ ] Complete read-only review and conditional focused re-review.
+- Owner: Textus CBD Support and CNCF Component knowledge maintainers
+- Entry rule: DOC-05 is DONE.
+- Completion rule: CBD Support uses exact Component knowledge manifests and
+  resources as the primary evidence for detail, usage, MCP, and CAR Review.
 
-## ADM-09: Canonical Documentation and Closure
+- [ ] Admit manifest identity/location/digest from catalog, development
+  directory, warehouse CAR, cache, and exact Component observations.
+- [ ] Preserve catalog/source identity and require exact Component/version
+  selection before detailed retrieval.
+- [ ] Resolve embedded and Documentation/SourceCode SubComponent resources
+  safely.
+- [ ] Project configuration, Operations, schemas, manuals, examples, Scaladoc,
+  source availability, and provenance.
+- [ ] Return explicit absence when a source does not publish Component
+  knowledge.
+- [ ] Make `getUsage` cite exact contract/manual/example/source evidence and
+  distinguish inference.
+- [ ] Provide bounded read-only manifest/resource retrieval through CBD MCP.
+- [ ] Add CAR Review checks for manual completeness, manifest integrity,
+  Scaladoc, source policy, Help discovery, and BoK publication readiness.
+- [ ] Enforce origin, digest, size, license, authorization, and disclosure.
+- [ ] Keep CBD Support independently useful without Textus BoK.
+- [ ] Preserve BoK semantic evidence as a separate attributable input.
+- [ ] Update CBD design/spec/strategy/manual contracts.
 
+Evidence:
+- Pending.
+
+## DOC-07: Textus BoK Complementary RAG/MCP Integration
+
+Stage Status:
 - Current status: PLANNED
-- [ ] Create/update `docs/design/component-admin.md`.
-- [ ] Create/update `docs/spec/component-admin.md`.
+- Owner: Textus BoK RAG/MCP maintainers
+- Entry rule: DOC-06 is DONE.
+- Completion rule: Component semantic retrieval and shared framework knowledge
+  retrieval remain distinct, bounded, attributable, and capable of exact
+  handoff to CBD Support/direct Help.
+
+- [ ] Define the Component knowledge manifest admission resource kind.
+- [ ] Define admission resource kinds for SimpleModeling.org publication
+  metadata and equivalent framework Documentation Component snapshots without
+  changing Component-specific admission.
+- [ ] Define separate public AI-guidance and Skill-metadata admission resource
+  kinds.
+- [ ] Admit SmartDox-derived document/section metadata, RDF/JSON-LD, glossary,
+  ontology, schema, and catalog projections without requiring HTML scraping.
+- [ ] Resolve Component-local and Documentation/SourceCode SubComponent
+  resources safely.
+- [ ] Define deterministic document, section, chunk, and evidence identities.
+- [ ] Preserve Component version, manifest/resource digests, authority,
+  license, source path, and indexed-at time.
+- [ ] Preserve framework product/version, canonical URL, publication
+  generation, document/section digest, and indexed-at time separately.
+- [ ] Preserve Directive/rule/profile or Skill/bundle identity, version,
+  authority, visibility, owner, canonical URL, and digest separately.
+- [ ] Preserve SmartDox structure and schema/API resources without flattening
+  away required semantics.
+- [ ] Implement lexical and structural retrieval independent of embeddings.
+- [ ] Integrate optional embedding/vector retrieval through existing provider
+  boundaries.
+- [ ] Return exact Component/resource/section evidence with every result.
+- [ ] Return exact framework product, version, document/section identity,
+  canonical URL, source generation, and content hash with every framework
+  result.
+- [ ] Distinguish contract, manual, example, source, and context authority.
+- [ ] Detect and report stale snapshot versus current manifest digest.
+- [ ] Add read-only MCP discovery, search, manifest, resource, and section
+  operations under explicit MCP readiness.
+- [ ] Keep framework Documentation Component Operations out of MCP by default
+  and expose curated BoK retrieval Operations instead.
+- [ ] Add bounded read-only AI-guidance and Skill-metadata discovery/retrieval
+  Operations under explicit MCP readiness.
+- [ ] Prove guidance/Skill retrieval cannot override directives, mutate Codex
+  configuration, install/activate Skills, or grant MCP authority.
+- [ ] Keep mutation and execution Operations absent from the retrieval MCP
+  catalog.
+- [ ] Enforce proprietary-source and caller-authorization policy at response
+  time.
+- [ ] Return exact identity/version/resource/digest evidence for CBD Support
+  handoff.
+- [ ] Preserve CBD Support detail/usage/comparison/review ownership.
+- [ ] Update Textus BoK domain/design/spec/strategy/manual contracts.
+- [ ] Add RAG/MCP no-match, ambiguous-version, stale, forbidden, and bounded
+  result specifications.
+
+Evidence:
+- Pending.
+
+## DOC-08: Representative Component and Framework Documentation Acceptance
+
+Stage Status:
+- Current status: PLANNED
+- Owner: CNCF samples and selected Component maintainers
+- Entry rule: DOC-07 is DONE.
+- Completion rule: Embedded and required-SubComponent Component profiles plus
+  separate framework online/installed/offline profiles preserve ownership
+  while providing attributable human and AI knowledge.
+
+- [ ] Provide one small Component with embedded manuals, model metadata,
+  diagrams, Scaladoc, source, and manifests.
+- [ ] Provide one large Component using required Documentation and SourceCode
+  SubComponents.
+- [ ] Provide one restricted-source profile whose SourceCode SubComponent is
+  repository-complete but authorization-controlled.
+- [ ] Verify `OperationMode.Develop` automatically composes Documentation and
+  the development target's source.
+- [ ] Verify `OperationMode.Test` uses deterministic explicitly selected
+  local resources and performs no implicit remote retrieval.
+- [ ] Verify `OperationMode.Demo` does not automatically mount source and
+  requires explicit policy for remote Documentation.
+- [ ] Verify `OperationMode.Production` permits primary-only activation,
+  resolves Documentation only on demand and under authorization, and never
+  automatically fetches source.
+- [ ] Verify dependency Documentation is available to AI by exact version and
+  dependency source obeys authorization policy.
+- [ ] Verify production activation does not fetch required knowledge
+  SubComponents or fail only because their repository is offline.
+- [ ] Verify an offline complete-release bundle resolves all SubComponents.
+- [ ] Provide one online-only profile using versioned SimpleModeling.org
+  framework publication.
+- [ ] Provide one installed CNCF/CML/Cozy framework Documentation Component
+  profile.
+- [ ] Provide one closed-network Documentation Hub SAR profile.
+- [ ] Provide one public AI Development Guide generated from explicitly public
+  `ai-directive` rules.
+- [ ] Provide one public Skill Catalog linked to an actual CAR-owned
+  `SkillBundleManifest`.
+- [ ] Verify User Guide and Reference Manual navigation.
+- [ ] Verify direct Help-to-manifest AI discovery.
+- [ ] Verify exact configuration, Operation, schema, example, and Scaladoc
+  retrieval.
+- [ ] Verify admitted source improves retrieval without becoming a public
+  contract or leaking secrets/local state.
+- [ ] Verify Component model metadata and diagrams cover Entity, Powertype,
+  StateMachine, Value, and Datatype.
+- [ ] Verify CBD Support exact detail, usage, MCP, and CAR Review.
+- [ ] Verify Textus BoK ingestion and evidence-bearing RAG/MCP retrieval.
+- [ ] Verify BoK-to-CBD-to-direct-Help identity/version/hash handoff.
+- [ ] Verify offline/runtime operation without build/render/embedding tools.
+- [ ] Verify online-only, installed-framework-snapshot, and offline-Hub
+  profiles resolve the same framework document and section identities without
+  changing Component-specific resource resolution.
+- [ ] Verify the public guide cannot override the mounted directive and the
+  Skill Catalog cannot install or activate its referenced Skill.
+
+Evidence:
+- Pending.
+
+## DOC-09: Security, Regression, and Downstream Validation
+
+Stage Status:
+- Current status: PLANNED
+- Owner: all Phase 58 repository maintainers
+- Entry rule: DOC-08 is DONE.
+- Completion rule: Security, compatibility, full regression, and downstream
+  checks pass across every changed repository.
+
+- [ ] Verify traversal, symlink, oversized-resource, malformed-content, and
+  digest attacks fail safely.
+- [ ] Verify secrets and unauthorized source never enter Help, indexes,
+  diagnostics, RAG context, or MCP responses.
+- [ ] Verify manifest/SubComponent relationships grant no Operation, runtime
+  Component, Componentlet, or MCP execution authority.
+- [ ] Verify develop-mode automatic mounting cannot bypass source disclosure,
+  authorization, path, digest, or signature policy.
+- [ ] Verify production mode never auto-fetches SourceCode SubComponents.
+- [ ] Verify production Help/knowledge exposure follows the accepted policy.
+- [ ] Verify online-documentation timeout, unavailable, cache, version
+  mismatch, and immutable-evidence behavior.
+- [ ] Verify restricted directives, project-local rules, raw private Skill
+  content, credentials, approvals, and provider configuration never enter
+  public Help, publication, indexes, RAG context, or MCP responses.
+- [ ] Run CNCF focused and full suites.
+- [ ] Run Cozy/sbt-cozy and SmartDox focused/full suites.
+- [ ] Run SimpleModeling.org publication and structured metadata validation.
+- [ ] Run Textus BoK focused/full suites and CAR lint/build.
+- [ ] Run Textus CBD Support focused/full suites, CAR lint/build, and
+  representative MCP checks.
+- [ ] Run representative Component and subsystem integration suites.
+- [ ] Run `sbt --batch Test/compile` in every changed Scala repository.
+- [ ] Run `git diff --check` in every changed repository.
+- [ ] Complete read-only review, review-fix, and clean re-review.
+
+Evidence:
+- Pending.
+
+## DOC-10: Canonical Documentation and Closure
+
+Stage Status:
+- Current status: PLANNED
+- Owner: CNCF, SimpleModeling.org/Cozy, ai-directive, Skill/Launcher, Textus
+  CBD Support, and Textus BoK architecture maintainers
+- Entry rule: DOC-09 is DONE and implementation behavior is stable.
+- Completion rule: Design, specification, notes, strategy, phase records,
+  implementation, and executable evidence agree without a competing latest
+  contract.
+
+- [ ] Create/update
+  `docs/design/component-documentation-knowledge-package.md`.
+- [ ] Create/update
+  `docs/spec/component-documentation-knowledge-package.md`.
+- [ ] Update affected CNCF Help/Manual/CAR/Web/MCP design/spec documents.
+- [ ] Update SimpleModeling.org and Cozy publication design/specification for
+  stable versioned HTML, structured metadata, and Documentation Component
+  projection.
+- [ ] Update `ai-directive` public-projection guidance without weakening its
+  authoritative contract or sample non-authority.
+- [ ] Update Skill bundle/catalog documentation so publication metadata,
+  installation, activation, execution, and MCP authority remain separate.
+- [ ] Update Textus CBD Support and Textus BoK
+  design/spec/strategy/manual documents.
 - [ ] Record exact executable evidence in normative documents.
-- [ ] Mark the implementation note historical and non-normative.
-- [ ] Reconcile strategy, phase, checklist, Help/Admin, and affected contracts.
-- [ ] Confirm no latest contract exists only in notes or journal.
-- [ ] Close Phase 58 with exact validation evidence.
+- [ ] Mark
+  `docs/notes/component-documentation-knowledge-package-implementation.md`
+  historical and non-normative.
+- [ ] State in that note that final design/specification override it.
+- [ ] Retain the journal as chronological consideration history.
+- [ ] Remove or mark superseded contradictory current documentation.
+- [ ] Confirm no latest specification exists only in notes, journal, phase
+  documents, implementation, or tests.
+- [ ] Update CNCF strategy completed history and remove active Phase 58 item.
+- [ ] Close Phase 58 dashboard/checklist with exact validation evidence.
+
+Evidence:
+- Pending.

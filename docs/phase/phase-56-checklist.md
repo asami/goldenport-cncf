@@ -1,252 +1,185 @@
-# Phase 56 Checklist - Component Resource SubComponent Foundation
+# Phase 56 Checklist - Namespace-qualified Component Identity and Derived Coordinates
 
 status=planned
-phase=[Phase 56 - Component Resource SubComponent Foundation](phase-56.md)
-implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
-planning_journal=[Phase 56 Resource SubComponent Phase Split and Planning](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
+phase=[Phase 56 - Namespace-qualified Component Identity and Derived Coordinates](phase-56.md)
+planning_journal=[Phase 56 Identity Planning and Phase Renumbering](../journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md)
+entry_handoff=[Current Work Closeout before Phase 56](../journal/2026/08/2026-08-06-current-work-closeout-before-phase-56.md)
 
 This checklist is the authoritative Phase 56 state ledger after Phase 56
-starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 55 closes.
+starts. Only one stage may be `IN_PROGRESS` at a time. No implementation stage
+starts until the current work described by the entry handoff reaches its
+bounded stopping point.
 
-## RSC-01: Inventory and Executable Contract Freeze
-
-Stage Status:
-- Current status: PLANNED
-- Owner: CNCF, Cozy/sbt-cozy, Component Repository, Help, Admin, and sample
-  maintainers
-- Entry rule: Phase 55 is closed.
-- Completion rule: Existing behavior, conflicts, ownership, and exact
-  failing-first acceptance identities are recorded.
-
-- [ ] Inventory CAR/SAR layouts, runtime manifests, descriptors, integrity
-  entries, dependency metadata, expanded artifacts, and development evidence.
-- [ ] Inventory Component Repository index, local publication, remote
-  retrieval, cache, offline, and release-visibility behavior.
-- [ ] Inventory development-directory and packaged resolver precedence.
-- [ ] Inventory current Help and Admin physical-resource walking or assumptions.
-- [ ] Inventory source/archive equivalence and managed-source collection paths.
-- [ ] Fix Resource SubComponent as non-executable and non-participating.
-- [ ] Fix initial `Documentation` and `SourceCode` roles.
-- [ ] Fix logical release identity separately from physical artifact identity.
-- [ ] Fix publication completeness separately from runtime activation.
-- [ ] Register failing-first specifications for every Phase 56 acceptance
-  group.
-
-Evidence:
-- Pending.
-
-## RSC-02: Identity and Composition Model
+## CID-01: Inventory and Executable Contract Freeze
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Component and repository contract maintainers
-- Entry rule: RSC-01 is DONE.
-- Completion rule: One deterministic composition model and codec represent
-  exact release membership without duplicating Component identity.
+- Owner: CNCF, Cozy/sbt-cozy, CAR, repository, launcher, CBD, and BoK maintainers
+- Entry rule: Phase 55 and its admitted closeout work are closed.
+- Completion rule: Existing authorities, projections, ambiguities, and exact
+  failing-first acceptance identities are recorded before implementation.
 
-- [ ] Define root composition manifest schema and version.
-- [ ] Define primary and Resource SubComponent artifact roles.
-- [ ] Define parent Component coordinate, exact logical release, artifact
-  coordinate, role, version, digest, signature, requiredness, and repository.
-- [ ] Define access, disclosure, license, media/profile, and provenance fields.
-- [ ] Define canonical logical resource identity separately from physical path.
-- [ ] Define forward-compatible unknown-field behavior.
-- [ ] Reject duplicate roles, coordinates, logical resources, and inconsistent
-  parent membership.
-- [ ] Reject unsafe paths and malformed digests/signatures.
-- [ ] Add codec round-trip, property, hostile-input, and compatibility tests.
+- [ ] Inventory `ComponentId`, `ComponentInstanceId`, `Component.Core.name`,
+  descriptor models/codecs, project schemas, generators, and runtime loaders.
+- [ ] Inventory SBT organization/name/version, Maven group/artifact/version,
+  CAR filenames, repository/index/cache keys, and dependency declarations.
+- [ ] Inventory JVM packages, generated class names, CML Component names,
+  display names, titles, paths, Help/Admin identities, and diagnostics.
+- [ ] Inventory every accepted bare, kebab-case, `textus-`-prefixed, and
+  qualified spelling and identify whether it is canonical or compatibility.
+- [ ] Inventory every admitted CAR repository and freeze its effective
+  version, SNAPSHOT/release status, identity shape, derived coordinates, and
+  migration owner.
+- [ ] Freeze the mandatory Phase 56 migration cohort to CARs whose effective
+  version is SNAPSHOT and record every non-SNAPSHOT legacy CAR in a separate
+  next-version deferral ledger.
+- [ ] Freeze `namespace`, local `id`, qualified ID, release version, and
+  presentation metadata boundaries.
+- [ ] Freeze word splitting, acronym/digit, package, artifact, filename, and
+  path projection algorithms and collision behavior.
+- [ ] Register failing-first cross-repository acceptance for the canonical
+  User Account example and same-local-ID/different-namespace isolation.
 
-Evidence:
-- Pending.
-
-## RSC-03: Packaging and Publication Completeness
-
-Stage Status:
-- Current status: PLANNED
-- Owner: Cozy/sbt-cozy and Component Repository maintainers
-- Entry rule: RSC-02 is DONE.
-- Completion rule: Fixture Resource SubComponents package deterministically and
-  incomplete logical releases never become repository-visible.
-
-- [ ] Define deterministic archive layout for Resource SubComponents.
-- [ ] Generate primary composition metadata and subordinate artifact metadata.
-- [ ] Bind exact digests/signatures after deterministic packaging.
-- [ ] Validate parent, role, coordinate, version, and integrity before upload.
-- [ ] Define atomic repository admission and release visibility.
-- [ ] Reject missing, duplicate, incompatible, and digest-invalid required
-  artifacts.
-- [ ] Define optional versus required relationship behavior without making
-  initial Documentation/SourceCode completeness ambiguous.
-- [ ] Preserve local publication and remote publication parity.
-- [ ] Build deterministic Documentation and SourceCode fixture artifacts.
-- [ ] Add source/archive and repeated-build equivalence tests.
-
-Evidence:
-- Pending.
-
-## RSC-04: Resolver and Provenance
+## CID-02: Typed Identity and Derivation Core
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF Component Repository and runtime loading maintainers
-- Entry rule: RSC-03 is DONE.
-- Completion rule: Every resource form resolves through one API with exact
-  logical identity and physical provenance.
+- Entry rule: CID-01 is complete.
+- Completion rule: One validated typed identity produces every naming
+  projection through one tested implementation.
 
-- [ ] Resolve embedded primary resources.
-- [ ] Resolve explicit development-directory resources.
-- [ ] Resolve expanded Resource SubComponents.
-- [ ] Resolve local repository and managed-cache artifacts.
-- [ ] Resolve explicitly admitted remote repository artifacts.
-- [ ] Resolve offline complete-release bundles.
-- [ ] Define deterministic precedence and conflict behavior.
-- [ ] Preserve origin kind, repository, artifact, path, digest, access,
-  license, and resolution-step provenance.
-- [ ] Report local, remote, cached, restricted, unavailable, missing, stale,
-  incompatible, and corrupt states separately.
-- [ ] Expose one `ResolvedComponentResources` API or accepted equivalent.
+- [ ] Implement or admit `ComponentNamespace` and `ComponentLocalId`.
+- [ ] Make `ComponentId` namespace-qualified and make instance identity carry
+  that exact Component ID.
+- [ ] Implement one deterministic projection API for qualified name, artifact,
+  Maven group/artifact, JVM package, generated class, and path segments.
+- [ ] Test validation, normalization rejection, acronym/digit boundaries,
+  namespace-leaf collisions, and round trips.
+- [ ] Prevent display metadata and version from entering identity equality.
 
-Evidence:
-- Pending.
-
-## RSC-05: Operation-Mode and Development Composition
+## CID-03: Cozy Project Schema and Generation
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF launcher, runtime, and development resolver maintainers
-- Entry rule: RSC-04 is DONE.
-- Completion rule: Operation mode selects one runtime-owned resource policy
-  without entering Component domain code.
+- Entry rule: CID-02 is complete.
+- Completion rule: A CAR project authors identity once and generation produces
+  consistent source, build, and descriptor outputs.
 
-- [ ] Implement Develop precedence across explicit directory,
-  development-local, expanded, local, cache, and remote sources.
-- [ ] Define structured development-readiness failure for required missing,
-  stale, corrupt, or incompatible resources.
-- [ ] Keep Test deterministic with no implicit remote access.
-- [ ] Require explicit Demo policy for remote Documentation retrieval.
-- [ ] Keep Production primary-only capable.
-- [ ] Prevent automatic Production source resolution, mounting, or fetch.
-- [ ] Keep `OperationMode` out of Component implementation APIs.
-- [ ] Verify development and packaged parity.
+- [ ] Add canonical `project.namespace` and `project.id` schema fields.
+- [ ] Remove or deprecate independently authored component name, class name,
+  Scala package, artifact name, and organization fields.
+- [ ] Derive SBT/Maven metadata, JVM package, generated API class, descriptor,
+  and CAR filename from the canonical identity plus version.
+- [ ] Reject explicitly supplied derived values that disagree during the
+  compatibility window.
+- [ ] Add scaffold, regeneration, and upgrade tests in Cozy and sbt-cozy.
+- [ ] Expose enough canonical/legacy and effective-version evidence for CAR
+  lint to classify migration status without guessing identity.
 
-Evidence:
-- Pending.
-
-## RSC-06: Authorization, Disclosure, and Integrity
+## CID-04: CAR, Maven, and Repository Coordinates
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF security, repository, and source-policy maintainers
-- Entry rule: RSC-05 is DONE.
-- Completion rule: Resource access is authorized, integrity-checked, and
-  non-leaking in every resolution form.
+- Entry rule: CID-03 is complete.
+- Completion rule: Publication and resolution retain namespace-qualified
+  identity and verify every materialized projection.
 
-- [ ] Enforce role and resource access policy before content exposure.
-- [ ] Represent restricted source without disclosing or indexing it.
-- [ ] Verify digest, signature, parent, release, and repository evidence.
-- [ ] Reject path traversal, symlink escape, and archive ambiguity.
-- [ ] Keep repository credentials and signed access material out of manifests.
-- [ ] Keep source content, credentials, host paths, and repository secrets out
-  of diagnostics, metrics, and CallTree.
-- [ ] Verify authorization cannot be granted by a manifest alone.
-- [ ] Add hostile archive, corrupt cache, unauthorized source, and disclosure
-  regression tests.
+- [ ] Replace canonical descriptor `name`/`component` inputs with `namespace`
+  and `id`; retain version as release metadata.
+- [ ] Derive and verify artifact name, CAR filename, Maven coordinate, and
+  repository path/index metadata.
+- [ ] Include namespace in repository, cache, dependency, and integrity keys
+  even when filenames collide.
+- [ ] Update dependency declaration codecs and error diagnostics.
+- [ ] Test publish, retrieve, cache, offline, and transitive dependency paths.
 
-Evidence:
-- Pending.
-
-## RSC-07: Lifecycle, Concurrency, and Observability
+## CID-05: CNCF Runtime Identity Migration
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF runtime, repository, cache, and observability maintainers
-- Entry rule: RSC-06 is DONE.
-- Completion rule: Resource lifecycle and concurrent resolution are bounded,
-  idempotent, observable, and safe.
+- Entry rule: CID-04 is complete.
+- Completion rule: Runtime loading and all internal consumers use the exact
+  qualified `ComponentId`.
 
-- [ ] Define cache reuse, refresh, invalidation, and stale detection.
-- [ ] Define load, release, unload, and shutdown ownership.
-- [ ] Verify multiple Component instances share immutable artifacts safely.
-- [ ] Verify concurrent resolution does not duplicate or partially publish
-  cache entries.
-- [ ] Preserve actual terminal outcomes across cancellation and refresh races.
-- [ ] Add bounded resolver CallTree nodes and metrics.
-- [ ] Add structured repository/resolver diagnostics without sensitive data.
-- [ ] Verify failure of one resource does not corrupt unrelated releases.
+- [ ] Align CML declaration, generated Component core, descriptor admission,
+  and runtime `ComponentId` without heuristic normalization.
+- [ ] Migrate instance IDs, dependency lookup, class loading, configuration
+  targets, routing, Help/Admin metadata, logs, and diagnostics.
+- [ ] Remove internal artifact-name-as-Component-ID use.
+- [ ] Test two namespaces with one local ID through loading and routing.
+- [ ] Preserve presentation-only display names and titles.
 
-Evidence:
-- Pending.
-
-## RSC-08: Downstream Consumer Contract
+## CID-06: Compatibility Adapters
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF resolver, Help, and Component Admin maintainers
-- Entry rule: RSC-07 is DONE.
-- Completion rule: Help and Admin fixtures consume the same resolved resources
-  and provenance without physical-artifact scans.
+- Entry rule: CID-05 is complete.
+- Completion rule: Old inputs remain bounded decode aliases and all internal
+  state is canonical.
 
-- [ ] Define read-only resource inventory and content-access APIs.
-- [ ] Define safe availability, role, identity, version, digest, source, and
-  provenance projections.
-- [ ] Prove a Help fixture resolves Documentation through the common API.
-- [ ] Prove an Admin fixture displays Documentation/SourceCode state through
-  the same API.
-- [ ] Prove Help and Admin report identical physical availability and integrity.
-- [ ] Prevent Help/Admin from walking CAR, SubComponent, cache, repository, or
-  development directories independently.
-- [ ] Preserve authorization differences between inventory visibility and
-  content access.
+- [ ] Decode legacy descriptor `name`/`component` shapes through an explicit
+  compatibility adapter.
+- [ ] Admit known bare, artifact, prefixed, and legacy Web-path spellings only
+  where a unique canonical identity is available.
+- [ ] Reject ambiguity and disagreement with structured diagnostics.
+- [ ] Emit only the new descriptor/project identity shape.
+- [ ] Record warning, observability, and removal policy for every alias.
+- [ ] Preserve non-SNAPSHOT legacy CAR releases without rewriting or
+  republishing them solely for identity migration.
 
-Evidence:
-- Pending.
-
-## RSC-09: End-to-End and Cross-Repository Validation
+## CID-07: CAR Lint and Development CAR Migration
 
 Stage Status:
 - Current status: PLANNED
-- Owner: all Phase 56 repository maintainers
-- Entry rule: RSC-08 is DONE.
-- Completion rule: Every representative profile and affected repository passes
-  focused and full validation.
+- Entry rule: CID-06 is complete.
+- Completion rule: CAR lint enforces the version-sensitive migration policy,
+  every CAR in the frozen SNAPSHOT cohort uses canonical authoring, and every
+  non-SNAPSHOT legacy CAR has a next-version migration entry.
 
-- [ ] Verify embedded-only small Component.
-- [ ] Verify primary plus Documentation and SourceCode fixture artifacts.
-- [ ] Verify restricted-source release.
-- [ ] Verify development-directory override and provenance.
-- [ ] Verify local, cached, remote, and offline resolution.
-- [ ] Verify production primary-only activation with repository offline.
-- [ ] Verify missing, incompatible, duplicate, unsafe, stale, and corrupt
-  failures.
-- [ ] Verify load/unload, multi-instance, restart, and concurrency.
-- [ ] Run focused CNCF, Cozy/sbt-cozy, and repository suites.
-- [ ] Run full tests in every changed code repository.
-- [ ] Run representative downstream CAR lint and packaging checks.
+- [ ] Extend CAR lint to pass canonical identity with consistent projections.
+- [ ] Make legacy identity on a SNAPSHOT CAR a migration-required lint error.
+- [ ] Detect legacy identity on a non-SNAPSHOT CAR as a
+  deferred-to-next-version warning without invalidating the existing release.
+- [ ] Prove advancing a deferred CAR beyond its recorded release version,
+  whether to a SNAPSHOT or directly to another release, promotes that finding
+  to a migration-required lint error.
+- [ ] Make canonical/derived disagreement a lint error regardless of version.
+- [ ] Include effective version, identity shape, expected projections,
+  migration status, owner, and actionable path in lint diagnostics.
+- [ ] Migrate Textus User Account to
+  `org.simplemodeling.textus + UserAccount`.
+- [ ] Verify `org.simplemodeling.textus.UserAccount`,
+  `textus-user-account`, `UserAccountComponent`, and
+  `org.simplemodeling.textus.useraccount` are projections, not copied inputs.
+- [ ] Migrate representative first-party CARs and one same-local-ID fixture.
+- [ ] Migrate every admitted CAR whose frozen effective version is SNAPSHOT;
+  do not limit Phase 56 adoption to representative fixtures.
+- [ ] Leave non-SNAPSHOT CAR releases unchanged and record their exact next
+  development version migration owner and entry condition.
 
-Evidence:
-- Pending.
-
-## RSC-10: Canonical Closure
+## CID-08: Ecosystem Regression and Normative Closure
 
 Stage Status:
 - Current status: PLANNED
-- Owner: all Phase 56 documentation owners
-- Entry rule: RSC-09 is DONE.
-- Completion rule: Canonical documents describe verified behavior and no
-  current planning record contradicts it.
+- Entry rule: CID-07 is complete.
+- Completion rule: Cross-repository evidence, CAR lint results, and normative
+  documentation show exactly one identity authority and a complete migration
+  ledger.
 
-- [ ] Promote verified architecture to
-  `docs/design/component-resource-subcomponent.md`.
-- [ ] Promote normative behavior to
-  `docs/spec/component-resource-subcomponent.md`.
-- [ ] Mark the implementation note historical and point it to final
-  design/specification.
-- [ ] Update Phase 57 Documentation/AI and Phase 58 Admin entry contracts.
-- [ ] Update strategy and phase evidence.
-- [ ] Run `git diff --check` and documentation link checks.
-- [ ] Complete read-only review and admitted review fixes.
-- [ ] Close Phase 56 only after exact validation evidence is recorded.
-
-Evidence:
-- Pending.
+- [ ] Update launchers, samples, CBD Support, BoK, repository metadata, and
+  downstream dependency consumers.
+- [ ] Verify existing admitted Web routes through compatibility aliases.
+- [ ] Run focused and full validation for every modified repository under the
+  required serialized SBT execution policy.
+- [ ] Run CAR generation, packaging, publication-local, repository-resolution,
+  launcher, and representative runtime acceptance.
+- [ ] Perform independent review of collisions, compatibility, routing,
+  package generation, and coordinate integrity.
+- [ ] Promote verified behavior to CNCF/Cozy design and specification.
+- [ ] Publish migration guidance for CAR authors and downstream consumers.
+- [ ] Record exact commits, commands, results, remaining aliases, and removal
+  owners before closing Phase 56.
+- [ ] Record a lint-clean result for every frozen SNAPSHOT CAR and a complete
+  next-version deferral report for every non-SNAPSHOT legacy CAR.
+- [ ] Update Phase 57 entry contracts to consume the qualified Component
+  identity without reopening Phase 56 naming decisions.

@@ -1,191 +1,229 @@
-# Phase 56 - Component Resource SubComponent Foundation
+# Phase 56 - Namespace-qualified Component Identity and Derived Coordinates
 
 status=planned
-planned_at=2026-07-31
+planned_at=2026-08-06
 depends_on=[Phase 55](phase-55.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 56 Checklist](phase-56-checklist.md)
-implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
-planning_journal=[Phase 56 Resource SubComponent Phase Split and Planning](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
+planning_journal=[Phase 56 Identity Planning and Phase Renumbering](../journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md)
+entry_handoff=[Current Work Closeout before Phase 56](../journal/2026/08/2026-08-06-current-work-closeout-before-phase-56.md)
 
 ## Purpose
 
-Implement the repository, composition, resolution, integrity, provenance, and
-lifecycle foundation that lets one logical Component release use multiple
-physical resource artifacts.
+Replace independently authored Component, artifact, Maven, JVM-package, and
+generated-class names with one namespace-qualified Component identity and
+deterministic projections.
 
-The initial resource roles are:
+Phase 56 makes `namespace + id` the sole naming and identity authority. A
+release version remains independent release metadata, and localized display
+text remains non-identifying presentation metadata.
 
-- `Documentation`; and
-- `SourceCode`.
+For the official Textus User Account CAR, the canonical inputs are:
 
-These artifacts are Resource SubComponents. They are not executable
-Components, Componentlets, Subsystems, or runtime CAR dependencies.
+```yaml
+namespace: org.simplemodeling.textus
+id: UserAccount
+```
 
-Phase 56 precedes Component Documentation and AI Knowledge Integration so
-later Help, AI, and Component Admin features consume one verified resolver
-instead of inventing separate archive, repository, or provenance paths.
+The word `namespace` is canonical. Maven `organization`/`groupId`, JVM
+package, Component name, artifact name, generated class name, and paths are
+projections; `package` is not used as the cross-system metadata field.
 
-## Dependency
+## Canonical Model
 
-Phase 56 begins after Phase 55 closes.
+The planned typed identity model is:
 
-Phase 55 supplies typed configuration/provenance foundations that may be
-consumed by resolver policy and diagnostics. Phase 56 must not reopen Phase 55
-scope or encode SubComponent selection as an unrelated configuration
-authority.
+```text
+ComponentNamespace("org.simplemodeling.textus")
+ComponentLocalId("UserAccount")
+ComponentId(namespace, localId)
+ComponentInstanceId(componentId, "default")
+```
 
-## Selected Direction
+`ComponentId` is namespace-qualified. A bare `UserAccount` value is a local
+ID or a compatibility spelling, never a globally complete Component ID.
 
-- One logical Component release has one identity and version even when it is
-  physically represented by a primary execution CAR plus Resource
-  SubComponents.
-- A root composition manifest in the primary artifact declares exact
-  SubComponent role, coordinate, parent identity, version, digest, required
-  relationship, access policy, and repository evidence.
-- Documentation and SourceCode are initial closed roles. The model remains
-  extension-ready, but arbitrary role registration is not part of Phase 56.
-- Resource SubComponents use Component Repository publication, integrity,
-  cache, and retrieval services without becoming runtime participants.
-- Repository release visibility is atomic: a complete release is not exposed
-  until every required physical artifact is present and valid.
-- Publication completeness and runtime activation are separate. Production
-  may activate the primary CAR without fetching resource artifacts.
-- One resolver composes embedded, development-directory, expanded artifact,
-  local repository, cache, remote repository, and offline-bundle resources.
-- Every resolved resource retains logical identity and physical provenance.
-- Missing, remote, restricted, unavailable, stale, incompatible, and corrupt
-  states remain structurally distinguishable.
-- `OperationMode` selects runtime-owned resource-resolution policy and is not
-  exposed to Component domain code.
-- Develop mode may resolve required development resources automatically;
-  production never automatically fetches source.
-- Phase 57 Help and AI access and Phase 58 Component Admin consume the same
-  resolved resource and provenance APIs.
-- Help and Admin must not independently scan CARs, SubComponents, development
-  directories, caches, or repositories.
+The canonical authoring shape is provisionally:
 
-## Scope
+```yaml
+project:
+  namespace: org.simplemodeling.textus
+  id: UserAccount
+  version: 0.6.0-SNAPSHOT
+  displayName: Textus User Account
+```
 
-- Define Resource SubComponent identity, role, parent relationship, logical
-  release membership, version, digest, signature, requiredness, access policy,
-  media/profile metadata, and repository identity.
-- Define the root Component composition manifest without duplicating
-  authoritative Component identity.
-- Define exact publication completeness and release visibility behavior.
-- Define Component Repository index, upload/admission, retrieval, cache,
-  offline bundle, and failure behavior for multi-artifact releases.
-- Define embedded versus external resource identity and precedence.
-- Define development-directory, expanded artifact, local repository, cache,
-  remote repository, and offline-bundle resolution.
-- Preserve physical origin, repository, path, digest, authorization, license,
-  disclosure, and resolution-step provenance.
-- Define deterministic duplicate, conflict, stale, corrupt, missing,
-  incompatible, restricted, and unavailable outcomes.
-- Define operation-mode resolution policy for Develop, Test, Demo, and
-  Production without adding Component mode branches.
-- Define primary-only activation independently from knowledge/source
-  availability.
-- Define load, cache reuse, refresh, unload, shutdown, multi-instance, and
-  concurrent-resolution behavior.
-- Define bounded diagnostics and metrics without exposing source content,
-  credentials, repository secrets, or host paths.
-- Provide fake/in-memory repository and resolver fixtures plus packaged,
-  development-directory, offline, restricted, and corrupt acceptance cases.
-- Extend Cozy/sbt-cozy packaging and repository publication paths for generic
-  Resource SubComponent fixtures.
-- Provide stable resolver/provenance APIs for Phase 57 Help/AI and Phase 58
-  Admin consumers.
-- Promote verified architecture and behavior to design/specification before
-  closure.
+Only `namespace` and `id` determine names and identifiers. `version` selects
+a release. `displayName`, summaries, and localized titles are descriptive and
+must not participate in equality, routing, lookup, repository keys, or code
+generation identity.
 
-## Boundaries
+## Deterministic Projections
 
-- Phase 56 does not author User Guides, Reference Manuals, Scaladoc, model
-  diagrams, or AI indexes.
-- Phase 56 does not implement Textus CBD Support or Textus BoK ingestion.
-- Phase 56 does not implement final Help or Component Admin presentation.
-- Phase 56 does not make a Resource SubComponent executable.
-- Phase 56 does not turn a Resource SubComponent into a Component,
-  Componentlet, Subsystem, service provider, or capability provider.
-- Phase 56 does not add fine-grained language/media roles beyond the initial
-  Documentation and SourceCode roles.
-- Phase 56 does not use Maven documentation classifiers as the Component
-  resource contract.
-- Phase 56 does not allow a manifest to grant Operation authority, capability,
-  source disclosure, or MCP readiness.
-- Phase 56 does not treat ClassLoader loading as the resource-artifact
-  lifecycle.
-- Phase 56 does not package arbitrary `target` state. Source content policy and
-  managed-source normalization are consumed by Phase 57.
+For `org.simplemodeling.textus + UserAccount`, Phase 56 freezes and implements
+the following projections:
+
+| Projection | Result | Rule |
+| --- | --- | --- |
+| Qualified Component name/ID | `org.simplemodeling.textus.UserAccount` | `namespace + "." + id` |
+| Maven organization/groupId | `org.simplemodeling.textus` | exact namespace |
+| Artifact name/artifactId | `textus-user-account` | final namespace segment + kebab-case local ID |
+| CAR filename | `textus-user-account-0.6.0-SNAPSHOT.car` | artifact name + release version |
+| Maven coordinate | `org.simplemodeling.textus:textus-user-account_3:0.6.0-SNAPSHOT` | namespace + artifact projection + Scala suffix + version |
+| JVM package | `org.simplemodeling.textus.useraccount` | namespace + lower-flat local ID |
+| Generated Scala API | `UserAccountComponent` | local ID + `Component` |
+| Normalized local path segment | `user-account` | kebab-case local ID |
+| Legacy Web path alias | `/web/textus-user-account/...` | compatibility projection, not identity |
+
+The exact word-splitting, acronym, digit, validation, escaping, and collision
+rules must be one shared library contract. Generators and runtime consumers
+must not reimplement these transformations independently.
+
+Artifact filenames are not globally unique identities. Repository and Maven
+lookup use the namespace-qualified coordinate. Two namespaces may therefore
+produce the same filename without collapsing their identities.
+
+## Descriptor Contract
+
+The target CAR descriptor authoring contract is:
+
+```json
+{
+  "namespace": "org.simplemodeling.textus",
+  "id": "UserAccount",
+  "version": "0.6.0-SNAPSHOT"
+}
+```
+
+`name`, `component`, `className`, `scalaPackage`, Maven organization, and
+artifact name are not independent canonical inputs. A generated descriptor or
+repository index may materialize projections for convenience, but generation
+and admission must recompute them from the canonical identity and reject a
+divergent materialized value.
+
+## Compatibility Boundary
+
+- New authoring and serialization emit only the namespace-qualified model.
+- Existing `UserAccount`, `textus-user-account`, and previously admitted
+  prefixed spellings are decode/route compatibility aliases.
+- Compatibility aliases resolve to one canonical `ComponentId` before lookup,
+  routing, caching, or diagnostics.
+- Ambiguous legacy spellings are rejected; namespace is never guessed when
+  more than one canonical identity could match.
+- Existing `/web/textus-user-account/...` paths may remain supported without
+  becoming canonical Component IDs.
+- Compatibility has an explicit warning/removal policy and cannot become a
+  second write authority.
+
+## CAR Migration Cohort and Lint Policy
+
+Phase 56 includes migration of every admitted first-party/development CAR
+whose effective artifact version is `SNAPSHOT` at the CID-01 inventory freeze.
+The inventory records the exact repository, current version, identity shape,
+derived coordinates, and migration owner. A SNAPSHOT CAR cannot be declared
+Phase 56-complete while it still authors the legacy identity shape.
+
+An admitted CAR whose effective version is not `SNAPSHOT` is not rewritten or
+republished during Phase 56 solely for this identity change. Its current
+release remains loadable through the compatibility adapter, and migration is
+required when development of its next version begins.
+
+CAR lint makes this boundary executable:
+
+- canonical `namespace + id` with consistent projections passes;
+- a legacy-identity SNAPSHOT CAR fails lint as migration-required;
+- a legacy-identity non-SNAPSHOT CAR is detected as
+  migration-deferred-to-next-version without invalidating the existing
+  release;
+- when that CAR advances beyond the release version recorded in the deferral
+  ledger—normally to its next SNAPSHOT, but also if it advances directly to a
+  release version—the condition becomes migration-required and fails lint;
+  and
+- a declared or materialized derived value that disagrees with the canonical
+  identity fails lint for both SNAPSHOT and release versions.
+
+Lint must report the effective version, canonical-or-legacy identity shape,
+expected derived values, migration status, and actionable owner/path. It must
+not silently infer a namespace or rewrite project metadata.
 
 ## Work Stack
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| RSC-01 | Inventory and executable contract freeze | Existing CAR, repository, dev-dir, cache, manifest, integrity, source/archive, Help, and Admin assumptions plus failing-first acceptance identities are fixed. | planned |
-| RSC-02 | Identity and composition model | Resource SubComponent roles, parent/release identity, root composition manifest, provenance, access, and deterministic codecs are implemented. | planned |
-| RSC-03 | Packaging and publication completeness | Cozy/sbt-cozy can package fixture SubComponents and the repository exposes a release only after all required artifacts validate. | planned |
-| RSC-04 | Resolver and provenance | Embedded, development, expanded, local, cached, remote, and offline resources resolve through one API without losing physical origin. | planned |
-| RSC-05 | Operation-mode and development composition | Develop/Test/Demo/Production policies, precedence, primary-only activation, and structured readiness outcomes are implemented. | planned |
-| RSC-06 | Authorization, disclosure, and integrity | Restricted source, signatures/digests, safe paths, repository credentials, and non-leaking diagnostics are enforced. | planned |
-| RSC-07 | Lifecycle, concurrency, and observability | Cache reuse, refresh, unload, shutdown, multi-instance, concurrent resolution, CallTree, metrics, and diagnostics are deterministic. | planned |
-| RSC-08 | Downstream consumer contract | Stable resolved-resource and provenance APIs are proven with non-presentational Help and Admin consumer fixtures. | planned |
-| RSC-09 | End-to-end and cross-repository validation | Packaged, dev-dir, local/remote, offline, restricted, missing, corrupt, and primary-only profiles pass across owning repositories. | planned |
-| RSC-10 | Canonical closure | Verified design/specification, strategy, phase, notes, and journal records agree; provisional notes are marked historical. | planned |
+| CID-01 | Inventory and contract freeze | Every authored/derived name, identity type, descriptor field, coordinate, path, alias, and consumer is inventoried; the exact SNAPSHOT migration cohort and non-SNAPSHOT deferral ledger are frozen with failing-first acceptance identities. | planned |
+| CID-02 | Typed identity and derivation core | Namespace, local ID, qualified Component ID, instance ID, and one shared projection library are implemented with validation and collision behavior. | planned |
+| CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | planned |
+| CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. | planned |
+| CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | planned |
+| CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | planned |
+| CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | planned |
+| CID-08 | Ecosystem regression and normative closure | Representative samples, launchers, CBD/BoK metadata, and dependency consumers adopt the contract; cross-repository tests, migration guidance, design/spec promotion, review, compatibility ledger, and release evidence close the phase. | planned |
+
+## Repository Ownership
+
+- `simplemodeling-lib` owns a generic validated namespace/local-ID and naming
+  transformation foundation only if existing generic identity facilities are
+  insufficient.
+- `cloud-native-component-framework` owns Component identity semantics,
+  runtime admission, descriptor interpretation, routing, diagnostics, and
+  compatibility policy.
+- `cozy` and `sbt-cozy` own project schema, generation, package/class
+  projections, build metadata, generated descriptor consistency, and CAR lint
+  migration classification/diagnostics.
+- CAR projects own migration to canonical inputs and removal of independently
+  authored derived names.
+- Component Repository, launchers, Textus CBD Support, and Textus BoK own
+  coordinate/index/transport adoption without defining alternate identities.
 
 ## Acceptance
 
-- A root composition manifest represents one logical Component release without
-  creating another Component identity.
-- Documentation and SourceCode Resource SubComponents bind to one exact parent
-  release.
-- Repository publication does not expose an incomplete required-artifact set.
-- Primary-only production activation succeeds without automatically
-  downloading Documentation or SourceCode artifacts.
-- Develop resolution follows deterministic precedence and retains exact
-  provenance for every winning resource.
-- Test resolution is deterministic and performs no implicit remote access.
-- Demo remote Documentation access requires explicit policy.
-- Production never automatically resolves, mounts, or fetches source.
-- Restricted source remains represented without being disclosed or indexed.
-- Missing, remote, restricted, unavailable, stale, incompatible, corrupt, and
-  local states are not collapsed into generic absence.
-- Duplicate logical resource identities fail deterministically.
-- Unsafe paths, digest mismatch, parent mismatch, and incompatible release
-  membership are rejected.
-- Offline complete-release bundles resolve without network access.
-- Repeated and concurrent resolution does not duplicate cache state or erase
-  provenance.
-- Help and Admin consumer fixtures receive the same resolved identity,
-  availability, and provenance without scanning physical artifacts directly.
-- Runtime execution does not depend on build, rendering, source-generation, or
-  repository tooling.
-- Final verified contracts are promoted to `docs/design` and `docs/spec`.
+- Two Components with the same local ID and different namespaces remain
+  distinct through descriptor, runtime, repository, cache, dependency,
+  routing, and diagnostics.
+- One canonical identity deterministically reproduces every declared
+  projection, including acronym and digit edge cases.
+- No new project or descriptor can independently set conflicting `name`,
+  `component`, organization, artifact, class, or package identities.
+- CAR descriptor, generated Scala class, runtime `Component.Core`, and
+  `ComponentId` agree without string normalization heuristics.
+- Maven coordinates and CAR repository keys retain the full namespace even
+  when the human-facing artifact filename uses only its final segment.
+- User Account resolves as `org.simplemodeling.textus.UserAccount`, publishes
+  as `textus-user-account`, generates `UserAccountComponent`, and uses
+  `org.simplemodeling.textus.useraccount` without duplicate authoring.
+- Every SNAPSHOT CAR in the frozen Phase 56 cohort uses canonical
+  `namespace + id` authoring and passes CAR lint.
+- Every non-SNAPSHOT legacy CAR is preserved unchanged, remains compatible,
+  and is visible in CAR lint and the next-version migration ledger.
+- Advancing a deferred CAR beyond its recorded current release version makes
+  legacy identity a lint failure until that CAR migrates.
+- Legacy spellings remain usable only through tested compatibility adapters;
+  ambiguous aliases fail with actionable diagnostics.
+- Display names and titles can change or localize without changing identity,
+  routes, packages, artifacts, or dependencies.
+- Phase closure leaves one authoritative identity model in implementation,
+  generated output, design, specification, and migration guidance.
 
-## Repository Responsibilities
+## Boundary
 
-| Repository | Responsibility |
-| --- | --- |
-| `/Users/asami/src/dev2025/cloud-native-component-framework` | Composition model, resolver, provenance, policy, lifecycle, downstream consumer API, diagnostics, and executable runtime contract |
-| `/Users/asami/src/dev2025/cozy` | Resource SubComponent packaging model, archive layout, validation, publication metadata, and fixture generation |
-| `/Users/asami/src/dev2026/sbt-cozy` | Build integration, development evidence, packaging tasks, and local publication workflow |
-| Component Repository implementation owners | Atomic logical-release visibility, exact artifact retrieval, cache/repository metadata, and offline bundles |
-| selected sample/Component repositories | Embedded, split, restricted, development, production-primary-only, and offline acceptance |
+- Phase 56 does not redesign Component behavior, Service/Operation APIs,
+  configuration semantics, resource SubComponents, Admin presentation, or Web
+  CSRF behavior except where they consume Component identity.
+- Phase 56 does not rename existing public Web routes merely to make them look
+  canonical; route migration is compatibility-policy work.
+- Phase 56 does not treat the version or display metadata as part of the
+  namespace/local-ID naming truth.
+- Phase 56 does not rewrite or republish a non-SNAPSHOT CAR release only to
+  adopt the new identity; that CAR migrates in its next development version.
+- No partial schema is released in which some tools author the old names and
+  others author the new fields without consistency validation.
 
-## Planning References
+## Completion Rule
 
-- `docs/notes/component-resource-subcomponent-implementation.md`
-- `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`
-- `docs/journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md`
-- `docs/design/component-dependency-loading.md`
-- `docs/design/component-factory.md`
-- `docs/phase/phase-57.md`
-- `docs/phase/phase-58.md`
-
-## Resume Point
-
-After Phase 55 closes, begin RSC-01. Freeze identity, composition,
-publication-completeness, resolver, provenance, operation-mode, Help-consumer,
-and Admin-consumer acceptance before implementing archive or repository
-changes.
+Phase 56 closes only after the canonical identity and derivation contract is
+implemented and accepted end to end across CNCF, Cozy/sbt-cozy, CAR packaging,
+Maven publication, repository resolution, User Account, and representative
+runtime consumers. Every frozen SNAPSHOT CAR must be migrated and lint-clean,
+and every non-SNAPSHOT deferral must have a lint-visible next-version owner.
+Verified behavior must be promoted to normative design and specification;
+this phase document and working notes are not the final authority.

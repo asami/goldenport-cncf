@@ -683,3 +683,24 @@ and AI Knowledge Integration plan therefore moved to:
 Component Admin and Documentation Visibility is the separate Phase 58
 consumer. Current documentation/AI planning follows Phase 57. Earlier Phase
 53 through Phase 56 assignments in this journal remain chronological history.
+
+## 2026-08-06 Namespace-qualified Identity Phase Insertion
+
+Namespace-qualified Component identity became the new Phase 56. The current
+delivery order is now:
+
+```text
+Phase 56  Namespace-qualified Component Identity and Derived Coordinates
+Phase 57  Component Resource SubComponent Foundation
+Phase 58  Component Documentation and AI Knowledge Integration
+Phase 59  Component Admin and Documentation Visibility
+```
+
+Current documentation/AI planning therefore follows:
+
+- `docs/phase/phase-58.md`
+- `docs/phase/phase-58-checklist.md`
+
+The prior Phase 56/57/58 assignments above remain chronological planning
+history. The authoritative renumbering record is
+`docs/journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md`.

@@ -74,6 +74,6 @@ Mechanisms:
 
 - `mechanisms/documentation/overview.svg`
 
-The documentation overview shows the planned Phase 56 ownership, projection,
+The documentation overview shows the planned Phase 58 ownership, projection,
 distribution, Help, Textus CBD Support, Textus BoK, AI Directive, and Skill
 Catalog boundaries on one canvas.

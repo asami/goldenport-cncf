@@ -1,6 +1,6 @@
 # Documentation Management Mechanism Overview
 
-`overview.svg` is the primary at-a-glance view of the Phase 56 documentation
+`overview.svg` is the primary at-a-glance view of the Phase 58 documentation
 management mechanism.
 
 It distinguishes two ownership paths:
@@ -18,15 +18,15 @@ install, activate, execute, configure, or authorize a Skill.
 
 Implementation status:
 
-- `PLANNED`: Phase 56 has not started.
+- `PLANNED`: Phase 58 has not started.
 
 Planning evidence:
 
-- `docs/phase/phase-56.md`
-- `docs/phase/phase-56-checklist.md`
+- `docs/phase/phase-58.md`
+- `docs/phase/phase-58-checklist.md`
 - `docs/notes/component-documentation-knowledge-package-implementation.md`
 - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`
 
-The overview is explanatory and non-normative. Verified Phase 56 design,
+The overview is explanatory and non-normative. Verified Phase 58 design,
 specification, and Executable Specifications become authoritative when the
 phase closes.

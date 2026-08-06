@@ -2430,15 +2430,15 @@ Future Web/platform development item.
   - public developer portal.
 
 ### 9.23 Component-owned Admin Surface Discovery
-Planned as the Web discovery/presentation subset of Phase 58.
+Planned as the Web discovery/presentation subset of Phase 59.
 
 - Design references:
   - `docs/design/management-console.md`
   - `docs/notes/cncf-web-static-form-app-contract.md`
-  - `docs/phase/phase-58.md`
+  - `docs/phase/phase-59.md`
 - Goal: improve discovery and diagnostics for component-owned admin pages
   beyond explicit Web composition while preserving declared-page
-  authorization and projecting the common Phase 58 Admin view model.
+  authorization and projecting the common Phase 59 Admin view model.
 - Scope:
   - descriptor/index discovery for component-owned admin pages;
   - application/system admin grouping and audience metadata;
@@ -2447,7 +2447,7 @@ Planned as the Web discovery/presentation subset of Phase 58.
   - broken-link/missing-template diagnostics;
   - admin index rendering that remains operation-centric and
     descriptor-backed; and
-  - navigation to Phase 56 Resource SubComponent state and Phase 57
+  - navigation to Phase 57 Resource SubComponent state and Phase 58
     documentation/model resources without independently scanning artifacts.
 - First implementation direction:
   - add discovery/projection diagnostics for declared admin pages;
@@ -3009,13 +3009,56 @@ after 9.12 and 9.39 move to completed history.
 
 ### 9.42 Component Resource, Documentation, and Admin Delivery Sequence
 
-The work is split into three ordered phases so physical composition,
-knowledge production, and runtime administration have separate acceptance
-boundaries.
+The work is split into four ordered phases so Component identity, physical
+composition, knowledge production, and runtime administration have separate
+acceptance boundaries.
 
-#### Phase 56 - Component Resource SubComponent Foundation
+#### Phase 56 - Namespace-qualified Component Identity and Derived Coordinates
 
 Phase 55 is closed; Phase 56 is the next planned delivery phase.
+
+- Goal:
+  - make `namespace + local id` the sole Component naming and identity
+    authority;
+  - derive runtime Component ID, Maven organization/artifact, CAR filename,
+    JVM package, generated class, and path spellings deterministically; and
+  - eliminate independently authored artifact/runtime IDs without removing
+    bounded compatibility for admitted legacy descriptors and routes;
+  - migrate every admitted CAR currently on a SNAPSHOT development version;
+    and
+  - defer non-SNAPSHOT CAR migration to its next development version without
+    rewriting or republishing the current release.
+- Selected official Textus example:
+  - namespace `org.simplemodeling.textus`;
+  - local ID `UserAccount`;
+  - qualified Component ID `org.simplemodeling.textus.UserAccount`;
+  - artifact `textus-user-account`;
+  - JVM package `org.simplemodeling.textus.useraccount`; and
+  - generated Scala API `UserAccountComponent`.
+- Boundary:
+  - `namespace` is canonical metadata; Maven organization/groupId and JVM
+    package are projections;
+  - release version is independent release metadata;
+  - display name/title/summary are presentation metadata only;
+  - old bare, artifact, prefixed, and Web-path spellings are decode/route
+    compatibility aliases, never new canonical IDs; and
+  - CAR lint fails legacy identity on SNAPSHOT CARs, reports legacy identity
+    on non-SNAPSHOT CARs as next-version migration work, promotes that finding
+    to failure when the CAR advances beyond its recorded current release
+    version, and always fails a canonical/derived mismatch; and
+  - the current configuration/User Account upgrade work closes at its bounded
+    handoff before Phase 56 implementation begins.
+- Planning references:
+  - `docs/phase/phase-56.md`;
+  - `docs/phase/phase-56-checklist.md`;
+  - `docs/journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md`; and
+  - `docs/journal/2026/08/2026-08-06-current-work-closeout-before-phase-56.md`.
+
+#### Phase 57 - Component Resource SubComponent Foundation
+
+Planned after Phase 56 closes. Resource identity and repository composition
+consume the namespace-qualified Component identity and derived release
+coordinates without defining another naming authority.
 
 - Owns Resource SubComponent identity, primary/release composition, packaging
   contract, atomic repository visibility, cache/retrieval, offline bundles,
@@ -3028,19 +3071,19 @@ Phase 55 is closed; Phase 56 is the next planned delivery phase.
 - Supplies one resolver to Help, AI, CBD Support, BoK, and later Admin; those
   consumers must not scan physical artifacts or repositories independently.
 - Planning references:
-  - `docs/phase/phase-56.md`;
-  - `docs/phase/phase-56-checklist.md`;
+  - `docs/phase/phase-57.md`;
+  - `docs/phase/phase-57-checklist.md`;
   - `docs/notes/component-resource-subcomponent-implementation.md`; and
   - `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`.
 
-#### Phase 57 - Component Documentation and AI Knowledge Integration
+#### Phase 58 - Component Documentation and AI Knowledge Integration
 
-Planned after Phase 56 closes.
+Planned after Phase 57 closes.
 
 - Goal:
   - make each logical Component release a one-stop, self-describing execution,
     development, and knowledge package for humans and AI;
-  - populate the Phase 56 logical resource space with exact documentation,
+  - populate the Phase 57 logical resource space with exact documentation,
     model, Scaladoc, source, and AI knowledge;
   - provide direct Help/manifest retrieval, primary Textus CBD Support
     detail/usage/review integration, and complementary Textus BoK RAG/MCP
@@ -3100,7 +3143,7 @@ Planned after Phase 56 closes.
   - normalized SBT managed-source capture plus generator inputs, options,
     identities, digests, and provenance sufficient for later reproduction,
     investigation, and debugging, without packaging transient `target` state;
-  - Phase 56 resolver integration with exact logical identity, physical
+  - Phase 57 resolver integration with exact logical identity, physical
     provenance, availability, integrity, access, and diagnostics preserved;
   - manifest-based AI development context with bounded disclosure;
   - unified Help, direct AI manifest/resource access, authorization, and
@@ -3136,7 +3179,7 @@ Planned after Phase 56 closes.
     retrieval surface, replace CBD detail/usage ownership, or invent
     unsupported capability/compatibility claims;
   - restricted source is not indexed or returned without authorization;
-  - Phase 56 production/development resource policy remains authoritative and
+  - Phase 57 production/development resource policy remains authoritative and
     does not expose `OperationMode` to Component domain APIs;
   - runtime Help requires no compiler, renderer, PDF, or embedding toolchain;
   - framework Documentation Component absence never blocks Component startup
@@ -3159,30 +3202,30 @@ Planned after Phase 56 closes.
   - the implementation note is marked historical and explicitly overridden by
     final design/specification;
   - journal remains chronological history; and
-  - Phase 57 cannot close while the latest contract exists only in notes,
+  - Phase 58 cannot close while the latest contract exists only in notes,
     journal, phase documents, implementation, or tests.
 - Planning references:
-  - `docs/phase/phase-57.md`;
-  - `docs/phase/phase-57-checklist.md`;
+  - `docs/phase/phase-58.md`;
+  - `docs/phase/phase-58-checklist.md`;
   - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`;
   - `docs/journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md`; and
   - `docs/notes/component-documentation-knowledge-package-implementation.md`.
 
-#### Phase 58 - Component Admin and Documentation Visibility
+#### Phase 59 - Component Admin and Documentation Visibility
 
-Planned after Phase 57 closes.
+Planned after Phase 58 closes.
 
 - Goal:
   - make the full operational and descriptive state of a loaded Component
     visible through one Component-owned Admin surface;
-  - combine Phase 55 configuration provenance, Phase 56 resource composition,
-    Phase 57 knowledge/model manifests, and authoritative runtime state; and
+  - combine Phase 55 configuration provenance, Phase 57 resource composition,
+    Phase 58 knowledge/model manifests, and authoritative runtime state; and
   - provide explicitly authorized management without conflating visibility
     with authority.
 - Selected direction:
   - Help is the human/AI knowledge surface and Admin is the operator/runtime
     surface;
-  - Admin consumes the Phase 56 resolver and Phase 57 manifests and never
+  - Admin consumes the Phase 57 resolver and Phase 58 manifests and never
     reconstructs them by scanning files, CARs, repositories, or source;
   - identity distinguishes Component class, release, instance, Subsystem, and
     implicit Component Subsystem;
@@ -3194,8 +3237,8 @@ Planned after Phase 57 closes.
   - management actions require explicit Operation authorization, lifecycle
     safety, validation, and audit.
 - Planning references:
-  - `docs/phase/phase-58.md`;
-  - `docs/phase/phase-58-checklist.md`;
+  - `docs/phase/phase-59.md`;
+  - `docs/phase/phase-59-checklist.md`;
   - `docs/notes/component-admin-documentation-visibility-implementation.md`;
     and
   - `docs/journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md`.
@@ -3270,7 +3313,7 @@ OCC foundation.
   - schedule this item as an independent phase rather than expanding Phase 50.
 
 ### 9.44 Information CML Runtime Canonicalization
-Planned for Phase 59 after Phase 58 closes.
+Planned for Phase 60 after Phase 59 closes.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected
@@ -3279,7 +3322,7 @@ Planned for Phase 59 after Phase 58 closes.
   - Phase 50 proved the generated Information `SimpleEntity` output/input
     revision contract but did not move the operational runtime to that
     generated Entity; and
-  - Phase 59 completes that runtime cutover rather than moving CNCF
+  - Phase 60 completes that runtime cutover rather than moving CNCF
     Information into `simplemodeling-model`.
 - Goal:
   - make the Information CML generated Entity/value/lifecycle family the one
@@ -3334,7 +3377,7 @@ Planned for Phase 59 after Phase 58 closes.
     standard Entity repository;
   - no two public canonical Information models remain after compatibility
     closure; and
-  - unrelated CML Entity or generator redesign remains outside Phase 59.
+  - unrelated CML Entity or generator redesign remains outside Phase 60.
 - Acceptance:
   - InformationSpace and every operational/projection/downstream path use the
     generated canonical Information Entity;
@@ -3349,8 +3392,8 @@ Planned for Phase 59 after Phase 58 closes.
   - final design/specification and Executable Specifications identify exactly
     one canonical runtime model.
 - Planning references:
-  - `docs/phase/phase-59.md`;
-  - `docs/phase/phase-59-checklist.md`;
+  - `docs/phase/phase-60.md`;
+  - `docs/phase/phase-60-checklist.md`;
   - `docs/phase/phase-27-checklist.md`;
   - `docs/phase/phase-50.md`;
   - `src/main/cozy/information.cml`; and
@@ -3435,7 +3478,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - equal numeric versions neither are required nor prove compatibility;
   - Cozy remains a build-time generator and is not a CAR runtime dependency;
   - generator compatibility does not replace CNCF runtime/ABI compatibility;
-  - Information canonicalization remains Phase 59 work;
+  - Information canonicalization remains Phase 60 work;
   - CML semantic redesign and unrelated generator output remain outside Phase
     51;
   - arbitrary business/API Records are not reinterpreted as persisted scalar
@@ -3542,7 +3585,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - `../cozy/docs/spec/car-project-scaffold.md`.
 
 ### 9.46 Web Session CSRF Unification
-Planned for Phase 60 after Phase 59 closes.
+Planned for Phase 61 after Phase 60 closes.
 
 - Historical basis:
   - CNCF already protects normal Form and `/form-api` POST execution with a
@@ -3588,8 +3631,8 @@ Planned for Phase 60 after Phase 59 closes.
     and
   - application-owned token generation or verification.
 - Planning references:
-  - `docs/phase/phase-60.md`;
-  - `docs/phase/phase-60-checklist.md`;
+  - `docs/phase/phase-61.md`;
+  - `docs/phase/phase-61-checklist.md`;
   - `docs/notes/web-session-csrf-unification-implementation.md`; and
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
 

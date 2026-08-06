@@ -45,6 +45,21 @@ The existing Luna command runners are not migration candidates for Luna high.
 Their work is deliberately mechanical, and higher reasoning would normally add
 cost without improving the contract.
 
+## Current Adopted Routing (2026-08-05)
+
+The user explicitly adopted the following routing after considering the lower
+Luna cost and the different roles of full review and convergence review:
+
+| Workload | Adopted execution |
+| --- | --- |
+| BASELINE_REVIEW and clean full REVIEW | fresh GPT-5.6 Sol medium by default; Sol high for recorded high-risk boundaries |
+| focused RE_REVIEW with a complete valid baseline | fresh GPT-5.6 Luna high, xhigh, or max selected from bounded reasoning density and retry cost |
+| invalid or missing focused baseline | `FULL_REVIEW_REQUIRED`; start a new clean full REVIEW with fresh Sol medium/high |
+
+The Luna effort ladder is not a substitute for a valid review baseline. Escalate
+high → xhigh → max only when the same fully frozen focused manifest remains
+valid and additional reasoning depth is the actual need.
+
 ## Migration Principle
 
 Migrate bounded semantic work before broad semantic work.
@@ -93,11 +108,16 @@ Candidate:
   delta, newly touched files, and directly affected integration edges; and
 - unchanged settled areas remain outside the re-review scope.
 
-Proposed migration:
+Adopted migration:
 
-- change the focused RE_REVIEW subagent from Sol medium to Luna high;
-- retain fail-closed escalation to Sol medium when the baseline is invalidated,
-  the fix expands scope, or a new public-contract concern appears; and
+- use Luna high for routine focused convergence, Luna xhigh for complex bounded
+  convergence, and Luna max only for the hardest fully frozen convergence
+  audit with unusually expensive retry;
+- retain fail-closed `FULL_REVIEW_REQUIRED` routing to a new clean Sol
+  medium/high full REVIEW when the baseline is missing or invalid, unexpected
+  delta or scope appears, protected contract concerns become material, or
+  evidence is incomplete or contradictory;
+- never use a higher Luna effort to compensate for baseline invalidation; and
 - keep clean initial REVIEW behavior unchanged.
 
 This is the first candidate because the problem boundary and convergence
@@ -331,13 +351,13 @@ Add one row per trial. Keep evidence links repository-relative where possible.
 
 | Trial | Stage | Date | Workload | Role | Agent type/name | Model/effort | Agent ID | Fallback/escalation | Result | Comparison gate | Supporting evidence | User verdict | Disposition |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| — | LH-1 | — | Not started | — | — | — | — | — | — | — | — | — | `continue` |
+| — | LH-1 | 2026-08-05 | No natural-workload trial; direct policy adoption | focused RE_REVIEW | Luna high/xhigh/max profiles | GPT-5.6 Luna high/xhigh/max | — | new Sol full REVIEW on `FULL_REVIEW_REQUIRED` | Configuration validated separately | full REVIEW remains Sol | Explicit user direction | adopt | `adopted` |
 
 ## Stage Decision Ledger
 
 | Stage | Status | Decision date | Decision | Evidence summary | Skill/configuration change |
 | --- | --- | --- | --- | --- | --- |
-| LH-1 focused re-review | proposed | — | Begin here when explicitly authorized | Most bounded semantic review role | — |
+| LH-1 focused re-review | adopted | 2026-08-05 | Use Luna high/xhigh/max for valid focused convergence; keep full review on Sol | Explicit user direction after policy comparison; no natural-workload trial evidence yet | `cncf-goal-phase`, `cncf-goal-task`, `cncf-goal-step`, `cncf-goal-slice`, `cncf-continuation-cycle`, `cncf-step-commit`; `cncf_rereview_worker_luna{,_xhigh,_max}.toml` |
 | LH-2 other focused review | waiting | — | Evaluate only after LH-1 | Requires a clear focused-review classifier | — |
 | LH-3 bounded investigation | waiting | — | Evaluate only after earlier evidence | Likely needs a separate focused skill or mode | — |
 | LH-4 bounded fix/implementation | optional | — | No presumption of adoption | Higher mutation risk | — |
@@ -345,12 +365,14 @@ Add one row per trial. Keep evidence links repository-relative where possible.
 
 ## Current Decision
 
-- Keep the current model assignments unchanged until LH-1 is explicitly
-  started.
-- Use focused RE_REVIEW as the first Luna-high migration candidate.
-- Do not combine the first migration with another role change.
-- Keep PLAN on Sol high and broad or contract-sensitive review/investigation on
-  Sol.
+- Use Luna high/xhigh/max only for focused RE_REVIEW with a complete, valid
+  Focused Re-review Manifest and baseline.
+- Start a fresh Sol medium/high full REVIEW when the focused baseline is
+  invalidated; do not raise Luna effort in that case.
+- Keep clean initial/full REVIEW and broad or contract-sensitive review on Sol.
+- Keep LH-2 and later review migration stages separate and optional.
+- Preserve fresh reviewer identity across implementation, fix, full review, and
+  every focused re-review pass.
 - Treat stopping at any stable, cost-effective stage as the intended operating
   model, not as an incomplete migration.
 
