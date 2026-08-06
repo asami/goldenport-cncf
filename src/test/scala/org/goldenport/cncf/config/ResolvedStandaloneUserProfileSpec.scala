@@ -28,8 +28,14 @@ final class ResolvedStandaloneUserProfileSpec extends AnyWordSpec with Matchers 
         stableprofile.toOption.flatMap(_.locale) shouldBe Some(Locale.forLanguageTag("ja-JP"))
         stableprofile.toOption.flatMap(_.timezone) shouldBe Some(ZoneId.of("Asia/Tokyo"))
         changedprofile shouldBe a[Consequence.Failure[_]]
+        changedprofile.display should include ("explicit data migration")
+        changedprofile.display should include ("isolated datastore")
+        changedprofile.display should include ("silent data reuse is not admitted")
         changedprofile.display.contains("alice") shouldBe false
         changedprofile.display.contains("bob") shouldBe false
+        changedprofile.display.contains("profile-1") shouldBe false
+        changedprofile.display.contains("profile-2") shouldBe false
+        changedprofile.display.contains("standalone-local") shouldBe false
       }
     }
   }

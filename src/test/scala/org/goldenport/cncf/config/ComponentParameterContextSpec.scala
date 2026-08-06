@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Aug. 6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -212,6 +212,68 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
 
         Then("the artifact name cannot claim the runtime component descriptor or settings")
         _failure_taxonomy(result) shouldBe _configuration_invalid_taxonomy
+      }
+    }
+
+    "E10 resolve a primary runtime component through its distinct CAR artifact identity" must _e10_metadata {
+      "when the requested instance and assembly metadata use the artifact name" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; a primary runtime component with a distinct CAR artifact name")
+        val descriptor = ComponentDescriptor(
+          name = Some("textus-user-account"),
+          componentName = Some("UserAccount")
+        )
+        val metadata = ComponentInstanceMetadata(
+          "textus-user-account",
+          "tenant_a",
+          config = Map("user.account.mode" -> "artifact-bound")
+        )
+
+        When("CNCF selects the primary component context through its artifact-named instance")
+        val result = ComponentParameterContext.select(
+          ComponentId("UserAccount"),
+          ComponentInstanceId("textus-user-account", "tenant_a"),
+          Vector(descriptor),
+          Vector(metadata)
+        )
+        val resolved = result.flatMap { context =>
+          _layers(context).resolve(
+            ComponentParameterKey.requiredString("user.account.mode")
+          )
+        }
+
+        Then("the context retains the requested artifact-named instance and resolves only its assembly configuration")
+        result.toOption.map(_.componentInstanceId) shouldBe Some(
+          ComponentInstanceId("textus-user-account", "tenant_a")
+        )
+        result.toOption.map(_.descriptor) shouldBe Some(descriptor)
+        resolved.toOption.map(_.value) shouldBe Some(Some("artifact-bound"))
+      }
+    }
+
+    "E10 reject an artifact alias when it replaces a componentlet runtime identity" must _e10_metadata {
+      "when the componentlet requests the owning artifact name as its instance identity" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; a descriptor primary and componentlet with a shared assembly artifact")
+        val descriptor = ComponentDescriptor(
+          name = Some("textus-user-account"),
+          componentName = Some("UserAccount"),
+          componentlets = Vector(ComponentletDescriptor("UserAccountAdmin"))
+        )
+        val metadata = ComponentInstanceMetadata(
+          "textus-user-account",
+          "tenant_a"
+        )
+
+        When("CNCF validates the componentlet context using the artifact-named instance")
+        val result = ComponentParameterContext.select(
+          ComponentId("UserAccountAdmin"),
+          ComponentInstanceId("textus-user-account", "tenant_a"),
+          Vector(descriptor),
+          Vector(metadata)
+        )
+
+        Then("the artifact alias is rejected instead of replacing the componentlet identity")
+        _failure_taxonomy(result) shouldBe _configuration_invalid_taxonomy
+        _diagnostic_key(result) shouldBe "rejected"
       }
     }
   }

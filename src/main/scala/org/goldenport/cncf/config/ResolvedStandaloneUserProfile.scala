@@ -35,7 +35,9 @@ object ResolvedStandaloneUserProfile {
     binding: ConfigurationBinding[String, CncfConfigurationTarget]
   ): Consequence[String] =
     if (_ids(binding).distinct.size > 1)
-      Consequence.configurationInvalid("fixed-user identity changes within one resolved configuration are not admitted")
+      Consequence.configurationInvalid(
+        "fixed-user identity change requires explicit data migration or an isolated datastore; silent data reuse is not admitted"
+      )
     else
       Consequence.success(binding.value)
 

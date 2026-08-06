@@ -11,7 +11,7 @@ import org.goldenport.log.Logger
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.action.{CommandExecutionMode, CommandExecutionPolicy}
-import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
@@ -47,7 +47,8 @@ import cats.~>
  *  version Feb. 25, 2026
  *  version Apr. 25, 2026
  *  version May. 31, 2026
- * @version Jul. 31, 2026
+ *  version Jul. 31, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -110,6 +111,7 @@ object ExecutionContext {
       def observability: ObservabilityContext = cncfCore.observability
       def formatting: RuntimeContext.FormattingContext = cncfCore.runtime.context.formatting
       def scope: ScopeContext = cncfCore.scope
+      def resolvedParameters: ResolvedParameters = cncfCore.runtime.resolvedParameters
       private[cncf] def runtime: RuntimeContext = cncfCore.runtime
       private[cncf] def operationMode: OperationMode = runtime.operationMode
       def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork

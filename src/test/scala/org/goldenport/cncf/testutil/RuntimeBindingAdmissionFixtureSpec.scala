@@ -1,8 +1,12 @@
 package org.goldenport.cncf.testutil
 
 import java.nio.file.Path
+import java.time.{Clock, Instant, ZoneOffset}
+import java.util.Locale
 
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig, RuntimeOperationSecurityPolicy}
+import org.goldenport.cncf.context.{ExecutionContext, Principal, PrincipalId, SecurityContext}
+import org.goldenport.cncf.servicecontainer.{FakeServiceContainerGateway, ServiceContainerRegistry, ServiceContainerRuntime}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem, SubsystemExecutionProfile, SubsystemUserMode}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
@@ -12,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  4, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeBindingAdmissionFixtureSpec
@@ -208,6 +212,71 @@ final class RuntimeBindingAdmissionFixtureSpec
         Then("the same subsystem and policy are retained")
         admitted shouldBe theSameInstanceAs(subsystem)
         admitted.runtimeOperationSecurityPolicyC.toOption shouldBe policy
+      }
+    }
+
+    "provide explicit downstream service-container runtime test support" which {
+      "install a runtime visible through the public projection and remain idempotent" in {
+        Given("a subsystem and an in-memory fake service-container runtime")
+        given context: ExecutionContext = ExecutionContext.create()
+        val subsystem = new Subsystem(
+          name = "runtime-binding-admission-fixture-service-container",
+          configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+        )
+        val runtime = ServiceContainerRuntime.create(
+          ServiceContainerRegistry.inMemory(),
+          FakeServiceContainerGateway.create()
+        )
+
+        When("the explicit fixture installs the same runtime twice")
+        val first = RuntimeBindingAdmissionFixture.withServiceContainerRuntime(subsystem, runtime)
+        val second = RuntimeBindingAdmissionFixture.withServiceContainerRuntime(subsystem, runtime)
+        val firstProjection = subsystem.serviceContainerRuntime
+        val secondProjection = subsystem.serviceContainerRuntime
+
+        Then("both calls retain the subsystem and expose the installed runtime")
+        first shouldBe theSameInstanceAs(subsystem)
+        second shouldBe theSameInstanceAs(subsystem)
+        firstProjection shouldBe defined
+        secondProjection shouldBe defined
+        subsystem.shutdown()
+      }
+    }
+
+    "provide explicit downstream execution-context test support" which {
+      "project clock, locale policy, and security through supported fixture helpers" in {
+        Given("a downstream test context, fixed clock, locale policy, and authenticated subject")
+        val base = ExecutionContext.create()
+        val instant = Instant.parse("2026-08-06T00:00:00Z")
+        val clock = Clock.fixed(instant, ZoneOffset.UTC)
+        val security = SecurityContext(
+          principal = new Principal {
+            def id: PrincipalId = PrincipalId("fixture-user")
+            def attributes: Map[String, String] = Map("authenticated" -> "true")
+          },
+          capabilities = SecurityContext.Privilege.User.capabilities,
+          level = SecurityContext.Privilege.User.level,
+          subjectKind = SecurityContext.Privilege.User.subjectKind
+        )
+
+        When("the fixture applies each controlled downstream test projection")
+        val clocked = RuntimeBindingAdmissionFixture.withClock(base, clock)
+        val localized = RuntimeBindingAdmissionFixture.withLocalePolicy(
+          clocked,
+          Locale.JAPANESE,
+          Set(Locale.JAPANESE)
+        )
+        val secured = RuntimeBindingAdmissionFixture.withSecurityContext(
+          localized,
+          security,
+          "runtime-binding-admission-fixture-spec"
+        )
+
+        Then("the projected context retains the exact downstream test evidence")
+        secured.clock.instant() shouldBe instant
+        secured.locale shouldBe Locale.JAPANESE
+        secured.i18n.allowedLocales shouldBe Some(Set(Locale.JAPANESE))
+        secured.security.principal.id shouldBe PrincipalId("fixture-user")
       }
     }
   }

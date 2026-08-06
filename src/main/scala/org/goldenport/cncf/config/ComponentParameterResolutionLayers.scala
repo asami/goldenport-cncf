@@ -5,7 +5,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationValue, Resolved
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] sealed abstract class ComponentParameterLayer private[config] (
@@ -83,12 +83,12 @@ private[cncf] final class ComponentRuntimeParameterProjection private (
 
 private[cncf] object ComponentRuntimeParameterProjection {
   def create(
-    runtimeconfiguration: ResolvedConfiguration,
-    testdescriptor: Option[RuntimeTestDescriptor]
+    runtimeConfiguration: ResolvedConfiguration,
+    testDescriptor: Option[RuntimeTestDescriptor]
   ): ComponentRuntimeParameterProjection = {
-    val testoverlay = ComponentTestParameterOverlay.fromDescriptor(testdescriptor)
+    val testoverlay = ComponentTestParameterOverlay.fromDescriptor(testDescriptor)
     val testkeys = testoverlay._configuration.values.keySet
-    val runtimevalues = runtimeconfiguration.configuration.values -- testkeys
+    val runtimevalues = runtimeConfiguration.configuration.values -- testkeys
     new ComponentRuntimeParameterProjection(
       ComponentRuntimeParameterConfiguration.fromConfiguration(Configuration(runtimevalues)),
       testoverlay
@@ -111,6 +111,15 @@ private[cncf] final class ComponentParameterResolutionLayers private (
   private val _runtime_configuration = runtimeconfiguration
   private val _test_overlay = testoverlay
 
+  private[config] def parameterLayersHighToLow: Vector[ComponentParameterLayer] =
+    Vector(
+      _test_overlay,
+      _runtime_configuration,
+      _subsystem_instance,
+      _assembly_defaults,
+      _packaged_defaults
+    )
+
   protected def lookup_parameter(
     name: String
   ): Consequence[Option[ComponentParameterCandidate]] =
@@ -126,21 +135,42 @@ private[cncf] final class ComponentParameterResolutionLayers private (
     layer: ComponentParameterLayer,
     name: String
   ): Option[ComponentParameterCandidate] =
-    layer._configuration.get(name).map(ComponentParameterCandidate(_, layer._provenance))
+    _configuration_value(layer._configuration, name).map(ComponentParameterCandidate(_, layer._provenance))
+
+  private def _configuration_value(
+    configuration: Configuration,
+    name: String
+  ): Option[ConfigurationValue] =
+    configuration.get(name).orElse(
+      _nested_configuration_value(configuration.values, name.split('.').toList)
+    )
+
+  private def _nested_configuration_value(
+    values: Map[String, ConfigurationValue],
+    path: List[String]
+  ): Option[ConfigurationValue] =
+    path match {
+      case Nil => None
+      case name :: Nil => values.get(name)
+      case name :: tail =>
+        values.get(name).collect {
+          case ConfigurationValue.ObjectValue(children) => children
+        }.flatMap(_nested_configuration_value(_, tail))
+    }
 }
 
 private[cncf] object ComponentParameterResolutionLayers {
   def create(
-    packageddefaults: ComponentPackagedParameterDefaults,
-    assemblydefaults: ComponentAssemblyParameterDefaults,
+    packagedDefaults: ComponentPackagedParameterDefaults,
+    assemblyDefaults: ComponentAssemblyParameterDefaults,
     context: ComponentParameterContext,
-    runtimeprojection: ComponentRuntimeParameterProjection
+    runtimeProjection: ComponentRuntimeParameterProjection
   ): ComponentParameterResolutionLayers =
     new ComponentParameterResolutionLayers(
-      packageddefaults,
-      assemblydefaults,
+      packagedDefaults,
+      assemblyDefaults,
       context,
-      runtimeprojection.runtimeConfiguration,
-      runtimeprojection.testOverlay
+      runtimeProjection.runtimeConfiguration,
+      runtimeProjection.testOverlay
     )
 }

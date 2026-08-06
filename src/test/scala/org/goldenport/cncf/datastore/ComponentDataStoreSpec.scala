@@ -1,11 +1,12 @@
 package org.goldenport.cncf.datastore
 
 import java.nio.file.{Files, Path}
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.sql.SqlDataStore
+import org.goldenport.observation.Taxonomy
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -133,12 +134,22 @@ class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThe
       )
 
       When("the runtime datastore space is created")
-      val thrown = intercept[IllegalArgumentException] {
+      val thrown = intercept[ConsequenceException] {
         DataStoreSpace.create(configuration)
       }
 
-      Then("configuration fails instead of falling back to in-memory storage")
-      thrown.getMessage should include ("textus.datastore.path is required")
+      Then("configuration fails with the structured invalid-configuration taxonomy and actionable cause")
+      val conclusion = thrown.consequence match {
+        case Consequence.Failure(value) => value
+        case Consequence.Success(value) => fail(s"expected configuration failure, got $value")
+      }
+      conclusion.observation.taxonomy shouldBe Taxonomy(
+        Taxonomy.Category.Configuration,
+        Taxonomy.Symptom.Invalid
+      )
+      conclusion.observation.cause.getEffectiveMessage shouldBe Some(
+        "textus.datastore.path is required when textus.datastore.kind is local or sqlite"
+      )
     }
 
     "fall back to the component local datastore for local-default CAR policy" in {

@@ -298,6 +298,31 @@ Declaration is factory-owned because it must be available before
 component-domain initialization. It is distinct from operation-time
 `ComponentConfigurationKey` access.
 
+When user-defined logical names form a configuration family, the factory may
+also declare `initializationParameterPathRoutes`. A route is a schema template,
+not a wildcard lookup: it fixes one owned prefix, one bounded dynamic segment,
+and a finite typed leaf vocabulary. CNCF examines only the admitted five
+initialization layers, discovers concrete segment identities under that route,
+and expands ordinary canonical `ComponentParameterKey` declarations before
+the existing decoder/resolver path runs.
+
+Dynamic schema registration precedes typed resolution:
+
+```text
+fixed admitted layers
+  -> declared route discovery
+  -> bounded canonical concrete-key expansion
+  -> existing exact-key typed resolution
+  -> immutable ComponentInitializationParameters
+```
+
+The registration step remains CNCF-private. Component code receives neither
+the source maps nor an arbitrary path API; it can resolve only the exact route,
+segment, and leaf identities retained by its immutable snapshot. Each concrete
+leaf keeps normal fixed-layer precedence and provenance. Compatibility aliases
+participate only during CNCF-owned candidate selection and never become public
+snapshot identities.
+
 The canonical construction methods are `createPrimaryC` and
 `createComponentletC`; bundle factories use `createC`. CNCF allocates the
 component and core, establishes final participant identity, resolves the five

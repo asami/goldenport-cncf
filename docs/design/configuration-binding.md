@@ -90,6 +90,21 @@ diagnostics accept only the sanitized resolved trace; they own no source,
 loader, or resource handle and cannot reload or open resources. Diagnostics are
 a projection for explanation, never a second resolution authority.
 
+## Fixed-user identity continuity
+
+For standalone execution, admitted `StandaloneUserProfile` values from canonical
+Textus HOME and compatibility CNCF HOME are projected into the same typed
+candidate collection and resolved once before Subsystem binding. If that final
+fixed-user binding history contains more than one distinct id, admission fails
+with a structured configuration-invalid conclusion. The conclusion directs the
+operator to explicit data migration or an isolated datastore and never exposes
+an identity value, profile path, or descriptor `local_subject` value.
+
+The resolver never moves data, selects a datastore, creates a marker, or
+automatically migrates any record. A clean isolated datastore with one effective
+new identity is admissible. Descriptor `local_subject` remains capability wiring
+and is not a second fixed-user identity authority.
+
 ## Compatibility and ownership boundaries
 
 `ResolvedConfiguration` remains a raw compatibility projection for explicit

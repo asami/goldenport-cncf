@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -541,7 +541,15 @@ object ComponentRepository extends GlobalObservable {
         if (classdirs.isEmpty) {
           throw new IllegalStateException(ComponentDevDirRepository.noClassDirectoryMessage(baseDir))
         } else {
-          val effectiveparams = with_assembly_api_class_loader(params)
+          val assemblyparams = with_assembly_api_class_loader(params)
+          val sourcedescriptors = ComponentDevDirRepository.devComponentDescriptors(baseDir)
+          val effectiveparams =
+            if (sourcedescriptors.nonEmpty)
+              assemblyparams.withComponentDescriptors(
+                sourcedescriptors.flatMap(_component_descriptors_for_artifact(assemblyparams, _))
+              )
+            else
+              assemblyparams
           val origin = ComponentOrigin.Repository("component-dev-dir")
           val loader = ComponentLocalFirstClassLoader(
             classpath,

@@ -6,7 +6,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentParameterRequirement {
@@ -140,7 +140,7 @@ object ComponentParameterKey {
       ComponentParameterConfidentiality.Confidential
     )
 
-  private def _create[A](
+  private[config] def _create[A](
     name: String,
     decoder: ComponentParameterDecoder[A],
     requirement: ComponentParameterRequirement,
@@ -212,11 +212,12 @@ abstract class ComponentParameterResolver private[cncf] () {
 }
 
 final class ComponentInitializationParameters private (
-  private val _entries: Vector[ComponentInitializationParameters.Entry]
+  private val _entries: Vector[ComponentInitializationParameters.Entry],
+  private val _path_parameters: Vector[ComponentParameterPathParameters]
 ) {
-  def size: Int = _entries.size
+  def size: Int = _entries.size + _path_parameters.map(_.size).sum
 
-  def isEmpty: Boolean = _entries.isEmpty
+  def isEmpty: Boolean = _entries.isEmpty && _path_parameters.forall(_.isEmpty)
 
   def resolve[A](
     key: ComponentParameterKey[A]
@@ -227,25 +228,47 @@ final class ComponentInitializationParameters private (
         ComponentParameterDiagnostics.undeclared(key.name)
     }
 
+  def resolvePath(
+    route: ComponentParameterPathRoute
+  ): Consequence[ComponentParameterPathParameters] =
+    _path_parameters.find(_.route eq route) match {
+      case Some(parameters) => Consequence.success(parameters)
+      case None =>
+        ComponentParameterPathDiagnostics.rejected(
+          "component initialization parameter path route was not declared in this snapshot",
+          route.prefix
+        )
+    }
+
   private[cncf] def diagnosticSummaries: Vector[ComponentParameterDiagnosticSummary] =
-    _entries.map(_.diagnosticSummary)
+    _entries.map(_.diagnosticSummary) ++ _path_parameters.flatMap(_.diagnosticSummaries)
+
+  private[cncf] def withPathParameters(
+    parameters: Vector[ComponentParameterPathParameters]
+  ): ComponentInitializationParameters =
+    new ComponentInitializationParameters(_entries, parameters)
 }
 
 object ComponentInitializationParameters {
   val empty: ComponentInitializationParameters =
-    new ComponentInitializationParameters(Vector.empty)
+    new ComponentInitializationParameters(Vector.empty, Vector.empty)
 
   private[cncf] def create(
     declarations: Seq[ComponentParameterKey[?]],
     resolver: ComponentParameterResolver
   ): Consequence[ComponentInitializationParameters] = {
     val keys = declarations.toVector
-    _validate_declarations(keys).flatMap { _ =>
+    validateDeclarations(keys).flatMap { _ =>
       _sequence(keys.map(key => _resolve_entry(key, resolver))).map { entries =>
-        new ComponentInitializationParameters(entries)
+        new ComponentInitializationParameters(entries, Vector.empty)
       }
     }
   }
+
+  private[cncf] def validateDeclarations(
+    declarations: Seq[ComponentParameterKey[?]]
+  ): Consequence[Unit] =
+    _validate_declarations(declarations.toVector)
 
   private sealed abstract class Entry {
     def diagnosticSummary: ComponentParameterDiagnosticSummary

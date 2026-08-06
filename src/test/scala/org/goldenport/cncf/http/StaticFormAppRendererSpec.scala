@@ -74,7 +74,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -85,6 +85,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
   "StaticFormAppRenderer" must _in_phase53_spec {
     "provide dashboard, system administration, Blob, and documentation contracts" which {
+    "keep the generated manual available when one metadata projection fails" in {
+      Given("a projection that raises while the manual assembles its independent sections")
+
+      When("the projection boundary converts the failure to renderable metadata")
+      val projected = _renderer.manual_projection_or_error("Schema", "notice-board") {
+        throw new NotImplementedError("schema fixture is unavailable")
+      }
+
+      Then("the failed section is explicit without aborting the whole manual")
+      projected.getString("type") shouldBe Some("error")
+      projected.getString("name") shouldBe Some("notice-board")
+      projected.getString("summary") shouldBe Some("Schema projection unavailable")
+      projected.getString("error") shouldBe Some("schema fixture is unavailable")
+    }
+
     "render subsystem dashboard state contract" in {
       Given("the prerequisites for render subsystem dashboard state contract")
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))

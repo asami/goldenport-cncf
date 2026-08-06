@@ -1,21 +1,71 @@
 package org.goldenport.cncf.testutil
 
+import java.time.Clock
+import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
-import org.goldenport.cncf.context.{GlobalRuntimeContext, ScopeContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, SecurityContext}
 import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.servicecontainer.ServiceContainerRuntime
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem, SubsystemUserMode}
 import org.goldenport.configuration.{Configuration, ConfigurationBindingCollection, ConfigurationBindingResolver, ConfigurationDocument, ConfigurationOrigin, ConfigurationSourceAdmission, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.context.I18nContext
 
 /*
  * @since   Aug.  4, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Explicit downstream test support packaged in the main artifact; it never auto-admits production Subsystems. */
 object RuntimeBindingAdmissionFixture {
+  def withClock(
+    context: ExecutionContext,
+    clock: Clock
+  ): ExecutionContext = context match {
+    case instance: ExecutionContext.Instance =>
+      instance.copy(core = ExecutionContext.create(clock).core)
+  }
+
+  def withLocalePolicy(
+    context: ExecutionContext,
+    locale: Locale,
+    allowedLocales: Set[Locale]
+  ): ExecutionContext = context match {
+    case instance: ExecutionContext.Instance =>
+      val i18n = I18nContext.Instant(instance.i18n.core.copy(
+        locale = Some(locale),
+        allowedLocales = Some(allowedLocales)
+      ))
+      instance.copy(core = instance.core.copy(i18n = i18n, locale = locale))
+  }
+
+  def withSecurityContext(
+    context: ExecutionContext,
+    security: SecurityContext,
+    unitOfWorkToken: String
+  ): ExecutionContext = {
+    lazy val secured = ExecutionContext.withSecurityContext(context, security)
+    lazy val rebound: ExecutionContext =
+      ExecutionContext.withRuntimeContext(secured, runtime)
+    lazy val runtime =
+      secured.runtime.withUnitOfWorkContext(rebound, unitOfWorkToken)
+    rebound
+  }
+
+  /**
+    * Explicit controlled test support for downstream consumers; this does not
+    * reopen production Subsystem runtime auto-admission.
+    */
+  def withServiceContainerRuntime(
+    subsystem: Subsystem,
+    runtime: ServiceContainerRuntime
+  ): Subsystem = {
+    _take(subsystem.installServiceContainerRuntimeC(runtime))
+    subsystem
+  }
+
   def default(
     mode: Option[String] = None,
     configuration: ResolvedConfiguration =
@@ -81,7 +131,7 @@ object RuntimeBindingAdmissionFixture {
     subsystem
   }
 
-  private val _runtime_binding_keys: Set[String] = {
+  private lazy val _runtime_binding_keys: Set[String] = {
     val canonical = Vector(
       SubsystemUserMode.CONFIGURATION_KEY,
       RuntimeConfig.operationModeKey,

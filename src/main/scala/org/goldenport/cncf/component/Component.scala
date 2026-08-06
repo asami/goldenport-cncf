@@ -21,7 +21,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBe
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.cncf.http.{HttpDriver, WebMessageCatalog, WebPageContextProvider}
-import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterBootstrap, ComponentParameterKey}
+import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterBootstrap, ComponentParameterKey, ComponentParameterPathRoute}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.service.{Service, ServiceGroup}
@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -908,6 +908,9 @@ object Component {
     def initializationParameterDeclarations: Vector[ComponentParameterKey[?]] =
       Vector.empty
 
+    def initializationParameterPathRoutes: Vector[ComponentParameterPathRoute] =
+      Vector.empty
+
     final def createPrimary(params: ComponentCreate): Component =
       _or_raise(createPrimaryC(params))
 
@@ -966,7 +969,8 @@ object Component {
             ),
             sharedcore.componentId,
             sharedcore.instanceId,
-            initializationParameterDeclarations
+            initializationParameterDeclarations,
+            initializationParameterPathRoutes
           )
           .flatMap { parameters =>
             initialize_component_c(

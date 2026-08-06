@@ -12,7 +12,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 23, 2026
+ * @version Aug. 6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final class ComponentParameterContext private (
@@ -39,12 +39,12 @@ private[cncf] object ComponentParameterContext {
     assemblymetadata: Seq[ComponentInstanceMetadata]
   ): Consequence[ComponentParameterContext] =
     for {
-      _ <- _validate_identity(componentid, componentinstanceid)
       descriptor <- _select_descriptor(
         componentid,
         componentinstanceid,
         descriptors.toVector
       )
+      _ <- _validate_identity(componentid, componentinstanceid, descriptor)
       metadata <- _select_metadata(
         componentid,
         componentinstanceid,
@@ -60,10 +60,18 @@ private[cncf] object ComponentParameterContext {
 
   private def _validate_identity(
     componentid: ComponentId,
-    componentinstanceid: ComponentInstanceId
+    componentinstanceid: ComponentInstanceId,
+    descriptor: ComponentDescriptor
   ): Consequence[Unit] = {
     val expected = ComponentInstanceId(componentid.name, componentinstanceid.instance)
-    if (expected.canonicalKey == componentinstanceid.canonicalKey)
+    val runtimeidentity = expected.canonicalKey == componentinstanceid.canonicalKey
+    val artifactalias = descriptor.name.exists { name =>
+      descriptor.componentName.exists { componentname =>
+        NamingConventions.equivalentByNormalized(componentname, componentid.name) &&
+          NamingConventions.equivalentByNormalized(name, componentinstanceid.name)
+      }
+    }
+    if (runtimeidentity || artifactalias)
       Consequence.unit
     else
       ComponentParameterDiagnostics.contextRejected(
@@ -105,8 +113,7 @@ private[cncf] object ComponentParameterContext {
     val roots = _descriptor_root_names(descriptor)
     val candidates = assemblymetadata.filter { metadata =>
       roots.exists(NamingConventions.equivalentByNormalized(_, metadata.componentName)) &&
-        ComponentInstanceId(componentid.name, metadata.instance).canonicalKey ==
-          componentinstanceid.canonicalKey
+        metadata.instance == componentinstanceid.instance
     }
     candidates match {
       case Vector(metadata) => Consequence.success(metadata)
@@ -129,11 +136,16 @@ private[cncf] object ComponentParameterContext {
     descriptor: ComponentDescriptor,
     componentid: ComponentId
   ): Boolean =
-    (_descriptor_root_names(descriptor) ++ descriptor.componentlets.map(_.name))
+    (_descriptor_runtime_names(descriptor) ++ descriptor.componentlets.map(_.name))
       .exists(NamingConventions.equivalentByNormalized(_, componentid.name))
+
+  private def _descriptor_runtime_names(
+    descriptor: ComponentDescriptor
+  ): Vector[String] =
+    descriptor.componentName.orElse(descriptor.name).toVector
 
   private def _descriptor_root_names(
     descriptor: ComponentDescriptor
   ): Vector[String] =
-    descriptor.componentName.orElse(descriptor.name).toVector
+    (descriptor.componentName.toVector ++ descriptor.name.toVector).distinct
 }

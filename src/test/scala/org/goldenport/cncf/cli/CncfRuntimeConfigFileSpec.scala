@@ -754,6 +754,36 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${explicitcar}")
     }
 
+    "retain admitted repository selections across resolved invocation re-bootstrap" in {
+      Given("one admitted path for every repository selection kind")
+      val cwd = Files.createTempDirectory("cncf-repository-invocation-rebootstrap")
+      val values = Vector(
+        RuntimeConfig.repositoryDirKey -> cwd.resolve("repository").toString,
+        RuntimeConfig.repositoryComponentDevDirKey -> cwd.resolve("repository-component-dev").toString,
+        RuntimeConfig.componentDirKey -> cwd.resolve("component").toString,
+        RuntimeConfig.componentDevDirKey -> cwd.resolve("component-dev").toString,
+        RuntimeConfig.componentCarDirKey -> cwd.resolve("component-car").toString,
+        RuntimeConfig.componentFileKey -> cwd.resolve("component.car").toString,
+        RuntimeConfig.subsystemDevDirKey -> cwd.resolve("subsystem-dev").toString,
+        RuntimeConfig.subsystemSarDirKey -> cwd.resolve("subsystem-sar").toString
+      )
+      val args = values.map { case (key, value) => s"--${key}=${value}" }.toArray ++ Array("command")
+
+      When("the canonical invocation is bootstrapped again after launcher resolution")
+      val first = CncfRuntime.bootstrap(cwd, args)
+      val second = CncfRuntime.bootstrap(cwd, first.invocation.actualArgs)
+
+      Then("every repository selection retains its original semantic type and value")
+      second.repositoryBootstrapPolicy.repositoryDirs shouldBe Vector(values(0)._2)
+      second.repositoryBootstrapPolicy.repositoryComponentDevDirs shouldBe Vector(values(1)._2)
+      second.repositoryBootstrapPolicy.componentDirs shouldBe Vector(values(2)._2)
+      second.repositoryBootstrapPolicy.componentDevDirs shouldBe Vector(values(3)._2)
+      second.repositoryBootstrapPolicy.componentCarDirs shouldBe Vector(values(4)._2)
+      second.repositoryBootstrapPolicy.componentFiles shouldBe Vector(values(5)._2)
+      second.repositoryBootstrapPolicy.subsystemDevDirs shouldBe Vector(values(6)._2)
+      second.repositoryBootstrapPolicy.subsystemSarDirs shouldBe Vector(values(7)._2)
+    }
+
     "resolve a named subsystem SAR from the standard repository for server startup" in {
       Given("a named subsystem SAR in an explicit repository")
       val cwd = Files.createTempDirectory("textus-subsystem-name-repo")

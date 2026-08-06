@@ -33,7 +33,8 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 31, 2026
+ *  version Jul. 31, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -821,6 +822,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )),
           ConfigurationTrace.empty
         )
+        val testdescriptor = _controlled_test_descriptor(root, "component-dev-dir-identity")
 
         When("identity inference, descriptor resolution, and runtime initialization complete")
         val inferred = ComponentRepository.ComponentDevDirRepository.inferComponentNames(componentdir)
@@ -828,6 +830,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val initialized = new org.goldenport.cncf.cli.CncfRuntime().initializeForEmbedding(
           cwd = root,
           args = Array(
+            s"--textus.test.descriptor=$testdescriptor",
             "--component-dev-dir", componentdir.toString,
             "command", "devdirsample.main.hello"
           ),
@@ -1526,11 +1529,13 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             "component-descriptor.json" -> providerdescriptor
           )
         )
+        val testdescriptor = _controlled_test_descriptor(root, "component-file-dependency-resolution")
 
         When("CNCF initializes from the single application component file")
         val initialized = new org.goldenport.cncf.cli.CncfRuntime().initializeForEmbedding(
           cwd = root,
           args = Array(
+            s"--textus.test.descriptor=$testdescriptor",
             "--no-default-components",
             "--component-file", appcar.toString,
             "--repository-dir", repositorydir.toString,
@@ -1583,11 +1588,13 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             "assembly-descriptor.yaml" -> assemblydescriptor
           )
         )
+        val testdescriptor = _controlled_test_descriptor(root, "component-file-missing-dependency")
 
         When("CNCF initializes without a repository containing the dependency")
         val result = new org.goldenport.cncf.cli.CncfRuntime().initializeForEmbedding(
           cwd = root,
           args = Array(
+            s"--textus.test.descriptor=$testdescriptor",
             "--no-default-components",
             "--component-file", appcar.toString,
             "command", "component-file-app.main.noop"
@@ -2452,6 +2459,35 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     entries: Seq[(String, Path)]
   ): Unit =
     CarArchiveFixture.write(target, entries)
+
+  private def _controlled_test_descriptor(
+    root: Path,
+    key: String
+  ): Path = {
+    val descriptor = root.resolve(s"test-$key.yaml")
+    Files.writeString(
+      descriptor,
+      s"""kind: test-descriptor
+         |execution:
+         |  profile: controlled
+         |  key: $key
+         |  time:
+         |    mode: manual
+         |    start-at: 2026-08-06T00:00:00Z
+         |  random:
+         |    mode: seeded
+         |    seed: $key
+         |  ids:
+         |    mode: deterministic
+         |  scheduler:
+         |    mode: manual
+         |  ordering:
+         |    mode: deterministic
+         |""".stripMargin,
+      StandardCharsets.UTF_8
+    )
+    descriptor
+  }
 
   private def _write_runtime_classpath(
     componentdir: Path,

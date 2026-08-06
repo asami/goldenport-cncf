@@ -25,9 +25,14 @@ internal authority.
 
 Use the admitted typed fixed-user/profile projection for identity, display name,
 locale, and timezone. An identity change is not an ordinary override: it must
-be rejected unless the owning migration/isolation contract explicitly admits
-it. Formatting assumptions come from the resolved profile, not request-restored
-or host defaults.
+be rejected before Subsystem binding unless the operator supplies explicit data
+migration or an isolated datastore. The resolver never moves data, chooses a
+datastore, or records automatic identity migration. A clean isolated datastore
+with one effective new identity is admissible. Formatting assumptions come from
+the resolved profile, not request-restored or host defaults. The diagnostic
+must not reveal either identity, profile path, or descriptor `local_subject`;
+that descriptor value is capability wiring only and cannot become fixed-user
+identity authority.
 
 ## Secret-safe diagnostics
 

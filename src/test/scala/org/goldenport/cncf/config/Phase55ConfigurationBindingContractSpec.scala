@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  3, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase55ConfigurationBindingContractSpec
@@ -51,7 +51,7 @@ final class Phase55ConfigurationBindingContractSpec
     "canonical-alias-coexistence-rejected-for-one-parameter-target-source"
   )
   private val _fixed_user_scenario =
-    "fixed-user-change-diagnosed-explicit-migration-or-isolation-no-silent-reuse"
+    CncfConfigurationBindingScenarioSpi.fixedUserIdentityChangeScenarioId
 
   "Phase 55 CNCF configuration binding catalog" should {
     "route concrete-target scenarios through the CNCF specialization" which {
@@ -118,25 +118,27 @@ final class Phase55ConfigurationBindingContractSpec
     }
 
     "route fixed-user scenarios through the CNCF specialization" which {
-      "E4 preserve migration-or-isolation diagnosis while behavior is deferred" must _e4 {
+      "E4 reject the registered conflicting fixed-user identity through typed binding resolution" must _e4 {
         "when a fixed-user identity change request is evaluated" in {
-          Given("the unchanged Phase 53 HOME-only and multi-user boundaries")
+          Given("the canonical Textus HOME then CNCF HOME fixed-user admission order")
 
           When("the request is sent through the CNCF production SPI")
           val report = _evaluate(CncfConfigurationBindingScenarioRequest.FixedUserIdentityChange(_fixed_user_scenario))
 
-          Then("the report is attributable to the registered fixed-user scenario")
-          report shouldBe NotImplemented(_fixed_user_scenario)
-        }
-
-        "when GCF-07 requires explicit migration or isolation" in {
-          Given("the registered fixed-user scenario")
-
-          When("its behavior becomes authoritative")
-
-          Then("it no longer remains a GCF-02 deferred report")
-          pendingUntilFixed {
-            _evaluate(CncfConfigurationBindingScenarioRequest.FixedUserIdentityChange(_fixed_user_scenario)).isInstanceOf[NotImplemented] shouldBe false
+          Then("the exact registered scenario rejects with a value-safe migration-or-isolation conclusion")
+          report match {
+            case ConfigurationBindingScenarioReport.Rejected(scenarioid, conclusion) =>
+              scenarioid shouldBe _fixed_user_scenario
+              conclusion.show should include ("explicit data migration")
+              conclusion.show should include ("isolated datastore")
+              conclusion.show should include ("silent data reuse is not admitted")
+              conclusion.show.contains("fixture-textus-fixed-user") shouldBe false
+              conclusion.show.contains("fixture-cncf-fixed-user") shouldBe false
+              conclusion.show.contains(".textus/user-profile.yaml") shouldBe false
+              conclusion.show.contains(".cncf/user-profile.yaml") shouldBe false
+              conclusion.show.contains("standalone-local") shouldBe false
+            case other =>
+              fail(s"Expected fixed-user rejection, got $other")
           }
         }
       }

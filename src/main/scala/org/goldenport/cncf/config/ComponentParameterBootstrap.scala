@@ -13,27 +13,29 @@ import org.goldenport.cncf.observability.ComponentParameterBootstrapObservation
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object ComponentParameterBootstrap {
   def resolve(
     create: ComponentCreate,
-    componentid: ComponentId,
-    instanceid: ComponentInstanceId,
-    declarations: Seq[ComponentParameterKey[?]]
+    componentId: ComponentId,
+    instanceId: ComponentInstanceId,
+    declarations: Seq[ComponentParameterKey[?]],
+    pathRoutes: Seq[ComponentParameterPathRoute]
   ): Consequence[ComponentInitializationParameters] = {
     val keys = declarations.toVector
-    val result =
-      if (keys.isEmpty) {
-        Consequence.success(ComponentInitializationParameters.empty)
+    val routes = pathRoutes.toVector
+    val prepared =
+      if (keys.isEmpty && routes.isEmpty) {
+        Consequence.success(None)
       } else {
         for {
           context <- ComponentParameterContext.select(
-            componentid,
-            instanceid,
+            componentId,
+            instanceId,
             create.componentDescriptors,
-            _assembly_metadata(create, instanceid)
+            _assembly_metadata(create, instanceId)
           )
           testdescriptor <- RuntimeTestDescriptor.load(create.subsystem.configuration)
           runtimeprojection = ComponentRuntimeParameterProjection.create(
@@ -50,13 +52,24 @@ private[cncf] object ComponentParameterBootstrap {
             context,
             runtimeprojection
           )
-          parameters <- ComponentInitializationParameters.create(keys, layers)
-        } yield parameters
+          pathschema <- ComponentParameterPathSchemaRegistration.registerC(routes, layers, keys)
+        } yield Some(layers -> pathschema)
       }
+    val observationkeys = prepared.toOption.flatten.fold(keys) { case (_, pathschema) =>
+      keys ++ pathschema.declarations
+    }
+    val result = prepared.flatMap {
+      case None =>
+        Consequence.success(ComponentInitializationParameters.empty)
+      case Some((layers, pathschema)) =>
+        for {
+          parameters <- ComponentInitializationParameters.create(keys, layers)
+        } yield parameters.withPathParameters(pathschema.parameters)
+    }
     ComponentParameterBootstrapObservation.record(
-      componentid,
-      instanceid,
-      keys,
+      componentId,
+      instanceId,
+      observationkeys,
       result
     )
     result

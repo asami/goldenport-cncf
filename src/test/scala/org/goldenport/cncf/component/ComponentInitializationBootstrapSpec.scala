@@ -18,6 +18,8 @@ import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentR
 import org.goldenport.cncf.config.{
   ComponentInitializationParameters,
   ComponentParameterKey,
+  ComponentParameterPathLeaf,
+  ComponentParameterPathRoute,
   ComponentParameterProvenance,
   RuntimeConfig,
   SecretReference
@@ -42,7 +44,7 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationBootstrapSpec
@@ -51,6 +53,8 @@ final class ComponentInitializationBootstrapSpec
   with GivenWhenThen {
   private val _e12_metadata =
     afterWord("in spec:component-runtime-boundary-capabilities, example:E12, rules:R3a,R5,R10, phase:47, slices:CIP-05,CIP-06,CIP-07,CIP-08")
+  private val _e14_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E14, rules:R3a,R10, phase:12, slice:P12-S12C-1C-DYNAMIC-PATH")
 
   "Component initialization bootstrap" should {
     "E12 deliver context-bound snapshots" must _e12_metadata {
@@ -299,6 +303,48 @@ final class ComponentInitializationBootstrapSpec
         }
       }
 
+      "merge the authoritative development descriptor before factory parameter bootstrap" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a development artifact alias that differs from its runtime component name")
+        _with_parameter_repository("textus-repository-parameter-probe") { repositorydir =>
+          val configuration = ResolvedConfiguration(
+            Configuration(Map(
+              RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(repositorydir.toString)
+            )),
+            ConfigurationTrace.empty
+          )
+          val artifactname = "textus-repository-parameter-probe"
+          val binding = GenericSubsystemComponentBinding(
+            artifactname,
+            config = Map("provider.limit" -> "47")
+          )
+          val descriptor = GenericSubsystemDescriptor(
+            path = repositorydir,
+            subsystemName = "repository-artifact-identity-parameter",
+            componentBindings = Vector(binding)
+          )
+
+          When("the development repository discovers its factory through the assembly artifact binding")
+          val component = GenericSubsystemFactory
+            .default(descriptor, configuration = configuration)
+            .components
+            .find(_.name == "repository_parameter_probe")
+            .value
+
+          Then("factory bootstrap retains the source alias pair while the generated core retains its runtime name")
+          component.core.name shouldBe "repository_parameter_probe"
+          component.instanceMetadata.map(_.componentName) shouldBe Some(artifactname)
+          component.instanceMetadata.map(_.instance) shouldBe Some("default")
+          component.initializationParameters
+            .resolve(RepositoryParameterProbeFactory.limitKey)
+            .toOption
+            .flatMap(_.value) shouldBe Some(47)
+          component.componentDescriptors.headOption.flatMap(_.name) shouldBe Some(artifactname)
+          component.componentDescriptors.headOption.flatMap(_.componentName) shouldBe Some(
+            "repository_parameter_probe"
+          )
+        }
+      }
+
     }
 
     "E12 preserve structured failure" must _e12_metadata {
@@ -544,6 +590,57 @@ final class ComponentInitializationBootstrapSpec
       }
     }
 
+    "E14 expand bounded dynamic initialization parameter paths" must _e14_metadata {
+      "expand declared dynamic paths before component initialization" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E14; a factory route and two packaged dynamic parameter names")
+        val subsystem = TestComponentFactory.emptySubsystem("initialization-dynamic-path")
+        val descriptor = ComponentDescriptor(
+          componentName = Some("dynamic_path_probe"),
+          config = Map(
+            "provider.profiles.standard.model" -> "standard-model",
+            "provider.profiles.deep.model" -> "deep-model"
+          )
+        )
+
+        When("the consequence-aware factory creates and initializes the component")
+        val component = DynamicPathProbeFactory.createPrimaryC(
+          ComponentCreate(
+            subsystem,
+            ComponentOrigin.Repository("phase-12"),
+            Vector(descriptor)
+          )
+        ).toOption.value.asInstanceOf[DynamicPathProbeComponent]
+
+        Then("component initialization receives only the expanded typed path snapshot")
+        component.models shouldBe Map(
+          "deep" -> "deep-model",
+          "standard" -> "standard-model"
+        )
+        component.initializationParameters.size shouldBe 2
+      }
+
+      "propagate static and dynamic declaration collisions through factory bootstrap" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E14; one factory statically declares a canonical name its route expands")
+        val subsystem = TestComponentFactory.emptySubsystem("initialization-dynamic-path-collision")
+        val descriptor = ComponentDescriptor(
+          componentName = Some("dynamic_path_static_collision"),
+          config = Map("provider.profiles.standard.model" -> "standard-model")
+        )
+
+        When("the consequence-aware factory builds its initialization snapshot")
+        val result = DynamicPathStaticCollisionFactory.createPrimaryC(
+          ComponentCreate(
+            subsystem,
+            ComponentOrigin.Repository("phase-12"),
+            Vector(descriptor)
+          )
+        )
+
+        Then("the structured duplicate declaration failure prevents component admission")
+        result.isFaillure shouldBe true
+      }
+    }
+
     "E12 protect the public snapshot boundary" must _e12_metadata {
       "keep physical runtime configuration outside the public snapshot API" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; the public component initialization snapshot type")
@@ -564,23 +661,26 @@ final class ComponentInitializationBootstrapSpec
     }
   }
 
-  private def _with_parameter_repository[T](body: Path => T): T = {
+  private def _with_parameter_repository[T](body: Path => T): T =
+    _with_parameter_repository("repository-parameter-probe")(body)
+
+  private def _with_parameter_repository[T](artifactname: String)(body: Path => T): T = {
     val repositorydir = Files.createTempDirectory("component-parameter-repository")
-    val classdir = repositorydir.resolve("target/classes")
-    val factoryresource = classOf[RepositoryParameterProbeFactory].getName.replace('.', '/') + ".class"
-    val factoryclass = classdir.resolve(factoryresource)
-    Files.createDirectories(factoryclass.getParent)
-    Using.resource(classOf[RepositoryParameterProbeFactory].getClassLoader.getResourceAsStream(factoryresource)) { in =>
-      Files.copy(in, factoryclass)
-    }
-    DevelopmentRuntimeManifestFixture.write(
-      repositorydir,
-      classdir,
-      "repository-parameter-probe",
-      CncfVersion.current,
-      "repository_parameter_probe"
-    )
     try {
+      val classdir = repositorydir.resolve("target/classes")
+      val factoryresource = classOf[RepositoryParameterProbeFactory].getName.replace('.', '/') + ".class"
+      val factoryclass = classdir.resolve(factoryresource)
+      Files.createDirectories(factoryclass.getParent)
+      Using.resource(classOf[RepositoryParameterProbeFactory].getClassLoader.getResourceAsStream(factoryresource)) { in =>
+        Files.copy(in, factoryclass)
+      }
+      DevelopmentRuntimeManifestFixture.write(
+        repositorydir,
+        classdir,
+        artifactname,
+        CncfVersion.current,
+        "repository_parameter_probe"
+      )
       body(repositorydir)
     } finally {
       Using.resource(Files.walk(repositorydir)) { stream =>
@@ -703,6 +803,76 @@ final class ComponentInitializationBootstrapSpec
       spec_create(
         "empty_parameter_probe",
         ComponentId("empty_parameter_probe"),
+        Vector.empty[spec.ServiceDefinition]
+      )
+  }
+
+  private final class DynamicPathProbeComponent extends Component {
+    var models: Map[String, String] = Map.empty
+
+    override protected def initialize_component_c(params: ComponentInit): Consequence[Unit] =
+      params.initializationParameters.resolvePath(DynamicPathProbeFactory.profileRoute).flatMap { parameters =>
+        parameters.segments.foldLeft(Consequence.success(Map.empty[String, String])) { (acc, segment) =>
+          acc.flatMap { values =>
+            parameters.resolve(segment, DynamicPathProbeFactory.modelLeaf).map { resolution =>
+              resolution.value.fold(values)(value => values.updated(segment.value, value))
+            }
+          }
+        }.map { values =>
+          models = values
+        }
+      }
+  }
+
+  private object DynamicPathProbeFactory extends Component.Factory {
+    val modelLeaf: ComponentParameterPathLeaf[String] =
+      ComponentParameterPathLeaf.requiredString("model").toOption.get
+    val profileRoute: ComponentParameterPathRoute =
+      ComponentParameterPathRoute.createC(
+        "provider.profiles",
+        "profile",
+        Vector(modelLeaf)
+      ).toOption.get
+
+    override def initializationParameterPathRoutes: Vector[ComponentParameterPathRoute] =
+      Vector(profileRoute)
+
+    protected def create_Component(params: ComponentCreate): Component =
+      new DynamicPathProbeComponent
+
+    protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
+      spec_create(
+        "dynamic_path_probe",
+        ComponentId("dynamic_path_probe"),
+        Vector.empty[spec.ServiceDefinition]
+      )
+  }
+
+  private object DynamicPathStaticCollisionFactory extends Component.Factory {
+    val modelLeaf: ComponentParameterPathLeaf[String] =
+      ComponentParameterPathLeaf.requiredString("model").toOption.get
+    val profileRoute: ComponentParameterPathRoute =
+      ComponentParameterPathRoute.createC(
+        "provider.profiles",
+        "profile",
+        Vector(modelLeaf)
+      ).toOption.get
+    val staticModelKey: ComponentParameterKey[String] =
+      ComponentParameterKey.requiredString("provider.profiles.standard.model")
+
+    override def initializationParameterDeclarations: Vector[ComponentParameterKey[?]] =
+      Vector(staticModelKey)
+
+    override def initializationParameterPathRoutes: Vector[ComponentParameterPathRoute] =
+      Vector(profileRoute)
+
+    protected def create_Component(params: ComponentCreate): Component =
+      new Component {}
+
+    protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
+      spec_create(
+        "dynamic_path_static_collision",
+        ComponentId("dynamic_path_static_collision"),
         Vector.empty[spec.ServiceDefinition]
       )
   }

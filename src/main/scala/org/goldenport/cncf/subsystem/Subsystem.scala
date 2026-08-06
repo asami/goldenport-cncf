@@ -68,7 +68,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -916,11 +916,20 @@ final class Subsystem(
       profile <- executionProfileC
       response <- {
         val (component, _, _) = route
-        IngressSecurityResolver.resolve(
-          profile,
-          component.logic.executionContext(),
-          _request_security_attributes(normalizedrequest)
-        ).flatMap { security =>
+        val attributes = _request_security_attributes(normalizedrequest)
+        val accesspolicy = component.operationDefinitions
+          .find(x => _normalize_operation_name(x.name) == _normalize_operation_name(route._3.name))
+          .flatMap(_.access.map(_.policy))
+        val ingress =
+          if (_is_explicit_anonymous_capable_access_policy(accesspolicy))
+            IngressSecurityResolver.resolve(component.logic.executionContext(), attributes)
+          else
+            IngressSecurityResolver.resolve(
+              profile,
+              component.logic.executionContext(),
+              attributes
+            )
+        ingress.flatMap { security =>
           val executioncontext =
             _with_http_runtime_parameters(security.executionContext, httprequest)
           _execute_resolved_operation(route, normalizedrequest, executioncontext).map { result =>
@@ -1719,6 +1728,12 @@ final class Subsystem(
 
   private def _normalize_operation_name(name: String): String =
     Option(name).getOrElse("").replace("-", "").replace("_", "").toLowerCase(java.util.Locale.ROOT)
+
+  private def _is_explicit_anonymous_capable_access_policy(policy: Option[String]): Boolean =
+    policy.map(_.trim.toLowerCase(java.util.Locale.ROOT)).exists {
+      case "public" | "anonymous_only" | "anonymous-only" => true
+      case _ => false
+    }
 
   private def _operation_authorization_context(
     ctx: ExecutionContext,

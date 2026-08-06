@@ -675,9 +675,11 @@ object DataStoreSpace {
               normalizeColumnNames = sqlnormalizecolumns
             )
           )
-        }.getOrElse(throw new IllegalArgumentException(
-          "textus.datastore.path is required when textus.datastore.kind is local or sqlite"
-        ))
+        }.getOrElse(
+          Consequence.configurationInvalid(
+            "textus.datastore.path is required when textus.datastore.kind is local or sqlite"
+          ).RAISEC
+        )
       case _ =>
         sqlitepath match {
           case Some(path) =>

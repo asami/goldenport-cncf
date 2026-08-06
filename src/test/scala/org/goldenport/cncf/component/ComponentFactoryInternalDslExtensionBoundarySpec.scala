@@ -7,7 +7,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  1, 2026
- * @version Aug.  1, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryInternalDslExtensionBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -96,6 +96,7 @@ final class ComponentFactoryInternalDslExtensionBoundarySpec extends AnyWordSpec
       nonfinalmethods shouldBe Set(
         "serviceFactory",
         "initializationParameterDeclarations",
+        "initializationParameterPathRoutes",
         "authorizeOperationAccess",
         "authorizeOperationEntity",
         "authorizeUnitOfWork",

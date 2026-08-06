@@ -9,7 +9,7 @@ import java.util.ServiceLoader
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.Conclusion
 import org.goldenport.conclusion.cli.CliConclusionRenderer
 import org.goldenport.conclusion.presentation.{PresentationContext, SimpleConclusionPresenter}
@@ -26,7 +26,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.config.{ClientConfig, CncfAssemblyConfigurationProjection, CncfConfigurationArgumentBindingAdmission, CncfConfigurationArgumentBindingAssignment, CncfConfigurationArgumentBindingCodec, CncfConfigurationEnvironmentBindingAdmission, CncfConfigurationEnvironmentBindingAssignment, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, CncfRuntimeConfigurationProjection, RepositoryBootstrapPolicy, RuntimeConfig, RuntimeDefaults, RuntimeExecutionProfileConfiguration, RuntimeFileConfigLoader, RuntimeProcessExitPolicy, RuntimeTestDescriptor, StandaloneUserProfileBindingProjection, StandaloneUserProfileResolver, SubsystemInstanceId, SystemNodeShutdownConfiguration}
+import org.goldenport.cncf.config.{ClientConfig, CncfAssemblyConfigurationProjection, CncfConfigurationArgumentBindingAdmission, CncfConfigurationArgumentBindingAssignment, CncfConfigurationArgumentBindingCodec, CncfConfigurationEnvironmentBindingAdmission, CncfConfigurationEnvironmentBindingAssignment, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, CncfRuntimeConfigurationProjection, RepositoryBootstrapPolicy, ResolvedStandaloneUserProfile, RuntimeConfig, RuntimeDefaults, RuntimeExecutionProfileConfiguration, RuntimeFileConfigLoader, RuntimeProcessExitPolicy, RuntimeTestDescriptor, StandaloneUserProfileBindingProjection, StandaloneUserProfileResolver, SubsystemInstanceId, SystemNodeShutdownConfiguration}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionProfileActivation, ExecutionProfileMode, ExecutionProfileResolver, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalContext
@@ -42,7 +42,7 @@ import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory, ServerPortPolicy}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
-import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemFactory, Subsystem, SystemNode, SystemNodeConstruction}
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemFactory, Subsystem, SubsystemExecutionProfile, SubsystemUserMode, SystemNode, SystemNodeConstruction}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
 import org.goldenport.cncf.bootstrap.{BootstrapConfig, CncfHandle}
@@ -67,7 +67,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -724,10 +724,21 @@ object CncfRuntime extends GlobalObservable {
 
   private def _repository_policy_invocation_arguments(
     policy: RepositoryBootstrapPolicy
-  ): Array[String] =
-    policy.componentFiles
-      .map(value => s"--${RuntimeConfig.componentFileKey}=$value")
-      .toArray
+  ): Array[String] = {
+    def arguments(key: String, values: Vector[String]): Vector[String] =
+      values.map(value => s"--${key}=$value")
+
+    (
+      arguments(RuntimeConfig.repositoryDirKey, policy.repositoryDirs) ++
+        arguments(RuntimeConfig.repositoryComponentDevDirKey, policy.repositoryComponentDevDirs) ++
+        arguments(RuntimeConfig.componentDirKey, policy.componentDirs) ++
+        arguments(RuntimeConfig.componentDevDirKey, policy.componentDevDirs) ++
+        arguments(RuntimeConfig.componentCarDirKey, policy.componentCarDirs) ++
+        arguments(RuntimeConfig.componentFileKey, policy.componentFiles) ++
+        arguments(RuntimeConfig.subsystemDevDirKey, policy.subsystemDevDirs) ++
+        arguments(RuntimeConfig.subsystemSarDirKey, policy.subsystemSarDirs)
+    ).toArray
+  }
 
   private def _with_auto_component_file(
     cwd: Path,
@@ -1080,6 +1091,25 @@ object CncfRuntime extends GlobalObservable {
     }
   }
 
+  private def _capture_consequence[A](body: => A): Consequence[A] =
+    try {
+      Consequence.success(body)
+    } catch {
+      case error: ConsequenceException =>
+        error.consequence match {
+          case Consequence.Failure(conclusion) => Consequence.Failure(conclusion)
+          case Consequence.Success(_) => Consequence.Failure(Conclusion.from(error))
+        }
+      case NonFatal(error) =>
+        Consequence.Failure(Conclusion.from(error))
+    }
+
+  private def _prepare_launch_consequence(
+    cwd: Path,
+    args: Array[String]
+  ): Consequence[Either[Int, RuntimeLaunch]] =
+    _capture_consequence(_prepare_launch(cwd, args))
+
   private def _prepare_runtime(
     launch: RuntimeLaunch
   ): Unit = {
@@ -1105,69 +1135,79 @@ object CncfRuntime extends GlobalObservable {
     extracomponents: Subsystem => Seq[Component]
   ): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    _prepare_launch(cwd, args) match {
-      case Left(code) =>
+    _prepare_launch_consequence(cwd, args) match {
+      case Consequence.Success(Left(code)) =>
         code
-      case Right(launch) =>
-        _prepare_runtime(launch)
-        val r: Consequence[OperationRequest] =
-          _runtime_protocol_engine.makeOperationRequest(launch.domainargs)
-        r match {
-          case Consequence.Success(req) =>
-            val requestmode = RunMode.from(req.request.operation)
-            if (requestmode.contains(RunMode.Server)) {
-              LogBackendHolder.backend match {
-                case Some(LogBackend.NopLogBackend) =>
-                  LogBackendHolder.install(LogBackend.StdoutBackend)
-                case _ => ()
-              }
-            }
-            requestmode.foreach { m =>
-              GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
-            }
-            observe_trace(
-              s"[subsytem] runWithExtraComponents dispatching mode args=${_trace_safe_args(launch.domainargs.drop(1)).mkString(" ")}"
-            )
-            requestmode match {
-              case Some(RunMode.Server) =>
-                val subsystem = buildSubsystem(extracomponents, Some(RunMode.Server), args)
-                try {
-                  new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
-                  0
-                } finally {
-                  Subsystem.shutdownOwned(subsystem)
+      case Consequence.Success(Right(launch)) =>
+        _capture_consequence {
+          _prepare_runtime(launch)
+          val r: Consequence[OperationRequest] =
+            _runtime_protocol_engine.makeOperationRequest(launch.domainargs)
+          r match {
+            case Consequence.Success(req) =>
+              val requestmode = RunMode.from(req.request.operation)
+              if (requestmode.contains(RunMode.Server)) {
+                LogBackendHolder.backend match {
+                  case Some(LogBackend.NopLogBackend) =>
+                    LogBackendHolder.install(LogBackend.StdoutBackend)
+                  case _ => ()
                 }
-              case Some(RunMode.Client) =>
-                val subsystem = buildSubsystem(extracomponents, Some(RunMode.Client), args)
-                try
-                  new CncfRuntime().executeClient(subsystem, launch.domainargs.drop(1))
-                finally
-                  Subsystem.shutdownOwned(subsystem)
-              case Some(RunMode.Command) =>
-                val subsystem = buildSubsystem(extracomponents, Some(RunMode.Command), args)
-                try
-                  new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
-                finally
-                  Subsystem.shutdownOwned(subsystem)
-              case Some(RunMode.ServerEmulator) =>
-                _execute_server_emulator(launch.domainargs.drop(1), args, extracomponents)
-              case Some(RunMode.Script) =>
-                _run_script(launch.domainargs.drop(1), extracomponents, args)
-              case _ =>
-                _print_usage()
-                2
-            }
+              }
+              requestmode.foreach { m =>
+                GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
+              }
+              observe_trace(
+                s"[subsytem] runWithExtraComponents dispatching mode args=${_trace_safe_args(launch.domainargs.drop(1)).mkString(" ")}"
+              )
+              requestmode match {
+                case Some(RunMode.Server) =>
+                  val subsystem = buildSubsystem(extracomponents, Some(RunMode.Server), args)
+                  try {
+                    new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
+                    0
+                  } finally {
+                    Subsystem.shutdownOwned(subsystem)
+                  }
+                case Some(RunMode.Client) =>
+                  val subsystem = buildSubsystem(extracomponents, Some(RunMode.Client), args)
+                  try
+                    new CncfRuntime().executeClient(subsystem, launch.domainargs.drop(1))
+                  finally
+                    Subsystem.shutdownOwned(subsystem)
+                case Some(RunMode.Command) =>
+                  val subsystem = buildSubsystem(extracomponents, Some(RunMode.Command), args)
+                  try
+                    new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
+                  finally
+                    Subsystem.shutdownOwned(subsystem)
+                case Some(RunMode.ServerEmulator) =>
+                  _execute_server_emulator(launch.domainargs.drop(1), args, extracomponents)
+                case Some(RunMode.Script) =>
+                  _run_script(launch.domainargs.drop(1), extracomponents, args)
+                case _ =>
+                  _print_usage()
+                  2
+              }
+            case Consequence.Failure(conclusion) =>
+              _print_error(conclusion)
+              _exit_code(Consequence.Failure(conclusion))
+          }
+        } match {
+          case Consequence.Success(code) => code
           case Consequence.Failure(conclusion) =>
             _print_error(conclusion)
             _exit_code(Consequence.Failure(conclusion))
         }
+      case Consequence.Failure(conclusion) =>
+        _print_error(conclusion)
+        _exit_code(Consequence.Failure(conclusion))
     }
   }
 
   def run(args: Array[String]): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    _prepare_launch(cwd, args) match {
-      case Left(code) =>
+    _prepare_launch_consequence(cwd, args) match {
+      case Consequence.Success(Left(code)) =>
         if (code == 2) {
           val normalizedargs = _normalize_help_aliases(args)
           if (normalizedargs.nonEmpty) {
@@ -1175,7 +1215,7 @@ object CncfRuntime extends GlobalObservable {
           }
         }
         code
-      case Right(launch) =>
+      case Consequence.Success(Right(launch)) =>
         _prepare_runtime(launch)
         val r: Consequence[OperationRequest] =
           _runtime_protocol_engine.makeOperationRequest(launch.domainargs)
@@ -1227,6 +1267,9 @@ object CncfRuntime extends GlobalObservable {
             _print_usage()
             _exit_code(Consequence.Failure(conclusion))
         }
+      case Consequence.Failure(conclusion) =>
+        _print_error(conclusion)
+        _exit_code(Consequence.Failure(conclusion))
     }
   }
 
@@ -3586,7 +3629,8 @@ class CncfRuntime() extends GlobalObservable {
   private final case class RuntimeConfigurationPreflight(
     identity: SubsystemInstanceId,
     candidates: ConfigurationBindingCandidates[CncfConfigurationTarget],
-    bindings: ConfigurationBindingCollection[CncfConfigurationTarget]
+    bindings: ConfigurationBindingCollection[CncfConfigurationTarget],
+    admittedprofiles: Option[Vector[StandaloneUserProfileResolver.Admitted]] = None
   )
 
   private val _configuration_application_name = "textus"
@@ -3675,7 +3719,7 @@ class CncfRuntime() extends GlobalObservable {
     modeHint: Option[RunMode] = None,
     extraComponents: Subsystem => Seq[Component] = (_: Subsystem) => Nil
   ): Consequence[Subsystem] =
-    Consequence(_initialize(cwd, args, modeHint, extraComponents))
+    _initialize_consequence(_initialize(cwd, args, modeHint, extraComponents))
 
   def initializeHandle(
     config: BootstrapConfig
@@ -3740,7 +3784,7 @@ class CncfRuntime() extends GlobalObservable {
       _print_usage()
       return 2
     }
-    Consequence(_initialize(normalizedargs, extracomponents)) match {
+    _initialize_consequence(_initialize(normalizedargs, extracomponents)) match {
       case Consequence.Success(subsystem) =>
         try {
           normalizedargs.headOption.flatMap(RunMode.from) match {
@@ -3763,6 +3807,9 @@ class CncfRuntime() extends GlobalObservable {
         _exit_code(Consequence.Failure(conclusion))
     }
   }
+
+  private def _initialize_consequence(body: => Subsystem): Consequence[Subsystem] =
+    CncfRuntime._capture_consequence(body)
 
   private def _execute_command_args(
     subsystem: Subsystem,
@@ -4020,16 +4067,22 @@ class CncfRuntime() extends GlobalObservable {
   ): Consequence[Unit] =
     if (preflight == null || subsystem == null)
       Consequence.configurationInvalid("runtime configuration preflight is invalid")
-    else
-      for {
-        profile <- subsystem.executionProfileForRuntimeConfigurationBindingsC(preflight.bindings)
-        admitted <- RuntimeStandaloneUserProfileAdmission.admit(subsystem, profile, profileadmission)
-        profilecandidates <- StandaloneUserProfileBindingProjection.candidates(admitted, preflight.identity)
-        candidates <- ConfigurationBindingCandidates.from(preflight.candidates.bindings ++ profilecandidates.bindings)
-        context <- CncfConfigurationResolutionContext.forSubsystem(preflight.identity)
-        collection <- ConfigurationBindingResolver.resolve(candidates, context.generic)
-        _ <- subsystem.admitRuntimeConfigurationBindingsC(collection, profile)
-      } yield ()
+    else preflight.admittedprofiles match {
+      case Some(_) =>
+        subsystem.executionProfileForRuntimeConfigurationBindingsC(preflight.bindings).flatMap { profile =>
+          subsystem.admitRuntimeConfigurationBindingsC(preflight.bindings, profile)
+        }
+      case None =>
+        for {
+          profile <- subsystem.executionProfileForRuntimeConfigurationBindingsC(preflight.bindings)
+          admitted <- RuntimeStandaloneUserProfileAdmission.admit(subsystem, profile, profileadmission)
+          profilecandidates <- StandaloneUserProfileBindingProjection.candidates(admitted, preflight.identity)
+          candidates <- ConfigurationBindingCandidates.from(preflight.candidates.bindings ++ profilecandidates.bindings)
+          context <- CncfConfigurationResolutionContext.forSubsystem(preflight.identity)
+          collection <- ConfigurationBindingResolver.resolve(candidates, context.generic)
+          _ <- subsystem.admitRuntimeConfigurationBindingsC(collection, profile)
+        } yield ()
+    }
 
   private def _runtime_configuration_preflight(
     snapshot: ConfigurationResolutionSnapshot,
@@ -4040,15 +4093,16 @@ class CncfRuntime() extends GlobalObservable {
     configurationenvironmentbindings: Vector[CncfConfigurationEnvironmentBindingAssignment]
   ): Consequence[RuntimeConfigurationPreflight] =
     for {
-      selectedname <- GenericSubsystemFactory.runtimeResolveDescriptorC(
+      descriptor <- GenericSubsystemFactory.runtimeResolveDescriptorC(
         configuration,
         Some(repositorybootstrappolicy)
-      ).map(_.map(_.subsystemName).getOrElse(
+      )
+      selectedname = descriptor.map(_.subsystemName).getOrElse(
         RuntimeConfig.getString(configuration, RuntimeConfig.subsystemNameKey)
           .map(_.trim)
           .filter(_.nonEmpty)
           .getOrElse(DefaultSubsystemFactory.subsystemName)
-      ))
+      )
       identity <- SubsystemInstanceId.default(selectedname)
       runtimecandidates <- CncfRuntimeConfigurationProjection.candidates(
         snapshot,
@@ -4064,7 +4118,46 @@ class CncfRuntime() extends GlobalObservable {
       candidates <- ConfigurationBindingCandidates.from(runtimecandidates.bindings ++ assemblycandidates.bindings)
       context <- CncfConfigurationResolutionContext.forSubsystem(identity)
       bindings <- ConfigurationBindingResolver.resolve(candidates, context.generic)
-    } yield RuntimeConfigurationPreflight(identity, candidates, bindings)
+      preflight <- _admit_runtime_configuration_preflight_for_launch(
+        RuntimeConfigurationPreflight(identity, candidates, bindings),
+        descriptor
+      )
+    } yield preflight
+
+  private def _admit_runtime_configuration_preflight_for_launch(
+    preflight: RuntimeConfigurationPreflight,
+    descriptor: Option[GenericSubsystemDescriptor]
+  ): Consequence[RuntimeConfigurationPreflight] =
+    _fixed_profile_for_launch(preflight, descriptor).flatMap {
+      case Some(SubsystemExecutionProfile.Fixed) =>
+        for {
+          admitted <- StandaloneUserProfileResolver.resolve(SubsystemExecutionProfile.Fixed)
+          profilecandidates <- StandaloneUserProfileBindingProjection.candidates(admitted, preflight.identity)
+          candidates <- ConfigurationBindingCandidates.from(preflight.candidates.bindings ++ profilecandidates.bindings)
+          context <- CncfConfigurationResolutionContext.forSubsystem(preflight.identity)
+          bindings <- ConfigurationBindingResolver.resolve(candidates, context.generic)
+          _ <- ResolvedStandaloneUserProfile.resolve(bindings)
+        } yield preflight.copy(
+          candidates = candidates,
+          bindings = bindings,
+          admittedprofiles = Some(admitted)
+        )
+      case None => Consequence.success(preflight)
+    }
+
+  private def _fixed_profile_for_launch(
+    preflight: RuntimeConfigurationPreflight,
+    descriptor: Option[GenericSubsystemDescriptor]
+  ): Consequence[Option[SubsystemExecutionProfile]] =
+    descriptor.flatMap(_.security).flatMap(_.authentication).flatMap(_.localSubject) match {
+      case Some(_) =>
+        preflight.bindings.binding(CncfConfigurationParameterCatalog.subsystemUserMode).map {
+          case Some(binding) if binding.value == SubsystemUserMode.Standalone =>
+            Some(SubsystemExecutionProfile.Fixed)
+          case _ => None
+        }
+      case None => Consequence.success(None)
+    }
 
   private def _execution_profile_activation(
     configuration: ResolvedConfiguration,

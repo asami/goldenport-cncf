@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Aug.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -117,6 +117,62 @@ final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matc
 
         Then("the last present fixed layer wins deterministically")
         values.foreach { case (actual, expected) => actual shouldBe Some(expected) }
+      }
+    }
+
+    "E9 resolve a declared runtime key from nested configuration" must _e9_metadata {
+      "when the typed parameter name is represented by nested objects" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E9; a nested runtime configuration value")
+        val key = ComponentParameterKey.requiredBoolean("textus.debug.auth.enabled")
+        val runtimeconfiguration = ResolvedConfiguration(
+          Configuration(Map(
+            "textus" -> ConfigurationValue.ObjectValue(Map(
+              "debug" -> ConfigurationValue.ObjectValue(Map(
+                "auth" -> ConfigurationValue.ObjectValue(Map(
+                  "enabled" -> ConfigurationValue.BooleanValue(true)
+                ))
+              ))
+            ))
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("the fixed runtime layer resolves the declared typed key")
+        val resolution = _layers(runtimeconfiguration = runtimeconfiguration).resolve(key)
+
+        Then("the nested value retains runtime-configuration provenance")
+        resolution.toOption shouldBe Some(
+          ComponentParameterResolution(Some(true), ComponentParameterProvenance.RuntimeConfiguration)
+        )
+      }
+    }
+
+    "E9 prefer a direct runtime key over its nested representation" must _e9_metadata {
+      "when one runtime layer contains conflicting direct and nested values" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E9; conflicting direct and nested runtime values")
+        val name = "textus.debug.auth.enabled"
+        val key = ComponentParameterKey.requiredBoolean(name)
+        val runtimeconfiguration = ResolvedConfiguration(
+          Configuration(Map(
+            name -> ConfigurationValue.BooleanValue(false),
+            "textus" -> ConfigurationValue.ObjectValue(Map(
+              "debug" -> ConfigurationValue.ObjectValue(Map(
+                "auth" -> ConfigurationValue.ObjectValue(Map(
+                  "enabled" -> ConfigurationValue.BooleanValue(true)
+                ))
+              ))
+            ))
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("the fixed runtime layer resolves the declared typed key")
+        val resolution = _layers(runtimeconfiguration = runtimeconfiguration).resolve(key)
+
+        Then("the direct exact-key value wins without changing its provenance")
+        resolution.toOption shouldBe Some(
+          ComponentParameterResolution(Some(false), ComponentParameterProvenance.RuntimeConfiguration)
+        )
       }
     }
 

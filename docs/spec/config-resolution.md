@@ -317,6 +317,22 @@ Consumers must not:
 
 This layer is not application-specific.
 
+----------------------------------------------------------------------
+10. Standalone Fixed-User Identity Safety
+----------------------------------------------------------------------
+
+Canonical Textus HOME and compatibility CNCF HOME `StandaloneUserProfile`
+sources are admitted in that order and projected into CNCF typed bindings before
+Subsystem binding. A final fixed-user binding history with more than one
+distinct id is rejected as structured invalid configuration. The diagnostic
+requires explicit operator-owned data migration or an isolated datastore and
+does not reveal identities, profile paths, or `local_subject` values.
+
+Resolution never moves data, selects a datastore, writes an identity marker, or
+performs automatic migration. A clean isolated datastore with one effective new
+identity is admissible. The descriptor `local_subject` is capability wiring,
+not a fallback fixed-user identity authority.
+
 
 ----------------------------------------------------------------------
 10. Testing Expectations

@@ -62,23 +62,26 @@ object RepositoryBootstrapPolicy {
     var aftersentinel = false
     var index = 0
 
+    def values(value: String): Vector[String] =
+      value.split(",", -1).toVector.map(_.trim).filter(_.nonEmpty)
+
     def add(flag: String, value: String): Unit =
       flag match {
-        case "repository-dir" => repositorydirs += value
-        case "repository-component-dev-dir" => repositorycomponentdevdirs += value
-        case "component-dir" => componentdirs += value
-        case "component-dev-dir" => componentdevdirs += value
-        case "component-car-dir" => componentcardirs += value
-        case "component-file" => componentfiles += value
-        case "subsystem-dev-dir" => subsystemdevdirs += value
-        case "subsystem-sar-dir" => subsystemsardirs += value
+        case "repository-dir" => repositorydirs ++= values(value)
+        case "repository-component-dev-dir" => repositorycomponentdevdirs ++= values(value)
+        case "component-dir" => componentdirs ++= values(value)
+        case "component-dev-dir" => componentdevdirs ++= values(value)
+        case "component-car-dir" => componentcardirs ++= values(value)
+        case "component-file" => componentfiles ++= values(value)
+        case "subsystem-dev-dir" => subsystemdevdirs ++= values(value)
+        case "subsystem-sar-dir" => subsystemsardirs ++= values(value)
       }
 
     def canonical(flag: String): Option[String] =
       flag match {
-        case "repository-dir" => Some("repository-dir")
-        case "repository-component-dev-dir" | "cncf.repository.component.dev.dir" => Some("repository-component-dev-dir")
-        case "component-dir" => Some("component-dir")
+        case "repository-dir" | RuntimeConfig.repositoryDirKey => Some("repository-dir")
+        case "repository-component-dev-dir" | RuntimeConfig.repositoryComponentDevDirKey | "cncf.repository.component.dev.dir" => Some("repository-component-dev-dir")
+        case "component-dir" | RuntimeConfig.componentDirKey => Some("component-dir")
         case "component-dev-dir" | RuntimeConfig.componentDevDirKey | "cncf.component.dev.dir" => Some("component-dev-dir")
         case "component-car-dir" | RuntimeConfig.componentCarDirKey | "cncf.component.car.dir" => Some("component-car-dir")
         case "component-file" | RuntimeConfig.componentFileKey | RuntimeConfig.runtimeComponentFileKey => Some("component-file")

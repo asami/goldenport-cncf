@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RepositoryBootstrapPolicySpec
@@ -134,6 +134,23 @@ final class RepositoryBootstrapPolicySpec
           policy.subsystemDevDirs shouldBe Vector("subsystem-development")
           policy.subsystemSarDirs shouldBe Vector("subsystem-sar")
           residual.toVector shouldBe Vector("command")
+        }
+
+        "when repeatable repository flags use their established comma-separated form" in {
+          Given("search and active development repository lists")
+          val args = Array(
+            "--textus.repository.component.dev.dir=search-one, search-two",
+            "--textus.component.dev.dir=active-one,active-two",
+            "server"
+          )
+
+          When("the bootstrap boundary admits the repository lists")
+          val (policy, residual) = RepositoryBootstrapPolicy.admitArguments(RepositoryBootstrapPolicy(), args)
+
+          Then("each list member retains its repository type")
+          policy.repositoryComponentDevDirs shouldBe Vector("search-one", "search-two")
+          policy.componentDevDirs shouldBe Vector("active-one", "active-two")
+          residual.toVector shouldBe Vector("server")
         }
       }
 

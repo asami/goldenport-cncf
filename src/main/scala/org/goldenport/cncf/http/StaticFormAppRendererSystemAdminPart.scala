@@ -3,6 +3,7 @@ package org.goldenport.cncf.http
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
@@ -33,7 +34,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 20, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -1899,9 +1900,10 @@ trait StaticFormAppRendererSystemAdminPart {
     childNames: Vector[String]
   ): String = {
     val componentpath = NamingConventions.toNormalizedSegment(component.name)
-    val help = HelpProjection.project(component, selector)
-    val describe = DescribeProjection.project(component, selector)
-    val schema = SchemaProjection.project(component, selector)
+    val target = selector.getOrElse(component.name)
+    val help = manual_projection_or_error("Help", target)(HelpProjection.project(component, selector))
+    val describe = manual_projection_or_error("Describe", target)(DescribeProjection.project(component, selector))
+    val schema = manual_projection_or_error("Schema", target)(SchemaProjection.project(component, selector))
     val childLinks = manual_child_links(currentPath, childNames)
     val componentletCard =
       if (selector.exists(NamingConventions.equivalentByNormalized(component.name, _)))
@@ -1945,9 +1947,9 @@ trait StaticFormAppRendererSystemAdminPart {
     subsystem: Subsystem,
     component: Component
   ): String = {
-    val help = HelpProjection.project(component, None)
-    val describe = DescribeProjection.project(component, None)
-    val schema = SchemaProjection.project(component, None)
+    val help = manual_projection_or_error("Help", "system")(HelpProjection.project(component, None))
+    val describe = manual_projection_or_error("Describe", "system")(DescribeProjection.project(component, None))
+    val schema = manual_projection_or_error("Schema", "system")(SchemaProjection.project(component, None))
     val componentLinks = manual_component_links(subsystem.components)
     val body =
       s"""${manual_card("Specification navigation",
@@ -2014,6 +2016,22 @@ trait StaticFormAppRendererSystemAdminPart {
       manual_projection_body(title, currentPath, record),
       id
     )
+
+  private[http] def manual_projection_or_error(
+    label: String,
+    target: String
+  )(projection: => Record): Record =
+    try {
+      projection
+    } catch {
+      case NonFatal(error) =>
+        Record.data(
+          "type" -> "error",
+          "name" -> target,
+          "summary" -> s"$label projection unavailable",
+          "error" -> Option(error.getMessage).filter(_.nonEmpty).getOrElse(error.getClass.getSimpleName)
+        )
+    }
 
   protected def manual_projection_body(
     title: String,

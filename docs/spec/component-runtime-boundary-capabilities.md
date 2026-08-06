@@ -143,6 +143,30 @@ snapshot construction. The public snapshot surface MAY expose typed resolution
 and bounded counts; it MUST NOT expose entries, raw values, a map conversion,
 arbitrary name lookup, `ConfigurationValue`, or `ResolvedConfiguration`.
 
+A factory MAY additionally declare bounded dynamic parameter paths through
+`initializationParameterPathRoutes`. One route owns exactly one static prefix,
+one dynamic path segment, and a finite set of typed leaves. CNCF MUST discover
+dynamic segment identities only beneath the declared canonical prefix or its
+declared compatibility aliases, expand each discovered segment into canonical
+concrete typed declarations, and resolve those declarations before component
+initialization. Discovery MUST NOT deliver a raw configuration map, arbitrary
+key lookup, source handle, trace, or selected value to component code.
+
+One route MUST bound its segment grammar, segment count, leaf count, aliases,
+and total expanded declaration count. Unknown leaves, invalid path shapes,
+overlapping routes, duplicate canonical identities, or exceeded bounds MUST
+fail structurally before component initialization. Discovering any declared
+leaf activates that segment: every required sibling leaf is then required and
+every absent optional sibling retains `Absent` provenance.
+
+Dynamic expansion MUST preserve the same fixed layer precedence independently
+for every concrete leaf. Layer selection occurs before compatibility spelling
+preference: a higher-layer declared alias wins over a lower-layer canonical
+spelling, while canonical prefix and leaf spellings win inside one layer.
+Aliases MUST NOT become snapshot identities or provenance. The public path
+snapshot MUST resolve only the exact route, segment, and leaf identities used
+to construct it and MUST expose no string lookup or raw entry collection.
+
 Initialization parameter layers have this fixed low-to-high precedence:
 
 1. packaged component defaults;
@@ -473,3 +497,13 @@ One initialized component may declare the same logical key independently as a
 ActionCall configuration DSL resolves only operation-time sources, never falls
 back to the immutable initialization snapshot, and cannot mutate or replace
 that snapshot.
+
+### E14: Bounded Dynamic Initialization Parameter Paths
+
+A component factory declares a path route such as
+`textus.ai.execution-classes.<execution-class>.<leaf>` with finite typed leaf
+declarations. CNCF discovers admitted dynamic names, rejects unknown or unsafe
+paths, expands canonical concrete declarations, and resolves each leaf through
+the existing five fixed layers. Flat and nested configuration spellings behave
+identically, compatibility aliases do not replace canonical identities, and
+the component receives only the immutable typed path snapshot.
