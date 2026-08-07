@@ -70,7 +70,7 @@ jars are treated as component-local classpath entries.
 A consumer declares exact dependent CAR coordinates through sbt-cozy:
 
 ```scala
-cozyCarDependencies += CarDependency("textus-scraper", "0.1.0-SNAPSHOT")
+cozyCarDependencies += CarDependency("org.simplemodeling.textus", "TextusScraper", "0.1.0-SNAPSHOT")
 ```
 
 The consumer CML declares the required generated component API. sbt-cozy

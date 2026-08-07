@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://www.simplemodeling.org/schema/cncf/component-repository-index-v1.json",
+  "$id": "https://www.simplemodeling.org/schema/cncf/component-repository-index-v2.json",
   "title": "CNCF Component Repository Index",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "generatedAt", "artifacts"],
   "properties": {
-    "schemaVersion": { "const": "cncf.component-repository-index.v1" },
+    "schemaVersion": { "const": "cncf.component-repository-index.v2" },
     "generatedAt": { "type": "string", "format": "date-time" },
     "artifacts": {
       "type": "array",
@@ -20,16 +20,32 @@
       "required": ["kind", "artifactId", "catalog", "status"],
       "properties": {
         "kind": { "enum": ["car", "sar"] },
+        "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$" },
+        "id": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
         "artifactId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
-        "catalog": {
-          "type": "string",
-          "pattern": "^(car|sar)/[A-Za-z0-9][A-Za-z0-9._-]*\\.(yaml|yml|json)$"
-        },
+        "catalog": { "type": "string", "minLength": 1 },
         "status": { "enum": ["active", "deprecated", "disabled"] },
         "recommended": { "type": "string", "minLength": 1 },
         "latestStable": { "type": "string", "minLength": 1 },
         "latestSnapshot": { "type": "string", "minLength": 1 }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "car" } } },
+          "then": {
+            "required": ["namespace", "id"],
+            "properties": {
+              "catalog": { "pattern": "^car/[a-z][a-z0-9]*(/[a-z][a-z0-9]*)*/[A-Za-z0-9][A-Za-z0-9._-]*\\.yaml$" }
+            }
+          },
+          "else": {
+            "not": { "anyOf": [ { "required": ["namespace"] }, { "required": ["id"] } ] },
+            "properties": {
+              "catalog": { "pattern": "^sar/[A-Za-z0-9][A-Za-z0-9._-]*\\.(yaml|yml|json)$" }
+            }
+          }
+        }
+      ]
     }
   }
 }

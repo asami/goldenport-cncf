@@ -217,12 +217,76 @@ specifications and do not weaken CID-03 closure.
 ## CID-04: CAR, Maven, and Repository Coordinates
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Entry rule: CID-03 is complete.
 - Completion rule: Publication and resolution retain namespace-qualified
   identity and verify every materialized projection.
 
-- [ ] Replace canonical descriptor `name`/`component` inputs with `namespace`
+[CID-04 implementation plan](../notes/phase-56-cid04-car-maven-repository-coordinate-plan.md)
+freezes the canonical release-coordinate shape, repository boundary,
+serialized schemas, Slice ownership, and executable acceptance matrix.
+
+CID-04 Slice ledger:
+
+| Slice | Scope | Status |
+| --- | --- | --- |
+| CID-04A | Shared release-coordinate and repository/cache/catalog projection ABI. | COMPLETED |
+| CID-04B | Cozy canonical component descriptor, API/ABI descriptor, and dependency codecs. | COMPLETED |
+| CID-04C | Cozy namespace-qualified publisher, catalog, index, Maven metadata, and integrity records. | ACCEPTED/REVIEWED |
+| CID-04D | sbt-cozy canonical dependency declarations, local/HTTP/cache resolver, publication wiring, and E9 activation. | ACCEPTED/REVIEWED |
+| CID-04E | CNCF v2 repository index and namespace-qualified standard repository/cache consumer. | IMPLEMENTATION/REVIEW_PENDING |
+
+[CID-04B implementation plan](../notes/phase-56-cid04b-cozy-canonical-descriptor-codec-plan.md)
+freezes the exact canonical JSON shapes, four-field dependency bridge,
+diagnostics, source ownership, and focused executable specification.
+
+[CID-04C implementation plan](../notes/phase-56-cid04c-cozy-repository-publication-plan.md)
+freezes CAR catalog/index v2, namespace-qualified warehouse and sidecar paths,
+Maven metadata, integrity validation, publication locking, and focused tests.
+
+[CID-04D implementation plan](../notes/phase-56-cid04d-sbt-cozy-repository-resolution-plan.md)
+freezes canonical and legacy `CarDependency` construction, shared local/file/
+HTTP/cache paths, namespace-isolated runtime extraction, the four-field Cozy
+bridge, canonical CAR publication task wiring, SAR preservation, focused
+loopback evidence, and sole E9 activation.
+
+[CID-04E implementation plan](../notes/phase-56-cid04e-cncf-repository-resolution-plan.md)
+freezes the CNCF v2 index reader, direct canonical CAR repository/cache
+resolver, namespace-isolated local/remote/offline behavior, and focused
+executable specification.
+
+CID-04C focused acceptance and review evidence:
+
+- Cozy exact changed-spec validation invocation `99017-20260807T061825Z`:
+  17 suites and 224 tests passed; `sbt_exit=0`, `wrapper_exit=0`,
+  `lock=released`.
+- Catalog/index residual validation invocation `98681-20260807T061738Z`:
+  29 tests passed; `sbt_exit=0`, `wrapper_exit=0`, `lock=released`.
+- Parallel publisher/fault-seam isolation invocation
+  `89318-20260807T054751Z`: 27 tests passed; `sbt_exit=0`,
+  `wrapper_exit=0`, `lock=released`.
+- Independent review and focused re-review converged for canonical descriptor
+  and ABI admission, namespace-isolated warehouse/catalog/index/Maven
+  projections, exact checksum and integrity evidence, prepared-candidate
+  validation, index-last atomic replacement, complete rollback and debris
+  cleanup, strict catalog/index parsing, SAR-v1 preservation, naming, and
+  executable-spec structure. The retained history header in
+  `CozyCarRuntimeManifestSpec` is an explicit user decision and follows the
+  canonical date format.
+
+CID-04D focused acceptance and review evidence:
+
+- Validation invocation `39887-20260807T081517Z`: 6 suites, 53/53;
+  `sbt=0`, `wrapper=0`, `lock=released`.
+- Focused re-review was clean.
+
+CID-04E acceptance remains required before the CID-04 Step scripted acceptance.
+The Step fixture
+`sbt-cozy/src/sbt-test/cozy/namespace-qualified-car-repository`, the Step
+commit, and repository-wide suites therefore remain pending; repository-wide
+suites remain Phase-release-only.
+
+- [x] Replace canonical descriptor `name`/`component` inputs with `namespace`
   and `id`; retain version as release metadata.
 - [ ] Derive and verify artifact name, CAR filename, Maven coordinate, and
   repository path/index metadata.

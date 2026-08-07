@@ -485,7 +485,7 @@ parser or persistence implementations, or private resources.
 A consumer declares the provider CAR coordinate in `build.sbt`:
 
 ```scala
-cozyCarDependencies += CarDependency("textus-scraper", "0.1.0-SNAPSHOT")
+cozyCarDependencies += CarDependency("org.simplemodeling.textus", "TextusScraper", "0.1.0-SNAPSHOT")
 ```
 
 sbt-cozy resolves the declared CAR, verifies that its API descriptor satisfies

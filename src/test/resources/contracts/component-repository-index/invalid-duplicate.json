@@ -1,8 +1,8 @@
 {
-  "schemaVersion": "cncf.component-repository-index.v1",
-  "generatedAt": "2026-07-21T00:00:00Z",
+  "schemaVersion": "cncf.component-repository-index.v2",
+  "generatedAt": "2026-08-07T00:00:00Z",
   "artifacts": [
-    { "kind": "car", "artifactId": "textus-blog", "catalog": "car/textus-blog.yaml", "status": "active" },
-    { "kind": "car", "artifactId": "textus-blog", "catalog": "car/textus-blog.json", "status": "active" }
+    { "kind": "car", "namespace": "org.alpha.textus", "id": "Shared", "artifactId": "textus-shared", "catalog": "car/org/alpha/textus/textus-shared.yaml", "status": "active" },
+    { "kind": "car", "namespace": "org.alpha.textus", "id": "Shared", "artifactId": "textus-shared", "catalog": "car/org/alpha/textus/textus-shared.yaml", "status": "active" }
   ]
 }
