@@ -5,6 +5,7 @@ started_at=2026-08-06
 phase=[Phase 56 - Namespace-qualified Component Identity and Derived Coordinates](phase-56.md)
 planning_journal=[Phase 56 Identity Planning and Phase Renumbering](../journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md)
 entry_handoff=[Current Work Closeout before Phase 56](../journal/2026/08/2026-08-06-current-work-closeout-before-phase-56.md)
+hygiene_journal=[Phase 56 hygiene follow-up](../journal/2026/08/2026-08-07-phase-56-hygiene-follow-up.md)
 
 This checklist is the authoritative Phase 56 state ledger after Phase 56
 starts. Only one stage may be `IN_PROGRESS` at a time. No implementation stage
@@ -217,7 +218,7 @@ specifications and do not weaken CID-03 closure.
 ## CID-04: CAR, Maven, and Repository Coordinates
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Entry rule: CID-03 is complete.
 - Completion rule: Publication and resolution retain namespace-qualified
   identity and verify every materialized projection.
@@ -230,11 +231,12 @@ CID-04 Slice ledger:
 
 | Slice | Scope | Status |
 | --- | --- | --- |
-| CID-04A | Shared release-coordinate and repository/cache/catalog projection ABI. | COMPLETED |
-| CID-04B | Cozy canonical component descriptor, API/ABI descriptor, and dependency codecs. | COMPLETED |
+| CID-04A | Shared release-coordinate and repository/cache/catalog projection ABI. | ACCEPTED/REVIEWED |
+| CID-04B | Cozy canonical component descriptor, API/ABI descriptor, and dependency codecs. | ACCEPTED/REVIEWED |
 | CID-04C | Cozy namespace-qualified publisher, catalog, index, Maven metadata, and integrity records. | ACCEPTED/REVIEWED |
 | CID-04D | sbt-cozy canonical dependency declarations, local/HTTP/cache resolver, publication wiring, and E9 activation. | ACCEPTED/REVIEWED |
-| CID-04E | CNCF v2 repository index and namespace-qualified standard repository/cache consumer. | IMPLEMENTATION/REVIEW_PENDING |
+| CID-04E | CNCF v2 repository index and namespace-qualified standard repository/cache consumer. | ACCEPTED/REVIEWED |
+| CID-04F | Acceptance-ledger reconciliation and hygiene-journal persistence for CID-04 closure preparation. | ACCEPTED/REVIEWED |
 
 [CID-04B implementation plan](../notes/phase-56-cid04b-cozy-canonical-descriptor-codec-plan.md)
 freezes the exact canonical JSON shapes, four-field dependency bridge,
@@ -280,20 +282,41 @@ CID-04D focused acceptance and review evidence:
   `sbt=0`, `wrapper=0`, `lock=released`.
 - Focused re-review was clean.
 
-CID-04E acceptance remains required before the CID-04 Step scripted acceptance.
-The Step fixture
-`sbt-cozy/src/sbt-test/cozy/namespace-qualified-car-repository`, the Step
-commit, and repository-wide suites therefore remain pending; repository-wide
-suites remain Phase-release-only.
+CID-04E final focused validation invocation `70737-20260807T094615Z` passed
+3 suites and 18 tests with 0 failures and 4 expected ownership cancellations;
+`sbt_exit=0`, `wrapper_exit=0`, `lock=released`. Focused re-review was PASS
+with no findings.
+
+The dependency-ordered CID-04 Step validation and commits are accepted:
+
+- `cncf-collaborator-api` test invocation `18570-20260807T115729Z` (22 tests),
+  `publishLocal` invocation `18799-20260807T115752Z`, commit
+  `6493d29920c6db3d0ed2b810485901ec3192a2b1`.
+- Cozy invocation `19044-20260807T115822Z` (17 suites/224 tests),
+  `publishLocal` invocation `19473-20260807T115922Z`, commit
+  `2d65321c5d9362cb7493d90aa7ebf34d03dbee90`.
+- CNCF invocation `19701-20260807T115947Z` (3 suites/18 tests plus 4 expected
+  ownership cancellations), `publishLocal` invocation
+  `19997-20260807T120021Z`, commit
+  `9371ab8c0349b9ad28b46c56982cd4c83e938912`.
+- sbt-cozy invocation `20315-20260807T120059Z` (6 suites/53 tests), commit
+  `a84a91514c8b843da8524d06d61e33dc480ebf38`.
+
+Every invocation had `sbt_exit=0`, `wrapper_exit=0`, `lock=released`. Step
+scripted invocation `20534-20260807T120122Z` passed 1/1 with PublisherProbe
+plus CncfProbe online/offline. Repository-wide full suites remain
+Phase-release-only/pending; this evidence does not close Phase 56.
 
 - [x] Replace canonical descriptor `name`/`component` inputs with `namespace`
   and `id`; retain version as release metadata.
-- [ ] Derive and verify artifact name, CAR filename, Maven coordinate, and
+- [x] Derive and verify artifact name, CAR filename, Maven coordinate, and
   repository path/index metadata.
-- [ ] Include namespace in repository, cache, dependency, and integrity keys
+- [x] Include namespace in repository, cache, dependency, and integrity keys
   even when filenames collide.
-- [ ] Update dependency declaration codecs and error diagnostics.
-- [ ] Test publish, retrieve, cache, offline, and transitive dependency paths.
+- [x] Update dependency declaration codecs and error diagnostics.
+- [x] Test publish, retrieve, cache, offline, and transitive dependency paths.
+- [x] Record the clean CID-04F review, set CID-04 to DONE, and persist the
+  hygiene journal.
 
 ## CID-05: CNCF Runtime Identity Migration
 

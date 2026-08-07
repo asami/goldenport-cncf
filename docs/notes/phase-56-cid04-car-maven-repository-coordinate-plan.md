@@ -6,7 +6,7 @@ phase=[Phase 56](../phase/phase-56.md)
 checklist=[Phase 56 checklist](../phase/phase-56-checklist.md)
 authority=[CID-01 inventory and failing-first contract](phase-56-cid01-component-identity-inventory-and-failing-first-contract.md)
 step=CID-04 - CAR, Maven, and repository coordinates
-slices=CID-04A,CID-04B,CID-04C,CID-04D,CID-04E
+slices=CID-04A,CID-04B,CID-04C,CID-04D,CID-04E,CID-04F
 
 ## Goal and closure
 
@@ -138,6 +138,29 @@ unqualified values fail with the shared qualified-ID diagnostic. Do not migrate
 runtime `Component.Core`, assembly/routing selectors, or compatibility aliases;
 those remain CID-05/CID-06. Prove exact local, remote, cached-offline, and
 same-filename namespace-isolated resolution.
+
+### CID-04F - Acceptance ledger and hygiene persistence
+
+CID-04F owns only reconciliation of the acceptance ledger and persistence of the
+already accepted hygiene journal for CID-04 closure preparation. It makes no
+code, API, schema, or behavior change and does not set CID-04 or Phase 56 to
+closed.
+
+The dependency-ordered Step commits are `cncf-collaborator-api`
+`6493d29920c6db3d0ed2b810485901ec3192a2b1`, Cozy
+`2d65321c5d9362cb7493d90aa7ebf34d03dbee90`, CNCF
+`9371ab8c0349b9ad28b46c56982cd4c83e938912`, and sbt-cozy
+`a84a91514c8b843da8524d06d61e33dc480ebf38`. Accepted Step validation ran in
+that order: collaborator 22 tests (`18570-20260807T115729Z`) and
+`publishLocal` (`18799-20260807T115752Z`); Cozy 17 suites/224 tests
+(`19044-20260807T115822Z`) and `publishLocal` (`19473-20260807T115922Z`);
+CNCF 3 suites/18 tests plus 4 expected ownership cancellations
+(`19701-20260807T115947Z`) and `publishLocal` (`19997-20260807T120021Z`);
+sbt-cozy 6 suites/53 tests (`20315-20260807T120059Z`); and Step scripted
+`20534-20260807T120122Z`, 1/1 passed with PublisherProbe plus CncfProbe
+online/offline. Every invocation had `sbt_exit=0`, `wrapper_exit=0`,
+`lock=released`. This records accepted Step evidence only; repository-wide
+full-suite completion remains Phase-release-only/pending.
 
 ## Executable acceptance matrix
 
