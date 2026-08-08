@@ -126,7 +126,7 @@ Web-facing REST endpoints using the Web session apply the same guard.
   must be deterministic and observable.
 
 External REST keeps its separate authentication, scope, replay, quota, and
-gateway policies. Phase 61 does not implement a complete external API gateway.
+gateway policies. Phase 62 does not implement a complete external API gateway.
 
 ## Diagnostics
 
@@ -193,4 +193,4 @@ secrets.
 - `docs/design/web-layer.md`
 - `docs/design/web-form-api-schema.md`
 - `docs/notes/cncf-hosted-spa-boundary-note.md`
-- `docs/phase/phase-61.md`
+- `docs/phase/phase-62.md`

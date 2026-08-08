@@ -2,18 +2,18 @@
 
 status = proposed, non-normative
 date = 2026-07-25
-phase = Phase 58
+phase = Phase 59
 
-This note is the working implementation proposal for Phase 58. It is not the
+This note is the working implementation proposal for Phase 59. It is not the
 final Component documentation contract.
 
-During Phase 58, verified decisions and behavior must be promoted to:
+During Phase 59, verified decisions and behavior must be promoted to:
 
 - `docs/design/component-documentation-knowledge-package.md`; and
 - `docs/spec/component-documentation-knowledge-package.md`.
 
 When either canonical document differs from this note, the design and
-specification take precedence. At Phase 58 closure this note must be marked
+specification take precedence. At Phase 59 closure this note must be marked
 historical and must point to the final design/specification instead of
 remaining a competing latest specification.
 
@@ -37,11 +37,11 @@ SubComponent remains retrievable for the exact release.
 
 Resource SubComponent identity, composition, publication completeness,
 repository/cache access, resolution precedence, integrity, physical
-provenance, lifecycle, and operation-mode resource policy are Phase 57
-contracts. Phase 58 consumes
+provenance, lifecycle, and operation-mode resource policy are Phase 58
+contracts. Phase 59 consumes
 `docs/notes/component-resource-subcomponent-implementation.md` and must not
-build a second physical-resource resolver. Phase 59 Admin is a later consumer
-of the same Phase 57 resource view and the Phase 58 knowledge/model manifests.
+build a second physical-resource resolver. Phase 60 Admin is a later consumer
+of the same Phase 58 resource view and the Phase 59 knowledge/model manifests.
 
 Shared CNCF, CML, Cozy, and SmartDox framework/toolchain documentation follows
 a separate distribution rule. SimpleModeling.org is its basic public
@@ -59,8 +59,8 @@ publication generation is packaged as a framework Documentation Component.
 4. A root composition manifest plus subordinate knowledge/model manifests
    deterministically index every physical resource without duplicating
    identity authority.
-5. Human Help and AI retrieval project the Phase 57 resolved Component
-   resources. Phase 59 Admin consumes the same read-only resource and
+5. Human Help and AI retrieval project the Phase 58 resolved Component
+   resources. Phase 60 Admin consumes the same read-only resource and
    knowledge/model contract.
 6. `OperationMode.Develop` automatically resolves and mounts Documentation and
    the development target's admitted source without exposing mode to Component
@@ -128,7 +128,7 @@ logical Component release
     └── provenance/
 ```
 
-Phase 58 must confirm paths against existing CAR source/archive rules before
+Phase 59 must confirm paths against existing CAR source/archive rules before
 making them normative. It must not introduce a second identity source that
 duplicates `project.yaml`, the CAR descriptor, or the existing runtime
 descriptor.
@@ -254,7 +254,7 @@ Generated resources include:
 The Component distribution must remain useful without a compiler, Scaladoc
 generator, SmartDox renderer, or PDF toolchain installed at runtime.
 
-Phase 58 must decide which HTML and PDF projections are mandatory. Generated
+Phase 59 must decide which HTML and PDF projections are mandatory. Generated
 output must record its source resource and source digest so stale projections
 can be detected.
 
@@ -313,17 +313,17 @@ caches, temporary files, logs, downloaded caches, host paths, and other
 transient build state are excluded.
 
 The contract aims for debugging completeness, not a byte-for-byte archive of
-the build workspace. Phase 58 must define executable release-readiness checks
+the build workspace. Phase 59 must define executable release-readiness checks
 for evidence that is required to explain or regenerate the released behavior.
 
 ## Component SubComponents
 
-Phase 57 defines Documentation and SourceCode SubComponents as versioned
+Phase 58 defines Documentation and SourceCode SubComponents as versioned
 physical resource artifacts with a declared parent relationship to one exact
 logical Component release. They use Component Repository identity, integrity,
 cache, and retrieval services but are not runtime Components.
 
-The inherited Phase 57 contract fixes:
+The inherited Phase 58 contract fixes:
 
 - SubComponent kind and identity;
 - exact parent Component identity and logical version;
@@ -346,13 +346,13 @@ The initial large Component topology is one primary execution CAR, one
 Documentation SubComponent, and one SourceCode SubComponent. Fine-grained
 language/media fragmentation is deferred.
 
-Phase 58 consumes the resulting exact resource inventory, state, content
+Phase 59 consumes the resulting exact resource inventory, state, content
 handle, and provenance. It does not implement repository publication,
 retrieval, cache, archive walking, or resolution precedence.
 
 ### Development Composition
 
-`OperationMode.Develop` selects a Phase 57 runtime-owned development resource
+`OperationMode.Develop` selects a Phase 58 runtime-owned development resource
 profile. It does not become a Component-domain mode.
 
 The inherited resolution order is:
@@ -365,7 +365,7 @@ explicit development directory
   -> remote Component Repository
 ```
 
-The Phase 57 resolver mounts the Documentation SubComponent automatically. The
+The Phase 58 resolver mounts the Documentation SubComponent automatically. The
 development target's checked-out source tree satisfies the SourceCode role;
 otherwise the exact SourceCode SubComponent is resolved subject to access
 policy. Missing, stale, corrupt, or incompatible required development
@@ -379,7 +379,7 @@ developer-local configuration, caches, and untracked host state.
 
 ### Operation Mode Resource Policy
 
-Operation mode selects a Phase 57 runtime-owned resource-composition policy.
+Operation mode selects a Phase 58 runtime-owned resource-composition policy.
 It never becomes an input to Component domain behavior.
 
 | Operation mode | Documentation resources | Source resources | Implicit remote access |
@@ -451,7 +451,7 @@ The provisional AI discovery route is:
   -> resolved Component knowledge resources
 ```
 
-Phase 58 must confirm the canonical route and its relationship with existing
+Phase 59 must confirm the canonical route and its relationship with existing
 `/help`, `/man`, OpenAPI, MCP, authorization, and production-mode policies.
 
 Human Help should advertise the manifest with a machine-readable link relation.
@@ -500,7 +500,7 @@ human `latest` alias as an evidence identity.
 
 ## Textus CBD Support Primary Integration
 
-Phase 58 includes real integration with
+Phase 59 includes real integration with
 `/Users/asami/src/dev2026/textus-cbd-support`.
 
 CBD Support is the primary AI-facing Component use path after direct Help. Its
@@ -508,7 +508,7 @@ existing ownership already includes versions, runtime compatibility,
 dependencies, Operations, artifacts, manuals, examples, reuse guidance, CAR
 Review, and evidence-bearing read-only MCP operations.
 
-Phase 58 extends that contract so CBD Support consumes exact Component
+Phase 59 extends that contract so CBD Support consumes exact Component
 knowledge manifests and resources while preserving canonical
 SimpleModeling.org publication references for broader documentation. It does
 not rely only on catalog links or model-metadata sidecars.
@@ -545,11 +545,11 @@ rewrite CBD-owned Component facts.
 
 ## Textus BoK Complementary RAG/MCP Integration
 
-Phase 58 also includes real integration with
+Phase 59 also includes real integration with
 `/Users/asami/src/dev2026/textus-bok`.
 
 The current Textus BoK contract treats CAR/SAR references as existence-only and
-hands detailed usage questions to CBD Support. Phase 58 extends the BoK route
+hands detailed usage questions to CBD Support. Phase 59 extends the BoK route
 without reversing that primary ownership:
 
 - Textus BoK owns evidence-bearing indexing, search, and retrieval of admitted
@@ -610,15 +610,15 @@ The integration requires:
   verification.
 
 Textus BoK design, specification, strategy, manual, and executable evidence
-must be updated in the Textus BoK repository as part of Phase 58. A CNCF-only
+must be updated in the Textus BoK repository as part of Phase 59. A CNCF-only
 mock is not sufficient acceptance.
 
 ## Repository Responsibilities
 
 | Repository | Responsibility |
 | --- | --- |
-| `cloud-native-component-framework` | Knowledge/model manifests, Phase 57 resolver consumption, development context, Help/AI direct surface, authorization, and executable documentation contract |
-| `cozy` / `sbt-cozy` | Authoring validation, model/diagram generation, SmartDox/manual projection, Scaladoc generation, filtered release source, content handoff to Phase 57 packaging, and source/archive equivalence |
+| `cloud-native-component-framework` | Knowledge/model manifests, Phase 58 resolver consumption, development context, Help/AI direct surface, authorization, and executable documentation contract |
+| `cozy` / `sbt-cozy` | Authoring validation, model/diagram generation, SmartDox/manual projection, Scaladoc generation, filtered release source, content handoff to Phase 58 packaging, and source/archive equivalence |
 | `smartdox` | SmartDox/Markdown parsing and HTML/PDF/document projection capabilities used by the build toolchain |
 | `simplemodeling-org` | Canonical versioned HTML publication, stable document/section URLs, RDF/JSON-LD/catalog projection, and online human/AI access |
 | `ai-directive` | Authoritative Directive ownership, public-rule identity/visibility, and public-guide projection inputs |
@@ -626,7 +626,7 @@ mock is not sufficient acceptance.
 | `textus-bok` | Complementary terminology/semantic Component knowledge admission, indexing, RAG/MCP retrieval, CBD handoff, and stale/disclosure enforcement |
 | representative Component/sample | End-to-end embedded/required-SubComponent, develop-mode, restricted-source, offline-bundle, Help discovery, CBD usage/review, and BoK retrieval evidence |
 
-If a missing capability belongs to one of these repositories, Phase 58 changes
+If a missing capability belongs to one of these repositories, Phase 59 changes
 the owning repository rather than duplicating the capability in CNCF.
 
 ## Implementation Sequence
@@ -634,18 +634,18 @@ the owning repository rather than duplicating the capability in CNCF.
 1. Inventory current Help/Manual/CAR/SimpleModeling.org/ai-directive/Skill
    bundle/CBD Support/Textus BoK contracts and freeze failing-first acceptance
    identities.
-2. Consume the Phase 57 Component release/resource identities and define
+2. Consume the Phase 58 Component release/resource identities and define
    publication, document, model, section, canonical URL, and
    authority/disclosure identities.
-3. Implement knowledge/model manifest codecs and Phase 57 resolver adapters in
+3. Implement knowledge/model manifest codecs and Phase 58 resolver adapters in
    CNCF.
 4. Implement Cozy/SmartDox authoring, lint, SimpleModeling.org HTML and
    structured publication projections, public AI guidance, Skill Catalog,
    model diagrams, Scaladoc, filtered release source, and content packaging
    inputs.
-5. Compose Phase 57 resolved Documentation/SourceCode resources into
+5. Compose Phase 58 resolved Documentation/SourceCode resources into
    `ResolvedComponentKnowledge`.
-6. Implement `ComponentDevelopmentContext` over the Phase 57 develop-mode
+6. Implement `ComponentDevelopmentContext` over the Phase 58 develop-mode
    resource view.
 7. Implement unified Help and direct manifest/resource access.
 8. Implement Textus CBD Support manifest/resource admission, exact detail,
@@ -668,7 +668,7 @@ During implementation:
 - phase/checklist documents hold plan, status, and acceptance evidence; and
 - executable specifications determine verified behavior.
 
-At Phase 58 closure:
+At Phase 59 closure:
 
 - `docs/design/component-documentation-knowledge-package.md` describes the
   verified architecture, ownership, flows, and rationale;
@@ -682,5 +682,5 @@ At Phase 58 closure:
 - no current README, design, spec, note, phase, manual, or executable
   specification contradicts the implemented behavior.
 
-Phase 58 cannot close while the latest contract exists only in this note,
+Phase 59 cannot close while the latest contract exists only in this note,
 journal, phase document, or implementation.

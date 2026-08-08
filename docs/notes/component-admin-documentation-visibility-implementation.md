@@ -2,9 +2,9 @@
 
 status = proposed, non-normative
 date = 2026-07-31
-phase = Phase 59
+phase = Phase 60
 
-This note is the provisional implementation plan for Phase 59. It must not be
+This note is the provisional implementation plan for Phase 60. It must not be
 treated as the final specification. Verified behavior is promoted to
 `docs/design/component-admin.md` and `docs/spec/component-admin.md` after
 implementation.
@@ -18,9 +18,9 @@ the runtime:
 ```text
 Phase 55 ConfigurationBindingCollection
         +
-Phase 57 ResolvedComponentResources
+Phase 58 ResolvedComponentResources
         +
-Phase 58 ComponentKnowledgeManifest / ComponentModelManifest
+Phase 59 ComponentKnowledgeManifest / ComponentModelManifest
         +
 runtime lifecycle, health, dependency, datastore, and authorization state
         =
@@ -66,7 +66,7 @@ The initial Admin view groups:
 Help is optimized for learning and use by humans and AI. Admin is optimized
 for inspecting and operating a concrete runtime context.
 
-Both consume the Phase 57 resource resolver and Phase 58 knowledge/model
+Both consume the Phase 58 resource resolver and Phase 59 knowledge/model
 manifest. Help and Admin may link to each other, but neither owns a second
 artifact scanner, repository client, or documentation generator.
 
@@ -93,6 +93,6 @@ and its provenance without turning it into Component-domain policy.
 
 ## Closure
 
-At Phase 59 closure this note becomes historical. The accepted Admin identity,
+At Phase 60 closure this note becomes historical. The accepted Admin identity,
 view model, authorization, management, and projection contracts must exist in
 design/specification and executable evidence.

@@ -306,10 +306,10 @@ Stage Status:
   selection plus runtime arguments without Web/user/datastore interpretation;
   the document contract contains no Web operation field.
 - [x] Deferred to Phase 55 GCF-06/GCF-10 for sanitized effective binding/trace
-  and Phase 59 ADM-03--ADM-05 for the operator surface: expose style/provider,
+  and Phase 60 ADM-03--ADM-05 for the operator surface: expose style/provider,
   capabilities, context, non-secret fixed-user values, trace evidence, and
   datastore binding in operator inspection.
-- [x] Deferred to Phase 55 GCF-01/GCF-02/GCF-06/GCF-10 and Phase 59 rendering:
+- [x] Deferred to Phase 55 GCF-01/GCF-02/GCF-06/GCF-10 and Phase 60 rendering:
   keep diagnostics secret-safe.
 - [x] CS-05F: prove profile admission does not rename, migrate, overwrite, or
   delete unrelated CNCF operational state. Review-fix validation and focused
@@ -325,7 +325,7 @@ Deferred-owner ledger:
 - Phase 55 owns effective binding, fixed-user identity/migration/isolation,
   fixed-user formatting, provenance, redacted diagnostics, and explicit
   override behavior; it preserves Phase 53 admission semantics.
-- Phase 59 owns the operator-admin presentation after Phase 55 supplies
+- Phase 60 owns the operator-admin presentation after Phase 55 supplies
   sanitized evidence.
 - Strategy candidate 9.53 owns the unproven general ComponentFactory purity
   and capability-implementation policy. CS-06 owns final Component-execution

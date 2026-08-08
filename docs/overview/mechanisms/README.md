@@ -8,7 +8,7 @@ implementation at a glance and should name its design/specification evidence.
 
 Current graphics:
 
-- `documentation/overview.svg`: planned Phase 58 documentation ownership,
+- `documentation/overview.svg`: planned Phase 59 documentation ownership,
   projection, distribution, Help, and AI knowledge routes.
 - `jobs/overview.svg`: complete Job management mechanism overview.
 - `jobs/job-engine-runtime.svg`: submission, scheduling, Task execution, and
