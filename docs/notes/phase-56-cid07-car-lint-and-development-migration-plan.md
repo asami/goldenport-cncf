@@ -4,13 +4,13 @@
 
 - Phase: 56
 - Step: CID-07 CAR Lint and Development CAR Migration
-- Step status: ACCEPTED / REVIEWED / STEP_COMMIT_PENDING
+- Step status: DONE / COMMITTED
 - Current Slice: CID-07E Complete Inventory Acceptance
 - Slice status: ACCEPTED / REVIEWED
 - Entry evidence: CID-06 committed as
   `6afab962ccd33431e6e2944c8d9191295d1a7f38`
   (`Preserve bounded component identity compatibility`)
-- Phase full validation: pending until the Phase 56 release gate
+- Phase full validation: explicitly waived at the Phase 56 release gate
 
 ## Goal
 
@@ -132,8 +132,8 @@ Independent focused re-review first found one stale Cozy E7 checklist owner/rule
 row. After correction to `CID07-R1` and the current classifier/lint/spec paths,
 the corrective re-review returned PASS with no findings and
 `FULL_REVIEW_REQUIRED=no`. CID-07B through CID-07D are recorded below;
-CID-07E is now implemented with Step full review pending. The CID-07 Step
-commit and Phase full validation remain pending.
+CID-07E was subsequently accepted/reviewed and included in the completed
+CID-07 Step commit.
 
 ### CID-07B — Canonical scaffold/build migration and User Account exemplar
 
@@ -156,7 +156,7 @@ component. The compatibility route URLs remain stable while their authored
 component targets and primary Help/manual selectors use
 `org.simplemodeling.textus.UserAccount`.
 
-Focused implementation evidence on the current uncommitted worktree is:
+Focused implementation evidence on the then-uncommitted CID-07B worktree was:
 
 - SimpleModeler `38242-20260808T074521Z`: 1 suite and 2 tests succeeded;
   `publishLocal` `38436-20260808T074538Z` published `1.1.26-SNAPSHOT`;
@@ -187,10 +187,9 @@ OK results. Review-fix validation passed:
 
 Independent focused re-review returned PASS with no findings and
 `FULL_REVIEW_REQUIRED=no`; RF-CID07B-001/002 are closed and CID-07B is
-ACCEPTED / REVIEWED. CID-07C is accepted/reviewed below; CID-07D remains
-accepted/reviewed and CID-07E is implemented with Step full review pending.
-No CID-07 commit
-or Phase full validation is claimed.
+ACCEPTED / REVIEWED. At that CID-07B checkpoint, CID-07C was recorded below,
+CID-07D was accepted/reviewed, CID-07E awaited Step full review, and no CID-07
+commit or Phase full-validation claim had yet been made.
 
 ### CID-07C — Noncolliding SNAPSHOT cohort
 
@@ -281,9 +280,9 @@ Every final SBT marker has `sbt_exit=0`, `wrapper_exit=0`, and
 valid JSON, the exact canonical identity, and no FAIL finding. Independent
 focused re-review closed RF-CID07C-008 with PASS, no findings, and
 `FULL_REVIEW_REQUIRED=no`. RF-CID07C-001 through RF-CID07C-008 are closed and
-CID-07C is ACCEPTED / REVIEWED. CID-07C is not committed; CID-07D is
-ACCEPTED / REVIEWED and CID-07E is implemented with Step full review
-pending. The CID-07 Step commit and Phase full validation remain pending.
+CID-07C is ACCEPTED / REVIEWED. At that CID-07C checkpoint, its commit,
+CID-07E Step full review, the CID-07 Step commit, and Phase full validation
+remained pending; CID-07D was ACCEPTED / REVIEWED.
 
 Existing Debt (Separate Follow-up):
 
@@ -320,9 +319,9 @@ failed, aborted, canceled, ignored, or pending, with `sbt_exit=0`,
 `cozyCarName`, SNAPSHOT, mutable-pair, and nine deprecation warnings.
 Post-fix full review returned PASS with Actionable findings 0;
 `CID07D-R1` and `CID07D-R2` are CLOSED and `FULL_REVIEW_REQUIRED=no`.
-CID-07D is ACCEPTED / REVIEWED. No CID-07D commit has been made; CID-07E is
-implemented with Step full review pending. The CID-07 Step commit and Phase
-full validation remain pending.
+CID-07D is ACCEPTED / REVIEWED. At that CID-07D checkpoint, its commit,
+CID-07E Step full review, the CID-07 Step commit, and Phase full validation
+remained pending.
 
 ### CID-07E — Complete inventory acceptance and Step commit
 
@@ -412,13 +411,38 @@ admitted and unchanged by these repairs.
 Parent scope clarification: path-level staging is safe. The Blog source
 `BundleFactory` duplicate is excluded because the managed generated file has
 identical SHA-1 `e39535...`; the official port inclusion remains preserved.
-CID-07 A-E are accepted/reviewed. No Step commit or full Phase claim is made;
-Step feature validation/commit remains pending.
+CID-07 A-E are accepted/reviewed and committed. No full Phase claim was made
+at that Step checkpoint.
 
-The Cozy repair is accepted/reviewed and no CID-07 Step commit is claimed.
-Step feature validation/commit and Phase full validation remain pending. The
-five official registry port hunks admitted in
-CID-07D remain in scope for the eventual commit.
+The Cozy repair and five official registry port hunks admitted in CID-07D are
+included in the completed Step commits.
+
+## Commit Record
+
+CID-07 committed on 2026-08-08 in dependency order:
+
+- `cncf-collaborator-api` `ff9da918d28ee04e63096a214d268ce8112f56f8`;
+- `simple-modeler` `c05460bd21c637e375357f6412ea1bcb1ff9e006`;
+- `cozy` `8754f927a8fbac035f239565354003f51d6f6f10`;
+- `sbt-cozy` `43ae856e0c1813ff8bf05e9c93ec0b258efae550`;
+- `cloud-native-component-framework`
+  `34cb4483813a3d276edab2d5e604804087a96c08`;
+- `textus-user-account` `816d1a4e6e8d07b4b648bc77074b2bfa5dcd3b12`;
+- `textus-user-notification` `0e94adc5018ae0755d498ecd59b0c8f70ae9f122`;
+- `textus-scraper` `3008b2738ccb701500b7702b38617efae9118c74`;
+- `textus-ai` `82d711ccbbc8b310858064f1ccaa092fb5742c31`;
+- `textus-aws` `17038a9b49733a74f3a642f06e26364f2367994a`;
+- `textus-blog` `36ed508d2e01803cf4dd12cb61e30506975517af`;
+- `textus-cbd-support` `56a3a6ba2416eb37f6a4c498e7d79a5f36e9726b`;
+- `textus-control-center` `e6fd75d7787603d9630b9f2c974f98d4cdd84f37`;
+- `textus-knowledge-editor` `29b2fad4297474f7c455dd9ba951d96943eb3853`;
+- `textus-semantic-integration-engine`
+  `cef5ba448ea2d2f8bbb66cd7ccff00140b0e78f6`;
+- `textus-art-scene` `39c46a58256e6806de76611a75aafc66ef1739b9`;
+- `textus-bok` `c9ec850420ee116383fd8f8ac5f14de154ccada0`;
+- `textus-supervisor` `7c496a20b731574d469bf18f192e3db7c7ef834a`;
+  and
+- `textus-toolchain-runner` `2da68a711065e6c1fd11ce81c423131d60a6a5f3`.
 
 ## Validation Strategy
 
@@ -435,12 +459,12 @@ CID-07D remain in scope for the eventual commit.
 
 All SBT invocations use the shared serialized wrapper. Each Slice performs
 focused validation and independent review; findings require bounded
-review-fix and focused re-review. Phase full validation remains deferred to
-CID-08/release closure.
+review-fix and focused re-review. Phase full validation was explicitly waived
+at the Phase 56 release gate; no new full-test claim is made.
 
 ## Exit Criteria
 
-CID-07 is complete only when the classifier has one shared authority, Cozy
+CID-07 is complete: the classifier has one shared authority, Cozy
 lint exposes the complete stable diagnostic contract, all 14 SNAPSHOT CARs
 are canonical and lint-clean, the four released CARs remain unchanged with
 exact next-version warnings, no unrelated dirty hunk is committed, and the

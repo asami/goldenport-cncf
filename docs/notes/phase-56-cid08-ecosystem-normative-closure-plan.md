@@ -2,8 +2,8 @@
 
 - Step: CID-08 Ecosystem Regression and Normative Closure
 - Slice: CID-08A Minimal Normative Promotion
-- Status: ACCEPTED / REVIEWED / STEP_COMMIT_PENDING
-- Phase full validation: deferred to the Phase 56 release gate
+- Status: DONE / COMMITTED
+- Phase full validation: explicitly waived at the Phase 56 release gate
 
 ## Goal
 
@@ -42,7 +42,7 @@ against the behavior already validated by CID-01 through CID-07, checking
 links and the exact diff, and performing one independent review. If that
 review is clean, CID-08 is committed immediately. CID-08 adds no test and runs
 no CID-08-specific SBT command. Repository-wide and ecosystem-wide full
-validation remains the Phase release gate.
+validation was later explicitly waived at the Phase release gate.
 
 ## Exit criteria
 
@@ -63,4 +63,5 @@ The single independent CID-08 review found two documentation-only lifecycle
 contradictions: stale CID-07 commit-pending text and stale CID-01
 `pendingUntilFixed` present-tense text. Both are corrected in this diff.
 `FULL_REVIEW_REQUIRED=no`; no duplicate review or CID-08-specific SBT run is
-required. Static link and diff checks pass. The Step commit is pending.
+required. Static link and diff checks pass. Commit
+`3d723c3ba18954bdca55f85ba3d64ac046c7512d` closes the Step.

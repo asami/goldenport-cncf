@@ -1,8 +1,9 @@
 # Phase 56 - Namespace-qualified Component Identity and Derived Coordinates
 
-status=in-progress
+status=closed
 started_at=2026-08-06
 planned_at=2026-08-06
+closed_at=2026-08-09
 depends_on=[Phase 55](phase-55.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 56 Checklist](phase-56-checklist.md)
@@ -175,7 +176,7 @@ not silently infer a namespace or rewrite project metadata.
 | CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | done |
 | CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | done; committed |
 | CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | done; committed |
-| CID-08 | Ecosystem regression and normative closure | Promote the accepted ecosystem behavior, migration guidance, compatibility ledger, and successor-phase contract to normative design/specification. | accepted/reviewed; Step commit pending |
+| CID-08 | Ecosystem regression and normative closure | Promote the accepted ecosystem behavior, migration guidance, compatibility ledger, and successor-phase contract to normative design/specification. | done; committed |
 
 CID-07A was implemented and review-fixed as part of the subsequently committed
 CID-07 Step. The exact registry and classification authority now lives in the
@@ -244,7 +245,8 @@ failed, aborted, canceled, ignored, or pending, with `sbt_exit=0`,
 full review returned PASS with Actionable findings 0; `CID07D-R1` and
 `CID07D-R2` are CLOSED and `FULL_REVIEW_REQUIRED=no`. CID-07D is ACCEPTED /
 REVIEWED. CID-07D and CID-07E were accepted/reviewed before the completed
-CID-07 Step commit. Phase full validation remains pending.
+CID-07 Step commit. At that checkpoint, Phase full validation remained
+pending.
 
 CID-07E is `ACCEPTED / REVIEWED`. The frozen inventory is
 18/18 classified: all 14/14 SNAPSHOT CARs are canonical and final lint has no
@@ -305,12 +307,14 @@ unchanged.
 Parent scope clarification: path-level staging is safe. The Blog source
 `BundleFactory` duplicate is excluded because the managed generated file has
 identical SHA-1 `e39535...`; the official port inclusion is preserved. CID-07
-A-E are accepted/reviewed and the CID-07 Step commit is complete. No full
-Phase claim is made; Phase full validation remains pending.
+A-E are accepted/reviewed and the CID-07 Step commit is complete. At that Step
+checkpoint, no full Phase claim was made and Phase full validation remained
+pending.
 
 The Cozy repair is accepted/reviewed and included in the completed CID-07 Step
-commit. Phase full validation remains pending. The five official registry port
-hunks admitted in CID-07D were included in that Step commit.
+commit. At that Step checkpoint, Phase full validation remained pending. The
+five official registry port hunks admitted in CID-07D were included in that
+Step commit.
 
 CID-05 slice ledger is committed and done:
 
@@ -379,13 +383,14 @@ CID-05D and the CID-05 Step closure criterion are accepted. The Step commit is
 `d5d3c5bb71962d93898ac8b1ddbcac7d9c8cfe83` (`Carry qualified component
 identity through CNCF runtime`). Its exact four-suite validation invocation
 `86240-20260808T003231Z` passed 59 tests with one intentional pending leaf;
-both exits were zero and the lock was released. Phase full validation and
-Phase 56 closure remain pending, and HYG-P56-005 remains separate.
+both exits were zero and the lock was released. At that CID-05 checkpoint,
+Phase full validation and Phase 56 closure remained pending, and HYG-P56-005
+remained separate.
 
 CID-05D does not implement CID-06 compatibility adapters or CID-01 E4 bare
 assembly admission, alter ComponentId syntax, repository/cache behavior, or
-HYG-P56-005. CID-05 is complete; Phase 56 and Phase full validation remain
-incomplete.
+HYG-P56-005. CID-05 was complete while Phase 56 and Phase full validation
+remained incomplete at that checkpoint.
 
 CID-06 is implemented through the separate
 [compatibility adapter plan](../notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md).
@@ -423,7 +428,7 @@ target hashes were exact. `R1-F1` through `R1-F6` and `VF-CID06B-001` through
 `VF-CID06B-003` are closed. CID-06B is `ACCEPTED / REVIEWED`. That record is
 historical; current lifecycle state has CID-06C through CID-06E
 accepted/reviewed, while the CID-06 Step feature-test/commit and Phase full
-validation remain pending.
+validation remained pending at that checkpoint.
 
 CID-06E is frozen separately in the
 [compatibility Step acceptance plan](../notes/phase-56-cid06e-compatibility-step-acceptance-plan.md).
@@ -466,14 +471,14 @@ truth. Invocation `98250-20260808T055120Z` passed the two affected suites and
 all 10 tests without warnings, with both exits zero and the lock released.
 Independent focused re-review returned PASS with no findings and
 `FULL_REVIEW_REQUIRED=no`. The CID-06 Step feature-test/commit and Phase full
-validation remain pending.
+validation remained pending at that checkpoint.
 
 The final CID-06 Step accumulator `9227-20260808T062445Z` completed all 19
 suites with 306 tests succeeded, zero failed/canceled/ignored/pending/aborted,
 no warnings, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Commit
 `6afab962ccd33431e6e2944c8d9191295d1a7f38`
 (`Preserve bounded component identity compatibility`) closes the CID-06 Step.
-Only Phase full validation remains pending.
+At that CID-06 checkpoint, only Phase full validation remained pending.
 
 CID-06C review-fix implementation is recorded in the separate
 [runtime selector and compatibility observability plan](../notes/phase-56-cid06c-runtime-selector-observability-plan.md).
@@ -497,10 +502,11 @@ authoritative invocation `52869-20260808T033203Z` completed all 11 suites with
 `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Independent focused
 re-review returned PASS with no findings on tracked diff
 `50ed3a22239bd8ed5dab2819957c421d72562abc1a0f683b4b409517a53252c6`;
-`FULL_REVIEW_REQUIRED=no`. CID-06C is accepted/reviewed, but no CID-06 Step
-commit is claimed. Historical pre-review invocation `26232` is retained only
-as superseded evidence. CID-06E is accepted/reviewed; the Step commit, Phase
-full validation, CID-07, and notice-removal ownership remain pending.
+`FULL_REVIEW_REQUIRED=no`. At that checkpoint CID-06C was accepted/reviewed,
+but no CID-06 Step commit was yet claimed. Historical pre-review invocation
+`26232` is retained only as superseded evidence. CID-06E was
+accepted/reviewed; the Step commit, Phase full validation, CID-07, and
+notice-removal ownership remained pending at that checkpoint.
 
 CID-06D review fixes are applied under the separate
 [deferred-release compatibility plan](../notes/phase-56-cid06d-deferred-release-compatibility-plan.md).
@@ -522,8 +528,8 @@ is superseded by these review fixes. Post-fix invocation
 no warnings, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Independent
 focused re-review verified the exact repaired hashes, closed RF-CID06D-001
 through RF-CID06D-004 without new findings, and returned PASS with
-`FULL_REVIEW_REQUIRED=no`. CID-06E is accepted/reviewed; the CID-06 Step
-commit and Phase full validation remain pending.
+`FULL_REVIEW_REQUIRED=no`. CID-06E was accepted/reviewed; the CID-06 Step
+commit and Phase full validation remained pending at that checkpoint.
 
 CID-05D also exposed an adjacent plain-`Action` implicit-job defect. Because
 fixing it changes observable execution behavior rather than Component
@@ -534,7 +540,8 @@ execution-policy work.
 
 CID-05B excludes compatibility adapters (CID-06), routing and presentation
 projection (CID-05C), end-to-end closure (CID-05D), and cross-file/public
-hygiene (HYG-P56-005). Phase 56 remains incomplete.
+hygiene (HYG-P56-005). At that CID-05B checkpoint, Phase 56 remained
+incomplete.
 
 ## Repository Ownership
 
@@ -608,3 +615,25 @@ runtime consumers. Every frozen SNAPSHOT CAR must be migrated and lint-clean,
 and every non-SNAPSHOT deferral must have a lint-visible next-version owner.
 Verified behavior must be promoted to normative design and specification;
 this phase document and working notes are not the final authority.
+
+## Closure Record
+
+Phase 56 is closed on 2026-08-09. The normative authority is the
+[Component Identity Design](../design/component-identity.md) plus the
+[Component Identity Specification](../spec/component-identity.md); CID-01
+through CID-08 are implemented, accepted, reviewed, and committed. The final
+Step commits are:
+
+- CID-05: `d5d3c5bb71962d93898ac8b1ddbcac7d9c8cfe83`;
+- CID-06: `6afab962ccd33431e6e2944c8d9191295d1a7f38`;
+- CID-07 CNCF contract: `34cb4483813a3d276edab2d5e604804087a96c08`
+  with the 18 companion repository commits recorded by the CID-07 plan; and
+- CID-08: `3d723c3ba18954bdca55f85ba3d64ac046c7512d`.
+
+The user explicitly waived final Phase-wide full validation on 2026-08-09.
+No new full-test claim is made. Closure relies on the recorded Slice/Step
+focused, integration, CAR packaging/publication/resolution, lint, and
+independent-review evidence accepted before each Step commit. All SNAPSHOT
+versions remain unchanged, including `sbt-cozy 0.1.20-SNAPSHOT` and
+`cozy 0.3.4-SNAPSHOT`. Phase 57 may begin and must not reopen the qualified
+Component identity contract.
