@@ -8,19 +8,19 @@ import org.goldenport.protocol.spec.{ServiceDefinition, OperationDefinition}
 /*
  * @since   Mar.  5, 2026
  *  version May.  8, 2026
- * @version Jul. 19, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjection {
   import MetaProjectionSupport._
 
   def projectComponent(component: Component): String = {
-    val componentname = component.name
+    val componentname = component.displayName
     val paths = component.protocol.services.services.flatMap { service =>
       service.operations.operations.toVector.map { op =>
-        val path = NamingConventions.toNormalizedPath(component.name, service.name, op.name)
+        val path = NamingConventions.toNormalizedPath(componentname, service.name, op.name)
         val method = _infer_method(service.name, op.name)
-        val operationid = NamingConventions.toOperationId(component.name, service.name, op.name)
+        val operationid = NamingConventions.toOperationId(componentname, service.name, op.name)
         val summary = _operation_summary(service, op).getOrElse(s"${service.name}.${op.name}")
         val description = _operation_description(service, op)
         s""""${_escape(path)}":{"${method}":{"operationId":"${_escape(operationid)}","summary":"${_escape(summary)}","description":"${_escape(description)}","responses":{"200":{"description":"OK"}}}}"""

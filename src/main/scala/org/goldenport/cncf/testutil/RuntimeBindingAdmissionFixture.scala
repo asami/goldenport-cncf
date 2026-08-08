@@ -5,7 +5,7 @@ import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
+import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, ResolvedParameters, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, SecurityContext}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.servicecontainer.ServiceContainerRuntime
@@ -15,7 +15,7 @@ import org.goldenport.context.I18nContext
 
 /*
  * @since   Aug.  4, 2026
- * @version Aug.  6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Explicit downstream test support packaged in the main artifact; it never auto-admits production Subsystems. */
@@ -52,6 +52,14 @@ object RuntimeBindingAdmissionFixture {
     lazy val runtime =
       secured.runtime.withUnitOfWorkContext(rebound, unitOfWorkToken)
     rebound
+  }
+
+  def withResolvedParameters(
+    context: ExecutionContext,
+    parameters: ResolvedParameters
+  ): ExecutionContext = {
+    context.runtime.setResolvedParameters(parameters)
+    context
   }
 
   /**

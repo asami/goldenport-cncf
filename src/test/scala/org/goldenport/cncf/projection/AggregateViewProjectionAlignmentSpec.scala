@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 23, 2026
  *  version Apr. 11, 2026
- * @version Jul. 19, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -174,6 +174,8 @@ final class AggregateViewProjectionAlignmentSpec
     )
 
     val component = new Component() {
+      override def displayName: String = "projection_alignment_spec"
+
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
           AggregateDefinition(name = "profile_aggregate", entityName = "profile"),
@@ -224,10 +226,11 @@ final class AggregateViewProjectionAlignmentSpec
         )
     }
 
+    val componentid = ComponentId("org.goldenport.cncf.ProjectionAlignmentSpec")
     val core = Component.Core.create(
-      name = "projection_alignment_spec",
-      componentid = ComponentId("projection_alignment_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("projection_alignment_spec")),
+      name = componentid.name,
+      componentid = componentid,
+      instanceid = ComponentInstanceId.default(componentid),
       protocol = protocol
     )
     val subsystem = TestComponentFactory.emptySubsystem("projection_alignment_spec")

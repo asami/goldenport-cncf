@@ -1,16 +1,17 @@
 package org.goldenport.cncf.component
 
-import java.nio.charset.StandardCharsets
-import scala.util.control.NonFatal
-
-import io.circe.{ACursor, Decoder, HCursor, Json}
-import io.circe.jawn.JawnParser
+import scala.jdk.CollectionConverters.*
+import scala.jdk.OptionConverters.*
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
+import org.goldenport.cncf.component.identity.{
+  ComponentIdentityMigrationClassifier,
+  ComponentIdentityMigrationDecision,
+  ComponentIdentityMigrationRequest
+}
 
 /*
- * Executable authority for the four exact released CAR identity deferrals.
+ * Runtime adapter over the shared deferred-release migration authority.
  *
  * @since   Aug.  8, 2026
  * @version Aug.  8, 2026
@@ -25,7 +26,8 @@ final case class ComponentIdentityDeferredReleaseEntry(
 )
 
 private[cncf] final case class ComponentIdentityDeferredReleaseRegistry(
-  entries: Vector[ComponentIdentityDeferredReleaseEntry]
+  entries: Vector[ComponentIdentityDeferredReleaseEntry],
+  private val _classifier: ComponentIdentityMigrationClassifier
 ) {
   import ComponentIdentityDeferredReleaseRegistry.*
 
@@ -69,80 +71,83 @@ private[cncf] final case class ComponentIdentityDeferredReleaseRegistry(
   private def _classify_legacy_c(
     descriptor: ComponentDescriptor
   ): Consequence[Classification] = {
-      val artifact = descriptor.name.map(_.trim).filter(_.nonEmpty)
-      val localid = descriptor.componentName.map(_.trim).filter(_.nonEmpty)
-      val release = descriptor.version.map(_.trim).filter(_.nonEmpty)
-      val artifactentry = artifact.flatMap(value => entries.find(_.legacyartifact == value))
-      artifactentry match {
-        case Some(entry) =>
-          release match {
-            case Some(value) if value == entry.release && localid.contains(entry.legacylocalid) =>
-              ComponentIdentityCompatibilityAdapter
-                .projectDescriptorC(
-                  descriptor.copy(
-                    name = Some(entry.componentid.name),
-                    componentName = Some(entry.componentid.name)
-                  ),
-                  entry.componentid
-                )
-                .map(projection => ExactDeferred(entry, projection.descriptor))
-            case Some(value) if value == entry.release =>
-              Consequence.success(
-                InventoryError(
-                  s"component.identity.deferred-release.inventory-error reason=local-id-mismatch; artifact=${entry.legacyartifact}; release=$value; expected=${entry.legacylocalid}; actual=${localid.getOrElse("missing")}"
-                )
-              )
-            case Some(value) if _is_snapshot(value) =>
-              Consequence.success(MigrationRequired(entry, value, "snapshot-release"))
-            case Some(value) =>
-              (_numeric_release(entry.release), _numeric_release(value)) match {
-                case (Some(expected), Some(actual)) if _compare(actual, expected) > 0 =>
-                  Consequence.success(MigrationRequired(entry, value, "greater-stable-release"))
-                case (Some(expected), Some(actual)) if _compare(actual, expected) < 0 =>
-                  Consequence.success(
-                    InventoryError(
-                      s"component.identity.deferred-release.inventory-error reason=lower-release; artifact=${entry.legacyartifact}; expected=${entry.release}; actual=$value"
-                    )
-                  )
-                case _ =>
-                  val reason =
-                    if (_qualified_release_pattern.matches(value)) "incomparable-release"
-                    else "malformed-release"
-                  Consequence.success(
-                    InventoryError(
-                      s"component.identity.deferred-release.inventory-error reason=$reason; artifact=${entry.legacyartifact}; expected=${entry.release}; actual=$value"
-                    )
-                  )
-              }
-            case None =>
-              Consequence.success(
-                InventoryError(
-                  s"component.identity.deferred-release.inventory-error reason=release-missing; artifact=${entry.legacyartifact}; expected=${entry.release}"
-                )
-              )
-          }
-        case None =>
-          val partial = entries.filter { entry =>
-            localid.contains(entry.legacylocalid) ||
-              descriptor.componentId.contains(entry.componentid)
-          }
-          if (partial.nonEmpty)
-            Consequence.success(
-              InventoryError(
-                s"component.identity.deferred-release.inventory-error reason=partial-match; artifact=${artifact.getOrElse("missing")}; local-id=${localid.getOrElse("missing")}; candidates=${partial.map(_.componentid.name).sorted.mkString(",")}"
-              )
+    val request = new ComponentIdentityMigrationRequest(
+      null,
+      null,
+      descriptor.name.orNull,
+      descriptor.componentName.orNull,
+      descriptor.version.orNull,
+      java.util.Map.of[String, String]()
+    )
+    val result = _classifier.classify(request)
+    if (result.isFailure) {
+      val error = result.error.orElseThrow()
+      Consequence.resourceInvalid(
+        s"component.identity.deferred-release.inventory-error reason=shared-classifier; code=${error.code}; detail=${error.message}"
+      )
+    } else {
+      val decision = result.value.orElseThrow()
+      decision.status match {
+        case ComponentIdentityMigrationDecision.Status.DEFERRED_TO_NEXT_VERSION =>
+          val entry = _entry(decision.entry.orElseThrow())
+          ComponentIdentityCompatibilityAdapter
+            .projectDescriptorC(
+              descriptor.copy(
+                name = Some(entry.componentid.name),
+                componentName = Some(entry.componentid.name)
+              ),
+              entry.componentid
             )
-          else
-            Consequence.success(Strict)
+            .map(projection => ExactDeferred(entry, projection.descriptor))
+        case ComponentIdentityMigrationDecision.Status.MIGRATION_REQUIRED =>
+          decision.entry.toScala match {
+            case Some(sharedentry) =>
+              Consequence.success(
+                MigrationRequired(
+                  _entry(sharedentry),
+                  decision.release.orElse("missing"),
+                  decision.reason
+                )
+              )
+            case None => Consequence.success(Strict)
+          }
+        case ComponentIdentityMigrationDecision.Status.INVENTORY_ERROR =>
+          Consequence.success(
+            InventoryError(_diagnostic(descriptor, decision.reason, decision.entry.toScala.map(_entry)))
+          )
+        case ComponentIdentityMigrationDecision.Status.STRICT_LEGACY =>
+          Consequence.success(Strict)
+        case ComponentIdentityMigrationDecision.Status.CANONICAL =>
+          Consequence.success(Strict)
+        case ComponentIdentityMigrationDecision.Status.PROJECTION_DISAGREEMENT =>
+          Consequence.success(
+            InventoryError(_diagnostic(descriptor, decision.reason, decision.entry.toScala.map(_entry)))
+          )
       }
+    }
+  }
+
+  private def _diagnostic(
+    descriptor: ComponentDescriptor,
+    reason: String,
+    entry: Option[ComponentIdentityDeferredReleaseEntry]
+  ): String = {
+    val runtimereason =
+      if (reason == "partial-registry-match") "partial-match" else reason
+    Vector(
+      "component.identity.deferred-release.inventory-error",
+      s"reason=$runtimereason",
+      s"artifact=${descriptor.name.getOrElse("missing")}",
+      s"release=${descriptor.version.getOrElse("missing")}",
+      s"local-id=${descriptor.componentName.getOrElse("missing")}",
+      s"expected=${entry.map(_.componentid.name).getOrElse("unregistered")}"
+    ).mkString(" ")
   }
 }
 
 private[cncf] object ComponentIdentityDeferredReleaseRegistry {
-  val RESOURCE_PATH =
-    "META-INF/cncf/component-identity-deferred-release-registry.json"
-  val SCHEMA_VERSION =
-    "cncf.component-identity-deferred-release-registry.v1"
+  val RESOURCE_PATH: String = ComponentIdentityMigrationClassifier.RESOURCE_PATH
+  val SCHEMA_VERSION: String = ComponentIdentityMigrationClassifier.SCHEMA_VERSION
 
   sealed trait Classification
   final case class DescriptorAdmission(
@@ -173,189 +178,39 @@ private[cncf] object ComponentIdentityDeferredReleaseRegistry {
   def loadC(
     loader: ClassLoader = getClass.getClassLoader
   ): Consequence[ComponentIdentityDeferredReleaseRegistry] =
-    try {
-      Option(loader.getResourceAsStream(RESOURCE_PATH)) match {
-        case Some(stream) =>
-          try parseC(new String(stream.readAllBytes(), StandardCharsets.UTF_8))
-          finally stream.close()
-        case None =>
-          Consequence.resourceInvalid(
-            s"component.identity.deferred-release.registry.invalid reason=resource-missing; path=$RESOURCE_PATH"
-          )
-      }
-    } catch {
-      case NonFatal(error) =>
-        Consequence.resourceInvalid(
-          s"component.identity.deferred-release.registry.invalid reason=resource-read-failed; path=$RESOURCE_PATH; cause=${Option(error.getMessage).getOrElse(error.getClass.getName)}"
-        )
-    }
+    _classifier_c(ComponentIdentityMigrationClassifier.load(loader))
 
   private[component] def parseC(
     text: String
   ): Consequence[ComponentIdentityDeferredReleaseRegistry] =
-    _parse(text) match {
-      case Right(registry) => Consequence.success(registry)
-      case Left(message) =>
-        Consequence.resourceInvalid(
-          s"component.identity.deferred-release.registry.invalid $message"
-        )
-    }
+    _classifier_c(ComponentIdentityMigrationClassifier.parseRegistry(text))
 
-  private def _parse(
-    text: String
-  ): Either[String, ComponentIdentityDeferredReleaseRegistry] =
-    for {
-      json <- _strict_json_parser.parse(text).left.map(error => s"reason=json-invalid; detail=${error.getMessage}")
-      cursor = json.hcursor
-      _ <- _only(cursor, Set("schemaVersion", "entries"), "registry")
-      schema <- _required[String](cursor, "schemaVersion", "registry")
-      _ <- Either.cond(
-        schema == SCHEMA_VERSION,
-        (),
-        s"reason=schema-version; expected=$SCHEMA_VERSION; actual=$schema"
+  private def _classifier_c(
+    result: org.goldenport.cncf.component.identity.ComponentIdentityResult[ComponentIdentityMigrationClassifier]
+  ): Consequence[ComponentIdentityDeferredReleaseRegistry] =
+    if (result.isFailure) {
+      val error = result.error.orElseThrow()
+      Consequence.resourceInvalid(
+        s"component.identity.deferred-release.registry.invalid code=${error.code}; detail=${error.message}"
       )
-      values <- _required[Vector[Json]](cursor, "entries", "registry")
-      _ <- Either.cond(values.size == 4, (), s"reason=entry-count; expected=4; actual=${values.size}")
-      entries <- _sequence(values.zipWithIndex.map { case (value, index) =>
-        _entry(value.hcursor, index)
-      })
-      _ <- _unique(entries.map(_.componentid.name), "canonical-component-id")
-      _ <- _unique(entries.map(_.legacyartifact), "legacy-artifact")
-    } yield ComponentIdentityDeferredReleaseRegistry(entries.sortBy(_.componentid.name))
+    } else {
+      val classifier = result.value.orElseThrow()
+      Consequence.success(
+        ComponentIdentityDeferredReleaseRegistry(
+          classifier.entries.asScala.toVector.map(_entry),
+          classifier
+        )
+      )
+    }
 
   private def _entry(
-    cursor: HCursor,
-    index: Int
-  ): Either[String, ComponentIdentityDeferredReleaseEntry] = {
-    val context = s"entry[$index]"
-    for {
-      _ <- _only(
-        cursor,
-        Set("canonicalComponentId", "release", "legacyArtifact", "legacyLocalId", "migrationOwner"),
-        context
-      )
-      canonical <- _non_empty(cursor, "canonicalComponentId", context)
-      componentid <- ComponentId.parseC(canonical) match {
-        case Consequence.Success(value) => Right(value)
-        case Consequence.Failure(conclusion) =>
-          Left(s"reason=canonical-component-id; context=$context; detail=${conclusion.display}")
-      }
-      release <- _non_empty(cursor, "release", context)
-      _ <- _validate_coordinate(componentid, release, context)
-      artifact <- _non_empty(cursor, "legacyArtifact", context)
-      localid <- _non_empty(cursor, "legacyLocalId", context)
-      owner <- _non_empty(cursor, "migrationOwner", context)
-      _ <- Either.cond(
-        componentid.localId.value() == localid,
-        (),
-        s"reason=local-id-disagreement; context=$context; expected=${componentid.localId.value()}; actual=$localid"
-      )
-    } yield ComponentIdentityDeferredReleaseEntry(
-      componentid,
-      release,
-      artifact,
-      localid,
-      owner
+    entry: ComponentIdentityMigrationClassifier.RegistryEntry
+  ): ComponentIdentityDeferredReleaseEntry =
+    ComponentIdentityDeferredReleaseEntry(
+      ComponentId(entry.componentId.qualifiedName),
+      entry.release,
+      entry.legacyArtifact,
+      entry.legacyLocalId,
+      entry.migrationOwner
     )
-  }
-
-  private def _validate_coordinate(
-    componentid: ComponentId,
-    release: String,
-    context: String
-  ): Either[String, Unit] = {
-    val result = ComponentReleaseCoordinate.create(componentid.sharedIdentity, release)
-    if (result.isSuccess()) Right(())
-    else {
-      val error = result.error().get()
-      Left(s"reason=release-coordinate; context=$context; detail=${error.code()}: ${error.message()}")
-    }
-  }
-
-  private def _non_empty(
-    cursor: HCursor,
-    field: String,
-    context: String
-  ): Either[String, String] =
-    _required[String](cursor, field, context).flatMap { value =>
-      Either.cond(
-        value.nonEmpty && value == value.trim,
-        value,
-        s"reason=non-empty-field; context=$context; field=$field"
-      )
-    }
-
-  private def _required[A: Decoder](
-    cursor: ACursor,
-    field: String,
-    context: String
-  ): Either[String, A] =
-    cursor.get[A](field).left.map(error =>
-      s"reason=required-field; context=$context; field=$field; detail=${error.message}"
-    )
-
-  private def _only(
-    cursor: HCursor,
-    allowed: Set[String],
-    context: String
-  ): Either[String, Unit] = {
-    val unknown = cursor.keys.toVector.flatten.filterNot(allowed).sorted
-    Either.cond(
-      unknown.isEmpty,
-      (),
-      s"reason=unknown-field; context=$context; fields=${unknown.mkString(",")}"
-    )
-  }
-
-  private def _unique(
-    values: Vector[String],
-    field: String
-  ): Either[String, Unit] = {
-    val duplicates = values.groupBy(x => x).collect {
-      case (value, xs) if xs.size > 1 => value
-    }.toVector.sorted
-    Either.cond(
-      duplicates.isEmpty,
-      (),
-      s"reason=duplicate-entry; field=$field; values=${duplicates.mkString(",")}"
-    )
-  }
-
-  private def _sequence[A](
-    values: Vector[Either[String, A]]
-  ): Either[String, Vector[A]] =
-    values.foldLeft(Right(Vector.empty): Either[String, Vector[A]]) { (z, x) =>
-      for {
-        xs <- z
-        value <- x
-      } yield xs :+ value
-    }
-
-  private def _is_snapshot(value: String): Boolean =
-    value.endsWith("-SNAPSHOT")
-
-  private def _numeric_release(value: String): Option[(Int, Int, Int)] =
-    value match {
-      case _numeric_release_pattern(major, minor, patch) =>
-        try Some((major.toInt, minor.toInt, patch.toInt))
-        catch {
-          case _: NumberFormatException => None
-        }
-      case _ => None
-    }
-
-  private def _compare(
-    lhs: (Int, Int, Int),
-    rhs: (Int, Int, Int)
-  ): Int = {
-    val left = Vector(lhs._1, lhs._2, lhs._3)
-    val right = Vector(rhs._1, rhs._2, rhs._3)
-    left.zip(right).collectFirst {
-      case (l, r) if l != r => java.lang.Integer.compare(l, r)
-    }.getOrElse(0)
-  }
-
-  private val _numeric_release_pattern = "([0-9]+)\\.([0-9]+)\\.([0-9]+)".r
-  private val _qualified_release_pattern = "[0-9]+\\.[0-9]+\\.[0-9]+-.+".r
-  private val _strict_json_parser = JawnParser(allowDuplicateKeys = false)
 }

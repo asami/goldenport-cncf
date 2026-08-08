@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 21, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -100,17 +100,21 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
       operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation))
     )
     val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
-    val componentid = ComponentId(name.replace('-', '_'))
+    val localid = name.split("-").iterator.map(_.capitalize).mkString
+    val componentid = ComponentId(s"org.goldenport.cncf.$localid")
+    val displayname = name
     val factory = new Component.SinglePrimaryBundleFactory {
       override protected def create_Component(params: ComponentCreate): Component =
-        new Component() {}
+        new Component() {
+          override def displayName: String = displayname
+        }
 
       override protected def create_Core(
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          name,
+          componentid.name,
           componentid,
           ComponentInstanceId.default(componentid),
           protocol,
@@ -119,7 +123,7 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
     }
     factory.create(
       ComponentCreate(subsystem, ComponentOrigin.Main)
-        .withInstanceMetadata(ComponentInstanceMetadata(name, instance))
+        .withInstanceMetadata(ComponentInstanceMetadata(name, instance, componentId = Some(componentid)))
     ).primary.withMcpReadyServices(Set("Query"))
   }
 

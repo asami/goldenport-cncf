@@ -71,7 +71,7 @@ CID-01 closure evidence (2026-08-07):
   | CNCF E4 | `CID01-R6,R7` | `src/test/scala/org/goldenport/cncf/component/Phase56ComponentIdentityContractSpec.scala`; `src/main/scala/org/goldenport/cncf/subsystem/SubsystemAssemblyAdmission.scala`, `GenericSubsystemDescriptor.scala`, `GenericSubsystemFactory.scala`, and `Subsystem.scala` |
   | Cozy E5 | `CID01-R1,R2` | `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/scaffold/CozyScaffold.scala`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/archive/CozyArchivePackager.scala`, and `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/CozyCarPublisher.scala` |
   | Cozy E6 | `CID01-R3,R4` | `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/scaffold/CozyScaffold.scala`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyCarLint.scala`, and scenario-only `NotImplemented` `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/modeler/ProjectIdentityContractScenarioSpi.scala` |
-  | Cozy E7 | `CID01-R5,R6` | `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyCarLint.scala`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyRepositoryLint.scala`, and `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyBuildLint.scala` |
+  | Cozy E7 | `CID07-R1` | `/Users/asami/src/dev2026/cncf-collaborator-api/src/main/java/org/goldenport/cncf/component/identity/ComponentIdentityMigrationClassifier.java`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyCarIdentityLint.scala`, `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/lint/CozyCarLint.scala`, and `/Users/asami/src/dev2025/cozy/src/test/scala/cozy/modeler/Phase56ProjectIdentityContractSpec.scala` |
   | sbt-cozy E8 | `CID01-R1,R2,R3` | `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CozyPlugin.scala` and scenario-only `NotImplemented` `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala` |
   | sbt-cozy E9 | `CID01-R4,R5,R6` | `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarDependencyResolver.scala`, `CozyPlugin.scala` repository destinations, and scenario-only `NotImplemented` `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala` |
   | sbt-cozy E10 | `CID01-R7,R8,R9` | `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CozyPlugin.scala`, bridge/manifest generation, and scenario-only `NotImplemented` `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala` |
@@ -536,45 +536,207 @@ Independent focused re-review returned PASS with no findings and
 `FULL_REVIEW_REQUIRED=no`. The CID-06 Step feature-test/commit and Phase full
 validation remain pending.
 
-- [ ] Decode legacy descriptor `name`/`component` shapes through an explicit
+The final CID-06 Step accumulator `9227-20260808T062445Z` completed 19 suites
+and 306 tests with no failures, pending cases, aborts, or warnings; both exits
+were zero and the shared lock was released. Commit
+`6afab962ccd33431e6e2944c8d9191295d1a7f38`
+(`Preserve bounded component identity compatibility`) closes the CID-06 Step.
+Phase full validation remains pending.
+
+- [x] Decode legacy descriptor `name`/`component` shapes through an explicit
   compatibility adapter.
-- [ ] Admit known bare, artifact, prefixed, and legacy Web-path spellings only
+- [x] Admit known bare, artifact, prefixed, and legacy Web-path spellings only
   where a unique canonical identity is available.
-- [ ] Reject ambiguity and disagreement with structured diagnostics.
-- [ ] Emit only the new descriptor/project identity shape.
-- [ ] Record warning, observability, and removal policy for every alias.
-- [ ] Preserve non-SNAPSHOT legacy CAR releases without rewriting or
+- [x] Reject ambiguity and disagreement with structured diagnostics.
+- [x] Emit only the new descriptor/project identity shape.
+- [x] Record warning, observability, and removal policy for every alias.
+- [x] Preserve non-SNAPSHOT legacy CAR releases without rewriting or
   republishing them solely for identity migration.
 
 ## CID-07: CAR Lint and Development CAR Migration
 
 Stage Status:
-- Current status: PLANNED
+- Current status: ACCEPTED / REVIEWED / STEP_COMMIT_PENDING
 - Entry rule: CID-06 is complete.
 - Completion rule: CAR lint enforces the version-sensitive migration policy,
   every CAR in the frozen SNAPSHOT cohort uses canonical authoring, and every
   non-SNAPSHOT legacy CAR has a next-version migration entry.
 
-- [ ] Extend CAR lint to pass canonical identity with consistent projections.
-- [ ] Make legacy identity on a SNAPSHOT CAR a migration-required lint error.
-- [ ] Detect legacy identity on a non-SNAPSHOT CAR as a
+- [x] Extend CAR lint to pass canonical identity with consistent projections.
+- [x] Make legacy identity on a SNAPSHOT CAR a migration-required lint error.
+- [x] Detect legacy identity on a non-SNAPSHOT CAR as a
   deferred-to-next-version warning without invalidating the existing release.
-- [ ] Prove advancing a deferred CAR beyond its recorded release version,
+- [x] Prove advancing a deferred CAR beyond its recorded release version,
   whether to a SNAPSHOT or directly to another release, promotes that finding
   to a migration-required lint error.
-- [ ] Make canonical/derived disagreement a lint error regardless of version.
-- [ ] Include effective version, identity shape, expected projections,
+- [x] Make canonical/derived disagreement a lint error regardless of version.
+- [x] Include effective version, identity shape, expected projections,
   migration status, owner, and actionable path in lint diagnostics.
-- [ ] Migrate Textus User Account to
+- [x] Migrate Textus User Account to
   `org.simplemodeling.textus + UserAccount`.
-- [ ] Verify `org.simplemodeling.textus.UserAccount`,
+- [x] Verify `org.simplemodeling.textus.UserAccount`,
   `textus-user-account`, `UserAccountComponent`, and
   `org.simplemodeling.textus.useraccount` are projections, not copied inputs.
-- [ ] Migrate representative first-party CARs and one same-local-ID fixture.
-- [ ] Migrate every admitted CAR whose frozen effective version is SNAPSHOT;
+- [x] Migrate representative first-party CARs and one same-local-ID fixture.
+- [x] Migrate every admitted CAR whose frozen effective version is SNAPSHOT;
   do not limit Phase 56 adoption to representative fixtures.
-- [ ] Leave non-SNAPSHOT CAR releases unchanged and record their exact next
+- [x] Leave non-SNAPSHOT CAR releases unchanged and record their exact next
   development version migration owner and entry condition.
+
+Migration inventory acceptance (CID-07E):
+
+- [x] `textus-user-account` (CID-07B) is canonical and final lint has no FAIL.
+- [x] `textus-ai` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-art-scene` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-bok` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-control-center` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-scraper` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-supervisor` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-toolchain-runner` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-user-notification` (CID-07C) is canonical and final lint has no FAIL.
+- [x] `textus-aws` (CID-07D) is canonical and final lint has no FAIL.
+- [x] `textus-blog` (CID-07D) is canonical and final lint has no FAIL.
+- [x] `textus-cbd-support` (CID-07D) is canonical and final lint has no FAIL.
+- [x] `textus-knowledge-editor` (CID-07D) is canonical and final lint has no FAIL.
+- [x] `textus-semantic-integration-engine` (CID-07D) is canonical and final lint has no FAIL.
+- [x] Classify all 18/18 records: 14/14 canonical SNAPSHOT CARs and four
+  exact released deferrals.
+- [x] Keep `textus-corpus` 0.1.0 unchanged; corrective lint exits zero with
+  identity-deferred WARN and no FAIL.
+- [x] Keep `textus-experiment` 0.1.0 unchanged; corrective lint exits zero
+  with identity-deferred WARN and no FAIL.
+- [x] Keep `textus-georesolver` 0.2.1 unchanged; corrective lint exits zero
+  with identity-deferred WARN and no FAIL.
+- [x] Keep `textus-sanpomap` 0.2.1 unchanged; corrective lint exits zero with
+  identity-deferred WARN and no FAIL.
+
+The frozen implementation sequence and worktree-collision gate are recorded in
+the [CID-07 CAR lint and development migration plan](../notes/phase-56-cid07-car-lint-and-development-migration-plan.md).
+CID-07A is implemented and review-fixed. Final focused evidence is collaborator
+API `22292` (27 tests), publishLocal `22502`, CNCF `22679` (23 tests), and Cozy
+`23433` (30 tests), all with zero failures and released locks. Independent
+focused re-review closed one stale E7 ledger row and returned PASS with no
+findings and `FULL_REVIEW_REQUIRED=no`. CID-07A is ACCEPTED / REVIEWED.
+CID-07B implementation evidence is SimpleModeler `38242` / publish `38436`,
+Cozy `40022` / publish `40358`, sbt-cozy `40696` / publish `40900`, User
+Account `42502`, and exit-zero canonical `cozy lint car` JSON. Independent
+review findings RF-CID07B-001/002 are repaired: E8 now exercises actual lint
+for equal local IDs under distinct namespaces, and edited Scala headers are
+current/compressed. Corrective validation is Cozy `49328` (55 tests) and User
+Account `49550` (1 test), both with zero failures and released locks. Focused
+re-review returned PASS with no findings and `FULL_REVIEW_REQUIRED=no`;
+CID-07B is ACCEPTED / REVIEWED. CID-07C is ACCEPTED / REVIEWED.
+RF-CID07C-001 through RF-CID07C-008 repair
+canonical User Notification selectors, ArtScene descriptor truth, admitted
+parameter naming, Scala headers, executable-spec metadata, actual Cozy
+publisher lifecycle evidence, and checklist truth. Its prior focused markers
+are historical only: Textus AI `56453` (26 tests), ArtScene `75354`
+(8 tests, using target-local Scraper CAR publication `70824`), BoK `87430`,
+Control Center `81667`, Scraper `64539`, Supervisor `82759`, Toolchain Runner
+`84531`, User Account `49550`, and User Notification `85662`. All final SBT
+markers exit zero with released locks. Normal Cozy CAR lint for all nine
+projects historically exited zero, reported each exact canonical identity, and
+had no FAIL finding. Corrective post-review-fix validation is Cozy `98391`
+(31 tests; superseding compile failure `97994`), ArtScene `98798` (8), Textus
+AI `99544` (25), BoK `99900` (1), Control Center `203` (3), Scraper `472`
+(3), Supervisor `816` (2), Toolchain Runner `1016` (7), and User Notification
+`1185` (24). Every final marker exited zero with its lock released. Corrective
+User Notification CAR lint exited zero with the exact canonical identity and
+no FAIL finding. The first focused re-review closed RF-CID07C-001 through -007
+but found BoK's legacy ABI dependency field. RF-CID07C-008 aligns
+`org.simplemodeling.textus.SemanticIntegrationEngine` in `project.yaml` and
+the ABI v2 manifest; `8279-20260808T104439Z` built the BoK CAR and passed its
+1-test component spec with both exits zero and the lock released. Independent
+focused re-review closed RF-CID07C-008 with PASS, no findings, and
+`FULL_REVIEW_REQUIRED=no`. CID-07D is ACCEPTED / REVIEWED. REVIEW_FIX findings
+`CID07D-R1` (stale Scala
+`@version` headers) and `CID07D-R2` (Knowledge Editor assembly-identity
+executable-spec structure) are applied. The official port-inclusion authority
+is Textus Control Center's `docs/spec/default-server-port-registry.md`; the
+five exact current hunks are explicitly user-authorized CID-07D scope, while
+unrelated pre-existing changes remain excluded. Pre-fix final focused
+validation evidence is AWS `47205` (2/2), Blog `47523` (30/30), CBD `36824`
+(14/14), Knowledge Editor `41016` (124/124), framework `44150` (27/27) plus
+`publishLocal` `44394`, and SIE `49993` (33/33), all exits zero with released
+locks. Final Cozy CAR lint for all five collision repositories exited zero with
+no FAIL findings. Post-review-fix focused validation invocation
+`58134-20260808T130002Z` used the exact serialized wrapper command
+`/Users/asami/.codex/skills/cncf-sbt-serial-execution/scripts/run-sbt-serial.sh --batch 'cozyBuildCar; testOnly org.goldenport.textus.knowledge.editor.ComponentFactorySpec'`.
+The CAR was built; one suite completed with 125 tests succeeded and zero
+failed, aborted, canceled, ignored, or pending, with `sbt_exit=0`,
+`wrapper_exit=0`, and `lock=released`. Nonblocking warnings were unused
+`cozyCarName`, SNAPSHOT, mutable-pair, and nine deprecation warnings. Post-fix
+full review returned PASS with Actionable findings 0; `CID07D-R1` and
+`CID07D-R2` are CLOSED and `FULL_REVIEW_REQUIRED=no`. CID-07D is ACCEPTED /
+REVIEWED. No CID-07D commit has been made; CID-07E is implemented with Step
+full review pending. The CID-07 Step commit and Phase full validation remain
+pending.
+CID-07E is `ACCEPTED / REVIEWED`: 18/18 inventory records
+are classified, 14/14 SNAPSHOT CARs are canonical with final lint showing no
+FAIL, and the four exact released deferrals (Corpus 0.1.0, Experiment 0.1.0,
+GeoResolver 0.2.1, Sanpomap 0.2.1) now lint exit zero with valid JSON,
+identity-deferred WARN, and no FAIL. Those four source repositories were not
+modified. CID-07D remains ACCEPTED / REVIEWED.
+
+TEST_FIX #1: the initial four deferral lints classified identity correctly but
+exited 1 on compatibility metadata. Corpus and Experiment reported typed
+`ReleaseGenerationPairRejected` (authored 0.3.0 versus executing
+0.3.4-SNAPSHOT); GeoResolver and Sanpomap reported typed
+`CozyVersionMissing`. Cozy lint downgrades only those two typed diagnostics to
+WARN when the exact identity code is
+`CAR_COMPONENT_IDENTITY_MIGRATION_DEFERRED`; every other state/diagnostic
+remains FAIL. E-CID07E-1..3 cover Corpus, GeoResolver, and the canonical User
+Account negative case. Validation `63778-20260808T131546Z` used the exact
+serialized wrapper `testOnly CozyCarLintSpec +
+Phase56ProjectIdentityContractSpec`: two suites, 34 successes, zero other
+statuses, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Corrective four
+Cozy lints exited zero with valid JSON, no FAIL, empty stderr, and no source
+mutation.
+
+STEP REVIEW_FIX #1 (`CID07-FR-001`) closes the registered legacy local-ID
+fail-open path. `ComponentIdentityMigrationClassifier` now validates the
+registered `legacyLocalId` before exact, SNAPSHOT, or stable release branches
+and returns `INVENTORY_ERROR` / `local-id-mismatch`; the exact-release check is
+no longer duplicated. The Java classifier matrix adds advanced SNAPSHOT with a
+wrong local ID and advanced stable with a missing local ID. The Cozy E7
+projection spec adds matching `textus-corpus` wrong-class/local cases while
+retaining valid advanced `MIGRATION_REQUIRED` cases. Focused validation of
+`ComponentIdentityMigrationClassifierTest` and
+`Phase56ProjectIdentityContractSpec` passed. Collaborator API invocation
+`70784-20260808T133527Z` passed 27 tests with zero failures, errors, or ignored
+tests, exited 0, and released its lock; `publishLocal` invocation
+`71030-20260808T133554Z` published coordinate
+`org.goldenport:cncf-collaborator-api:0.2.0-SNAPSHOT`, exited 0, and released
+its lock (an initial invalid working directory did not launch SBT); Cozy
+invocation `71199-20260808T133608Z` passed 2 suites and 34 tests with zero
+failures, errors, ignored, aborted, canceled, or pending statuses, exited 0,
+and released its lock. CID07-FR-001 post-fix validation passed. Independent
+focused re-review closed CID07-FR-001 with no new finding, zero actionable
+findings, `FULL_REVIEW_REQUIRED=no`, and PASS.
+
+Commit-manifest validation closed `CID07-VF-002` through `CID07-VF-004`:
+User Account uses validated `sbt-cozy 0.1.20-SNAPSHOT` (`84492`, CAR + 1/1),
+Control Center projects canonical assembly/SPI/config/security identities
+(`88259`, CAR + 3/3), and ArtScene removes duplicate source descriptor authority
+while E3 checks the packaged schema-3 descriptor (`90629`, CAR + three suites /
+8 tests). The serialized chain completed at `91574-20260808T142233Z`; all
+accepted invocations exited zero and released the lock. Focused re-review found
+no actionable issue and returned PASS with `FULL_REVIEW_REQUIRED=no`. Official
+registry port hunks remain admitted and unchanged.
+
+Parent scope clarification: path-level staging is safe. The Blog source
+`BundleFactory` duplicate is excluded because the managed generated file has
+identical SHA-1 `e39535...`; the official port inclusion is preserved. CID-07
+A-E are accepted/reviewed. No Step commit or full Phase claim is made; Step
+feature validation/commit remains pending.
+
+The Cozy repair is accepted/reviewed and the CID-07 Step commit is not claimed.
+Step feature validation/commit and Phase full validation remain pending. The
+five official registry port hunks admitted in CID-07D
+remain in scope for the eventual commit.
+Existing separate debt is the coordinated Cozy `Resolved.projectrelativepath`
+rename and BoK WARN-only nominal wrappers; protected unrelated paths remain
+unchanged.
 
 ## CID-08: Ecosystem Regression and Normative Closure
 

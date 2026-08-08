@@ -14,7 +14,7 @@ import org.goldenport.schema.{Multiplicity, XBoolean, XDouble, XFloat, XInt, XIn
  * Provider-neutral CNCF Operation tool values.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationToolSetId private (value: String) {
@@ -245,7 +245,7 @@ object OperationToolDefinitionBuilder {
     service: ServiceDefinition,
     operation: OperationDefinition
   ): Consequence[OperationToolDefinition] =
-    _definition_c(component.name, Some(component), service, operation)
+    _definition_c(component.displayName, Some(component), service, operation)
 
   def definitionC(
     componentname: String,

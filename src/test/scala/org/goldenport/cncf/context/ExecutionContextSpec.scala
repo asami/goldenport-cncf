@@ -14,10 +14,13 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version May.  5, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _e1 = afterWord(
+    "in spec:execution-context, example:E1, rules:CID07D-R1, phase:56, slice:CID-07D"
+  )
 
   "ExecutionContext" should {
 
@@ -258,6 +261,23 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
       ctx.minor shouldBe "osaka_02"
       ctx.clock should be theSameInstanceAs runtimeclock.clock
       ctx.clock.instant() shouldBe virtualstart
+    }
+
+    "security-context rebinding" which {
+      "E1 propagate the replacement security context into Unit of Work execution" must _e1 {
+        "when a component execution context receives an authenticated privilege" in {
+          Given("a runtime context whose Unit of Work is bound to its original user security")
+          val base = ExecutionContext.create(SecurityContext.Privilege.User)
+          val elevated = ExecutionContext.create(SecurityContext.Privilege.ApplicationContentManager).security
+
+          When("the execution security is replaced through the public context helper")
+          val secured = ExecutionContext.withSecurityContext(base, elevated)
+
+          Then("the returned context and its Unit of Work observe the same replacement security")
+          secured.security shouldBe elevated
+          secured.unitOfWork.executionContext.security shouldBe elevated
+        }
+      }
     }
   }
 

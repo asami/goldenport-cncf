@@ -23,7 +23,7 @@ import scala.reflect.ClassTag
 import org.goldenport.cncf.context.{CorrelationId, EntitySpaceContext, ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBehavior, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.configuration.{Configuration, ConfigurationValue}
+import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.cncf.http.{HttpDriver, WebMessageCatalog, WebPageContextProvider}
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterBootstrap, ComponentParameterKey, ComponentParameterPathRoute}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
@@ -2359,6 +2359,9 @@ final case class ComponentCreate(
   assemblyApiClassLoader: Option[ClassLoader] = None
 ) {
   private[cncf] def subsystem: Subsystem = assembly.subsystem
+
+  /** Read-only runtime configuration available to external component factories. */
+  def configuration: ResolvedConfiguration = assembly.subsystem.configuration
 
   def withOrigin(p: ComponentOrigin) = copy(origin = p)
 

@@ -16,11 +16,13 @@ import org.simplemodeling.model.datatype.EntityId
 /*
  * @since   May. 20, 2026
  *  version May. 30, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
 object InformationId {
+  def apply(value: String): InformationId = createC(value).TAKE
+
   def createC(value: String): Consequence[InformationId] =
     Option(value)
       .map(_.trim)

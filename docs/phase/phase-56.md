@@ -173,9 +173,146 @@ not silently infer a namespace or rewrite project metadata.
 | CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | accepted/reviewed |
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. CID-04E adds the CNCF v2 index reader and direct canonical resolver while legacy runtime repository migration remains CID-05/06. | done |
 | CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | done |
-| CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | in progress |
-| CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | planned |
+| CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | done; committed |
+| CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | ACCEPTED / REVIEWED / STEP_COMMIT_PENDING |
 | CID-08 | Ecosystem regression and normative closure | Representative samples, launchers, CBD/BoK metadata, and dependency consumers adopt the contract; cross-repository tests, migration guidance, design/spec promotion, review, compatibility ledger, and release evidence close the phase. | planned |
+
+CID-07A is implemented and review-fixed while the CID-07 Step remains in
+progress. The exact registry and classification authority now lives in the
+shared Java ABI, CNCF consumes it through its existing runtime adapter, and
+Cozy CAR lint exposes canonical, migration-required, exact-deferred,
+inventory-error, and projection-disagreement results. Final focused evidence
+is collaborator API `22292-20260808T070443Z` (27 tests), publishLocal
+`22502-20260808T070455Z`, CNCF `22679-20260808T070510Z` (23 tests), and Cozy
+`23433-20260808T070648Z` (30 tests), all with zero failures and released locks.
+Independent focused re-review closed one stale Cozy E7 authority-ledger row and
+returned PASS with no findings and `FULL_REVIEW_REQUIRED=no`; CID-07A is
+ACCEPTED / REVIEWED. CID-07B now carries canonical identity through the
+SimpleModeler, Cozy, sbt-cozy, and User Account build/runtime boundary. Focused
+evidence is SimpleModeler `38242` plus publish `38436`, Cozy `40022` plus
+publish `40358`, sbt-cozy `40696` plus publish `40900`, User Account `42502`,
+and an exit-zero canonical `cozy lint car` result. Independent review findings
+RF-CID07B-001/002 are repaired; review-fix evidence is Cozy `49328` (55 tests)
+and User Account `49550` (1 test), both with zero failures and released locks.
+CID-07B focused re-review returned PASS with no findings and
+`FULL_REVIEW_REQUIRED=no`; CID-07B is ACCEPTED / REVIEWED. CID-07C review fixes
+RF-CID07C-001 through RF-CID07C-008 are applied and carry
+canonical build, descriptor, ABI, generated Core, and runtime identity through
+the nine noncolliding SNAPSHOT repositories. The prior focused evidence is
+historical only: Textus AI
+`56453` (26 tests), ArtScene `75354` (8 tests with isolated Scraper CAR
+`70824`), BoK `87430`, Control Center `81667`, Scraper `64539`, Supervisor
+`82759`, Toolchain Runner `84531`, User Account `49550`, and User Notification
+`85662`; every historical marker exited zero with the lock released. Normal
+Cozy CAR lint historically reported the exact canonical identity and no FAIL
+finding for all nine projects. Corrective post-review-fix evidence is Cozy
+`98391` (31 tests; superseding compile failure `97994`), ArtScene `98798`
+(8), Textus AI `99544` (25), BoK `99900` (1), Control Center `203` (3),
+Scraper `472` (3), Supervisor `816` (2), Toolchain Runner `1016` (7), and
+User Notification `1185` (24). Every final marker exited zero with the lock
+released. Corrective User Notification CAR lint exited zero with its exact
+canonical identity and no FAIL finding. The first focused re-review closed
+RF-CID07C-001 through -007 but found BoK's legacy ABI dependency field;
+RF-CID07C-008 now aligns the exact
+`org.simplemodeling.textus.SemanticIntegrationEngine` dependency in
+`project.yaml` and the ABI v2 manifest. Invocation
+`8279-20260808T104439Z` built the BoK CAR and passed its 1-test component spec
+with both exits zero and the lock released. Independent focused re-review
+closed RF-CID07C-008 with PASS, no findings, and
+`FULL_REVIEW_REQUIRED=no`; CID-07C is ACCEPTED / REVIEWED. No CID-07C commit
+or Phase full-validation claim is made. Separate debt is the coordinated Cozy
+`Resolved.projectrelativepath` rename and BoK WARN-only nominal wrappers;
+protected unrelated paths remain unchanged. CID-07D is
+ACCEPTED / REVIEWED. REVIEW_FIX findings
+`CID07D-R1` (stale Scala `@version` headers) and `CID07D-R2` (Knowledge Editor
+assembly-identity executable-spec structure) are applied. The official
+port-inclusion authority is Textus Control Center's
+`docs/spec/default-server-port-registry.md`; the five exact current hunks are
+explicitly user-authorized CID-07D scope, while unrelated pre-existing changes
+remain excluded. Pre-fix final focused validation evidence is AWS `47205`
+(2/2), Blog `47523` (30/30), CBD `36824` (14/14), Knowledge Editor `41016`
+(124/124), framework `44150` (27/27) plus `publishLocal` `44394`, and SIE
+`49993` (33/33), all exits zero with released locks. Final Cozy CAR lint for
+all five collision repositories exited zero with no FAIL findings. Post-review-
+fix focused validation invocation `58134-20260808T130002Z` used the exact
+serialized wrapper command
+`/Users/asami/.codex/skills/cncf-sbt-serial-execution/scripts/run-sbt-serial.sh --batch 'cozyBuildCar; testOnly org.goldenport.textus.knowledge.editor.ComponentFactorySpec'`.
+The CAR was built; one suite completed with 125 tests succeeded and zero
+failed, aborted, canceled, ignored, or pending, with `sbt_exit=0`,
+`wrapper_exit=0`, and `lock=released`. Nonblocking warnings were unused
+`cozyCarName`, SNAPSHOT, mutable-pair, and nine deprecation warnings. Post-fix
+full review returned PASS with Actionable findings 0; `CID07D-R1` and
+`CID07D-R2` are CLOSED and `FULL_REVIEW_REQUIRED=no`. CID-07D is ACCEPTED /
+REVIEWED. No CID-07D commit has been made; CID-07E is accepted/reviewed. The
+CID-07 Step commit and Phase full validation remain
+pending.
+
+CID-07E is `ACCEPTED / REVIEWED`. The frozen inventory is
+18/18 classified: all 14/14 SNAPSHOT CARs are canonical and final lint has no
+FAIL findings, using accepted Slice evidence for User Account from CID-07B,
+eight CARs from CID-07C, and five CARs from CID-07D. The exact four released
+deferrals are Corpus 0.1.0, Experiment 0.1.0, GeoResolver 0.2.1, and Sanpomap
+0.2.1. Their corrective lints exit zero with valid JSON, identity-deferred
+WARN, and no FAIL; the four source repositories were not modified. CID-07D
+remains ACCEPTED / REVIEWED.
+
+TEST_FIX #1 records that the initial four deferral lints classified identity
+correctly but exited 1 on compatibility metadata: Corpus and Experiment had
+`ReleaseGenerationPairRejected` (authored 0.3.0 versus executing
+0.3.4-SNAPSHOT), and GeoResolver and Sanpomap had `CozyVersionMissing`. Cozy
+lint downgrades only typed `CozyVersionMissing` and
+`ReleaseGenerationPairRejected` to WARN when the exact identity code is
+`CAR_COMPONENT_IDENTITY_MIGRATION_DEFERRED`; every other state or diagnostic
+remains FAIL. E-CID07E-1..3 cover Corpus, GeoResolver, and the canonical User
+Account negative case. Validation `63778-20260808T131546Z` used the exact
+serialized wrapper `testOnly CozyCarLintSpec +
+Phase56ProjectIdentityContractSpec`: two suites, 34 successes, zero other
+statuses, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Corrective four
+Cozy lints exited zero with valid JSON, no FAIL, empty stderr, and no source
+mutation.
+
+STEP REVIEW_FIX #1 (`CID07-FR-001`) closes the registered legacy local-ID
+fail-open path. `ComponentIdentityMigrationClassifier` now validates the
+registered `legacyLocalId` before exact, SNAPSHOT, or stable release branches
+and returns `INVENTORY_ERROR` / `local-id-mismatch`; the exact-release check is
+no longer duplicated. The Java classifier matrix adds advanced SNAPSHOT with a
+wrong local ID and advanced stable with a missing local ID. The Cozy E7
+projection spec adds matching `textus-corpus` wrong-class/local cases while
+retaining valid advanced `MIGRATION_REQUIRED` cases. Focused validation of
+`ComponentIdentityMigrationClassifierTest` and
+`Phase56ProjectIdentityContractSpec` passed. Collaborator API invocation
+`70784-20260808T133527Z` passed 27 tests with zero failures, errors, or ignored
+tests, exited 0, and released its lock; `publishLocal` invocation
+`71030-20260808T133554Z` published coordinate
+`org.goldenport:cncf-collaborator-api:0.2.0-SNAPSHOT`, exited 0, and released
+its lock (an initial invalid working directory did not launch SBT); Cozy
+invocation `71199-20260808T133608Z` passed 2 suites and 34 tests with zero
+failures, errors, ignored, aborted, canceled, or pending statuses, exited 0,
+and released its lock. CID07-FR-001 post-fix validation passed. Independent
+focused re-review closed CID07-FR-001 with no new finding, zero actionable
+findings, `FULL_REVIEW_REQUIRED=no`, and PASS.
+
+Commit-manifest validation also closed `CID07-VF-002` through
+`CID07-VF-004`: User Account now consumes validated `sbt-cozy
+0.1.20-SNAPSHOT` (`84492`, CAR + 1/1); Control Center carries canonical
+assembly/SPI/config/security identities (`88259`, CAR + 3/3); and ArtScene
+removes duplicate source descriptor authority while E3 verifies the packaged
+schema-3 descriptor (`90629`, CAR + three suites / 8 tests). The serialized
+chain completed at `91574-20260808T142233Z`; accepted invocations exited zero
+and released the shared lock. Focused re-review returned PASS, no findings, and
+`FULL_REVIEW_REQUIRED=no`. Official registry port hunks remain admitted and
+unchanged.
+
+Parent scope clarification: path-level staging is safe. The Blog source
+`BundleFactory` duplicate is excluded because the managed generated file has
+identical SHA-1 `e39535...`; the official port inclusion is preserved. CID-07
+A-E are accepted/reviewed. No Step commit or full Phase claim is made; Step
+feature validation/commit remains pending.
+
+The Cozy repair is accepted/reviewed and the CID-07 Step commit is not claimed.
+Step feature validation/commit and Phase full validation remain pending. The
+five official registry port hunks admitted in CID-07D
+remain in scope for the eventual commit.
 
 CID-05 slice ledger is committed and done:
 
@@ -332,6 +469,13 @@ all 10 tests without warnings, with both exits zero and the lock released.
 Independent focused re-review returned PASS with no findings and
 `FULL_REVIEW_REQUIRED=no`. The CID-06 Step feature-test/commit and Phase full
 validation remain pending.
+
+The final CID-06 Step accumulator `9227-20260808T062445Z` completed all 19
+suites with 306 tests succeeded, zero failed/canceled/ignored/pending/aborted,
+no warnings, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Commit
+`6afab962ccd33431e6e2944c8d9191295d1a7f38`
+(`Preserve bounded component identity compatibility`) closes the CID-06 Step.
+Only Phase full validation remains pending.
 
 CID-06C review-fix implementation is recorded in the separate
 [runtime selector and compatibility observability plan](../notes/phase-56-cid06c-runtime-selector-observability-plan.md).

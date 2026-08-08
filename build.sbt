@@ -6,7 +6,7 @@ import java.util.Base64
 import org.goldenport.cncf.phase51.build.{CncfGenerationBuildContract, CncfGenerationInputs}
 
 val scala3Version = "3.3.8"
-val cozyGeneratorVersion = "0.3.1-SNAPSHOT"
+val cozyGeneratorVersion = "0.3.4-SNAPSHOT"
 
 Compile / javacOptions ++= Seq("--release", "8")
 Test / javacOptions := Seq("--release", "14")

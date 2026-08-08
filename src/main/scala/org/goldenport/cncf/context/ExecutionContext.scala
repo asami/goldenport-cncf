@@ -48,7 +48,7 @@ import cats.~>
  *  version Apr. 25, 2026
  *  version May. 31, 2026
  *  version Jul. 31, 2026
- * @version Aug.  5, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -688,9 +688,9 @@ object ExecutionContext {
     security: SecurityContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
-      i.copy(
+      _rebind_runtime_context(i.copy(
         cncfCore = i.cncfCore.copy(security = security)
-      )
+      ))
     case _ =>
       ctx
   }
