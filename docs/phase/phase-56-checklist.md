@@ -52,10 +52,9 @@ CID-01 closure evidence (2026-08-07):
 
 - [Inventory and failing-first contract](../notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md)
   and [CAR migration ledger](../notes/phase-56-cid01-car-migration-ledger.yaml) are
-  the exact implementation-freeze artifacts. The inventory note is the
-  authoritative Phase-56 working specification until CID-08 normative
-  promotion; it is not the final normative design, and executable leaves remain
-  target pending.
+  the exact implementation-freeze artifacts. CID-08 promoted the inventory
+  note to the normative Component identity design and specification; the note
+  remains historical evidence rather than a second authority.
 - The ledger contains exactly 18 eligible CAR repositories: 14
   `SNAPSHOT` records in the mandatory migration cohort and four current-release
   deferrals (`textus-corpus` 0.1.0, `textus-experiment` 0.1.0,
@@ -668,9 +667,8 @@ failed, aborted, canceled, ignored, or pending, with `sbt_exit=0`,
 `cozyCarName`, SNAPSHOT, mutable-pair, and nine deprecation warnings. Post-fix
 full review returned PASS with Actionable findings 0; `CID07D-R1` and
 `CID07D-R2` are CLOSED and `FULL_REVIEW_REQUIRED=no`. CID-07D is ACCEPTED /
-REVIEWED. No CID-07D commit has been made; CID-07E is implemented with Step
-full review pending. The CID-07 Step commit and Phase full validation remain
-pending.
+REVIEWED. CID-07D and CID-07E were accepted/reviewed before the completed
+CID-07 Step commit. Phase full validation remains pending.
 CID-07E is `ACCEPTED / REVIEWED`: 18/18 inventory records
 are classified, 14/14 SNAPSHOT CARs are canonical with final lint showing no
 FAIL, and the four exact released deferrals (Corpus 0.1.0, Experiment 0.1.0,
@@ -727,13 +725,12 @@ registry port hunks remain admitted and unchanged.
 Parent scope clarification: path-level staging is safe. The Blog source
 `BundleFactory` duplicate is excluded because the managed generated file has
 identical SHA-1 `e39535...`; the official port inclusion is preserved. CID-07
-A-E are accepted/reviewed. No Step commit or full Phase claim is made; Step
-feature validation/commit remains pending.
+A-E are accepted/reviewed and the CID-07 Step commit is complete. No full
+Phase claim is made; Phase full validation remains pending.
 
-The Cozy repair is accepted/reviewed and the CID-07 Step commit is not claimed.
-Step feature validation/commit and Phase full validation remain pending. The
-five official registry port hunks admitted in CID-07D
-remain in scope for the eventual commit.
+The Cozy repair is accepted/reviewed and included in the completed CID-07 Step
+commit. Phase full validation remains pending. The five official registry port
+hunks admitted in CID-07D were included in that Step commit.
 Existing separate debt is the coordinated Cozy `Resolved.projectrelativepath`
 rename and BoK WARN-only nominal wrappers; protected unrelated paths remain
 unchanged.
@@ -741,29 +738,41 @@ unchanged.
 ## CID-08: Ecosystem Regression and Normative Closure
 
 Stage Status:
-- Current status: PLANNED
+- Current status: ACCEPTED / REVIEWED / STEP_COMMIT_PENDING
 - Entry rule: CID-07 is complete.
 - Completion rule: Cross-repository evidence, CAR lint results, and normative
   documentation show exactly one identity authority and a complete migration
   ledger.
 
-- [ ] Update launchers, samples, CBD Support, BoK, repository metadata, and
-  downstream dependency consumers.
-- [ ] Verify existing admitted Web routes through compatibility aliases.
-- [ ] Run focused and full validation for every modified repository under the
-  required serialized SBT execution policy.
-- [ ] Run CAR generation, packaging, publication-local, repository-resolution,
-  launcher, and representative runtime acceptance.
-- [ ] Perform independent review of collisions, compatibility, routing,
-  package generation, and coordinate integrity.
-- [ ] Promote verified behavior to CNCF/Cozy design and specification.
-- [ ] Publish migration guidance for CAR authors and downstream consumers.
-- [ ] Record exact commits, commands, results, remaining aliases, and removal
-  owners before closing Phase 56.
-- [ ] Record a lint-clean result for every frozen SNAPSHOT CAR and a complete
-  next-version deferral report for every non-SNAPSHOT legacy CAR.
-- [ ] Update Phase 57 entry contracts to consume the qualified Component,
-  Service, Operation, and runtime routing identities without reopening Phase
-  56 naming decisions.
-- [ ] Update Phase 58 entry contracts to consume the qualified Component
-  identity without reopening Phase 56 naming decisions.
+- [x] Audit launchers, samples, CBD Support, BoK, repository metadata, and
+  downstream consumers; retain artifact, subsystem, and Web alias spellings as
+  non-authoritative compatibility/presentation metadata.
+- [x] Verify existing admitted Web routes remain compatibility aliases.
+- [x] Statically confirm the normative promotion against behavior already
+  validated by CID-01 through CID-07.
+- [x] Check normative links and the exact CID-08 diff.
+- [x] Admit CID-07 CAR generation, packaging, local publication,
+  repository-resolution, launcher, and representative runtime evidence.
+- [x] Perform one independent CID-08 review.
+- [x] Promote verified behavior to normative Component identity design and
+  specification.
+- [x] Publish migration guidance for CAR authors and downstream consumers.
+- [x] Record completed Step commits, remaining aliases, deferral owners, and
+  removal gates.
+- [x] Record 14 lint-clean canonical SNAPSHOT CARs and four exact next-version
+  release deferrals.
+- [x] Verify Phase 57 consumes the closed qualified parent Component identity
+  without reopening Phase 56 naming decisions.
+- [x] Verify Phase 58 consumes the same qualified Component identity for Help
+  and knowledge resources without reopening Phase 56 naming decisions.
+
+CID-08 adds no permanent closure test and runs no CID-08-specific SBT command.
+The toolchain remains `sbt-cozy 0.1.20-SNAPSHOT` and
+`cozy 0.3.4-SNAPSHOT`. Repository-wide and ecosystem-wide full validation
+remains the Phase 56 release gate.
+
+The single independent review found two documentation-only lifecycle
+contradictions: stale CID-07 commit-pending text and stale CID-01
+`pendingUntilFixed` present-tense text. Both are corrected in the CID-08 diff;
+`FULL_REVIEW_REQUIRED=no`. Static link and diff checks pass. No duplicate
+review or CID-08-specific SBT run is required. The Step commit is pending.

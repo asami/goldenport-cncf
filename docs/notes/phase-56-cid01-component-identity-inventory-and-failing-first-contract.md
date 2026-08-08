@@ -1,6 +1,6 @@
 # Phase 56 CID-01 - Component Identity Inventory and Failing-first Contract
 
-status=authoritative Phase-56 working specification until CID-08 normative promotion
+status=promoted to docs/design/component-identity.md and docs/spec/component-identity.md by CID-08
 date=2026-08-07
 phase = [Phase 56](../phase/phase-56.md)
 checklist = [Phase 56 checklist](../phase/phase-56-checklist.md)
@@ -8,11 +8,11 @@ ledger = [CAR migration ledger](phase-56-cid01-car-migration-ledger.yaml)
 step = CID-01 - inventory and executable contract freeze
 slices = CID-01A, CID-01B, CID-01C, CID-01D, CID-01E
 
-This note is the authoritative Phase-56 working specification until CID-08
-normative promotion. It is not the final typed identity design or normative
-specification. Current worktrees provide documentary evidence only; no CAR was
-mutated, and every executable leaf remains a target contract under
-`pendingUntilFixed` until its owning implementation stage.
+This note is the historical Phase-56 inventory and failing-first contract.
+CID-08 promoted its verified rules to
+`docs/design/component-identity.md` and `docs/spec/component-identity.md`, which
+are now normative. The inventory and stable rule IDs remain evidence; they are
+not a second identity authority.
 
 ## Sole authority contract
 
@@ -38,10 +38,11 @@ later. The qualified ID is `namespace + "." + exact local id`.
 
 ## Stable CID-01 rules
 
-The following rules are stable working-spec rules for CID-01. They remain the
-implementation contract until CID-08 promotes verified behavior to the final
-normative design and specification. The rule IDs are domain-scoped; the same
-numeric ID in CNCF, Cozy, and sbt-cozy is not an alternate cross-domain rule.
+The following rules were the stable working-spec rules frozen by CID-01.
+CID-08 has promoted their verified behavior to the final normative design and
+specification; these IDs remain historical traceability keys. The rule IDs are
+domain-scoped, so the same numeric ID in CNCF, Cozy, and sbt-cozy is not an
+alternate cross-domain rule.
 
 ### CNCF component identity rules
 
@@ -164,11 +165,11 @@ it is not a canonical identity.
 
 ## Cross-repository acceptance registry
 
-The exact acceptance identities below are frozen for CID-01. Ownership is the
-repository path that must provide the later behavior; this step records
-documentary evidence and target-pending executable leaves only. A scenario-only
-`NotImplemented` SPI path is a deferred boundary, not an identity algorithm or
-public API behavior.
+The exact acceptance identities below record the CID-01 freeze. Ownership is
+the repository path that subsequently provided the behavior in CID-02 through
+CID-07. References to pending targets describe their state at the CID-01
+freeze, not their current status. A scenario-only `NotImplemented` SPI path was
+a deferred boundary, not an identity algorithm or public API behavior.
 
 | Identity | Stable rules and documentary target | Owning path / stage |
 | --- | --- | --- |
@@ -183,16 +184,14 @@ public API behavior.
 | sbt-cozy E9 | `CID01-R4,R5,R6`: namespace-retaining dependency/repository/cache keys and filename-collision isolation; documentary target pending at the same scenario-only `NotImplemented` SPI boundary. | sbt-cozy `CarDependencyResolver.scala`, repository destinations, and `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala`; CID-04 |
 | sbt-cozy E10 | `CID01-R7,R8,R9`: actual metadata admission, descriptor/manifest agreement, and semantic conflict rejection; documentary target pending at the same scenario-only `NotImplemented` SPI boundary. | sbt-cozy bridge/manifest generation and `/Users/asami/src/dev2026/sbt-cozy/src/main/scala/org/goldenport/cozy/CarCoordinateContractScenarioSpi.scala`; CID-03/CID-04 |
 
-## Documentary evidence and pending target pairings
+## Historical documentary evidence and target pairings
 
-The current worktrees and inventories are documentary evidence only. The CNCF
-executable leaves in `src/test/scala/org/goldenport/cncf/component/Phase56ComponentIdentityContractSpec.scala`
-contain no current-behavior assertions and no test-only production seam. Each
-E1-E4 leaf has one terminal `pendingUntilFixed` block containing the precise
-target behavior; CID-02 through CID-07 own the implementations that may later
-remove the pending state. Cozy and sbt-cozy entries likewise remain documentary
-target pairings at scenario-only `NotImplemented` SPI boundaries and add no
-identity algorithm or API behavior in CID-01.
+At the CID-01 freeze, the worktrees and inventories were documentary evidence
+and each CNCF E1-E4 leaf ended in `pendingUntilFixed`. CID-02 through CID-07
+subsequently implemented the behavior and activated those assertions; the
+current `Phase56ComponentIdentityContractSpec` has no CID-01 terminal pending
+block. Cozy and sbt-cozy likewise replaced their scenario-only target
+boundaries with the accepted implementations recorded by their owning Steps.
 
 * E1 targets compatibility parsing: bare `UserAccount` rejects
   (`CID01-R1,R2`). Qualified admission belongs exclusively to E3
@@ -204,18 +203,19 @@ identity algorithm or API behavior in CID-01.
   ambiguous bare `UserAccount`, with a diagnostic naming both candidates
   (`CID01-R6,R7`).
 
-CID-01 makes no red-build or implementation claim: pending assertions are
-contract markers, and later stages own their production behavior.
+CID-01 made no red-build or implementation claim: its pending assertions were
+contract markers. CID-02 through CID-07 now own the accepted production
+behavior, and CID-08 promotes it to the normative documents.
 
 ## Modified-program compliance ledger
 
 | Program / artifact | CID-01 evidence and obligation | Status |
 | --- | --- | --- |
-| CNCF runtime and specs | Inventory is documentary; E1-E4 are Given/When/Then target contracts with `should` matchers, one active ScalaCheck property, and one terminal pending block each. | Contract frozen; implementation pending CID-02+ |
-| Cozy | Project/scaffold/archive/publisher/repository/lint ownership and E5-E7 target pairings are documentary; E6 names a scenario-only `NotImplemented` SPI boundary and adds no identity algorithm/API behavior. | Contract frozen; implementation pending CID-03/04/07 |
-| sbt-cozy | Build metadata, `cozyCarName`, manifest, `CarDependency`, and repository destination ownership and E8-E10 target pairings are documentary; the named scenario-only `NotImplemented` SPI boundary adds no identity algorithm/API behavior. | Contract frozen; implementation pending CID-03/04 |
-| 18 CAR repositories | Read-only ledger records full HEAD, dirty state, project.yaml hash/dirty state, version source, legacy fields, target identity, projections, divergence, and migration classification. | 14 snapshot migration-required; 4 release-deferred |
-| launcher / CBD / BoK | Later adoption edges are named but not changed. | Deferred to CID-08 |
+| CNCF runtime and specs | Inventory froze E1-E4 as Given/When/Then target contracts; later Steps activated the assertions. | Implemented and accepted by CID-02, CID-05, and CID-06 |
+| Cozy | Inventory froze project/scaffold/archive/publisher/repository/lint ownership and E5-E7 target pairings. | Implemented and accepted by CID-03, CID-04, and CID-07 |
+| sbt-cozy | Inventory froze build metadata, `cozyCarName`, manifest, `CarDependency`, repository ownership, and E8-E10 pairings. | Implemented and accepted by CID-03 and CID-04 |
+| 18 CAR repositories | Read-only ledger records full HEAD, dirty state, project.yaml hash/dirty state, version source, legacy fields, target identity, projections, divergence, and migration classification. | CID-07 closed 14 canonical SNAPSHOT migrations; 4 exact release deferrals remain |
+| launcher / CBD / BoK | CID-01 named the later adoption edges. | CID-08 static audit complete |
 
 ## Explicit exclusions
 

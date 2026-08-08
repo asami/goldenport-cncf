@@ -58,10 +58,10 @@ project:
 CID-01 freeze artifacts: [identity inventory and failing-first contract](../notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md)
 and [CAR migration ledger](../notes/phase-56-cid01-car-migration-ledger.yaml).
 
-The CID-01 inventory note is the authoritative Phase-56 working specification
-until CID-08 normative promotion. It is implementation-free working authority,
-not the final normative identity design; executable leaves remain target
-pending until their owning stage implements them.
+The CID-01 inventory note is the historical implementation-free working
+authority promoted by CID-08 to the normative Component identity design and
+specification. Its inventory and rule IDs remain evidence, not a second
+identity authority.
 
 Only `namespace` and `id` determine names and identifiers. `version` selects
 a release. `displayName`, summaries, and localized titles are descriptive and
@@ -174,11 +174,11 @@ not silently infer a namespace or rewrite project metadata.
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. CID-04E adds the CNCF v2 index reader and direct canonical resolver while legacy runtime repository migration remains CID-05/06. | done |
 | CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | done |
 | CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | done; committed |
-| CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | ACCEPTED / REVIEWED / STEP_COMMIT_PENDING |
-| CID-08 | Ecosystem regression and normative closure | Representative samples, launchers, CBD/BoK metadata, and dependency consumers adopt the contract; cross-repository tests, migration guidance, design/spec promotion, review, compatibility ledger, and release evidence close the phase. | planned |
+| CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | done; committed |
+| CID-08 | Ecosystem regression and normative closure | Promote the accepted ecosystem behavior, migration guidance, compatibility ledger, and successor-phase contract to normative design/specification. | accepted/reviewed; Step commit pending |
 
-CID-07A is implemented and review-fixed while the CID-07 Step remains in
-progress. The exact registry and classification authority now lives in the
+CID-07A was implemented and review-fixed as part of the subsequently committed
+CID-07 Step. The exact registry and classification authority now lives in the
 shared Java ABI, CNCF consumes it through its existing runtime adapter, and
 Cozy CAR lint exposes canonical, migration-required, exact-deferred,
 inventory-error, and projection-disagreement results. Final focused evidence
@@ -243,9 +243,8 @@ failed, aborted, canceled, ignored, or pending, with `sbt_exit=0`,
 `cozyCarName`, SNAPSHOT, mutable-pair, and nine deprecation warnings. Post-fix
 full review returned PASS with Actionable findings 0; `CID07D-R1` and
 `CID07D-R2` are CLOSED and `FULL_REVIEW_REQUIRED=no`. CID-07D is ACCEPTED /
-REVIEWED. No CID-07D commit has been made; CID-07E is accepted/reviewed. The
-CID-07 Step commit and Phase full validation remain
-pending.
+REVIEWED. CID-07D and CID-07E were accepted/reviewed before the completed
+CID-07 Step commit. Phase full validation remains pending.
 
 CID-07E is `ACCEPTED / REVIEWED`. The frozen inventory is
 18/18 classified: all 14/14 SNAPSHOT CARs are canonical and final lint has no
@@ -306,13 +305,12 @@ unchanged.
 Parent scope clarification: path-level staging is safe. The Blog source
 `BundleFactory` duplicate is excluded because the managed generated file has
 identical SHA-1 `e39535...`; the official port inclusion is preserved. CID-07
-A-E are accepted/reviewed. No Step commit or full Phase claim is made; Step
-feature validation/commit remains pending.
+A-E are accepted/reviewed and the CID-07 Step commit is complete. No full
+Phase claim is made; Phase full validation remains pending.
 
-The Cozy repair is accepted/reviewed and the CID-07 Step commit is not claimed.
-Step feature validation/commit and Phase full validation remain pending. The
-five official registry port hunks admitted in CID-07D
-remain in scope for the eventual commit.
+The Cozy repair is accepted/reviewed and included in the completed CID-07 Step
+commit. Phase full validation remains pending. The five official registry port
+hunks admitted in CID-07D were included in that Step commit.
 
 CID-05 slice ledger is committed and done:
 
