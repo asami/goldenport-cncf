@@ -6,7 +6,9 @@
 - Step: CID-06 Compatibility Adapters
 - Current Slice: CID-06E End-to-End Compatibility Acceptance
 - Slice status: ACCEPTED / REVIEWED
-- Phase full validation: pending until Phase 56 release
+- Step status: DONE / COMMITTED
+- Step commit: `6afab962ccd33431e6e2944c8d9191295d1a7f38` (`Preserve bounded component identity compatibility`)
+- Phase full validation: explicitly waived at the Phase 56 release gate
 
 ## Goal
 
@@ -238,8 +240,17 @@ grouping/metadata in `SubsystemAssemblyAdmissionSpec`, and synchronized
 CID-06C/D lifecycle truth. Invocation `98250-20260808T055120Z` passed the two
 affected suites and all 10 tests without warnings, with `sbt_exit=0`,
 `wrapper_exit=0`, and `lock=released`. Independent focused re-review returned
-PASS with no findings and `FULL_REVIEW_REQUIRED=no`. The CID-06 Step
-feature-test/commit and Phase full validation remain pending.
+PASS with no findings and `FULL_REVIEW_REQUIRED=no`. At that review
+checkpoint, the CID-06 Step feature-test/commit and Phase full validation
+remained pending.
+
+The final CID-06 Step accumulator `9227-20260808T062445Z` completed 19 suites
+with 306 tests succeeded, zero failed/canceled/ignored/pending/aborted, no
+warnings, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Commit
+`6afab962ccd33431e6e2944c8d9191295d1a7f38`
+(`Preserve bounded component identity compatibility`) closes the Step. Final
+Phase-wide full validation was explicitly waived at the Phase 56 release gate;
+no new full-test claim is made.
 
 | Finding | Applied boundary repair | Current evidence state |
 | --- | --- | --- |
