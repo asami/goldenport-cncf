@@ -435,7 +435,7 @@ CID-07 committed on 2026-08-08 in dependency order:
 - `textus-blog` `36ed508d2e01803cf4dd12cb61e30506975517af`;
 - `textus-cbd-support` `56a3a6ba2416eb37f6a4c498e7d79a5f36e9726b`;
 - `textus-control-center` `e6fd75d7787603d9630b9f2c974f98d4cdd84f37`;
-- `textus-knowledge-editor` `29b2fad4297474f7c455dd9ba951d96943eb3853`;
+- `textus-knowledge-editor` `29b2fad429747974c455dd9ba951d96943eb3853`;
 - `textus-semantic-integration-engine`
   `cef5ba448ea2d2f8bbb66cd7ccff00140b0e78f6`;
 - `textus-art-scene` `39c46a58256e6806de76611a75aafc66ef1739b9`;
