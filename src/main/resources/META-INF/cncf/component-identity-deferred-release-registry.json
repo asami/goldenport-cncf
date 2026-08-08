@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "cncf.component-identity-deferred-release-registry.v1",
+  "entries": [
+    {
+      "canonicalComponentId": "org.simplemodeling.textus.Corpus",
+      "release": "0.1.0",
+      "legacyArtifact": "textus-corpus",
+      "legacyLocalId": "Corpus",
+      "migrationOwner": "textus-corpus"
+    },
+    {
+      "canonicalComponentId": "org.simplemodeling.textus.Experiment",
+      "release": "0.1.0",
+      "legacyArtifact": "textus-experiment",
+      "legacyLocalId": "Experiment",
+      "migrationOwner": "textus-experiment"
+    },
+    {
+      "canonicalComponentId": "org.simplemodeling.textus.GeoResolver",
+      "release": "0.2.1",
+      "legacyArtifact": "textus-georesolver",
+      "legacyLocalId": "GeoResolver",
+      "migrationOwner": "textus-georesolver"
+    },
+    {
+      "canonicalComponentId": "org.simplemodeling.textus.Sanpomap",
+      "release": "0.2.1",
+      "legacyArtifact": "textus-sanpomap",
+      "legacyLocalId": "Sanpomap",
+      "migrationOwner": "textus-sanpomap"
+    }
+  ]
+}

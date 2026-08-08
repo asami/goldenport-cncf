@@ -123,6 +123,16 @@ object ComponentRepository extends GlobalObservable {
 
   sealed abstract class Specification {
     def build(params: ComponentCreate): ComponentRepository
+
+    /**
+     * Enumerates descriptor metadata without resolving an alias or activating
+     * a component.  Repository-specific static candidate adapters use this
+     * package-internal view to establish canonical identity authority before
+     * assembly admission.
+     */
+    private[cncf] def resolveStaticComponentDescriptors: Vector[ComponentDescriptor] =
+      Vector.empty
+
     def resolveSubsystemDescriptor(
       subsystemName: String
     ): Option[GenericSubsystemDescriptor] = None
@@ -449,6 +459,9 @@ object ComponentRepository extends GlobalObservable {
       ): Option[ComponentDescriptor] =
         ComponentRepository.resolveComponentDescriptorFromComponentDir(baseDir, componentName)
 
+      override private[cncf] def resolveStaticComponentDescriptors: Vector[ComponentDescriptor] =
+        ComponentRepository.resolveStaticComponentDescriptorsFromComponentDir(baseDir)
+
       override def resolveComponentSubsystemDefaultsC(
         componentName: String,
         version: Option[String]
@@ -513,7 +526,7 @@ object ComponentRepository extends GlobalObservable {
         version: Option[String]
       ): Consequence[Option[GenericSubsystemDescriptor]] =
         if (Files.isRegularFile(file))
-          ComponentDescriptorLoader.loadArchive(file).flatMap { descriptor =>
+          ComponentDescriptorLoader.loadArchiveEffective(file).flatMap { descriptor =>
             if (_matches_component_descriptor(descriptor, componentName, version))
               GenericSubsystemDescriptor.loadComponentArchive(file).map(Some(_))
             else
@@ -526,7 +539,7 @@ object ComponentRepository extends GlobalObservable {
         componentName: String
       ): Option[ComponentDescriptor] =
         if (Files.isRegularFile(file))
-          ComponentDescriptorLoader.loadArchive(file).toOption.filter(_matches_component_descriptor(_, componentName))
+          ComponentDescriptorLoader.loadArchiveEffective(file).toOption.filter(_matches_component_descriptor(_, componentName))
         else
           None
 
@@ -534,9 +547,15 @@ object ComponentRepository extends GlobalObservable {
         componentName: String
       ): Option[ComponentDescriptor] =
         if (Files.isRegularFile(file))
-          ComponentDescriptorLoader.loadArchive(file).toOption.filter(_matches_component_descriptor(_, componentName))
+          ComponentDescriptorLoader.loadArchiveEffective(file).toOption.filter(_matches_component_descriptor(_, componentName))
         else
           None
+
+      override private[cncf] def resolveStaticComponentDescriptors: Vector[ComponentDescriptor] =
+        if (Files.isRegularFile(file))
+          ComponentDescriptorLoader.loadArchiveEffective(file).toOption.toVector
+        else
+          Vector.empty
 
       override def resolveComponentArchivePath(
         componentName: String
@@ -548,7 +567,7 @@ object ComponentRepository extends GlobalObservable {
         version: Option[String]
       ): Option[Path] =
         if (Files.isRegularFile(file))
-          ComponentDescriptorLoader.loadArchive(file).toOption
+          ComponentDescriptorLoader.loadArchiveEffective(file).toOption
             .filter(_matches_component_descriptor(_, componentName, version))
             .map(_ => file)
         else
@@ -691,6 +710,9 @@ object ComponentRepository extends GlobalObservable {
       ): Option[ComponentDescriptor] =
         ComponentDevDirRepository.devComponentDescriptors(baseDir)
           .find(_matches_component_descriptor(_, componentName))
+
+      override private[cncf] def resolveStaticComponentDescriptors: Vector[ComponentDescriptor] =
+        ComponentDevDirRepository.devComponentDescriptors(baseDir)
 
       override def resolveComponentSubsystemDefaultsC(
         componentName: String,
@@ -1225,15 +1247,29 @@ object ComponentRepository extends GlobalObservable {
     } else {
       _list_artifacts(baseDir).iterator.flatMap {
         case Artifact(path, ArtifactKind.Car) =>
-          ComponentDescriptorLoader.loadArchive(path).toOption
+          ComponentDescriptorLoader.loadArchiveEffective(path).toOption
         case Artifact(path, ArtifactKind.CarDir) =>
-          ComponentDescriptorLoader.loadArchive(path).toOption
+          ComponentDescriptorLoader.loadArchiveEffective(path).toOption
         case _ =>
           None
       }.find(_matches_component_descriptor(_, componentName))
         .orElse(_resolve_standard_component_descriptor(baseDir, componentName))
     }
   }
+
+  private[cncf] def resolveStaticComponentDescriptorsFromComponentDir(
+    baseDir: Path
+  ): Vector[ComponentDescriptor] =
+    if (!Files.isDirectory(baseDir)) {
+      Vector.empty
+    } else {
+      _list_artifacts(baseDir).iterator.flatMap {
+        case Artifact(path, ArtifactKind.Car | ArtifactKind.CarDir) =>
+          ComponentDescriptorLoader.loadArchiveEffective(path).toOption
+        case _ =>
+          None
+      }.toVector
+    }
 
   def resolveComponentSubsystemDefaultsFromComponentDirC(
     baseDir: Path,
@@ -1259,14 +1295,14 @@ object ComponentRepository extends GlobalObservable {
   ): Consequence[Option[GenericSubsystemDescriptor]] =
     artifact match {
       case Artifact(path, ArtifactKind.Car) =>
-        ComponentDescriptorLoader.loadArchive(path).flatMap { descriptor =>
+        ComponentDescriptorLoader.loadArchiveEffective(path).flatMap { descriptor =>
           if (_matches_component_descriptor(descriptor, componentname, version))
             GenericSubsystemDescriptor.loadComponentArchive(path).map(Some(_))
           else
             Consequence.success(None)
         }
       case Artifact(path, ArtifactKind.CarDir) =>
-        ComponentDescriptorLoader.loadArchive(path).flatMap { descriptor =>
+        ComponentDescriptorLoader.loadArchiveEffective(path).flatMap { descriptor =>
           if (_matches_component_descriptor(descriptor, componentname, version))
             GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor).map(Some(_))
           else
@@ -1292,7 +1328,7 @@ object ComponentRepository extends GlobalObservable {
     } else {
       _list_artifacts(baseDir).iterator.flatMap {
         case Artifact(path, ArtifactKind.Car) =>
-          ComponentDescriptorLoader.loadArchive(path).toOption
+          ComponentDescriptorLoader.loadArchiveEffective(path).toOption
             .filter(_matches_component_descriptor(_, componentName, version))
             .map(_ => path)
         case _ =>
@@ -1564,9 +1600,9 @@ object ComponentRepository extends GlobalObservable {
   ): Boolean = {
     val descriptor = artifact.kind match {
       case ArtifactKind.Car =>
-        ComponentDescriptorLoader.loadArchive(artifact.path).toOption
+        ComponentDescriptorLoader.loadArchiveEffective(artifact.path).toOption
       case ArtifactKind.CarDir =>
-        ComponentDescriptorLoader.loadArchive(artifact.path).toOption
+        ComponentDescriptorLoader.loadArchiveEffective(artifact.path).toOption
       case _ =>
         None
     }
@@ -1599,9 +1635,9 @@ object ComponentRepository extends GlobalObservable {
   ): Option[ComponentDescriptor] =
     _resolve_standard_component_artifact(basedir, componentname, None, releaseonly).iterator.flatMap {
       case Artifact(path, ArtifactKind.Car) =>
-        ComponentDescriptorLoader.loadArchive(path).toOption
+        ComponentDescriptorLoader.loadArchiveEffective(path).toOption
       case Artifact(path, ArtifactKind.CarDir) =>
-        ComponentDescriptorLoader.loadArchive(path).toOption
+        ComponentDescriptorLoader.loadArchiveEffective(path).toOption
       case _ =>
         None
     }.toSeq.headOption
@@ -1686,7 +1722,7 @@ object ComponentRepository extends GlobalObservable {
   ): Option[ComponentDescriptor] =
     _fetch_standard_component_artifact(baseurl, cacheroot, componentname, None).iterator.flatMap {
       case Artifact(path, ArtifactKind.Car) =>
-        ComponentDescriptorLoader.loadArchive(path).toOption
+        ComponentDescriptorLoader.loadArchiveEffective(path).toOption
       case _ =>
         None
     }.toSeq.headOption
@@ -1983,7 +2019,33 @@ object ComponentRepository extends GlobalObservable {
     artifactmetadata: Component.ArtifactMetadata,
     discovered: Vector[Component]
   ): Consequence[Vector[Component]] =
-    descriptor.requireCanonicalIdentityC.flatMap { case (componentid, release) =>
+    _admit_archive_components_c(
+      descriptor.requireCanonicalIdentityC,
+      archivepath,
+      artifactmetadata,
+      discovered
+    )
+
+  private def _admit_extracted_archive_components_c(
+    extracted: CarExtracted,
+    archivepath: Path,
+    artifactmetadata: Component.ArtifactMetadata,
+    discovered: Vector[Component]
+  ): Consequence[Vector[Component]] =
+    _admit_archive_components_c(
+      extracted.requireEffectiveIdentityC,
+      archivepath,
+      artifactmetadata,
+      discovered
+    )
+
+  private def _admit_archive_components_c(
+    identityc: Consequence[(ComponentId, String)],
+    archivepath: Path,
+    artifactmetadata: Component.ArtifactMetadata,
+    discovered: Vector[Component]
+  ): Consequence[Vector[Component]] =
+    identityc.flatMap { case (componentid, release) =>
       if (!artifactmetadata.componentId.contains(componentid) || artifactmetadata.version != release)
         if (!artifactmetadata.componentId.contains(componentid))
           Consequence.componentInvalid(
@@ -2023,7 +2085,7 @@ object ComponentRepository extends GlobalObservable {
     sardescriptor: Option[GenericSubsystemDescriptor],
     sourcetype: String
   ): Consequence[Vector[Component]] = {
-    extracted.descriptor.requireCanonicalIdentityC.flatMap { case (componentid, carversion) =>
+    extracted.requireEffectiveIdentityC.flatMap { case (componentid, carversion) =>
       val carname = extracted.descriptor.name.getOrElse(artifactpath.getFileName.toString.stripSuffix(".car"))
       val componentname = componentid.name
           ComponentDependencyResolver.resolve(
@@ -2095,7 +2157,7 @@ object ComponentRepository extends GlobalObservable {
     )
     var retaincomponentloader = false
     try {
-      val components0 =
+      val discover = () =>
         _discover_component_from_artifact_with_loader(
           artifactname = artifactpath.getFileName.toString,
           loader = componentloader,
@@ -2107,8 +2169,13 @@ object ComponentRepository extends GlobalObservable {
           origin = baseorigin,
           log = log
         ).toVector
-      val result = admitCanonicalArchiveComponentsC(
-        extracted.descriptor,
+      val components0 = extracted.deferredRelease match {
+        case Some(entry) =>
+          ComponentIdentityDeferredReleaseScope.withExpected(entry)(discover())
+        case None => discover()
+      }
+      val result0 = _admit_extracted_archive_components_c(
+        extracted,
         artifactpath,
         artifactmetadata,
         components0
@@ -2138,6 +2205,20 @@ object ComponentRepository extends GlobalObservable {
           )
       }
       }
+      }
+      val result = result0.map { components =>
+        extracted.deferredRelease match {
+          case Some(entry) =>
+            params.subsystem.globalRuntimeContextOption.foreach { context =>
+              ComponentIdentityCompatibilityObserver.observeDeferredRelease(
+                context.assemblyReport,
+                entry
+              )
+            }
+            components.map(_.withDeferredReleaseProvenance(entry))
+          case None =>
+            components
+        }
       }
       result match {
         case Consequence.Success(_) =>

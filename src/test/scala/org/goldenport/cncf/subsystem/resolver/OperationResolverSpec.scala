@@ -14,8 +14,8 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 
 /*
- * @since Aug. 8, 2026
- * @version Aug. 8, 2026
+ * @since   Aug.  8, 2026
+ * @version Aug.  8, 2026
  * @author ASAMI, Tomoharu
  */
 class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen with TableDrivenPropertyChecks {
@@ -23,6 +23,8 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
   private val _e2 = afterWord("in spec:operation-resolver, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e3 = afterWord("in spec:operation-resolver, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e4 = afterWord("in spec:operation-resolver, example:E4, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private val _e24 = afterWord("in spec:operation-resolver, example:E24, rules:CID06C-R3,R6, phase:56, slice:CID-06C")
+  private val _e25 = afterWord("in spec:operation-resolver, example:E25, rules:CID06C-R1,R4,R6, phase:56, slice:CID-06C")
   private def _metadata(exampleid: String) =
     afterWord(s"in spec:operation-resolver, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
   "OperationResolver.resolve" should {
@@ -366,6 +368,76 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       }
       }
     }
+
+    "E24 reject a local-ID and presentation-alias collision across runtime Components" must _e24 {
+      "when one Component local ID equals another Component display alias" in {
+      Given("two runtime Components whose local and display identities claim the same selector")
+      val localcomponent = _runtime_component(
+        "org.example.Catalog",
+        "catalog-local",
+        None
+      )
+      val displaycomponent = _runtime_component(
+        "org.other.Other",
+        "Catalog",
+        None
+      )
+      val artifactcomponent = _runtime_component(
+        "org.third.Artifact",
+        "artifact-component",
+        Some("Catalog")
+      )
+      val resolver = OperationResolver.build(Seq(localcomponent, displaycomponent, artifactcomponent))
+
+      When("the colliding bare Component selector is resolved")
+      val result = resolver.resolve("Catalog.notice.search")
+
+      Then("the resolver reports all qualified operations instead of routing to one presentation alias")
+      result match {
+        case ResolutionResult.Ambiguous(_, candidates) =>
+          candidates.toSet shouldBe Set(
+            "org.example.Catalog.notice.search",
+            "org.other.Other.notice.search",
+            "org.third.Artifact.notice.search"
+          )
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+      }
+    }
+
+    "E25 keep an exact qualified selector authoritative across a local-ID collision" must _e25 {
+      "when the qualified selector names the canonical Component explicitly" in {
+      Given("the same local-ID and display-alias collision as E24")
+      val localcomponent = _runtime_component(
+        "org.example.Catalog",
+        "catalog-local",
+        None
+      )
+      val displaycomponent = _runtime_component(
+        "org.other.Other",
+        "Catalog",
+        None
+      )
+      val artifactcomponent = _runtime_component(
+        "org.third.Artifact",
+        "artifact-component",
+        Some("Catalog")
+      )
+      val resolver = OperationResolver.build(Seq(localcomponent, displaycomponent, artifactcomponent))
+
+      When("the exact qualified Component selector is resolved")
+      val result = resolver.resolve("org.example.Catalog.notice.search")
+
+      Then("the canonical identity wins without consulting presentation aliases")
+      result shouldBe ResolutionResult.Resolved(
+        "org.example.Catalog.notice.search",
+        "org.example.Catalog",
+        "notice",
+        "search"
+      )
+      }
+    }
     }
   }
 
@@ -427,6 +499,7 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       }
       }
     }
+
   }
 
   private def _component_with_componentlet_metadata(): Component = {
@@ -541,6 +614,51 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
     component.initialize(
       org.goldenport.cncf.component.ComponentInit(
         subsystem = org.goldenport.cncf.testutil.TestComponentFactory.emptySubsystem("UserNotification"),
+        core = core,
+        origin = org.goldenport.cncf.component.ComponentOrigin.Main,
+        componentDescriptors = Vector.empty
+      )
+    )
+  }
+
+  private def _runtime_component(
+    canonicalname: String,
+    displayname: String,
+    artifactname: Option[String]
+  ): Component = {
+    val component = new Component() {
+      override def displayName: String = displayname
+    }
+    val protocol = Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(NoopOperation("search"))
+            )
+          )
+        )
+      )
+    )
+    val componentid = org.goldenport.cncf.component.ComponentId(canonicalname)
+    val core = org.goldenport.cncf.component.Component.Core.create(
+      name = canonicalname,
+      componentid = componentid,
+      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(componentid),
+      protocol = protocol
+    )
+    artifactname.foreach { name =>
+      component.withArtifactMetadata(org.goldenport.cncf.component.Component.ArtifactMetadata(
+        sourceType = "car",
+        name = name,
+        version = "0.1.1-SNAPSHOT",
+        component = Some(name)
+      ))
+    }
+    component.initialize(
+      org.goldenport.cncf.component.ComponentInit(
+        subsystem = org.goldenport.cncf.testutil.TestComponentFactory.emptySubsystem(displayname),
         core = core,
         origin = org.goldenport.cncf.component.ComponentOrigin.Main,
         componentDescriptors = Vector.empty

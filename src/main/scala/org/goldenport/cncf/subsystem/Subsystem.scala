@@ -17,6 +17,7 @@ import org.goldenport.cncf.component.{
   Component,
   ComponentCapabilityId,
   ComponentId,
+  ComponentIdentityCompatibilityObserver,
   ComponentInstanceId,
   ComponentSpace
 }
@@ -150,12 +151,13 @@ final class Subsystem(
       .orElse(scopecontext.flatMap(_.operationEvaluationCrossSinkPolicyOption))
       .getOrElse(OperationEvaluationCrossSinkPolicy.disabled)
 
-  def globalRuntimeContext: GlobalRuntimeContext = {
-    val a = _find_global_runtime_context(scopecontext)
-    a orElse GlobalRuntimeContext.current getOrElse {
+  private[cncf] def globalRuntimeContextOption: Option[GlobalRuntimeContext] =
+    _find_global_runtime_context(scopecontext).orElse(GlobalRuntimeContext.current)
+
+  def globalRuntimeContext: GlobalRuntimeContext =
+    globalRuntimeContextOption.getOrElse {
       Consequence.RAISE.UnreachableReached
     }
-  }
 
   @annotation.tailrec
   private def _find_global_runtime_context(p: Option[ScopeContext]): Option[GlobalRuntimeContext] =
@@ -1987,7 +1989,11 @@ final class Subsystem(
     operationname: String
   ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
     val selector = s"$componentname.$servicename.$operationname"
-    _resolver.resolve(selector) match {
+    val resolved = _resolver.resolveWithNotices(selector)
+    globalRuntimeContextOption.foreach(
+      context => ComponentIdentityCompatibilityObserver.observe(context.assemblyReport, resolved.notices)
+    )
+    resolved.result match {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         for {
           component <- findComponent(ComponentId(component))

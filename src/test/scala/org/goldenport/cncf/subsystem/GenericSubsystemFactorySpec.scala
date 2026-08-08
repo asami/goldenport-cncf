@@ -15,8 +15,9 @@ import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.{RepositoryBootstrapPolicy, RuntimeConfig}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.context.GlobalContext
-import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, SubsystemCapabilityId}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, SubsystemCapabilityId}
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.component.repository.fixture.spi.{
   ArtSceneComponent,
   ArtSceneComponentFactory,
@@ -48,12 +49,165 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
   private val _e3 = afterWord("in spec:generic-subsystem-factory, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
   private def _metadata(exampleid: String) =
     afterWord(s"in spec:generic-subsystem-factory, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private def _cid06c_metadata(exampleid: String) =
+    afterWord(s"in spec:generic-subsystem-factory, example:$exampleid, rules:CID06C-R5,R8, phase:56, slice:CID-06C")
   override def beforeAll(): Unit = {
     val workarea = WorkAreaSpace.create(RuntimeConfig.default)
     GlobalContext.set(GlobalContext(workarea))
   }
 
   "GenericSubsystemFactory" should {
+    "compatibility notice ownership" which {
+      "E56-CID06C retain an assembly-binding notice in the owning runtime report" must _cid06c_metadata("E56-CID06C-assembly") {
+        "when a bare binding is admitted through the scoped factory boundary" in {
+          Given("a canonical descriptor override, an owning runtime scope, and a foreign ambient runtime")
+          val componentid = ComponentId("org.goldenport.cncf.Specification")
+          val descriptor = GenericSubsystemDescriptor(
+            path = Path.of("cid06c-factory-assembly.yaml"),
+            subsystemName = "cid06c-factory-assembly",
+            componentBindings = Vector(GenericSubsystemComponentBinding("Specification")),
+            componentDescriptorOverrides = Vector(_canonical_descriptor(componentid))
+          )
+          _with_temp_dir { repositorydir =>
+            _install_specification_car(repositorydir)
+            val configuration = _repository_configuration(repositorydir)
+            val execution = ExecutionContext.create()
+            val owner = GlobalRuntimeContext.create(
+              "cid06c-factory-assembly",
+              RuntimeConfig.default,
+              configuration,
+              execution.observability,
+              AliasResolver.empty
+            )
+            val foreign = GlobalRuntimeContext.create(
+              "cid06c-factory-foreign",
+              RuntimeConfig.default,
+              configuration,
+              execution.observability,
+              AliasResolver.empty
+            )
+            val previous = GlobalRuntimeContext.current
+            GlobalRuntimeContext.current = Some(foreign)
+            try {
+              When("the factory constructs the subsystem with the owner supplied as its scope")
+              GenericSubsystemFactory.defaultWithScope(
+                descriptor = descriptor,
+                context = owner,
+                configuration = configuration,
+                aliasResolver = AliasResolver.empty
+              )
+
+              Then("the assembly-binding notice reaches only the owning report")
+              owner.assemblyReport.warnings.map(_.reason).flatten should contain (
+                "surface=assembly-binding; alias-kind=bare; alias=Specification; canonical=org.goldenport.cncf.Specification"
+              )
+              foreign.assemblyReport.warnings.filter(_.kind == "component-identity-compatibility") shouldBe empty
+            } finally {
+              GlobalRuntimeContext.current = previous
+            }
+          }
+        }
+      }
+
+      "E56-CID06C retain a descriptor-field notice in the owning runtime report" must _cid06c_metadata("E56-CID06C-descriptor") {
+        "when a typed binding projects legacy descriptor fields through the scoped factory boundary" in {
+          Given("a canonical typed binding, a legacy descriptor override, and an owning runtime scope")
+          val componentid = ComponentId("org.goldenport.cncf.Specification")
+          val descriptor = GenericSubsystemDescriptor(
+            path = Path.of("cid06c-factory-descriptor.yaml"),
+            subsystemName = "cid06c-factory-descriptor",
+            componentBindings = Vector(
+              GenericSubsystemComponentBinding(componentid.name, componentId = Some(componentid))
+            ),
+            componentDescriptorOverrides = Vector(
+              ComponentDescriptor(
+                name = Some("Specification"),
+                componentName = Some("Specification"),
+                version = Some("0.1.0")
+              )
+            )
+          )
+          _with_temp_dir { repositorydir =>
+            _install_specification_car(repositorydir)
+            val configuration = _repository_configuration(repositorydir)
+            val execution = ExecutionContext.create()
+            val owner = GlobalRuntimeContext.create(
+              "cid06c-factory-descriptor",
+              RuntimeConfig.default,
+              configuration,
+              execution.observability,
+              AliasResolver.empty
+            )
+            val previous = GlobalRuntimeContext.current
+            GlobalRuntimeContext.current = None
+            try {
+              When("the factory constructs the subsystem with the owner supplied as its scope")
+              GenericSubsystemFactory.defaultWithScope(
+                descriptor = descriptor,
+                context = owner,
+                configuration = configuration,
+                aliasResolver = AliasResolver.empty
+              )
+
+              Then("the descriptor-field notice reaches the owning report without reconstructing it")
+              owner.assemblyReport.warnings.map(_.reason).flatten should contain (
+                "surface=descriptor-field; alias-kind=bare; alias=Specification; canonical=org.goldenport.cncf.Specification"
+              )
+            } finally {
+              GlobalRuntimeContext.current = previous
+            }
+          }
+        }
+      }
+
+      "E56-CID06C leave notices unowned when only a foreign ambient runtime exists" must _cid06c_metadata("E56-CID06C-unowned") {
+        "when the supplied scope has no GlobalRuntimeContext owner" in {
+          Given("a bare binding, its canonical override, an unowned scope, and a foreign ambient runtime")
+          val componentid = ComponentId("org.goldenport.cncf.Specification")
+          val descriptor = GenericSubsystemDescriptor(
+            path = Path.of("cid06c-factory-unowned.yaml"),
+            subsystemName = "cid06c-factory-unowned",
+            componentBindings = Vector(GenericSubsystemComponentBinding("Specification")),
+            componentDescriptorOverrides = Vector(_canonical_descriptor(componentid))
+          )
+          _with_temp_dir { repositorydir =>
+            _install_specification_car(repositorydir)
+            val configuration = _repository_configuration(repositorydir)
+            val execution = ExecutionContext.create()
+            val foreign = GlobalRuntimeContext.create(
+              "cid06c-factory-foreign-only",
+              RuntimeConfig.default,
+              configuration,
+              execution.observability,
+              AliasResolver.empty
+            )
+            val unowned = ScopeContext(
+              kind = ScopeKind.Subsystem,
+              name = "cid06c-factory-unowned",
+              parent = None,
+              observabilityContext = execution.observability
+            )
+            val previous = GlobalRuntimeContext.current
+            GlobalRuntimeContext.current = Some(foreign)
+            try {
+              When("the factory constructs the subsystem with the unowned scope")
+              GenericSubsystemFactory.defaultWithScope(
+                descriptor = descriptor,
+                context = unowned,
+                configuration = configuration,
+                aliasResolver = AliasResolver.empty
+              )
+
+              Then("no compatibility notice is attributed to the foreign ambient runtime")
+              foreign.assemblyReport.warnings.filter(_.kind == "component-identity-compatibility") shouldBe empty
+            } finally {
+              GlobalRuntimeContext.current = previous
+            }
+          }
+        }
+      }
+    }
+
     "descriptor materialization and development selection" which {
     "E1 materialize multiple named instances from one descriptor component type" must _e1 {
       "when exercising: materialize multiple named instances from one descriptor component type" in {
@@ -820,6 +974,41 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
     }
   }
+
+  private def _repository_configuration(repositorydir: Path): ResolvedConfiguration =
+    ResolvedConfiguration(
+      Configuration(Map(
+        RuntimeConfig.repositoryDirKey -> ConfigurationValue.StringValue(s"component-dir:$repositorydir")
+      )),
+      ConfigurationTrace.empty
+    )
+
+  private def _install_specification_car(repositorydir: Path): Unit = {
+    val assets = repositorydir.resolve("cid06c-specification-assets")
+    val componentjar = _create_fake_component_jar(assets.resolve("component-main.jar"))
+    val componentdescriptor = assets.resolve("component-descriptor.json")
+    Files.writeString(
+      componentdescriptor,
+      _canonical_descriptor_json("org.goldenport.cncf.Specification", "0.1.0"),
+      StandardCharsets.UTF_8
+    )
+    _create_car(
+      repositorydir.resolve("org.goldenport.cncf.Specification-0.1.0.car"),
+      Seq(
+        "component/main.jar" -> componentjar,
+        "component-descriptor.json" -> componentdescriptor
+      )
+    )
+  }
+
+  private def _canonical_descriptor(componentid: ComponentId): ComponentDescriptor =
+    ComponentDescriptor(
+      name = Some(componentid.name),
+      version = Some("0.1.0"),
+      componentName = Some(componentid.name),
+      schemaVersion = Some(3),
+      componentId = Some(componentid)
+    )
 
   private object NamedInstanceFactory extends Component.PrimaryComponentFactory {
     protected def create_Component(params: ComponentCreate): Component =

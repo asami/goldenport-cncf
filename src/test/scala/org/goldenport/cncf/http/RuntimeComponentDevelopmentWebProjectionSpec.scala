@@ -6,6 +6,8 @@ import scala.jdk.CollectionConverters._
 
 import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
 import org.goldenport.configuration.{Configuration, ConfigurationBindingCandidate, ConfigurationBindingCandidates, ConfigurationBindingCollection, ConfigurationBindingResolver, ConfigurationOrigin, ConfigurationProvenance, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
@@ -15,8 +17,8 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
- * @since Aug. 8, 2026
- * @version Aug. 8, 2026
+ * @since   Aug.  8, 2026
+ * @version Aug.  8, 2026
  * @author ASAMI, Tomoharu
  */
 final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen with BeforeAndAfterAll {
@@ -40,10 +42,12 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
     }
 
   private val _e1 = afterWord("in spec:phase-55-runtime-component-development-web-projection, example:E1, rules:GCF09E-C1,C2,C3, phase:55, slice:GCF-09E")
-  private val _e2 = afterWord("in spec:phase-56-runtime-identity-projection, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
-  private val _e3 = afterWord("in spec:phase-56-runtime-identity-projection, example:E3, rules:CID05D-R3, phase:56, slice:CID-05D")
+  private val _e2 = afterWord("in spec:phase-56-runtime-identity-projection, example:E2, rules:CID06C-R9, phase:56, slice:CID-06C")
+  private val _e3 = afterWord("in spec:phase-56-runtime-identity-projection, example:E3, rules:CID06C-R3,R6, phase:56, slice:CID-06C")
+  private val _e4 = afterWord("in spec:phase-56-runtime-identity-projection, example:E4, rules:CID06C-R3,R4,R8,R9, phase:56, slice:CID-06C")
 
   "Runtime component-development Web projection" should {
+    "admitted component-development projection" which {
     "E1 use only admitted component-development paths" must _e1 {
       "when raw configuration conflicts with an admitted path" in {
         Given("raw and admitted component-development descriptors with distinct exposures")
@@ -166,7 +170,9 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
         manualroots should contain(raw.resolve("src").resolve("main").resolve("car").resolve("manual").toString)
       }
     }
+    }
 
+    "CID-06C runtime identity and Web observability" which {
     "E2 when a qualified runtime identity retains a legacy display and development-directory name" must _e2 {
       "when a qualified runtime identity retains a legacy display and development-directory name" in {
         Given("an admitted development directory named for the visible component display")
@@ -231,6 +237,64 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
         displaymanual shouldBe empty
         aggregateweb should not contain ambiguousdev.resolve("src").resolve("main").resolve("web").toString
       }
+    }
+
+    "E4 observe a warning only for one accepted Web alias and keep ambiguous selection empty" must _e4 {
+      "when one artifact alias is unique and another display alias is shared" in {
+        Given("two ambiguous display components and one component with a unique artifact alias")
+        val sharedroot = _named_component_directory("Shared")
+        val alphaassets = _asset_directory("warning-alpha")
+        val betaassets = _asset_directory("warning-beta")
+        val uniquassets = _asset_directory("warning-unique")
+        val subsystem = _subsystem("component-dev-web-observability", sharedroot.toString, Some(sharedroot.toString))
+        subsystem.add(Vector(
+          _asset_component(subsystem, ComponentId("org.alpha.Shared"), "Shared", ComponentOrigin.Main, alphaassets),
+          _asset_component(subsystem, ComponentId("org.beta.Shared"), "Shared", ComponentOrigin.Repository("repository"), betaassets),
+          _asset_component(subsystem, ComponentId("org.gamma.Unique"), "Unique", ComponentOrigin.Main, uniquassets).withArtifactMetadata(
+            Component.ArtifactMetadata(
+              sourceType = "spec",
+              name = "unique-web",
+              version = "0.6.0",
+              component = Some("Unique"),
+              archivePath = Some(uniquassets.toString),
+              componentId = Some(ComponentId("org.gamma.Unique"))
+            )
+          )
+        ))
+        val runtime = GlobalRuntimeContext.create(
+          "component-dev-web-observability",
+          RuntimeConfig.default,
+          subsystem.configuration,
+          ExecutionContext.create().observability,
+          AliasResolver.empty
+        )
+        val previous = GlobalRuntimeContext.current
+        GlobalRuntimeContext.current = Some(runtime)
+        try {
+          val server = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime engine is required")))
+          val before = runtime.assemblyReport.warnings
+
+          When("the unique artifact alias and then the ambiguous display alias select Web roots")
+          val uniquroots = server._component_web_roots("unique-web").map(_.name)
+          val afterunique = runtime.assemblyReport.warnings
+          val ambiguousroots = server._component_web_roots("Shared").map(_.name)
+          val afterambiguous = runtime.assemblyReport.warnings
+
+          Then("the unique alias selects its own root and records one Web warning")
+          uniquroots should contain(uniquassets.resolve("src").resolve("main").resolve("web").toString)
+          afterunique should have size (before.size + 1)
+          val uniquewarnings = afterunique.filter(_.reason.exists(_.contains("alias=unique-web")))
+          uniquewarnings should have size 1
+          uniquewarnings.head.reason.getOrElse("") should include ("surface=web-path")
+
+          And("the ambiguous display alias selects no roots and adds no warning")
+          ambiguousroots shouldBe empty
+          afterambiguous shouldBe afterunique
+        } finally {
+          GlobalRuntimeContext.current = previous
+        }
+      }
+    }
     }
   }
 

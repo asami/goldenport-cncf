@@ -41,7 +41,8 @@ final class Phase56ComponentIdentityContractSpec
   )
 
   "Phase 56 Component identity" should {
-    "E1 reject bare ComponentId compatibility input through the safe parser" must _e1 {
+    "ComponentId and Core behavior (E1-E2)" which {
+      "E1 reject bare ComponentId compatibility input through the safe parser" must _e1 {
       "when the canonical UserAccount compatibility parser receives a bare spelling" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R2; Example: E1 UserAccount")
         val bareid = "UserAccount"
@@ -58,7 +59,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E1 reject bare ComponentId compatibility input through the throwing constructor" must _e1 {
+      "E1 reject bare ComponentId compatibility input through the throwing constructor" must _e1 {
       "when the throwing constructor receives a bare spelling" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R2; Example: E1 UserAccount")
         val bareid = "UserAccount"
@@ -69,7 +70,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E2 reject every invalid identity through each public Core.create overload" must _e2 {
+      "E2 reject every invalid identity through each public Core.create overload" must _e2 {
       "when the create overloads receive missing, divergent, or foreign Core identities" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
         val overloads = Vector(
@@ -116,7 +117,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E2 retain an exact qualified Core identity" must _e2 {
+      "E2 retain an exact qualified Core identity" must _e2 {
       "when Core.create receives a matching qualified ComponentId and default instance" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
         val componentid = ComponentId("org.simplemodeling.textus.UserAccount")
@@ -137,7 +138,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E2 reject every invalid identity through direct Core construction" must _e2 {
+      "E2 reject every invalid identity through direct Core construction" must _e2 {
       "when the case-class constructor receives the Core invalid identity matrix" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
         val admitted = _admitted_core()
@@ -159,7 +160,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E2 reject every invalid identity through Core.copy" must _e2 {
+      "E2 reject every invalid identity through Core.copy" must _e2 {
       "when copy receives the Core invalid identity matrix" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
         val admitted = _admitted_core()
@@ -176,7 +177,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E2 create the Script Core with its canonical identity" must _e2 {
+      "E2 create the Script Core with its canonical identity" must _e2 {
       "when the Script Core helper materializes its default runtime identity" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.goldenport.cncf.Script")
         When("createScriptCore creates the built-in Script Core")
@@ -187,9 +188,11 @@ final class Phase56ComponentIdentityContractSpec
         core.instanceId.componentId shouldBe core.componentId
         core.instanceId.instance shouldBe "default"
       }
+      }
     }
 
-    "E3 preserve ComponentId value semantics" must _e3 {
+    "ComponentInstanceId behavior (E3)" which {
+      "E3 preserve ComponentId value semantics" must _e3 {
       "when qualified ComponentId values are parsed independently" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R4,R5; Example: E3 org.simplemodeling.textus.UserAccount")
         val qualifiedid = "org.simplemodeling.textus.UserAccount"
@@ -222,7 +225,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E3 preserve ComponentInstanceId value semantics" must _e3 {
+      "E3 preserve ComponentInstanceId value semantics" must _e3 {
       "when default and named instances are created from a qualified ComponentId" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R4,R5; Example: E3 org.simplemodeling.textus.UserAccount")
         val qualifiedid = "org.simplemodeling.textus.UserAccount"
@@ -261,7 +264,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E3 reject unsafe ComponentInstanceId values through the safe factory" must _e3 {
+      "E3 reject unsafe ComponentInstanceId values through the safe factory" must _e3 {
       "when null component and invalid labels are submitted" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R4,R5; Example: E3 org.simplemodeling.textus.UserAccount")
         val qualifiedid = "org.simplemodeling.textus.UserAccount"
@@ -289,7 +292,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E3 reject unsafe ComponentInstanceId values through throwing conveniences" must _e3 {
+      "E3 reject unsafe ComponentInstanceId values through throwing conveniences" must _e3 {
       "when throwing constructors receive null component and invalid labels" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R4,R5; Example: E3 org.simplemodeling.textus.UserAccount")
         val qualifiedid = "org.simplemodeling.textus.UserAccount"
@@ -305,9 +308,11 @@ final class Phase56ComponentIdentityContractSpec
         _assert_try_illegal_argument(emptylabelresult)
         _assert_try_illegal_argument(nulllabelresult)
       }
+      }
     }
 
-    "E4 isolate generated namespaces" must _e4 {
+    "namespace isolation (E4)" which {
+      "E4 isolate generated namespaces" must _e4 {
       "when subsystem admission resolves generated same-local identities" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R6,R7; Example: E4 org.alpha.UserAccount, org.beta.UserAccount, and UserAccount")
         val property = Prop.forAll(_distinct_namespaces) { namespaces =>
@@ -338,7 +343,7 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E4 reject an ambiguous bare UserAccount" must _e4 {
+      "E4 reject an ambiguous bare UserAccount" must _e4 {
       "when subsystem admission resolves a bare alias among qualified candidates" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R6,R7; Example: E4 org.alpha.UserAccount, org.beta.UserAccount, and UserAccount")
         val candidates = Vector(
@@ -350,18 +355,17 @@ final class Phase56ComponentIdentityContractSpec
         When("SubsystemAssemblyAdmission.resolveC evaluates the bare alias")
         val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
         Then("ambiguous bare resolution reports both qualified candidates")
-        pendingUntilFixed {
-          result match {
-            case Consequence.Failure(conclusion) =>
-              val diagnostic = conclusion.show
-              diagnostic.toLowerCase should include ("ambiguous")
-              diagnostic.toLowerCase should include ("bare")
-              diagnostic should include ("org.alpha.UserAccount")
-              diagnostic should include ("org.beta.UserAccount")
-            case Consequence.Success(_) =>
-              fail("ambiguous bare UserAccount was admitted")
-          }
+        result match {
+          case Consequence.Failure(conclusion) =>
+            val diagnostic = conclusion.show
+            diagnostic should include ("component.identity.compatibility.ambiguous")
+            diagnostic should include ("alias-kind=bare")
+            diagnostic should include ("org.alpha.UserAccount")
+            diagnostic should include ("org.beta.UserAccount")
+          case Consequence.Success(_) =>
+            fail("ambiguous bare UserAccount was admitted")
         }
+      }
       }
     }
   }
@@ -391,7 +395,7 @@ final class Phase56ComponentIdentityContractSpec
 
   private def _assert_try_illegal_argument(result: Try[_]): Unit =
     result match {
-      case Failure(_: IllegalArgumentException) => succeed
+      case Failure(_: IllegalArgumentException) => ()
       case Failure(exception) =>
         fail(s"expected IllegalArgumentException but received ${exception.getClass.getName}")
       case scala.util.Success(_) =>

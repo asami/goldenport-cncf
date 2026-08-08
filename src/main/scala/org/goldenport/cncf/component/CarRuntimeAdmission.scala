@@ -18,7 +18,7 @@ import org.goldenport.cncf.CncfVersion
  * opaque bytes; ABI and CNCF runtime compatibility are validated separately.
  *
  * @since   Jul. 28, 2026
- * @version Jul. 29, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] object CarRuntimeAdmission {
@@ -47,10 +47,23 @@ private[component] object CarRuntimeAdmission {
 
   private def _validate(extracted: CarExtracted): Either[String, Unit] =
     for {
-      manifest <- _read_json(
-        extracted.root.resolve(MANIFEST_FILE),
-        "CAR runtime manifest"
+      _ <- _validate_runtime_manifest(extracted)
+      abi <- _read_json(
+        extracted.root.resolve(ABI_MANIFEST_FILE),
+        "CAR ABI manifest"
       )
+      _ <- _validate_abi(abi.hcursor, extracted.archiveDescriptor)
+    } yield ()
+
+  private def _validate_runtime_manifest(
+    extracted: CarExtracted
+  ): Either[String, Unit] = {
+    val path = extracted.root.resolve(MANIFEST_FILE)
+    if (!Files.exists(path) && extracted.deferredRelease.nonEmpty)
+      Right(())
+    else
+      for {
+      manifest <- _read_json(path, "CAR runtime manifest")
       _ <- _require_string(manifest.hcursor, "schemaVersion", "CAR runtime manifest")
         .flatMap { schema =>
           _require_equal(
@@ -59,21 +72,19 @@ private[component] object CarRuntimeAdmission {
             "CAR runtime manifest schemaVersion"
           )
         }
-      _ <- _validate_coordinate(manifest.hcursor, extracted.descriptor)
+      _ <- _validate_coordinate(manifest.hcursor, extracted.archiveDescriptor)
       range <- _runtime_range(manifest.hcursor)
       _ <- _validate_runtime_range(range, CncfVersion.current)
       entries <- _integrity_entries(manifest.hcursor)
       _ <- _validate_integrity(extracted.root, entries)
-      abi <- _read_json(
-        extracted.root.resolve(ABI_MANIFEST_FILE),
-        "CAR ABI manifest"
-      )
-      _ <- _validate_abi(abi.hcursor, extracted.descriptor)
     } yield ()
+  }
 
   private def _read_json(path: Path, label: String): Either[String, Json] =
-    if (!Files.isRegularFile(path))
+    if (!Files.exists(path))
       Left(s"${label} is missing: ${path}")
+    else if (!Files.isRegularFile(path))
+      Left(s"${label} is not a regular file: ${path}")
     else
       try {
         parse(Files.readString(path)).left.map { error =>

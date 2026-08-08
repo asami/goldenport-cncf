@@ -1,7 +1,7 @@
 package org.goldenport.cncf.projection
 
 import org.goldenport.record.Record
-import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.{Component, ComponentIdentityCompatibilityAdapter}
 import org.goldenport.cncf.projection.model.{HelpCapabilityModel, HelpConstraintModel, HelpContextMapModel, HelpContextModel, HelpModel, HelpQualityModel, HelpSelectorModel, HelpSystemContextModel, HelpUseCaseModel, HelpUseCaseScenarioModel, HelpVisionModel}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
@@ -19,7 +19,7 @@ object HelpProjection {
   import MetaProjectionSupport._
 
   def projectModel(base: Component, selector: Option[String] = None): HelpModel =
-    resolve(base, selector) match {
+    resolve(base, selector, ComponentIdentityCompatibilityAdapter.Surface.HelpProjection) match {
       case Target.Subsystem(components, name) =>
         val effectivename = _subsystem_effective_name(components, name)
         val domainvisionmodels = _subsystem_domain_vision_models(components, effectivename)
@@ -600,16 +600,15 @@ object HelpProjection {
   }
 
   private def _is_unique_display_alias(component: Component): Boolean =
-    components(component).count(candidate =>
-      _component_aliases(candidate).exists(
-        NamingConventions.equivalentByNormalized(_, component.displayName)
-      )
-    ) == 1
-
-  private def _component_aliases(component: Component): Vector[String] =
-    (Vector(component.displayName) ++ component.artifactMetadata.toVector.flatMap { metadata =>
-      Vector(metadata.name) ++ metadata.component.toVector
-    }).filter(_.nonEmpty)
+    ComponentIdentityCompatibilityAdapter.resolveAliases(
+      component.displayName,
+      ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(components(component)),
+      ComponentIdentityCompatibilityAdapter.Surface.HelpProjection
+    ) match {
+      case result: ComponentIdentityCompatibilityAdapter.Canonical => result.componentid == component.componentId
+      case result: ComponentIdentityCompatibilityAdapter.Adapted => result.componentid == component.componentId
+      case _: ComponentIdentityCompatibilityAdapter.Rejected => false
+    }
 
   private def _component_selector(
     componentid: String,

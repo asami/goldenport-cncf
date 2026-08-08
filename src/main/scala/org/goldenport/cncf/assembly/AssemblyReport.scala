@@ -10,7 +10,8 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Apr. 10, 2026
  *  version Apr. 11, 2026
- * @version May. 27, 2026
+ *  version May. 27, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssemblyWarning(
@@ -36,21 +37,29 @@ final case class AssemblyWarning(
 
 final class AssemblyReport {
   private val _warnings = mutable.ArrayBuffer.empty[AssemblyWarning]
+  private val _lock = new AnyRef
 
-  def warnings: Vector[AssemblyWarning] = _warnings.toVector
+  def warnings: Vector[AssemblyWarning] = _snapshot
 
-  def hasWarnings: Boolean = _warnings.nonEmpty
+  def hasWarnings: Boolean = _snapshot.nonEmpty
 
   def addWarning(warning: AssemblyWarning): Unit =
-    if (!_warnings.contains(warning))
-      _warnings += warning
+    _lock.synchronized {
+      if (warning != null && !_warnings.contains(warning))
+        _warnings += warning
+    }
 
-  def toRecord: Record =
+  def toRecord: Record = {
+    val snapshot = _snapshot
     Record.data(
-      "status" -> (if (hasWarnings) "warning" else "ok"),
-      "warningCount" -> warnings.size,
-      "warnings" -> warnings.map(_.toRecord)
+      "status" -> (if (snapshot.nonEmpty) "warning" else "ok"),
+      "warningCount" -> snapshot.size,
+      "warnings" -> snapshot.map(_.toRecord)
     )
+  }
+
+  private def _snapshot: Vector[AssemblyWarning] =
+    _lock.synchronized(_warnings.toVector)
 }
 
 object AssemblyReport {
@@ -64,9 +73,9 @@ object AssemblyReport {
     existing: Component,
     candidate: Component
   ): Selection = {
-    val existingPriority = _priority(existing)
-    val candidatePriority = _priority(candidate)
-    if (candidatePriority > existingPriority)
+    val existingpriority = _priority(existing)
+    val candidatepriority = _priority(candidate)
+    if (candidatepriority > existingpriority)
       Selection(
         selected = candidate,
         dropped = Vector(existing),
@@ -119,18 +128,18 @@ object AssemblyReport {
     else 0
 
   private def _reason(existing: Component, candidate: Component): String = {
-    val existingOrigin = existing.origin.label
-    val candidateOrigin = candidate.origin.label
-    if ((candidateOrigin.contains(":sar:") || candidateOrigin.contains(":sar-dir:")) &&
-        (existingOrigin.contains(":car:") || existingOrigin.contains(":car-dir:")))
+    val existingorigin = existing.origin.label
+    val candidateorigin = candidate.origin.label
+    if ((candidateorigin.contains(":sar:") || candidateorigin.contains(":sar-dir:")) &&
+        (existingorigin.contains(":car:") || existingorigin.contains(":car-dir:")))
       "bundled-subsystem-component-preferred-over-standalone-component"
-    else if ((existingOrigin.contains(":sar:") || existingOrigin.contains(":sar-dir:")) &&
-             (candidateOrigin.contains(":car:") || candidateOrigin.contains(":car-dir:")))
+    else if ((existingorigin.contains(":sar:") || existingorigin.contains(":sar-dir:")) &&
+             (candidateorigin.contains(":car:") || candidateorigin.contains(":car-dir:")))
       "bundled-subsystem-component-preferred-over-standalone-component"
     else if (_priority(candidate) > _priority(existing))
-      s"higher-origin-priority:${candidateOrigin}"
+      s"higher-origin-priority:${candidateorigin}"
     else
-      s"higher-origin-priority:${existingOrigin}"
+      s"higher-origin-priority:${existingorigin}"
   }
 
   private def _same_component_name(

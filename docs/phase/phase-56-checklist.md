@@ -321,7 +321,7 @@ Phase-release-only/pending; this evidence does not close Phase 56.
 ## CID-05: CNCF Runtime Identity Migration
 
 Stage Status:
-- Current status: DONE / STEP_COMMIT_PENDING
+- Current status: DONE / COMMITTED
 - Entry rule: CID-04 is complete.
 - Completion rule: Runtime loading and all internal consumers use the exact
   qualified `ComponentId`.
@@ -400,17 +400,141 @@ is absent after the suite and that the owned diff-check is clean. Independent
 focused re-review closed `RF-CID05D-011` through `RF-CID05D-013` with PASS,
 no new finding, and no full-review escalation on reviewed scoped diff
 `64fd912685db918b9c92e5b02e556b81b42b39cd83b2450aeb31ec86255b46ec`.
-CID-05D is accepted/reviewed and the CID-05 completion boxes are closed; the
-Step commit and Phase full validation remain pending, and HYG-P56-005 remains
+CID-05D is accepted/reviewed and the CID-05 completion boxes are closed. The
+Step commit is `d5d3c5bb71962d93898ac8b1ddbcac7d9c8cfe83` with message `Carry
+qualified component identity through CNCF runtime`. Exact validation invocation
+`86240-20260808T003231Z` completed four suites with 59 tests succeeded, zero
+failed/canceled/ignored, one intentional pending, both exits zero, and the lock
+released. Phase full validation remains pending, and HYG-P56-005 remains
 separate.
 
 ## CID-06: Compatibility Adapters
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Entry rule: CID-05 is complete.
 - Completion rule: Old inputs remain bounded decode aliases and all internal
   state is canonical.
+
+CID-06 Slice ledger:
+
+| Slice | Scope | Status |
+| --- | --- | --- |
+| CID-06A | Typed compatibility result and assembly-binding admission; exact qualified selection, unique bare adaptation, deterministic ambiguity/unsupported results, and active CID-01 E4. | ACCEPTED / REVIEWED |
+| CID-06B | Legacy descriptor-field agreement and canonical in-memory projection. | ACCEPTED / REVIEWED |
+| CID-06C | Runtime selector, Help/Meta, Web alias, and warning/Admin convergence. | ACCEPTED / REVIEWED. RF-CID06C-001 through RF-CID06C-012 are closed; invocation `52869-20260808T033203Z` passed all 11 suites and 119 tests without warnings. Independent focused re-review returned PASS on tracked diff `50ed3a22239bd8ed5dab2819957c421d72562abc1a0f683b4b409517a53252c6`; `FULL_REVIEW_REQUIRED=no`. CID-06E is also accepted/reviewed; the CID-06 Step commit, Phase full validation, CID-07, and notice-removal ownership remain pending. |
+| CID-06D | Exact deferred-release registry and unchanged legacy CAR ClassLoader/factory compatibility. | ACCEPTED / REVIEWED; post-fix invocation `74557-20260808T044055Z` passed 5 suites/109 tests warning-free, and independent focused re-review closed RF-CID06D-001 through RF-CID06D-004 with PASS and `FULL_REVIEW_REQUIRED=no`. |
+| CID-06E | End-to-end compatibility acceptance and Step convergence. | ACCEPTED / REVIEWED; [separate plan](../notes/phase-56-cid06e-compatibility-step-acceptance-plan.md) records RF-CID06E-001 exact-provenance repair; `85353-20260808T051139Z` passed 11 suites/179 tests warning-free; RF-CID06E-002 lifecycle contradictions are repaired and independent focused re-review returned PASS. |
+
+CID-06A completed `AssemblyBinding`; CID-06B adds `DescriptorField` projection
+without creating a second normalization authority. `REVIEW #1` admitted
+`R1-F1` static dev-repository candidate discovery, `R1-F2` adapter visibility,
+`R1-F3` direct spelling/metadata preservation evidence, `R1-F4` semantic
+specification grouping, `R1-F5` adapter-plan lifecycle reporting, and `R1-F6`
+phase/checklist lifecycle reporting. `REVIEW_FIX #1` is applied. The separate
+[descriptor compatibility plan](../notes/phase-56-cid06b-component-descriptor-compatibility-plan.md)
+keeps legacy projection expected-identity-bound, schema-3 strict, and unbound
+decode untyped. `VF-CID06B-001` and `VF-CID06B-002` correct the two admission
+brace placements. Focused evidence invocation `10489-20260808T013738Z`
+completed four suites with 36 tests succeeded, zero failed/canceled/ignored/
+pending/aborted, main and test compile succeeded, `sbt_exit=0`,
+`wrapper_exit=0`, and `lock=released`. `VF-CID06B-003` then repaired one
+discarded-Assertion warning. Final warning-free focused evidence invocation
+`13371-20260808T014534Z` used the exact logical argv:
+
+```text
+["--batch", "testOnly org.goldenport.cncf.component.Phase56ComponentIdentityCompatibilitySpec org.goldenport.cncf.component.Phase56ComponentDescriptorCompatibilitySpec org.goldenport.cncf.component.Phase56ComponentIdentityContractSpec org.goldenport.cncf.subsystem.SubsystemAssemblyAdmissionSpec"]
+```
+
+Four suites completed with zero aborted; 36 tests succeeded; zero failed,
+canceled, ignored, or pending; compile was warning-free; `sbt_exit=0`,
+`wrapper_exit=0`, and `lock=released`. Independent focused re-review returned
+PASS with no findings and `FULL_REVIEW_REQUIRED=no` on status SHA
+`cd38b345a039fdf0d850b5b9b3db4167e4989eaf098219f2a540bdac1b5ddb16` and
+tracked diff SHA
+`5af442141553a258093364af59afe476c9f7c313c5872438096db0b9561a344f`; all ten
+target hashes were exact. `R1-F1` through `R1-F6` and `VF-CID06B-001` through
+`VF-CID06B-003` are closed. This CID-06B record is historical; current state
+has CID-06C through CID-06E accepted/reviewed. The CID-06 Step feature-test,
+commit, and Phase full validation remain pending. No CID-06 completion box is closed until review and Step
+acceptance converge.
+
+CID-06C has a separate
+[runtime selector and compatibility observability plan](../notes/phase-56-cid06c-runtime-selector-observability-plan.md).
+Its acceptance matrix covers typed notice retention, unique and ambiguous
+runtime selectors, Help/Meta/Web convergence, warning deduplication, and the
+existing Admin assembly warning/report projection. Status:
+`ACCEPTED / REVIEWED`; RF-CID06C-001 through
+RF-CID06C-012 and validation repairs are applied. The earlier post-fix
+invocation `43771-20260808T030432Z` used the exact 11-suite CID-06C focused
+`testOnly` accumulator: 11 suites completed, zero aborted; 119 tests succeeded;
+zero failed, canceled, ignored, or pending; `sbt_exit=0`, `wrapper_exit=0`, and
+`lock=released`. The subsequent full re-review found no runtime defect and
+admitted only bounded metadata/grouping, internal naming, and header repairs.
+Initial validation `52300-20260808T033036Z` found exactly three stale test
+references after the internal field rename. Corrective authoritative invocation
+`52869-20260808T033203Z` then completed 11 suites with 119 tests succeeded,
+zero failed/canceled/ignored/pending/aborted, no warnings, both exits zero, and
+the lock released. Independent focused re-review returned PASS with no findings
+on status SHA `33c605da019b1eddca1fae3697e720b65c5894adab5042318641ccab040ff5a6`
+and tracked diff SHA
+`50ed3a22239bd8ed5dab2819957c421d72562abc1a0f683b4b409517a53252c6`;
+`FULL_REVIEW_REQUIRED=no`. Historical pre-review invocation `26232` is
+superseded. CID-06E is accepted/reviewed; the CID-06 Step commit remains
+pending.
+The complete finding-to-boundary ledger is retained in the primary
+[CID-06 compatibility adapter plan](../notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md).
+
+CID-06D RF-CID06D-001 through RF-CID06D-004 are applied. Historical invocation
+`66284` failed during compilation; `66671` compiled and reported three failures;
+`67421` completed five suites with 109 tests passed, no warnings, `sbt_exit=0`,
+`wrapper_exit=0`, and `lock=released`. That evidence predates and is superseded by the
+review fixes. Post-fix invocation `74557-20260808T044055Z` completed the same
+five suites with 109 tests passed, no warnings, `sbt_exit=0`, `wrapper_exit=0`,
+and `lock=released`. Independent focused re-review verified exact repaired
+hashes and returned PASS without new findings. CID-06E is accepted/reviewed;
+the CID-06 Step commit and Phase full validation remain pending.
+
+CID-06E now has one E1 executable acceptance in
+`Phase56ComponentIdentityCompatibilityAcceptanceSpec`. It composes the real
+GenericSubsystemFactory, the only configured packed-CAR repository candidate,
+raw/effective exact-release extraction, generated factory/Core, canonical
+Component/default-instance/artifact/cache/resolver state, canonical and unique
+legacy public routing, Help/Meta, owned AssemblyReport/Admin warnings, strict
+negative selectors, and one-time loader shutdown. The Corpus fixture keeps the
+intentional bare generated ID and adds one scalar operation. CID-06D and E use
+the shared `LegacyDeferredReleaseCarFixture`. All work is hermetic below the
+deterministic CID-06E target directory. Focused validation is complete:
+`84975-20260808T051049Z` passed E1 and authoritative
+`85353-20260808T051139Z` passed 11 suites/179 tests warning-free. Full review
+found no production or specification defect and admitted only RF-CID06E-002
+lifecycle contradictions. Those documentation repairs are applied, and
+independent focused re-review returned PASS with no findings and
+`FULL_REVIEW_REQUIRED=no`.
+
+CID-06E validation chain: `80957` aborted on invalid WorkAreaId; `81384`
+exposed missing capabilities; `81844` exposed the provider owner; and `82252`
+plus `82742` exposed deferred scope loss at GenericSubsystemFactory
+rematerialization. RF-CID06E-001 carries the exact repository-admitted
+deferred entry as package-internal, nonserialized Component provenance, scopes
+only the rematerializing factory/Core call, and propagates the same provenance
+to the recreated Component. It does not rederive from artifact/path/name,
+change ArtifactMetadata, relax strict cases, or expand the registry. Smallest
+corrective invocation `84975-20260808T051049Z` passed E1, and authoritative
+invocation `85353-20260808T051139Z` passed 11 suites/179 tests warning-free
+with both exits zero and the lock released. Full review found only
+RF-CID06E-002 lifecycle contradictions. Their documentation repair is applied,
+and independent focused re-review returned PASS with no findings and
+`FULL_REVIEW_REQUIRED=no`; CID-06E is accepted/reviewed.
+
+The CID-06 Step full review admitted `CID06-FR-001` through `CID06-FR-003`:
+failure-safe acceptance shutdown cleanup, complete semantic grouping/metadata
+in `SubsystemAssemblyAdmissionSpec`, and synchronized CID-06C/D lifecycle
+truth. Invocation `98250-20260808T055120Z` passed the two affected suites and
+all 10 tests without warnings, with both exits zero and the lock released.
+Independent focused re-review returned PASS with no findings and
+`FULL_REVIEW_REQUIRED=no`. The CID-06 Step feature-test/commit and Phase full
+validation remain pending.
 
 - [ ] Decode legacy descriptor `name`/`component` shapes through an explicit
   compatibility adapter.

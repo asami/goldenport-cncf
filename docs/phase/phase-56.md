@@ -173,11 +173,11 @@ not silently infer a namespace or rewrite project metadata.
 | CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | accepted/reviewed |
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. CID-04E adds the CNCF v2 index reader and direct canonical resolver while legacy runtime repository migration remains CID-05/06. | done |
 | CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | done |
-| CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | planned |
+| CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | in progress |
 | CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | planned |
 | CID-08 | Ecosystem regression and normative closure | Representative samples, launchers, CBD/BoK metadata, and dependency consumers adopt the contract; cross-repository tests, migration guidance, design/spec promotion, review, compatibility ledger, and release evidence close the phase. | planned |
 
-CID-05 slice ledger is accepted/reviewed and ready for its Step commit:
+CID-05 slice ledger is committed and done:
 
 | Slice | Status | Boundary |
 | --- | --- | --- |
@@ -240,14 +240,148 @@ is absent after the suite and that the owned diff-check is clean. Independent
 focused re-review closed `RF-CID05D-011` through `RF-CID05D-013` with PASS,
 no new finding, and no full-review escalation on reviewed scoped diff
 `64fd912685db918b9c92e5b02e556b81b42b39cd83b2450aeb31ec86255b46ec`.
-CID-05D and the CID-05 Step closure criterion are accepted; the Step commit,
-Phase full validation, and Phase 56 closure remain pending, and HYG-P56-005
-remains separate.
+CID-05D and the CID-05 Step closure criterion are accepted. The Step commit is
+`d5d3c5bb71962d93898ac8b1ddbcac7d9c8cfe83` (`Carry qualified component
+identity through CNCF runtime`). Its exact four-suite validation invocation
+`86240-20260808T003231Z` passed 59 tests with one intentional pending leaf;
+both exits were zero and the lock was released. Phase full validation and
+Phase 56 closure remain pending, and HYG-P56-005 remains separate.
 
 CID-05D does not implement CID-06 compatibility adapters or CID-01 E4 bare
 assembly admission, alter ComponentId syntax, repository/cache behavior, or
 HYG-P56-005. CID-05 is complete; Phase 56 and Phase full validation remain
 incomplete.
+
+CID-06 is implemented through the separate
+[compatibility adapter plan](../notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md).
+CID-06A completed the `AssemblyBinding` adapter. The current CID-06A + CID-06B
+boundary owns `AssemblyBinding` plus `DescriptorField`: exact qualified,
+bare, normalized-artifact, and namespace-leaf-prefixed artifact aliases remain
+central-adapter decisions only. `REVIEW #1` admitted `R1-F1` static candidate
+discovery, `R1-F2` adapter visibility, `R1-F3` projection evidence, `R1-F4`
+semantic spec grouping, `R1-F5` adapter-plan lifecycle reporting, and `R1-F6`
+phase/checklist lifecycle reporting. `REVIEW_FIX #1` is applied. CID-06B
+provides expected-identity-bound legacy descriptor projection, strict schema-3
+preservation, and assembly/static-repository integration; its
+[separate plan](../notes/phase-56-cid06b-component-descriptor-compatibility-plan.md)
+retains unbound decode without namespace inference and defers notices to
+CID-06C. `VF-CID06B-001` and `VF-CID06B-002` correct the two admission-method
+brace placements. Focused evidence invocation `10489-20260808T013738Z`
+completed four suites with 36 tests succeeded, zero failed/canceled/ignored/
+pending/aborted, main and test compile succeeded, `sbt_exit=0`,
+`wrapper_exit=0`, and `lock=released`. `VF-CID06B-003` then repaired one
+discarded-Assertion warning. Final warning-free focused evidence invocation
+`13371-20260808T014534Z` used the exact logical argv:
+
+```text
+["--batch", "testOnly org.goldenport.cncf.component.Phase56ComponentIdentityCompatibilitySpec org.goldenport.cncf.component.Phase56ComponentDescriptorCompatibilitySpec org.goldenport.cncf.component.Phase56ComponentIdentityContractSpec org.goldenport.cncf.subsystem.SubsystemAssemblyAdmissionSpec"]
+```
+
+Four suites completed with zero aborted; 36 tests succeeded; zero failed,
+canceled, ignored, or pending; compile was warning-free; `sbt_exit=0`,
+`wrapper_exit=0`, and `lock=released`. Independent focused re-review returned
+PASS with no findings and `FULL_REVIEW_REQUIRED=no` on status SHA
+`cd38b345a039fdf0d850b5b9b3db4167e4989eaf098219f2a540bdac1b5ddb16` and
+tracked diff SHA
+`5af442141553a258093364af59afe476c9f7c313c5872438096db0b9561a344f`; all ten
+target hashes were exact. `R1-F1` through `R1-F6` and `VF-CID06B-001` through
+`VF-CID06B-003` are closed. CID-06B is `ACCEPTED / REVIEWED`. That record is
+historical; current lifecycle state has CID-06C through CID-06E
+accepted/reviewed, while the CID-06 Step feature-test/commit and Phase full
+validation remain pending.
+
+CID-06E is frozen separately in the
+[compatibility Step acceptance plan](../notes/phase-56-cid06e-compatibility-step-acceptance-plan.md).
+Status: `ACCEPTED / REVIEWED`. One hermetic exact
+Corpus release fixture now crosses real assembly,
+repository, ClassLoader/factory/Core, public routing, Help/Meta,
+AssemblyReport/Admin, strict negative-selector, and shutdown boundaries.
+Focused validation is complete: `84975-20260808T051049Z` passed E1 and
+`85353-20260808T051139Z` passed 11 suites/179 tests warning-free. Full review
+found no production or specification defect and admitted only RF-CID06E-002
+stale lifecycle wording. That documentation repair is applied, and independent
+focused re-review returned PASS with no findings and
+`FULL_REVIEW_REQUIRED=no`.
+
+The E1 executable acceptance uses `GenericSubsystemFactory`, the configured
+packed-CAR repository, the unchanged generated `ComponentId("Corpus")` Core,
+public canonical and legacy Request routing, Help/Meta, the owning Admin
+assembly report, strict negative selectors, and repeated shutdown. CID-06D and
+CID-06E share `LegacyDeferredReleaseCarFixture`; all acceptance work is rooted
+under the deterministic CID-06E target directory and cleaned by the spec.
+
+The acceptance validation chain reached the frozen defect in stages: `80957`
+aborted on invalid WorkAreaId, `81384` exposed missing fixture capabilities,
+`81844` exposed the provider owner, and `82252`/`82742` exposed deferred scope
+loss during GenericSubsystemFactory rematerialization. RF-CID06E-001 now
+carries the exact repository-admitted deferred entry as package-internal,
+nonserialized Component provenance, scopes only the rematerializing
+factory/Core call, and propagates the same provenance. Smallest corrective
+invocation `84975-20260808T051049Z` passed E1; authoritative invocation
+`85353-20260808T051139Z` passed the exact 11-suite accumulator with 179 tests,
+no warnings, both exits zero, and the lock released. Full review found only
+RF-CID06E-002 lifecycle contradictions. Their documentation repair is applied,
+and independent focused re-review returned PASS with no findings and
+`FULL_REVIEW_REQUIRED=no`; CID-06E is accepted/reviewed.
+
+The CID-06 Step full review admitted `CID06-FR-001` through `CID06-FR-003`:
+failure-safe acceptance shutdown cleanup, complete semantic grouping/metadata
+in `SubsystemAssemblyAdmissionSpec`, and synchronized CID-06C/D lifecycle
+truth. Invocation `98250-20260808T055120Z` passed the two affected suites and
+all 10 tests without warnings, with both exits zero and the lock released.
+Independent focused re-review returned PASS with no findings and
+`FULL_REVIEW_REQUIRED=no`. The CID-06 Step feature-test/commit and Phase full
+validation remain pending.
+
+CID-06C review-fix implementation is recorded in the separate
+[runtime selector and compatibility observability plan](../notes/phase-56-cid06c-runtime-selector-observability-plan.md).
+It centralizes admitted runtime display/artifact alias decisions, retains
+typed assembly and descriptor notices through the runtime factory boundary,
+and projects deduplicated warnings through the existing assembly Admin report.
+Status: `ACCEPTED / REVIEWED`. Runtime adapter,
+admission notice retention, resolver, Help/Meta, Web, and existing
+AssemblyReport/Admin warning boundaries are implemented with repaired E1-E9
+executable evidence. Post-fix focused invocation `43771-20260808T030432Z`
+completed 11 suites with 119 tests succeeded, zero failed/canceled/ignored/
+pending/aborted, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. The
+required full re-review
+closed the runtime semantics but admitted RF-CID06C-009 through
+RF-CID06C-012 for executable metadata/grouping, internal naming, and edited
+Scala headers. Those bounded repairs are applied. Initial validation
+`52300-20260808T033036Z` stopped during test compilation on exactly three stale
+test references to renamed internal fields. After correcting those references,
+authoritative invocation `52869-20260808T033203Z` completed all 11 suites with
+119 tests succeeded, zero failed/canceled/ignored/pending/aborted, no warnings,
+`sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Independent focused
+re-review returned PASS with no findings on tracked diff
+`50ed3a22239bd8ed5dab2819957c421d72562abc1a0f683b4b409517a53252c6`;
+`FULL_REVIEW_REQUIRED=no`. CID-06C is accepted/reviewed, but no CID-06 Step
+commit is claimed. Historical pre-review invocation `26232` is retained only
+as superseded evidence. CID-06E is accepted/reviewed; the Step commit, Phase
+full validation, CID-07, and notice-removal ownership remain pending.
+
+CID-06D review fixes are applied under the separate
+[deferred-release compatibility plan](../notes/phase-56-cid06d-deferred-release-compatibility-plan.md).
+The frozen boundary contains exactly four released coordinates, separates raw
+archive evidence from canonical in-memory projection, scopes legacy generated
+bare `ComponentId` calls to exact repository factory execution, and keeps
+SNAPSHOT/future/lower/malformed/unregistered inputs strict or invalid. The
+exact registry, raw/effective archive roles, runtime-evidence exception,
+thread-local factory/Core scope, repository admission wrapper, warning, and
+E1-E10 executable fixture matrix are implemented. RF-CID06D-001 through
+RF-CID06D-004 restrict deferral to schema 2, reject an existing non-regular
+runtime-manifest path, and repair the specification and lifecycle evidence.
+Status: `ACCEPTED / REVIEWED`. Historical
+invocation `66284` failed during compilation; `66671` compiled and reported three
+failures; `67421` completed five suites with 109 tests passed, no warnings,
+`sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. That evidence predates and
+is superseded by these review fixes. Post-fix invocation
+`74557-20260808T044055Z` completed the same five suites with 109 tests passed,
+no warnings, `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Independent
+focused re-review verified the exact repaired hashes, closed RF-CID06D-001
+through RF-CID06D-004 without new findings, and returned PASS with
+`FULL_REVIEW_REQUIRED=no`. CID-06E is accepted/reviewed; the CID-06 Step
+commit and Phase full validation remain pending.
 
 CID-05D also exposed an adjacent plain-`Action` implicit-job defect. Because
 fixing it changes observable execution behavior rather than Component

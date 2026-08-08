@@ -3,7 +3,8 @@ package org.goldenport.cncf.projection
 import org.goldenport.record.Record
 import org.goldenport.schema.DataType
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
-import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.{Component, ComponentIdentityCompatibilityAdapter, ComponentIdentityCompatibilityObserver}
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.goldenport.cncf.entity.runtime.EntityQueryFieldResolver
@@ -85,7 +86,11 @@ private[projection] object MetaProjectionSupport {
   def components(base: Component): Vector[Component] =
     base.subsystem.map(_.components.sortBy(_.componentId.name)).filter(_.nonEmpty).getOrElse(Vector(base))
 
-  def resolve(base: Component, selector: Option[String]): Target = {
+  def resolve(
+    base: Component,
+    selector: Option[String],
+    surface: ComponentIdentityCompatibilityAdapter.Surface = ComponentIdentityCompatibilityAdapter.Surface.MetaProjection
+  ): Target = {
     val comps = components(base)
     selector.map(_.trim).filter(_.nonEmpty) match {
       case None =>
@@ -95,11 +100,11 @@ private[projection] object MetaProjectionSupport {
         if (segments.exists(_.isEmpty))
           Target.NotFound(Some(s))
         else
-          _find_component(comps, s).map(Target.ComponentTarget.apply).orElse {
+          _find_component(base, comps, s, surface).map(Target.ComponentTarget.apply).orElse {
             segments match {
               case xs if xs.size >= 3 =>
                 for {
-                  comp <- _find_component(comps, xs.dropRight(2).mkString("."))
+                  comp <- _find_component(base, comps, xs.dropRight(2).mkString("."), surface)
                   service <- _find_service(comp, xs(xs.size - 2))
                   op <- _find_operation(service, xs.last)
                 } yield Target.OperationTarget(comp, service, op)
@@ -109,7 +114,7 @@ private[projection] object MetaProjectionSupport {
             segments match {
               case xs if xs.size >= 2 =>
                 for {
-                  comp <- _find_component(comps, xs.dropRight(1).mkString("."))
+                  comp <- _find_component(base, comps, xs.dropRight(1).mkString("."), surface)
                   service <- _find_service(comp, xs.last)
                 } yield Target.ServiceTarget(comp, service)
               case _ => None
@@ -566,19 +571,32 @@ private[projection] object MetaProjectionSupport {
   ): String =
     NamingConventions.toNormalizedSelector(component.displayName, service.name, operation.name)
 
-  private def _find_component(comps: Vector[Component], name: String): Option[Component] =
-    comps.find(_.componentId.name == name).orElse {
-      if (name.contains("."))
-        None
-      else
-        comps.filter { x =>
-          NamingConventions.equivalentByNormalized(x.displayName, name) ||
-            x.artifactMetadata.toVector.exists { metadata =>
-              metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
-                NamingConventions.equivalentByNormalized(metadata.name, name)
-            }
-        } match { case Vector(component) => Some(component); case _ => None }
+  private def _find_component(
+    base: Component,
+    comps: Vector[Component],
+    name: String,
+    surface: ComponentIdentityCompatibilityAdapter.Surface
+  ): Option[Component] =
+    ComponentIdentityCompatibilityAdapter.resolveAliases(
+      name,
+      ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(comps),
+      surface
+    ) match {
+      case result: ComponentIdentityCompatibilityAdapter.Canonical =>
+        comps.find(_.componentId == result.componentid)
+      case result: ComponentIdentityCompatibilityAdapter.Adapted =>
+        _observe_compatibility_notice(base, result.notice)
+        comps.find(_.componentId == result.componentid)
+      case _: ComponentIdentityCompatibilityAdapter.Rejected => None
     }
+
+  private def _observe_compatibility_notice(
+    base: Component,
+    notice: ComponentIdentityCompatibilityAdapter.Notice
+  ): Unit =
+    base.subsystem.flatMap(_.globalRuntimeContextOption).orElse(GlobalRuntimeContext.current).foreach(
+      context => ComponentIdentityCompatibilityObserver.observe(context.assemblyReport, notice)
+    )
 
   private def _find_service(component: Component, servicename: String): Option[ServiceDefinition] =
     component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, servicename))

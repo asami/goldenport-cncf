@@ -43,7 +43,7 @@ import org.goldenport.record.io.RecordExportEncoder
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
-import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.component.{ComponentId, ComponentIdentityCompatibilityAdapter, ComponentIdentityCompatibilityObserver}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.subsystem.SubsystemCurrentUserEvidence
@@ -4196,18 +4196,22 @@ final class Http4sHttpServer(
   private def _select_components(
     selector: String
   ): Vector[org.goldenport.cncf.component.Component] =
-    ComponentId.parseC(selector) match {
-      case org.goldenport.Consequence.Success(id) => engine.runtimeSubsystem.components.filter(_.componentId == id)
-      case org.goldenport.Consequence.Failure(_) =>
-        val normalized = NamingConventions.toNormalizedSegment(selector)
-        val candidates = engine.runtimeSubsystem.components.filter { component =>
-          val aliases = Vector(component.displayName) ++ component.artifactMetadata.toVector.flatMap { metadata =>
-            Vector(Some(metadata.name), metadata.component).flatten
-          }
-          aliases.exists(value => NamingConventions.toNormalizedSegment(value) == normalized)
-        }
-        val ids = candidates.map(_.componentId).distinct
-        if (ids.size == 1) candidates.filter(_.componentId == ids.head) else Vector.empty
+    ComponentIdentityCompatibilityAdapter.resolveAliases(
+      selector,
+      ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(engine.runtimeSubsystem.components),
+      ComponentIdentityCompatibilityAdapter.Surface.WebPath
+    ) match {
+      case result: ComponentIdentityCompatibilityAdapter.Canonical =>
+        engine.runtimeSubsystem.components.filter(_.componentId == result.componentid)
+      case result: ComponentIdentityCompatibilityAdapter.Adapted =>
+        engine.runtimeSubsystem.globalRuntimeContextOption.foreach(
+          context => ComponentIdentityCompatibilityObserver.observe(
+            context.assemblyReport,
+            result.notice
+          )
+        )
+        engine.runtimeSubsystem.components.filter(_.componentId == result.componentid)
+      case _: ComponentIdentityCompatibilityAdapter.Rejected => Vector.empty
     }
 
   private def _configured_component_dev_dir_web_roots(

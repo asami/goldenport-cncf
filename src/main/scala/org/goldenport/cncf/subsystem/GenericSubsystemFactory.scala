@@ -3,7 +3,7 @@ package org.goldenport.cncf.subsystem
 import java.nio.file.{Path, Paths}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentInstanceMetadata, ComponentOrigin, DevelopmentCarRuntimeAdmission}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentIdentityCompatibilityObserver, ComponentIdentityDeferredReleaseScope, ComponentInstanceMetadata, ComponentOrigin, DevelopmentCarRuntimeAdmission}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{ConfigurationAccess, RepositoryBootstrapPolicy, RuntimeConfig, RuntimeTestDescriptor}
@@ -592,7 +592,17 @@ object GenericSubsystemFactory {
     aliasresolver: AliasResolver,
     repositoryspecs: Vector[ComponentRepository.Specification]
   ): Subsystem = {
-    val admitteddescriptor = _admit_descriptor_or_raise(descriptor, configuration, repositoryspecs)
+    val admission = _or_raise(
+      _admit_descriptor_detailed_c(
+        descriptor,
+        configuration,
+        repositoryspecs
+      )
+    )
+    val admitteddescriptor = admission.descriptor
+    _find_global_runtime_context(Some(context)).foreach { owner =>
+      ComponentIdentityCompatibilityObserver.observe(owner.assemblyReport, admission.notices)
+    }
     val admissionreport = _or_raise(SubsystemAssemblyAdmission.evaluateC(admitteddescriptor))
     val componentdescriptors = admitteddescriptor.toComponentDescriptors
     val runtimeconfig = RuntimeConfig.from(configuration)
@@ -865,17 +875,35 @@ object GenericSubsystemFactory {
     descriptor: GenericSubsystemDescriptor,
     configuration: ResolvedConfiguration,
     repositoryspecs: Vector[ComponentRepository.Specification]
-  ): Consequence[GenericSubsystemDescriptor] = {
+  ): Consequence[GenericSubsystemDescriptor] =
+    _admit_descriptor_detailed_c(descriptor, configuration, repositoryspecs)
+      .map(_.descriptor)
+
+  private def _admit_descriptor_detailed_c(
+    descriptor: GenericSubsystemDescriptor,
+    configuration: ResolvedConfiguration,
+    repositoryspecs: Vector[ComponentRepository.Specification]
+  ): Consequence[SubsystemAssemblyAdmission.DetailedAdmission] = {
     val specs =
       if (repositoryspecs.nonEmpty) repositoryspecs
       else _repository_specs_for_descriptor(configuration, descriptor)
     _with_primary_component_defaults_c(descriptor, specs).flatMap { effective =>
-      SubsystemAssemblyAdmission.resolveC(
+      SubsystemAssemblyAdmission.resolveWithNoticesC(
         effective,
         _admission_repository_specs(configuration, specs)
       )
     }
   }
+
+  @annotation.tailrec
+  private def _find_global_runtime_context(
+    scopecontext: Option[ScopeContext]
+  ): Option[GlobalRuntimeContext] =
+    scopecontext match {
+      case Some(owner: GlobalRuntimeContext) => Some(owner)
+      case Some(scope) => _find_global_runtime_context(scope.parent)
+      case None => None
+    }
 
   private def _with_primary_component_defaults_c(
     descriptor: GenericSubsystemDescriptor,
@@ -1069,11 +1097,18 @@ object GenericSubsystemFactory {
           .withOrigin(prototype.origin)
           .withComponentDescriptors(prototype.componentDescriptors)
           .withInstanceMetadata(_binding_instance_metadata(binding, prototype))
-        val componentc =
+        val create = () =>
           if (prototype.isComponentletParticipant) factory.createComponentletC(instanceparams)
           else factory.createPrimaryC(instanceparams)
+        val componentc = prototype.deferredReleaseProvenance match {
+          case Some(entry) =>
+            ComponentIdentityDeferredReleaseScope.withExpected(entry)(create())
+          case None =>
+            create()
+        }
         componentc.map { component =>
           prototype.artifactMetadata.foreach(component.withArtifactMetadata)
+          prototype.deferredReleaseProvenance.foreach(component.withDeferredReleaseProvenance)
           component.withCollaboratorClasspath(prototype.collaboratorClasspath)
         }
       case None =>

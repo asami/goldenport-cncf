@@ -57,11 +57,32 @@ object ComponentDescriptorLoader {
       Consequence.resourceInvalid(s"component descriptor path is not a file or directory: ${path}")
 
   def loadArchive(path: Path): Consequence[ComponentDescriptor] =
+    _load_archive(path, validatecanonical = true)
+
+  /**
+   * Decodes packaged descriptor evidence before CID-06D admission
+   * classification. Public archive loading remains canonical and strict.
+   */
+  private[component] def loadArchiveRaw(path: Path): Consequence[ComponentDescriptor] =
+    _load_archive(path, validatecanonical = false)
+
+  /** Repository metadata view after exact deferred-release classification. */
+  private[cncf] def loadArchiveEffective(path: Path): Consequence[ComponentDescriptor] =
+    for {
+      raw <- loadArchiveRaw(path)
+      registry <- ComponentIdentityDeferredReleaseRegistry.loadC()
+      admission <- registry.admitDescriptorC(raw)
+    } yield admission.effective
+
+  private def _load_archive(
+    path: Path,
+    validatecanonical: Boolean
+  ): Consequence[ComponentDescriptor] =
     try {
       if (!Files.exists(path))
         Consequence.resourceNotFound(s"component archive descriptor path does not exist: ${path}")
       else if (_is_archive_file(path))
-        _load_archive_file(path)
+        _load_archive_file(path, validatecanonical)
       else if (_is_non_component_archive_file(path))
         Consequence.resourceInvalid(s"component archive must be a CAR file: ${path}")
       else {
@@ -70,7 +91,7 @@ object ComponentDescriptorLoader {
           else Some(path)
         descriptorpath match {
           case Some(file) =>
-            _load_archive_descriptor_file(file, path)
+            _load_archive_descriptor_file(file, path, validatecanonical)
           case None =>
             Consequence.resourceNotFound(s"component descriptor not found under canonical CAR layout: ${path}")
         }
@@ -113,21 +134,24 @@ object ComponentDescriptorLoader {
 
   private def _is_archive_file(path: Path): Boolean = {
     val name = path.getFileName.toString.toLowerCase
-    name.endsWith(".car")
+    Files.isRegularFile(path) && name.endsWith(".car")
   }
 
   private def _is_non_component_archive_file(path: Path): Boolean = {
     val name = path.getFileName.toString.toLowerCase
-    name.endsWith(".sar") || name.endsWith(".zip")
+    Files.isRegularFile(path) && (name.endsWith(".sar") || name.endsWith(".zip"))
   }
 
-  private def _load_archive_file(path: Path): Consequence[ComponentDescriptor] = {
+  private def _load_archive_file(
+    path: Path,
+    validatecanonical: Boolean
+  ): Consequence[ComponentDescriptor] = {
     val uri = URI.create(s"jar:${path.toUri}")
     Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
       val root = fs.getPath("/")
       _resolve_canonical_descriptor_files(root).headOption match {
         case Some(file) =>
-          _load_archive_descriptor_file(file, path)
+          _load_archive_descriptor_file(file, path, validatecanonical)
         case None =>
           Consequence.resourceNotFound(s"component descriptor not found in archive: ${path}")
       }
@@ -144,14 +168,18 @@ object ComponentDescriptorLoader {
 
   private def _load_archive_descriptor_file(
     descriptorpath: Path,
-    archivepath: Path
+    archivepath: Path,
+    validatecanonical: Boolean
   ): Consequence[ComponentDescriptor] = {
     val result = _load_file(descriptorpath).flatMap { descriptors =>
       descriptors.headOption
         .map(Consequence.success)
         .getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${archivepath}"))
     }.flatMap { descriptor =>
-      _validate_archive_descriptor_contract(descriptor).map(_ => descriptor)
+      if (validatecanonical)
+        _validate_archive_descriptor_contract(descriptor).map(_ => descriptor)
+      else
+        Consequence.success(descriptor)
     }
     _archive_admission_result_c(archivepath, result)
   }

@@ -5,8 +5,12 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentInstanceMetadata, ComponentLocator, ComponentOrigin, ComponentSpace}
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
-import org.goldenport.cncf.config.ComponentParameterDiagnostics
+import org.goldenport.cncf.config.{ComponentParameterDiagnostics, RuntimeConfig}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
+import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.projection.DescribeProjection
 import org.goldenport.cncf.projection.HelpProjection
+import org.goldenport.cncf.projection.SchemaProjection
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.testutil.{RuntimeBindingAdmissionFixture, TestComponentFactory}
@@ -15,7 +19,10 @@ import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationRequest
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
+import org.goldenport.record.Record
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -32,7 +39,7 @@ final class Phase56RuntimeIdentityProjectionSpec
     with GivenWhenThen
     with TableDrivenPropertyChecks {
   private val _e12 = afterWord("in spec:phase-56-runtime-identity-projection, example:E12, rules:CID05C-R8, phase:56, slice:CID-05C")
-  private val _e13 = afterWord("in spec:phase-56-runtime-identity-projection, example:E13, rules:CID05C-R8, phase:56, slice:CID-05C")
+  private val _e13 = afterWord("in spec:phase-56-runtime-identity-projection, example:E13, rules:CID06C-R3,R4,R6, phase:56, slice:CID-06C")
   private val _e14 = afterWord("in spec:phase-56-runtime-identity-projection, example:E14, rules:CID05C-R8, phase:56, slice:CID-05C")
   private val _e15 = afterWord("in spec:phase-56-runtime-identity-projection, example:E15, rules:CID05C-R8, phase:56, slice:CID-05C")
   private val _e16 = afterWord("in spec:phase-56-runtime-identity-projection, example:E16, rules:CID05C-R8, phase:56, slice:CID-05C")
@@ -40,11 +47,14 @@ final class Phase56RuntimeIdentityProjectionSpec
   private val _e18 = afterWord("in spec:phase-56-runtime-identity-projection, example:E18, rules:CID05C-R8, phase:56, slice:CID-05C")
   private val _e19 = afterWord("in spec:phase-56-runtime-identity-projection, example:E19, rules:CID05C-R6,R7, phase:56, slice:CID-05C")
   private val _e20 = afterWord("in spec:phase-56-runtime-identity-projection, example:E20, rules:CID05C-R10, phase:56, slice:CID-05C")
+  private val _e21 = afterWord("in spec:phase-56-runtime-identity-projection, example:E21, rules:CID06C-R6,R7, phase:56, slice:CID-06C")
+  private val _e22 = afterWord("in spec:phase-56-runtime-identity-projection, example:E22, rules:CID06C-R8,R9, phase:56, slice:CID-06C")
   private val _e8 = afterWord("in spec:phase-56-runtime-identity-projection, example:E8, rules:CID05C-R8, phase:56, slice:CID-05C")
   private val _e9 = afterWord("in spec:phase-56-runtime-identity-projection, example:E9, rules:CID05C-R8, phase:56, slice:CID-05C")
   private def _metadata(exampleid: String) =
     afterWord(s"in spec:phase-56-runtime-identity-projection, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
   "Phase 56 runtime identity projection" should {
+    "use one canonical identity across runtime selectors and projections" which {
     "E12 select ComponentSpace by exact ComponentId and reject ambiguous displays" must _e12 {
       "when exercising: E12 select ComponentSpace by exact ComponentId and reject ambiguous displays" in {
         Given("two qualified components with display identities that collide after compatibility normalization")
@@ -89,15 +99,24 @@ final class Phase56RuntimeIdentityProjectionSpec
         When("canonical and display selectors are resolved")
         val canonical = resolver.resolve("org.alpha.Shared.notice.search")
         val display = resolver.resolve("Shared.notice.search")
+        val detailed = resolver.resolveWithNotices("Shared.notice.search")
 
-        Then("both return the canonical qualified result")
+        Then("the exact selector resolves while the colliding bare local identity remains ambiguous")
         canonical shouldBe ResolutionResult.Resolved(
           "org.alpha.Shared.notice.search",
           "org.alpha.Shared",
           "notice",
           "search"
         )
-        display shouldBe canonical
+        display shouldBe ResolutionResult.Ambiguous(
+          "Shared",
+          Vector(
+            "org.alpha.Shared.notice.search",
+            "org.beta.Shared.notice.search"
+          )
+        )
+        detailed.result shouldBe display
+        detailed.notices shouldBe empty
 
         When("the display alias becomes ambiguous")
         val ambiguous = OperationResolver.build(Vector(alpha, _component(
@@ -313,6 +332,44 @@ final class Phase56RuntimeIdentityProjectionSpec
       }
     }
 
+    "E21 converge Help and Meta projections for unique, ambiguous, and unknown qualified selectors" must _e21 {
+      "when exercising: converge Help and Meta projections for unique, ambiguous, and unknown qualified selectors" in {
+        Given("two qualified components that share one display alias and a third component with a unique display alias")
+        val subsystem = TestComponentFactory.emptySubsystem("phase56-help-meta-boundary")
+        val alpha = _component("org.alpha.Shared", "Shared", subsystem = subsystem)
+        val beta = _component("org.beta.Shared", "Shared", subsystem = subsystem)
+        val gamma = _component("org.gamma.Unique", "Unique", subsystem = subsystem)
+        subsystem.add(Vector(alpha, beta, gamma))
+
+        When("Help and Meta are projected through unique, ambiguous, and unknown qualified selectors")
+        val uniquehelp = HelpProjection.projectModel(alpha, Some("org.alpha.Shared.service.operation"))
+        val uniquealiashelp = HelpProjection.projectModel(gamma, Some("Unique.service.operation"))
+        val ambiguoushelp = HelpProjection.projectModel(alpha, Some("Shared.service.operation"))
+        val unique = DescribeProjection.project(gamma, Some("org.gamma.Unique"))
+        val ambiguous = DescribeProjection.project(alpha, Some("Shared"))
+        val unknown = SchemaProjection.project(gamma, Some("org.unknown.Unique"))
+
+        Then("Help keeps the exact selector and advertises a unique display alias only when it is accepted")
+        uniquehelp.`type` shouldBe "operation"
+        uniquealiashelp.`type` shouldBe "operation"
+        uniquehelp.selector.map(_.accepted) shouldBe Some(Vector("org.alpha.Shared.service.operation"))
+        uniquealiashelp.selector.map(_.accepted) shouldBe Some(Vector(
+          "org.gamma.Unique.service.operation",
+          "Unique.service.operation"
+        ))
+        uniquealiashelp.usage shouldBe Vector("command unique.service.operation")
+        ambiguoushelp.`type` shouldBe "error"
+        ambiguoushelp.selector shouldBe None
+        ambiguoushelp.usage shouldBe empty
+
+        And("Meta preserves exact qualified projection while ambiguous and unknown qualified aliases remain errors")
+        unique.getString("type") shouldBe Some("component")
+        unique.getString("name") shouldBe Some("org.gamma.Unique")
+        ambiguous.getString("type") shouldBe Some("error")
+        unknown.getString("type") shouldBe Some("error")
+      }
+    }
+
     "E8 expose Admin assembly records with exact ID and separate display name" must _e8 {
       "when exercising: expose Admin assembly records with exact ID and separate display name" in {
         Given("the builtin Admin component")
@@ -351,6 +408,55 @@ final class Phase56RuntimeIdentityProjectionSpec
         }
         ids should contain allOf ("org.alpha.Shared", "org.alpha.Shared@blue")
       }
+    }
+
+    "E22 expose deduplicated compatibility warnings through the Admin assembly report operation" must _e22 {
+      "when exercising: expose deduplicated compatibility warnings through the Admin assembly report operation" in {
+        Given("a server subsystem owned by one runtime whose Admin operation is reached through one legacy display alias repeatedly")
+        val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+        val runtime = GlobalRuntimeContext.create(
+          "phase56-admin-observability",
+          RuntimeConfig.default,
+          configuration,
+          ExecutionContext.create().observability,
+          AliasResolver.empty
+        )
+        val previous = GlobalRuntimeContext.current
+        GlobalRuntimeContext.current = Some(runtime)
+        try {
+          val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"), configuration)
+          val legacy = HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
+
+          When("the accepted alias is resolved twice and the canonical assembly report is requested")
+          subsystem.executeHttp(legacy).code shouldBe 200
+          subsystem.executeHttp(legacy).code shouldBe 200
+          val reportresult = subsystem.executeOperationResponse(Request.of(
+            component = "org.goldenport.cncf.Admin",
+            service = "assembly",
+            operation = "report"
+          ))
+          val report = reportresult.toOption.collect {
+            case OperationResponse.RecordResponse(record) => record
+          }.getOrElse(fail(s"Admin assembly report was not a RecordResponse: $reportresult"))
+          val warnings = report.getRecord("warnings").getOrElse(fail("assembly warning projection is missing"))
+          val warningrecords = warnings.getAny("warnings").collect {
+            case xs: Seq[?] => xs.collect { case value: Record => value }.toVector
+          }.getOrElse(Vector.empty)
+
+          Then("the report exposes one compatibility warning with stable fields despite repeated alias resolution")
+          warnings.getString("status") shouldBe Some("warning")
+          warnings.getInt("warningCount") shouldBe Some(1)
+          warningrecords should have size 1
+          warningrecords.head.getString("kind") shouldBe Some("component-identity-compatibility")
+          warningrecords.head.getString("component") shouldBe Some("org.goldenport.cncf.Admin")
+          warningrecords.head.getString("reason").getOrElse("") should include ("surface=runtime-selector")
+          warningrecords.head.getString("reason").getOrElse("") should include ("alias=admin")
+          warningrecords.head.getString("message").getOrElse("") should include ("canonical=org.goldenport.cncf.Admin")
+        } finally {
+          GlobalRuntimeContext.current = previous
+        }
+      }
+    }
     }
   }
 
