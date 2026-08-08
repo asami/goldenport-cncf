@@ -10,10 +10,13 @@ import org.goldenport.schema.XString
 
 /*
  * @since   May. 18, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
-class DevDirSampleComponent extends Component
+class DevDirSampleComponent extends Component {
+  override def displayName: String = DevDirSampleComponent.name
+}
 
 final class DevDirSamplePrimaryComponent extends DevDirSampleComponent
 
@@ -31,7 +34,7 @@ object DevDirSamplePrimaryFactory extends Component.PrimaryComponentFactory {
     comp: Component
   ): Component.Core =
     spec_create(
-      DevDirSampleComponent.name,
+      DevDirSampleComponent.componentId.name,
       DevDirSampleComponent.componentId,
       MainService
     )
@@ -39,7 +42,7 @@ object DevDirSamplePrimaryFactory extends Component.PrimaryComponentFactory {
 
 object DevDirSampleComponent extends Component.Factory {
   val name = "devdirsample"
-  val componentId = ComponentId(name)
+  val componentId = ComponentId("org.goldenport.fixture.DevDirSample")
 
   protected def create_Component(params: ComponentCreate): Component =
     DevDirSampleComponent()
@@ -49,7 +52,7 @@ object DevDirSampleComponent extends Component.Factory {
     comp: Component
   ): Component.Core =
     spec_create(
-      name,
+      componentId.name,
       componentId,
       MainService
     )

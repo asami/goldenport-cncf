@@ -110,14 +110,16 @@ import org.simplemodeling.model.datatype.{
  *  version May. 31, 2026
  *  version Jun. 18, 2026
  *  version Jul. 30, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
-class AdminComponent() extends Component {}
+class AdminComponent() extends Component {
+  override def displayName: String = AdminComponent.name
+}
 
 object AdminComponent {
   val name: String = "admin"
-  val componentId = ComponentId(name) // TODO static
+  val componentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN
 
   private trait AdminOperationAuthorization extends OperationAuthorizationProvider {
     def operationAuthorization(
@@ -398,7 +400,7 @@ object AdminComponent {
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         instanceid,
         protocol
@@ -1424,17 +1426,17 @@ object AdminComponent {
 
   private final case class ExecutionCalltreeActionCall(
     core: ActionCall.Core,
-    calltreeRequest: Request
+    calltreerequest: Request
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      val originslot = _request_value(calltreeRequest, "originSlot")
-        .orElse(_request_value(calltreeRequest, "origin_slot"))
-        .orElse(_request_value(calltreeRequest, "requestKind"))
-        .orElse(_request_value(calltreeRequest, "request_kind"))
-      val executionid = _request_value(calltreeRequest, "executionId")
-        .orElse(_request_value(calltreeRequest, "execution_id"))
-      val traceid = _request_value(calltreeRequest, "traceId")
-        .orElse(_request_value(calltreeRequest, "trace_id"))
+      val originslot = _request_value(calltreerequest, "originSlot")
+        .orElse(_request_value(calltreerequest, "origin_slot"))
+        .orElse(_request_value(calltreerequest, "requestKind"))
+        .orElse(_request_value(calltreerequest, "request_kind"))
+      val executionid = _request_value(calltreerequest, "executionId")
+        .orElse(_request_value(calltreerequest, "execution_id"))
+      val traceid = _request_value(calltreerequest, "traceId")
+        .orElse(_request_value(calltreerequest, "trace_id"))
       val record = ObservabilityEngine.findExecution(executionid, traceid, originslot)
         .orElse(ObservabilityEngine.latestExecution(originslot))
         .map(_.calltreeRecord)
@@ -1452,19 +1454,19 @@ object AdminComponent {
 
   private final case class ExecutionHistoryActionCall(
     core: ActionCall.Core,
-    historyRequest: Request
+    historyrequest: Request
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      val operationfilter = _request_value(historyRequest, "operation")
-        .orElse(_request_value(historyRequest, "operation_contains"))
-      val originslot = _request_value(historyRequest, "originSlot")
-        .orElse(_request_value(historyRequest, "origin_slot"))
-        .orElse(_request_value(historyRequest, "requestKind"))
-        .orElse(_request_value(historyRequest, "request_kind"))
-      val executionid = _request_value(historyRequest, "executionId")
-        .orElse(_request_value(historyRequest, "execution_id"))
-      val traceid = _request_value(historyRequest, "traceId")
-        .orElse(_request_value(historyRequest, "trace_id"))
+      val operationfilter = _request_value(historyrequest, "operation")
+        .orElse(_request_value(historyrequest, "operation_contains"))
+      val originslot = _request_value(historyrequest, "originSlot")
+        .orElse(_request_value(historyrequest, "origin_slot"))
+        .orElse(_request_value(historyrequest, "requestKind"))
+        .orElse(_request_value(historyrequest, "request_kind"))
+      val executionid = _request_value(historyrequest, "executionId")
+        .orElse(_request_value(historyrequest, "execution_id"))
+      val traceid = _request_value(historyrequest, "traceId")
+        .orElse(_request_value(historyrequest, "trace_id"))
       val entries = executionid.orElse(traceid) match {
         case Some(_) =>
           ObservabilityEngine.findExecution(executionid, traceid, originslot).toVector
@@ -1638,9 +1640,10 @@ object AdminComponent {
       )
     )
 
-  private def _assembly_component_record(comp: Component): Record =
+  private[cncf] def _assembly_component_record(comp: Component): Record =
     org.goldenport.record.Record.data(
-      "name" -> comp.name,
+      "name" -> comp.displayName,
+      "componentId" -> comp.componentId.name,
       "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
     )
 
@@ -1815,11 +1818,11 @@ object AdminComponent {
 
   private final case class VariationDescribeActionCall(
     core: ActionCall.Core,
-    describeRequest: Request
+    describerequest: Request
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      val key = describeRequest.arguments.headOption.map(_.printValue)
-        .orElse(_request_value(describeRequest, "key"))
+      val key = describerequest.arguments.headOption.map(_.printValue)
+        .orElse(_request_value(describerequest, "key"))
         .getOrElse("")
       _declared_runtime_variation_points.find(_.key == key) match {
         case Some(point) =>
@@ -1902,24 +1905,24 @@ object AdminComponent {
     lines.result().mkString("\n").trim
   }
 
-  private def _declared_runtime_variation_points: Vector[_DeclaredVariationPoint] = {
+  private def _declared_runtime_variation_points: Vector[DeclaredVariationPoint] = {
     val defaults = ObservabilityEngine.ExecutionHistoryConfig()
     Vector(
-      _DeclaredVariationPoint(
+      DeclaredVariationPoint(
         key = RuntimeConfig.executionHistoryRecentLimitKey,
         value = defaults.recentLimit.toString,
         brief = "Recent execution history size.",
         detail =
           "Number of most recent action execution records retained unconditionally for admin inspection."
       ),
-      _DeclaredVariationPoint(
+      DeclaredVariationPoint(
         key = RuntimeConfig.executionHistoryFilteredLimitKey,
         value = defaults.filteredLimit.toString,
         brief = "Filtered execution history size.",
         detail =
           "Number of additional action execution records retained when they match configured debug filters."
       ),
-      _DeclaredVariationPoint(
+      DeclaredVariationPoint(
         key = RuntimeConfig.executionHistoryFilterOperationContainsKey,
         value = "",
         brief = "Operation-name debug filter.",
@@ -1929,7 +1932,7 @@ object AdminComponent {
     )
   }
 
-  private final case class _DeclaredVariationPoint(
+  private final case class DeclaredVariationPoint(
     key: String,
     value: String,
     brief: String,
@@ -2403,7 +2406,7 @@ object AdminComponent {
     component: Component,
       entityname: String,
     view: String,
-    paging: _Paging,
+    paging: Paging,
     args: Map[String, Any]
   ): Consequence[org.goldenport.cncf.directive.SearchResult[A]] = {
     given org.goldenport.cncf.context.ExecutionContext = executioncontext
@@ -2574,10 +2577,10 @@ object AdminComponent {
         offset = paging.offset,
         limit = Some(paging.fetchPageSize)
       )
-      visible = values.take(paging.pageSize)
-      page = _Page(
+      visible = values.take(paging.pagesize)
+      page = Page(
         visible.map(AssociationRecordCodec.toRecord),
-        values.size > paging.pageSize,
+        values.size > paging.pagesize,
         if (paging.wantsTotal) Some(paging.offset + values.size) else None,
         None,
         None
@@ -2591,8 +2594,8 @@ object AdminComponent {
             "data" -> page.values,
             "ids" -> page.values.flatMap(_.getString("id")),
             "page" -> paging.page,
-            "pageSize" -> paging.pageSize,
-            "hasNext" -> page.hasNext
+            "pageSize" -> paging.pagesize,
+            "hasNext" -> page.hasnext
           ),
           page
         )*
@@ -2812,7 +2815,7 @@ object AdminComponent {
       componentname: String,
       viewname: String,
     browser: org.goldenport.cncf.entity.view.Browser[Any],
-    paging: _Paging
+    paging: Paging
   ): Consequence[OperationResponse] =
     for {
       capability <- browser.totalCountCapabilityWithContext(using core.executionContext)
@@ -2900,7 +2903,7 @@ object AdminComponent {
       componentname: String,
       aggregatename: String,
     collection: org.goldenport.cncf.entity.aggregate.AggregateCollection[Any],
-    paging: _Paging
+    paging: Paging
   ): Consequence[OperationResponse] =
     for {
       capability <- collection.totalCountCapabilityWithContext(using core.executionContext)
@@ -2941,7 +2944,7 @@ object AdminComponent {
     core: ActionCall.Core,
     component: Component,
       aggregatename: String,
-    paging: _Paging
+    paging: Paging
   ): Consequence[Vector[Any]] =
     _aggregate_entity_collection(component, aggregatename) match {
       case Some((_, collection)) =>
@@ -3052,28 +3055,28 @@ object AdminComponent {
       case None => Consequence.success(None)
     }
 
-  private final case class _Paging(
+  private final case class Paging(
     page: Int,
-    pageSize: Int,
-    includeTotal: Boolean,
-    totalCountPolicy: _TotalCountPolicy
+    pagesize: Int,
+    includetotal: Boolean,
+    totalcountpolicy: TotalCountPolicy
   ) {
-    def offset: Int = (page - 1) * pageSize
-    def fetchPageSize: Int = pageSize + 1
+    def offset: Int = (page - 1) * pagesize
+    def fetchPageSize: Int = pagesize + 1
     def fetchSize: Int = offset + fetchPageSize
-    def wantsTotal: Boolean = includeTotal && totalCountPolicy.allowsTotal
+    def wantsTotal: Boolean = includetotal && totalcountpolicy.allowsTotal
   }
 
   private def _paging(
     args: Map[String, Any]
-  ): Consequence[_Paging] =
+  ): Consequence[Paging] =
     for {
       page <- _positive_int_arg(args, "page", 1)
       pagesize <- _positive_int_arg(args, "pageSize", 20)
       policy <- _total_count_policy(args)
-    } yield _Paging(page, pagesize, _boolean_arg(args, "includeTotal", false), policy)
+    } yield Paging(page, pagesize, _boolean_arg(args, "includeTotal", false), policy)
 
-  private enum _TotalCountPolicy {
+  private enum TotalCountPolicy {
     case Disabled
     case Optional
     case Required
@@ -3082,36 +3085,36 @@ object AdminComponent {
       this != Disabled
   }
 
-  private final case class _PagingCapabilityDecision(
-    paging: _Paging,
+  private final case class PagingCapabilityDecision(
+    paging: Paging,
     warning: Option[String],
-    unavailableReason: Option[String]
+    unavailablereason: Option[String]
   )
 
   private def _paging_decision_default(
-    paging: _Paging
-  ): _PagingCapabilityDecision =
-    _PagingCapabilityDecision(paging, None, None)
+    paging: Paging
+  ): PagingCapabilityDecision =
+    PagingCapabilityDecision(paging, None, None)
 
   private def _paging_with_capability(
-    paging: _Paging,
+    paging: Paging,
     capability: TotalCountCapability,
       surfacename: String
-  ): Consequence[_PagingCapabilityDecision] =
+  ): Consequence[PagingCapabilityDecision] =
     if (!paging.wantsTotal)
-      Consequence.success(_PagingCapabilityDecision(paging, None, None))
+      Consequence.success(PagingCapabilityDecision(paging, None, None))
     else if (capability.supportsTotalCount)
-      Consequence.success(_PagingCapabilityDecision(paging, None, None))
+      Consequence.success(PagingCapabilityDecision(paging, None, None))
     else
-      paging.totalCountPolicy match {
-        case _TotalCountPolicy.Required =>
+      paging.totalcountpolicy match {
+        case TotalCountPolicy.Required =>
           Consequence.argumentInvalid(
             s"total count is required but not supported for ${surfacename}: ${capability}"
           )
         case _ =>
           val reason = capability.toString.toLowerCase
-          Consequence.success(_PagingCapabilityDecision(
-            paging.copy(includeTotal = false),
+          Consequence.success(PagingCapabilityDecision(
+            paging.copy(includetotal = false),
             Some(s"total count is not available for ${surfacename}: ${reason}"),
             Some(reason)
           ))
@@ -3119,20 +3122,20 @@ object AdminComponent {
 
   private def _total_count_policy(
     args: Map[String, Any]
-  ): Consequence[_TotalCountPolicy] =
+  ): Consequence[TotalCountPolicy] =
     args.get("totalCountPolicy").map(_.toString.trim.toLowerCase).filter(_.nonEmpty) match {
       case Some("disabled" | "none" | "false" | "off") =>
-        Consequence.success(_TotalCountPolicy.Disabled)
+        Consequence.success(TotalCountPolicy.Disabled)
       case Some("optional" | "best-effort" | "besteffort" | "true" | "on") =>
-        Consequence.success(_TotalCountPolicy.Optional)
+        Consequence.success(TotalCountPolicy.Optional)
       case Some("required" | "require") =>
-        Consequence.success(_TotalCountPolicy.Required)
+        Consequence.success(TotalCountPolicy.Required)
       case Some(value) =>
         Consequence.argumentInvalid(
           s"totalCountPolicy must be disabled, optional, or required: ${value}"
         )
       case None =>
-        Consequence.success(_TotalCountPolicy.Disabled)
+        Consequence.success(TotalCountPolicy.Disabled)
     }
 
   private def _positive_int_arg(
@@ -3346,11 +3349,11 @@ object AdminComponent {
 
   private def _record_items(
     records: Vector[Record]
-  ): Vector[_AdminReadItem] =
+  ): Vector[AdminReadItem] =
     records.map { record =>
       val id = _record_id(record)
       val label = _record_label(record).getOrElse(id)
-      _AdminReadItem(id, label, _record_text(record))
+      AdminReadItem(id, label, _record_text(record))
     }
 
   private def _record_id(
@@ -3367,55 +3370,55 @@ object AdminComponent {
 
   private def _page_values[A](
     values: Vector[A],
-    paging: _Paging,
-    decision: _PagingCapabilityDecision
-  ): _Page[A] = {
+    paging: Paging,
+    decision: PagingCapabilityDecision
+  ): Page[A] = {
     val source = values.drop(paging.offset)
-    val visible = source.take(paging.pageSize)
-    _Page(
+    val visible = source.take(paging.pagesize)
+    Page(
       visible,
-      source.size > paging.pageSize,
+      source.size > paging.pagesize,
       if (paging.wantsTotal) Some(values.size) else None,
       decision.warning,
-      decision.unavailableReason
+      decision.unavailablereason
     )
   }
 
   private def _search_result_page[A](
     collection: EntityCollection[A],
     result: org.goldenport.cncf.directive.SearchResult[A],
-    paging: _Paging,
-    decision: _PagingCapabilityDecision,
+    paging: Paging,
+    decision: PagingCapabilityDecision,
     fields: Vector[String] = Vector.empty
-  ): _Page[_AdminReadItem] = {
+  ): Page[AdminReadItem] = {
     val items = result.data.map { x =>
       val entityid = collection.descriptor.persistent.id(x)
       val id       = entityid.value
       val record = _entity_view_record(collection, x, fields)
       val label = _record_label(record).getOrElse(id)
-      _AdminReadItem(
+      AdminReadItem(
         id,
         label,
         _record_text(record),
         record.getString("shortid").orElse(Some(entityid.parts.entropy))
       )
     }
-    _Page(
-      items.take(paging.pageSize),
-      result.data.size > paging.pageSize,
+    Page(
+      items.take(paging.pagesize),
+      result.data.size > paging.pagesize,
       if (paging.wantsTotal) result.totalCount else None,
       decision.warning,
-      decision.unavailableReason
+      decision.unavailablereason
     )
   }
 
   private def _admin_entity_page[A](
     collection: EntityCollection[A],
     result: org.goldenport.cncf.directive.SearchResult[A],
-    paging: _Paging,
-    decision: _PagingCapabilityDecision,
+    paging: Paging,
+    decision: PagingCapabilityDecision,
     fields: Vector[String] = Vector.empty
-  ): _Page[_AdminReadItem] =
+  ): Page[AdminReadItem] =
     if (result.nonEmpty || _entity_values(collection).isEmpty)
       _search_result_page(collection, result, paging, decision, fields)
     else
@@ -3424,7 +3427,7 @@ object AdminComponent {
           val entityid = collection.descriptor.persistent.id(x)
           val id       = entityid.value
           val record = _entity_view_record(collection, x, fields)
-          _AdminReadItem(
+          AdminReadItem(
             id,
             _record_label(record).getOrElse(id),
             _record_text(record),
@@ -3452,38 +3455,38 @@ object AdminComponent {
 
   private def _prefetched_page_values[A](
     values: Vector[A],
-    paging: _Paging,
-    decision: _PagingCapabilityDecision,
+    paging: Paging,
+    decision: PagingCapabilityDecision,
     total: Option[Int] = None
-  ): _Page[A] = {
+  ): Page[A] = {
     val source = values
-    val visible = source.take(paging.pageSize)
-    _Page(
+    val visible = source.take(paging.pagesize)
+    Page(
       visible,
-      source.size > paging.pageSize,
+      source.size > paging.pagesize,
       if (paging.wantsTotal) total else None,
       decision.warning,
-      decision.unavailableReason
+      decision.unavailablereason
     )
   }
 
-  private final case class _Page[A](
+  private final case class Page[A](
     values: Vector[A],
-    hasNext: Boolean,
+    hasnext: Boolean,
     total: Option[Int],
     warning: Option[String],
-    unavailableReason: Option[String]
+    unavailablereason: Option[String]
   )
 
   private def _with_optional_total(
     base: Vector[(String, Any)],
-    page: _Page[?]
+    page: Page[?]
   ): Vector[(String, Any)] =
     base ++
       page.total.map(total => Vector("total" -> total, "totalAvailable" -> true)).getOrElse(Vector(
         "totalAvailable" -> false
       )) ++
-      page.unavailableReason.map(reason => Vector("totalUnavailableReason" -> reason)).getOrElse(
+      page.unavailablereason.map(reason => Vector("totalUnavailableReason" -> reason)).getOrElse(
         Vector.empty
       ) ++
       page.warning.map(warning => Vector("warnings" -> Vector(warning))).getOrElse(Vector.empty)
@@ -3492,8 +3495,8 @@ object AdminComponent {
     kind: String,
       componentname: String,
       collectionname: String,
-    page: _Page[_AdminReadItem],
-    paging: _Paging
+    page: Page[AdminReadItem],
+    paging: Paging
   ): Record =
     Record.dataAuto(
       _with_optional_total(
@@ -3504,8 +3507,8 @@ object AdminComponent {
           "ids" -> page.values.map(_.id),
           "items" -> page.values.map(_.toRecord),
           "page" -> paging.page,
-          "pageSize" -> paging.pageSize,
-          "hasNext" -> page.hasNext
+            "pageSize" -> paging.pagesize,
+            "hasNext" -> page.hasnext
         ),
         page
       )*
@@ -3520,7 +3523,7 @@ object AdminComponent {
   ): Record = {
     val text = _record_text(record)
     val label = _record_label(record).getOrElse(id)
-    val item = _AdminReadItem(id, label, text)
+    val item = AdminReadItem(id, label, text)
     Record.dataAuto(
       "kind" -> s"${kind}.read",
       "component"  -> componentname,
@@ -3538,8 +3541,8 @@ object AdminComponent {
     kind: String,
       componentname: String,
       collectionname: String,
-    page: _Page[_AdminReadItem],
-    paging: _Paging
+    page: Page[AdminReadItem],
+    paging: Paging
   ): Record =
     Record.dataAuto(
       _with_optional_total(
@@ -3551,8 +3554,8 @@ object AdminComponent {
           "values" -> page.values.map(_.value),
           "fields" -> page.values.map(_.label).mkString("\n"),
           "page" -> paging.page,
-          "pageSize" -> paging.pageSize,
-          "hasNext" -> page.hasNext
+          "pageSize" -> paging.pagesize,
+          "hasNext" -> page.hasnext
         ),
         page
       )*
@@ -3717,13 +3720,13 @@ object AdminComponent {
       case _ => Vector.empty
     }
 
-  private final case class _AdminReadItem(
+  private final case class AdminReadItem(
     id: String,
     label: String,
     value: String,
     shortid: Option[String] = None,
     images: Vector[Record] = Vector.empty,
-    representativeImage: Option[Record] = None
+    representativeimage: Option[Record] = None
   ) {
     def toRecord: Record =
       Record.dataAuto(
@@ -3736,44 +3739,44 @@ object AdminComponent {
           (if (images.isEmpty) Vector.empty
            else Vector(
             "images" -> images,
-            "representativeImage" -> representativeImage
+            "representativeImage" -> representativeimage
           )))*
       )
   }
 
-  private def _read_items(values: Vector[Any]): Vector[_AdminReadItem] =
+  private def _read_items(values: Vector[Any]): Vector[AdminReadItem] =
     values.zipWithIndex.map { case (value, index) => _read_item(value, index) }
 
   private def _read_items_with_blobs(
     core: ActionCall.Core,
     values: Vector[Any]
-  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[_AdminReadItem]] =
-    _read_items(values).foldLeft(Consequence.success(Vector.empty[_AdminReadItem])) { (z, item) =>
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[AdminReadItem]] =
+    _read_items(values).foldLeft(Consequence.success(Vector.empty[AdminReadItem])) { (z, item) =>
       z.flatMap { acc =>
         _blob_projection_record(core, item.id).map { projection =>
           val images = _record_seq(projection.getAny("images"))
           val representative = projection.getAny("representativeImage").collect { case r: Record =>
             r
           }
-          acc :+ item.copy(images = images, representativeImage = representative)
+          acc :+ item.copy(images = images, representativeimage = representative)
         }
       }
     }
 
-  private def _read_item(value: Any, index: Int): _AdminReadItem = {
+  private def _read_item(value: Any, index: Int): AdminReadItem = {
     val text = _read_text(value)
     val id = _read_item_id(value).getOrElse(text) match {
       case "" => (index + 1).toString
       case x => x
     }
-    _AdminReadItem(
+    AdminReadItem(
       id = id,
       label = _read_item_label(value).getOrElse(text),
       value = text
     )
   }
 
-  private def _read_item_fields(item: _AdminReadItem): String =
+  private def _read_item_fields(item: AdminReadItem): String =
     Vector(
       "id" -> item.id,
       "label" -> item.label,

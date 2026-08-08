@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Aug.  6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -641,6 +641,7 @@ object ComponentRepository extends GlobalObservable {
         name = descriptor.flatMap(_.name).orElse(descriptor.flatMap(_.componentName)).getOrElse(componentname),
         version = descriptor.flatMap(_.version).getOrElse("0.1.0"),
         component = descriptor.flatMap(_.componentName).orElse(Some(componentname)),
+        componentId = Some(component.core.componentId),
         subsystem = descriptor.flatMap(_.subsystemName),
         archivePath = Some(base.toString),
         effectiveExtensions = descriptor.map(_.extensions).getOrElse(Map.empty),
@@ -1226,7 +1227,7 @@ object ComponentRepository extends GlobalObservable {
         case Artifact(path, ArtifactKind.Car) =>
           ComponentDescriptorLoader.loadArchive(path).toOption
         case Artifact(path, ArtifactKind.CarDir) =>
-          ComponentDescriptorLoader.load(path).toOption.flatMap(_.headOption)
+          ComponentDescriptorLoader.loadArchive(path).toOption
         case _ =>
           None
       }.find(_matches_component_descriptor(_, componentName))
@@ -1265,15 +1266,11 @@ object ComponentRepository extends GlobalObservable {
             Consequence.success(None)
         }
       case Artifact(path, ArtifactKind.CarDir) =>
-        ComponentDescriptorLoader.load(path).flatMap { descriptors =>
-          descriptors.headOption match {
-            case Some(descriptor) if _matches_component_descriptor(descriptor, componentname, version) =>
-              GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor).map(Some(_))
-            case Some(_) =>
-              Consequence.success(None)
-            case None =>
-              Consequence.resourceInvalid(s"component descriptor is empty: ${path}")
-          }
+        ComponentDescriptorLoader.loadArchive(path).flatMap { descriptor =>
+          if (_matches_component_descriptor(descriptor, componentname, version))
+            GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor).map(Some(_))
+          else
+            Consequence.success(None)
         }
       case _ =>
         Consequence.success(None)
@@ -1323,10 +1320,14 @@ object ComponentRepository extends GlobalObservable {
     descriptor: ComponentDescriptor,
     componentname: String
   ): Boolean = {
-    val requested = componentname.trim
-    val names = _component_descriptor_names(descriptor)
-    names.exists { name =>
-      NamingConventions.equivalentByNormalized(name, requested)
+    descriptor.componentId match {
+      case Some(id) => ComponentId.parseC(componentname).toOption.contains(id)
+      case None =>
+        val requested = componentname.trim
+        val names = _component_descriptor_names(descriptor)
+        names.exists { name =>
+          NamingConventions.equivalentByNormalized(name, requested)
+        }
     }
   }
 
@@ -1342,11 +1343,16 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     descriptor: ComponentDescriptor
   ): Vector[ComponentDescriptor] = {
-    val names = _component_descriptor_names(descriptor)
     val matched =
       params.componentDescriptors.filter { requested =>
-        _component_descriptor_names(requested).exists { requestedname =>
-          names.exists(name => NamingConventions.equivalentByNormalized(name, requestedname))
+        (descriptor.componentId, requested.componentId) match {
+          case (Some(packaged), Some(bound)) => packaged == bound
+          case (Some(_), None) => false
+          case (None, Some(_)) => false
+          case (None, None) =>
+            _component_descriptor_names(requested).exists { requestedname =>
+              _component_descriptor_names(descriptor).exists(name => NamingConventions.equivalentByNormalized(name, requestedname))
+            }
         }
       }
     if (matched.nonEmpty)
@@ -1489,7 +1495,7 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate
   ): Vector[(String, Option[String])] =
     params.componentDescriptors.flatMap { d =>
-      d.componentName.orElse(d.name).map(n => (n, d.version))
+      d.componentId.map(_.name).orElse(d.componentName).orElse(d.name).map(n => (n, d.version))
     }.distinct
 
   private def _satisfied_by_active_development_component(
@@ -1530,15 +1536,20 @@ object ComponentRepository extends GlobalObservable {
     componentname: String,
     version: Option[String]
   ): Vector[Artifact] = {
+    val canonical = ComponentId.parseC(componentname).toOption
     val prefix = version.map(v => s"${componentname}-${v}").getOrElse(componentname)
     _list_artifacts(basedir).filter { artifact =>
       val filename = artifact.path.getFileName.toString
       artifact.kind match {
         case ArtifactKind.Car | ArtifactKind.CarDir =>
-          filename == s"${componentname}.car" ||
-          filename == s"${componentname}.zip" ||
-          filename.startsWith(prefix) ||
-          _artifact_matches_component_descriptor(artifact, componentname, version)
+          canonical match {
+            case Some(_) => _artifact_matches_component_descriptor(artifact, componentname, version)
+            case None =>
+              filename == s"${componentname}.car" ||
+                filename == s"${componentname}.zip" ||
+                filename.startsWith(prefix) ||
+                _artifact_matches_component_descriptor(artifact, componentname, version)
+          }
         case ArtifactKind.Sar | ArtifactKind.SarDir =>
           _artifact_matches_subsystem_component(artifact, componentname, version)
         case ArtifactKind.Jar => false
@@ -1555,7 +1566,7 @@ object ComponentRepository extends GlobalObservable {
       case ArtifactKind.Car =>
         ComponentDescriptorLoader.loadArchive(artifact.path).toOption
       case ArtifactKind.CarDir =>
-        ComponentDescriptorLoader.load(artifact.path).toOption.flatMap(_.headOption)
+        ComponentDescriptorLoader.loadArchive(artifact.path).toOption
       case _ =>
         None
     }
@@ -1590,7 +1601,7 @@ object ComponentRepository extends GlobalObservable {
       case Artifact(path, ArtifactKind.Car) =>
         ComponentDescriptorLoader.loadArchive(path).toOption
       case Artifact(path, ArtifactKind.CarDir) =>
-        ComponentDescriptorLoader.load(path).toOption.flatMap(_.headOption)
+        ComponentDescriptorLoader.loadArchive(path).toOption
       case _ =>
         None
     }.toSeq.headOption
@@ -1966,6 +1977,43 @@ object ComponentRepository extends GlobalObservable {
       )
     }
 
+  private[cncf] def admitCanonicalArchiveComponentsC(
+    descriptor: ComponentDescriptor,
+    archivepath: Path,
+    artifactmetadata: Component.ArtifactMetadata,
+    discovered: Vector[Component]
+  ): Consequence[Vector[Component]] =
+    descriptor.requireCanonicalIdentityC.flatMap { case (componentid, release) =>
+      if (!artifactmetadata.componentId.contains(componentid) || artifactmetadata.version != release)
+        if (!artifactmetadata.componentId.contains(componentid))
+          Consequence.componentInvalid(
+            s"CAR component metadata component ID mismatch: descriptor=${componentid.name}, metadata=${artifactmetadata.componentId.map(_.name).getOrElse("missing")}, archive=${archivepath}"
+          )
+        else
+          Consequence.componentInvalid(
+            s"CAR component metadata release mismatch: descriptor=$release, metadata=${artifactmetadata.version}, archive=${archivepath}"
+          )
+      else {
+        val primaryparticipants = discovered.filterNot(_.isComponentletParticipant)
+        primaryparticipants match {
+          case Vector() =>
+            Consequence.componentInvalid(
+              s"CAR component primary participant is missing: descriptor=${componentid.name}, archive=${archivepath}"
+            )
+          case Vector(_, _, _*) =>
+            Consequence.componentInvalid(
+              s"CAR component primary participant is ambiguous: descriptor=${componentid.name}, primary-count=${primaryparticipants.size}, archive=${archivepath}"
+            )
+          case Vector(primary) if primary.core.componentId != componentid =>
+            Consequence.componentInvalid(
+              s"CAR component identity mismatch: descriptor=${componentid.name}, primary=${primary.core.componentId.name}, archive=${archivepath}"
+            )
+          case Vector(_) =>
+            Consequence.success(discovered.map(_.withArtifactMetadata(artifactmetadata)))
+        }
+      }
+    }
+
   private def _discover_component_from_car_common(
     extracted: CarExtracted,
     artifactpath: Path,
@@ -1975,17 +2023,9 @@ object ComponentRepository extends GlobalObservable {
     sardescriptor: Option[GenericSubsystemDescriptor],
     sourcetype: String
   ): Consequence[Vector[Component]] = {
-    _required_car_descriptor_value(
-      extracted.descriptor.name.orElse(extracted.descriptor.componentName),
-      "name",
-      artifactpath
-    ).flatMap { carname =>
-      _required_car_descriptor_value(extracted.descriptor.version, "version", artifactpath).flatMap { carversion =>
-        _required_car_descriptor_value(
-          extracted.descriptor.componentName.orElse(extracted.descriptor.name),
-          "component",
-          artifactpath
-        ).flatMap { componentname =>
+    extracted.descriptor.requireCanonicalIdentityC.flatMap { case (componentid, carversion) =>
+      val carname = extracted.descriptor.name.getOrElse(artifactpath.getFileName.toString.stripSuffix(".car"))
+      val componentname = componentid.name
           ComponentDependencyResolver.resolve(
             extracted.root,
             componentname,
@@ -2002,11 +2042,10 @@ object ComponentRepository extends GlobalObservable {
               carname,
               carversion,
               componentname,
+              componentid,
               dependencies
             )
           }
-        }
-      }
     }
   }
 
@@ -2021,6 +2060,7 @@ object ComponentRepository extends GlobalObservable {
     carname: String,
     carversion: String,
     componentname: String,
+    componentid: ComponentId,
     dependencies: ComponentDependencyResolution
   ): Consequence[Vector[Component]] = try {
     val baseorigin = _component_origin_for_archive(
@@ -2040,7 +2080,8 @@ object ComponentRepository extends GlobalObservable {
       subsystem = sardescriptor.map(_.subsystemName).orElse(extracted.descriptor.subsystemName),
       archivePath = Some(artifactpath.toString),
       effectiveExtensions = effectiveextensions,
-      effectiveConfig = effectiveconfig
+      effectiveConfig = effectiveconfig,
+      componentId = Some(componentid)
     )
     val componentparams =
       params.withComponentDescriptors(_component_descriptors_for_artifact(params, extracted.descriptor))
@@ -2052,25 +2093,32 @@ object ComponentRepository extends GlobalObservable {
       extracted.componentLibs,
       params.assemblyApiClassLoader.getOrElse(getClass.getClassLoader)
     )
-    val components0 =
-      _discover_component_from_artifact_with_loader(
-        artifactname = artifactpath.getFileName.toString,
-        loader = componentloader,
-        // Scan only the component's main archive. Dependency jars may contain
-        // demo or builtin components that must not be treated as packaged
-        // component definitions for this CAR.
-        scanclasspath = Vector(extracted.componentMain),
-        params = componentparams,
-        origin = baseorigin,
-        log = log
-      ).toVector
-    val components = components0.map(_.withArtifactMetadata(artifactmetadata))
-    val collaboratorcomponents = components.collect {
-      case comp: CollaboratorComponent => comp
-    }
-    if (collaboratorcomponents.isEmpty) {
-      Consequence.success(components)
-    } else {
+    var retaincomponentloader = false
+    try {
+      val components0 =
+        _discover_component_from_artifact_with_loader(
+          artifactname = artifactpath.getFileName.toString,
+          loader = componentloader,
+          // Scan only the component's main archive. Dependency jars may contain
+          // demo or builtin components that must not be treated as packaged
+          // component definitions for this CAR.
+          scanclasspath = Vector(extracted.componentMain),
+          params = componentparams,
+          origin = baseorigin,
+          log = log
+        ).toVector
+      val result = admitCanonicalArchiveComponentsC(
+        extracted.descriptor,
+        artifactpath,
+        artifactmetadata,
+        components0
+      ).flatMap { components =>
+      val collaboratorcomponents = components.collect {
+        case comp: CollaboratorComponent => comp
+      }
+      if (collaboratorcomponents.isEmpty) {
+        Consequence.success(components)
+      } else {
       extracted.collaboratorClasspath match {
         case Some(paths) if paths.nonEmpty =>
           Using.resource(CollaboratorClassLoader(paths)) { collaboratorloader =>
@@ -2089,6 +2137,22 @@ object ComponentRepository extends GlobalObservable {
             s"collaborator classpath is missing for component artifact: ${artifactpath.getFileName}"
           )
       }
+      }
+      }
+      result match {
+        case Consequence.Success(_) =>
+          params.subsystem.registerComponentClassLoader(componentloader)
+          retaincomponentloader = true
+        case Consequence.Failure(_) => ()
+      }
+      result
+    } finally {
+      if (!retaincomponentloader)
+        try componentloader.close()
+        catch {
+          case NonFatal(e) =>
+            log.warn(s"[component-dir] artifact=${artifactpath.getFileName} component loader cleanup failed cause=${e.getMessage}")
+        }
     }
   } catch {
     case e: ComponentRepositoryDiscoveryFailure => Consequence.Failure(e.conclusion)
@@ -2215,15 +2279,6 @@ object ComponentRepository extends GlobalObservable {
     val config = cardescriptor.config ++ sardescriptor.map(_.config).getOrElse(Map.empty)
     (extensions, config)
   }
-
-  private def _required_car_descriptor_value(
-    value: Option[String],
-    field: String,
-    artifactpath: Path
-  ): Consequence[String] =
-    value.map(_.trim).filter(_.nonEmpty)
-      .map(Consequence.success)
-      .getOrElse(Consequence.resourceInvalid(s"CAR component-descriptor.json must declare ${field}: ${artifactpath}"))
 
   private def _component_origin_for_archive(
     repositorytype: String,

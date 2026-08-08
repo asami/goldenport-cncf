@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.CarRuntimeAdmission
 
 /*
  * @since   Jul. 28, 2026
- * @version Jul. 28, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object CarArchiveFixture {
@@ -64,15 +64,30 @@ object CarArchiveFixture {
     entries.find(_._1 == "component-descriptor.json").flatMap { case (_, bytes) =>
       parse(new String(bytes, StandardCharsets.UTF_8)).toOption.flatMap { json =>
         val cursor = json.hcursor
-        val nestedname = cursor.downField("component").get[String]("name").toOption
-        val name = cursor.get[String]("name").toOption.orElse(nestedname)
-        val component = cursor.get[String]("component").toOption.orElse(nestedname).orElse(name)
-        val version = cursor.get[String]("version").toOption
-        for {
-          n <- name.map(_.trim).filter(_.nonEmpty)
-          v <- version.map(_.trim).filter(_.nonEmpty)
-          c <- component.map(_.trim).filter(_.nonEmpty)
-        } yield (n, v, c)
+        cursor.get[Int]("schemaVersion").toOption match {
+          case Some(3) =>
+            for {
+              namespace <- cursor.downField("component").get[String]("namespace").toOption
+                .map(_.trim).filter(_.nonEmpty)
+              localid <- cursor.downField("component").get[String]("id").toOption
+                .map(_.trim).filter(_.nonEmpty)
+              version <- cursor.downField("component").get[String]("version").toOption
+                .map(_.trim).filter(_.nonEmpty)
+            } yield {
+              val componentid = s"$namespace.$localid"
+              (componentid, version, componentid)
+            }
+          case _ =>
+            val nestedname = cursor.downField("component").get[String]("name").toOption
+            val name = cursor.get[String]("name").toOption.orElse(nestedname)
+            val component = cursor.get[String]("component").toOption.orElse(nestedname).orElse(name)
+            val version = cursor.get[String]("version").toOption
+            for {
+              n <- name.map(_.trim).filter(_.nonEmpty)
+              v <- version.map(_.trim).filter(_.nonEmpty)
+              c <- component.map(_.trim).filter(_.nonEmpty)
+            } yield (n, v, c)
+        }
       }
     }
 

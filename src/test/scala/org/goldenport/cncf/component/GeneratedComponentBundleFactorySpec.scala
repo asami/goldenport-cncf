@@ -23,15 +23,28 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 22, 2026
  *  version May. 15, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedComponentBundleFactorySpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
+  private val _domain_component_id = ComponentId("org.goldenport.fixture.Domain")
+  private val _notice_admin_component_id = ComponentId("org.goldenport.fixture.NoticeAdmin")
+  private val _duplicate_component_id = ComponentId("org.goldenport.fixture.Duplicate")
+
+  private val _e1 = afterWord("in spec:generated-component-bundle-factory, example:E1, rules:CID05C-R12, phase:56, slice:CID-05C")
+  private val _e2 = afterWord("in spec:generated-component-bundle-factory, example:E2, rules:CID05C-R12, phase:56, slice:CID-05C")
+  private val _e3 = afterWord("in spec:generated-component-bundle-factory, example:E3, rules:CID05C-R12, phase:56, slice:CID-05C")
+  private val _e4 = afterWord("in spec:generated-component-bundle-factory, example:E4, rules:CID05C-R12, phase:56, slice:CID-05C")
+  private val _e5 = afterWord("in spec:generated-component-bundle-factory, example:E5, rules:CID05C-R12, phase:56, slice:CID-05C")
+  private val _e6 = afterWord("in spec:generated-component-bundle-factory, example:E6, rules:CID05C-R12, phase:56, slice:CID-05C")
+  private val _e7 = afterWord("in spec:generated-component-bundle-factory, example:E7, rules:CID05C-R12, phase:56, slice:CID-05C")
+
   "Generated-style bundle factory" should {
-    "apply named instance identity and local properties during construction" in {
+    "E1 apply named instance identity and local properties during construction" must _e1 {
+      "when exercising: apply named instance identity and local properties during construction" in {
       Given("a generated component factory and named instance metadata")
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val metadata = ComponentInstanceMetadata(
@@ -42,7 +55,8 @@ final class GeneratedComponentBundleFactorySpec
         purposes = Vector("javascript-heavy-site"),
         tags = Vector("dynamic", "browser"),
         priority = 100,
-        isDefault = true
+        isDefault = true,
+        componentId = Some(_domain_component_id)
       )
       val params = ComponentCreate(
         subsystem,
@@ -55,14 +69,18 @@ final class GeneratedComponentBundleFactorySpec
       val packaged = component.logic.executionContext().runtime.resolvedParameters.get("scraper.timeout")
 
       Then("identity, rules, and ExecutionContext properties belong to that instance")
-      component.instanceId shouldBe ComponentInstanceId("textus-scraper", "dynamic-playwright")
+      component.componentId shouldBe _domain_component_id
+      component.name shouldBe _domain_component_id.name
+      component.instanceId shouldBe ComponentInstanceId(_domain_component_id, "dynamic-playwright")
       component.instanceMetadata shouldBe Some(metadata)
       resolved.map(_.value) shouldBe Some(ConfigurationValue.StringValue("dynamic"))
       resolved.map(_.source) shouldBe Some(org.goldenport.cncf.config.ResolvedParameter.Source.Component("dynamic-playwright"))
       packaged.map(_.value) shouldBe Some(ConfigurationValue.StringValue("30s"))
+      }
     }
 
-    "resolve entity runtime descriptors declared by generated components" in {
+    "E2 resolve entity runtime descriptors declared by generated components" must _e2 {
+      "when exercising: resolve entity runtime descriptors declared by generated components" in {
       Given("a generated component override supplies CML entity descriptors")
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-descriptor")
 
@@ -78,53 +96,76 @@ final class GeneratedComponentBundleFactorySpec
       component.entityRuntimeDescriptor("shared_notice").map(_.usageKind) should contain(
         org.goldenport.cncf.security.EntityUsageKind.SharedRecord
       )
+      }
     }
 
-    "keep named instances in component space and select the declared default by name" in {
+    "E3 keep named instances in component space and select the declared default by name" must _e3 {
+      "when exercising: keep named instances in component space and select the declared default by name" in {
       Given("two instances created from one component factory")
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val static = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
-          .withInstanceMetadata(ComponentInstanceMetadata("domain", "static", isDefault = true))
+          .withInstanceMetadata(ComponentInstanceMetadata(
+            "domain",
+            "static",
+            isDefault = true,
+            componentId = Some(_domain_component_id)
+          ))
       )
       val dynamic = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
-          .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic-playwright"))
+          .withInstanceMetadata(ComponentInstanceMetadata(
+            "domain",
+            "dynamic-playwright",
+            componentId = Some(_domain_component_id)
+          ))
       )
 
       When("both instances are added to component space")
       val space = ComponentSpace().add(Vector(dynamic, static))
 
-      Then("exact identity preserves both while name lookup resolves the declared default")
+      Then("exact labels preserve both while name lookup resolves the declared default")
       space.components.size shouldBe 2
-      space.findInstance(ComponentInstanceId("domain", "static")) shouldBe Some(static)
-      space.findInstance(ComponentInstanceId("domain", "dynamic-playwright")) shouldBe Some(dynamic)
-      space.findInstance(ComponentInstanceId("domain", "dynamic_playwright")) shouldBe Some(dynamic)
+      space.findInstance(ComponentInstanceId(_domain_component_id, "static")) shouldBe Some(static)
+      space.findInstance(ComponentInstanceId(_domain_component_id, "dynamic-playwright")) shouldBe Some(dynamic)
+      space.findInstance(ComponentInstanceId(_domain_component_id, "dynamic_playwright")) shouldBe None
       space.find(ComponentLocator.NameLocator("domain")) shouldBe Some(static)
+      }
     }
 
-    "reject canonical component instance identity collisions in component space" in {
-      Given("two components whose raw instance names normalize to one stable identity")
+    "E4 preserve exact component instance labels without punctuation normalization collisions" must _e4 {
+      "when exercising: preserve exact component instance labels without punctuation normalization collisions" in {
+      Given("two components whose exact instance labels differ by hyphen and underscore")
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val hyphenated = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
-          .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic-playwright"))
+          .withInstanceMetadata(ComponentInstanceMetadata(
+            "domain",
+            "dynamic-playwright",
+            componentId = Some(_domain_component_id)
+          ))
       )
       val underscored = GeneratedBundleFactory.PrimaryFactory.createPrimary(
         ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
-          .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic_playwright"))
+          .withInstanceMetadata(ComponentInstanceMetadata(
+            "domain",
+            "dynamic_playwright",
+            componentId = Some(_domain_component_id)
+          ))
       )
 
-      When("both components are added to one component space")
-      val result = intercept[IllegalArgumentException] {
-        ComponentSpace().add(Vector(hyphenated, underscored))
-      }
+      When("both exact identities are added to one component space")
+      val space = ComponentSpace().add(Vector(hyphenated, underscored))
 
-      Then("the stable identity collision fails before lookup")
-      result.getMessage should include ("duplicate component instance id")
+      Then("each exact label remains independently addressable")
+      space.components.size shouldBe 2
+      space.findInstance(ComponentInstanceId(_domain_component_id, "dynamic-playwright")) shouldBe Some(hyphenated)
+      space.findInstance(ComponentInstanceId(_domain_component_id, "dynamic_playwright")) shouldBe Some(underscored)
+      }
     }
 
-    "separate primary and componentlets at construction time" in {
+    "E5 separate primary and componentlets at construction time" must _e5 {
+      "when exercising: separate primary and componentlets at construction time" in {
       Given("generated-style bundle factory")
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
@@ -133,16 +174,20 @@ final class GeneratedComponentBundleFactorySpec
       val bundle = GeneratedBundleFactory.create(params)
 
       Then("primary and componentlets are explicit and initialized separately")
-      bundle.primary.name shouldBe "domain"
+      bundle.primary.name shouldBe _domain_component_id.name
+      bundle.primary.displayName shouldBe "domain"
       bundle.primary.isPrimaryParticipant shouldBe true
-      bundle.componentlets.map(_.name) shouldBe Vector("notice-admin")
+      bundle.componentlets.map(_.name) shouldBe Vector(_notice_admin_component_id.name)
+      bundle.componentlets.map(_.displayName) shouldBe Vector("notice-admin")
       bundle.componentlets.forall(_.isComponentletParticipant) shouldBe true
       bundle.participants.size shouldBe 2
       bundle.primary.core.factory shouldBe Some(GeneratedBundleFactory.PrimaryFactory)
       bundle.componentlets.head.core.factory shouldBe Some(GeneratedBundleFactory.NoticeAdminFactory)
+      }
     }
 
-    "dispatch same-subsystem sync reception on generated componentlet with runtime identity" in {
+    "E6 dispatch same-subsystem sync reception on generated componentlet with runtime identity" must _e6 {
+      "when exercising: dispatch same-subsystem sync reception on generated componentlet with runtime identity" in {
       Given("bootstrapped generated runtime participants")
       GeneratedBundleFactory.clearCalls()
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
@@ -151,8 +196,8 @@ final class GeneratedComponentBundleFactorySpec
       val factory = new ComponentFactory()
       val components = bundle.participants.map(factory.bootstrap)
       subsystem.add(components)
-      val publisher = subsystem.components.find(_.name == "domain").getOrElse(fail("missing publisher component"))
-      val target = subsystem.components.find(_.name == "notice-admin").getOrElse(fail("missing target componentlet"))
+      val publisher = subsystem.components.find(_.displayName == "domain").getOrElse(fail("missing publisher component"))
+      val target = subsystem.components.find(_.displayName == "notice-admin").getOrElse(fail("missing target componentlet"))
 
       When("publisher emits event through the shared subsystem event path")
       val result = publisher.eventReception.getOrElse(fail("missing publisher event reception")).receive(
@@ -168,6 +213,8 @@ final class GeneratedComponentBundleFactorySpec
       )
 
       Then("follow-up action executes with componentlet runtime identity")
+      publisher.componentId shouldBe _domain_component_id
+      target.componentId shouldBe _notice_admin_component_id
       target.eventReception.isDefined shouldBe true
       result shouldBe Consequence.success(
         ReceptionResult(
@@ -177,9 +224,11 @@ final class GeneratedComponentBundleFactorySpec
         )
       )
       GeneratedBundleFactory.calls.toVector shouldBe Vector("notice-admin")
+      }
     }
 
-    "reject malformed bundle outputs deterministically" in {
+    "E7 reject malformed bundle outputs deterministically" must _e7 {
+      "when exercising: reject malformed bundle outputs deterministically" in {
       Given("bundle factory with duplicate participant names")
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
@@ -191,6 +240,7 @@ final class GeneratedComponentBundleFactorySpec
 
       Then("construction fails before bootstrap")
       ex.getMessage should include ("duplicate participant name")
+      }
     }
   }
 
@@ -203,6 +253,8 @@ final class GeneratedComponentBundleFactorySpec
     object PrimaryFactory extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
         new Component() {
+          override def displayName: String = "domain"
+
           override def componentDescriptors: Vector[ComponentDescriptor] =
             Vector(ComponentDescriptor(
               name = Some("domain"),
@@ -242,9 +294,9 @@ final class GeneratedComponentBundleFactorySpec
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          "domain",
-          ComponentId("domain"),
-          ComponentInstanceId.default(ComponentId("domain")),
+          GeneratedComponentBundleFactorySpec.this._domain_component_id.name,
+          GeneratedComponentBundleFactorySpec.this._domain_component_id,
+          ComponentInstanceId.default(GeneratedComponentBundleFactorySpec.this._domain_component_id),
           Protocol.empty,
           this
         )
@@ -253,6 +305,8 @@ final class GeneratedComponentBundleFactorySpec
     object NoticeAdminFactory extends Component.ComponentletFactory {
       protected def create_Component(params: ComponentCreate): Component =
         new Component() {
+          override def displayName: String = "notice-admin"
+
           override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
             Vector(
               CmlEventDefinition(
@@ -332,9 +386,9 @@ final class GeneratedComponentBundleFactorySpec
           )
         )
         Component.Core.create(
-          "notice-admin",
-          ComponentId("notice_admin"),
-          ComponentInstanceId.default(ComponentId("notice_admin")),
+          GeneratedComponentBundleFactorySpec.this._notice_admin_component_id.name,
+          GeneratedComponentBundleFactorySpec.this._notice_admin_component_id,
+          ComponentInstanceId.default(GeneratedComponentBundleFactorySpec.this._notice_admin_component_id),
           Protocol(
             services = spec.ServiceDefinitionGroup(Vector(service)),
             handler = ProtocolHandler.default
@@ -354,7 +408,7 @@ final class GeneratedComponentBundleFactorySpec
         core: ActionCall.Core
       ) extends ProcedureActionCall {
         def execute(): Consequence[OperationResponse] = {
-          _calls += core.component.map(_.name).getOrElse("missing")
+          _calls += core.component.map(_.displayName).getOrElse("missing")
           Consequence.success(OperationResponse.Scalar("ok"))
         }
       }
@@ -370,16 +424,18 @@ final class GeneratedComponentBundleFactorySpec
   private object InvalidBundleFactory extends Component.BundleFactory {
     object PrimaryFactory extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
-        new Component() {}
+        new Component() {
+          override def displayName: String = "duplicate"
+        }
 
       protected def create_Core(
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          "duplicate",
-          ComponentId("duplicate"),
-          ComponentInstanceId.default(ComponentId("duplicate")),
+          GeneratedComponentBundleFactorySpec.this._duplicate_component_id.name,
+          GeneratedComponentBundleFactorySpec.this._duplicate_component_id,
+          ComponentInstanceId.default(GeneratedComponentBundleFactorySpec.this._duplicate_component_id),
           Protocol.empty,
           this
         )
@@ -387,16 +443,18 @@ final class GeneratedComponentBundleFactorySpec
 
     object DuplicateComponentletFactory extends Component.ComponentletFactory {
       protected def create_Component(params: ComponentCreate): Component =
-        new Component() {}
+        new Component() {
+          override def displayName: String = "duplicate"
+        }
 
       protected def create_Core(
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          "duplicate",
-          ComponentId("duplicate_componentlet"),
-          ComponentInstanceId.default(ComponentId("duplicate_componentlet")),
+          GeneratedComponentBundleFactorySpec.this._duplicate_component_id.name,
+          GeneratedComponentBundleFactorySpec.this._duplicate_component_id,
+          ComponentInstanceId.default(GeneratedComponentBundleFactorySpec.this._duplicate_component_id),
           Protocol.empty,
           this
         )

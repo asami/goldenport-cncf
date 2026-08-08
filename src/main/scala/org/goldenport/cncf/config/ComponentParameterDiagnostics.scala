@@ -9,7 +9,7 @@ import org.goldenport.record.Record
  * Payload-safe diagnostics for component initialization parameter resolution.
  *
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] enum ComponentParameterDiagnosticOutcome(val token: String) {
@@ -203,7 +203,7 @@ private[cncf] object ComponentParameterDiagnostics {
       outcome,
       Vector(
         Descriptor.Facet.Id(componentid.name),
-        Descriptor.Facet.Id(instanceid.instance)
+        Descriptor.Facet.Id(instanceid.canonicalKey)
       )
     )
 

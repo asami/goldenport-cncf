@@ -172,10 +172,93 @@ not silently infer a namespace or rewrite project metadata.
 | CID-02C | Cozy adoption | Cozy and sbt-cozy consume the shared ABI through package-private Java-ABI adapters; project schema/generation remains CID-03, coordinate/repository/publication wiring CID-04, and lint CID-07. | accepted/reviewed |
 | CID-03 | Cozy project schema and generation | `project.yaml`, Cozy, sbt-cozy, generated Scala APIs, package output, build metadata, and descriptor generation use `namespace + id`. | accepted/reviewed |
 | CID-04 | CAR, Maven, and repository coordinates | CAR descriptor, filename, Maven group/artifact, repository layout/index, dependency declarations, cache keys, and integrity metadata use canonical or verified derived values. CID-04E adds the CNCF v2 index reader and direct canonical resolver while legacy runtime repository migration remains CID-05/06. | done |
-| CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | planned |
+| CID-05 | CNCF runtime identity migration | `Component.Core.name`, `ComponentId`, instance identity, loading, dependency resolution, routing, Help/Admin identity, diagnostics, and configuration targets use the qualified ID. | done |
 | CID-06 | Compatibility adapters | Legacy descriptor fields, bare IDs, artifact spellings, prefixed spellings, and Web paths decode through bounded single-authority adapters with ambiguity diagnostics. | planned |
 | CID-07 | CAR lint and development CAR migration | CAR lint classifies canonical, required-SNAPSHOT-migration, deferred-release, and disagreement states; every inventoried SNAPSHOT CAR migrates and non-SNAPSHOT CARs enter the next-version ledger. | planned |
 | CID-08 | Ecosystem regression and normative closure | Representative samples, launchers, CBD/BoK metadata, and dependency consumers adopt the contract; cross-repository tests, migration guidance, design/spec promotion, review, compatibility ledger, and release evidence close the phase. | planned |
+
+CID-05 slice ledger is accepted/reviewed and ready for its Step commit:
+
+| Slice | Status | Boundary |
+| --- | --- | --- |
+| CID-05A | ACCEPTED/REVIEWED | Invocation `44742-20260807T131308Z`: 1 suite, 12 executable leaves, 24 matrix operations, 1 intentional pending, exits 0, lock released. |
+| CID-05B | ACCEPTED/REVIEWED | Canonical schema-3 descriptor, repository/factory, and configuration identity. Final review-fix validation `81149-20260807T150153Z`: 106 passed, 1 intentional pending, 9 suite executions completed, exits 0, lock released. Independent focused re-review closed CID05B-R1 through R7 with PASS on reviewed tracked diff `4d0f835fab40b5b4e0dfb6c69370e4ca17659f848b32602f3c848abcb5e1b459`. Future Step integration remains Phase 56 A+B. |
+| CID-05C | ACCEPTED/REVIEWED | Initial findings `CID05C-R1` through `CID05C-R9` and second-pass findings `RF-CID05C-010`/`RF-CID05C-011` are repaired. Authoritative invocation `11800-20260707T210921Z` passed 234 tests across 12 suites with one intentional pending leaf, exits 0, and lock released. Independent focused re-review returned PASS on reviewed tracked diff `b5c00333fa8d91d09a03473f8cbcff741dbb5f23877039db034cc4715ac6fd93`; validation repairs `VF-CID05C-012` through `VF-CID05C-015` are closed. |
+| CID-05D | ACCEPTED/REVIEWED | RF-CID05D-001..013 are closed, preserving exact schema/binding identity, namespace-isolated Web/manual roots, subsystem-owned successful-CAR loader lifecycle, current header history, method-local helper naming, and repository-local temporary-directory lifecycle. Independent focused re-review returned PASS with no actionable finding on reviewed scoped diff `64fd912685db918b9c92e5b02e556b81b42b39cd83b2450aeb31ec86255b46ec`; `FULL_REVIEW_REQUIRED=no`. |
+
+CID-05D writes a real assembly descriptor with the two exact qualified
+declarations but no authored binding IDs. Runtime admission promotes only
+successful `ComponentId.parseC` values; the ordinary CAR repository, integrity,
+ClassLoader, factory, Core, ComponentSpace, resolver, and public Request path
+then retain both identities. Both components display `Shared`, exact qualified
+Requests return namespace-distinguishing scalars, and bare `Shared` selects
+neither component while resolver ambiguity names both qualified candidates.
+
+Implementation-focused validation passed with invocation `33307-20260807T220812Z`:
+4 suites completed, 55 tests succeeded, 1 intentional pending leaf remained,
+both exits were zero, and the shared lock was released. The exact command was:
+
+```text
+testOnly org.goldenport.cncf.subsystem.Phase56NamespaceIsolatedRuntimeIntegrationSpec org.goldenport.cncf.component.Phase56ComponentIdentityContractSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityMigrationSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityProjectionSpec
+```
+
+Review-fix validation is complete for `RF-CID05D-001` through
+`RF-CID05D-010`. Validation repairs `VF-CID05D-001` (replaced the illegal
+anonymous sealed `Specification` with existing concrete development-repository
+specifications) and `VF-CID05D-002` (observe the Subsystem-owned loader
+snapshot without changing lifecycle semantics) are also complete. The
+authoritative final focused validation is invocation
+`59976-20260807T231428Z`, using the exact logical argv:
+
+```text
+["--batch", "testOnly org.goldenport.cncf.component.Phase56ComponentIdentityContractSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityMigrationSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityProjectionSpec org.goldenport.cncf.subsystem.Phase56NamespaceIsolatedRuntimeIntegrationSpec org.goldenport.cncf.component.ComponentDescriptorSpec org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec org.goldenport.cncf.http.RuntimeComponentDevelopmentWebProjectionSpec org.goldenport.cncf.subsystem.resolver.OperationResolverSpec org.goldenport.cncf.projection.GeneratedHelpProjectionSpec org.goldenport.cncf.subsystem.GenericSubsystemDescriptorSpec org.goldenport.cncf.subsystem.GenericSubsystemFactorySpec"]
+```
+
+Eleven suites completed, zero aborted; 243 tests succeeded, zero
+failed/canceled/ignored, and one intentional pending remained;
+`sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. The smallest lifecycle
+correction evidence is invocation `59556-20260807T231330Z`: 1/1 passed,
+exits 0, and lock released. RF-CID05D-011..013 were applied in this pass:
+ComponentDependency retains the Jul. 30 history while carrying the current
+Aug. 8 header, ComponentDescriptor uses the required method-local helper
+form, and RuntimeComponentDevelopmentWebProjectionSpec scopes all temporary
+directories under its deterministic target work root with finally-based
+cleanup. The authoritative focused validation for these repairs is invocation
+`75311-20260808T000025Z`, using the exact logical argv:
+
+```text
+["--batch", "testOnly org.goldenport.cncf.http.RuntimeComponentDevelopmentWebProjectionSpec"]
+```
+
+The final wrapper was
+`/Users/asami/.codex/skills/cncf-sbt-serial-execution/scripts/run-sbt-serial.sh --batch 'testOnly org.goldenport.cncf.http.RuntimeComponentDevelopmentWebProjectionSpec'`;
+one suite completed with 10 tests succeeded and zero failed, canceled,
+ignored, or pending; `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`.
+The parent also verified that
+`target/cncf-test/work/runtime-component-development-web-projection-spec`
+is absent after the suite and that the owned diff-check is clean. Independent
+focused re-review closed `RF-CID05D-011` through `RF-CID05D-013` with PASS,
+no new finding, and no full-review escalation on reviewed scoped diff
+`64fd912685db918b9c92e5b02e556b81b42b39cd83b2450aeb31ec86255b46ec`.
+CID-05D and the CID-05 Step closure criterion are accepted; the Step commit,
+Phase full validation, and Phase 56 closure remain pending, and HYG-P56-005
+remains separate.
+
+CID-05D does not implement CID-06 compatibility adapters or CID-01 E4 bare
+assembly admission, alter ComponentId syntax, repository/cache behavior, or
+HYG-P56-005. CID-05 is complete; Phase 56 and Phase full validation remain
+incomplete.
+
+CID-05D also exposed an adjacent plain-`Action` implicit-job defect. Because
+fixing it changes observable execution behavior rather than Component
+identity, [Phase 57 - Action Execution Semantics](phase-57.md) owns its
+compatibility inventory, executable matrix, implementation, validation, and
+review. It does not extend CID-05 or block CID-05D review on unrelated
+execution-policy work.
+
+CID-05B excludes compatibility adapters (CID-06), routing and presentation
+projection (CID-05C), end-to-end closure (CID-05D), and cross-file/public
+hygiene (HYG-P56-005). Phase 56 remains incomplete.
 
 ## Repository Ownership
 

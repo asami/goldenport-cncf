@@ -3,11 +3,12 @@ package org.goldenport.cncf.subsystem
 import java.nio.file.{Path, Paths}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin, DevelopmentCarRuntimeAdmission}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentInstanceMetadata, ComponentOrigin, DevelopmentCarRuntimeAdmission}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{ConfigurationAccess, RepositoryBootstrapPolicy, RuntimeConfig, RuntimeTestDescriptor}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.Consequence
@@ -18,7 +19,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Aug.  6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -649,7 +650,7 @@ object GenericSubsystemFactory {
       val components0 = _or_raise(
         ComponentRepository.discoverAssemblyC(repositories).flatMap { discovered =>
         val selected = discovered.filter(component =>
-          admitteddescriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName))
+          admitteddescriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding))
         )
         materializeComponentInstancesC(selected, admitteddescriptor, params)
         }
@@ -986,16 +987,32 @@ object GenericSubsystemFactory {
 
   private def _matches_descriptor_component(
     component: Component,
-    descriptorcomponentname: String
+    binding: GenericSubsystemComponentBinding
   ): Boolean = {
-    val runtimename = _runtime_component_name(descriptorcomponentname)
-    val legacyruntimename = _legacy_runtime_component_name(descriptorcomponentname)
-    component.name == runtimename ||
-      component.name == legacyruntimename ||
-      component.artifactMetadata.exists(metadata =>
-        metadata.component.contains(descriptorcomponentname) ||
-          metadata.name == descriptorcomponentname
-      )
+    binding.componentId match {
+      case Some(id) =>
+        component.core.componentId == id &&
+          component.artifactMetadata.flatMap(_.componentId).contains(id)
+      case None =>
+        val bindingpresentations = Vector(
+          binding.componentName,
+          _runtime_component_name(binding.componentName),
+          _legacy_runtime_component_name(binding.componentName)
+        ).distinct
+        val presentations = Vector(
+          component.name,
+          component.core.componentId.name,
+          component.core.componentId.localId.value()
+        ).distinct
+        presentations.exists(presentation =>
+          bindingpresentations.exists(NamingConventions.equivalentByNormalized(presentation, _))
+        ) ||
+          component.artifactMetadata.exists(metadata =>
+            metadata.component.exists(componentname =>
+              bindingpresentations.exists(NamingConventions.equivalentByNormalized(componentname, _))
+            ) || bindingpresentations.exists(NamingConventions.equivalentByNormalized(metadata.name, _))
+          )
+    }
   }
 
   private[cncf] def materializeComponentInstances(
@@ -1011,12 +1028,32 @@ object GenericSubsystemFactory {
     params: ComponentCreate
   ): Consequence[Vector[Component]] = {
     val participants = descriptor.componentBindings.flatMap { binding =>
-      val candidates = discovered.filter(_matches_descriptor_component(_, binding.componentName)).toVector
-      val exact = candidates.filter(_.instanceMetadata.contains(binding.instanceMetadata))
-      if (exact.nonEmpty)
-        exact.map(Consequence.success)
-      else
-        candidates.map(_create_component_participant_c(_, binding, params))
+      val candidates = discovered.filter(_matches_descriptor_component(_, binding)).toVector
+      val exact = candidates.filter { candidate =>
+        candidate.instanceMetadata.contains(_binding_instance_metadata(binding, candidate))
+      }
+      binding.componentId match {
+        case Some(componentid) =>
+          candidates match {
+            case Vector() =>
+              Vector(Consequence.componentInvalid(
+                s"canonical component binding has no exact Core/artifact identity match: ${componentid.name}"
+              ))
+            case Vector(candidate) =>
+              exact.headOption.map(x => Vector(Consequence.success(x))).getOrElse(
+                Vector(_create_component_participant_c(candidate, binding, params))
+              )
+            case _ =>
+              Vector(Consequence.componentInvalid(
+                s"canonical component binding has multiple exact Core/artifact identity matches: ${componentid.name}"
+              ))
+          }
+        case None =>
+          if (exact.nonEmpty)
+            exact.map(Consequence.success)
+          else
+            candidates.map(_create_component_participant_c(_, binding, params))
+      }
     }.toVector
     _sequence(participants)
   }
@@ -1031,7 +1068,7 @@ object GenericSubsystemFactory {
         val instanceparams = params
           .withOrigin(prototype.origin)
           .withComponentDescriptors(prototype.componentDescriptors)
-          .withInstanceMetadata(binding.instanceMetadata)
+          .withInstanceMetadata(_binding_instance_metadata(binding, prototype))
         val componentc =
           if (prototype.isComponentletParticipant) factory.createComponentletC(instanceparams)
           else factory.createPrimaryC(instanceparams)
@@ -1047,6 +1084,15 @@ object GenericSubsystemFactory {
         } else {
           Consequence.success(prototype)
         }
+    }
+
+  private def _binding_instance_metadata(
+    binding: GenericSubsystemComponentBinding,
+    prototype: Component
+  ): ComponentInstanceMetadata =
+    binding.componentId match {
+      case Some(_) => binding.instanceMetadata
+      case None => binding.instanceMetadata.copy(componentId = Some(prototype.core.componentId))
     }
 
   private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =

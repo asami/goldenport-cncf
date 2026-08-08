@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.bag.BinaryBag
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.builtin.blob.BlobComponent
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.ContentType
 import org.simplemodeling.model.datatype.EntityId
@@ -12,13 +13,13 @@ import org.simplemodeling.model.datatype.EntityId
  * Reusable Blob payload boundary for components that need managed Blob bytes.
  *
  * @since   Apr. 29, 2026
- * @version Apr. 29, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object BlobPayloadSupport {
   def service(component: Component): Consequence[BlobComponent.BlobService] =
     component.subsystem
-      .flatMap(_.findComponent("blob"))
+      .flatMap(_.findComponent(BuiltinComponentIdentity.BLOB))
       .flatMap(_.port.get[BlobComponent.BlobService]) match {
       case Some(service) => Consequence.success(service)
       case None => Consequence.serviceUnavailable("blob service is not available in subsystem")

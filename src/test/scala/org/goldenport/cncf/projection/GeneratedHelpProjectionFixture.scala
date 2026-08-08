@@ -25,7 +25,7 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr.  6, 2026
  *  version Apr. 14, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {
@@ -41,11 +41,13 @@ private[projection] object GeneratedHelpProjectionFixture {
   }
 
   private val _name = "domain"
-  private val _component_id = ComponentId(_name)
+  private val _component_id = ComponentId("org.goldenport.fixture.Domain")
 
   private lazy val _factory = new Component.SinglePrimaryBundleFactory {
     override protected def create_Component(params: ComponentCreate): Component =
       new Component() {
+        override def displayName: String = _name
+
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(
             CmlOperationDefinition(
@@ -123,7 +125,7 @@ private[projection] object GeneratedHelpProjectionFixture {
 
   private lazy val _core: Component.Core =
     Component.Core.create(
-      _name,
+      _component_id.name,
       _component_id,
       ComponentInstanceId.default(_component_id),
       Protocol(

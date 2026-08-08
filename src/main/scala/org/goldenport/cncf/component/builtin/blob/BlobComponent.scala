@@ -42,10 +42,11 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 26, 2026
  *  version Jun.  5, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
+  override def displayName: String = BlobComponent.name
   override protected def initialize_Component(params: ComponentInit): Unit =
     withComponentDescriptors(componentDescriptors ++ BlobComponent.componentDescriptors)
 }
@@ -116,7 +117,7 @@ object BlobComponent {
   }
 
   val name: String = "blob"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB
   val BLOB_COLLECTION_ID: EntityCollectionId = BlobRepository.CollectionId
   private val _blob_store_resource_name: String = "blobstore"
 
@@ -206,7 +207,7 @@ object BlobComponent {
         )
       )
       val instanceid = ComponentInstanceId.default(componentId)
-      Component.Core.create(name, componentId, instanceid, protocol)
+      Component.Core.create(componentId.name, componentId, instanceid, protocol)
     }
 
     private def _blob_store(config: BlobStoreConfig): BlobStore =

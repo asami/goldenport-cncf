@@ -1,6 +1,6 @@
 package org.goldenport.cncf.subsystem.resolver
 
-import org.goldenport.cncf.component.{Component, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentOrigin}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.protocol.spec.OperationDefinition
 import scala.collection.immutable.ListMap
@@ -12,7 +12,7 @@ import OperationResolver._
  *  version Jan. 16, 2026
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version May.  8, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResolver private (
@@ -31,16 +31,16 @@ final class OperationResolver private (
    */
   def resolve(selector: String): ResolutionResult = {
     val trimmed = selector.trim
-    val dotCount = trimmed.count(_ == '.')
+    val dotcount = trimmed.count(_ == '.')
 
     val canonical =
-      if (config.mode == Mode.OneOperation && dotCount < 2) {
+      if (config.mode == Mode.OneOperation && dotcount < 2) {
         ResolutionResult.NotFound(ResolutionStage.Operation, trimmed)
       } else {
         _resolve_with_flags(
           trimmed,
-          allowPrefix = config.mode != Mode.OneOperation && config.prefixMatchingEnabled,
-          allowImplicit = false
+          allowprefix = config.mode != Mode.OneOperation && config.prefixMatchingEnabled,
+          allowimplicit = false
         )
       }
 
@@ -58,15 +58,11 @@ final class OperationResolver private (
   def resolveOperationDefinition(
     selector: String
   ): Option[OperationDefinition] = {
-    val parts = selector.trim.split("\\.")
-    if (parts.length != 3)
-      None
-    else
-      _entries.find { entry =>
-        entry.component.matches(parts(0)) &&
-          entry.service.matches(parts(1)) &&
-          entry.operation.matches(parts(2))
-      }.flatMap(_.operationDefinition)
+    resolve(selector) match {
+      case ResolutionResult.Resolved(fqn, _, _, _) =>
+        _entries.find(_.fqn == fqn).flatMap(_.operationdefinition)
+      case _ => None
+    }
   }
 
   @deprecated("Phase 2.8: use resolve(selector: String). Flags are no longer part of the public API.")
@@ -76,10 +72,6 @@ final class OperationResolver private (
     allowImplicit: Boolean
   ): ResolutionResult = {
     val trimmed = selector.trim
-    val dotCount = trimmed.count(_ == '.')
-    if (dotCount >= 3) {
-      return ResolutionResult.Invalid("selector contains too many segments")
-    }
     val canonical =
       if (config.mode == Mode.OneOperation) {
         _resolve_with_flags(trimmed, allowPrefix, allowImplicit) match {
@@ -100,11 +92,11 @@ final class OperationResolver private (
 
   private def _resolve_with_flags(
     trimmed: String,
-    allowPrefix: Boolean,
-    allowImplicit: Boolean
+    allowprefix: Boolean,
+    allowimplicit: Boolean
   ): ResolutionResult =
     if (trimmed.isEmpty) {
-      if (allowImplicit) {
+      if (allowimplicit) {
         _implicit_target match {
           case Some(target) => ResolutionResult.Resolved(target.fqn, target.component.canonical, target.service.canonical, target.operation.canonical)
           case None => ResolutionResult.Invalid("operation selector is empty")
@@ -113,20 +105,28 @@ final class OperationResolver private (
         ResolutionResult.Invalid("operation selector is empty")
       }
     } else {
-      val dotCount = trimmed.count(_ == '.')
-      dotCount match {
-        case 0 => _resolve_operation_only(trimmed, allowPrefix)
-        case 1 => _resolve_service_and_operation(trimmed, allowPrefix)
-        case 2 => _resolve_component_service_operation(trimmed, allowPrefix)
-        case _ => ResolutionResult.Invalid("invalid selector")
+      val parts = trimmed.split("\\.", -1).toVector
+      if (parts.exists(_.isEmpty)) {
+        ResolutionResult.Invalid("operation selector has an empty segment")
+      } else parts.size match {
+        case 0 => ResolutionResult.Invalid("operation selector is empty")
+        case 1 => _resolve_operation_only(trimmed, allowprefix)
+        case 2 => _resolve_service_and_operation(trimmed, allowprefix)
+        case _ =>
+          _resolve_component_service_operation(
+            parts.dropRight(2).mkString("."),
+            parts(parts.size - 2),
+            parts.last,
+            allowprefix
+          )
       }
     }
 
   private def _resolve_operation_only(
     selector: String,
-    allowPrefix: Boolean
+    allowprefix: Boolean
   ): ResolutionResult =
-    _match_items(_entries, _.operation, selector, allowPrefix) match {
+    _match_items(_entries, _.operation, selector, allowprefix) match {
       case MatchOutcome.Found(result) =>
         result.headOption.map(_to_resolved).getOrElse(ResolutionResult.NotFound(ResolutionStage.Operation, selector))
       case MatchOutcome.Ambiguous(result) =>
@@ -137,51 +137,93 @@ final class OperationResolver private (
 
   private def _resolve_service_and_operation(
     selector: String,
-    allowPrefix: Boolean
+    allowprefix: Boolean
   ): ResolutionResult = {
-    val Array(serviceSelector, operationSelector) = selector.split("\\.", 2)
-    _match_items(_service_slots, _.service, serviceSelector, allowPrefix) match {
+    val Array(serviceselector, operationselector) = selector.split("\\.", 2)
+    _match_items(_service_slots, _.service, serviceselector, allowprefix) match {
       case MatchOutcome.Found(result) =>
         val slot = result.head
-        _match_items(slot.operations, _.operation, operationSelector, allowPrefix) match {
+        _match_items(slot.operations, _.operation, operationselector, allowprefix) match {
           case MatchOutcome.Found(operation) => _to_resolved(operation.head)
-          case MatchOutcome.Ambiguous(operation) => ResolutionResult.Ambiguous(operationSelector, _candidate_fqns(operation))
-          case MatchOutcome.NotFound => ResolutionResult.NotFound(ResolutionStage.Operation, operationSelector)
+          case MatchOutcome.Ambiguous(operation) => ResolutionResult.Ambiguous(operationselector, _candidate_fqns(operation))
+          case MatchOutcome.NotFound => ResolutionResult.NotFound(ResolutionStage.Operation, operationselector)
         }
       case MatchOutcome.Ambiguous(result) =>
-        ResolutionResult.Ambiguous(serviceSelector, _candidate_fqns(result.flatMap(_.operations)))
+        ResolutionResult.Ambiguous(serviceselector, _candidate_fqns(result.flatMap(_.operations)))
       case MatchOutcome.NotFound =>
-        ResolutionResult.NotFound(ResolutionStage.Service, serviceSelector)
+        ResolutionResult.NotFound(ResolutionStage.Service, serviceselector)
     }
   }
 
   private def _resolve_component_service_operation(
-    selector: String,
-    allowPrefix: Boolean
+    componentselector: String,
+    serviceselector: String,
+    operationselector: String,
+    allowprefix: Boolean
   ): ResolutionResult = {
-    val Array(componentSelector, serviceSelector, operationSelector) = selector.split("\\.", 3)
-    _match_items(_component_slots, _.component, componentSelector, allowPrefix) match {
+    val componentmatches =
+      if (componentselector.contains(".")) {
+        val exact = _component_slots.filter(_.component.canonicalMatches(componentselector))
+        exact.size match {
+          case 0 => MatchOutcome.NotFound
+          case 1 => MatchOutcome.Found(exact)
+          case _ => MatchOutcome.Ambiguous(exact)
+        }
+      } else {
+        _match_items(_component_slots, _.component, componentselector, allowprefix)
+      }
+    componentmatches match {
       case MatchOutcome.Found(result) =>
         val component = result.head
-        _match_items(component.services, _.service, serviceSelector, allowPrefix) match {
+        _match_items(component.services, _.service, serviceselector, allowprefix) match {
           case MatchOutcome.Found(service) =>
             val slot = service.head
-            _match_items(slot.operations, _.operation, operationSelector, allowPrefix) match {
+            _match_items(slot.operations, _.operation, operationselector, allowprefix) match {
               case MatchOutcome.Found(operation) => _to_resolved(operation.head)
-              case MatchOutcome.Ambiguous(operation) => ResolutionResult.Ambiguous(operationSelector, _candidate_fqns(operation))
-              case MatchOutcome.NotFound => ResolutionResult.NotFound(ResolutionStage.Operation, operationSelector)
+              case MatchOutcome.Ambiguous(operation) => ResolutionResult.Ambiguous(operationselector, _candidate_fqns(operation))
+              case MatchOutcome.NotFound => ResolutionResult.NotFound(ResolutionStage.Operation, operationselector)
             }
           case MatchOutcome.Ambiguous(service) =>
-            ResolutionResult.Ambiguous(serviceSelector, _candidate_fqns(service.flatMap(_.operations)))
+            ResolutionResult.Ambiguous(serviceselector, _candidate_fqns(service.flatMap(_.operations)))
           case MatchOutcome.NotFound =>
-            ResolutionResult.NotFound(ResolutionStage.Component, componentSelector)
+            ResolutionResult.NotFound(ResolutionStage.Component, componentselector)
         }
       case MatchOutcome.Ambiguous(result) =>
-        ResolutionResult.Ambiguous(componentSelector, _candidate_fqns(result.flatMap(_.operations)))
+        ResolutionResult.Ambiguous(
+          componentselector,
+          _candidate_fqns(_matching_component_operations(result, serviceselector, operationselector, allowprefix))
+        )
       case MatchOutcome.NotFound =>
-        ResolutionResult.NotFound(ResolutionStage.Component, componentSelector)
+        ResolutionResult.NotFound(ResolutionStage.Component, componentselector)
     }
   }
+
+  private def _matching_component_operations(
+    components: Vector[ComponentSlot],
+    serviceselector: String,
+    operationselector: String,
+    allowprefix: Boolean
+  ): Vector[OperationEntry] =
+    components.flatMap { component =>
+      _match_items(component.services, _.service, serviceselector, allowprefix) match {
+        case MatchOutcome.Found(services) => _matching_service_operations(services, operationselector, allowprefix)
+        case MatchOutcome.Ambiguous(services) => _matching_service_operations(services, operationselector, allowprefix)
+        case MatchOutcome.NotFound => Vector.empty
+      }
+    }
+
+  private def _matching_service_operations(
+    services: Vector[ServiceSlot],
+    operationselector: String,
+    allowprefix: Boolean
+  ): Vector[OperationEntry] =
+    services.flatMap { service =>
+      _match_items(service.operations, _.operation, operationselector, allowprefix) match {
+        case MatchOutcome.Found(operations) => operations
+        case MatchOutcome.Ambiguous(operations) => operations
+        case MatchOutcome.NotFound => Vector.empty
+      }
+    }
 
   private def _to_resolved(entry: OperationEntry): ResolutionResult.Resolved =
     ResolutionResult.Resolved(
@@ -200,13 +242,13 @@ final class OperationResolver private (
       return ResolutionResult.NotFound(ResolutionStage.Operation, trimmed)
     }
 
-    val exactMatches =
+    val exactmatches =
       _entries.filter { e =>
         e.origin != ComponentOrigin.Builtin &&
         NamingConventions.equivalentSelector(e.fqn, trimmed)
       }
 
-    exactMatches match {
+    exactmatches match {
       case Vector(entry) => _to_resolved(entry)
       case _ => ResolutionResult.NotFound(ResolutionStage.Operation, trimmed)
     }
@@ -214,13 +256,13 @@ final class OperationResolver private (
 
   private def _match_items[T](
     items: Vector[T],
-    accessor: T => NameEntry,
+    accessor: T => SelectorEntry,
     selector: String,
-    allowPrefix: Boolean
+    allowprefix: Boolean
   ): MatchOutcome[T] = {
     val exact = items.filter(item => accessor(item).matches(selector))
 
-    if (!allowPrefix) {
+    if (!allowprefix) {
       if (exact.size == 1) return MatchOutcome.Found(exact)
       if (exact.size > 1) return MatchOutcome.Ambiguous(exact)
       return MatchOutcome.NotFound
@@ -262,18 +304,23 @@ object OperationResolver {
 
   def build(components: Seq[Component]): OperationResolver = {
     val entries = components.toVector.flatMap { component =>
-      val componentAliases =
+      val componentaliases =
         component.artifactMetadata.toVector.flatMap(metadata =>
           Vector(Some(metadata.name), metadata.component).flatten
-        ).filter(_.trim.nonEmpty).distinct.filterNot(NamingConventions.equivalentByNormalized(_, component.name))
+        ).filter(_.trim.nonEmpty).distinct
       component.protocol.services.services.flatMap { service =>
         service.operations.operations.toVector.map { operation =>
           OperationEntry(
-            component = NameEntry(component.name, componentAliases),
+            component = ComponentEntry(
+              component.componentId,
+              (Vector(component.displayName) ++ componentaliases)
+                .filterNot(_ == component.componentId.name)
+                .distinct
+            ),
             service = NameEntry(service.name),
             operation = NameEntry(operation.name),
             origin = component.origin,
-            operationDefinition = Some(operation)
+            operationdefinition = Some(operation)
           )
         }
       }
@@ -286,41 +333,46 @@ object OperationResolver {
     aliases: Map[String, String] = Map.empty
   ): OperationResolver = {
     val tuples = fqns.map { fqn =>
-      val parts = fqn.split("\\.")
-      require(parts.length == 3, s"Invalid FQN: $fqn")
-      (parts(0), parts(1), parts(2))
+      val parts = fqn.split("\\.", -1).toVector
+      require(parts.size >= 3, s"Invalid FQN: $fqn")
+      require(parts.forall(_.nonEmpty), s"Invalid FQN: $fqn")
+      val componentid = parts.dropRight(2).mkString(".")
+      val componentvalue = ComponentId.parseC(componentid).toOption.getOrElse(
+        throw new IllegalArgumentException(s"Invalid FQN: $fqn")
+      )
+      (componentvalue, parts(parts.size - 2), parts.last)
     }
     _build_from_tuples(tuples, aliases)
   }
 
   private def _build_from_tuples(
-    tuples: Seq[(String, String, String)],
+    tuples: Seq[(ComponentId, String, String)],
     aliases: Map[String, String]
   ): OperationResolver = {
-    val entries = tuples.toVector.map { case (componentName, serviceName, operationName) =>
-      val alias = aliases.get(s"$componentName.$serviceName.$operationName").toVector
+    val entries = tuples.toVector.map { case (componentid, servicename, operationname) =>
+      val alias = aliases.get(s"${componentid.name}.$servicename.$operationname").toVector
       OperationEntry(
-        component = NameEntry(componentName),
-        service = NameEntry(serviceName),
-        operation = NameEntry(operationName, alias),
+        component = ComponentEntry(componentid),
+        service = NameEntry(servicename),
+        operation = NameEntry(operationname, alias),
         origin = ComponentOrigin.Main,
-        operationDefinition = None
+        operationdefinition = None
       )
     }
     _build_from_entries(entries)
   }
 
   private def _build_from_entries(entries: Vector[OperationEntry]): OperationResolver = {
-    val serviceSlots = _build_service_slots(entries)
-    val componentSlots = _build_component_slots(serviceSlots)
-    val implicitTarget = _find_implicit_target(entries)
+    val serviceslots = _build_service_slots(entries)
+    val componentslots = _build_component_slots(serviceslots)
+    val implicittarget = _find_implicit_target(entries)
 
-    val non_builtin_entries = entries.filter(_.origin != ComponentOrigin.Builtin)
-    val non_builtin_components = non_builtin_entries.map(_.component.canonical).distinct
-    val non_builtin_operations = non_builtin_entries.map(_.operation.canonical).distinct
+    val nonbuiltinentries = entries.filter(_.origin != ComponentOrigin.Builtin)
+    val nonbuiltincomponents = nonbuiltinentries.map(_.component.id).distinct
+    val nonbuiltinoperations = nonbuiltinentries.map(_.operation.canonical).distinct
 
     val mode =
-      if (non_builtin_components.size == 1 && non_builtin_operations.size == 1)
+      if (nonbuiltincomponents.size == 1 && nonbuiltinoperations.size == 1)
         Mode.OneOperation
       else
         Mode.Normal
@@ -331,16 +383,16 @@ object OperationResolver {
         prefixMatchingEnabled = true
       ),
       entries,
-      serviceSlots,
-      componentSlots,
-      implicitTarget
+      serviceslots,
+      componentslots,
+      implicittarget
     )
   }
 
   private def _build_service_slots(entries: Vector[OperationEntry]): Vector[ServiceSlot] = {
-    val grouped = entries.foldLeft(ListMap.empty[(String, String), Vector[OperationEntry]]) {
+    val grouped = entries.foldLeft(ListMap.empty[(ComponentId, String), Vector[OperationEntry]]) {
       case (map, entry) =>
-        val key = (entry.component.canonical, entry.service.canonical)
+        val key = (entry.component.id, entry.service.canonical)
         val values = map.getOrElse(key, Vector.empty) :+ entry
         map.updated(key, values)
     }
@@ -349,10 +401,10 @@ object OperationResolver {
     }.toVector
   }
 
-  private def _build_component_slots(serviceSlots: Vector[ServiceSlot]): Vector[ComponentSlot] = {
-    val grouped = serviceSlots.foldLeft(ListMap.empty[String, Vector[ServiceSlot]]) {
+  private def _build_component_slots(serviceslots: Vector[ServiceSlot]): Vector[ComponentSlot] = {
+    val grouped = serviceslots.foldLeft(ListMap.empty[ComponentId, Vector[ServiceSlot]]) {
       case (map, slot) =>
-        val key = slot.component.canonical
+        val key = slot.component.id
         val values = map.getOrElse(key, Vector.empty) :+ slot
         map.updated(key, values)
     }
@@ -366,31 +418,40 @@ object OperationResolver {
   }
 
   private def _find_implicit_target(entries: Vector[OperationEntry]): Option[OperationEntry] = {
-    val nonBuiltinEntries = entries.filter(_.origin != ComponentOrigin.Builtin)
-    if (nonBuiltinEntries.isEmpty) return None
-    val componentGroup = nonBuiltinEntries.groupBy(_.component.canonical)
-    if (componentGroup.size != 1) return None
-    val operations = componentGroup.values.head
-    val serviceGroup = operations.groupBy(_.service.canonical)
-    if (serviceGroup.size != 1) return None
-    val operationGroup = operations.groupBy(_.operation.canonical)
-    if (operationGroup.size != 1) return None
+    val nonbuiltinentries = entries.filter(_.origin != ComponentOrigin.Builtin)
+    if (nonbuiltinentries.isEmpty) return None
+    val componentgroup = nonbuiltinentries.groupBy(_.component.id)
+    if (componentgroup.size != 1) return None
+    val operations = componentgroup.values.head
+    val servicegroup = operations.groupBy(_.service.canonical)
+    if (servicegroup.size != 1) return None
+    val operationgroup = operations.groupBy(_.operation.canonical)
+    if (operationgroup.size != 1) return None
     operations.headOption
+  }
+
+  private sealed trait SelectorEntry {
+    def canonical: String
+    def canonicalMatches(input: String): Boolean
+    def matches(input: String): Boolean
+    def prefixMatches(input: String): Boolean
   }
 
   private final case class NameEntry(
     canonical: String,
     aliases: Vector[String] = Vector.empty
-  ) {
-    private val allCanonical = canonical +: aliases
-    private val allComparison = allCanonical.map(NamingConventions.toComparisonKey).distinct
+  ) extends SelectorEntry {
+    private val _alias_comparison = aliases.map(NamingConventions.toComparisonKey).distinct
+
+    def canonicalMatches(input: String): Boolean =
+      canonical == input.trim
 
     def matches(input: String): Boolean = {
       val trimmed = input.trim
       if (trimmed.isEmpty) {
         false
       } else {
-        allComparison.contains(NamingConventions.toComparisonKey(trimmed))
+        canonicalMatches(trimmed) || _alias_comparison.contains(NamingConventions.toComparisonKey(trimmed))
       }
     }
 
@@ -400,29 +461,59 @@ object OperationResolver {
         false
       } else {
         val key = NamingConventions.toComparisonKey(trimmed)
-        allComparison.exists(_.startsWith(key))
+        (NamingConventions.toComparisonKey(canonical).startsWith(key) ||
+          _alias_comparison.exists(_.startsWith(key)))
+      }
+    }
+  }
+
+  private final case class ComponentEntry(
+    id: ComponentId,
+    aliases: Vector[String] = Vector.empty
+  ) extends SelectorEntry {
+    private val _alias_comparison = aliases.map(NamingConventions.toComparisonKey).distinct
+
+    def canonical: String = id.name
+
+    def canonicalMatches(input: String): Boolean =
+      canonical == input.trim
+
+    def matches(input: String): Boolean = {
+      val trimmed = input.trim
+      trimmed.nonEmpty &&
+        (canonicalMatches(trimmed) || _alias_comparison.contains(NamingConventions.toComparisonKey(trimmed)))
+    }
+
+    def prefixMatches(input: String): Boolean = {
+      val trimmed = input.trim
+      if (trimmed.isEmpty)
+        false
+      else {
+        val key = NamingConventions.toComparisonKey(trimmed)
+        NamingConventions.toComparisonKey(canonical).startsWith(key) ||
+          _alias_comparison.exists(_.startsWith(key))
       }
     }
   }
 
   private final case class OperationEntry(
-    component: NameEntry,
+    component: ComponentEntry,
     service: NameEntry,
     operation: NameEntry,
     origin: ComponentOrigin,
-    operationDefinition: Option[OperationDefinition]
+    operationdefinition: Option[OperationDefinition]
   ) {
     def fqn: String = s"${component.canonical}.${service.canonical}.${operation.canonical}"
   }
 
   private final case class ServiceSlot(
-    component: NameEntry,
+    component: ComponentEntry,
     service: NameEntry,
     operations: Vector[OperationEntry]
   )
 
   private final case class ComponentSlot(
-    component: NameEntry,
+    component: ComponentEntry,
     services: Vector[ServiceSlot],
     operations: Vector[OperationEntry]
   )

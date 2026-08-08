@@ -9,49 +9,60 @@ import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 20, 2026
  *  version Feb.  1, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
-final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers {
+final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _e1 = afterWord("in spec:admin-system-ping-resolver, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
 
   "Ping selector resolution" should {
-    "resolve both canonical and alias selectors to builtin admin.system.ping" in {
-      withAliasContext(RunMode.Command, aliasConfig("ping" -> "admin.system.ping")) { (aliasResolver, _) =>
-        val subsystem = DefaultSubsystemFactory.default(Some("command"))
-        val resolver = subsystem.resolver
+    "E1 resolve both canonical and alias selectors to builtin admin.system.ping" must _e1 {
+      "when exercising: resolve both canonical and alias selectors to builtin admin.system.ping" in {
+        Given("the command runtime and one alias for the canonical Admin ping selector")
+        val configuration = _alias_config("ping" -> "admin.system.ping")
+        val mode = RunMode.Command
 
-        Seq("admin.system.ping", "ping").foreach { selector =>
-          val normalized =
-            PathPreNormalizer.rewriteSelector(selector, RunMode.Command, aliasResolver)
-          resolver.resolve(normalized) match {
-            case ResolutionResult.Resolved(fqn, component, service, operation) =>
-              fqn shouldBe "admin.system.ping"
-              component shouldBe "admin"
-              service shouldBe "system"
-              operation shouldBe "ping"
-            case other =>
-              fail(s"unexpected resolution for selector ${selector}: $other")
+        When("the resolver rewrites and resolves canonical and alias selectors")
+        _with_alias_context(mode, configuration) { (aliasresolver, _) =>
+          val subsystem = DefaultSubsystemFactory.default(Some("command"))
+          val resolver = subsystem.resolver
+
+          Seq("admin.system.ping", "ping").foreach { selector =>
+            val normalized =
+              PathPreNormalizer.rewriteSelector(selector, mode, aliasresolver)
+            Then("each selector resolves to the canonical builtin Admin operation")
+            resolver.resolve(normalized) match {
+              case ResolutionResult.Resolved(fqn, component, service, operation) =>
+                fqn shouldBe "org.goldenport.cncf.Admin.system.ping"
+                component shouldBe "org.goldenport.cncf.Admin"
+                service shouldBe "system"
+                operation shouldBe "ping"
+              case other =>
+                fail(s"unexpected resolution for selector ${selector}: $other")
+            }
           }
         }
       }
     }
   }
 
-  private def withAliasContext[T](
+  private def _with_alias_context[T](
     mode: RunMode,
     configuration: Configuration
   )(body: (AliasResolver, GlobalRuntimeContext) => T): T = {
     val resolver = AliasLoader.load(configuration)
     val execution = ExecutionContext.create()
-    val httpDriver = FakeHttpDriver.okText("noop")
-    val runtimeConfig = RuntimeConfig.default.copy(
-      httpDriver = httpDriver,
+    val httpdriver = FakeHttpDriver.okText("noop")
+    val runtimeconfig = RuntimeConfig.default.copy(
+      httpDriver = httpdriver,
       mode = mode
     )
     val core = ScopeContext(
@@ -59,11 +70,11 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers {
       name = "ping-resolver-spec",
       parent = None,
       observabilityContext = execution.observability,
-      httpDriverOption = Some(httpDriver)
+      httpDriverOption = Some(httpdriver)
     ).core
     val context = new GlobalRuntimeContext(
       core = core,
-      config = runtimeConfig,
+      config = runtimeconfig,
       aliasResolver = resolver,
       runtimeMode = mode,
       commandExecutionMode = None,
@@ -77,7 +88,7 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers {
     finally GlobalRuntimeContext.current = previous
   }
 
-  private def aliasConfig(defs: (String, String)*): Configuration = {
+  private def _alias_config(defs: (String, String)*): Configuration = {
     val entries = defs.toVector.map { case (input, output) =>
       ConfigurationValue.ObjectValue(
         Map(

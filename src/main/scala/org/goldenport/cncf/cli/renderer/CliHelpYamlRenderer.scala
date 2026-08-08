@@ -6,7 +6,7 @@ import org.goldenport.record.io.RecordEncoder
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object CliHelpYamlRenderer {
@@ -15,6 +15,7 @@ object CliHelpYamlRenderer {
     lines += s"type: ${model.`type`}"
     lines += s"name: ${model.name}"
     lines += s"summary: ${model.summary}"
+    model.componentId.foreach(v => lines += s"componentId: $v")
     model.component.foreach(v => lines += s"component: $v")
     model.service.foreach(v => lines += s"service: $v")
     model.selector.foreach { selector =>

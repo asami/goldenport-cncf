@@ -8,7 +8,7 @@ import org.goldenport.cncf.config.ComponentInitializationParameters
 /*
  * @since   Feb.  1, 2026
  *  version Feb.  5, 2026
- * @version Jul. 22, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CollaboratorComponent() extends Component()
@@ -28,7 +28,7 @@ abstract class CollaboratorComponent() extends Component()
 
   inline def collaborator: Collaborator = collaboratorSlot.fold(
     Consequence.RAISE.UninitializedState(_),
-    identity
+    scala.Predef.identity
   )
 }
 

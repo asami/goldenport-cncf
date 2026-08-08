@@ -26,15 +26,16 @@ import org.goldenport.schema.DataType
  *  version Jan. 21, 2026
  *  version Feb. 15, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientComponent() extends Component {
+  override def displayName: String = ClientComponent.name
 }
 
 object ClientComponent {
   val name: String = "client"
-  val componentId = ComponentId(name) // TODO static
+  val componentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.CLIENT
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -64,7 +65,7 @@ object ClientComponent {
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         instanceid,
         protocol

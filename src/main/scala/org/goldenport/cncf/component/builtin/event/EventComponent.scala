@@ -17,10 +17,11 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Apr. 22, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponent() extends Component {
+  override def displayName: String = EventComponent.name
 }
 
 object EventComponent {
@@ -36,7 +37,7 @@ object EventComponent {
   }
 
   val name: String = "event"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.EVENT
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -47,28 +48,28 @@ object EventComponent {
       comp: Component
     ): Component.Core = {
       val request = spec.RequestDefinition()
-      val idRequest = _event_id_request
-      val jobIdRequest = _job_id_request
-      val loadEvent = new LoadEventOperationDefinition(request = idRequest, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecord"))))
-      val searchEvent = new SearchEventOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
-      val loadEventStoreStatus = new LoadEventStoreStatusOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val searchEventLog = new SearchEventLogOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
-      val loadJobEvents = new LoadJobEventsOperationDefinition(request = jobIdRequest, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
-      val eventService = spec.ServiceDefinition(
+      val idrequest = _event_id_request
+      val jobidrequest = _job_id_request
+      val loadevent = new LoadEventOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecord"))))
+      val searchevent = new SearchEventOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
+      val loadeventstorestatus = new LoadEventStoreStatusOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val searcheventlog = new SearchEventLogOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
+      val loadevents = new LoadJobEventsOperationDefinition(request = jobidrequest, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
+      val eventservice = spec.ServiceDefinition(
         name = "event",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(loadEvent, searchEvent)
+          operations = NonEmptyVector.of(loadevent, searchevent)
         )
       )
-      val eventAdminService = spec.ServiceDefinition(
+      val eventadminservice = spec.ServiceDefinition(
         name = "event_admin",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(loadEventStoreStatus, searchEventLog, loadJobEvents)
+          operations = NonEmptyVector.of(loadeventstorestatus, searcheventlog, loadevents)
         )
       )
       val protocol = Protocol(
         services = spec.ServiceDefinitionGroup(
-          services = Vector(eventService, eventAdminService)
+          services = Vector(eventservice, eventadminservice)
         ),
         handler = ProtocolHandler.default
       )
@@ -77,7 +78,7 @@ object EventComponent {
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         instanceid,
         protocol
@@ -226,10 +227,10 @@ object EventComponent {
 
   private final case class LoadEventAction(
     request: Request,
-    eventId: EventId
+    eventid: EventId
   ) extends QueryAction() {
     def createCall(core: ActionCall.Core): ActionCall =
-      LoadEventCall(core, eventId)
+      LoadEventCall(core, eventid)
   }
 
   private final case class SearchEventAction(
@@ -255,21 +256,21 @@ object EventComponent {
 
   private final case class LoadJobEventsAction(
     request: Request,
-    jobId: org.goldenport.cncf.job.JobId
+    jobid: org.goldenport.cncf.job.JobId
   ) extends QueryAction() {
     def createCall(core: ActionCall.Core): ActionCall =
-      LoadJobEventsCall(core, jobId)
+      LoadJobEventsCall(core, jobid)
   }
 
   private final case class LoadEventCall(
     core: ActionCall.Core,
-    eventId: EventId
+    eventid: EventId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       _event_store(core).flatMap { store =>
         core.component.flatMap(_.port.get[EventService]) match {
           case Some(service) =>
-            service.loadEvent(eventId).map(event => OperationResponse.RecordResponse(_event_record(event)))
+            service.loadEvent(eventid).map(event => OperationResponse.RecordResponse(_event_record(event)))
           case None =>
             Consequence.serviceUnavailable("event service is not available")
         }
@@ -328,16 +329,16 @@ object EventComponent {
 
   private final case class LoadJobEventsCall(
     core: ActionCall.Core,
-    jobId: org.goldenport.cncf.job.JobId
+    jobid: org.goldenport.cncf.job.JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       _event_store(core).flatMap { store =>
         core.component.flatMap(_.port.get[EventAdminService]) match {
           case Some(service) =>
-            service.loadJobEvents(jobId).map { records =>
+            service.loadJobEvents(jobid).map { records =>
               OperationResponse.RecordResponse(
                 Record.data(
-                  "job-id" -> jobId.value,
+                  "job-id" -> jobid.value,
                   "events" -> records.map(_event_record)
                 )
               )

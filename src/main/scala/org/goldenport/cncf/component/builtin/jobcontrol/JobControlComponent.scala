@@ -79,10 +79,11 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul. 25, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
+  override def displayName: String = JobControlComponent.name
   override def componentDescriptors: Vector[ComponentDescriptor] =
     super.componentDescriptors ++ JobControlComponent.componentDescriptors
 }
@@ -163,7 +164,7 @@ object JobControlComponent {
   }
 
   val name: String = "job_control"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL
 
   def componentDescriptors: Vector[ComponentDescriptor] =
     Vector(ComponentDescriptor(
@@ -195,14 +196,14 @@ object JobControlComponent {
           entityKindExplicit = true,
           workingSetPolicy = Some(WorkingSetPolicy.Custom(
             "active-job-definition",
-            _ActiveJobDefinitionWorkingSetPolicy
+            ActiveJobDefinitionWorkingSetPolicy
           )),
           workingSetPolicySource = Some(WorkingSetPolicySource.Code)
         )
       )
     ))
 
-  private object _ActiveJobDefinitionWorkingSetPolicy extends WorkingSetPolicyEvaluator {
+  private object ActiveJobDefinitionWorkingSetPolicy extends WorkingSetPolicyEvaluator {
     def isResident(
       record: Record,
       now: java.time.Instant
@@ -361,7 +362,7 @@ object JobControlComponent {
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         instanceid,
         protocol
@@ -439,8 +440,8 @@ object JobControlComponent {
     private val _definitions: TrieMap[String, JobDefinitionEntity] =
       TrieMap.empty
 
-    private final case class _Submission(
-      jobIds: Vector[JobId],
+    private final case class Submission(
+      jobids: Vector[JobId],
       response: Consequence[OperationResponse]
     )
 
@@ -649,7 +650,7 @@ object JobControlComponent {
           Consequence.success(JobBatchSubmissionResult(submitted, success = true))
         case Some(job) =>
           _submit_one(job, snapshot).flatMap { submission =>
-            val updated = submitted ++ submission.jobIds
+            val updated = submitted ++ submission.jobids
             submission.response match {
               case Consequence.Success(_) =>
                 _submit_jobs(jobs.drop(1), updated, snapshot, index + 1)
@@ -694,7 +695,7 @@ object JobControlComponent {
     private def _submit_one(
       job: JobDefinition,
       snapshot: Option[JobDefinitionSnapshot]
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[_Submission] =
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Submission] =
       job.target match {
         case x if x.action.nonEmpty =>
           _submit_action(
@@ -706,7 +707,7 @@ object JobControlComponent {
             definitionsnapshot = snapshot,
             compensation = job.compensation
           ).map { case (jobid, response) =>
-            _Submission(Vector(jobid), response)
+            Submission(Vector(jobid), response)
           }
         case x if x.workflow.nonEmpty =>
           _submit_workflow(
@@ -795,7 +796,7 @@ object JobControlComponent {
         requestsummary: Option[String],
         declaredprofile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
         definitionsnapshot: Option[JobDefinitionSnapshot] = None
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[_Submission] =
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Submission] =
       _resolve_workflow_entrypoint(entry).flatMap { endpoint =>
         val event = _workflow_start_event(endpoint, parameters)
         component.subsystem match {
@@ -823,7 +824,7 @@ object JobControlComponent {
                       )
                     }
                     Consequence.success(
-                      _Submission(
+                      Submission(
                         Vector(jobid),
                         Consequence.success(
                           OperationResponse.Scalar(requestsummary.getOrElse("workflow-started"))
@@ -837,7 +838,7 @@ object JobControlComponent {
                 }
               else
                 Consequence.success(
-                  _Submission(
+                  Submission(
                     Vector.empty,
                     Consequence.argumentInvalid(
                       s"workflow did not progress: ${decision.reason.getOrElse("unknown")}"
@@ -1453,59 +1454,59 @@ object JobControlComponent {
 
   private final case class GetJobStatusAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetJobStatusCall(core, jobId)
+      GetJobStatusCall(core, jobid)
   }
 
   private final case class LoadJobHistoryAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      LoadJobHistoryCall(core, jobId)
+      LoadJobHistoryCall(core, jobid)
   }
 
   private final case class GetJobCalltreeAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetJobCalltreeCall(core, jobId)
+      GetJobCalltreeCall(core, jobid)
   }
 
   private final case class GetTaskExecutionTreeAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetTaskExecutionTreeCall(core, jobId)
+      GetTaskExecutionTreeCall(core, jobid)
   }
 
   private final case class GetTaskDetailAction(
     request: Request,
-    jobId: JobId,
-    taskId: TaskId
+    jobid: JobId,
+    taskid: TaskId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetTaskDetailCall(core, jobId, taskId)
+      GetTaskDetailCall(core, jobid, taskid)
   }
 
   private final case class GetJobResultAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetJobResultCall(core, jobId)
+      GetJobResultCall(core, jobid)
   }
 
   private final case class AwaitJobResultAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      AwaitJobResultCall(core, jobId)
+      AwaitJobResultCall(core, jobid)
   }
 
   private final case class DescribeJobDefinitionAction(
@@ -1537,18 +1538,18 @@ object JobControlComponent {
 
   private final case class CompareJobProfileAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      CompareJobProfileCall(core, jobId)
+      CompareJobProfileCall(core, jobid)
   }
 
   private final case class ReconstructJobProfileAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ReconstructJobProfileCall(core, jobId)
+      ReconstructJobProfileCall(core, jobid)
   }
 
   private final case class CreateJobDefinitionAction(
@@ -1606,19 +1607,19 @@ object JobControlComponent {
 
   private final case class ControlJobAction(
     request: Request,
-    jobId: JobId,
+    jobid: JobId,
     command: JobControlCommand
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ControlJobCall(core, jobId, command)
+      ControlJobCall(core, jobid, command)
   }
 
   private final case class LoadJobEventsAction(
     request: Request,
-    jobId: JobId
+    jobid: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      LoadJobEventsCall(core, jobId)
+      LoadJobEventsCall(core, jobid)
   }
 
   private abstract class SyncJobAction extends CommandAction {
@@ -1628,13 +1629,13 @@ object JobControlComponent {
 
   private final case class GetJobStatusCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
           component.port.get[JobService].map(
-            _.getJobStatus(jobId)(using core.executionContext)
+            _.getJobStatus(jobid)(using core.executionContext)
           ) match {
             case Some(result) =>
               result.map(model => OperationResponse.RecordResponse(_job_record(model)))
@@ -1647,16 +1648,16 @@ object JobControlComponent {
 
   private final case class LoadJobHistoryCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
           component.port.get[JobService].map(
-            _.loadJobHistory(jobId)(using core.executionContext)
+            _.loadJobHistory(jobid)(using core.executionContext)
           ) match {
             case Some(result) =>
-              result.map(page => OperationResponse.RecordResponse(_timeline_record(jobId, page)))
+              result.map(page => OperationResponse.RecordResponse(_timeline_record(jobid, page)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -1666,13 +1667,13 @@ object JobControlComponent {
 
   private final case class GetJobCalltreeCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
           component.port.get[JobService].map(
-            _.getJobCalltree(jobId)(using core.executionContext)
+            _.getJobCalltree(jobid)(using core.executionContext)
           ) match {
             case Some(result) => result.map(OperationResponse.RecordResponse.apply)
             case None => Consequence.serviceUnavailable("job service is not available")
@@ -1684,12 +1685,12 @@ object JobControlComponent {
 
   private final case class GetTaskExecutionTreeCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.getTaskExecutionTree(jobId)(using
+          component.port.get[JobService].map(_.getTaskExecutionTree(jobid)(using
           core.executionContext)) match {
             case Some(result) =>
               result.map(tree => OperationResponse.RecordResponse(_task_tree_record(tree)))
@@ -1702,13 +1703,13 @@ object JobControlComponent {
 
   private final case class GetTaskDetailCall(
     core: ActionCall.Core,
-    jobId: JobId,
-    taskId: TaskId
+    jobid: JobId,
+    taskid: TaskId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.getTaskDetail(jobId, taskId)(using
+          component.port.get[JobService].map(_.getTaskDetail(jobid, taskid)(using
           core.executionContext)) match {
             case Some(result) =>
               result.map(detail => OperationResponse.RecordResponse(_task_detail_record(detail)))
@@ -1721,21 +1722,21 @@ object JobControlComponent {
 
   private final case class GetJobResultCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_result_response(core, jobId, _.getJobResult(jobId)(using core.executionContext))
+      _job_result_response(core, jobid, _.getJobResult(jobid)(using core.executionContext))
   }
 
   private final case class AwaitJobResultCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
           component.port.get[JobService].map(
-            _.awaitJobResult(jobId)(using core.executionContext)
+            _.awaitJobResult(jobid)(using core.executionContext)
           ) match {
             case Some(result) => result
             case None => Consequence.serviceUnavailable("job service is not available")
@@ -1786,18 +1787,18 @@ object JobControlComponent {
 
   private final case class CompareJobProfileCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_profile_response(core, _.compareJobProfile(jobId)(using core.executionContext))
+      _job_profile_response(core, _.compareJobProfile(jobid)(using core.executionContext))
   }
 
   private final case class ReconstructJobProfileCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_profile_response(core, _.reconstructJobProfile(jobId)(using core.executionContext))
+      _job_profile_response(core, _.reconstructJobProfile(jobid)(using core.executionContext))
   }
 
   private final case class CreateJobDefinitionCall(
@@ -1910,7 +1911,7 @@ object JobControlComponent {
 
   private final case class ControlJobCall(
     core: ActionCall.Core,
-    jobId: JobId,
+    jobid: JobId,
     command: JobControlCommand
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
@@ -1920,11 +1921,11 @@ object JobControlComponent {
           component.port.get[JobAdminService] match {
             case Some(jobAdmin) =>
               val response = command match {
-                case JobControlCommand.Cancel => jobAdmin.cancelJob(jobId)
-                case JobControlCommand.Suspend => jobAdmin.suspendJob(jobId)
-                case JobControlCommand.Resume => jobAdmin.resumeJob(jobId)
+                case JobControlCommand.Cancel => jobAdmin.cancelJob(jobid)
+                case JobControlCommand.Suspend => jobAdmin.suspendJob(jobid)
+                case JobControlCommand.Resume => jobAdmin.resumeJob(jobid)
                 case JobControlCommand.Retry =>
-                  component.logic.controlJob(jobId, JobControlRequest(command))
+                  component.logic.controlJob(jobid, JobControlRequest(command))
               }
               response.map { response =>
                 OperationResponse.RecordResponse(
@@ -1946,17 +1947,17 @@ object JobControlComponent {
 
   private final case class LoadJobEventsCall(
     core: ActionCall.Core,
-    jobId: JobId
+    jobid: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobAdminService].map(_.loadJobEvents(jobId)) match {
+          component.port.get[JobAdminService].map(_.loadJobEvents(jobid)) match {
             case Some(result) =>
               result.map { records =>
                 OperationResponse.RecordResponse(
                   Record.data(
-                    "job-id" -> jobId.value,
+                    "job-id" -> jobid.value,
                     "events" -> records
                   )
                 )

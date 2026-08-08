@@ -26,15 +26,16 @@ import org.goldenport.schema.XString
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
  *  version Mar. 19, 2026
- * @version Apr. 10, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpecificationComponent() extends Component {
+  override def displayName: String = SpecificationComponent.name
 }
 
 object SpecificationComponent {
   val name: String = "spec"
-  val componentId = ComponentId(name) // TODO static
+  val componentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.SPECIFICATION
 
   class Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -45,11 +46,11 @@ object SpecificationComponent {
       comp: Component
     ): Component.Core = {
       val subsystem = params.subsystem
-      val exportService = new DefaultExportSpecificationService(subsystem)
+      val exportservice = new DefaultExportSpecificationService(subsystem)
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition(result = List(XString))
-      val openapiop = new ExportOperationDefinition("openapi", exportService, request, response)
-      val mcpop = new ExportOperationDefinition("mcp", exportService, request, response)
+      val openapiop = new ExportOperationDefinition("openapi", exportservice, request, response)
+      val mcpop = new ExportOperationDefinition("mcp", exportservice, request, response)
       val service = spec.ServiceDefinition(
         name = "export",
         operations = spec.OperationDefinitionGroup(
@@ -65,7 +66,7 @@ object SpecificationComponent {
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         instanceid,
         protocol
@@ -94,7 +95,7 @@ private final class DefaultExportSpecificationService(
 
 private final class ExportOperationDefinition(
   format: String,
-  exportService: ExportSpecificationService,
+  exportservice: ExportSpecificationService,
   request: spec.RequestDefinition,
   response: spec.ResponseDefinition
 ) extends spec.OperationDefinition {
@@ -109,28 +110,28 @@ private final class ExportOperationDefinition(
     req: Request
   ): Consequence[OperationRequest] = {
     val _ = req
-    Consequence.success(ExportSpecificationAction(req, format, exportService))
+      Consequence.success(ExportSpecificationAction(req, format, exportservice))
   }
 }
 
 private final case class ExportSpecificationAction(
   request: Request,
   format: String,
-  exportService: ExportSpecificationService
+  exportservice: ExportSpecificationService
 ) extends QueryAction() {
 //  val name = "openapi"
 
   def createCall(core: ActionCall.Core): ActionCall =
-    ExportSpecificationCall(core, format, exportService)
+    ExportSpecificationCall(core, format, exportservice)
 }
 
 private final case class ExportSpecificationCall(
   core: ActionCall.Core,
   format: String,
-  exportService: ExportSpecificationService
+  exportservice: ExportSpecificationService
 ) extends ActionCall {
   def execute(): Consequence[OperationResponse] =
     Consequence.success(
-      OperationResponse.Scalar(exportService.exportSpec(format))
+      OperationResponse.Scalar(exportservice.exportSpec(format))
     )
 }

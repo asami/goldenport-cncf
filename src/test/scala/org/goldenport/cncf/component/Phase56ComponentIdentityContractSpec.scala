@@ -3,12 +3,15 @@ package org.goldenport.cncf.component
 import java.nio.file.Path
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.ActionEngine
+import org.goldenport.cncf.job.InMemoryJobEngine
 import org.goldenport.cncf.subsystem.{
   GenericSubsystemComponentBinding,
   GenericSubsystemDescriptor,
   SubsystemAssemblyAdmission
 }
 import org.goldenport.protocol.Protocol
+import org.goldenport.protocol.logic.ProtocolLogic
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +20,7 @@ import scala.util.{Failure, Try}
 
 /*
  * @since   Aug.  7, 2026
- * @version Aug.  7, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityContractSpec
@@ -66,25 +69,123 @@ final class Phase56ComponentIdentityContractSpec
       }
     }
 
-    "E2 reject divergent Component.Core.create name" must _e2 {
-      "when Core.create receives an independently authored display name" in {
+    "E2 reject every invalid identity through each public Core.create overload" must _e2 {
+      "when the create overloads receive missing, divergent, or foreign Core identities" in {
+        Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
+        val overloads = Vector(
+          "four-argument" -> ((name: String, componentid: ComponentId, instanceid: ComponentInstanceId) =>
+            Component.Core.create(name, componentid, instanceid, Protocol.empty)
+          ),
+          "five-argument job-engine" -> ((name: String, componentid: ComponentId, instanceid: ComponentInstanceId) =>
+            Component.Core.create(
+              name,
+              componentid,
+              instanceid,
+              Protocol.empty,
+              InMemoryJobEngine.create()
+            )
+          ),
+          "five-argument factory" -> ((name: String, componentid: ComponentId, instanceid: ComponentInstanceId) =>
+            Component.Core.create(
+              name,
+              componentid,
+              instanceid,
+              Protocol.empty,
+              CoreAdmissionFactory
+            )
+          ),
+          "eight-argument" -> ((name: String, componentid: ComponentId, instanceid: ComponentInstanceId) =>
+            Component.Core.create(
+              name,
+              componentid,
+              instanceid,
+              Protocol.empty,
+              ProtocolLogic(Protocol.empty),
+              CoreAdmissionFactory,
+              ActionEngine.create(),
+              InMemoryJobEngine.create()
+            )
+          )
+        )
+        When("each public Core.create overload admits the invalid identity matrix")
+        val results = overloads.flatMap { case (label, create) =>
+          _core_admission_results(s"$label Core.create", create)
+        }
+        Then("every overload preserves the exact Core identity admission diagnostics")
+        _assert_core_admission_results(results)
+      }
+    }
+
+    "E2 retain an exact qualified Core identity" must _e2 {
+      "when Core.create receives a matching qualified ComponentId and default instance" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
         val componentid = ComponentId("org.simplemodeling.textus.UserAccount")
         val instanceid = ComponentInstanceId.default(componentid)
-        val protocol = Protocol.empty
-        When("Core.create is given a qualified ComponentId and a divergent name")
-        val result = Try(
-          Component.Core.create(
-            "Textus User Account",
+        When("Core.create is given the exact qualified name and matching default instance")
+        val core = Component.Core.create(
+          componentid.name,
+          componentid,
+          instanceid,
+          Protocol.empty
+        )
+        Then("the verified Core projections retain the exact component and instance identities")
+        core.name shouldBe "org.simplemodeling.textus.UserAccount"
+        core.componentId shouldBe componentid
+        core.instanceId shouldBe instanceid
+        core.instanceId.componentId shouldBe componentid
+        core.instanceId.canonicalKey shouldBe "org.simplemodeling.textus.UserAccount@default"
+      }
+    }
+
+    "E2 reject every invalid identity through direct Core construction" must _e2 {
+      "when the case-class constructor receives the Core invalid identity matrix" in {
+        Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
+        val admitted = _admitted_core()
+        When("direct Core construction admits the invalid identity matrix")
+        val results = _core_admission_results("direct Core construction", { (name, componentid, instanceid) =>
+          Component.Core(
+            name,
             componentid,
             instanceid,
-            protocol
+            admitted.protocol,
+            admitted.protocolLogic,
+            admitted.factory,
+            admitted.actionEngine,
+            admitted.jobEngine
           )
-        )
-        Then("Core.create rejects the divergent name")
-        pendingUntilFixed {
-          _assert_try_illegal_argument(result)
-        }
+        })
+        Then("the case-class constructor preserves the exact Core identity admission diagnostics")
+        _assert_core_admission_results(results)
+      }
+    }
+
+    "E2 reject every invalid identity through Core.copy" must _e2 {
+      "when copy receives the Core invalid identity matrix" in {
+        Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.simplemodeling.textus.UserAccount")
+        val admitted = _admitted_core()
+        When("Core.copy admits the invalid identity matrix")
+        val results = _core_admission_results("Core.copy", { (name, componentid, instanceid) =>
+          admitted.copy(
+            name = name,
+            componentId = componentid,
+            instanceId = instanceid
+          )
+        })
+        Then("copy preserves the exact Core identity admission diagnostics")
+        _assert_core_admission_results(results)
+      }
+    }
+
+    "E2 create the Script Core with its canonical identity" must _e2 {
+      "when the Script Core helper materializes its default runtime identity" in {
+        Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R1,R3; Example: E2 org.goldenport.cncf.Script")
+        When("createScriptCore creates the built-in Script Core")
+        val core = Component.createScriptCore()
+        Then("the Script Core retains the canonical qualified ID and matching default instance")
+        core.name shouldBe "org.goldenport.cncf.Script"
+        core.componentId.name shouldBe "org.goldenport.cncf.Script"
+        core.instanceId.componentId shouldBe core.componentId
+        core.instanceId.instance shouldBe "default"
       }
     }
 
@@ -296,4 +397,103 @@ final class Phase56ComponentIdentityContractSpec
       case scala.util.Success(_) =>
         fail("expected IllegalArgumentException but operation succeeded")
     }
+
+  private def _assert_try_illegal_argument_message(
+    result: Try[_],
+    expected: String
+  ): Unit =
+    result match {
+      case Failure(exception: IllegalArgumentException) =>
+        exception.getMessage shouldBe expected
+      case Failure(exception) =>
+        fail(s"expected IllegalArgumentException but received ${exception.getClass.getName}")
+      case scala.util.Success(_) =>
+        fail("expected IllegalArgumentException but operation succeeded")
+    }
+
+  private def _admitted_core(): Component.Core = {
+    val componentid = ComponentId("org.simplemodeling.textus.UserAccount")
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty
+    )
+  }
+
+  private def _core_admission_results(
+    label: String,
+    create: (String, ComponentId, ComponentInstanceId) => Component.Core
+  ): Vector[CoreAdmissionResult] = {
+    val componentid = ComponentId("org.simplemodeling.textus.UserAccount")
+    val instanceid = ComponentInstanceId.default(componentid)
+    val foreigncomponentid = ComponentId("org.simplemodeling.textus.UserProfile")
+    _core_admission_invalid_inputs.map { invalid =>
+      val (name, invalidcomponentid, invalidinstanceid) = invalid.input(componentid, instanceid, foreigncomponentid)
+      CoreAdmissionResult(
+        s"$label ${invalid.label}",
+        invalid.expected,
+        Try(create(name, invalidcomponentid, invalidinstanceid))
+      )
+    }
+  }
+
+  private def _assert_core_admission_results(
+    results: Vector[CoreAdmissionResult]
+  ): Unit =
+    results.foreach { result =>
+      withClue(s"${result.label}: ") {
+        _assert_try_illegal_argument_message(result.result, result.expected)
+      }
+    }
+
+  private val _core_admission_invalid_inputs = Vector(
+    CoreAdmissionInvalid(
+      "null ComponentId",
+      "component.core.component-id.required: expected qualified component ID; actual qualified component ID: null",
+      (componentid, instanceid, _) =>
+        (componentid.name, null.asInstanceOf[ComponentId], instanceid)
+    ),
+    CoreAdmissionInvalid(
+      "null ComponentInstanceId",
+      "component.core.instance-id.required: expected ComponentInstanceId for qualified component ID 'org.simplemodeling.textus.UserAccount'; actual instance identity: null",
+      (componentid, _, _) =>
+        (componentid.name, componentid, null.asInstanceOf[ComponentInstanceId])
+    ),
+    CoreAdmissionInvalid(
+      "divergent name",
+      "component.core.name.component-id.mismatch: expected qualified component ID 'org.simplemodeling.textus.UserAccount'; actual supplied name 'Textus User Account'",
+      (componentid, instanceid, _) =>
+        ("Textus User Account", componentid, instanceid)
+    ),
+    CoreAdmissionInvalid(
+      "foreign ComponentInstanceId",
+      "component.core.instance.component-id.mismatch: expected qualified component ID 'org.simplemodeling.textus.UserAccount'; actual instance component ID 'org.simplemodeling.textus.UserProfile'",
+      (componentid, _, foreigncomponentid) =>
+        (componentid.name, componentid, ComponentInstanceId.default(foreigncomponentid))
+    )
+  )
+
+  private final case class CoreAdmissionInvalid(
+    label: String,
+    expected: String,
+    input: (ComponentId, ComponentInstanceId, ComponentId) => (String, ComponentId, ComponentInstanceId)
+  )
+
+  private final case class CoreAdmissionResult(
+    label: String,
+    expected: String,
+    result: Try[Component.Core]
+  )
+
+  private object CoreAdmissionFactory extends Component.Factory {
+    protected def create_Core(
+      params: ComponentCreate,
+      comp: Component
+    ): Component.Core =
+      throw new UnsupportedOperationException("Core admission fixture does not create Components")
+
+    protected def create_Component(params: ComponentCreate): Component =
+      throw new UnsupportedOperationException("Core admission fixture does not create Components")
+  }
 }

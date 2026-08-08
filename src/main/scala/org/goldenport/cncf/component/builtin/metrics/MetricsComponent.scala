@@ -19,10 +19,11 @@ import org.goldenport.schema.DataType
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
+  override def displayName: String = MetricsComponent.name
 }
 
 object MetricsComponent {
@@ -33,7 +34,7 @@ object MetricsComponent {
   }
 
   val name: String = "metrics"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.METRICS
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -45,16 +46,16 @@ object MetricsComponent {
     ): Component.Core = {
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
-      val loadEntityAccessMetrics = new LoadEntityAccessMetricsOperationDefinition(request, response)
-      val loadRuntimeMetrics = new LoadRuntimeMetricsOperationDefinition(request, response)
-      val loadMetricsCatalog = new LoadMetricsCatalogOperationDefinition(request, response)
+      val loadentityaccessmetrics = new LoadEntityAccessMetricsOperationDefinition(request, response)
+      val loadruntimemetrics = new LoadRuntimeMetricsOperationDefinition(request, response)
+      val loadmetricscatalog = new LoadMetricsCatalogOperationDefinition(request, response)
       val service = spec.ServiceDefinition(
         name = "metrics",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            loadEntityAccessMetrics,
-            loadRuntimeMetrics,
-            loadMetricsCatalog
+            loadentityaccessmetrics,
+            loadruntimemetrics,
+            loadmetricscatalog
           )
         )
       )
@@ -62,40 +63,40 @@ object MetricsComponent {
         services = spec.ServiceDefinitionGroup(services = Vector(service)),
         handler = ProtocolHandler.default
       )
-      val runtimeConfig = RuntimeConfig.from(params.subsystem.configuration)
+      val runtimeconfig = RuntimeConfig.from(params.subsystem.configuration)
       comp.withPort(Component.Port.of(new DefaultMetricsService(
         params.subsystem.entityAccessMetrics,
         params.subsystem.componentMetrics,
-        runtimeConfig,
+        runtimeconfig,
         () => params.subsystem.runtimeOperationSecurityPolicyC
       )))
-      val instanceId = ComponentInstanceId.default(componentId)
-      Component.Core.create(name, componentId, instanceId, protocol)
+      val instanceid = ComponentInstanceId.default(componentId)
+      Component.Core.create(componentId.name, componentId, instanceid, protocol)
     }
   }
 
   private[cncf] final class DefaultMetricsService(
     registry: EntityAccessMetricsRegistry,
     componentmetrics: ComponentMetricsRegistry,
-    runtimeConfig: RuntimeConfig,
-    operationModeSupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
+    runtimeconfig: RuntimeConfig,
+    operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
   ) extends MetricsService {
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
 
     def loadRuntimeMetrics(): Consequence[Record] = {
       val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry, componentmetrics)
-      val operationmode = MetricsComponent.operationMode(operationModeSupplier())
-      val exportResult = OpenTelemetryExporter(
-        runtimeConfig.openTelemetryExportConfig.forOperationMode(operationmode),
+      val operationmode = MetricsComponent.operationMode(operationmodesupplier())
+      val exportresult = OpenTelemetryExporter(
+        runtimeconfig.openTelemetryExportConfig.forOperationMode(operationmode),
         operationmode
       ).exportMetrics(snapshot)
       Consequence.success(snapshot.toRecord ++ Record.dataAuto(
         "otel_export" -> Record.dataOption(
-          "signal" -> Some(exportResult.signal),
-          "status" -> Some(exportResult.status),
-          "status_code" -> exportResult.statusCode,
-          "message" -> exportResult.message
+          "signal" -> Some(exportresult.signal),
+          "status" -> Some(exportresult.status),
+          "status_code" -> exportresult.statusCode,
+          "message" -> exportresult.message
         )
       ))
     }

@@ -22,7 +22,9 @@ import org.goldenport.cncf.component.{
 }
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
+import org.goldenport.cncf.component.ComponentLocator.ComponentIdLocator
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.association.{AssociationBindingAttachResult, AssociationBindingWorkflow, AssociationDomain, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.{BlobAttachmentWorkflow, BlobPayloadSupport, BlobRepository}
@@ -68,7 +70,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug.  6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -456,6 +458,36 @@ final class Subsystem(
 
   private var _shutdown_in_progress: Boolean = false
   private var _shutdown_result: Option[Consequence[Vector[ServiceContainerCleanupOutcome]]] = None
+  private var _component_class_loaders: Vector[java.net.URLClassLoader] = Vector.empty
+
+  private[cncf] def registerComponentClassLoader(loader: java.net.URLClassLoader): Unit = synchronized {
+    if (!_component_class_loaders.exists(_ eq loader))
+      _component_class_loaders = _component_class_loaders :+ loader
+  }
+
+  private[cncf] def componentClassLoaderSnapshot: Vector[java.net.URLClassLoader] = synchronized {
+    _component_class_loaders
+  }
+
+  private def _drain_component_class_loaders_c(): Consequence[Unit] = {
+    val loaders = synchronized {
+      val result = _component_class_loaders.reverse
+      _component_class_loaders = Vector.empty
+      result
+    }
+    val failures = loaders.flatMap { loader =>
+      try {
+        loader.close()
+        None
+      } catch {
+        case e: Throwable => Some(org.goldenport.Conclusion.from(e))
+      }
+    }
+    failures.reduceOption(_ ++ _) match {
+      case Some(conclusion) => Consequence.Failure(conclusion)
+      case None => Consequence.unit
+    }
+  }
 
   def shutdownC(): Consequence[Vector[ServiceContainerCleanupOutcome]] = {
     val owner = synchronized {
@@ -525,7 +557,8 @@ final class Subsystem(
       } catch {
         case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
       }
-    val failures = Vector(jobresult, mcpresult, evaluationresult, serviceresult, bindingdrainresult, jobterminalresult, bindingresult).collect {
+    val componentloaderresult = _drain_component_class_loaders_c()
+    val failures = Vector(jobresult, mcpresult, evaluationresult, serviceresult, bindingdrainresult, jobterminalresult, bindingresult, componentloaderresult).collect {
       case Consequence.Failure(conclusion) => conclusion
     }
     failures.reduceOption(_ ++ _) match {
@@ -608,7 +641,7 @@ final class Subsystem(
     comps: Seq[Component]
   ): Consequence[Vector[Component]] =
     _sequence(comps.toVector.map(_component_factory.bootstrapC)).flatMap { bootstrapped =>
-      val injected = bootstrapped.map(x => _inject_context(x.name, x))
+      val injected = bootstrapped.map(x => _inject_context(x.componentId.name, x))
       injected.foreach(_bind_runtime_services)
       val mcpc = _mcp_client_runtime.fold(Consequence.unit) { runtime =>
         _install_mcp_client_runtime_c(runtime, injected)
@@ -682,7 +715,7 @@ final class Subsystem(
       case _ =>
         ()
     }
-    component.eventReception.foreach(registerEventReception(component.name, _))
+    component.eventReception.foreach(registerEventReception(component.componentId.name, _))
   }
 
   private def _install_mcp_client_runtime_c(
@@ -725,6 +758,9 @@ final class Subsystem(
 
   def findComponent(name: String): Option[Component] =
     _component_space.find(NameLocator(name))
+
+  def findComponent(componentId: ComponentId): Option[Component] =
+    _component_space.find(ComponentIdLocator(componentId))
 
   def resolver: OperationResolver = _resolver
 
@@ -1137,7 +1173,7 @@ final class Subsystem(
     route: (Component, ServiceDefinition, OperationDefinition)
   ): OperationEvaluationOperationIdentity = {
     val (component, service, operation) = route
-    OperationEvaluationOperationIdentity.fromResolvedRoute(component.name, service.name, operation.name)
+    OperationEvaluationOperationIdentity.fromResolvedRoute(component.componentId.name, service.name, operation.name)
   }
 
   private def _operation_evaluation_task_decorator(
@@ -1600,7 +1636,7 @@ final class Subsystem(
     {
       val (component, service, operation) = route
       OperationRequestValidationObserver.observeFailure(
-        componentName = component.name,
+        componentName = component.componentId.name,
         serviceName = service.name,
         operationName = operation.name,
         operation = Some(operation),
@@ -1698,15 +1734,16 @@ final class Subsystem(
   ): Consequence[Unit] = {
     runtimeOperationSecurityPolicyC.flatMap { policy =>
       val (component, service, operation) = route
-      val selector = s"${component.name}.${service.name}.${operation.name}"
-      val rule = if (component.name == AdminComponent.name)
-        Some(AdminAuthorizationPolicy.operationRule(selector, policy))
+      val selector = s"${component.componentId.name}.${service.name}.${operation.name}"
+      val displayselector = s"${component.displayName}.${service.name}.${operation.name}"
+      val rule = if (component.componentId == BuiltinComponentIdentity.ADMIN)
+        Some(AdminAuthorizationPolicy.operationRule(displayselector, policy))
       else operation match {
         case provider: OperationAuthorizationProvider =>
           Some(provider.operationAuthorization(policy))
         case _ =>
           _cml_operation_authorization_rule(component, operation.name)
-            .orElse(descriptor.flatMap(_.operationAuthorizationRule(selector)))
+            .orElse(descriptor.flatMap(_.operationAuthorizationRule(displayselector)))
       }
       rule match {
         case Some(r) =>
@@ -1952,9 +1989,8 @@ final class Subsystem(
     val selector = s"$componentname.$servicename.$operationname"
     _resolver.resolve(selector) match {
       case ResolutionResult.Resolved(_, component, service, operation) =>
-        val locator = NameLocator(component)
         for {
-          component <- _component_space.find(locator)
+          component <- findComponent(ComponentId(component))
           service <- component.protocol.services.services.find(_.name == service)
           operation <- _find_operation(service, operation)
         } yield (component, service, operation)
@@ -1974,12 +2010,7 @@ final class Subsystem(
   ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
     (request.component, request.service) match {
       case (Some(componentname), Some(servicename)) =>
-        val locator = NameLocator(componentname)
-        for {
-          component <- _component_space.find(locator)
-          service <- component.protocol.services.services.find(_.name == servicename)
-          operation <- _find_operation(service, request.operation)
-        } yield (component, service, operation)
+        _resolve_route_via_resolver(componentname, servicename, request.operation)
       case (None, Some(serviceid)) =>
         _resolve_route(serviceid, request.operation)
       case _ =>
@@ -1991,14 +2022,11 @@ final class Subsystem(
     serviceid: String,
     operationname: String
   ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
-    serviceid.split("\\.") match {
-      case Array(componentname, servicename) =>
-        val locator = NameLocator(componentname)
-        for {
-          component <- _component_space.find(locator)
-          service <- component.protocol.services.services.find(_.name == servicename)
-          operation <- _find_operation(service, operationname)
-        } yield (component, service, operation)
+    serviceid.split("\\.", -1).toVector match {
+      case parts if parts.size >= 2 && parts.forall(_.nonEmpty) =>
+        val componentname = parts.dropRight(1).mkString(".")
+        val servicename = parts.last
+        _resolve_route_via_resolver(componentname, servicename, operationname)
       case _ =>
         None
     }
@@ -2082,7 +2110,7 @@ final class Subsystem(
         case None =>
           Request.ofHttpRequest(
             req,
-            component = component.name,
+            component = component.componentId.name,
             service = service.name,
             operation = operation.name,
             arguments = request1.arguments,

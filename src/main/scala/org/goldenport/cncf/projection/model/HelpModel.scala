@@ -4,7 +4,7 @@ package org.goldenport.cncf.projection.model
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class HelpModel(
@@ -31,7 +31,8 @@ final case class HelpModel(
   domainQualities: Vector[HelpQualityModel] = Vector.empty,
   domainConstraints: Vector[HelpConstraintModel] = Vector.empty,
   useCases: Vector[HelpUseCaseModel] = Vector.empty,
-  domainUseCases: Vector[HelpUseCaseModel] = Vector.empty
+  domainUseCases: Vector[HelpUseCaseModel] = Vector.empty,
+  componentId: Option[String] = None
 )
 
 final case class HelpVisionModel(

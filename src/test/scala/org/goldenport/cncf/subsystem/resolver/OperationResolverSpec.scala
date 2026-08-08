@@ -3,6 +3,8 @@ package org.goldenport.cncf.subsystem.resolver
 import cats.data.NonEmptyVector
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.GivenWhenThen
+import org.scalatest.prop.TableDrivenPropertyChecks
 
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.spec as spec
@@ -11,246 +13,426 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 
-class OperationResolverSpec extends AnyWordSpec with Matchers {
+/*
+ * @since Aug. 8, 2026
+ * @version Aug. 8, 2026
+ * @author ASAMI, Tomoharu
+ */
+class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen with TableDrivenPropertyChecks {
+  private val _e1 = afterWord("in spec:operation-resolver, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private val _e2 = afterWord("in spec:operation-resolver, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private val _e3 = afterWord("in spec:operation-resolver, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private val _e4 = afterWord("in spec:operation-resolver, example:E4, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private def _metadata(exampleid: String) =
+    afterWord(s"in spec:operation-resolver, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
   "OperationResolver.resolve" should {
-    "resolve 2-dot selector component.service.operation uniquely" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.op1", "c2.s2.op2"))
-      resolver.resolve("c1.s1.op1") match {
-        case ResolutionResult.Resolved(fqn, _, _, _) => fqn shouldBe "c1.s1.op1"
+    "selector parsing and candidate resolution" which {
+    "E1 parse qualified component identity from the right" must _e1 {
+      "when exercising: parse qualified component identity from the right" in {
+        Given("one qualified operation identity with a namespace and local component ID")
+        val resolver = OperationResolver.fromFqns(Seq("org.alpha.textus.Shared.notice.search"))
+        When("the exact qualified selector is resolved")
+        val result = resolver.resolve("org.alpha.textus.Shared.notice.search")
+        Then("the component prefix is parsed from the right")
+        result shouldBe
+          ResolutionResult.Resolved(
+            "org.alpha.textus.Shared.notice.search",
+            "org.alpha.textus.Shared",
+            "notice",
+            "search"
+          )
+      }
+    }
+
+    "E2 reject leading, trailing, and doubled selector dots without normalizing them" must _e2 {
+      "when exercising: reject leading, trailing, and doubled selector dots without normalizing them" in {
+        Given("a resolver with one exact qualified operation identity")
+        val resolver = OperationResolver.fromFqns(Seq("org.alpha.textus.Shared.notice.search"))
+        val malformed = Table(
+          "selector",
+          ".org.alpha.textus.Shared.notice.search",
+          "org.alpha.textus.Shared.notice.search.",
+          "org.alpha..textus.Shared.notice.search"
+        )
+
+        forAll(malformed) { selector =>
+          When("a selector contains an empty dot segment")
+          Then("the malformed selector is rejected rather than normalized into an exact identity")
+          resolver.resolve(selector) shouldBe ResolutionResult.Invalid("operation selector has an empty segment")
+        }
+      }
+    }
+
+    "E5 resolve 2-dot selector component.service.operation uniquely" must _metadata("E5") {
+      "when exercising: resolve 2-dot selector component.service.operation uniquely" in {
+      Given("a resolver with two qualified component operations")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.s1.op1", "org.example.C2.s2.op2"))
+      When("the exact qualified selector is resolved")
+      val result = resolver.resolve("org.example.C1.s1.op1")
+      Then("the exact operation is selected")
+      result match {
+        case ResolutionResult.Resolved(fqn, _, _, _) => fqn shouldBe "org.example.C1.s1.op1"
         case other => fail(s"unexpected result: $other")
       }
-    }
-
-    "resolve 2-dot selector using prefix matching when unique" in {
-      val resolver = OperationResolver.fromFqns(
-        Seq("admin.user.find", "admin.user.list")
-      )
-      resolver.resolve("ad.us.fi") match {
-        case ResolutionResult.Resolved(fqn, _, _, _) =>
-          fqn shouldBe "admin.user.find"
-        case other =>
-          fail(s"unexpected result: $other")
       }
     }
 
-    "resolve 1-dot selector service.operation when unique across components" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.op1", "c2.s2.op2"))
-      resolver.resolve("s1.op1") match {
-        case ResolutionResult.Resolved(fqn, _, _, _) => fqn shouldBe "c1.s1.op1"
+    "E6 resolve 2-dot selector using prefix matching when unique" must _metadata("E6") {
+      "when exercising: resolve 2-dot selector using prefix matching when unique" in {
+      Given("a resolver with one unique matching operation prefix")
+      val resolver = OperationResolver.fromFqns(
+        Seq("org.example.Admin.user.find", "org.example.Admin.user.list")
+      )
+      When("the qualified prefix selector is resolved")
+      val result = resolver.resolve("org.us.fi")
+      Then("the unique matching operation is selected")
+      result match {
+        case ResolutionResult.Resolved(fqn, _, _, _) =>
+          fqn shouldBe "org.example.Admin.user.find"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+      }
+    }
+
+    "E7 resolve 1-dot selector service.operation when unique across components" must _metadata("E7") {
+      "when exercising: resolve 1-dot selector service.operation when unique across components" in {
+      Given("a resolver with distinct service-operation pairs")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.s1.op1", "org.example.C2.s2.op2"))
+      When("the service-operation selector is resolved")
+      val result = resolver.resolve("s1.op1")
+      Then("the unique component operation is selected")
+      result match {
+        case ResolutionResult.Resolved(fqn, _, _, _) => fqn shouldBe "org.example.C1.s1.op1"
         case other => fail(s"unexpected result: $other")
       }
-    }
-
-    "resolve 1-dot selector using prefix matching when unique" in {
-      val resolver = OperationResolver.fromFqns(
-        Seq("admin.user.find", "admin.group.list")
-      )
-      resolver.resolve("user.fi") match {
-        case ResolutionResult.Resolved(fqn, _, _, _) =>
-          fqn shouldBe "admin.user.find"
-        case other =>
-          fail(s"unexpected result: $other")
       }
     }
 
-    "resolve 0-dot selector operation when unique across all services" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.unique", "c2.s2.other"))
-      resolver.resolve("unique") match {
-        case ResolutionResult.Resolved(fqn, _, _, _) => fqn shouldBe "c1.s1.unique"
+    "E8 resolve 1-dot selector using prefix matching when unique" must _metadata("E8") {
+      "when exercising: resolve 1-dot selector using prefix matching when unique" in {
+      Given("a resolver with one unique service-operation prefix")
+      val resolver = OperationResolver.fromFqns(
+        Seq("org.example.Admin.user.find", "org.example.Admin.group.list")
+      )
+      When("the service-operation prefix is resolved")
+      val result = resolver.resolve("user.fi")
+      Then("the unique prefix match is selected")
+      result match {
+        case ResolutionResult.Resolved(fqn, _, _, _) =>
+          fqn shouldBe "org.example.Admin.user.find"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+      }
+    }
+
+    "E9 resolve 0-dot selector operation when unique across all services" must _metadata("E9") {
+      "when exercising: resolve 0-dot selector operation when unique across all services" in {
+      Given("a resolver with one unique operation name")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.s1.unique", "org.example.C2.s2.other"))
+      When("the operation selector is resolved")
+      val result = resolver.resolve("unique")
+      Then("the unique operation is selected")
+      result match {
+        case ResolutionResult.Resolved(fqn, _, _, _) => fqn shouldBe "org.example.C1.s1.unique"
         case other => fail(s"unexpected result: $other")
       }
-    }
-
-    "resolve 0-dot selector using prefix matching when unique" in {
-      val resolver = OperationResolver.fromFqns(
-        Seq("c1.s1.find", "c2.s2.list")
-      )
-      resolver.resolve("fi") match {
-        case ResolutionResult.Resolved(fqn, _, _, _) =>
-          fqn shouldBe "c1.s1.find"
-        case other =>
-          fail(s"unexpected result: $other")
       }
     }
 
-    "return Ambiguous for 0-dot prefix matching when multiple candidates exist" in {
+    "E10 resolve 0-dot selector using prefix matching when unique" must _metadata("E10") {
+      "when exercising: resolve 0-dot selector using prefix matching when unique" in {
+      Given("a resolver with one unique operation prefix")
       val resolver = OperationResolver.fromFqns(
-        Seq("c1.s1.find", "c2.s2.findAll")
+        Seq("org.example.C1.s1.find", "org.example.C2.s2.list")
       )
-      resolver.resolve("find") match {
+      When("the operation prefix is resolved")
+      val result = resolver.resolve("fi")
+      Then("the unique operation is selected")
+      result match {
         case ResolutionResult.Resolved(fqn, _, _, _) =>
-          fqn shouldBe "c1.s1.find"
+          fqn shouldBe "org.example.C1.s1.find"
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "return Ambiguous for prefix-only 0-dot matching when multiple candidates exist" in {
+    "E11 return Ambiguous for 0-dot prefix matching when multiple candidates exist" must _metadata("E11") {
+      "when exercising: return Ambiguous for 0-dot prefix matching when multiple candidates exist" in {
+      Given("a resolver with exact and longer matching operation names")
       val resolver = OperationResolver.fromFqns(
-        Seq("c1.s1.findOne", "c2.s2.findAll")
+        Seq("org.example.C1.s1.find", "org.example.C2.s2.findAll")
       )
-      resolver.resolve("find") match {
+      When("the exact operation selector is resolved")
+      val result = resolver.resolve("find")
+      Then("the exact operation remains selected")
+      result match {
+        case ResolutionResult.Resolved(fqn, _, _, _) =>
+          fqn shouldBe "org.example.C1.s1.find"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+      }
+    }
+
+    "E12 return Ambiguous for prefix-only 0-dot matching when multiple candidates exist" must _metadata("E12") {
+      "when exercising: return Ambiguous for prefix-only 0-dot matching when multiple candidates exist" in {
+      Given("a resolver with two prefix-only operation candidates")
+      val resolver = OperationResolver.fromFqns(
+        Seq("org.example.C1.s1.findOne", "org.example.C2.s2.findAll")
+      )
+      When("the operation prefix is resolved")
+      val result = resolver.resolve("find")
+      Then("both matching candidates are reported")
+      result match {
         case ResolutionResult.Ambiguous(_, candidates) =>
           candidates.toSet shouldBe Set(
-            "c1.s1.findOne",
-            "c2.s2.findAll"
+            "org.example.C1.s1.findOne",
+            "org.example.C2.s2.findAll"
           )
         case other =>
           fail(s"unexpected result: $other")
       }
-    }
-
-    "return NotFound when no match exists (0-dot)" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.op1"))
-      resolver.resolve("missing") match {
-        case ResolutionResult.NotFound(stage, _) => stage shouldBe ResolutionStage.Operation
-        case other => fail(s"unexpected result: $other")
       }
     }
 
-    "return NotFound when operation is missing (1-dot)" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.op1"))
-      resolver.resolve("s1.does_not_exist") match {
+    "E13 return NotFound when no match exists (0-dot)" must _metadata("E13") {
+      "when exercising: return NotFound when no match exists (0-dot)" in {
+      Given("a resolver without the requested operation")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.s1.op1"))
+      When("the missing operation is resolved")
+      val result = resolver.resolve("missing")
+      Then("operation lookup reports absence")
+      result match {
         case ResolutionResult.NotFound(stage, _) => stage shouldBe ResolutionStage.Operation
         case other => fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "return NotFound when component is unknown (2-dot)" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.op1"))
-      resolver.resolve("unknown.s1.op1") match {
+    "E14 return NotFound when operation is missing (1-dot)" must _metadata("E14") {
+      "when exercising: return NotFound when operation is missing (1-dot)" in {
+      Given("a resolver without the requested service operation")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.s1.op1"))
+      When("the missing service operation is resolved")
+      val result = resolver.resolve("s1.does_not_exist")
+      Then("operation lookup reports absence")
+      result match {
+        case ResolutionResult.NotFound(stage, _) => stage shouldBe ResolutionStage.Operation
+        case other => fail(s"unexpected result: $other")
+      }
+      }
+    }
+
+    "E15 return NotFound when component is unknown (2-dot)" must _metadata("E15") {
+      "when exercising: return NotFound when component is unknown (2-dot)" in {
+      Given("a resolver without the requested component")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.s1.op1"))
+      When("the unknown component selector is resolved")
+      val result = resolver.resolve("unknown.s1.op1")
+      Then("component lookup reports absence")
+      result match {
         case ResolutionResult.NotFound(stage, _) => stage shouldBe ResolutionStage.Component
         case other => fail(s"unexpected result: $other")
       }
-    }
-
-    "return Ambiguous and list candidates as FQN (0-dot)" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.op", "c2.s2.op"))
-      resolver.resolve("op") match {
-        case ResolutionResult.Ambiguous(_, candidates) =>
-          candidates.toSet shouldBe Set("c1.s1.op", "c2.s2.op")
-        case other => fail(s"unexpected result: $other")
       }
     }
 
-    "prefer exact component match over component prefix matches in FQN selector" in {
+    "E16 return Ambiguous and list candidates as FQN (0-dot)" must _metadata("E16") {
+      "when exercising: return Ambiguous and list candidates as FQN (0-dot)" in {
+      Given("a resolver with two identical operation names")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.s1.op", "org.example.C2.s2.op"))
+      When("the shared operation selector is resolved")
+      val result = resolver.resolve("op")
+      Then("both qualified candidates are reported")
+      result match {
+        case ResolutionResult.Ambiguous(_, candidates) =>
+          candidates.toSet shouldBe Set("org.example.C1.s1.op", "org.example.C2.s2.op")
+        case other => fail(s"unexpected result: $other")
+      }
+      }
+    }
+
+    "E17 prefer exact component match over component prefix matches in FQN selector" must _metadata("E17") {
+      "when exercising: prefer exact component match over component prefix matches in FQN selector" in {
+      Given("a resolver with exact and prefix-overlapping qualified components")
       val resolver = OperationResolver.fromFqns(
         Seq(
-          "job_control.job.await_job_result",
-          "job_control.job_admin.cancel_job",
-          "job.job.get_job_status"
+          "org.example.JobControl.job.await_job_result",
+          "org.example.JobControl.job_admin.cancel_job",
+          "org.example.Job.job.get_job_status"
         )
       )
 
-      resolver.resolve("job_control.job.await_job_result") match {
+      When("the exact qualified selector is resolved")
+      val result = resolver.resolve("org.example.JobControl.job.await_job_result")
+      Then("the exact component operation is selected")
+      result match {
         case ResolutionResult.Resolved(fqn, _, _, _) =>
-          fqn shouldBe "job_control.job.await_job_result"
+          fqn shouldBe "org.example.JobControl.job.await_job_result"
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "return Ambiguous and list candidates as FQN (1-dot)" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.svc.op", "c2.svc.op"))
-      resolver.resolve("svc.op") match {
+    "E18 return Ambiguous and list candidates as FQN (1-dot)" must _metadata("E18") {
+      "when exercising: return Ambiguous and list candidates as FQN (1-dot)" in {
+      Given("a resolver with two matching service operations")
+      val resolver = OperationResolver.fromFqns(Seq("org.example.C1.svc.op", "org.example.C2.svc.op"))
+      When("the shared service-operation selector is resolved")
+      val result = resolver.resolve("svc.op")
+      Then("both qualified candidates are reported")
+      result match {
         case ResolutionResult.Ambiguous(_, candidates) =>
-          candidates.toSet shouldBe Set("c1.svc.op", "c2.svc.op")
+          candidates.toSet shouldBe Set("org.example.C1.svc.op", "org.example.C2.svc.op")
         case other => fail(s"unexpected result: $other")
       }
-    }
-
-    "treat 3+ dots as Invalid" in {
-      val resolver = OperationResolver.fromFqns(Seq("c1.s1.op1"))
-      resolver.resolve("a.b.c.d") match {
-        case ResolutionResult.Invalid(_) => succeed
-        case other => fail(s"unexpected result: $other")
       }
     }
 
-    "resolve real componentlet as component selector when built from runtime components" in {
-      val resolver = OperationResolver.build(Seq(_component_with_componentlet_metadata(), _componentlet_runtime_component()))
-
-      resolver.resolve("public-notice.notice.search-notices") match {
-        case ResolutionResult.Resolved(fqn, component, service, operation) =>
-          fqn shouldBe "public-notice.notice.search-notices"
-          component shouldBe "public-notice"
-          service shouldBe "notice"
-          operation shouldBe "search-notices"
-        case other =>
-          fail(s"unexpected result: $other")
+    "E3 treat 3+ dots as a qualified component selector" must _e3 {
+      "when exercising: treat 3+ dots as a qualified component selector" in {
+        Given("a resolver with one four-segment qualified operation identity")
+        val resolver = OperationResolver.fromFqns(Seq("org.example.Sample.c.d"))
+        When("the four-segment selector is resolved")
+        val result = resolver.resolve("org.example.Sample.c.d")
+        Then("the qualified component prefix remains right-associated")
+        result match {
+          case ResolutionResult.Resolved("org.example.Sample.c.d", "org.example.Sample", "c", "d") => succeed
+          case other => fail(s"unexpected result: $other")
+        }
       }
     }
 
-    "not resolve componentlet metadata alone as runtime component selector" in {
+    "E4 resolve real componentlet as component selector when built from runtime components" must _e4 {
+      "when exercising: resolve real componentlet as component selector when built from runtime components" in {
+        Given("a runtime component and a componentlet with a qualified component identity")
+        val resolver = OperationResolver.build(Seq(_component_with_componentlet_metadata(), _componentlet_runtime_component()))
+
+        When("the display-compatible componentlet selector is resolved")
+        val result = resolver.resolve("public-notice.notice.search-notices")
+
+        Then("the runtime component identity is returned in qualified form")
+        result match {
+          case ResolutionResult.Resolved(fqn, component, service, operation) =>
+            fqn shouldBe "org.goldenport.fixture.PublicNotice.notice.search-notices"
+            component shouldBe "org.goldenport.fixture.PublicNotice"
+            service shouldBe "notice"
+            operation shouldBe "search-notices"
+          case other =>
+            fail(s"unexpected result: $other")
+        }
+      }
+    }
+
+    "E19 not resolve componentlet metadata alone as runtime component selector" must _metadata("E19") {
+      "when exercising: not resolve componentlet metadata alone as runtime component selector" in {
+      Given("only componentlet metadata without a runtime component participant")
       val resolver = OperationResolver.build(Seq(_component_with_componentlet_metadata()))
 
-      resolver.resolve("public-notice.notice.search-notices") match {
+      When("the componentlet selector is resolved")
+      val result = resolver.resolve("public-notice.notice.search-notices")
+
+      Then("metadata alone does not create a runtime component selector")
+      result match {
         case ResolutionResult.NotFound(_, _) =>
           succeed
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "resolve component artifact metadata name as a component alias" in {
+    "E20 resolve component artifact metadata name as a component alias" must _metadata("E20") {
+      "when exercising: resolve component artifact metadata name as a component alias" in {
+      Given("a runtime component with canonical identity and a legacy artifact alias")
       val resolver = OperationResolver.build(Seq(_component_with_artifact_metadata_alias()))
 
-      resolver.resolve("textus-user-notification.notification.search-my-notifications") match {
+      When("the artifact alias selector is resolved")
+      val result = resolver.resolve("textus-user-notification.notification.search-my-notifications")
+
+      Then("the canonical qualified component identity is returned")
+      result match {
         case ResolutionResult.Resolved(fqn, component, service, operation) =>
-          fqn shouldBe "UserNotification.notification.searchMyNotifications"
-          component shouldBe "UserNotification"
+          fqn shouldBe "org.goldenport.fixture.UserNotification.notification.searchMyNotifications"
+          component shouldBe "org.goldenport.fixture.UserNotification"
           service shouldBe "notification"
           operation shouldBe "searchMyNotifications"
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
+    }
     }
   }
 
   "Single Operation Optimization (CLI / Script, FQN-only)" should {
 
-    "resolve when exactly one non-builtin operation exists and selector is FQN" in {
+    "E21 resolve when exactly one non-builtin operation exists and selector is FQN" must _metadata("E21") {
+      "when exercising: resolve when exactly one non-builtin operation exists and selector is FQN" in {
+      Given("a resolver with one qualified operation")
       val resolver = OperationResolver.fromFqns(
-        Seq("app.health.check")
+        Seq("org.example.App.health.check")
       )
 
-      resolver.resolve("app.health.check") match {
+      When("the exact qualified selector is resolved")
+      val result = resolver.resolve("org.example.App.health.check")
+      Then("the single operation is selected")
+      result match {
         case ResolutionResult.Resolved(fqn, _, _, _) =>
-          fqn shouldBe "app.health.check"
+          fqn shouldBe "org.example.App.health.check"
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "not apply to operation-name-only input such as ping" in {
+    "E22 not apply to operation-name-only input such as ping" must _metadata("E22") {
+      "when exercising: not apply to operation-name-only input such as ping" in {
+      Given("a resolver with one qualified builtin-like operation")
       val resolver = OperationResolver.fromFqns(
-        Seq("admin.default.ping")
+        Seq("org.example.Admin.default.ping")
       )
 
-      resolver.resolve("ping") match {
+      When("an operation-name-only selector is resolved")
+      val result = resolver.resolve("ping")
+      Then("single-operation optimization does not select it")
+      result match {
         case ResolutionResult.NotFound(_, _) =>
           succeed
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "not apply prefix matching during single operation optimization" in {
+    "E23 not apply prefix matching during single operation optimization" must _metadata("E23") {
+      "when exercising: not apply prefix matching during single operation optimization" in {
+      Given("a resolver with one qualified operation")
       val resolver = OperationResolver.fromFqns(
-        Seq("app.health.check")
+        Seq("org.example.App.health.check")
       )
 
-      resolver.resolve("app.health.ch") match {
+      When("a prefix-only selector is resolved")
+      val result = resolver.resolve("app.health.ch")
+      Then("single-operation optimization does not apply prefix matching")
+      result match {
         case ResolutionResult.NotFound(_, _) =>
           succeed
         case other =>
           fail(s"unexpected result: $other")
+      }
       }
     }
   }
 
   private def _component_with_componentlet_metadata(): Component = {
-    val component = new Component() {}
+    val component = new Component() {
+      override def displayName: String = "notice-board"
+    }
     component.withComponentDescriptors(
       Vector(
         ComponentDescriptor(
@@ -268,17 +450,17 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
           spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("search-notices"))
+              operations = NonEmptyVector.of(NoopOperation("search-notices"))
             )
           )
         )
       )
     )
     val core = org.goldenport.cncf.component.Component.Core.create(
-      name = "notice-board",
-      componentid = org.goldenport.cncf.component.ComponentId("notice_board"),
+      name = "org.goldenport.fixture.NoticeBoard",
+      componentid = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.NoticeBoard"),
       instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
-        org.goldenport.cncf.component.ComponentId("notice_board")
+        org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.NoticeBoard")
       ),
       protocol = protocol
     )
@@ -293,24 +475,26 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
   }
 
   private def _componentlet_runtime_component(): Component = {
-    val component = new Component() {}
+    val component = new Component() {
+      override def displayName: String = "public-notice"
+    }
     val protocol = Protocol(
       services = spec.ServiceDefinitionGroup(
         Vector(
           spec.ServiceDefinition(
             name = "notice",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("search-notices"))
+              operations = NonEmptyVector.of(NoopOperation("search-notices"))
             )
           )
         )
       )
     )
     val core = org.goldenport.cncf.component.Component.Core.create(
-      name = "public-notice",
-      componentid = org.goldenport.cncf.component.ComponentId("public_notice"),
+      name = "org.goldenport.fixture.PublicNotice",
+      componentid = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.PublicNotice"),
       instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
-        org.goldenport.cncf.component.ComponentId("public_notice")
+        org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.PublicNotice")
       ),
       protocol = protocol
     )
@@ -325,24 +509,26 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
   }
 
   private def _component_with_artifact_metadata_alias(): Component = {
-    val component = new Component() {}
+    val component = new Component() {
+      override def displayName: String = "UserNotification"
+    }
     val protocol = Protocol(
       services = spec.ServiceDefinitionGroup(
         Vector(
           spec.ServiceDefinition(
             name = "notification",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_NoopOperation("searchMyNotifications"))
+              operations = NonEmptyVector.of(NoopOperation("searchMyNotifications"))
             )
           )
         )
       )
     )
     val core = org.goldenport.cncf.component.Component.Core.create(
-      name = "UserNotification",
-      componentid = org.goldenport.cncf.component.ComponentId("user_notification"),
+      name = "org.goldenport.fixture.UserNotification",
+      componentid = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.UserNotification"),
       instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
-        org.goldenport.cncf.component.ComponentId("user_notification")
+        org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.UserNotification")
       ),
       protocol = protocol
     )
@@ -363,7 +549,7 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
   }
 }
 
-private final case class _NoopOperation(
+private final case class NoopOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =

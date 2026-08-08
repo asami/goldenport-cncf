@@ -6,7 +6,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * @since   Jan.  8, 2026
  *  version Jan. 15, 2026
  *  version Apr. 24, 2026
- * @version Jul. 12, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentSpace(
@@ -14,12 +14,27 @@ final class ComponentSpace(
   import ComponentSpace._
 
   private var _components: Vector[Component] = Vector.empty
-  private var _by_name: Map[String, Component] = Map.empty
   private var _by_instance_id: Map[String, Component] = Map.empty
   private var _by_component_id: Map[ComponentId, Vector[Component]] = Map.empty
 
+  private def _select_default(candidates: Vector[Component]): Option[Component] =
+    candidates.find(_.instanceMetadata.exists(_.isDefault))
+      .orElse(candidates.find { component =>
+        component.instanceMetadata.exists(_.instance == "default") ||
+          component.instanceId.instance == "default"
+      })
+      .orElse(candidates.headOption)
+
   private def _get_default_by_component_id(id: ComponentId) =
-    _by_component_id.get(id).flatMap(_.headOption)
+    _by_component_id.get(id).flatMap(_select_default)
+
+  private def _unique_legacy_match(name: String): Option[Component] =
+    _components.filter(_matches_component_name(_, name)) match {
+      case Vector() => None
+      case candidates if candidates.map(_.componentId).distinct.size == 1 =>
+        _select_default(candidates)
+      case _ => None
+    }
 
   def components = _components
 
@@ -35,7 +50,7 @@ final class ComponentSpace(
     locator match {
       case ComponentLocator.ComponentIdLocator(id) => _get_default_by_component_id(id)
       case ComponentLocator.NameLocator(name) =>
-        _by_name.get(name).orElse(_components.find(x => _matches_component_name(x, name)))
+        _unique_legacy_match(name)
     }
 
   def add(ps: Seq[Component]): ComponentSpace = {
@@ -76,15 +91,6 @@ final class ComponentSpace(
       .groupBy(_.instanceId.canonicalKey)
       .collectFirst { case (id, xs) if xs.size > 1 => id }
     require(duplicateid.isEmpty, s"duplicate component instance id: ${duplicateid.getOrElse("")}")
-    _by_name = _components
-      .groupBy(_.name)
-      .view
-      .mapValues { xs =>
-        xs.find(_.instanceMetadata.exists(_.isDefault))
-          .orElse(xs.find(_.instanceId.instance == "default"))
-          .getOrElse(xs.head)
-      }
-      .toMap
     _by_instance_id = _components.map(x => x.instanceId.canonicalKey -> x).toMap
     _by_component_id =
       _components
@@ -97,7 +103,7 @@ final class ComponentSpace(
 
 object ComponentSpace {
   private def _matches_component_name(component: Component, name: String): Boolean =
-    NamingConventions.equivalentByNormalized(component.name, name) ||
+    NamingConventions.equivalentByNormalized(component.displayName, name) ||
       component.artifactMetadata.toVector.exists { metadata =>
         metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
           NamingConventions.equivalentByNormalized(metadata.name, name)

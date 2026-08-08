@@ -14,7 +14,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 /*
  * @since   Mar.  5, 2026
  *  version May. 31, 2026
- * @version Jul. 24, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -83,7 +83,7 @@ private[projection] object MetaProjectionSupport {
   }
 
   def components(base: Component): Vector[Component] =
-    base.subsystem.map(_.components.sortBy(_.name)).filter(_.nonEmpty).getOrElse(Vector(base))
+    base.subsystem.map(_.components.sortBy(_.componentId.name)).filter(_.nonEmpty).getOrElse(Vector(base))
 
   def resolve(base: Component, selector: Option[String]): Target = {
     val comps = components(base)
@@ -91,31 +91,38 @@ private[projection] object MetaProjectionSupport {
       case None =>
         Target.Subsystem(comps, base.subsystem.map(_.name).getOrElse("subsystem"))
       case Some(s) =>
-        val segments = s.split("\\.").toVector.filter(_.nonEmpty)
-        segments match {
-          case Vector(componentname) =>
-            _find_component(comps, componentname).map(Target.ComponentTarget.apply).getOrElse(Target.NotFound(Some(s)))
-          case Vector(componentname, servicename) =>
-            (for {
-              comp <- _find_component(comps, componentname)
-              service <- _find_service(comp, servicename)
-            } yield Target.ServiceTarget(comp, service)).getOrElse(Target.NotFound(Some(s)))
-          case Vector(componentname, servicename, operationname) =>
-            (for {
-              comp <- _find_component(comps, componentname)
-              service <- _find_service(comp, servicename)
-              op <- _find_operation(service, operationname)
-            } yield Target.OperationTarget(comp, service, op)).getOrElse(Target.NotFound(Some(s)))
-          case _ =>
-            Target.NotFound(Some(s))
-        }
+        val segments = s.split("\\.", -1).toVector
+        if (segments.exists(_.isEmpty))
+          Target.NotFound(Some(s))
+        else
+          _find_component(comps, s).map(Target.ComponentTarget.apply).orElse {
+            segments match {
+              case xs if xs.size >= 3 =>
+                for {
+                  comp <- _find_component(comps, xs.dropRight(2).mkString("."))
+                  service <- _find_service(comp, xs(xs.size - 2))
+                  op <- _find_operation(service, xs.last)
+                } yield Target.OperationTarget(comp, service, op)
+              case _ => None
+            }
+          }.orElse {
+            segments match {
+              case xs if xs.size >= 2 =>
+                for {
+                  comp <- _find_component(comps, xs.dropRight(1).mkString("."))
+                  service <- _find_service(comp, xs.last)
+                } yield Target.ServiceTarget(comp, service)
+              case _ => None
+            }
+          }.getOrElse(Target.NotFound(Some(s)))
     }
   }
 
   def component_record(comp: Component): Record =
     Record.data( // Includes runtime-origin and archive metadata for CAR/SAR introspection.
       "type" -> "component",
-      "name" -> comp.name,
+      "name" -> comp.displayName,
+      "componentId" -> comp.componentId.name,
       "runtimeName" -> component_runtime_name(comp),
       "origin" -> user_origin_label(comp.origin.label),
       "artifact" -> artifact_record(comp)
@@ -544,7 +551,7 @@ private[projection] object MetaProjectionSupport {
   }
 
   def component_runtime_name(component: Component): String =
-    NamingConventions.toNormalizedSegment(component.name)
+    NamingConventions.toNormalizedSegment(component.displayName)
 
   def service_runtime_name(service: ServiceDefinition): String =
     NamingConventions.toNormalizedSegment(service.name)
@@ -557,15 +564,20 @@ private[projection] object MetaProjectionSupport {
     service: ServiceDefinition,
     operation: OperationDefinition
   ): String =
-    NamingConventions.toNormalizedSelector(component.name, service.name, operation.name)
+    NamingConventions.toNormalizedSelector(component.displayName, service.name, operation.name)
 
   private def _find_component(comps: Vector[Component], name: String): Option[Component] =
-    comps.find { x =>
-      NamingConventions.equivalentByNormalized(x.name, name) ||
-        x.artifactMetadata.toVector.exists { metadata =>
-          metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
-            NamingConventions.equivalentByNormalized(metadata.name, name)
-        }
+    comps.find(_.componentId.name == name).orElse {
+      if (name.contains("."))
+        None
+      else
+        comps.filter { x =>
+          NamingConventions.equivalentByNormalized(x.displayName, name) ||
+            x.artifactMetadata.toVector.exists { metadata =>
+              metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
+                NamingConventions.equivalentByNormalized(metadata.name, name)
+            }
+        } match { case Vector(component) => Some(component); case _ => None }
     }
 
   private def _find_service(component: Component, servicename: String): Option[ServiceDefinition] =

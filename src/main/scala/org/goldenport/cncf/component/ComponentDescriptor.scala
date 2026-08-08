@@ -12,6 +12,7 @@ import org.goldenport.cncf.entity.{
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
@@ -21,7 +22,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @since   Mar. 27, 2026
  *  version Apr. 24, 2026
  *  version May.  4, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentletDescriptor(
@@ -46,8 +47,23 @@ final case class ComponentDescriptor(
   extensions: Map[String, String] = Map.empty,
   config: Map[String, String] = Map.empty,
   schemaVersion: Option[Int] = None,
-  componentStyleSnapshot: Option[ComponentStyleSnapshot] = None
+  componentStyleSnapshot: Option[ComponentStyleSnapshot] = None,
+  componentId: Option[ComponentId] = None
 ) {
+  def isCanonicalIdentity: Boolean =
+    schemaVersion.contains(3) && componentId.nonEmpty
+
+  def requireCanonicalIdentityC: Consequence[(ComponentId, String)] =
+    (schemaVersion, componentId, version) match {
+      case (Some(3), Some(id), Some(release)) if id != null =>
+        for {
+          _ <- ComponentDescriptor._canonical_release_c(id, release)
+          _ <- ComponentDescriptor._validate_canonical_legacy_projection_c("name", name, id.name)
+          _ <- ComponentDescriptor._validate_canonical_legacy_projection_c("componentName", componentName, id.name)
+        } yield id -> release
+      case _ => Consequence.resourceInvalid("canonical component descriptor requires schemaVersion 3 namespace, id, and version")
+    }
+
   def requireComponentStyleSnapshotC: Consequence[ComponentStyleSnapshot] =
     componentStyleSnapshot
       .map(Consequence.success)
@@ -142,9 +158,8 @@ object ComponentDescriptor {
 
   given RecordDecoder[ComponentDescriptor] with
     def fromRecord(rec: Record): Consequence[ComponentDescriptor] = {
+      val schemac = _schema_version_c(rec)
       val componentrec = _component_record(rec)
-      val componentname = _string(componentrec, "component", "componentName")
-        .orElse(_string(componentrec, "name"))
       val entitiesc = _entity_descriptors_prefer_root(rec, componentrec)
       val componentletsc = _componentlet_descriptors(rec)
       val extensionbindings = _record_value(
@@ -165,23 +180,36 @@ object ComponentDescriptor {
       for {
         xs <- entitiesc
         componentlets <- componentletsc
-        schemaversion <- _schema_version_c(rec)
+        schemaversion <- schemac
+        canonicalidentity <- _canonical_identity_c(rec, schemaversion)
         componentstylec = _component_style_snapshot(rec, schemaversion)
         componentstyle <- componentstylec
-      } yield
+      } yield {
+          val componentname = canonicalidentity.map(_.id.name).orElse(
+            _string(componentrec, "component", "componentName").orElse(_string(componentrec, "name"))
+          )
+          val release = canonicalidentity.map(_.release).orElse(_string(rec, "version").orElse(_string(componentrec, "version")))
+          val extensions =
+            if (schemaversion.contains(3)) _component_extensions(rec)
+            else _component_extensions(componentrec) ++ _component_extensions(rec)
+          val config =
+            if (schemaversion.contains(3)) _string_map_value(rec, List("config"))
+            else _string_map_value(componentrec, List("config")) ++ _string_map_value(rec, List("config"))
         ComponentDescriptor(
           name = _string(rec, "name").orElse(_string(componentrec, "name")).orElse(componentname),
-          version = _string(rec, "version").orElse(_string(componentrec, "version")),
+          version = release,
           componentName = componentname,
           subsystemName = _string(rec, "subsystem", "subsystemName").orElse(_string(componentrec, "subsystem", "subsystemName")),
           componentlets = componentlets,
           entityRuntimeDescriptors = xs,
           extensionBindings = extensionbindings,
-          extensions = _component_extensions(componentrec) ++ _component_extensions(rec),
-          config = _string_map_value(componentrec, List("config")) ++ _string_map_value(rec, List("config")),
+          extensions = extensions,
+          config = config,
           schemaVersion = schemaversion,
-          componentStyleSnapshot = componentstyle
+          componentStyleSnapshot = componentstyle,
+          componentId = canonicalidentity.map(_.id)
         )
+      }
     }
 
   def componentStyleProjectionJson(snapshot: ComponentStyleSnapshot): Json =
@@ -191,13 +219,13 @@ object ComponentDescriptor {
     rec.getAny("schemaVersion") match {
       case None =>
         Consequence.success(None)
-      case Some(value: Int) if value == 1 || value == 2 =>
+      case Some(value: Int) if value == 1 || value == 2 || value == 3 =>
         Consequence.success(Some(value))
-      case Some(value: Long) if value.isValidInt && (value == 1 || value == 2) =>
+      case Some(value: Long) if value.isValidInt && (value == 1 || value == 2 || value == 3) =>
         Consequence.success(Some(value.toInt))
-      case Some(value: BigInt) if value.isValidInt && (value == 1 || value == 2) =>
+      case Some(value: BigInt) if value.isValidInt && (value == 1 || value == 2 || value == 3) =>
         Consequence.success(Some(value.toInt))
-      case Some(value: BigDecimal) if value.isValidInt && (value == 1 || value == 2) =>
+      case Some(value: BigDecimal) if value.isValidInt && (value == 1 || value == 2 || value == 3) =>
         Consequence.success(Some(value.toInt))
       case Some(value) =>
         Consequence.argumentInvalid(s"Unsupported numeric component descriptor schemaVersion: $value")
@@ -217,7 +245,7 @@ object ComponentDescriptor {
             )
           }
           .getOrElse(Consequence.argumentMissing("componentStyle for descriptor schemaVersion 2"))
-      case Some(version) if version > 2 =>
+      case Some(version) if version > 3 =>
         Consequence.argumentInvalid(s"Unsupported component descriptor schemaVersion: $version")
       case _ =>
         if (_record_value(rec, List("componentStyle")).isDefined)
@@ -227,21 +255,112 @@ object ComponentDescriptor {
     }
 
   private def _preserve_empty_snapshot_fields(style: Record, json: Json): Json = {
-    def _restore(json: Json, record: Record, field: String, value: Json): Json =
+    def _restore_(json: Json, record: Record, field: String, value: Json): Json =
       if (record.getAny(field).isDefined && json.hcursor.downField(field).focus.isEmpty)
         json.mapObject(_.add(field, value))
       else
         json
     val schema = _record_value(style, List("parameterSchema")).map { record =>
       val encoded = json.hcursor.downField("parameterSchema").focus.getOrElse(Json.obj())
-      _restore(_restore(encoded, record, "properties", Json.obj()), record, "required", Json.arr())
+      _restore_(_restore_(encoded, record, "properties", Json.obj()), record, "required", Json.arr())
     }
     val withschema = schema.map(value => json.mapObject(_.add("parameterSchema", value))).getOrElse(json)
-    _restore(withschema, style, "parameters", Json.obj())
+    _restore_(withschema, style, "parameters", Json.obj())
   }
 
   private def _component_record(rec: Record): Record =
     _record_value(rec, List("component")).getOrElse(rec)
+
+  private final case class CanonicalIdentity(
+    id: ComponentId,
+    release: String
+  )
+
+  private def _canonical_identity_c(
+    rec: Record,
+    schemaversion: Option[Int]
+  ): Consequence[Option[CanonicalIdentity]] =
+    schemaversion match {
+      case Some(3) =>
+        rec.getAny("component") match {
+          case Some(value: Record) => _canonical_identity_record_c(rec, value).map(Some(_))
+          case Some(value: Map[?, ?]) =>
+            _canonical_identity_record_c(rec, Record.create(value.iterator.map { case (k, v) => k.toString -> v }.toMap)).map(Some(_))
+          case _ => Consequence.resourceInvalid("canonical component identity must be an object")
+        }
+      case _ => Consequence.success(None)
+    }
+
+  private def _canonical_identity_record_c(
+    root: Record,
+    identity: Record
+  ): Consequence[CanonicalIdentity] = {
+    val allowed = Set("namespace", "id", "version")
+    identity.asMap.keys.find(key => !allowed.contains(key)) match {
+      case Some(key) => Consequence.resourceInvalid(s"canonical component identity has unknown field: $key")
+      case None =>
+        for {
+          namespace <- _canonical_string_c(identity, "namespace")
+          localid <- _canonical_string_c(identity, "id")
+          release <- _canonical_string_c(identity, "version")
+          componentid <- ComponentId.parseC(s"$namespace.$localid").leftMap { c =>
+            c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"invalid canonical component identity: ${c.displayMessage}")))
+          }
+          _ <- _canonical_release_c(componentid, release)
+          _ <- _validate_legacy_root_identity_c(root, componentid, release)
+        } yield CanonicalIdentity(componentid, release)
+    }
+  }
+
+  private def _canonical_string_c(rec: Record, field: String): Consequence[String] =
+    rec.getAny(field) match {
+      case Some(value: String) if value.nonEmpty && value == value.trim => Consequence.success(value)
+      case Some(null) => Consequence.resourceInvalid(s"canonical component identity ${field} must be a non-empty string")
+      case Some(_: String) => Consequence.resourceInvalid(s"canonical component identity ${field} must be a non-empty string")
+      case Some(_) => Consequence.resourceInvalid(s"canonical component identity ${field} must be a non-empty string")
+      case None => Consequence.resourceInvalid(s"canonical component identity must declare $field")
+    }
+
+  private[component] def _canonical_release_c(
+    componentid: ComponentId,
+    release: String
+  ): Consequence[Unit] = {
+    val result = ComponentReleaseCoordinate.create(componentid.sharedIdentity, release)
+    if (result.isSuccess())
+      Consequence.unit
+    else {
+      val error = result.error().get()
+      Consequence.resourceInvalid(s"${error.code()}: ${error.message()}")
+    }
+  }
+
+  private def _validate_legacy_root_identity_c(
+    root: Record,
+    componentid: ComponentId,
+    release: String
+  ): Consequence[Unit] = {
+    val values = Vector(
+      "name" -> componentid.name,
+      "componentName" -> componentid.name,
+      "version" -> release
+    )
+    values.collectFirst {
+      case (field, expected) if root.getAny(field).exists(_ != expected) => field
+    } match {
+      case Some(field) => Consequence.resourceInvalid(s"canonical component identity disagrees with legacy root $field")
+      case None => Consequence.unit
+    }
+  }
+
+  private[component] def _validate_canonical_legacy_projection_c(
+    field: String,
+    value: Option[String],
+    expected: String
+  ): Consequence[Unit] =
+    if (value.forall(_ == expected))
+      Consequence.unit
+    else
+      Consequence.resourceInvalid(s"canonical component identity disagrees with legacy root $field")
 
   private def _entity_descriptors_prefer_root(
     rec: Record,
@@ -391,7 +510,9 @@ object ComponentDescriptor {
       "extensionBinding",
       "extensionBindings",
       "extension_binding",
-      "config"
+      "config",
+      "namespace",
+      "id"
     )
     _string_map_value(rec, List("extension", "extensions")) ++
       rec.asMap.collect {

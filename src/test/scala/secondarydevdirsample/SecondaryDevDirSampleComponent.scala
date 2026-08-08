@@ -5,14 +5,16 @@ import org.goldenport.protocol.Protocol
 
 /*
  * @since   Jul. 29, 2026
- * @version Jul. 29, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
-final class SecondaryDevDirSampleComponent extends Component
+final class SecondaryDevDirSampleComponent extends Component {
+  override def displayName: String = SecondaryDevDirSampleComponent.name
+}
 
 object SecondaryDevDirSampleComponent extends Component.Factory {
   val name = "secondarydevdirsample"
-  val componentId = ComponentId(name)
+  val componentId = ComponentId("org.goldenport.fixture.SecondaryDevDirSample")
 
   protected def create_Component(params: ComponentCreate): Component =
     new SecondaryDevDirSampleComponent
@@ -22,7 +24,7 @@ object SecondaryDevDirSampleComponent extends Component.Factory {
     comp: Component
   ): Component.Core =
     Component.Core.create(
-      name,
+      componentId.name,
       componentId,
       ComponentInstanceId.default(componentId),
       Protocol.empty,

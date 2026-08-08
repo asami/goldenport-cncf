@@ -34,7 +34,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Aug.  4, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -74,7 +74,7 @@ case class ComponentLogic(
     val boundctx = ExecutionContext.withExecutionInvocation(
       ctx0,
       ExecutionInvocationIdentity.operationSelector(
-        Some(component.name),
+        Some(component.componentId.name),
         action.request.service,
         action.request.operation
       )
@@ -436,7 +436,7 @@ case class ComponentLogic(
   ): Consequence[(Component, Action)] =
     component.subsystem.map(_.operationResolver.resolve(selector)).getOrElse(OperationResolver.ResolutionResult.Invalid("subsystem is not available")) match {
       case OperationResolver.ResolutionResult.Resolved(_, componentName, serviceName, operationName) =>
-        component.subsystem.flatMap(_.findComponent(componentName)) match {
+        component.subsystem.flatMap(_.findComponent(org.goldenport.cncf.component.ComponentId(componentName))) match {
           case Some(target) =>
             val request = Request.of(
               component = componentName,

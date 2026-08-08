@@ -16,15 +16,16 @@ import org.goldenport.protocol.spec as spec
 /*
  * @since   Jan. 20, 2026
  *  version Jan. 21, 2026
- * @version Feb. 19, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DebugComponent() extends Component {
+  override def displayName: String = DebugComponent.name
 }
 
 object DebugComponent {
   val name: String = "debug"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.DEBUG
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -54,11 +55,11 @@ object DebugComponent {
         services = services,
         handler = ProtocolHandler.default
       )
-      val instanceId = ComponentInstanceId.default(componentId)
+      val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
-        instanceId,
+        instanceid,
         protocol
       )
     }

@@ -49,6 +49,7 @@ import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.time.{Duration, Instant}
 import java.util.Properties
+import scala.deprecatedName
 import scala.util.control.NonFatal
 import org.goldenport.schema.{DataType, XString}
 
@@ -60,7 +61,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Aug.  5, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -103,6 +104,12 @@ abstract class Component() extends Component.Core.Holder {
 
   def coreOption: Option[Component.Core] =
     _core
+
+  /**
+   * Stable human-facing component label. Runtime identity is always componentId.
+   */
+  def displayName: String =
+    componentId.localId.value()
 
   def factoryOption: Option[Component.Factory] =
     _core.flatMap(_.factory)
@@ -495,9 +502,12 @@ object Component {
   private val _default_unknown_version = "unknown"
 
   final case class AggregateBehaviorBinding(
-    operation_name: String,
+    @deprecatedName("operation_name", "0.5.2") operationName: String,
     behavior: AggregateBehavior[?]
-  )
+  ) {
+    @deprecated("Use operationName.", "0.5.2")
+    def operation_name: String = operationName
+  }
 
   final case class AggregateCollectionBinding(
     aggregate_name: String,
@@ -579,7 +589,8 @@ object Component {
     subsystem: Option[String] = None,
     archivePath: Option[String] = None,
     effectiveExtensions: Map[String, String] = Map.empty,
-    effectiveConfig: Map[String, String] = Map.empty
+    effectiveConfig: Map[String, String] = Map.empty,
+    componentId: Option[ComponentId] = None
   )
 
   object Context {
@@ -618,8 +629,8 @@ object Component {
     createScriptCore(Protocol(services))
 
   def createScriptCore(protocol: Protocol): org.goldenport.cncf.component.Component.Core = {
-    val name = "SCRIPT" // _create_script_component_name()
-    val componentid = ComponentId("script")
+    val componentid = ComponentId("org.goldenport.cncf.Script")
+    val name = componentid.name
     val instanceid = ComponentInstanceId.default(componentid)
     org.goldenport.cncf.component.Component.Core.create(
       name,
@@ -703,6 +714,23 @@ object Component {
     actionEngine: ActionEngine,
     jobEngine: JobEngine
   ) {
+    if (componentId == null)
+      throw new IllegalArgumentException(
+        "component.core.component-id.required: expected qualified component ID; actual qualified component ID: null"
+      )
+    if (instanceId == null)
+      throw new IllegalArgumentException(
+        s"component.core.instance-id.required: expected ComponentInstanceId for qualified component ID '${componentId.name}'; actual instance identity: null"
+      )
+    if (name != componentId.name)
+      throw new IllegalArgumentException(
+        s"component.core.name.component-id.mismatch: expected qualified component ID '${componentId.name}'; actual supplied name '$name'"
+      )
+    if (instanceId.componentId != componentId)
+      throw new IllegalArgumentException(
+        s"component.core.instance.component-id.mismatch: expected qualified component ID '${componentId.name}'; actual instance component ID '${instanceId.componentId.name}'"
+      )
+
     lazy val serviceFactory = factory.map(_.serviceFactory) getOrElse ServiceFactory.empty
   }
   object Core {
@@ -843,7 +871,7 @@ object Component {
       for {
         comp <- core.component
         binding <- aggregateBehaviorBindings(comp)
-          .find(_.operation_name == action.request.operation)
+          .find(_.operationName == action.request.operation)
       } yield binding.behavior
 
     // Internal ActionCall access-authorization extension point for reviewed Component policy.
@@ -1000,7 +1028,7 @@ object Component {
       componentid: ComponentId
     ): Vector[ComponentDescriptor] = {
       val supplied = params.componentDescriptors
-      if (supplied.exists(_owns_component(_, componentid))) supplied
+      if (supplied.exists(_owns_component(_, componentid)) || supplied.exists(_.isCanonicalIdentity)) supplied
       else supplied ++ _bind_component_owned_descriptor(component.componentDescriptors, componentid)
     }
 
@@ -1009,6 +1037,8 @@ object Component {
       componentid: ComponentId
     ): Vector[ComponentDescriptor] =
       descriptors match {
+        case Vector(descriptor) if descriptor.isCanonicalIdentity =>
+          Vector(descriptor)
         case Vector(descriptor) if !_owns_component(descriptor, componentid) =>
           Vector(descriptor.copy(componentName = Some(componentid.name)))
         case values => values
@@ -1018,9 +1048,12 @@ object Component {
       descriptor: ComponentDescriptor,
       componentid: ComponentId
     ): Boolean =
-      (descriptor.componentName.orElse(descriptor.name).toVector ++
-        descriptor.componentlets.map(_.name))
-        .exists(NamingConventions.equivalentByNormalized(_, componentid.name))
+      if (descriptor.isCanonicalIdentity)
+        descriptor.componentId.contains(componentid)
+      else
+        (descriptor.componentName.orElse(descriptor.name).toVector ++
+          descriptor.componentlets.map(_.name))
+          .exists(NamingConventions.equivalentByNormalized(_, componentid.name))
 
     private def _or_raise[A](result: Consequence[A]): A =
       result match {
@@ -2150,8 +2183,8 @@ object ComponentId {
   def apply(qualifiedId: String): ComponentId =
     _require(SharedComponentId.parse(qualifiedId))(_from_shared)
 
-  private[component] def fromShared(sharedIdentity: SharedComponentId): ComponentId =
-    _from_shared(sharedIdentity)
+  private[component] def _from_shared_component_id(sharedidentity: SharedComponentId): ComponentId =
+    _from_shared(sharedidentity)
 
   private def _from_shared(sharedidentity: SharedComponentId): ComponentId =
     new ComponentId(sharedidentity)
@@ -2179,7 +2212,7 @@ object ComponentId {
 final class ComponentInstanceId private (
   val sharedIdentity: SharedComponentInstanceId
 ) {
-  def componentId: ComponentId = ComponentId.fromShared(sharedIdentity.componentId())
+  def componentId: ComponentId = ComponentId._from_shared_component_id(sharedIdentity.componentId())
 
   def name: String = sharedIdentity.componentId().qualifiedName()
 
@@ -2258,10 +2291,11 @@ final case class ComponentInstanceMetadata(
   tags: Vector[String] = Vector.empty,
   priority: Int = 0,
   isDefault: Boolean = false,
-  capabilities: Vector[String] = Vector.empty
+  capabilities: Vector[String] = Vector.empty,
+  componentId: Option[ComponentId] = None
 ) {
   def instanceId: ComponentInstanceId =
-    ComponentInstanceId(componentName, instance)
+    componentId.map(ComponentInstanceId(_, instance)).getOrElse(ComponentInstanceId(componentName, instance))
 }
 
 

@@ -24,16 +24,17 @@ import org.goldenport.value.BaseContent
  * Deterministic provider-neutral builtin Operations.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ToolComponent() extends Component with WebSearchSocket {
+  override def displayName: String = ToolComponent.name
   override def spiRequired: Boolean = false
 }
 
 object ToolComponent {
   val name: String = "tool"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL
 
   private val _max_decimal_text_length = 128
   private val _max_decimal_precision = 128
@@ -106,7 +107,7 @@ object ToolComponent {
         handler = ProtocolHandler.default
       )
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         ComponentInstanceId.default(componentId),
         protocol

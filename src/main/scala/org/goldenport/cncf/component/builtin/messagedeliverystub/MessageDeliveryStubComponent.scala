@@ -16,12 +16,14 @@ import org.goldenport.protocol.spec.ServiceDefinitionGroup
  *
  * @since   Apr. 23, 2026
  *  version Apr. 24, 2026
- * @version Jul. 15, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
-class MessageDeliveryStubComponent() extends Component
+class MessageDeliveryStubComponent() extends Component {
+  override def displayName: String = MessageDeliveryStubComponent.name
+}
 
-object MessageDeliveryStubComponent:
+object MessageDeliveryStubComponent {
   final case class Delivery(
     channel: DeliveryChannel,
     recipient: String,
@@ -37,7 +39,7 @@ object MessageDeliveryStubComponent:
   private val _deliveries = TrieMap.empty[String, Delivery]
 
   val name: String = "MessageDeliveryStub"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.MESSAGE_DELIVERY_STUB
 
   def deliveries: Vector[Delivery] =
     _deliveries.values.toVector.sortBy(_.acceptedAt)
@@ -45,18 +47,19 @@ object MessageDeliveryStubComponent:
   def clearDeliveries(): Unit =
     _deliveries.clear()
 
-  object Factory extends Component.SinglePrimaryBundleFactory:
+  object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
-      new MessageDeliveryStubComponent:
+      new MessageDeliveryStubComponent {
         override def messageDeliveryProviders: Vector[MessageDeliveryProvider] =
           Vector(DefaultMessageDeliveryProvider)
+      }
 
     protected def create_Core(
       params: ComponentCreate,
       comp: Component
     ): Component.Core =
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         ComponentInstanceId.default(componentId),
         Protocol(
@@ -64,13 +67,14 @@ object MessageDeliveryStubComponent:
           handler = ProtocolHandler.default
         )
       )
+  }
 
-  object DefaultMessageDeliveryProvider extends MessageDeliveryProvider:
+  object DefaultMessageDeliveryProvider extends MessageDeliveryProvider {
     val name: String = "textus-message-delivery-stub"
 
     def send(message: UnifiedMessage)(using ctx: ExecutionContext): Consequence[MessageDeliveryResult] =
       val now = ctx.clock.instant()
-      val providerMessageId = ctx.idGeneration.opaqueId("message-delivery.stub")
+      val providermessageid = ctx.idGeneration.opaqueId("message-delivery.stub")
       val delivery = Delivery(
         channel = message.channel,
         recipient = message.recipient,
@@ -79,19 +83,21 @@ object MessageDeliveryStubComponent:
         templateId = message.templateId,
         attributes = message.attributes,
         correlationId = message.correlationId,
-        providerMessageId = providerMessageId,
+        providerMessageId = providermessageid,
         acceptedAt = now
       )
-      _deliveries.update(providerMessageId, delivery)
+      _deliveries.update(providermessageid, delivery)
       LogBackendHolder.backend.foreach(_.log(
         "info",
-        s"[message-delivery-stub] channel=${message.channel.toString.toLowerCase(java.util.Locale.ROOT)} recipient=${message.recipient} subject=${message.subject.getOrElse("")} providerMessageId=$providerMessageId"
+        s"[message-delivery-stub] channel=${message.channel.toString.toLowerCase(java.util.Locale.ROOT)} recipient=${message.recipient} subject=${message.subject.getOrElse("")} providerMessageId=$providermessageid"
       ))
       Consequence.success(
         MessageDeliveryResult(
           accepted = true,
-          providerMessageId = Some(providerMessageId),
+          providerMessageId = Some(providermessageid),
           acceptedAt = now,
           attributes = Map("provider" -> name)
         )
       )
+  }
+}

@@ -9,13 +9,14 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
+import org.goldenport.Consequence
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.{RepositoryBootstrapPolicy, RuntimeConfig}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, SubsystemCapabilityId}
 import org.goldenport.cncf.component.repository.fixture.spi.{
   ArtSceneComponent,
   ArtSceneComponentFactory,
@@ -38,10 +39,15 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Aug.  6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
+  private val _e1 = afterWord("in spec:generic-subsystem-factory, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private val _e2 = afterWord("in spec:generic-subsystem-factory, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private val _e3 = afterWord("in spec:generic-subsystem-factory, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
+  private def _metadata(exampleid: String) =
+    afterWord(s"in spec:generic-subsystem-factory, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
   override def beforeAll(): Unit = {
     val workarea = WorkAreaSpace.create(RuntimeConfig.default)
     GlobalContext.set(GlobalContext(workarea))
@@ -49,46 +55,49 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
   "GenericSubsystemFactory" should {
     "descriptor materialization and development selection" which {
-    "materialize multiple named instances from one descriptor component type" in {
-      Given("one discovered component and two descriptor instance declarations")
-      val subsystem = TestComponentFactory.emptySubsystem("named-instance-materialization")
-      val params = ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
-      val prototype = _named_instance_factory.createPrimary(params)
-      val descriptor = GenericSubsystemDescriptor(
-        path = Path.of("named-instance-materialization.yaml"),
-        subsystemName = "named-instance-materialization",
-        componentBindings = Vector(
-          GenericSubsystemComponentBinding(
-            "textus-scraper",
-            instance = Some("static-default"),
-            config = Map("scraper.mode" -> "static"),
-            isDefault = Some(true)
-          ),
-          GenericSubsystemComponentBinding(
-            "textus-scraper",
-            instance = Some("dynamic-playwright"),
-            config = Map("scraper.mode" -> "dynamic")
+    "E1 materialize multiple named instances from one descriptor component type" must _e1 {
+      "when exercising: materialize multiple named instances from one descriptor component type" in {
+        Given("one discovered component and two descriptor instance declarations")
+        val subsystem = TestComponentFactory.emptySubsystem("named-instance-materialization")
+        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
+        val prototype = NamedInstanceFactory.createPrimary(params)
+        val descriptor = GenericSubsystemDescriptor(
+          path = Path.of("named-instance-materialization.yaml"),
+          subsystemName = "named-instance-materialization",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding(
+              "textus-scraper",
+              instance = Some("static-default"),
+              config = Map("scraper.mode" -> "static"),
+              isDefault = Some(true)
+            ),
+            GenericSubsystemComponentBinding(
+              "textus-scraper",
+              instance = Some("dynamic-playwright"),
+              config = Map("scraper.mode" -> "dynamic")
+            )
           )
         )
-      )
 
-      When("the descriptor bindings are materialized")
-      val instances = GenericSubsystemFactory.materializeComponentInstances(Vector(prototype), descriptor, params)
+        When("the descriptor bindings are materialized")
+        val instances = GenericSubsystemFactory.materializeComponentInstances(Vector(prototype), descriptor, params)
 
-      Then("one factory produces two independently configured runtime instances")
-      instances.map(_.instanceId).toSet shouldBe Set(
-        ComponentInstanceId("textus-scraper", "static-default"),
-        ComponentInstanceId("textus-scraper", "dynamic-playwright")
-      )
-      instances.flatMap(_.instanceMetadata).map(_.config("scraper.mode")).toSet shouldBe Set("static", "dynamic")
+        Then("one factory produces two independently configured runtime instances")
+        instances.map(_.instanceId).toSet shouldBe Set(
+          ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "static-default"),
+          ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "dynamic-playwright")
+        )
+        instances.flatMap(_.instanceMetadata).map(_.config("scraper.mode")).toSet shouldBe Set("static", "dynamic")
+      }
     }
 
-    "preserve descriptor runtime config across repository duplicate selection" in {
+    "E4 preserve descriptor runtime config across repository duplicate selection" must _metadata("E4") {
+      "when exercising: preserve descriptor runtime config across repository duplicate selection" in {
       Given("one repository component and a descriptor binding that disables MCP publication")
       val subsystem = TestComponentFactory.emptySubsystem("descriptor-runtime-config")
       val origin = ComponentOrigin.Repository("component-file:car:textus-scraper:0.1.0-SNAPSHOT")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-descriptor"))
-      val prototype = _named_instance_factory.createPrimary(params.withOrigin(origin))
+      val prototype = NamedInstanceFactory.createPrimary(params.withOrigin(origin))
       val descriptor = GenericSubsystemDescriptor(
         path = Path.of("descriptor-runtime-config.yaml"),
         subsystemName = "descriptor-runtime-config",
@@ -112,9 +121,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       materialized.applicationConfig.config.flatMap(_.string("cncf.mcp.enabled")) shouldBe Some("false")
       prototype.isMcpReady("Search", "query") shouldBe true
       materialized.isMcpReady("Search", "query") shouldBe false
+      }
     }
 
-    "materialize every bundle participant for each named component instance" in {
+    "E5 materialize every bundle participant for each named component instance" must _metadata("E5") {
+      "when exercising: materialize every bundle participant for each named component instance" in {
       Given("one discovered bundle with a primary and componentlet plus two instance declarations")
       val subsystem = TestComponentFactory.emptySubsystem("named-bundle-materialization")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
@@ -124,7 +135,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         version = "0.1.0",
         component = Some("textus-scraper")
       )
-      val discovered = _named_bundle_factory.create(params).participants.map(_.withArtifactMetadata(artifact))
+      val discovered = NamedBundleFactory.create(params).participants.map(_.withArtifactMetadata(artifact))
       val descriptor = GenericSubsystemDescriptor(
         path = Path.of("named-bundle-materialization.yaml"),
         subsystemName = "named-bundle-materialization",
@@ -142,21 +153,74 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       participants.count(_.isPrimaryParticipant) shouldBe 2
       participants.count(_.isComponentletParticipant) shouldBe 2
       participants.map(_.instanceId).toSet shouldBe Set(
-        ComponentInstanceId("textus-scraper", "static"),
-        ComponentInstanceId("textus-scraper-admin", "static"),
-        ComponentInstanceId("textus-scraper", "dynamic"),
-        ComponentInstanceId("textus-scraper-admin", "dynamic")
+        ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "static"),
+        ComponentInstanceId("org.goldenport.cncf.spec.ScraperAdmin", "static"),
+        ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "dynamic"),
+        ComponentInstanceId("org.goldenport.cncf.spec.ScraperAdmin", "dynamic")
       )
+      }
     }
 
-    "load the descriptor-bound component through the repository runtime path" in {
+    "E2 reject multiple exact canonical component candidates" must _e2 {
+      "when exercising: reject multiple exact canonical component candidates" in {
+        Given("one canonical binding and two discovered primaries with the same exact Core and artifact identity")
+        val componentid = ComponentId("org.example.Cwitter")
+        val subsystem = TestComponentFactory.emptySubsystem("canonical-candidate-ambiguity")
+        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
+        val descriptor = GenericSubsystemDescriptor(
+          path = Path.of("canonical-candidate-ambiguity.yaml"),
+          subsystemName = "canonical-candidate-ambiguity",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding(componentid.name, componentId = Some(componentid))
+          )
+        )
+        val artifact = Component.ArtifactMetadata(
+          sourceType = "spec",
+          name = "cwitter.car",
+          version = "0.1.0",
+          componentId = Some(componentid)
+        )
+        def _candidate_(): Component = {
+          val candidate = new Component() {}
+          candidate.initialize(
+            ComponentInit(
+              subsystem,
+              Component.Core.create(
+                componentid.name,
+                componentid,
+                ComponentInstanceId.default(componentid),
+                Protocol.empty
+              ),
+              ComponentOrigin.Repository("spec")
+            )
+          )
+          candidate.withArtifactMetadata(artifact)
+        }
+        val candidates = Vector.fill(2)(_candidate_())
+
+        When("canonical factory materialization selects exact candidates")
+        val result = GenericSubsystemFactory.materializeComponentInstancesC(candidates, descriptor, params)
+
+        Then("the ambiguous exact identity is rejected instead of materializing both primaries")
+        result match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.display shouldBe
+              "canonical component binding has multiple exact Core/artifact identity matches: org.example.Cwitter"
+          case Consequence.Success(value) =>
+            fail(s"expected canonical candidate ambiguity rejection but got $value")
+        }
+      }
+    }
+
+    "E6 load the descriptor-bound component through the repository runtime path" must _metadata("E6") {
+      "when exercising: load the descriptor-bound component through the repository runtime path" in {
       Given("a repository containing a descriptor-bound component CAR")
       _with_temp_dir { componentdir =>
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
         val componentdescriptor = componentdir.resolve("component-descriptor-car.json")
         Files.writeString(
           componentdescriptor,
-          """{"name":"structured-knowledge","version":"0.1.0-SNAPSHOT","component":"textus-mcp-rag"}"""
+          _canonical_descriptor_json("org.goldenport.cncf.Specification", "0.1.0-SNAPSHOT")
         )
         _create_car(
           componentdir.resolve("structured-knowledge.car"),
@@ -172,7 +236,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: mcprag
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: textus-mcp-rag
+            |  - name: org.goldenport.cncf.Specification
             |    version: 0.1.0-SNAPSHOT
             |    extension_bindings:
             |      knowledge_source_adapters:
@@ -192,77 +256,100 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
         When("the subsystem is built through the repository runtime path")
         val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
-        val names = subsystem.components.map(_.name).sorted
+        val names = subsystem.components.map(_.displayName).sorted
         val metadata = subsystem.components.flatMap(_.artifactMetadata)
 
         Then("the component and artifact metadata are visible in the subsystem")
         subsystem.name shouldBe "mcprag"
         subsystem.version shouldBe Some("0.1.0-SNAPSHOT")
         names should contain ("spec")
-        metadata.map(_.component) should contain (Some("textus-mcp-rag"))
+        metadata.map(_.component) should contain (Some("org.goldenport.cncf.Specification"))
+      }
       }
     }
 
-    "E10 prefer a complete sibling development set over an older packaged CAR" in {
-      Given("two prepared prefixed development directories and an older same-name packaged CAR")
-      _with_temp_dir { root =>
-        val primarydir = root.resolve("devdirsample")
-        val primaryclassdir = primarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
-        _copy_test_package_classes(classOf[devdirsample.DevDirSampleComponent], primaryclassdir)
-        _write_runtime_classpath(primarydir, primaryclassdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample")
-        val secondarydir = root.resolve("secondarydevdirsample")
-        val secondaryclassdir = secondarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
-        _copy_test_package_classes(classOf[secondarydevdirsample.SecondaryDevDirSampleComponent], secondaryclassdir)
-        _write_runtime_classpath(secondarydir, secondaryclassdir, "secondarydevdirsample", "0.1.0-SNAPSHOT", "secondarydevdirsample")
-        val packagedir = Files.createDirectories(root.resolve("packaged"))
-        val packagedjar = _create_fake_component_jar(root.resolve("assets").resolve("packaged-main.jar"))
-        val packageddescriptor = root.resolve("packaged-descriptor.json")
-        Files.writeString(
-          packageddescriptor,
-          """{"name":"devdirsample","version":"0.0.1","component":"devdirsample"}"""
-        )
-        _create_unadmitted_car(
-          packagedir.resolve("devdirsample-0.0.1.car"),
-          Seq(
-            "component/main.jar" -> packagedjar,
-            "component-descriptor.json" -> packageddescriptor
+    "E10 prefer a complete sibling development set over an older packaged CAR" must _e3 {
+      "when exercising: E10 prefer a complete sibling development set over an older packaged CAR" in {
+        Given("two prepared prefixed development directories and an older same-name packaged CAR")
+        _with_temp_dir { root =>
+          val primarydir = root.resolve("devdirsample")
+          val primaryclassdir = primarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
+          _copy_test_package_classes(classOf[devdirsample.DevDirSampleComponent], primaryclassdir)
+          _write_runtime_classpath(primarydir, primaryclassdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample", "org.goldenport.fixture.DevDirSample")
+          val secondarydir = root.resolve("secondarydevdirsample")
+          val secondaryclassdir = secondarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
+          _copy_test_package_classes(classOf[secondarydevdirsample.SecondaryDevDirSampleComponent], secondaryclassdir)
+          _write_runtime_classpath(secondarydir, secondaryclassdir, "secondarydevdirsample", "0.1.0-SNAPSHOT", "secondarydevdirsample", "org.goldenport.fixture.SecondaryDevDirSample")
+          val packagedir = Files.createDirectories(root.resolve("packaged"))
+          val packagedjar = _create_fake_component_jar(root.resolve("assets").resolve("packaged-main.jar"))
+          val packageddescriptor = root.resolve("packaged-descriptor.json")
+          Files.writeString(
+            packageddescriptor,
+            _canonical_descriptor_json("org.goldenport.fixture.DevDirSample", "0.0.1")
           )
-        )
-        val descriptor = GenericSubsystemDescriptor(
-          path = root.resolve("assembly-descriptor.yaml"),
-          subsystemName = "complete-development-set",
-          version = Some("0.0.1"),
-          componentBindings = Vector(
-            GenericSubsystemComponentBinding("devdirsample", version = Some("0.0.1")),
-            GenericSubsystemComponentBinding("secondarydevdirsample", version = Some("0.1.0-SNAPSHOT"))
-          )
-        )
-        val configuration = ResolvedConfiguration(
-          Configuration(Map(
-            RuntimeConfig.componentCarDirKey -> ConfigurationValue.StringValue(packagedir.toString),
-            RuntimeConfig.repositoryComponentDevDirKey -> ConfigurationValue.StringValue(
-              s"component-dev-dir:$primarydir,component-dev-dir:$secondarydir"
+          _create_car(
+            packagedir.resolve("devdirsample-0.0.1.car"),
+            Seq(
+              "component/main.jar" -> packagedjar,
+              "component-descriptor.json" -> packageddescriptor
             )
-          )),
-          ConfigurationTrace.empty
-        )
+          )
+          val descriptor = GenericSubsystemDescriptor(
+            path = root.resolve("assembly-descriptor.yaml"),
+            subsystemName = "complete-development-set",
+            version = Some("0.0.1"),
+            componentBindings = Vector(
+              GenericSubsystemComponentBinding("org.goldenport.fixture.DevDirSample", version = Some("0.0.1")),
+              GenericSubsystemComponentBinding("org.goldenport.fixture.SecondaryDevDirSample", version = Some("0.1.0-SNAPSHOT"))
+            ),
+            subsystemCapabilityProviders = Vector(
+              GenericSubsystemCapabilityProviderBinding(
+                "runtime-facilities",
+                "org.goldenport.fixture.DevDirSample",
+                Vector(
+                  SubsystemCapabilityId.parseC("datastore.optimistic-concurrency@1").toOption.get,
+                  SubsystemCapabilityId.parseC("datastore.persistent@1").toOption.get,
+                  SubsystemCapabilityId.parseC("datastore.transactional@1").toOption.get,
+                  SubsystemCapabilityId.parseC("user-context.current@1").toOption.get
+                )
+              )
+            )
+          )
+          val configuration = ResolvedConfiguration(
+            Configuration(Map(
+              RuntimeConfig.componentCarDirKey -> ConfigurationValue.StringValue(packagedir.toString),
+              RuntimeConfig.repositoryComponentDevDirKey -> ConfigurationValue.StringValue(
+                s"component-dev-dir:$primarydir,component-dev-dir:$secondarydir"
+              )
+            )),
+            ConfigurationTrace.empty
+          )
 
-        When("GenericSubsystemFactory resolves the complete explicit development repository set")
-        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
-        val components = subsystem.components.filter(component =>
-          Set("devdirsample", "secondarydevdirsample").contains(component.name)
-        )
+          When("GenericSubsystemFactory resolves the complete explicit development repository set")
+          val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
+          val components = subsystem.components.filter(component =>
+            Set(
+              "org.goldenport.fixture.DevDirSample",
+              "org.goldenport.fixture.SecondaryDevDirSample"
+            ).contains(component.name)
+          )
 
-        Then("both descriptor claims use development classes and no packaged provider is admitted")
-        components should have size 2
-        components.map(_.getClass.getName).toSet shouldBe Set(
-          classOf[devdirsample.DevDirSamplePrimaryComponent].getName,
-          classOf[secondarydevdirsample.SecondaryDevDirSampleComponent].getName
-        )
+          Then("both descriptor claims use development classes and no packaged provider is admitted")
+          components should have size 2
+          components.map(_.displayName).toSet shouldBe Set("devdirsample", "secondarydevdirsample")
+          components.map(_.getClass.getName).toSet shouldBe Set(
+            classOf[devdirsample.DevDirSamplePrimaryComponent].getName,
+            classOf[secondarydevdirsample.SecondaryDevDirSampleComponent].getName
+          )
+          components.foreach { component =>
+            component.artifactMetadata.flatMap(_.componentId) shouldBe Some(component.core.componentId)
+          }
+        }
       }
     }
 
-    "resolve an equivalent stable Subsystem identity through direct development and packaged inputs" in {
+    "E7 resolve an equivalent stable Subsystem identity through direct development and packaged inputs" must _metadata("E7") {
+      "when exercising: resolve an equivalent stable Subsystem identity through direct development and packaged inputs" in {
       Given("equivalent direct component descriptors in prepared development and packaged CAR forms")
       _with_temp_dir { root =>
         val developmentdir = root.resolve("identity-development")
@@ -273,12 +360,13 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           classdir,
           "identity-component",
           "0.1.0-SNAPSHOT",
-          "identity-component"
+          "identity-component",
+          "org.goldenport.fixture.DevDirSample"
         )
         val packageddescriptor = root.resolve("identity-component-descriptor.json")
         Files.writeString(
           packageddescriptor,
-          """{"name":"identity-component","version":"0.1.0-SNAPSHOT","component":"identity-component"}""",
+          _canonical_descriptor_json("org.goldenport.fixture.DevDirSample", "0.1.0-SNAPSHOT"),
           StandardCharsets.UTF_8
         )
         val packagedcar = root.resolve("identity-component.car")
@@ -304,12 +392,14 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val packaged = GenericSubsystemFactory.resolveDescriptorC(packagedconfiguration).toOption.flatten.get
 
         Then("the descriptor-owned Component identity is stable across the two paths")
-        development.subsystemName shouldBe "identity-component"
-        packaged.subsystemName shouldBe "identity-component"
+        development.subsystemName shouldBe "org.goldenport.fixture.DevDirSample"
+        packaged.subsystemName shouldBe "org.goldenport.fixture.DevDirSample"
+      }
       }
     }
 
-    "retain a configured component binding when an assembly overlay declares empty components" in {
+    "E8 retain a configured component binding when an assembly overlay declares empty components" must _metadata("E8") {
+      "when exercising: retain a configured component binding when an assembly overlay declares empty components" in {
       Given("a configured component name and an assembly descriptor with empty components plus config")
       _with_temp_dir { root =>
         val componentname = "configured-component"
@@ -348,9 +438,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         staticdescriptor.config should contain ("assembly.overlay" -> "retained")
         runtimedescriptor.config should contain ("assembly.overlay" -> "retained")
       }
+      }
     }
 
-    "reject an empty configured assembly when no component name or binding is available" in {
+    "E9 reject an empty configured assembly when no component name or binding is available" must _metadata("E9") {
+      "when exercising: reject an empty configured assembly when no component name or binding is available" in {
       Given("an assembly descriptor with empty components and no configured component name")
       _with_temp_dir { root =>
         val assembly = root.resolve("unbound-empty-components-assembly.yaml")
@@ -381,9 +473,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         staticresult shouldBe a[org.goldenport.Consequence.Failure[_]]
         runtimeresult shouldBe a[org.goldenport.Consequence.Failure[_]]
       }
+      }
     }
 
-    "accept an empty configured assembly with a valid explicit test descriptor" in {
+    "E11 accept an empty configured assembly with a valid explicit test descriptor" must _metadata("E11") {
+      "when exercising: accept an empty configured assembly with a valid explicit test descriptor" in {
       Given("an assembly descriptor with empty components and a controlled-test descriptor")
       _with_temp_dir { root =>
         val assembly = root.resolve("controlled-test-empty-components-assembly.yaml")
@@ -428,9 +522,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         staticdescriptor.config should contain ("assembly.overlay" -> "retained")
         runtimedescriptor.config should contain ("assembly.overlay" -> "retained")
       }
+      }
     }
 
-    "isolate assembly descriptors across explicit component CARs" in {
+    "E12 isolate assembly descriptors across explicit component CARs" must _metadata("E12") {
+      "when exercising: isolate assembly descriptors across explicit component CARs" in {
       Given("two explicit CARs and one assembly descriptor binding each component")
       _with_temp_dir { root =>
         val appjar = _create_class_component_jar(
@@ -449,11 +545,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val providerdescriptor = root.resolve("plain-ai-runner-provider-descriptor.json")
         Files.writeString(
           appdescriptor,
-          """{"name":"component-file-app","version":"0.1.0","component":"component-file-app"}"""
+          _canonical_descriptor_json("org.goldenport.fixture.ComponentFileApp", "0.1.0")
         )
         Files.writeString(
           providerdescriptor,
-          """{"name":"plain-ai-runner-provider","version":"0.1.0","component":"plain-ai-runner-provider"}"""
+          _canonical_descriptor_json("org.goldenport.fixture.PlainAiRunnerProvider", "0.1.0")
         )
         val appcar = root.resolve("component-file-app.car")
         val providercar = root.resolve("plain-ai-runner-provider.car")
@@ -475,8 +571,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           path = root.resolve("assembly-descriptor.yaml"),
           subsystemName = "explicit-component-files",
           componentBindings = Vector(
-            GenericSubsystemComponentBinding("component-file-app", version = Some("0.1.0")),
-            GenericSubsystemComponentBinding("plain-ai-runner-provider", version = Some("0.1.0"))
+            GenericSubsystemComponentBinding("org.goldenport.fixture.ComponentFileApp", version = Some("0.1.0")),
+            GenericSubsystemComponentBinding("org.goldenport.fixture.PlainAiRunnerProvider", version = Some("0.1.0"))
           )
         )
         val configuration = ResolvedConfiguration(
@@ -495,30 +591,32 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         Then("each factory receives only the descriptor owned by its CAR")
         val expectednames = Set("component-file-app", "plain-ai-runner-provider")
         val explicitcomponents = subsystem.components.filter(component =>
-          expectednames.contains(component.name)
+          expectednames.contains(component.displayName)
         )
         explicitcomponents.map(_.name).sorted shouldBe Vector(
-          "component-file-app",
-          "plain-ai-runner-provider"
+          "org.goldenport.fixture.ComponentFileApp",
+          "org.goldenport.fixture.PlainAiRunnerProvider"
         )
         explicitcomponents.flatMap(_.artifactMetadata.flatMap(_.component)).sorted shouldBe Vector(
-          "component-file-app",
-          "plain-ai-runner-provider"
+          "org.goldenport.fixture.ComponentFileApp",
+          "org.goldenport.fixture.PlainAiRunnerProvider"
         )
+      }
       }
     }
 
     }
 
     "runtime resolution and security wiring" which {
-    "make descriptor-bound component operations visible through the subsystem resolver" in {
+    "E13 make descriptor-bound component operations visible through the subsystem resolver" must _metadata("E13") {
+      "when exercising: make descriptor-bound component operations visible through the subsystem resolver" in {
       Given("a repository component with generated specification operations")
       _with_temp_dir { componentdir =>
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
         val componentdescriptor = componentdir.resolve("component-descriptor-car.json")
         Files.writeString(
           componentdescriptor,
-          """{"name":"structured-knowledge","version":"0.1.0-SNAPSHOT","component":"textus-mcp-rag"}"""
+          _canonical_descriptor_json("org.goldenport.cncf.Specification", "0.1.0-SNAPSHOT")
         )
         _create_car(
           componentdir.resolve("structured-knowledge.car"),
@@ -534,7 +632,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: mcprag
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: textus-mcp-rag
+            |  - name: org.goldenport.cncf.Specification
             |    version: 0.1.0-SNAPSHOT
             |""".stripMargin,
           StandardCharsets.UTF_8
@@ -552,20 +650,22 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
 
         Then("the explicitly versioned CAR is loaded")
-        subsystem.components.flatMap(_.artifactMetadata.map(_.component)) should contain (Some("textus-mcp-rag"))
+        subsystem.components.flatMap(_.artifactMetadata.map(_.component)) should contain (Some("org.goldenport.cncf.Specification"))
 
         And("the subsystem resolver exposes the component operation")
-        subsystem.resolver.resolve("spec.export.openapi") shouldBe
+        subsystem.resolver.resolve("org.goldenport.cncf.Specification.export.openapi") shouldBe
           ResolutionResult.Resolved(
-            fqn = "spec.export.openapi",
-            component = "spec",
+            fqn = "org.goldenport.cncf.Specification.export.openapi",
+            component = "org.goldenport.cncf.Specification",
             service = "export",
             operation = "openapi"
           )
       }
+      }
     }
 
-    "carry descriptor-defined security wiring from the textus-identity journal sample descriptor" in {
+    "E14 carry descriptor-defined security wiring from the textus-identity journal sample descriptor" must _metadata("E14") {
+      "when exercising: carry descriptor-defined security wiring from the textus-identity journal sample descriptor" in {
       Given("the maintained textus-identity descriptor")
       val descriptorpath = Path.of(
         "docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml"
@@ -597,16 +697,18 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         wiring.providers.head.schemes shouldBe Vector("bearer", "refresh-token")
         wiring.providers.head.provider shouldBe empty
       }
+      }
     }
 
-    "resolve a subsystem descriptor from component repository using subsystem name only" in {
+    "E15 resolve a subsystem descriptor from component repository using subsystem name only" must _metadata("E15") {
+      "when exercising: resolve a subsystem descriptor from component repository using subsystem name only" in {
       Given("a component repository containing a CAR and subsystem SAR")
       _with_temp_dir { componentdir =>
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
         val componentdescriptor = componentdir.resolve("component-descriptor.json")
         Files.writeString(
           componentdescriptor,
-          """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","componentName":"textus-user-account"}"""
+          _canonical_descriptor_json("org.goldenport.cncf.Specification", "0.1.0-SNAPSHOT")
         )
         _create_car(
           componentdir.resolve("textus-user-account-0.1.0-SNAPSHOT.car"),
@@ -622,7 +724,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: textus-identity
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: textus-user-account
+            |  - name: org.goldenport.cncf.Specification
             |    version: 0.1.0-SNAPSHOT
             |""".stripMargin,
           StandardCharsets.UTF_8
@@ -659,24 +761,26 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         subsystem.name shouldBe "textus-identity"
         subsystem.version shouldBe Some("0.1.0-SNAPSHOT")
         subsystem.descriptor.map(_.subsystemName) shouldBe Some("textus-identity")
-        subsystem.components.map(_.name) should contain ("spec")
-        subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+        subsystem.components.map(_.displayName) should contain ("spec")
+        subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("org.goldenport.cncf.Specification")
+      }
       }
     }
 
-    "resolve descriptor components from the default standard repository using name and version without repository config" in {
+    "E16 resolve descriptor components from the default standard repository using name and version without repository config" must _metadata("E16") {
+      "when exercising: resolve descriptor components from the default standard repository using name and version without repository config" in {
       Given("a CAR in the default user repository and no explicit repository setting")
       _with_temp_dir { homedir =>
-        val cachedir = homedir.resolve(".cncf").resolve("cache").resolve("car").resolve("textus-user-account").resolve("0.1.0")
+        val cachedir = homedir.resolve(".cncf").resolve("cache").resolve("car").resolve("org.goldenport.cncf.Specification").resolve("0.1.0")
         Files.createDirectories(cachedir)
         val fakecomponentjar = _create_fake_component_jar(homedir.resolve("assets").resolve("component-main.jar"))
         val componentdescriptor = homedir.resolve("component-descriptor.json")
         Files.writeString(
           componentdescriptor,
-          """{"name":"textus-user-account","version":"0.1.0","componentName":"textus-user-account"}"""
+          _canonical_descriptor_json("org.goldenport.cncf.Specification", "0.1.0")
         )
         _create_car(
-          cachedir.resolve("textus-user-account-0.1.0.car"),
+          cachedir.resolve("org.goldenport.cncf.Specification-0.1.0.car"),
           Seq(
             "component/main.jar" -> fakecomponentjar,
             "component-descriptor.json" -> componentdescriptor
@@ -689,7 +793,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: textus-identity
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: textus-user-account
+            |  - name: org.goldenport.cncf.Specification
             |    version: 0.1.0
             |""".stripMargin,
           StandardCharsets.UTF_8
@@ -705,18 +809,19 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
           Then("the versioned CAR is discovered from the standard repository")
           subsystem.name shouldBe "textus-identity"
-          subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+          subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("org.goldenport.cncf.Specification")
         } finally {
           if (originalhome == null) System.clearProperty("user.home")
           else System.setProperty("user.home", originalhome)
         }
+      }
       }
     }
 
     }
   }
 
-  private object _named_instance_factory extends Component.PrimaryComponentFactory {
+  private object NamedInstanceFactory extends Component.PrimaryComponentFactory {
     protected def create_Component(params: ComponentCreate): Component =
       new Component() {
         override def mcpReadyServices: Set[String] = Set("Search")
@@ -727,15 +832,15 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       comp: Component
     ): Component.Core =
       Component.Core.create(
-        "textus-scraper",
-        ComponentId("textus_scraper"),
-        ComponentInstanceId.default(ComponentId("textus_scraper")),
+        "org.goldenport.cncf.spec.Scraper",
+        ComponentId("org.goldenport.cncf.spec.Scraper"),
+        ComponentInstanceId.default(ComponentId("org.goldenport.cncf.spec.Scraper")),
         Protocol.empty,
         this
       )
   }
 
-  private object _named_bundle_factory extends Component.BundleFactory {
+  private object NamedBundleFactory extends Component.BundleFactory {
     object Primary extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
         new Component() {}
@@ -745,9 +850,9 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          "textus-scraper",
-          ComponentId("textus_scraper"),
-          ComponentInstanceId.default(ComponentId("textus_scraper")),
+          "org.goldenport.cncf.spec.Scraper",
+          ComponentId("org.goldenport.cncf.spec.Scraper"),
+          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.spec.Scraper")),
           Protocol.empty,
           this
         )
@@ -762,9 +867,9 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          "textus-scraper-admin",
-          ComponentId("textus_scraper_admin"),
-          ComponentInstanceId.default(ComponentId("textus_scraper_admin")),
+          "org.goldenport.cncf.spec.ScraperAdmin",
+          ComponentId("org.goldenport.cncf.spec.ScraperAdmin"),
+          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.spec.ScraperAdmin")),
           Protocol.empty,
           this
         )
@@ -798,7 +903,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     classdir: Path,
     name: String,
     version: String,
-    component: String
+    component: String,
+    componentid: String
   ): Unit = {
     val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
     val cardir = componentdir.resolve("src").resolve("main").resolve("car")
@@ -808,19 +914,19 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     Files.writeString(file, classdir.toString, StandardCharsets.UTF_8)
     Files.writeString(
       descriptor,
-      s"""{"name":"$name","version":"$version","component":"$component"}""",
+      _canonical_development_descriptor_json(componentid, version),
       StandardCharsets.UTF_8
     )
     Files.writeString(cardir.resolve("component-descriptor.json"), Files.readString(descriptor, StandardCharsets.UTF_8), StandardCharsets.UTF_8)
     Files.writeString(
       cardir.resolve("abi-manifest.json"),
-      s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$name","version":"$version"},"abi":{"exports":{"components":[{"name":"$component"}]}}}""",
+      s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$componentid","version":"$version"},"abi":{"exports":{"components":[{"name":"$componentid"}]}}}""",
       StandardCharsets.UTF_8
     )
     val classpathidentity = s"project:${componentdir.relativize(classdir).toString.replace('\\', '/')}"
     val evidence = Vector(
       ("target/cncf.d/runtime-classpath.txt", _sha256(file), Some(_sha256(classpathidentity.getBytes(StandardCharsets.UTF_8)))),
-      ("src/main/car/component-descriptor.json", _sha256(cardir.resolve("component-descriptor.json")), None),
+      ("target/cncf.d/component-descriptor.json", _sha256(descriptor), None),
       ("src/main/car/abi-manifest.json", _sha256(cardir.resolve("abi-manifest.json")), None)
     )
     val entries = evidence.map { case (path, digest, logical) =>
@@ -832,15 +938,31 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     }.mkString("\n").getBytes(StandardCharsets.UTF_8))
     Files.writeString(
       file.getParent.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v1","sourceKind":"development-directory","car":{"name":"$name","version":"$version","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$componentid","version":"$version","component":"$componentid"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
       StandardCharsets.UTF_8
     )
   }
+
+  private def _canonical_development_descriptor_json(
+    componentid: String,
+    release: String
+  ): String =
+    s"""{"schemaVersion":2,"name":"$componentid","version":"$release","component":{"name":"$componentid"},"componentStyle":{"apiVersion":"cncf.textus/v1","provider":"cncf","id":"full-fledged-with-standalone@1","version":1,"parameterSchema":{"type":"object","properties":{},"required":[],"additionalProperties":false},"parameters":{},"provides":{"bundles":["domain.full@1"],"capabilities":["user.fixed-context-compatible@1","user.multi-user@1"],"effective":["domain.aggregate@1","domain.command@1","domain.domain-event@1","domain.entity@1","domain.optimistic-concurrency@1","domain.persistence@1","domain.projection@1","domain.query@1","domain.transaction@1","user.fixed-context-compatible@1","user.multi-user@1"]},"requires":{"subsystemCapabilities":["datastore.optimistic-concurrency@1","datastore.persistent@1","datastore.transactional@1","user-context.current@1"]}}}"""
 
   private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
 
   private def _sha256(bytes: Array[Byte]): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
+
+  private def _canonical_descriptor_json(
+    componentid: String,
+    release: String
+  ): String = {
+    val segments = componentid.split("\\.").toVector
+    val namespace = segments.dropRight(1).mkString(".")
+    val localid = segments.last
+    s"""{"schemaVersion":3,"component":{"namespace":"$namespace","id":"$localid","version":"$release"}}"""
+  }
 
   private def _copy_test_package_classes(source: Class[?], target: Path): Unit = {
     val testclasses = Path.of(

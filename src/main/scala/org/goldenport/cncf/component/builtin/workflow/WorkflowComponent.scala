@@ -16,10 +16,11 @@ import org.goldenport.value.BaseContent
 
 /*
  * @since   Apr. 22, 2026
- * @version May. 31, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowComponent() extends Component {
+  override def displayName: String = WorkflowComponent.name
 }
 
 object WorkflowComponent {
@@ -32,7 +33,7 @@ object WorkflowComponent {
   }
 
   val name: String = "workflow"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -43,25 +44,25 @@ object WorkflowComponent {
       comp: Component
     ): Component.Core = {
       val request = spec.RequestDefinition()
-      val identityRequest = _identity_request
-      val listDefinitions = new ListWorkflowDefinitionsOperationDefinition(request, spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
-      val describeDefinition = new DescribeWorkflowDefinitionOperationDefinition(identityRequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val listInstances = new ListWorkflowInstancesOperationDefinition(request, spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
-      val getInstance = new GetWorkflowInstanceOperationDefinition(identityRequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val loadHistory = new LoadWorkflowHistoryOperationDefinition(identityRequest, spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
-      val workflowService = spec.ServiceDefinition(
+      val identityrequest = _identity_request
+      val listdefinitions = new ListWorkflowDefinitionsOperationDefinition(request, spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
+      val describedefinition = new DescribeWorkflowDefinitionOperationDefinition(identityrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val listinstances = new ListWorkflowInstancesOperationDefinition(request, spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
+      val getinstance = new GetWorkflowInstanceOperationDefinition(identityrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val loadhistory = new LoadWorkflowHistoryOperationDefinition(identityrequest, spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
+      val workflowservice = spec.ServiceDefinition(
         name = "workflow",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(listDefinitions, describeDefinition, listInstances, getInstance, loadHistory)
+          operations = NonEmptyVector.of(listdefinitions, describedefinition, listinstances, getinstance, loadhistory)
         )
       )
       val protocol = Protocol(
-        services = spec.ServiceDefinitionGroup(services = Vector(workflowService)),
+        services = spec.ServiceDefinitionGroup(services = Vector(workflowservice)),
         handler = ProtocolHandler.default
       )
       comp.withPort(Component.Port.of(new DefaultWorkflowService(comp)))
       val instanceid = ComponentInstanceId.default(componentId)
-      Component.Core.create(name, componentId, instanceid, protocol)
+      Component.Core.create(componentId.name, componentId, instanceid, protocol)
     }
 
     private def _identity_request: spec.RequestDefinition =

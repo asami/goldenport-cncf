@@ -12,7 +12,7 @@ import org.goldenport.datatype.I18nString
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -43,8 +43,8 @@ object HelpProjection {
           name = effectivename,
           summary = "Subsystem help",
           selector = Some(_subsystem_selector(effectivename)),
-          children = components.map(_.name),
-          details = Map("components" -> components.map(_.name)) ++
+          children = components.map(_.displayName),
+          details = Map("components" -> components.map(_.displayName)) ++
             (if (domainvisions.nonEmpty) Map("domainVisions" -> domainvisions) else Map.empty) ++
             (if (domaincontexts.nonEmpty) Map("domainContexts" -> domaincontexts) else Map.empty) ++
             (if (domainsystemcontexts.nonEmpty) Map("domainSystemContexts" -> domainsystemcontexts) else Map.empty) ++
@@ -64,7 +64,10 @@ object HelpProjection {
           domainUseCases = domainusecasemodels
         )
       case Target.ComponentTarget(component) =>
-        val componentname = component.name
+        val componentname = component.displayName
+        val componentid = component.componentId.name
+        val isuniquedisplayalias = _is_unique_display_alias(component)
+        val usagecomponent = if (isuniquedisplayalias) componentname else componentid
         val services = component.protocol.services.services.sortBy(_.name)
         val aggregates = aggregateMetas(component).map(_.name)
         val views = viewMetas(component).map(_.name)
@@ -88,7 +91,8 @@ object HelpProjection {
           `type` = "component",
           name = componentname,
           summary = s"Component: $componentname",
-          selector = Some(_component_selector(componentname)),
+          componentId = Some(componentid),
+          selector = Some(_component_selector(componentid, componentname, isuniquedisplayalias)),
           children = services.map(_.name),
           details = Map(
             "services" -> services.map(_.name),
@@ -103,11 +107,13 @@ object HelpProjection {
             "artifactVersion" -> artifactversion
           ) ++ (if (usecases.nonEmpty) Map("useCases" -> usecases) else Map.empty),
           relationshipDefinitions = relationships,
-          usage = services.headOption.map(s => Vector(s"command help $componentname.${s.name}")).getOrElse(Vector.empty),
+          usage = services.headOption.map(s => Vector(s"command help $usagecomponent.${s.name}")).getOrElse(Vector.empty),
           useCases = usecasemodels,
         )
       case Target.ServiceTarget(component, service) =>
-        val componentname = component.name
+        val componentname = component.displayName
+        val componentid = component.componentId.name
+        val isuniquedisplayalias = _is_unique_display_alias(component)
         val servicename = service.name
         val operations = service.operations.operations.toVector.sortBy(_.name)
         val summary = _service_summary(service).getOrElse(s"Service: ${service.name}")
@@ -117,15 +123,25 @@ object HelpProjection {
           `type` = "service",
           name = servicename,
           summary = summary,
+          componentId = Some(componentid),
           component = Some(componentname),
-          selector = Some(_service_selector(componentname, servicename)),
+          selector = Some(_service_selector(componentid, componentname, servicename, isuniquedisplayalias)),
           children = operations.map(_.name),
           details = Map("operations" -> operations.map(_.name)) ++ (if (usecases.nonEmpty) Map("useCases" -> usecases) else Map.empty),
-          usage = operations.headOption.map(op => Vector(s"command help ${_service_cli_selector(componentname, servicename)}.${NamingConventions.toNormalizedSegment(op.name)}")).getOrElse(Vector.empty),
+          usage = operations.headOption.map { op =>
+            val selector =
+              if (isuniquedisplayalias)
+                s"${_service_cli_selector(componentname, servicename)}.${NamingConventions.toNormalizedSegment(op.name)}"
+              else
+                s"$componentid.$servicename.${op.name}"
+            Vector(s"command help $selector")
+          }.getOrElse(Vector.empty),
           useCases = usecasemodels
         )
       case Target.OperationTarget(component, service, operation) =>
-        val componentname = component.name
+        val componentname = component.displayName
+        val componentid = component.componentId.name
+        val isuniquedisplayalias = _is_unique_display_alias(component)
         val servicename = service.name
         val operationname = operation.name
         val parameters = operation.specification.request.parameters.toVector
@@ -156,9 +172,10 @@ object HelpProjection {
           `type` = "operation",
           name = operationname,
           summary = summary,
+          componentId = Some(componentid),
           component = Some(componentname),
           service = Some(servicename),
-          selector = Some(_operation_selector(componentname, servicename, operationname)),
+          selector = Some(_operation_selector(componentid, componentname, servicename, operationname, isuniquedisplayalias)),
           children = Vector.empty,
           details = Map(
             "arguments" -> args,
@@ -172,7 +189,14 @@ object HelpProjection {
           imageBinding = imagebinding,
           commandExecution = commandexecution,
           evaluation = evaluation,
-          usage = Vector(s"command ${_operation_cli_selector(componentname, servicename, operationname)}")
+          usage = Vector(
+            s"command ${
+              if (isuniquedisplayalias)
+                _operation_cli_selector(componentname, servicename, operationname)
+              else
+                s"$componentid.$servicename.$operationname"
+            }"
+          )
         )
       case Target.NotFound(target) =>
         HelpModel(
@@ -189,6 +213,7 @@ object HelpProjection {
       "type" -> model.`type`,
       "name" -> model.name,
       "summary" -> model.summary,
+      "componentId" -> model.componentId,
       "component" -> model.component,
       "service" -> model.service,
       "selector" -> model.selector.map { x =>
@@ -574,30 +599,57 @@ object HelpProjection {
     )
   }
 
-  private def _component_selector(componentname: String): HelpSelectorModel = {
+  private def _is_unique_display_alias(component: Component): Boolean =
+    components(component).count(candidate =>
+      _component_aliases(candidate).exists(
+        NamingConventions.equivalentByNormalized(_, component.displayName)
+      )
+    ) == 1
+
+  private def _component_aliases(component: Component): Vector[String] =
+    (Vector(component.displayName) ++ component.artifactMetadata.toVector.flatMap { metadata =>
+      Vector(metadata.name) ++ metadata.component.toVector
+    }).filter(_.nonEmpty)
+
+  private def _component_selector(
+    componentid: String,
+    componentname: String,
+    includedisplayalias: Boolean
+  ): HelpSelectorModel = {
     val cli = NamingConventions.toNormalizedSegment(componentname)
     HelpSelectorModel(
-      canonical = componentname,
+      canonical = componentid,
       cli = cli,
       rest = s"/$cli",
-      accepted = Vector(componentname)
+      accepted = Vector(componentid) ++ (if (includedisplayalias) Vector(componentname) else Vector.empty)
     )
   }
 
-  private def _service_selector(componentname: String, servicename: String): HelpSelectorModel = {
-    val canonical = s"$componentname.$servicename"
+  private def _service_selector(
+    componentid: String,
+    componentname: String,
+    servicename: String,
+    includedisplayalias: Boolean
+  ): HelpSelectorModel = {
+    val canonical = s"$componentid.$servicename"
     val clicomponent = NamingConventions.toNormalizedSegment(componentname)
     val cliservice = NamingConventions.toNormalizedSegment(servicename)
     HelpSelectorModel(
       canonical = canonical,
       cli = s"$clicomponent.$cliservice",
       rest = s"/$clicomponent/$cliservice",
-      accepted = Vector(canonical)
+      accepted = Vector(canonical) ++ (if (includedisplayalias) Vector(s"$componentname.$servicename") else Vector.empty)
     )
   }
 
-  private def _operation_selector(componentname: String, servicename: String, operationname: String): HelpSelectorModel = {
-    val canonical = s"$componentname.$servicename.$operationname"
+  private def _operation_selector(
+    componentid: String,
+    componentname: String,
+    servicename: String,
+    operationname: String,
+    includedisplayalias: Boolean
+  ): HelpSelectorModel = {
+    val canonical = s"$componentid.$servicename.$operationname"
     val clicomponent = NamingConventions.toNormalizedSegment(componentname)
     val cliservice = NamingConventions.toNormalizedSegment(servicename)
     val clioperation = NamingConventions.toNormalizedSegment(operationname)
@@ -605,7 +657,7 @@ object HelpProjection {
       canonical = canonical,
       cli = s"$clicomponent.$cliservice.$clioperation",
       rest = s"/$clicomponent/$cliservice/$clioperation",
-      accepted = Vector(canonical)
+      accepted = Vector(canonical) ++ (if (includedisplayalias) Vector(s"$componentname.$servicename.$operationname") else Vector.empty)
     )
   }
 

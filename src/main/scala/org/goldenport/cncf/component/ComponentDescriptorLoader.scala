@@ -4,6 +4,7 @@ import java.net.URI
 import java.nio.file.{FileSystems, Files, Path}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
@@ -20,7 +21,7 @@ import org.goldenport.record.RecordDecoder
  *  version Apr.  8, 2026
  *  version Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version Jul.  8, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDescriptorLoader {
@@ -56,22 +57,26 @@ object ComponentDescriptorLoader {
       Consequence.resourceInvalid(s"component descriptor path is not a file or directory: ${path}")
 
   def loadArchive(path: Path): Consequence[ComponentDescriptor] =
-    if (!Files.exists(path))
-      Consequence.resourceNotFound(s"component archive descriptor path does not exist: ${path}")
-    else if (_is_archive_file(path))
-      _load_archive_file(path)
-    else if (_is_non_component_archive_file(path))
-      Consequence.resourceInvalid(s"component archive must be a CAR file: ${path}")
-    else {
-      val descriptorpath =
-        if (Files.isDirectory(path)) _resolve_canonical_descriptor_files(path).headOption
-        else Some(path)
-      descriptorpath match {
-        case Some(file) =>
-          _load_archive_descriptor_file(file, path)
-        case None =>
-          Consequence.resourceNotFound(s"component descriptor not found under canonical CAR layout: ${path}")
+    try {
+      if (!Files.exists(path))
+        Consequence.resourceNotFound(s"component archive descriptor path does not exist: ${path}")
+      else if (_is_archive_file(path))
+        _load_archive_file(path)
+      else if (_is_non_component_archive_file(path))
+        Consequence.resourceInvalid(s"component archive must be a CAR file: ${path}")
+      else {
+        val descriptorpath =
+          if (Files.isDirectory(path)) _resolve_canonical_descriptor_files(path).headOption
+          else Some(path)
+        descriptorpath match {
+          case Some(file) =>
+            _load_archive_descriptor_file(file, path)
+          case None =>
+            Consequence.resourceNotFound(s"component descriptor not found under canonical CAR layout: ${path}")
+        }
       }
+    } catch {
+      case NonFatal(e) => _archive_io_failure(path, e)
     }
 
   def looksLikeArchiveDirectory(path: Path): Boolean = {
@@ -129,31 +134,44 @@ object ComponentDescriptorLoader {
     }
   }
 
+  private def _archive_io_failure(
+    archivepath: Path,
+    cause: Throwable
+  ): Consequence[Nothing] = {
+    val message = Option(cause.getMessage).filter(_.nonEmpty).getOrElse(cause.getClass.getName)
+    Consequence.resourceInvalid(s"CAR component archive I/O failed: archive=${archivepath}; cause=${message}")
+  }
+
   private def _load_archive_descriptor_file(
     descriptorpath: Path,
     archivepath: Path
-  ): Consequence[ComponentDescriptor] =
-    _load_file(descriptorpath).flatMap { descriptors =>
+  ): Consequence[ComponentDescriptor] = {
+    val result = _load_file(descriptorpath).flatMap { descriptors =>
       descriptors.headOption
         .map(Consequence.success)
         .getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${archivepath}"))
     }.flatMap { descriptor =>
-      _validate_archive_descriptor_contract(descriptor, archivepath).map(_ => descriptor)
+      _validate_archive_descriptor_contract(descriptor).map(_ => descriptor)
+    }
+    _archive_admission_result_c(archivepath, result)
+  }
+
+  private def _archive_admission_result_c[A](
+    archivepath: Path,
+    result: Consequence[A]
+  ): Consequence[A] =
+    result match {
+      case Consequence.Success(value) => Consequence.success(value)
+      case Consequence.Failure(conclusion) =>
+        Consequence.resourceInvalid(
+          s"CAR component descriptor admission failed: archive=${archivepath}; reason=${conclusion.display}"
+        )
     }
 
   private def _validate_archive_descriptor_contract(
-    descriptor: ComponentDescriptor,
-    archivepath: Path
-  ): Consequence[Unit] = {
-    def missing(field: String): Consequence[Unit] =
-      Consequence.resourceInvalid(s"CAR component-descriptor.json must declare ${field}: ${archivepath}")
-    descriptor.name.map(_.trim).filter(_.nonEmpty).map(_ => Consequence.success(())).getOrElse(missing("name"))
-      .flatMap { _ =>
-        descriptor.version.map(_.trim).filter(_.nonEmpty).map(_ => Consequence.success(())).getOrElse(missing("version"))
-      }.flatMap { _ =>
-        descriptor.componentName.map(_.trim).filter(_.nonEmpty).map(_ => Consequence.success(())).getOrElse(missing("component"))
-      }
-  }
+    descriptor: ComponentDescriptor
+  ): Consequence[Unit] =
+    descriptor.requireCanonicalIdentityC.map(_ => ())
 
   private def _load_files(files: Vector[Path]): Consequence[Vector[ComponentDescriptor]] =
     files.foldLeft(Consequence.success(Vector.empty[ComponentDescriptor])) { (z, file) =>
@@ -175,7 +193,7 @@ object ComponentDescriptorLoader {
 
   private def _to_descriptor(origin: String, rec: Record): Consequence[ComponentDescriptor] = {
     summon[RecordDecoder[ComponentDescriptor]].fromRecord(rec).flatMap { descriptor =>
-      if (descriptor.name.orElse(descriptor.componentName).exists(_.trim.nonEmpty))
+      if (descriptor.isCanonicalIdentity || descriptor.name.orElse(descriptor.componentName).exists(_.trim.nonEmpty))
         Consequence.success(descriptor)
       else
         Consequence.argumentMissing("component descriptor name/component")

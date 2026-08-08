@@ -12,7 +12,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Jul. 22, 2026
- * @version Aug. 6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final class ComponentParameterContext private (
@@ -62,24 +62,38 @@ private[cncf] object ComponentParameterContext {
     componentid: ComponentId,
     componentinstanceid: ComponentInstanceId,
     descriptor: ComponentDescriptor
-  ): Consequence[Unit] = {
-    val expected = ComponentInstanceId(componentid.name, componentinstanceid.instance)
-    val runtimeidentity = expected.canonicalKey == componentinstanceid.canonicalKey
-    val artifactalias = descriptor.name.exists { name =>
-      descriptor.componentName.exists { componentname =>
-        NamingConventions.equivalentByNormalized(componentname, componentid.name) &&
-          NamingConventions.equivalentByNormalized(name, componentinstanceid.name)
+  ): Consequence[Unit] =
+    if (descriptor.isCanonicalIdentity) {
+      val expected = ComponentInstanceId(componentid, componentinstanceid.instance)
+      if (expected == componentinstanceid)
+        Consequence.unit
+      else
+        ComponentParameterDiagnostics.contextRejected(
+          s"component parameter context identity mismatch: component=${componentid.name}, instance=${componentinstanceid.instance}, expected=${expected.canonicalKey}, actual=${componentinstanceid.canonicalKey}",
+          componentid,
+          componentinstanceid
+        )
+    } else {
+      val expected = ComponentInstanceId(componentid.name, componentinstanceid.instance)
+      val runtimeidentity = expected.canonicalKey == componentinstanceid.canonicalKey
+      val artifactalias = descriptor.name.exists { name =>
+        descriptor.componentName.exists { componentname =>
+          _legacy_component_presentations(componentid).exists(
+            NamingConventions.equivalentByNormalized(componentname, _)
+          ) && _legacy_component_presentations(componentinstanceid.componentId).exists(
+            NamingConventions.equivalentByNormalized(name, _)
+          )
+        }
       }
+      if (runtimeidentity || artifactalias)
+        Consequence.unit
+      else
+        ComponentParameterDiagnostics.contextRejected(
+          s"component parameter context identity mismatch: component=${componentid.name}, instance=${componentinstanceid.instance}, expected=${expected.canonicalKey}, actual=${componentinstanceid.canonicalKey}",
+          componentid,
+          componentinstanceid
+        )
     }
-    if (runtimeidentity || artifactalias)
-      Consequence.unit
-    else
-      ComponentParameterDiagnostics.contextRejected(
-        s"component parameter context identity mismatch: component=${componentid.name}, instance=${componentinstanceid.instance}, expected=${expected.canonicalKey}, actual=${componentinstanceid.canonicalKey}",
-        componentid,
-        componentinstanceid
-      )
-  }
 
   private def _select_descriptor(
     componentid: ComponentId,
@@ -110,10 +124,13 @@ private[cncf] object ComponentParameterContext {
     descriptor: ComponentDescriptor,
     assemblymetadata: Vector[ComponentInstanceMetadata]
   ): Consequence[ComponentInstanceMetadata] = {
-    val roots = _descriptor_root_names(descriptor)
     val candidates = assemblymetadata.filter { metadata =>
-      roots.exists(NamingConventions.equivalentByNormalized(_, metadata.componentName)) &&
-        metadata.instance == componentinstanceid.instance
+      if (descriptor.isCanonicalIdentity)
+        metadata.componentId.contains(componentid) && metadata.instance == componentinstanceid.instance
+      else
+        _descriptor_root_names(descriptor).exists(
+          NamingConventions.equivalentByNormalized(_, metadata.componentName)
+        ) && metadata.instance == componentinstanceid.instance
     }
     candidates match {
       case Vector(metadata) => Consequence.success(metadata)
@@ -136,8 +153,20 @@ private[cncf] object ComponentParameterContext {
     descriptor: ComponentDescriptor,
     componentid: ComponentId
   ): Boolean =
-    (_descriptor_runtime_names(descriptor) ++ descriptor.componentlets.map(_.name))
-      .exists(NamingConventions.equivalentByNormalized(_, componentid.name))
+    if (descriptor.isCanonicalIdentity)
+      descriptor.componentId.contains(componentid)
+    else
+      (_descriptor_runtime_names(descriptor) ++ descriptor.componentlets.map(_.name))
+        .exists { name =>
+          _legacy_component_presentations(componentid).exists(
+            NamingConventions.equivalentByNormalized(name, _)
+          )
+        }
+
+  private def _legacy_component_presentations(
+    componentid: ComponentId
+  ): Vector[String] =
+    Vector(componentid.name, componentid.localId.value()).distinct
 
   private def _descriptor_runtime_names(
     descriptor: ComponentDescriptor

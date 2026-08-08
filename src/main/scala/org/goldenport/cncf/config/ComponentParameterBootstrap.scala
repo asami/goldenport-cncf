@@ -13,7 +13,7 @@ import org.goldenport.cncf.observability.ComponentParameterBootstrapObservation
 
 /*
  * @since   Jul. 22, 2026
- * @version Aug.  5, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object ComponentParameterBootstrap {
@@ -84,7 +84,7 @@ private[cncf] object ComponentParameterBootstrap {
       case _ =>
         create.componentDescriptors.flatMap { descriptor =>
           _descriptor_root_name(descriptor).map { name =>
-            ComponentInstanceMetadata(name, instanceid.instance)
+            ComponentInstanceMetadata(name, instanceid.instance, componentId = descriptor.componentId)
           }
         }
     }
@@ -92,7 +92,7 @@ private[cncf] object ComponentParameterBootstrap {
   private def _descriptor_root_name(
     descriptor: ComponentDescriptor
   ): Option[String] =
-    descriptor.componentName.orElse(descriptor.name)
+    descriptor.componentId.map(_.name).orElse(descriptor.componentName).orElse(descriptor.name)
 
   private def _configuration(values: Map[String, String]): Configuration =
     Configuration(

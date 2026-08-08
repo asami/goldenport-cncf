@@ -19,10 +19,11 @@ import org.goldenport.schema.DataType
  * @since   Apr. 23, 2026
  *  version Apr. 24, 2026
  *  version May.  8, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthComponent() extends Component {
+  override def displayName: String = AuthComponent.name
 }
 
 object AuthComponent {
@@ -78,7 +79,7 @@ object AuthComponent {
   }
 
   val name: String = "auth"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.AUTH
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -93,19 +94,19 @@ object AuthComponent {
       val login = new AuthOperationDefinition("login", request, response, comp)
       val logout = new AuthOperationDefinition("logout", request, response, comp)
       val session = new AuthOperationDefinition("session", request, response, comp)
-      val authService = spec.ServiceDefinition(
+      val authservice = spec.ServiceDefinition(
         name = "auth",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(login, logout, session)
         )
       )
       val protocol = Protocol(
-        services = spec.ServiceDefinitionGroup(services = Vector(authService)),
+        services = spec.ServiceDefinitionGroup(services = Vector(authservice)),
         handler = ProtocolHandler.default
       )
       comp.withPort(Component.Port.of(new DefaultAuthService(comp)))
       val instanceid = ComponentInstanceId.default(componentId)
-      Component.Core.create(name, componentId, instanceid, protocol)
+      Component.Core.create(componentId.name, componentId, instanceid, protocol)
     }
   }
 

@@ -321,18 +321,88 @@ Phase-release-only/pending; this evidence does not close Phase 56.
 ## CID-05: CNCF Runtime Identity Migration
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE / STEP_COMMIT_PENDING
 - Entry rule: CID-04 is complete.
 - Completion rule: Runtime loading and all internal consumers use the exact
   qualified `ComponentId`.
 
-- [ ] Align CML declaration, generated Component core, descriptor admission,
+Slice ledger:
+
+| Slice | Scope | Status |
+| --- | --- | --- |
+| CID-05A | Runtime Core Identity Admission | ACCEPTED/REVIEWED (44742-20260807T131308Z; 1 suite, 12 executable leaves, 24 matrix ops, 1 intentional pending, exits 0, lock released) |
+| CID-05B | Descriptor/factory/loading/dependency/configuration identity | ACCEPTED/REVIEWED; final review-fix validation `81149-20260807T150153Z`: 106 passed, 1 intentional pending, 9 suite executions completed, exits 0, lock released. Independent focused re-review closed CID05B-R1 through R7 with PASS on reviewed tracked diff `4d0f835fab40b5b4e0dfb6c69370e4ca17659f848b32602f3c848abcb5e1b459`. |
+| CID-05C | ComponentSpace/routing/Help/Admin/diagnostics identity | ACCEPTED/REVIEWED; initial findings `CID05C-R1` through `CID05C-R9` and second-pass findings `RF-CID05C-010`/`RF-CID05C-011` are repaired. Authoritative invocation `11800-20260707T210921Z` passed 234 tests across 12 suites with one intentional pending leaf, exits 0, and lock released. Independent focused re-review returned PASS on reviewed tracked diff `b5c00333fa8d91d09a03473f8cbcff741dbb5f23877039db034cc4715ac6fd93`; validation repairs `VF-CID05C-012` through `VF-CID05C-015` are closed. |
+| CID-05D | Namespace-isolated runtime integration | ACCEPTED/REVIEWED. RF-CID05D-001..013 are closed, preserving exact schema/binding identity, namespace-isolated Web/manual roots, subsystem-owned CAR loader lifecycle, current header history, method-local helper naming, and repository-local temporary-directory lifecycle. Independent focused re-review returned PASS with no actionable finding on reviewed scoped diff `64fd912685db918b9c92e5b02e556b81b42b39cd83b2450aeb31ec86255b46ec`; `FULL_REVIEW_REQUIRED=no`. |
+
+- [x] Align CML declaration, generated Component core, descriptor admission,
   and runtime `ComponentId` without heuristic normalization.
-- [ ] Migrate instance IDs, dependency lookup, class loading, configuration
+- [x] Migrate instance IDs, dependency lookup, class loading, configuration
   targets, routing, Help/Admin metadata, logs, and diagnostics.
-- [ ] Remove internal artifact-name-as-Component-ID use.
-- [ ] Test two namespaces with one local ID through loading and routing.
-- [ ] Preserve presentation-only display names and titles.
+- [x] Remove internal artifact-name-as-Component-ID use.
+- [x] Test two namespaces with one local ID through loading and routing.
+- [x] Preserve presentation-only display names and titles.
+
+CID-05D implementation record (2026-08-08): exact qualified declarations are
+promoted only by `ComponentId.parseC` before admission discovery/closure/
+evaluation and canonical instance validation. Two release `0.6.0` CARs retain
+their own Core/default instance/artifact ID/repository origin while both display
+`Shared`; qualified Request routing returns distinct scalars, and bare `Shared`
+is non-selecting with ambiguity evidence naming both qualified candidates.
+The plain-`Action` implicit-job defect exposed by this path is handed to
+[Phase 57 - Action Execution Semantics](phase-57.md) and does not extend
+CID-05. CID-06, CID-01 E4, Phase full validation, and HYG-P56-005 remain
+incomplete or unchanged as applicable.
+
+Implementation-focused validation passed with invocation `33307-20260807T220812Z`:
+4 suites, 55 succeeded, 1 intentional pending leaf, exits 0, lock released.
+The exact parent-owned command was:
+
+```text
+testOnly org.goldenport.cncf.subsystem.Phase56NamespaceIsolatedRuntimeIntegrationSpec org.goldenport.cncf.component.Phase56ComponentIdentityContractSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityMigrationSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityProjectionSpec
+```
+
+Review-fix validation is complete for `RF-CID05D-001` through
+`RF-CID05D-010`. Validation repairs `VF-CID05D-001` (replaced the illegal
+anonymous sealed `Specification` with existing concrete development-repository
+specifications) and `VF-CID05D-002` (corrected lifecycle observation to the
+Subsystem-owned loader snapshot without changing lifecycle semantics) are
+complete. Authoritative final focused validation is invocation
+`59976-20260807T231428Z`, with exact logical argv:
+
+```text
+["--batch", "testOnly org.goldenport.cncf.component.Phase56ComponentIdentityContractSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityMigrationSpec org.goldenport.cncf.subsystem.Phase56RuntimeIdentityProjectionSpec org.goldenport.cncf.subsystem.Phase56NamespaceIsolatedRuntimeIntegrationSpec org.goldenport.cncf.component.ComponentDescriptorSpec org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec org.goldenport.cncf.http.RuntimeComponentDevelopmentWebProjectionSpec org.goldenport.cncf.subsystem.resolver.OperationResolverSpec org.goldenport.cncf.projection.GeneratedHelpProjectionSpec org.goldenport.cncf.subsystem.GenericSubsystemDescriptorSpec org.goldenport.cncf.subsystem.GenericSubsystemFactorySpec"]
+```
+
+Eleven suites completed, zero aborted; 243 tests succeeded, zero
+failed/canceled/ignored, and one intentional pending remained;
+`sbt_exit=0`, `wrapper_exit=0`, and `lock=released`. Smallest lifecycle
+correction evidence is invocation `59556-20260807T231330Z`: 1/1 passed,
+exits 0, and lock released. RF-CID05D-011..013 were applied in this pass:
+ComponentDependency retains the Jul. 30 history while carrying the current
+Aug. 8 header, ComponentDescriptor uses the required method-local helper
+form, and RuntimeComponentDevelopmentWebProjectionSpec scopes all temporary
+directories under its deterministic target work root with finally-based
+cleanup. The authoritative focused validation for these repairs is invocation
+`75311-20260808T000025Z`, using the exact logical argv:
+
+```text
+["--batch", "testOnly org.goldenport.cncf.http.RuntimeComponentDevelopmentWebProjectionSpec"]
+```
+
+The final wrapper was
+`/Users/asami/.codex/skills/cncf-sbt-serial-execution/scripts/run-sbt-serial.sh --batch 'testOnly org.goldenport.cncf.http.RuntimeComponentDevelopmentWebProjectionSpec'`;
+one suite completed with 10 tests succeeded and zero failed, canceled,
+ignored, or pending; `sbt_exit=0`, `wrapper_exit=0`, and `lock=released`.
+The parent also verified that
+`target/cncf-test/work/runtime-component-development-web-projection-spec`
+is absent after the suite and that the owned diff-check is clean. Independent
+focused re-review closed `RF-CID05D-011` through `RF-CID05D-013` with PASS,
+no new finding, and no full-review escalation on reviewed scoped diff
+`64fd912685db918b9c92e5b02e556b81b42b39cd83b2450aeb31ec86255b46ec`.
+CID-05D is accepted/reviewed and the CID-05 completion boxes are closed; the
+Step commit and Phase full validation remain pending, and HYG-P56-005 remains
+separate.
 
 ## CID-06: Compatibility Adapters
 
@@ -406,5 +476,8 @@ Stage Status:
   owners before closing Phase 56.
 - [ ] Record a lint-clean result for every frozen SNAPSHOT CAR and a complete
   next-version deferral report for every non-SNAPSHOT legacy CAR.
-- [ ] Update Phase 57 entry contracts to consume the qualified Component
+- [ ] Update Phase 57 entry contracts to consume the qualified Component,
+  Service, Operation, and runtime routing identities without reopening Phase
+  56 naming decisions.
+- [ ] Update Phase 58 entry contracts to consume the qualified Component
   identity without reopening Phase 56 naming decisions.

@@ -6,7 +6,7 @@ import org.goldenport.record.io.RecordEncoder
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Jul. 23, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object CliHelpJsonRenderer {
@@ -17,23 +17,24 @@ object CliHelpJsonRenderer {
       s""""${_escape(k)}":[${xs}]"""
     }.mkString(",")
     val usage = model.usage.map(v => s""""${_escape(v)}"""").mkString(",")
-    val domainVisions = model.domainVisions.map(_vision_json).mkString(",")
-    val domainContexts = model.domainContexts.map(_context_json).mkString(",")
-    val domainSystemContexts = model.domainSystemContexts.map(_system_context_json).mkString(",")
-    val domainContextMaps = model.domainContextMaps.map(_context_map_json).mkString(",")
-    val domainCapabilities = model.domainCapabilities.map(_capability_json).mkString(",")
-    val domainQualities = model.domainQualities.map(_quality_json).mkString(",")
-    val domainConstraints = model.domainConstraints.map(_constraint_json).mkString(",")
-    val useCases = model.useCases.map(_use_case_json).mkString(",")
-    val domainUseCases = model.domainUseCases.map(_use_case_json).mkString(",")
+    val domainvisions = model.domainVisions.map(_vision_json).mkString(",")
+    val domaincontexts = model.domainContexts.map(_context_json).mkString(",")
+    val domainsystemcontexts = model.domainSystemContexts.map(_system_context_json).mkString(",")
+    val domaincontextmaps = model.domainContextMaps.map(_context_map_json).mkString(",")
+    val domaincapabilities = model.domainCapabilities.map(_capability_json).mkString(",")
+    val domainqualities = model.domainQualities.map(_quality_json).mkString(",")
+    val domainconstraints = model.domainConstraints.map(_constraint_json).mkString(",")
+    val usecases = model.useCases.map(_use_case_json).mkString(",")
+    val domainusecases = model.domainUseCases.map(_use_case_json).mkString(",")
     val component = model.component.map(v => s""""${_escape(v)}"""").getOrElse("null")
     val service = model.service.map(v => s""""${_escape(v)}"""").getOrElse("null")
+    val componentid = model.componentId.map(v => "\"" + _escape(v) + "\"").getOrElse("null")
     val selector = model.selector.map { selector =>
       val accepted = selector.accepted.map(v => s""""${_escape(v)}"""").mkString(",")
       s"""{"canonical":"${_escape(selector.canonical)}","cli":"${_escape(selector.cli)}","rest":"${_escape(selector.rest)}","accepted":[${accepted}]}"""
     }.getOrElse("null")
     val evaluation = model.evaluation.map(RecordEncoder.json).getOrElse("null")
-    s"""{"type":"${_escape(model.`type`)}","name":"${_escape(model.name)}","summary":"${_escape(model.summary)}","component":${component},"service":${service},"selector":${selector},"children":[${children}],"details":{${details}},"evaluation":${evaluation},"usage":[${usage}],"domainVisions":[${domainVisions}],"domainContexts":[${domainContexts}],"domainSystemContexts":[${domainSystemContexts}],"domainContextMaps":[${domainContextMaps}],"domainCapabilities":[${domainCapabilities}],"domainQualities":[${domainQualities}],"domainConstraints":[${domainConstraints}],"useCases":[${useCases}],"domainUseCases":[${domainUseCases}]}"""
+    s"""{"type":"${_escape(model.`type`)}","name":"${_escape(model.name)}","summary":"${_escape(model.summary)}","componentId":${componentid},"component":${component},"service":${service},"selector":${selector},"children":[${children}],"details":{${details}},"evaluation":${evaluation},"usage":[${usage}],"domainVisions":[${domainvisions}],"domainContexts":[${domaincontexts}],"domainSystemContexts":[${domainsystemcontexts}],"domainContextMaps":[${domaincontextmaps}],"domainCapabilities":[${domaincapabilities}],"domainQualities":[${domainqualities}],"domainConstraints":[${domainconstraints}],"useCases":[${usecases}],"domainUseCases":[${domainusecases}]}"""
   }
 
   private def _vision_json(p: HelpVisionModel): String =

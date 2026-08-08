@@ -1,7 +1,7 @@
 package org.goldenport.cncf.subsystem
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{ComponentDescriptor, SubsystemCapabilityId}
+import org.goldenport.cncf.component.{ComponentDescriptor, ComponentId, SubsystemCapabilityId}
 import org.goldenport.cncf.component.repository.ComponentRepository
 
 /*
@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.repository.ComponentRepository
  * is not a source of subsystem capability authority.
  *
  * @since   Jul. 31, 2026
- * @version Jul. 31, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object SubsystemAssemblyAdmission {
@@ -37,19 +37,20 @@ object SubsystemAssemblyAdmission {
   def resolveC(
     descriptor: GenericSubsystemDescriptor,
     repositories: Vector[ComponentRepository.Specification]
-  ): Consequence[GenericSubsystemDescriptor] = {
-    val discovered = _discover_static_descriptors(descriptor, repositories)
-    val discovereddescriptor =
-      if (discovered.isEmpty) descriptor
-      else descriptor.copy(componentDescriptorOverrides = discovered)
-    if (_requires_descriptor_closure(discovereddescriptor))
-      _resolve_descriptors_c(discovereddescriptor, repositories).flatMap { descriptors =>
-        val resolved = descriptor.copy(componentDescriptorOverrides = descriptors)
-        verifyC(resolved).map(_ => resolved)
-      }
-    else
-      verifyC(discovereddescriptor).map(_ => discovereddescriptor)
-  }
+  ): Consequence[GenericSubsystemDescriptor] =
+    _promote_qualified_component_ids_c(descriptor).flatMap { admitted =>
+      val discovered = _discover_static_descriptors(admitted, repositories)
+      val discovereddescriptor =
+        if (discovered.isEmpty) admitted
+        else admitted.copy(componentDescriptorOverrides = discovered)
+      if (_requires_descriptor_closure(discovereddescriptor))
+        _resolve_descriptors_c(discovereddescriptor, repositories).flatMap { descriptors =>
+          val resolved = admitted.copy(componentDescriptorOverrides = descriptors)
+          verifyC(resolved).map(_ => resolved)
+        }
+      else
+        verifyC(discovereddescriptor).map(_ => discovereddescriptor)
+    }
 
   def verifyC(descriptor: GenericSubsystemDescriptor): Consequence[Unit] = {
     evaluateC(descriptor).map(_ => ())
@@ -76,6 +77,24 @@ object SubsystemAssemblyAdmission {
     descriptor.subsystemCapabilityProviders.nonEmpty ||
       descriptor.componentDescriptorOverrides.exists(_.componentStyleSnapshot.nonEmpty)
 
+  private def _promote_qualified_component_ids_c(
+    descriptor: GenericSubsystemDescriptor
+  ): Consequence[GenericSubsystemDescriptor] = {
+    val bindings = descriptor.componentBindings.map { binding =>
+      binding.componentId match {
+        case Some(_) => Consequence.success(binding)
+        case None =>
+          ComponentId.parseC(binding.componentName)
+            .map(id => binding.copy(componentId = Some(id)))
+            .recover { _ => binding }
+      }
+    }
+    _sequence(bindings).flatMap { promoted =>
+      GenericSubsystemDescriptor._validate_component_bindings_c(promoted)
+        .map(validated => descriptor.copy(componentBindings = validated))
+    }
+  }
+
   private def _resolve_descriptors_c(
     descriptor: GenericSubsystemDescriptor,
     repositories: Vector[ComponentRepository.Specification]
@@ -96,7 +115,7 @@ object SubsystemAssemblyAdmission {
         case Vector(value) => Some(value)
         case Vector() =>
           repositories.iterator
-            .map(_.resolveStaticComponentDescriptor(binding.componentName))
+            .map(_.resolveStaticComponentDescriptor(binding.componentId.map(_.name).getOrElse(binding.componentName)))
             .collectFirst { case Some(value) => value }
         case _ => None
       }
@@ -112,7 +131,7 @@ object SubsystemAssemblyAdmission {
       case Vector(value) => Consequence.success(value)
       case Vector() =>
         repositories.iterator
-          .map(_.resolveStaticComponentDescriptor(binding.componentName))
+          .map(_.resolveStaticComponentDescriptor(binding.componentId.map(_.name).getOrElse(binding.componentName)))
           .collectFirst { case Some(value) => value }
           .map(Consequence.success)
           .getOrElse(
@@ -131,9 +150,12 @@ object SubsystemAssemblyAdmission {
     descriptor: ComponentDescriptor,
     binding: GenericSubsystemComponentBinding
   ): Boolean =
-    GenericSubsystemDescriptor.runtimeComponentName(
-      descriptor.componentName.orElse(descriptor.name).getOrElse("")
-    ) == binding.runtimeComponentName
+    binding.componentId match {
+      case Some(id) => descriptor.componentId.contains(id)
+      case None => GenericSubsystemDescriptor.runtimeComponentName(
+        descriptor.componentName.orElse(descriptor.name).getOrElse("")
+      ) == binding.runtimeComponentName
+    }
 
   private def _resolve_requirements_c(
     descriptor: GenericSubsystemDescriptor
@@ -177,4 +199,11 @@ object SubsystemAssemblyAdmission {
         )
     }
   }
+
+  private def _sequence[A](
+    values: Vector[Consequence[A]]
+  ): Consequence[Vector[A]] =
+    values.foldLeft(Consequence.success(Vector.empty[A])) { (z, value) =>
+      z.flatMap(xs => value.map(xs :+ _))
+    }
 }

@@ -28,17 +28,18 @@ import org.simplemodeling.model.datatype.EntityId
  * Built-in Tag management and Entity-to-Tag workflow component.
  *
  * @since   May.  5, 2026
- * @version Jul. 30, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagComponent() extends Component {
+  override def displayName: String = TagComponent.name
   override def componentDescriptors: Vector[org.goldenport.cncf.component.ComponentDescriptor] =
     super.componentDescriptors ++ TagComponent.componentDescriptors
 }
 
 object TagComponent {
   val name: String = "tag"
-  val componentId: ComponentId = ComponentId(name)
+  val componentId: ComponentId = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TAG
 
   def componentDescriptors: Vector[org.goldenport.cncf.component.ComponentDescriptor] =
     Vector(org.goldenport.cncf.component.ComponentDescriptor(
@@ -91,7 +92,7 @@ object TagComponent {
         handler = ProtocolHandler.default
       )
       Component.Core.create(
-        name,
+        componentId.name,
         componentId,
         ComponentInstanceId.default(componentId),
         protocol
@@ -105,7 +106,7 @@ object TagComponent {
   }
 
   private final class SimpleOperationDefinition(
-    operationName: String,
+    operationname: String,
     summary: String,
     description: String,
     request: spec.RequestDefinition,
@@ -114,7 +115,7 @@ object TagComponent {
   ) extends spec.OperationDefinition with TagOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
-        content = BaseContent.Builder(operationName).summary(summary).description(description).build(),
+        content = BaseContent.Builder(operationname).summary(summary).description(description).build(),
         request = request,
         response = response
       )

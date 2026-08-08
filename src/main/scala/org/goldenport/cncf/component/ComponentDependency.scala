@@ -12,7 +12,8 @@ import org.goldenport.cncf.config.RuntimeConfig
 
 /*
  * @since   May. 16, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentDependencyManifest(
@@ -403,6 +404,15 @@ final class ComponentLocalFirstClassLoader(
   urls: Array[java.net.URL],
   parent: ClassLoader
 ) extends URLClassLoader(urls, parent) {
+  private var _close_invocation_count: Int = 0
+
+  private[cncf] def closeInvocationCount: Int = synchronized(_close_invocation_count)
+
+  override def close(): Unit = synchronized {
+    _close_invocation_count += 1
+    super.close()
+  }
+
   override def loadClass(name: String, resolve: Boolean): Class[?] = synchronized {
     if (ComponentLocalFirstClassLoader.isParentFirst(name) || _is_assembly_api_class(name)) {
       super.loadClass(name, resolve)

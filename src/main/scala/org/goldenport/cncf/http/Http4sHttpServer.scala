@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Aug.  6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -43,6 +43,7 @@ import org.goldenport.record.io.RecordExportEncoder
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
+import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.subsystem.SubsystemCurrentUserEvidence
@@ -70,7 +71,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug.  6, 2026
+ * @version Aug.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -4135,19 +4136,17 @@ final class Http4sHttpServer(
 
   private[http] def _component_web_roots(): Vector[WebResourceRoot] =
     engine.runtimeSubsystem.components
-      .groupBy(component => NamingConventions.toNormalizedSegment(component.name))
+      .groupBy(_.componentId)
       .values
       .toVector
-      .sortBy(_.headOption.map(_.name).getOrElse(""))
+      .sortBy(_.headOption.map(_.componentId.name).getOrElse(""))
       .flatMap(_highest_priority_components)
       .flatMap(_component_web_roots)
 
   private[http] def _component_web_roots(
     componentname: String
   ): Vector[WebResourceRoot] = {
-    val normalized = NamingConventions.toNormalizedSegment(componentname)
-    val candidates = engine.runtimeSubsystem.components
-      .filter(component => _component_matches(component, normalized))
+    val candidates = _select_components(componentname)
     val active = _highest_priority_components(candidates)
     active
       .flatMap(_component_web_roots)
@@ -4194,18 +4193,22 @@ final class Http4sHttpServer(
           ).filter(Files.isDirectory(_)).map(WebResourceRoot.directory)
       }).distinct
 
-  private def _component_matches(
-    component: org.goldenport.cncf.component.Component,
-    normalizedname: String
-  ): Boolean = {
-    def _normalize_(value: String): String =
-      NamingConventions.toNormalizedSegment(value)
-    _normalize_(component.name) == normalizedname ||
-      component.artifactMetadata.toVector.exists { metadata =>
-        _normalize_(metadata.name) == normalizedname ||
-          metadata.component.exists(value => _normalize_(value) == normalizedname)
-      }
-  }
+  private def _select_components(
+    selector: String
+  ): Vector[org.goldenport.cncf.component.Component] =
+    ComponentId.parseC(selector) match {
+      case org.goldenport.Consequence.Success(id) => engine.runtimeSubsystem.components.filter(_.componentId == id)
+      case org.goldenport.Consequence.Failure(_) =>
+        val normalized = NamingConventions.toNormalizedSegment(selector)
+        val candidates = engine.runtimeSubsystem.components.filter { component =>
+          val aliases = Vector(component.displayName) ++ component.artifactMetadata.toVector.flatMap { metadata =>
+            Vector(Some(metadata.name), metadata.component).flatten
+          }
+          aliases.exists(value => NamingConventions.toNormalizedSegment(value) == normalized)
+        }
+        val ids = candidates.map(_.componentId).distinct
+        if (ids.size == 1) candidates.filter(_.componentId == ids.head) else Vector.empty
+    }
 
   private def _configured_component_dev_dir_web_roots(
     component: org.goldenport.cncf.component.Component
@@ -4239,11 +4242,7 @@ final class Http4sHttpServer(
     component: org.goldenport.cncf.component.Component,
     path: Path
   ): Boolean = {
-    val dirname = NamingConventions.toNormalizedSegment(path.getFileName.toString)
-    val names =
-      Vector(component.name) ++
-        component.artifactMetadata.toVector.flatMap(metadata => Vector(Some(metadata.name), metadata.component).flatten)
-    names.exists(name => NamingConventions.toNormalizedSegment(name) == dirname)
+    _select_components(path.getFileName.toString).exists(_.componentId == component.componentId)
   }
 
   private[http] def _web_app_asset_content(
@@ -4340,9 +4339,7 @@ final class Http4sHttpServer(
   private[http] def _component_manual_roots(
     componentname: String
   ): Vector[WebResourceRoot] = {
-    val normalized = NamingConventions.toNormalizedSegment(componentname)
-    val candidates = engine.runtimeSubsystem.components.
-      filter(component => _component_matches(component, normalized))
+    val candidates = _select_components(componentname)
     _highest_priority_components(candidates).flatMap(_component_manual_roots)
   }
 
@@ -5787,7 +5784,7 @@ final class Http4sHttpServer(
 
   private def _auth_service: Option[AuthComponent.AuthService] =
     engine.runtimeSubsystem
-      .findComponent(AuthComponent.name)
+      .findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.AUTH)
       .flatMap(_.port.get[AuthComponent.AuthService])
 
   private def _request_attributes(
