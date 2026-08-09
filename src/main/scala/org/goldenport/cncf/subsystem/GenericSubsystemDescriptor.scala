@@ -20,7 +20,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -369,7 +369,7 @@ object GenericSubsystemDescriptor {
     source: GenericSubsystemAssemblyDescriptorSource
   ): Consequence[GenericSubsystemDescriptor] = {
     val rec = source.record
-    _override_bindings_from_record_c(source.path.getOrElse(descriptor.path), rec).flatMap { bindings =>
+    _override_bindings_from_record_c(rec).flatMap { bindings =>
       for {
         runtime <- _optional_runtime_c(rec)
         security <- _security_value(rec)
@@ -397,11 +397,10 @@ object GenericSubsystemDescriptor {
   }
 
   private def _override_bindings_from_record_c(
-    path: Path,
     rec: Record
   ): Consequence[Vector[GenericSubsystemComponentBinding]] =
     if (rec.getAny("components").nonEmpty || rec.getAny("component").nonEmpty)
-      _bindings_from_record_c(path, rec)
+      _bindings_from_record_c(rec)
     else
       Consequence.success(Vector.empty)
 
@@ -985,8 +984,8 @@ object GenericSubsystemDescriptor {
       case _ => None
     }
 
-  def runtimeComponentName(componentname: String): String =
-    componentname.trim
+  def runtimeComponentName(componentName: String): String =
+    componentName.trim
 
   private def _resolve_descriptor_file(path: Path): Option[Path] =
     _resolve_descriptor_file_in(path)
@@ -1156,14 +1155,13 @@ object GenericSubsystemDescriptor {
   }
 
   private def _bindings_from_record_c(
-    path: Path,
     rec: Record
   ): Consequence[Vector[GenericSubsystemComponentBinding]] =
     rec.getAny("components") match {
       case Some(xs: Seq[?]) =>
-        _component_bindings_from_values(path, xs.toVector)
+        _component_bindings_from_values(xs.toVector)
       case Some(xs: java.util.List[?]) =>
-        _component_bindings_from_values(path, xs.asScala.toVector)
+        _component_bindings_from_values(xs.asScala.toVector)
       case Some(_) =>
         Consequence.resourceInvalid("components must be a list of component declarations")
       case _ =>
@@ -1171,22 +1169,21 @@ object GenericSubsystemDescriptor {
           case Some(r) if _string(rec, "component").isEmpty =>
             _sequence(r.asMap.toVector.map { case (k, v) =>
               _any_to_record(v) match {
-                case Some(bindingrecord) => _binding_from_record_c(path, bindingrecord, Some(k))
+                case Some(bindingrecord) => _binding_from_record_c(bindingrecord, Some(k))
                 case None => Consequence.resourceInvalid(s"component.${k} must be a component declaration")
               }
             }).flatMap(_validate_component_bindings_c)
           case _ =>
-            _binding_from_record_c(path, rec, None).map(Vector(_)).flatMap(_validate_component_bindings_c)
+            _binding_from_record_c(rec, None).map(Vector(_)).flatMap(_validate_component_bindings_c)
         }
     }
 
   private def _component_bindings_from_values(
-    path: Path,
     values: Vector[Any]
   ): Consequence[Vector[GenericSubsystemComponentBinding]] =
     _sequence(values.zipWithIndex.map { case (value, index) =>
       _any_to_record(value) match {
-        case Some(bindingrecord) => _binding_from_record_c(path, bindingrecord, None)
+        case Some(bindingrecord) => _binding_from_record_c(bindingrecord, None)
         case None => Consequence.resourceInvalid(s"components[${index}] must be a component declaration")
       }
     }).flatMap(_validate_component_bindings_c)
@@ -1225,13 +1222,12 @@ object GenericSubsystemDescriptor {
     )
 
   private def _binding_from_record_c(
-    path: Path,
     rec: Record,
     defaultname: Option[String]
   ): Consequence[GenericSubsystemComponentBinding] = {
     val componentnamec = _component_binding_identity_c(rec, defaultname)
     componentnamec.flatMap { componentname => componentname match {
-      case Some(name) =>
+      case Some((name, componentid)) =>
       val version = _string(rec, "version")
       val coordinate = _string(rec, "coordinate")
       val instance = _string(rec, "instance")
@@ -1268,7 +1264,8 @@ object GenericSubsystemDescriptor {
             tags = _string_vector(rec, List("tags", "tag")),
             priority = _int(rec, "priority"),
             isDefault = _boolean(rec, "default", "isDefault"),
-            capabilities = _string_vector(rec, List("capabilities", "capability"))
+            capabilities = _string_vector(rec, List("capabilities", "capability")),
+            componentId = componentid
           ))
         }
       }
@@ -1279,20 +1276,70 @@ object GenericSubsystemDescriptor {
   private def _component_binding_identity_c(
     rec: Record,
     defaultname: Option[String]
-  ): Consequence[Option[String]] =
-    Vector("component", "componentName", "name").iterator
-      .map(key => key -> rec.getAny(key))
-      .collectFirst { case (key, Some(value)) => key -> value } match {
-      case Some((_, value: String)) if value.nonEmpty && value == value.trim =>
-        Consequence.success(Some(value))
-      case Some((_, value: String)) if value.nonEmpty =>
-        Consequence.resourceInvalid("component binding identity must not include surrounding whitespace")
-      case Some(_) => Consequence.success(None)
-      case None => defaultname match {
-        case Some(value) if value.nonEmpty && value != value.trim =>
-          Consequence.resourceInvalid("component binding identity must not include surrounding whitespace")
-        case value => Consequence.success(value)
+  ): Consequence[Option[(String, Option[ComponentId])]] = {
+    val canonicalpresent = rec.getAny("namespace").nonEmpty || rec.getAny("id").nonEmpty
+    val canonicalc: Consequence[Option[(String, Option[ComponentId])]] =
+      if (canonicalpresent)
+        for {
+          namespace <- _required_component_binding_identity_field_c(rec, "namespace")
+          id <- _required_component_binding_identity_field_c(rec, "id")
+          componentid <- ComponentId.parseC(s"${namespace}.${id}")
+        } yield Some(s"${namespace}.${id}" -> Some(componentid))
+      else
+        Consequence.success(None)
+    val legacyc = _sequence(Vector("component", "componentName", "name").map { key =>
+      _component_binding_identity_field_c(rec, key).map(_.map(key -> _))
+    }).flatMap { values =>
+      val supplied = values.flatten
+      if (supplied.map(_._2).distinct.size > 1)
+        Consequence.resourceInvalid("component binding legacy identity fields must agree")
+      else
+        Consequence.success(supplied.headOption.map(_._2))
+    }
+    for {
+      canonical <- canonicalc
+      legacy <- legacyc
+      default <- _default_component_binding_identity_c(defaultname)
+      identity <- canonical match {
+        case Some((canonicalname, _)) =>
+          legacy match {
+            case Some(legacyname) if legacyname != canonicalname =>
+              Consequence.resourceInvalid(s"canonical and legacy component binding identities must agree: canonical=$canonicalname legacy=$legacyname")
+            case _ => Consequence.success(canonical)
+          }
+        case None =>
+          Consequence.success(legacy.orElse(default).map(_ -> None))
       }
+    } yield identity
+  }
+
+  private def _component_binding_identity_field_c(
+    rec: Record,
+    key: String
+  ): Consequence[Option[String]] =
+    rec.getAny(key) match {
+      case None => Consequence.success(None)
+      case Some(value: String) if value.nonEmpty && value == value.trim => Consequence.success(Some(value))
+      case Some(_: String) => Consequence.resourceInvalid(s"component binding ${key} must be a nonempty string without surrounding whitespace")
+      case Some(_) => Consequence.resourceInvalid(s"component binding ${key} must be a string")
+    }
+
+  private def _required_component_binding_identity_field_c(
+    rec: Record,
+    key: String
+  ): Consequence[String] =
+    _component_binding_identity_field_c(rec, key).flatMap {
+      case Some(value) => Consequence.success(value)
+      case None => Consequence.argumentMissing(s"component binding ${key}")
+    }
+
+  private def _default_component_binding_identity_c(
+    defaultname: Option[String]
+  ): Consequence[Option[String]] =
+    defaultname match {
+      case Some(value) if value.nonEmpty && value != value.trim =>
+        Consequence.resourceInvalid("component binding identity must not include surrounding whitespace")
+      case value => Consequence.success(value)
     }
 
   private def _valid_instance_name(value: String): Boolean =
@@ -1921,39 +1968,8 @@ object GenericSubsystemDescriptor {
   }
 
   given RecordDecoder[GenericSubsystemComponentBinding] with
-    def fromRecord(rec: Record): Consequence[GenericSubsystemComponentBinding] = {
-      val componentname = _string(rec, "component", "componentName", "name")
-      componentname match {
-        case Some(name) =>
-          val version = _string(rec, "version")
-          val coordinate = _string(rec, "coordinate")
-          coordinate.foreach { c =>
-            val artifact = coordinateArtifact(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
-            val cversion = coordinateVersion(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
-            require(artifact == name, s"component coordinate artifact must match component name: component=$name coordinate=$c")
-            version.foreach(v => require(v == cversion, s"component version must match coordinate version: component=$name version=$v coordinate=$c"))
-          }
-          Consequence.success(
-            GenericSubsystemComponentBinding(
-              componentName = name,
-              version = version,
-              coordinate = coordinate,
-              extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty),
-              api = _ports_from_record(rec, "api"),
-              spi = _ports_from_record(rec, "spi"),
-              instance = _string(rec, "instance"),
-              config = _string_map_value(rec, List("config")),
-              rules = _record_value(rec, List("rules")).getOrElse(Record.empty),
-              purposes = _string_vector(rec, List("purposes", "purpose")),
-              tags = _string_vector(rec, List("tags", "tag")),
-              priority = _int(rec, "priority"),
-              isDefault = _boolean(rec, "default", "isDefault")
-            )
-          )
-        case None =>
-          Consequence.argumentMissing("component/componentName/name")
-      }
-    }
+    def fromRecord(rec: Record): Consequence[GenericSubsystemComponentBinding] =
+      _binding_from_record_c(rec, None)
 
   given RecordDecoder[GenericSubsystemAuthenticationProviderBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemAuthenticationProviderBinding] = {
@@ -2288,7 +2304,7 @@ object GenericSubsystemDescriptor {
       val subsystemname = _string(rec, "subsystem", "subsystemName", "name")
       subsystemname match {
         case Some(name) =>
-          _bindings_from_record_c(Path.of("<record>"), rec).flatMap { bindings =>
+          _bindings_from_record_c(rec).flatMap { bindings =>
             if (bindings.isEmpty)
               Consequence.argumentMissing("component bindings")
             else for {

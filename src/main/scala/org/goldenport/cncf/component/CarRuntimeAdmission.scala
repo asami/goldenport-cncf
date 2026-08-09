@@ -9,6 +9,7 @@ import io.circe.parser.parse
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 
 /*
  * CNCF-owned admission of packaged CAR runtime evidence.
@@ -18,14 +19,14 @@ import org.goldenport.cncf.CncfVersion
  * opaque bytes; ABI and CNCF runtime compatibility are validated separately.
  *
  * @since   Jul. 28, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] object CarRuntimeAdmission {
   val MANIFEST_FILE = "car-runtime-manifest.json"
   val MANIFEST_SCHEMA = "cncf.car-runtime-manifest.v1"
   val ABI_MANIFEST_FILE = "abi-manifest.json"
-  val ABI_MANIFEST_FORMAT = "cozy.car.abi-manifest.v1"
+  val ABI_MANIFEST_FORMAT = "cozy.car.abi-manifest.v2"
 
   private final case class RuntimeRange(
     minimum: String,
@@ -37,6 +38,12 @@ private[component] object CarRuntimeAdmission {
   private final case class IntegrityEntry(
     path: String,
     sha256: String
+  )
+
+  private final case class CanonicalCoordinate(
+    artifactname: String,
+    release: String,
+    componentid: ComponentId
   )
 
   def validate(extracted: CarExtracted): Consequence[Unit] =
@@ -52,7 +59,15 @@ private[component] object CarRuntimeAdmission {
         extracted.root.resolve(ABI_MANIFEST_FILE),
         "CAR ABI manifest"
       )
-      _ <- _validate_abi(abi.hcursor, extracted.archiveDescriptor)
+      _ <- extracted.deferredRelease match {
+        case Some(entry) =>
+          _validate_deferred_abi(abi.hcursor, entry, extracted)
+        case None =>
+          for {
+            coordinate <- _canonical_coordinate(extracted)
+            _ <- _validate_abi(abi.hcursor, coordinate)
+          } yield ()
+      }
     } yield ()
 
   private def _validate_runtime_manifest(
@@ -72,7 +87,8 @@ private[component] object CarRuntimeAdmission {
             "CAR runtime manifest schemaVersion"
           )
         }
-      _ <- _validate_coordinate(manifest.hcursor, extracted.archiveDescriptor)
+      coordinate <- _canonical_coordinate(extracted)
+      _ <- _validate_coordinate(manifest.hcursor, coordinate)
       range <- _runtime_range(manifest.hcursor)
       _ <- _validate_runtime_range(range, CncfVersion.current)
       entries <- _integrity_entries(manifest.hcursor)
@@ -97,15 +113,9 @@ private[component] object CarRuntimeAdmission {
 
   private def _validate_coordinate(
     cursor: HCursor,
-    descriptor: ComponentDescriptor
+    coordinate: CanonicalCoordinate
   ): Either[String, Unit] =
     for {
-      name <- _required_descriptor_value(descriptor.name, "name")
-      version <- _required_descriptor_value(descriptor.version, "version")
-      component <- _required_descriptor_value(
-        descriptor.componentName,
-        "component"
-      )
       manifestname <- _require_string(
         cursor.downField("car"),
         "name",
@@ -121,17 +131,127 @@ private[component] object CarRuntimeAdmission {
         "component",
         "CAR runtime manifest car"
       )
-      _ <- _require_equal(manifestname, name, "CAR runtime manifest car.name")
+      _ <- _require_equal(
+        manifestname,
+        coordinate.artifactname,
+        "CAR runtime manifest car.name"
+      )
       _ <- _require_equal(
         manifestversion,
-        version,
+        coordinate.release,
         "CAR runtime manifest car.version"
       )
       _ <- _require_equal(
         manifestcomponent,
-        component,
+        coordinate.componentid.name,
         "CAR runtime manifest car.component"
       )
+    } yield ()
+
+  private def _canonical_coordinate(
+    extracted: CarExtracted
+  ): Either[String, CanonicalCoordinate] =
+    extracted.requireEffectiveIdentityC match {
+      case Consequence.Success((componentid, release)) =>
+        extracted.deferredRelease match {
+          case Some(entry)
+              if entry.componentid != componentid || entry.release != release =>
+            Left(
+              s"CAR deferred-release effective identity mismatch: expected=${entry.componentid.name}@${entry.release}, actual=${componentid.name}@${release}"
+            )
+          case _ =>
+            val result = ComponentReleaseCoordinate.create(componentid.sharedIdentity, release)
+            if (result.isSuccess()) {
+              Right(
+                CanonicalCoordinate(
+                  result.value().get().mavenArtifactId(),
+                  release,
+                  componentid
+                )
+              )
+            } else {
+              val error = result.error().get()
+              Left(s"CAR component descriptor canonical identity is invalid: ${error.code()}: ${error.message()}")
+            }
+        }
+      case Consequence.Failure(conclusion) =>
+        Left(s"CAR component descriptor canonical identity is invalid: ${conclusion.display}")
+    }
+
+  private def _validate_deferred_abi(
+    cursor: HCursor,
+    entry: ComponentIdentityDeferredReleaseEntry,
+    extracted: CarExtracted
+  ): Either[String, Unit] =
+    for {
+      _ <- _canonical_coordinate(extracted)
+      format <- _require_string(cursor, "format", "CAR ABI manifest")
+      _ <- _require_equal(
+        format,
+        "cozy.car.abi-manifest.v1",
+        "CAR ABI manifest format"
+      )
+      carname <- _require_string(
+        cursor.downField("car"),
+        "name",
+        "CAR ABI manifest car"
+      )
+      _ <- _require_equal(
+        carname,
+        entry.legacyartifact,
+        "CAR ABI manifest car.name"
+      )
+      carversion <- _require_string(
+        cursor.downField("car"),
+        "version",
+        "CAR ABI manifest car"
+      )
+      _ <- _require_equal(
+        carversion,
+        entry.release,
+        "CAR ABI manifest car.version"
+      )
+      abiversion <- cursor.downField("abi").downField("version").focus match {
+        case None => Right(None)
+        case Some(value) =>
+          value.as[Int]
+            .left
+            .map { error =>
+              s"CAR ABI manifest abi.version is invalid: ${error.message}"
+            }
+            .map(Some(_))
+      }
+      _ <- abiversion match {
+        case Some(1) => Right(())
+        case Some(value) => Left(s"Unsupported CAR ABI version: ${value}")
+        case None => Right(())
+      }
+      components <- cursor
+        .downField("abi")
+        .downField("exports")
+        .downField("components")
+        .as[Vector[Json]]
+        .left
+        .map { error =>
+          s"CAR ABI exports.components is invalid: ${error.message}"
+        }
+      componentnames <- components.zipWithIndex.foldLeft(
+        Right(Vector.empty): Either[String, Vector[String]]
+      ) { case (result, (value, index)) =>
+        for {
+          accumulated <- result
+          componentname <- _require_string(
+            value.hcursor,
+            "name",
+            s"CAR ABI component export ${index}"
+          )
+        } yield accumulated :+ componentname
+      }
+      _ <-
+        if (componentnames.contains(entry.legacylocalid)) Right(())
+        else Left(
+          s"CAR ABI manifest does not export deferred component ${entry.legacylocalid}"
+        )
     } yield ()
 
   private def _runtime_range(cursor: HCursor): Either[String, RuntimeRange] = {
@@ -258,7 +378,7 @@ private[component] object CarRuntimeAdmission {
 
   private def _validate_abi(
     cursor: HCursor,
-    descriptor: ComponentDescriptor
+    coordinate: CanonicalCoordinate
   ): Either[String, Unit] =
     for {
       format <- _require_string(cursor, "format", "CAR ABI manifest")
@@ -267,27 +387,35 @@ private[component] object CarRuntimeAdmission {
         ABI_MANIFEST_FORMAT,
         "CAR ABI manifest format"
       )
-      name <- _required_descriptor_value(descriptor.name, "name")
-      version <- _required_descriptor_value(descriptor.version, "version")
-      component <- _required_descriptor_value(
-        descriptor.componentName,
-        "component"
+      namespace <- _require_string(
+        cursor.downField("component"),
+        "namespace",
+        "CAR ABI manifest component"
       )
-      abiname <- _require_string(
-        cursor.downField("car"),
-        "name",
-        "CAR ABI manifest car"
-      )
-      abiversion <- _require_string(
-        cursor.downField("car"),
-        "version",
-        "CAR ABI manifest car"
-      )
-      _ <- _require_equal(abiname, name, "CAR ABI manifest car.name")
       _ <- _require_equal(
-        abiversion,
-        version,
-        "CAR ABI manifest car.version"
+        namespace,
+        coordinate.componentid.namespace.value(),
+        "CAR ABI manifest component namespace"
+      )
+      componentid <- _require_string(
+        cursor.downField("component"),
+        "id",
+        "CAR ABI manifest component"
+      )
+      _ <- _require_equal(
+        componentid,
+        coordinate.componentid.localId.value(),
+        "CAR ABI manifest component id"
+      )
+      componentversion <- _require_string(
+        cursor.downField("component"),
+        "version",
+        "CAR ABI manifest component"
+      )
+      _ <- _require_equal(
+        componentversion,
+        coordinate.release,
+        "CAR ABI manifest component version"
       )
       versionnumber <- cursor.downField("abi").get[Int]("version").left.map {
         error => s"CAR ABI manifest abi.version is invalid: ${error.message}"
@@ -304,32 +432,29 @@ private[component] object CarRuntimeAdmission {
         .map { error =>
           s"CAR ABI exports.components is invalid: ${error.message}"
         }
-      componentnames <- components.zipWithIndex.foldLeft(
-        Right(Vector.empty): Either[String, Vector[String]]
+      componentidentities <- components.zipWithIndex.foldLeft(
+        Right(Vector.empty): Either[String, Vector[(String, String)]]
       ) { case (result, (value, index)) =>
         for {
           accumulated <- result
-          componentname <- _require_string(
+          namespace <- _require_string(
             value.hcursor,
-            "name",
+            "namespace",
             s"CAR ABI component export ${index}"
           )
-        } yield accumulated :+ componentname
+          componentid <- _require_string(
+            value.hcursor,
+            "id",
+            s"CAR ABI component export ${index}"
+          )
+        } yield accumulated :+ (namespace -> componentid)
       }
       _ <-
-        if (componentnames.contains(component)) Right(())
+        if (componentidentities.contains(coordinate.componentid.namespace.value() -> coordinate.componentid.localId.value())) Right(())
         else Left(
-          s"CAR ABI manifest does not export packaged component ${component}"
+          s"CAR ABI manifest does not export packaged component ${coordinate.componentid.name}"
         )
     } yield ()
-
-  private def _required_descriptor_value(
-    value: Option[String],
-    field: String
-  ): Either[String, String] =
-    value.map(_.trim).filter(_.nonEmpty).toRight(
-      s"CAR component descriptor is missing ${field}"
-    )
 
   private def _require_string(
     cursor: ACursor,

@@ -533,7 +533,7 @@ commit and Phase full validation remained pending at that checkpoint.
 
 CID-05D also exposed an adjacent plain-`Action` implicit-job defect. Because
 fixing it changes observable execution behavior rather than Component
-identity, [Phase 57 - Action Execution Semantics](phase-57.md) owns its
+identity, [Phase 57.1 - Plain Action Direct Execution](phase-57.1.md) owns its
 compatibility inventory, executable matrix, implementation, validation, and
 review. It does not extend CID-05 or block CID-05D review on unrelated
 execution-policy work.
@@ -635,5 +635,5 @@ No new full-test claim is made. Closure relies on the recorded Slice/Step
 focused, integration, CAR packaging/publication/resolution, lint, and
 independent-review evidence accepted before each Step commit. All SNAPSHOT
 versions remain unchanged, including `sbt-cozy 0.1.20-SNAPSHOT` and
-`cozy 0.3.4-SNAPSHOT`. Phase 57 may begin and must not reopen the qualified
+`cozy 0.3.4-SNAPSHOT`. The Phase 57 series may begin and must not reopen the qualified
 Component identity contract.

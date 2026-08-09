@@ -20,6 +20,7 @@ import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.{ComponentParameterProvenance, RuntimeConfig}
 import org.goldenport.cncf.component.{AssemblyApiClassLoader, CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentFactory, ComponentId, ComponentInstanceId, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver, RepositoryParameterProbeComponent, RepositoryParameterProbeFactory}
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiRunnerSocket}
@@ -36,7 +37,7 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jul. 31, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -284,24 +285,32 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
       )
       _with_temp_dir { root =>
+        val componentid = ComponentId("org.goldenport.cncf.Specification")
+        val release = "0.1.1-SNAPSHOT"
         val localcar = root.resolve("local").resolve("repository").resolve("car")
-        val artifactdir = localcar.resolve("sample-component").resolve("0.1.1-SNAPSHOT")
+        val coordinate = ComponentReleaseCoordinate.require(componentid.sharedIdentity, release)
+        val artifact = localcar.resolve(coordinate.carRepositoryRelativePath())
+        val artifactdir = artifact.getParent
         Files.createDirectories(artifactdir)
         val fakecomponentjar = _create_fake_component_jar(root.resolve("assets").resolve("component-main-local-snapshot.jar"))
         val descriptor = root.resolve("component-descriptor-local-snapshot.json")
         Files.writeString(
           descriptor,
-          _canonical_descriptor_json("org.goldenport.cncf.Specification", "0.1.1-SNAPSHOT")
+          _canonical_descriptor_json(componentid.name, release)
         )
         _create_car(
-          artifactdir.resolve("sample-component-0.1.1-SNAPSHOT.car"),
+          artifact,
           Seq(
             "component/main.jar" -> fakecomponentjar,
             "component-descriptor.json" -> descriptor
           )
         )
         val descriptors = Vector(
-          ComponentDescriptor(name = Some("sample-component"), version = Some("0.1.1-SNAPSHOT"), componentName = Some("sample-component"))
+          ComponentDescriptor(
+            version = Some(release),
+            schemaVersion = Some(3),
+            componentId = Some(componentid)
+          )
         )
         val space = ComponentRepositorySpace.create(
           subsystem,
@@ -2893,9 +2902,12 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     componentid: String,
     release: String
   ): Unit = {
+    val id = ComponentId(componentid)
+    val coordinate = ComponentReleaseCoordinate.require(id.sharedIdentity, release)
+    val artifactname = coordinate.mavenArtifactId()
     Files.writeString(
       root.resolve("abi-manifest.json"),
-      s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$componentid","version":"$release"},"abi":{"version":1,"exports":{"components":[{"name":"$componentid"}]},"dependencies":[]}}""",
+      s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"${id.namespace.value()}","id":"${id.localId.value()}","version":"$release"},"abi":{"version":1,"exports":{"components":[{"namespace":"${id.namespace.value()}","id":"${id.localId.value()}"}]},"dependencies":[]}}""",
       StandardCharsets.UTF_8
     )
     val entries = Vector(
@@ -2907,7 +2919,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     }.mkString("[", ",", "]")
     Files.writeString(
       root.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"cncf.car-runtime-manifest.v1","car":{"name":"$componentid","version":"$release","component":"$componentid"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","maximum":null,"excluded":[],"tested":["${CncfVersion.current}"]}},"integrity":{"algorithm":"SHA-256","entries":$entries}}""",
+      s"""{"schemaVersion":"cncf.car-runtime-manifest.v1","car":{"name":"$artifactname","version":"$release","component":"${id.name}"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","maximum":null,"excluded":[],"tested":["${CncfVersion.current}"]}},"integrity":{"algorithm":"SHA-256","entries":$entries}}""",
       StandardCharsets.UTF_8
     )
   }

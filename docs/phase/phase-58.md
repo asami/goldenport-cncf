@@ -2,7 +2,7 @@
 
 status=planned
 planned_at=2026-07-31
-depends_on=[Phase 57](phase-57.md)
+depends_on=[Phase 57.5](phase-57.5.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 58 Checklist](phase-58-checklist.md)
 implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
@@ -28,14 +28,14 @@ instead of inventing separate archive, repository, or provenance paths.
 
 ## Dependency
 
-Phase 58 begins after Phase 57 closes.
+Phase 58 begins after Phase 57.5 closes the complete Phase 57 series.
 
 Phase 55 supplies typed configuration/provenance foundations that may be
 consumed by resolver policy and diagnostics. Phase 58 must not reopen Phase 55
 scope or encode SubComponent selection as an unrelated configuration
 authority.
 
-Phase 57 supplies explicit Action execution semantics. Resource SubComponent
+Phase 57.1 and Phase 57.2 supply explicit Action execution semantics. Resource SubComponent
 resolution must not create a second execution-intent or job-submission policy.
 
 ## Selected Direction

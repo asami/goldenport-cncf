@@ -19,6 +19,7 @@ import org.goldenport.cncf.bootstrap.BootstrapLog
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.*
+import org.goldenport.cncf.component.identity.{ComponentId => SharedComponentId, ComponentIdentityProjection, ComponentReleaseCoordinate}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.backend.collaborator.{CollaboratorClassLoader, CollaboratorFactory}
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
@@ -31,7 +32,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -1648,9 +1649,49 @@ object ComponentRepository extends GlobalObservable {
     version: Option[String],
     releaseonly: Boolean = false
   ): Option[Artifact] =
+    val canonical =
+      if (componentname != null) {
+        val result = SharedComponentId.parse(componentname)
+        if (result.isSuccess()) Some(result.value().get()) else None
+      } else {
+        None
+      }
     _standard_component_repository_roots(basedir).iterator.flatMap { root =>
-      _resolve_standard_artifact(root, componentname, version, ".car", ArtifactKind.Car, releaseonly)
+      canonical match {
+        case Some(componentid) =>
+          _resolve_canonical_component_artifact(root, componentid, version, releaseonly)
+        case None =>
+          _resolve_standard_artifact(root, componentname, version, ".car", ArtifactKind.Car, releaseonly)
+      }
     }.toSeq.headOption
+
+  private def _resolve_canonical_component_artifact(
+    repositoryroot: Path,
+    componentid: SharedComponentId,
+    version: Option[String],
+    releaseonly: Boolean
+  ): Option[Artifact] = {
+    val projection = ComponentIdentityProjection.of(componentid)
+    val artifactroot = repositoryroot
+      .resolve(projection.mavenGroupId().replace('.', '/'))
+      .resolve(projection.mavenArtifactId())
+    if (!Files.isDirectory(artifactroot)) {
+      None
+    } else {
+      val versions0 = version.map(v => Vector(v)).getOrElse(_version_dirs_desc(artifactroot))
+      val versions =
+        if (releaseonly) versions0.filterNot(_is_snapshot_version) else versions0
+      versions.iterator.flatMap { release =>
+        val coordinate = ComponentReleaseCoordinate.create(componentid, release)
+        if (coordinate.isSuccess()) {
+          val artifact = repositoryroot.resolve(coordinate.value().get().carRepositoryRelativePath())
+          if (Files.isRegularFile(artifact)) Some(Artifact(artifact, ArtifactKind.Car)) else None
+        } else {
+          None
+        }
+      }.toSeq.headOption
+    }
+  }
 
   private def _resolve_standard_subsystem_descriptor(
     basedir: Path,

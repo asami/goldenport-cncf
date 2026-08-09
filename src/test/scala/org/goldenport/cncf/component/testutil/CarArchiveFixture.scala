@@ -9,11 +9,12 @@ import scala.util.Using
 import io.circe.parser.parse
 
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.component.CarRuntimeAdmission
+import org.goldenport.cncf.component.{CarRuntimeAdmission, ComponentId}
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 
 /*
  * @since   Jul. 28, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object CarArchiveFixture {
@@ -73,10 +74,13 @@ object CarArchiveFixture {
                 .map(_.trim).filter(_.nonEmpty)
               version <- cursor.downField("component").get[String]("version").toOption
                 .map(_.trim).filter(_.nonEmpty)
-            } yield {
-              val componentid = s"$namespace.$localid"
-              (componentid, version, componentid)
-            }
+              componentid = s"$namespace.$localid"
+              id <- ComponentId.parseC(componentid).toOption
+              coordinate <- {
+                val result = ComponentReleaseCoordinate.create(id.sharedIdentity, version)
+                if (result.isSuccess()) Some(result.value().get()) else None
+              }
+            } yield (coordinate.mavenArtifactId(), version, id.name)
           case _ =>
             val nestedname = cursor.downField("component").get[String]("name").toOption
             val name = cursor.get[String]("name").toOption.orElse(nestedname)
@@ -96,16 +100,34 @@ object CarArchiveFixture {
     version: String,
     component: String
   ): String =
-    s"""{
-       |  "format": "${CarRuntimeAdmission.ABI_MANIFEST_FORMAT}",
-       |  "car": {"name": ${_json_string(name)}, "version": ${_json_string(version)}},
-       |  "abi": {
-       |    "version": 1,
-       |    "exports": {"components": [{"name": ${_json_string(component)}}]},
-       |    "dependencies": []
-       |  }
-       |}
-       |""".stripMargin
+    ComponentId.parseC(component).toOption match {
+      case Some(componentid) =>
+        s"""{
+           |  "format": "${CarRuntimeAdmission.ABI_MANIFEST_FORMAT}",
+           |  "component": {
+           |    "namespace": ${_json_string(componentid.namespace.value())},
+           |    "id": ${_json_string(componentid.localId.value())},
+           |    "version": ${_json_string(version)}
+           |  },
+           |  "abi": {
+           |    "version": 1,
+           |    "exports": {"components": [{"namespace": ${_json_string(componentid.namespace.value())}, "id": ${_json_string(componentid.localId.value())}}]},
+           |    "dependencies": []
+           |  }
+           |}
+           |""".stripMargin
+      case None =>
+        s"""{
+           |  "format": "cozy.car.abi-manifest.v1",
+           |  "car": {"name": ${_json_string(name)}, "version": ${_json_string(version)}},
+           |  "abi": {
+           |    "version": 1,
+           |    "exports": {"components": [{"name": ${_json_string(component)}}]},
+           |    "dependencies": []
+           |  }
+           |}
+           |""".stripMargin
+    }
 
   private def _runtime_manifest(
     name: String,

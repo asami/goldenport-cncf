@@ -15,7 +15,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.component.testutil.LegacyDeferredReleaseCarFixture
 import org.goldenport.cncf.workarea.WorkAreaSpace
 
 final class CarRuntimeAdmissionSpec
@@ -30,7 +32,7 @@ final class CarRuntimeAdmissionSpec
           val content = root.resolve("content")
           _prepare_root(
             content,
-            abicomponent = "sample"
+            abicomponent = "Sample"
           )
           Files.writeString(
             content.resolve("generation-provenance.json"),
@@ -51,7 +53,7 @@ final class CarRuntimeAdmissionSpec
           }
 
           Then("activation succeeds while no Cozy implementation is available to load")
-          admitted.toOption.flatMap(_.componentName) shouldBe Some("sample")
+          admitted.toOption.flatMap(_.componentName) shouldBe Some(_componentid.name)
           Try(Class.forName("cozy.archive.CozyArchivePackager")).isFailure shouldBe true
         }
       }
@@ -66,7 +68,7 @@ final class CarRuntimeAdmissionSpec
         When("the CNCF admission authority validates each generated CAR directory")
         val property = Prop.forAll(cases) { case (minimum, payload) =>
           _with_temp_dir { root =>
-            _prepare_root(root, abicomponent = "sample")
+            _prepare_root(root, abicomponent = "Sample")
             Files.createDirectories(root.resolve("manual"))
             Files.writeString(
               root.resolve("manual/payload.txt"),
@@ -91,12 +93,39 @@ final class CarRuntimeAdmissionSpec
       }
     }
 
+    "admit exact deferred-release legacy ABI evidence" which {
+      "admits the registered release without a runtime manifest" in {
+        _with_temp_dir { root =>
+          Given("the exact registered Corpus release packaged with legacy ABI v1 and no runtime manifest")
+          val registry = ComponentIdentityDeferredReleaseRegistry.default
+          val entry = registry.entries.find(_.legacylocalid == "Corpus").get
+          val expanded = LegacyDeferredReleaseCarFixture.writeDirectory(
+            root.resolve("expanded"),
+            entry
+          )
+          val archive = LegacyDeferredReleaseCarFixture.pack(
+            expanded,
+            root.resolve("textus-corpus-0.1.0.car")
+          )
+          val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+
+          When("CNCF extracts and validates the exact deferred-release CAR")
+          val admitted = CarExtractor.withExtracted(archive, workarea) { extracted =>
+            extracted.requireEffectiveIdentityC
+          }
+
+          Then("the registered canonical identity is admitted through the legacy ABI boundary")
+          admitted.toOption shouldBe Some(entry.componentid -> entry.release)
+        }
+      }
+    }
+
     "reject contradictory runtime evidence" which {
       "rejects an explicit packaged CAR without a runtime manifest" in {
         _with_temp_dir { root =>
           Given("an explicit CAR with a descriptor and ABI evidence but no runtime manifest")
           val content = root.resolve("content")
-          _prepare_root(content, abicomponent = "sample")
+          _prepare_root(content, abicomponent = "Sample")
           val archive = _zip(content, root.resolve("missing-runtime-manifest.car"))
           val workarea = WorkAreaSpace.create(RuntimeConfig.default)
 
@@ -114,7 +143,7 @@ final class CarRuntimeAdmissionSpec
         _with_temp_dir { root =>
           Given("a structurally valid CAR whose minimum runtime is above the executing CNCF")
           val content = root.resolve("content")
-          _prepare_root(content, abicomponent = "sample")
+          _prepare_root(content, abicomponent = "Sample")
           _write_runtime_manifest(
             content,
             minimum = "99.0.0",
@@ -139,7 +168,7 @@ final class CarRuntimeAdmissionSpec
           val content = root.resolve("content")
           _prepare_root(
             content,
-            abicomponent = "sample"
+            abicomponent = "Sample"
           )
           _write_runtime_manifest(
             content,
@@ -172,7 +201,7 @@ final class CarRuntimeAdmissionSpec
           val content = root.resolve("content")
           _prepare_root(
             content,
-            abicomponent = "other"
+            abicomponent = "Other"
           )
           _write_runtime_manifest(
             content,
@@ -189,7 +218,37 @@ final class CarRuntimeAdmissionSpec
 
           Then("component identity mismatch fails independently of runtime range")
           _failure_message(rejected) should include(
-            "CAR ABI manifest does not export packaged component sample"
+            "CAR ABI manifest does not export packaged component org.goldenport.fixture.Sample"
+          )
+        }
+      }
+
+      "rejects runtime evidence whose artifact name differs from the canonical descriptor projection" in {
+        _with_temp_dir { root =>
+          Given("a digest-valid CAR with canonical descriptor and ABI evidence but a different runtime car.name")
+          val content = root.resolve("content")
+          _prepare_root(
+            content,
+            abicomponent = "Sample"
+          )
+          val wrongartifactname = s"${_artifactname}-wrong"
+          _write_runtime_manifest(
+            content,
+            minimum = _compatible_minimum,
+            excluded = Vector.empty,
+            artifactname = wrongartifactname
+          )
+          val archive = _zip(content, root.resolve("artifact-name-mismatch.car"))
+          val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+
+          When("CNCF evaluates the packaged runtime coordinate")
+          val rejected = CarExtractor.withExtracted(archive, workarea) { _ =>
+            Consequence.success(())
+          }
+
+          Then("the canonical Maven artifact projection rejects the mismatched runtime car.name")
+          _failure_message(rejected) should include(
+            s"CAR runtime manifest car.name mismatch: expected=${_artifactname}, actual=${wrongartifactname}"
           )
         }
       }
@@ -208,6 +267,9 @@ final class CarRuntimeAdmissionSpec
     root: Path,
     abicomponent: String
   ): Unit = {
+    val componentid = _componentid
+    val release = _release
+    val artifactname = _artifactname
     Files.createDirectories(root.resolve("component"))
     Files.writeString(
       root.resolve("component/main.jar"),
@@ -216,17 +278,21 @@ final class CarRuntimeAdmissionSpec
     )
     Files.writeString(
       root.resolve("component-descriptor.json"),
-      """{"name":"sample","version":"0.0.1","component":"sample"}""",
+      s"""{"schemaVersion":3,"component":{"namespace":"${componentid.namespace.value()}","id":"${componentid.localId.value()}","version":"$release"}}""",
       StandardCharsets.UTF_8
     )
     Files.writeString(
       root.resolve(CarRuntimeAdmission.ABI_MANIFEST_FILE),
       s"""{
          |  "format": "${CarRuntimeAdmission.ABI_MANIFEST_FORMAT}",
-         |  "car": {"name": "sample", "version": "0.0.1"},
+         |  "component": {
+         |    "namespace": "${componentid.namespace.value()}",
+         |    "id": "${componentid.localId.value()}",
+         |    "version": "$release"
+         |  },
          |  "abi": {
          |    "version": 1,
-         |    "exports": {"components": [{"name": "${abicomponent}"}]},
+         |    "exports": {"components": [{"namespace": "${componentid.namespace.value()}", "id": "${abicomponent}"}]},
          |    "dependencies": []
          |  }
          |}
@@ -238,7 +304,8 @@ final class CarRuntimeAdmissionSpec
   private def _write_runtime_manifest(
     root: Path,
     minimum: String,
-    excluded: Vector[String]
+    excluded: Vector[String],
+    artifactname: String = _artifactname
   ): Unit = {
     val entries = _regular_files(root)
       .filterNot(_._1 == CarRuntimeAdmission.MANIFEST_FILE)
@@ -252,9 +319,9 @@ final class CarRuntimeAdmissionSpec
       s"""{
          |  "schemaVersion": "${CarRuntimeAdmission.MANIFEST_SCHEMA}",
          |  "car": {
-         |    "name": "sample",
-         |    "version": "0.0.1",
-         |    "component": "sample"
+         |    "name": "${artifactname}",
+         |    "version": "${_release}",
+         |    "component": "${_componentid.name}"
          |  },
          |  "runtime": {
          |    "cncf": {
@@ -278,9 +345,9 @@ final class CarRuntimeAdmissionSpec
     CarExtracted(
       root = root,
       descriptor = ComponentDescriptor(
-        name = Some("sample"),
-        version = Some("0.0.1"),
-        componentName = Some("sample")
+        schemaVersion = Some(3),
+        version = Some(_release),
+        componentId = Some(_componentid)
       ),
       componentMain = root.resolve("component/main.jar"),
       componentLibs = Vector.empty,
@@ -327,6 +394,11 @@ final class CarRuntimeAdmissionSpec
 
   private def _json_string(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+  private val _componentid = ComponentId("org.goldenport.fixture.Sample")
+  private val _release = "0.0.1"
+  private val _artifactname =
+    ComponentReleaseCoordinate.require(_componentid.sharedIdentity, _release).mavenArtifactId()
 
   private def _with_temp_dir[A](body: Path => A): A = {
     val root = Files.createTempDirectory("cncf-car-runtime-admission")

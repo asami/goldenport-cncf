@@ -119,7 +119,8 @@ ID instead of its scalar response. The temporary CID-05D fixture uses
 `QueryAction` to obey the current runtime contract.
 
 That defect is not part of CID-05 closure and is not hygiene. It is owned by
-[Phase 57 - Action Execution Semantics](../phase/phase-57.md), which inventories
+[Phase 57.1 - Plain Action Direct Execution](../phase/phase-57.1.md) and
+[Phase 57.2 - Explicit Async Migration and Projection Alignment](../phase/phase-57.2.md), which inventory
 compatibility, freezes a failing-first direct/query/command/explicit-async
 matrix, makes plain `Action` the simplest synchronous route, and independently
 validates the public behavior change.

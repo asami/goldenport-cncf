@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  8, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -344,6 +344,123 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
         "art-scene",
         Vector(SubsystemCapabilityId.parseC("datastore.persistent@1").toOption.get)
       ))
+      }
+    }
+
+    "E41 load a canonical namespace/id/version component binding with its qualified identity" must _metadata("E41") {
+      "when exercising: load a canonical namespace/id/version component binding with its qualified identity" in {
+      Given("an assembly descriptor that declares the canonical component identity fields")
+      val path = _create_temp_file("generic-subsystem-canonical-component-binding", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - namespace: org.example.art
+          |    id: Gallery
+          |    version: 1.0.0
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val binding = GenericSubsystemDescriptor.load(path).toOption.get.componentBindings.head
+
+      Then("the binding retains the qualified name and parsed ComponentId")
+      binding.componentName shouldBe "org.example.art.Gallery"
+      binding.componentId.map(_.name) shouldBe Some("org.example.art.Gallery")
+      binding.version shouldBe Some("1.0.0")
+      }
+    }
+
+    "E42 retain a legacy name component binding" must _metadata("E42") {
+      "when exercising: retain a legacy name component binding" in {
+      Given("an assembly descriptor with a legacy local name declaration")
+      val path = _create_temp_file("generic-subsystem-legacy-name-component-binding", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - name: gallery
+          |    version: 1.0.0
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val binding = GenericSubsystemDescriptor.load(path).toOption.get.componentBindings.head
+
+      Then("the legacy local name remains available without a forced ComponentId")
+      binding.componentName shouldBe "gallery"
+      binding.componentId shouldBe None
+      }
+    }
+
+    "E43 reject a partial canonical component identity" must _metadata("E43") {
+      "when exercising: reject a partial canonical component identity" in {
+      Given("an assembly descriptor with namespace but no canonical id")
+      val path = _create_temp_file("generic-subsystem-partial-canonical-component-binding", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - namespace: org.example.art
+          |    version: 1.0.0
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the incomplete canonical identity is rejected")
+      result shouldBe a[Consequence.Failure[_]]
+      }
+    }
+
+    "E44 reject a canonical component identity that disagrees with a legacy identity" must _metadata("E44") {
+      "when exercising: reject a canonical component identity that disagrees with a legacy identity" in {
+      Given("an assembly descriptor with conflicting canonical and legacy component identities")
+      val path = _create_temp_file("generic-subsystem-canonical-legacy-component-binding-mismatch", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - namespace: org.example.art
+          |    id: Gallery
+          |    name: org.example.art.Exhibit
+          |    version: 1.0.0
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the mismatch is rejected rather than selecting one identity form")
+      result shouldBe a[Consequence.Failure[_]]
+      }
+    }
+
+    "E45 reject conflicting legacy component identity fields" must _metadata("E45") {
+      "when exercising: reject conflicting legacy component identity fields" in {
+      Given("an assembly descriptor with multiple disagreeing legacy identity fields")
+      val path = _create_temp_file("generic-subsystem-conflicting-legacy-component-binding", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - component: gallery
+          |    name: exhibit
+          |    version: 1.0.0
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the conflicting legacy declarations are rejected")
+      result shouldBe a[Consequence.Failure[_]]
       }
     }
     }

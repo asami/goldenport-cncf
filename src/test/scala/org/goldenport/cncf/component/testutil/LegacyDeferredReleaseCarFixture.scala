@@ -12,10 +12,12 @@ import org.simplemodeling.textus.corpus.{CorpusComponent, CorpusComponentFactory
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object LegacyDeferredReleaseCarFixture {
+  val LEGACY_ABI_MANIFEST_FORMAT = "cozy.car.abi-manifest.v1"
+
   val corpusClasses: Vector[Class[?]] = Vector(
     classOf[CorpusComponent],
     classOf[CorpusComponentFactory],
@@ -119,5 +121,5 @@ object LegacyDeferredReleaseCarFixture {
     entry: ComponentIdentityDeferredReleaseEntry,
     descriptor: ComponentDescriptor
   ): String =
-    s"""{"format":"${CarRuntimeAdmission.ABI_MANIFEST_FORMAT}","car":{"name":"${descriptor.name.getOrElse(entry.legacyartifact)}","version":"${descriptor.version.getOrElse(entry.release)}"},"abi":{"version":1,"exports":{"components":[{"name":"${descriptor.componentName.getOrElse(entry.legacylocalid)}"}]},"dependencies":[]}}"""
+    s"""{"format":"${LEGACY_ABI_MANIFEST_FORMAT}","car":{"name":"${descriptor.name.getOrElse(entry.legacyartifact)}","version":"${descriptor.version.getOrElse(entry.release)}"},"abi":{"version":1,"exports":{"components":[{"name":"${descriptor.componentName.getOrElse(entry.legacylocalid)}"}]},"dependencies":[]}}"""
 }

@@ -107,6 +107,43 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
         developmentempty.isSuccess shouldBe true
       }
 
+      "when an explicit development repository is projected at runtime" in {
+        Given("Spec: phase-55-runtime-repository-bootstrap-projection; Rules: GCF09F-C1,C2,C3; Example: E1; an explicit current-project development repository")
+        val root = _fixture_root("gcf09f-runtime-default-search-")
+        val development = _canonical_development_fixture(root.resolve("current-project")).toAbsolutePath.normalize
+        val policy = RepositoryBootstrapPolicy(
+          repositoryComponentDevDirs = Vector(development.toString),
+          baseDirectory = root
+        )
+        val (withoutdefaults, residual) = RepositoryBootstrapPolicy.admitArguments(
+          policy,
+          Array("--no-default-components")
+        )
+        val explicit = ComponentRepository.ComponentDevDirRepository.Specification(development)
+        val defaultlocal = ComponentRepository.ComponentDirRepository.Specification(
+          ComponentRepository.defaultLocalComponentRepositoryDir()
+        )
+
+        When("the runtime factory projects repository sources from each admitted policy")
+        val projected = GenericSubsystemFactory._runtime_repository_specs_for_descriptor_c(policy)
+        val suppressing = GenericSubsystemFactory._runtime_repository_specs_for_descriptor_c(withoutdefaults)
+
+        Then("the explicit repository precedes the default local CAR repository, while the admitted no-default control preserves only explicit sources")
+        val projectedrepositories = projected.toOption.getOrElse(
+          fail(s"runtime repository projection: ${projected.display}")
+        )
+        val suppressingrepositories = suppressing.toOption.getOrElse(
+          fail(s"no-default runtime repository projection: ${suppressing.display}")
+        )
+        projectedrepositories should contain (explicit)
+        projectedrepositories should contain (defaultlocal)
+        projectedrepositories.indexOf(explicit) should be < projectedrepositories.indexOf(defaultlocal)
+        withoutdefaults.defaultRepositoriesEnabled shouldBe false
+        residual should contain ("--no-default-components")
+        suppressingrepositories should contain (explicit)
+        suppressingrepositories should not contain defaultlocal
+      }
+
       "when component development and assembly descriptor sources are both admitted" in {
         Given("a prepared development Component and an assembly-owned standalone security binding")
         val root = _fixture_root("gcf09f-runtime-development-assembly-")
@@ -615,6 +652,49 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
     Files.writeString(
       cncfdir.resolve("car-runtime-manifest.json"),
       s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v1","sourceKind":"development-directory","car":{"name":"$componentname","version":"1.0.0","component":"$componentname"},"runtime":{"cncf":{"minimum":"0.0.0","excluded":[],"tested":["0.0.0"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$integrity"}}""",
+      StandardCharsets.UTF_8
+    )
+    path
+  }
+
+  private def _canonical_development_fixture(path: Path): Path = {
+    val namespace = "org.goldenport.fixture"
+    val component = "CurrentProject"
+    val artifact = "fixture-current-project"
+    val version = "1.0.0-SNAPSHOT"
+    val classdir = Files.createDirectories(path.resolve("target").resolve("classes"))
+    val cncfdir = Files.createDirectories(path.resolve("target").resolve("cncf.d"))
+    val cardir = Files.createDirectories(path.resolve("src").resolve("main").resolve("car"))
+    val classpath = cncfdir.resolve("runtime-classpath.txt")
+    val descriptor = cncfdir.resolve("component-descriptor.json")
+    val abi = cardir.resolve("abi-manifest.json")
+    Files.writeString(classpath, classdir.toString, StandardCharsets.UTF_8)
+    Files.writeString(
+      descriptor,
+      s"""{"schemaVersion":3,"component":{"namespace":"$namespace","id":"$component","version":"$version"}}""",
+      StandardCharsets.UTF_8
+    )
+    Files.writeString(
+      abi,
+      s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"$namespace","id":"$component","version":"$version"},"abi":{"version":1,"exports":{"components":[{"namespace":"$namespace","id":"$component"}],"operations":[],"entities":[]},"dependencies":[]}}""",
+      StandardCharsets.UTF_8
+    )
+    val classpathidentity = s"project:${path.relativize(classdir).toString.replace('\\', '/')}"
+    val evidence = Vector(
+      ("target/cncf.d/runtime-classpath.txt", _sha256(classpath), Some(_sha256(classpathidentity.getBytes(StandardCharsets.UTF_8)))),
+      ("target/cncf.d/component-descriptor.json", _sha256(descriptor), None),
+      ("src/main/car/abi-manifest.json", _sha256(abi), None)
+    )
+    val entries = evidence.map { case (identity, digest, logical) =>
+      val logicalfield = logical.map(value => s"\"logicalSha256\":\"$value\",").getOrElse("")
+      s"{$logicalfield\"path\":\"$identity\",\"sha256\":\"$digest\"}"
+    }.mkString("[", ",", "]")
+    val integrity = _sha256(evidence.map { case (identity, digest, logical) =>
+      s"$identity\t$digest\t${logical.getOrElse("")}"
+    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
+    Files.writeString(
+      cncfdir.resolve("car-runtime-manifest.json"),
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$artifact","version":"$version","component":"$component"},"runtime":{"cncf":{"minimum":"0.0.0","excluded":[],"tested":["0.0.0"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$integrity"}}""",
       StandardCharsets.UTF_8
     )
     path

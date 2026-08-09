@@ -7,7 +7,7 @@ planning_journal=[Resource SubComponent Phase Split and Planning (historical Pha
 
 This checklist is the authoritative Phase 58 state ledger after Phase 58
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 57 closes.
+Phase 57.5 closes the complete Phase 57 series.
 
 ## RSC-01: Inventory and Executable Contract Freeze
 
@@ -15,7 +15,7 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF, Cozy/sbt-cozy, Component Repository, Help, Admin, and sample
   maintainers
-- Entry rule: Phase 57 is closed.
+- Entry rule: Phase 57.5 is closed.
 - Completion rule: Existing behavior, conflicts, ownership, and exact
   failing-first acceptance identities are recorded.
 

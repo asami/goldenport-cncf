@@ -11,6 +11,7 @@ import io.circe.parser.parse
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.component.identity.{ComponentId => SharedComponentId, ComponentIdentityProjection, ComponentReleaseCoordinate}
 
 /*
  * CNCF-owned admission of mutable component-development runtime evidence.
@@ -20,7 +21,8 @@ import org.goldenport.cncf.CncfVersion
  * packaged manifest as a development substitute.
  *
  * @since   Jul. 29, 2026
- * @version Jul. 31, 2026
+ *  version Jul. 31, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object DevelopmentCarRuntimeAdmission {
@@ -84,11 +86,24 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
     for {
       descriptoridentity <- Right(_component_descriptor_identity(schema))
       descriptor <- _read_json(root.resolve(descriptoridentity), "component development descriptor")
+      abi <- _read_json(root.resolve(ABI_MANIFEST_IDENTITY), "component development ABI manifest")
+      coordinate <-
+        if (schema == LEGACY_MANIFEST_SCHEMA)
+          _legacy_coordinate(descriptor, abi, schema)
+        else
+          descriptor.hcursor.get[Int]("schemaVersion").left.map(error => s"component development descriptor requires numeric schemaVersion 2 or 3: ${error.message}").flatMap {
+            case 2 => _legacy_coordinate(descriptor, abi, schema)
+            case 3 => _canonical_coordinate(descriptor, abi)
+            case value => Left(s"component development descriptor schemaVersion mismatch: expected=2 or 3 actual=$value")
+          }
+    } yield coordinate
+
+  private def _legacy_coordinate(descriptor: Json, abi: Json, schema: String): Either[String, Coordinate] =
+    for {
       name <- _required_string(descriptor.hcursor, "name", "component development descriptor")
       version <- _required_string(descriptor.hcursor, "version", "component development descriptor")
       component <- _component_name(descriptor.hcursor)
       _ <- _validate_descriptor_style(descriptor, schema)
-      abi <- _read_json(root.resolve(ABI_MANIFEST_IDENTITY), "component development ABI manifest")
       format <- _required_string(abi.hcursor, "format", "component development ABI manifest")
       _ <- _require_equal(format, "cozy.car.abi-manifest.v1", "component development ABI manifest format")
       abiname <- _required_string(abi.hcursor.downField("car"), "name", "component development ABI manifest car")
@@ -99,6 +114,45 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
       names <- _export_names(exports)
       _ <- if (names.contains(component)) Right(()) else Left(s"component development ABI does not export component $component")
     } yield Coordinate(name, version, component)
+
+  private def _canonical_coordinate(descriptor: Json, abi: Json): Either[String, Coordinate] = {
+    val descriptorcomponent = descriptor.hcursor.downField("component")
+    val abicomponent = abi.hcursor.downField("component")
+    for {
+      _ <- _validate_descriptor_style(descriptor, MANIFEST_SCHEMA)
+      namespace <- _required_string(descriptorcomponent, "namespace", "component development descriptor component")
+      component <- _required_string(descriptorcomponent, "id", "component development descriptor component")
+      version <- _required_string(descriptorcomponent, "version", "component development descriptor component")
+      componentid <- {
+        val result = SharedComponentId.parse(s"$namespace.$component")
+        if (result.isSuccess()) Right(result.value().get())
+        else {
+          val error = result.error().get()
+          Left(s"component development descriptor canonical identity is invalid: ${error.code()}: ${error.message()}")
+        }
+      }
+      projection = ComponentIdentityProjection.of(componentid)
+      releasecoordinate <- {
+        val result = ComponentReleaseCoordinate.create(componentid, version)
+        if (result.isSuccess()) Right(result.value().get())
+        else {
+          val error = result.error().get()
+          Left(s"component development descriptor canonical identity is invalid: ${error.code()}: ${error.message()}")
+        }
+      }
+      format <- _required_string(abi.hcursor, "format", "component development ABI manifest")
+      _ <- _require_equal(format, "cozy.car.abi-manifest.v2", "component development ABI manifest format")
+      abinamespace <- _required_string(abicomponent, "namespace", "component development ABI manifest component")
+      _ <- _require_equal(abinamespace, namespace, "component development ABI namespace")
+      abicomponentid <- _required_string(abicomponent, "id", "component development ABI manifest component")
+      _ <- _require_equal(abicomponentid, component, "component development ABI id")
+      abiversion <- _required_string(abicomponent, "version", "component development ABI manifest component")
+      _ <- _require_equal(abiversion, version, "component development ABI version")
+      exports <- abi.hcursor.downField("abi").downField("exports").downField("components").as[Vector[Json]].left.map(error => s"component development ABI exports are invalid: ${error.message}")
+      identities <- _export_identities(exports)
+      _ <- if (identities.contains(namespace -> component)) Right(()) else Left(s"component development ABI does not export component $namespace.$component")
+    } yield Coordinate(projection.mavenArtifactId(), releasecoordinate.release(), componentid.localId().value())
+  }
 
   private def _component_descriptor_identity(schema: String): String =
     if (schema == LEGACY_MANIFEST_SCHEMA) LEGACY_COMPONENT_DESCRIPTOR_IDENTITY
@@ -115,12 +169,19 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
         Right(())
     }
     else
-      for {
-        version <- descriptor.hcursor.get[Int]("schemaVersion").left.map(error => s"component development descriptor requires numeric schemaVersion 2: ${error.message}")
-        _ <- _require_equal(version.toString, "2", "component development descriptor schemaVersion")
-        snapshot <- descriptor.hcursor.downField("componentStyle").focus.toRight("component development descriptor requires componentStyle")
-        _ <- ComponentStyleCatalog.snapshotC(snapshot).toOption.toRight("component development descriptor componentStyle must be a complete catalog-matching snapshot")
-      } yield ()
+      descriptor.hcursor.get[Int]("schemaVersion").left.map(error => s"component development descriptor requires numeric schemaVersion 2 or 3: ${error.message}").flatMap {
+        case 2 =>
+          for {
+            snapshot <- descriptor.hcursor.downField("componentStyle").focus.toRight("component development descriptor requires componentStyle")
+            _ <- ComponentStyleCatalog.snapshotC(snapshot).toOption.toRight("component development descriptor componentStyle must be a complete catalog-matching snapshot")
+          } yield ()
+        case 3 =>
+          if (descriptor.hcursor.downField("name").focus.nonEmpty || descriptor.hcursor.downField("version").focus.nonEmpty)
+            Left("component development schema 3 descriptor must not declare legacy root name or version")
+          else
+            Right(())
+        case value => Left(s"component development descriptor schemaVersion mismatch: expected=2 or 3 actual=$value")
+      }
 
   private def _component_name(cursor: HCursor): Either[String, String] =
     cursor.downField("component").focus match {
@@ -249,6 +310,15 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
         accumulated <- result
         name <- _required_string(value.hcursor, "name", s"component development ABI export $index")
       } yield accumulated :+ name
+    }
+
+  private def _export_identities(values: Vector[Json]): Either[String, Vector[(String, String)]] =
+    values.zipWithIndex.foldLeft(Right(Vector.empty): Either[String, Vector[(String, String)]]) { case (result, (value, index)) =>
+      for {
+        accumulated <- result
+        namespace <- _required_string(value.hcursor, "namespace", s"component development ABI export $index")
+        id <- _required_string(value.hcursor, "id", s"component development ABI export $index")
+      } yield accumulated :+ (namespace -> id)
     }
 
   private def _read_json(path: Path, label: String): Either[String, Json] =

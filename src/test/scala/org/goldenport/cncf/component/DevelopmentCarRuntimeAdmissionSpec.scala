@@ -12,6 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 
 final class DevelopmentCarRuntimeAdmissionSpec
     extends AnyWordSpec
@@ -39,6 +40,8 @@ final class DevelopmentCarRuntimeAdmissionSpec
     afterWord("in spec:generation-compatibility-contract, example:E10, rules:R3,R6, phase:53, slice:CS-03")
   private val _e11_metadata =
     afterWord("in spec:generation-compatibility-contract, example:E11, rules:R2,R3, phase:53, slice:CS-03")
+  private val _e12_metadata =
+    afterWord("in spec:generation-compatibility-contract, example:E12, rules:R3,R6, phase:53, slice:CS-03")
 
   "Development CAR runtime admission" should {
     "E1 admit stable prepared evidence after mutable class recompilation" must _e1_metadata {
@@ -109,7 +112,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
           val manifest = root.resolve("target/cncf.d/car-runtime-manifest.json")
 
           When("the manifest component contradicts the descriptor")
-          Files.writeString(manifest, Files.readString(manifest, StandardCharsets.UTF_8).replace("\"component\":\"sample\"", "\"component\":\"other\""), StandardCharsets.UTF_8)
+          Files.writeString(manifest, Files.readString(manifest, StandardCharsets.UTF_8).replace("\"component\":\"Sample\"", "\"component\":\"other\""), StandardCharsets.UTF_8)
           val result = DevelopmentCarRuntimeAdmission.validate(root)
 
           Then("development admission rejects the contradictory coordinate")
@@ -199,20 +202,23 @@ final class DevelopmentCarRuntimeAdmissionSpec
           val descriptor = root.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)
 
           When("the descriptor component changes without regenerating its ABI and runtime evidence")
-          Files.writeString(descriptor, Files.readString(descriptor, StandardCharsets.UTF_8).replace("\"name\":\"sample\"}", "\"name\":\"other\"}"), StandardCharsets.UTF_8)
+          Files.writeString(descriptor, Files.readString(descriptor, StandardCharsets.UTF_8).replace("\"id\":\"Sample\"", "\"id\":\"Other\""), StandardCharsets.UTF_8)
           val result = DevelopmentCarRuntimeAdmission.validate(root)
 
           Then("development admission rejects the stale contract with recovery")
-          result.display should include("component development ABI does not export component other")
+          result.display should include("component development ABI id mismatch")
           result.display should include("sbt cozyPrepareRuntime")
         }
       }
     }
 
-    "E10 reject an incomplete schema-v2 component style snapshot" must _e10_metadata {
+    "E10 reject an incomplete schema-v2 componentStyle snapshot" must _e10_metadata {
       "reject a partial development descriptor before runtime activation" in {
-        _with_prepared_manifest { root =>
-          Given("Spec: docs/spec/generation-compatibility-contract.md; Rules: R3,R6; Example: E10; a prepared v2 development descriptor")
+        _with_temp_dir { root =>
+          Given("Spec: docs/spec/generation-compatibility-contract.md; Rules: R3,R6; Example: E10; a prepared schema-v2 development descriptor")
+          _prepare_schema2(root)
+          Files.writeString(root.resolve("target/scala-3.3.8/classes/sample.class"), "compiled", StandardCharsets.UTF_8)
+          _write_manifest(root, manifestname = "sample", manifestcomponent = "sample")
           val descriptor = root.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)
 
           When("the required parameters field is removed without regenerating evidence")
@@ -235,10 +241,17 @@ final class DevelopmentCarRuntimeAdmissionSpec
           val legacy = root.resolve(DevelopmentCarRuntimeAdmission.LEGACY_COMPONENT_DESCRIPTOR_IDENTITY)
           Files.createDirectories(legacy.getParent)
           Files.writeString(legacy, """{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"}""", StandardCharsets.UTF_8)
+          Files.writeString(
+            root.resolve(DevelopmentCarRuntimeAdmission.ABI_MANIFEST_IDENTITY),
+            """{"format":"cozy.car.abi-manifest.v1","car":{"name":"sample","version":"0.0.1-SNAPSHOT"},"abi":{"exports":{"components":[{"name":"sample"}]}}}""",
+            StandardCharsets.UTF_8
+          )
           _write_manifest(
             root,
             DevelopmentCarRuntimeAdmission.LEGACY_MANIFEST_SCHEMA,
-            DevelopmentCarRuntimeAdmission.LEGACY_COMPONENT_DESCRIPTOR_IDENTITY
+            DevelopmentCarRuntimeAdmission.LEGACY_COMPONENT_DESCRIPTOR_IDENTITY,
+            "sample",
+            "sample"
           )
 
           When("CNCF admits the explicitly selected development directory")
@@ -246,6 +259,29 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
           Then("the valid v1 migration contract remains readable")
           result.isSuccess shouldBe true
+        }
+      }
+    }
+
+    "E12 reject a canonical manifest artifact name mismatch" must _e12_metadata {
+      "reject a manifest name that is not projected from canonical descriptor identity" in {
+        _with_prepared_manifest { root =>
+          Given("Rules: R3,R6; a schema-3 development CAR with a canonically projected artifact name")
+          val manifest = root.resolve("target/cncf.d/car-runtime-manifest.json")
+
+          When("the manifest artifact name no longer matches the canonical identity projection")
+          Files.writeString(
+            manifest,
+            Files.readString(manifest, StandardCharsets.UTF_8).replace(
+              s"\"name\":\"$_canonical_artifact_name\"",
+              "\"name\":\"sample\""
+            ),
+            StandardCharsets.UTF_8
+          )
+          val result = DevelopmentCarRuntimeAdmission.validate(root)
+
+          Then("development admission rejects the manifest coordinate contradiction")
+          result.display should include("development runtime manifest car.name mismatch")
         }
       }
     }
@@ -259,9 +295,23 @@ final class DevelopmentCarRuntimeAdmissionSpec
     Files.createDirectories(abi.getParent)
     Files.createDirectories(classpath.getParent)
     Files.createDirectories(root.resolve("target/scala-3.3.8/classes"))
-    Files.writeString(descriptor, """{"schemaVersion":2,"name":"sample","version":"0.0.1-SNAPSHOT","component":{"name":"sample"},"componentStyle":{"apiVersion":"cncf.textus/v1","provider":"cncf","id":"full-fledged-with-standalone@1","version":1,"parameterSchema":{"type":"object","properties":{},"required":[],"additionalProperties":false},"parameters":{},"provides":{"bundles":["domain.full@1"],"capabilities":["user.fixed-context-compatible@1","user.multi-user@1"],"effective":["domain.aggregate@1","domain.command@1","domain.domain-event@1","domain.entity@1","domain.optimistic-concurrency@1","domain.persistence@1","domain.projection@1","domain.query@1","domain.transaction@1","user.fixed-context-compatible@1","user.multi-user@1"]},"requires":{"subsystemCapabilities":["datastore.optimistic-concurrency@1","datastore.persistent@1","datastore.transactional@1","user-context.current@1"]}}}""", StandardCharsets.UTF_8)
-    Files.writeString(abi, """{"format":"cozy.car.abi-manifest.v1","car":{"name":"sample","version":"0.0.1-SNAPSHOT"},"abi":{"exports":{"components":[{"name":"sample"}]}}}""", StandardCharsets.UTF_8)
+    Files.writeString(descriptor, """{"schemaVersion":3,"component":{"namespace":"org.example","id":"Sample","version":"0.0.1-SNAPSHOT"}}""", StandardCharsets.UTF_8)
+    Files.writeString(abi, """{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"org.example","id":"Sample","version":"0.0.1-SNAPSHOT"},"abi":{"version":1,"exports":{"components":[{"namespace":"org.example","id":"Sample"}],"operations":[],"entities":[]},"dependencies":[]}}""", StandardCharsets.UTF_8)
     Files.writeString(classpath, root.resolve("target/scala-3.3.8/classes").toString, StandardCharsets.UTF_8)
+  }
+
+  private def _prepare_schema2(root: Path): Unit = {
+    _prepare(root)
+    Files.writeString(
+      root.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY),
+      """{"schemaVersion":2,"name":"sample","version":"0.0.1-SNAPSHOT","component":{"name":"sample"},"componentStyle":{"apiVersion":"cncf.textus/v1","provider":"cncf","id":"full-fledged-with-standalone@1","version":1,"parameterSchema":{"type":"object","properties":{},"required":[],"additionalProperties":false},"parameters":{},"provides":{"bundles":["domain.full@1"],"capabilities":["user.fixed-context-compatible@1","user.multi-user@1"],"effective":["domain.aggregate@1","domain.command@1","domain.domain-event@1","domain.entity@1","domain.optimistic-concurrency@1","domain.persistence@1","domain.projection@1","domain.query@1","domain.transaction@1","user.fixed-context-compatible@1","user.multi-user@1"]},"requires":{"subsystemCapabilities":["datastore.optimistic-concurrency@1","datastore.persistent@1","datastore.transactional@1","user-context.current@1"]}}}""",
+      StandardCharsets.UTF_8
+    )
+    Files.writeString(
+      root.resolve(DevelopmentCarRuntimeAdmission.ABI_MANIFEST_IDENTITY),
+      """{"format":"cozy.car.abi-manifest.v1","car":{"name":"sample","version":"0.0.1-SNAPSHOT"},"abi":{"exports":{"components":[{"name":"sample"}]}}}""",
+      StandardCharsets.UTF_8
+    )
   }
 
   private def _with_prepared_manifest(body: Path => Unit): Unit =
@@ -275,7 +325,9 @@ final class DevelopmentCarRuntimeAdmissionSpec
   private def _write_manifest(
     root: Path,
     schema: String = DevelopmentCarRuntimeAdmission.MANIFEST_SCHEMA,
-    descriptoridentity: String = DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY
+    descriptoridentity: String = DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY,
+    manifestname: String = _canonical_artifact_name,
+    manifestcomponent: String = _canonical_component_id.localId.value()
   ): Unit = {
     val evidence = Vector(
       DevelopmentCarRuntimeAdmission.RUNTIME_CLASSPATH_IDENTITY,
@@ -300,7 +352,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
     val manifest = root.resolve("target/cncf.d/car-runtime-manifest.json")
     Files.writeString(
       manifest,
-      s"""{"schemaVersion":"$schema","sourceKind":"${DevelopmentCarRuntimeAdmission.SOURCE_KIND}","car":{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$digest"}}""",
+      s"""{"schemaVersion":"$schema","sourceKind":"${DevelopmentCarRuntimeAdmission.SOURCE_KIND}","car":{"name":"$manifestname","version":"0.0.1-SNAPSHOT","component":"$manifestcomponent"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$digest"}}""",
       StandardCharsets.UTF_8
     )
   }
@@ -309,6 +361,10 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
   private def _sha256(bytes: Array[Byte]): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
+
+  private val _canonical_component_id = ComponentId("org.example.Sample")
+  private val _canonical_artifact_name =
+    ComponentReleaseCoordinate.require(_canonical_component_id.sharedIdentity, "0.0.1-SNAPSHOT").mavenArtifactId()
 
   private def _with_temp_dir[A](body: Path => A): A = {
     val root = Files.createTempDirectory("development-car-runtime-admission")

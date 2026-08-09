@@ -19,7 +19,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Aug.  8, 2026
+ * @version Aug.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -224,12 +224,14 @@ object GenericSubsystemFactory {
   ): Consequence[Option[GenericSubsystemDescriptor]] =
     subsystemName(configuration) match {
       case Some(name) =>
-        _runtime_search_repository_specs_c(policy).flatMap { repositories =>
-          ComponentRepository.resolveSubsystemDescriptor(repositories, name) match {
-            case Some(descriptor) =>
-              _with_assembly_descriptor_override_c(descriptor, configuration).map(Some(_))
-            case None =>
-              Consequence.success(None)
+        _runtime_policy_repository_specs_c(policy, active = true).flatMap { active =>
+          _runtime_search_repository_specs_c(policy, active).flatMap { repositories =>
+            ComponentRepository.resolveSubsystemDescriptor(repositories, name) match {
+              case Some(descriptor) =>
+                _with_assembly_descriptor_override_c(descriptor, configuration).map(Some(_))
+              case None =>
+                Consequence.success(None)
+            }
           }
         }
       case None =>
@@ -733,7 +735,7 @@ object GenericSubsystemFactory {
     _merge_repository_specs(_active_component_repository_specs(configuration), base)
   }
 
-  private def _runtime_repository_specs_for_descriptor_c(
+  private[cncf] def _runtime_repository_specs_for_descriptor_c(
     policy: RepositoryBootstrapPolicy
   ): Consequence[Vector[ComponentRepository.Specification]] =
     _runtime_repository_specs_c(policy)
@@ -743,14 +745,27 @@ object GenericSubsystemFactory {
   ): Consequence[Vector[ComponentRepository.Specification]] =
     for {
       active <- _runtime_policy_repository_specs_c(policy, active = true)
-      search <- _runtime_search_repository_specs_c(policy)
+      search <- _runtime_search_repository_specs_c(policy, active)
     } yield _merge_repository_specs(active, search)
 
   private def _runtime_search_repository_specs_c(
-    policy: RepositoryBootstrapPolicy
+    policy: RepositoryBootstrapPolicy,
+    active: Vector[ComponentRepository.Specification]
   ): Consequence[Vector[ComponentRepository.Specification]] =
-    _runtime_policy_repository_specs_c(policy, active = false).map { repositories =>
-      if (repositories.nonEmpty) repositories else _default_repository_specs
+    _runtime_policy_repository_specs_c(policy, active = false).flatMap { repositories =>
+      ComponentRepositorySpace.appendDefaultSearchRepositories(
+        Right(repositories),
+        active,
+        policy.baseDirectory,
+        noDefault = !policy.defaultRepositoriesEnabled
+      ) match {
+        case Right(specifications) =>
+          Consequence.success(specifications)
+        case Left(message) =>
+          Consequence.configurationInvalid(
+            s"runtime repository bootstrap policy is invalid: $message"
+          )
+      }
     }
 
   private def _runtime_policy_repository_specs_c(

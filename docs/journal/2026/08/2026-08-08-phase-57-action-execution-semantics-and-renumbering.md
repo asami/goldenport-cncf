@@ -51,3 +51,26 @@ Phase 62  Web Session CSRF Unification
   numbers and dependency chain move.
 - This planning change contains no runtime implementation, validation,
   publication, or commit evidence.
+
+## 2026-08-09 Approved Phase Split
+
+The later Phase planning gate measured the accumulated Phase 57 scope at a
+conservative 20–31 hours. The user explicitly invoked `$cncf-split-phase 57`
+after receiving the complete six-unit proposal. This is the approval evidence
+for the following ordered sequence:
+
+```text
+Phase 57    Runtime and Control Center Development Stabilization
+Phase 57.1  Plain Action Direct Execution
+Phase 57.2  Explicit Async Migration and Projection Alignment
+Phase 57.3  Runtime Compatibility Retirement
+Phase 57.4  Build and Publication Compatibility Retirement
+Phase 57.5  Test Suite Hygiene and Series Release Gate
+Phase 58    Component Resource SubComponent Foundation
+```
+
+The original Phase 57 retains the runtime-recovery work and accepted validation
+and review history completed before the split. All unfinished Action work,
+pre-1.0 compatibility retirement, test cleanup, and release-gate work is owned
+exactly once by Phase 57.1 through Phase 57.5. Phase 58 and later are not
+renumbered.

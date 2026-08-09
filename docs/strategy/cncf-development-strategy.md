@@ -3015,7 +3015,8 @@ acceptance boundaries.
 
 #### Phase 56 - Namespace-qualified Component Identity and Derived Coordinates
 
-Phase 56 is closed; Phase 57 is the next planned delivery phase.
+Phase 56 is closed; the approved Phase 57 series is the current delivery
+sequence.
 
 - Goal:
   - make `namespace + local id` the sole Component naming and identity
@@ -3054,30 +3055,37 @@ Phase 56 is closed; Phase 57 is the next planned delivery phase.
   - `docs/journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md`; and
   - `docs/journal/2026/08/2026-08-06-current-work-closeout-before-phase-56.md`.
 
-#### Phase 57 - Action Execution Semantics
+#### Phase 57 Series - Runtime Stabilization, Action Semantics, and Pre-1.0 Closure
 
-Planned after Phase 56 closes. This phase owns the adjacent public execution-
-contract defect exposed by Phase 56 runtime integration without extending the
-Component identity migration.
+The user-approved 2026-08-09 split keeps each delivery unit within a
+conservative six-hour upper bound. Decimal children are ordered Phase IDs, not
+renumbering of Phase 58 or later.
 
-- Makes plain unclassified `Action` the simplest synchronous route and returns
-  its direct `OperationResponse`.
-- Preserves accepted `QueryAction` and `CommandAction` semantics.
-- Requires explicit admitted command/asynchronous intent for job submission,
-  job IDs, persistence, continuation, await, control, and job observability.
-- Inventories every existing caller before changing behavior and migrates real
-  job-dependent callers explicitly.
-- Preserves authorization, transaction, UnitOfWork, ExecutionContext,
-  CallTree, observability, diagnostics, and failure propagation.
-- Planning references:
-  - `docs/phase/phase-57.md`;
-  - `docs/phase/phase-57-checklist.md`; and
-  - `docs/notes/phase-56-cid05-cncf-runtime-identity-migration-plan.md`; and
-  - `docs/journal/2026/08/2026-08-08-phase-57-action-execution-semantics-and-renumbering.md`.
+| Phase | Goal | Dependency |
+| --- | --- | --- |
+| [57](../phase/phase-57.md) | Commit the reviewed framework/launcher/Control Center runtime-stabilization accumulator. | Phase 56 |
+| [57.1](../phase/phase-57.1.md) | Inventory the Action contract and make plain `Action` return its direct synchronous response. | Phase 57 |
+| [57.2](../phase/phase-57.2.md) | Migrate explicit asynchronous callers and align transport/projection semantics. | Phase 57.1 |
+| [57.3](../phase/phase-57.3.md) | Remove unreleased runtime-side Component/CAR compatibility and fail closed. | Phase 57.2 |
+| [57.4](../phase/phase-57.4.md) | Remove Cozy/sbt-cozy build/publication compatibility and rebuild the canonical local warehouse. | Phase 57.3 |
+| [57.5](../phase/phase-57.5.md) | Remove overgrown document/source closure Specs and run the one series release gate. | Phase 57.4 |
+
+The Action contract remains explicit: a plain unclassified `Action` is the
+simplest synchronous route; query and command semantics remain explicit; Job
+submission requires admitted asynchronous intent. The pre-1.0 boundary accepts
+only descriptor schema 3, ABI manifest v2, repository index v2, and qualified
+Component identity. Unreleased legacy state fails closed with operator-owned
+backup/rebuild guidance rather than runtime migration.
+
+Planning references:
+- `docs/phase/phase-57.md` through `docs/phase/phase-57.5.md` and their
+  checklists;
+- `docs/notes/phase-56-cid05-cncf-runtime-identity-migration-plan.md`; and
+- `docs/journal/2026/08/2026-08-08-phase-57-action-execution-semantics-and-renumbering.md`.
 
 #### Phase 58 - Component Resource SubComponent Foundation
 
-Planned after Phase 57 closes. Resource identity and repository composition
+Planned after Phase 57.5 closes. Resource identity and repository composition
 consume the namespace-qualified Component identity and derived release
 coordinates without defining another naming authority.
 

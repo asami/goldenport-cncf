@@ -23,7 +23,8 @@ final case class RepositoryBootstrapPolicy(
   subsystemDevDirs: Vector[String] = Vector.empty,
   subsystemSarDirs: Vector[String] = Vector.empty,
   collaboratorRepositories: Vector[String] = Vector.empty,
-  baseDirectory: Path = Paths.get("").toAbsolutePath.normalize
+  baseDirectory: Path = Paths.get("").toAbsolutePath.normalize,
+  defaultRepositoriesEnabled: Boolean = true
 ) {
   /**
    * Resolved collaborator repository directories. Missing or blank input has
@@ -59,6 +60,7 @@ object RepositoryBootstrapPolicy {
     val subsystemdevdirs = ArrayBuffer.empty[String]
     val subsystemsardirs = ArrayBuffer.empty[String]
     val residual = ArrayBuffer.empty[String]
+    var defaultrepositoriesenabled = policy.defaultRepositoriesEnabled
     var aftersentinel = false
     var index = 0
 
@@ -99,6 +101,10 @@ object RepositoryBootstrapPolicy {
         residual += arg
         aftersentinel = true
         index += 1
+      } else if (arg == "--no-default-components") {
+        defaultrepositoriesenabled = false
+        residual += arg
+        index += 1
       } else if (arg.startsWith("--")) {
         val option = arg.drop(2)
         val separator = option.indexOf('=')
@@ -129,7 +135,8 @@ object RepositoryBootstrapPolicy {
       componentCarDirs = (policy.componentCarDirs ++ componentcardirs).distinct,
       componentFiles = (policy.componentFiles ++ componentfiles).distinct,
       subsystemDevDirs = (policy.subsystemDevDirs ++ subsystemdevdirs).distinct,
-      subsystemSarDirs = (policy.subsystemSarDirs ++ subsystemsardirs).distinct
+      subsystemSarDirs = (policy.subsystemSarDirs ++ subsystemsardirs).distinct,
+      defaultRepositoriesEnabled = defaultrepositoriesenabled
     )
     (admitted, residual.toArray)
   }

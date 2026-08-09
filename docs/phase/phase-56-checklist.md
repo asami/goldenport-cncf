@@ -353,7 +353,7 @@ their own Core/default instance/artifact ID/repository origin while both display
 `Shared`; qualified Request routing returns distinct scalars, and bare `Shared`
 is non-selecting with ambiguity evidence naming both qualified candidates.
 The plain-`Action` implicit-job defect exposed by this path is handed to
-[Phase 57 - Action Execution Semantics](phase-57.md) and does not extend
+[Phase 57.1 - Plain Action Direct Execution](phase-57.1.md) and does not extend
 CID-05. At that checkpoint, CID-06, CID-01 E4, Phase full validation, and
 HYG-P56-005 remained incomplete or unchanged as applicable.
 
@@ -769,7 +769,7 @@ Stage Status:
   removal gates.
 - [x] Record 14 lint-clean canonical SNAPSHOT CARs and four exact next-version
   release deferrals.
-- [x] Verify Phase 57 consumes the closed qualified parent Component identity
+- [x] Verify the Phase 57 series consumes the closed qualified parent Component identity
   without reopening Phase 56 naming decisions.
 - [x] Verify Phase 58 consumes the same qualified Component identity for Help
   and knowledge resources without reopening Phase 56 naming decisions.
@@ -801,7 +801,7 @@ review or CID-08-specific SBT run is required. Commit
 - [x] `sbt-cozy 0.1.20-SNAPSHOT` and `cozy 0.3.4-SNAPSHOT` remain unchanged.
 - [x] The user explicitly waived final Phase-wide full validation on
   2026-08-09; no new full-test claim is made.
-- [x] Phase 57 consumes the qualified Component identity as closed input and
+- [x] The Phase 57 series consumes the qualified Component identity as closed input and
   does not carry `Phase56EcosystemNormativeClosureSpec` as unfinished work.
 
 Phase 56 is closed on 2026-08-09. Closure relies on the exact focused,
