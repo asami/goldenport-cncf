@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 16, 2026
  *  version Apr. 24, 2026
  *  version May.  7, 2026
- * @version Jul. 31, 2026
+ *  version Jul. 31, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -466,6 +467,57 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers with Given
       descriptor.extensions shouldBe Map("descriptor.extension" -> "enabled")
       descriptor.extensionBindings.asMap shouldBe Map("descriptor.binding" -> "bound")
       descriptor.config shouldBe Map("descriptor.config" -> "configured")
+      descriptor.requireComponentStyleSnapshotC.toOption.map(_.id.canonical) shouldBe Some("full-fledged-with-standalone@1")
+      ComponentDescriptor.componentStyleProjectionJson(descriptor.requireComponentStyleSnapshotC.toOption.get).hcursor.get[String]("id").toOption shouldBe Some("full-fledged-with-standalone@1")
+    }
+
+    "decode a canonical schema-v3 descriptor with a catalog-matching component style snapshot" in {
+      Given("a canonical schema-v3 namespace, id, and version with the complete canonical style snapshot")
+      val rec = Record.data(
+        "schemaVersion" -> 3,
+        "component" -> Record.data(
+          "namespace" -> "org.simplemodeling.textus",
+          "id" -> "TextusArtScene",
+          "version" -> "0.1.0-SNAPSHOT"
+        ),
+        "componentStyle" -> Record.createFull(Vector(
+          "apiVersion" -> "cncf.textus/v1",
+          "provider" -> "cncf",
+          "id" -> "full-fledged-with-standalone@1",
+          "version" -> 1,
+          "parameterSchema" -> Record.createFull(Vector(
+            "type" -> "object",
+            "properties" -> Record.empty,
+            "required" -> Vector.empty[String],
+            "additionalProperties" -> false
+          )),
+          "parameters" -> Record.empty,
+          "provides" -> Record.data(
+            "bundles" -> Vector("domain.full@1"),
+            "capabilities" -> Vector("user.fixed-context-compatible@1", "user.multi-user@1"),
+            "effective" -> Vector(
+              "domain.aggregate@1", "domain.command@1", "domain.domain-event@1", "domain.entity@1",
+              "domain.optimistic-concurrency@1", "domain.persistence@1", "domain.projection@1",
+              "domain.query@1", "domain.transaction@1", "user.fixed-context-compatible@1", "user.multi-user@1"
+            )
+          ),
+          "requires" -> Record.data(
+            "subsystemCapabilities" -> Vector(
+              "datastore.optimistic-concurrency@1", "datastore.persistent@1",
+              "datastore.transactional@1", "user-context.current@1"
+            )
+          )
+        ))
+      )
+
+      When("the descriptor is decoded through the public RecordDecoder boundary")
+      val descriptor = summon[RecordDecoder[ComponentDescriptor]].fromRecord(rec).toOption.get
+
+      Then("the canonical identity and catalog-matching snapshot are retained")
+      descriptor.schemaVersion shouldBe Some(3)
+      descriptor.componentId.map(_.name) shouldBe Some("org.simplemodeling.textus.TextusArtScene")
+      descriptor.componentName shouldBe Some("org.simplemodeling.textus.TextusArtScene")
+      descriptor.version shouldBe Some("0.1.0-SNAPSHOT")
       descriptor.requireComponentStyleSnapshotC.toOption.map(_.id.canonical) shouldBe Some("full-fledged-with-standalone@1")
       ComponentDescriptor.componentStyleProjectionJson(descriptor.requireComponentStyleSnapshotC.toOption.get).hcursor.get[String]("id").toOption shouldBe Some("full-fledged-with-standalone@1")
     }

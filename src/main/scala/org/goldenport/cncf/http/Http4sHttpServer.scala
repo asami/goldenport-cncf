@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -22,7 +22,6 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import fs2.Pipe
 import fs2.Stream
-import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
 import io.circe.Json
 import io.circe.parser.parse
@@ -71,7 +70,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -79,7 +78,7 @@ final class Http4sHttpServer(
   port: Int = Http4sHttpServer.defaultPort,
   operationDispatcherOption: Option[WebOperationDispatcher] = None
 ) extends HttpServer(engine) {
-  private val _bind_host = Host.fromString("0.0.0.0").get
+  private var _endpoint = ServerEndpointPolicy.Endpoint(ServerEndpointPolicy.DEFAULT_HOST, port)
   private val _form_continuations = TrieMap.empty[String, Http4sHttpServer.FormContinuation]
   private val _application_job_seen_at = TrieMap.empty[(String, String), Instant]
   private val _operation_dispatcher =
@@ -128,14 +127,16 @@ final class Http4sHttpServer(
     )
     EmberServerBuilder
       .default[IO]
-      .withHost(_bind_host)
-      .withPort(Port.fromInt(port).get)
+      .withHost(_endpoint.host)
+      .withPort(Port.fromInt(_endpoint.port).get)
       .withHttpWebSocketApp(wsb => routes(wsb).orNotFound)
       .build
-      .use { _ =>
+      .use { server =>
+        val actualhost = server.address.getHostString
+        val actualport = server.address.getPort
         // Block forever to keep server mode alive.
-        IO(Http4sHttpServer._publish_bound_base_url(port)) *>
-          IO.println(s"HTTP server started on port ${port}.") *>
+        IO(Http4sHttpServer._publish_bound_base_url(actualhost, actualport)) *>
+          IO.println(s"HTTP server started at $actualhost:$actualport.") *>
           IO.never
       }
       .guarantee(IO(Http4sHttpServer._clear_bound_base_url()))
@@ -3829,9 +3830,12 @@ final class Http4sHttpServer(
   private def _component(
     app: String
   ): Option[org.goldenport.cncf.component.Component] =
-    engine.runtimeSubsystem.components.find(c =>
-      NamingConventions.equivalentByNormalized(c.name, app)
-    )
+    engine.runtimeSubsystem.findComponent(app)
+
+  private[http] def _use_endpoint(endpoint: ServerEndpointPolicy.Endpoint): this.type = {
+    _endpoint = endpoint
+    this
+  }
 
   private def _form_transition_response(
     app: String,
@@ -7603,8 +7607,15 @@ object Http4sHttpServer {
   val BOUND_BASE_URL_PROPERTY_KEY = "textus.server.bound-base-url"
   val DEMO_ASSIST_MANIFEST_QUERY_KEY = "textus.demo.manifest"
 
-  private[http] def _publish_bound_base_url(port: Int): Unit =
-    sys.props.update(BOUND_BASE_URL_PROPERTY_KEY, s"http://127.0.0.1:$port")
+  private[http] def _publish_bound_base_url(host: String, port: Int): Unit = {
+    val clienthost = host match {
+      case "0.0.0.0" => "127.0.0.1"
+      case "::" | "0:0:0:0:0:0:0:0" => "[::1]"
+      case value if value.contains(":") => s"[$value]"
+      case value => value
+    }
+    sys.props.update(BOUND_BASE_URL_PROPERTY_KEY, s"http://$clienthost:$port")
+  }
 
   private[http] def _clear_bound_base_url(): Unit =
     sys.props.remove(BOUND_BASE_URL_PROPERTY_KEY)
@@ -7649,8 +7660,13 @@ object Http4sHttpServer {
       .flatMap(x => scala.util.Try(x.toInt).toOption)
       .getOrElse(8080)
 
+  def forEndpoint(
+    engine: HttpExecutionEngine,
+    endpoint: ServerEndpointPolicy.Endpoint,
+    operationDispatcherOption: Option[WebOperationDispatcher] = None
+  ): Http4sHttpServer =
+    new Http4sHttpServer(engine, endpoint.port, operationDispatcherOption)._use_endpoint(endpoint)
+
   def create(): Http4sHttpServer =
-    new Http4sHttpServer(
-      HttpExecutionEngine.Factory.engine()
-    )
+    new Http4sHttpServer(HttpExecutionEngine.Factory.engine())
 }

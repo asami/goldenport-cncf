@@ -29,7 +29,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Aug.  6, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -99,6 +99,53 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       pagecontext.hcursor.downField("view").get[String]("provider_application_mode").toOption shouldBe Some("standalone")
       }
     }
+    }
+    }
+
+    "legacy route locator execution context" which {
+    "E6 resolve a legacy Static Web locator to the canonical component execution context" must _metadata("E6", "SWEP-3") {
+      "when a standalone Static Web app is addressed by its legacy component locator" in {
+      Given("Spec: docs/spec/static-web-execution-context-projection.md; Rules: SWEP-3; Example: E6; a canonical qualified component with the legacy component locator art-scene and artifact app locator textus-art-scene")
+      _with_temp_directory("static-web-canonical-component-") { root =>
+      Files.createDirectories(root.resolve("textus-art-scene"))
+      Files.writeString(
+        root.resolve("web.yaml"),
+        """web:
+          |  apps:
+          |    - name: textus-art-scene
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("textus-art-scene").resolve("index.html"),
+        """<!doctype html><html><head><title>${message.page.title}</title></head><body><main id="application">${message.page.heading}</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+          SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("standalone")
+        )),
+        ConfigurationTrace.empty
+      )
+      val subsystem = _static_subsystem(configuration)
+      subsystem.add(_canonical_static_page_view_component(subsystem))
+
+      When("the fixed-user first render is requested through the legacy component and artifact locators")
+      val server = HttpRuntimeBindingAdmissionFixture.server(HttpExecutionEngine.Factory.forRuntime(subsystem).getOrElse(fail("Runtime HTTP engine is required")))
+      val request = Request[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/art-scene/textus-art-scene"))
+      val response = server.routes(null).orNotFound.run(request).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+      val pagecontext = _page_context(html)
+
+      Then("the canonical component context supplies the authenticated fixed-user first render")
+      subsystem.findComponent("art-scene").map(_.componentId.name) shouldBe Some("org.simplemodeling.textus.ArtScene")
+      response.status.code shouldBe 200
+      html should include ("<main id=\"application\">")
+      pagecontext.hcursor.downField("execution").get[String]("applicationMode").toOption shouldBe Some("standalone")
+      pagecontext.hcursor.downField("execution").downField("subject").get[Boolean]("authenticated").toOption shouldBe Some(true)
+      }
+      }
     }
     }
 
@@ -295,29 +342,30 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
   }
 
   private final class StaticPageViewComponent(
-    providers: Vector[AuthenticationProvider] = Vector.empty
+    providers: Vector[AuthenticationProvider] = Vector.empty,
+    appname: String = "debug-app"
   ) extends Component {
     override def authenticationProviders: Vector[AuthenticationProvider] = providers
 
     override def webMessageCatalogs: Vector[WebMessageCatalog] =
       Vector(
         WebMessageCatalog(
-          "debug-app",
+          appname,
           Locale.ROOT,
           Map("page.title" -> "Application", "page.heading" -> "Application")
         ),
         WebMessageCatalog(
-          "debug-app",
+          appname,
           Locale.JAPANESE,
           Map("page.heading" -> "鑑賞計画")
         ),
         WebMessageCatalog(
-          "debug-app",
+          appname,
           Locale.JAPAN,
           Map("page.title" -> "展覧会")
         ),
         WebMessageCatalog(
-          "debug-app",
+          appname,
           Locale.US,
           Map("page.title" -> "Exhibitions", "page.heading" -> "Planning")
         )
@@ -328,7 +376,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
         override def resolve(
           request: WebPageContextRequest
         )(using ExecutionContext): Consequence[WebPageContext] =
-          if (request.app == "debug-app" && request.page.isEmpty)
+          if (request.app == appname && request.page.isEmpty)
             Consequence.success(WebPageContext(view = Record.data(
               "items" -> Vector(Record.data("title" -> "展示A", "status" -> "開催中")),
               "query" -> Record.data(request.values.toSeq*),
@@ -343,11 +391,41 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     providers: Vector[AuthenticationProvider] = Vector.empty
   ): Component = {
-    val id = ComponentId("static_page_view")
-    new StaticPageViewComponent(providers).initialize(ComponentInit(
+    val id = ComponentId("org.goldenport.cncf.http.StaticPageView")
+    val component = new StaticPageViewComponent(providers).initialize(ComponentInit(
       subsystem,
-      Component.Core.create("debug-app", id, ComponentInstanceId.default(id), Protocol.empty),
+      Component.Core.create(id.name, id, ComponentInstanceId.default(id), Protocol.empty),
       ComponentOrigin.Main
+    ))
+    component.withArtifactMetadata(Component.ArtifactMetadata(
+      sourceType = "test",
+      name = "debug-app",
+      version = "0.1.0-SNAPSHOT",
+      component = Some("debug-app"),
+      componentId = Some(id)
+    ))
+  }
+
+  private def _canonical_static_page_view_component(
+    subsystem: org.goldenport.cncf.subsystem.Subsystem
+  ): Component = {
+    val componentid = ComponentId("org.simplemodeling.textus.ArtScene")
+    val component = new StaticPageViewComponent(Vector.empty, "textus-art-scene").initialize(ComponentInit(
+      subsystem,
+      Component.Core.create(
+        componentid.name,
+        componentid,
+        ComponentInstanceId.default(componentid),
+        Protocol.empty
+      ),
+      ComponentOrigin.Main
+    ))
+    component.withArtifactMetadata(Component.ArtifactMetadata(
+      sourceType = "test",
+      name = "textus-art-scene",
+      version = "0.1.0-SNAPSHOT",
+      component = Some("art-scene"),
+      componentId = Some(componentid)
     ))
   }
 

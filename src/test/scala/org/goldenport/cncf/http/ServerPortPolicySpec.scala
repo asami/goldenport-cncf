@@ -9,11 +9,12 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 19, 2026
- * @version Jul. 19, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "ServerPortPolicy" should {
+    "resolve explicit and artifact-classified ports" which {
     "use the CAR default and allocate an additional instance above 38000 when occupied" in {
       Given("a component CAR whose application default is already in use")
       val subsystem = _subsystem(Map("textus.component.file" -> "target/example.car"))
@@ -91,6 +92,9 @@ final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhe
       port shouldBe 8080
     }
 
+    }
+
+    "maintain stable artifact assignments" which {
     "persist a consecutive default port in each archive range" in {
       Given("an empty machine-local assignment registry")
       val directory = Files.createTempDirectory("cncf-server-port-assignments")
@@ -124,12 +128,15 @@ final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhe
       result.isFaillure shouldBe true
     }
 
+    }
+
+    "publish the bound endpoint for launcher registration" which {
     "publish the actual bound endpoint for launcher registration" in {
       Given("a runtime server that has selected an additional-instance port")
       Http4sHttpServer._clear_bound_base_url()
       try {
         When("the HTTP server reports that it has bound")
-        Http4sHttpServer._publish_bound_base_url(38002)
+        Http4sHttpServer._publish_bound_base_url("127.0.0.1", 38002)
 
         Then("the launcher handshake exposes the selected endpoint until server shutdown")
         sys.props.get(Http4sHttpServer.BOUND_BASE_URL_PROPERTY_KEY) shouldBe Some("http://127.0.0.1:38002")
@@ -142,6 +149,26 @@ final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhe
       } finally {
         Http4sHttpServer._clear_bound_base_url()
       }
+    }
+
+    "publish reachable loopback hosts for IPv4 and IPv6 wildcard bindings" in {
+      Given("IPv4 and compact or expanded IPv6 wildcard bind addresses")
+      val hosts = Vector("0.0.0.0", "::", "0:0:0:0:0:0:0:0")
+
+      When("each bound address is projected to the launcher handshake")
+      val published = hosts.map { host =>
+        Http4sHttpServer._publish_bound_base_url(host, 38003)
+        sys.props.get(Http4sHttpServer.BOUND_BASE_URL_PROPERTY_KEY)
+      }
+
+      Then("each address family advertises its own reachable loopback endpoint")
+      published shouldBe Vector(
+        Some("http://127.0.0.1:38003"),
+        Some("http://[::1]:38003"),
+        Some("http://[::1]:38003")
+      )
+      Http4sHttpServer._clear_bound_base_url()
+    }
     }
   }
 
@@ -159,13 +186,13 @@ final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhe
       def isAvailable(port: Int): Boolean = available.contains(port)
     }
 
-  private def _assignment(expectedPort: Int): ServerPortPolicy.AssignmentStore =
+  private def _assignment(expectedport: Int): ServerPortPolicy.AssignmentStore =
     new ServerPortPolicy.AssignmentStore {
       def defaultPort(
         identity: ServerPortPolicy.ArtifactIdentity,
         requestedPort: Option[Int]
       ) =
-        org.goldenport.Consequence.success(expectedPort)
+        org.goldenport.Consequence.success(expectedport)
     }
 
   private def _without_port_properties[A](body: => A): A = {

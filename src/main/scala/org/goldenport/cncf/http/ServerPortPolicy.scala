@@ -12,10 +12,12 @@ import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig}
 import org.goldenport.cncf.subsystem.Subsystem
+import com.comcast.ip4s.Host
 
 /*
  * @since   Jul. 19, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object ServerPortPolicy {
@@ -47,14 +49,19 @@ object ServerPortPolicy {
   }
 
   object Availability {
-    object System extends Availability {
+    def forHost(host: Host): Availability = new Availability {
       def isAvailable(port: Int): Boolean =
         scala.util.Try {
           Using.resource(new ServerSocket()) { socket =>
             socket.setReuseAddress(false)
-            socket.bind(new InetSocketAddress("0.0.0.0", port))
+            socket.bind(new InetSocketAddress(host.toString, port))
           }
         }.isSuccess
+    }
+
+    object System extends Availability {
+      def isAvailable(port: Int): Boolean =
+        forHost(Host.fromString("127.0.0.1").get).isAvailable(port)
     }
   }
 
@@ -99,16 +106,16 @@ object ServerPortPolicy {
               assignments.find(_.identity == identity) match {
                 case Some(assignment) =>
                   requestedPort match {
-                    case Some(port) if port != assignment.defaultPort =>
+                    case Some(port) if port != assignment.defaultport =>
                       Consequence.argumentInvalid(
-                        s"server port assignment for ${identity.kind.name}:${identity.name} is ${assignment.defaultPort}, not ${port}"
+                        s"server port assignment for ${identity.kind.name}:${identity.name} is ${assignment.defaultport}, not ${port}"
                       )
-                    case _ => Consequence.success(assignment.defaultPort)
+                    case _ => Consequence.success(assignment.defaultport)
                   }
                 case None =>
                   _allocate(identity, requestedPort, assignments).map { assignment =>
                     _save(channel, assignments :+ assignment)
-                    assignment.defaultPort
+                    assignment.defaultport
                   }
               }
             }
@@ -123,7 +130,7 @@ object ServerPortPolicy {
 
     private final case class Assignment(
       identity: ArtifactIdentity,
-      defaultPort: Int
+      defaultport: Int
     )
 
     private def _load(channel: FileChannel): Consequence[Vector[Assignment]] = {
@@ -168,12 +175,12 @@ object ServerPortPolicy {
 
     private def _allocate(
       identity: ArtifactIdentity,
-      requestedPort: Option[Int],
+      requestedport: Option[Int],
       assignments: Vector[Assignment]
     ): Consequence[Assignment] = {
       val (start, end) = _range(identity.kind)
-      val used = assignments.map(_.defaultPort).toSet
-      val candidate = requestedPort.orElse(
+      val used = assignments.map(_.defaultport).toSet
+      val candidate = requestedport.orElse(
         (start to end).find(port => !used.contains(port))
       )
       candidate match {
@@ -192,8 +199,8 @@ object ServerPortPolicy {
       assignments: Vector[Assignment]
     ): Consequence[Vector[Assignment]] = {
       val duplicateidentities = assignments.groupBy(_.identity).exists(_._2.size > 1)
-      val duplicateports = assignments.groupBy(_.defaultPort).exists(_._2.size > 1)
-      val invalidport = assignments.exists(x => !_is_valid_default_port(x.identity.kind, x.defaultPort))
+      val duplicateports = assignments.groupBy(_.defaultport).exists(_._2.size > 1)
+      val invalidport = assignments.exists(x => !_is_valid_default_port(x.identity.kind, x.defaultport))
       if (duplicateidentities || duplicateports || invalidport)
         Consequence.serviceUnavailable(s"inconsistent server port assignment registry: ${path}")
       else
@@ -206,11 +213,11 @@ object ServerPortPolicy {
     ): Unit = {
       val json = Json.obj(
         "schemaVersion" -> Json.fromString("textus.server-port-assignments.v1"),
-        "assignments" -> Json.arr(assignments.sortBy(_.defaultPort).map { assignment =>
+        "assignments" -> Json.arr(assignments.sortBy(_.defaultport).map { assignment =>
           Json.obj(
             "artifactKind" -> Json.fromString(assignment.identity.kind.name),
             "artifactName" -> Json.fromString(assignment.identity.name),
-            "defaultPort" -> Json.fromInt(assignment.defaultPort)
+            "defaultPort" -> Json.fromInt(assignment.defaultport)
           )
         }*)
       )
@@ -331,7 +338,7 @@ object ServerPortPolicy {
   private def _automatic_port(
     subsystem: Subsystem,
     availability: Availability,
-    assignmentStore: AssignmentStore
+    assignmentstore: AssignmentStore
   ): Consequence[Int] =
     artifactIdentity(subsystem) match {
       case None => Consequence.success(RuntimeDefaultPort)
@@ -339,24 +346,24 @@ object ServerPortPolicy {
         ConfigurationAccess.getString(subsystem.configuration, DefaultPortKey) match {
           case Some(value) =>
             _parse_port(value)
-              .flatMap(port => assignmentStore.defaultPort(identity, Some(port)))
+              .flatMap(port => assignmentstore.defaultPort(identity, Some(port)))
               .flatMap(_instance_port(_, identity.kind, availability))
-          case None => assignmentStore.defaultPort(identity).flatMap(_instance_port(_, identity.kind, availability))
+          case None => assignmentstore.defaultPort(identity).flatMap(_instance_port(_, identity.kind, availability))
         }
     }
 
   private def _instance_port(
-    defaultPort: Int,
+    defaultport: Int,
     kind: ArtifactKind,
     availability: Availability
   ): Consequence[Int] = {
     val (start, end) = _range(kind)
-    if (!_is_valid_default_port(kind, defaultPort)) {
+    if (!_is_valid_default_port(kind, defaultport)) {
       Consequence.argumentInvalid(
-        s"${kind.name.toUpperCase} default server port must be in range ${start}-${end}: ${defaultPort}"
+        s"${kind.name.toUpperCase} default server port must be in range ${start}-${end}: ${defaultport}"
       )
-    } else if (availability.isAvailable(defaultPort)) {
-      Consequence.success(defaultPort)
+    } else if (availability.isAvailable(defaultport)) {
+      Consequence.success(defaultport)
     } else {
       _first_available(AdditionalInstanceStartPort, AdditionalInstanceEndPort, availability)
     }

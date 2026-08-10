@@ -64,6 +64,14 @@ endpoint. An explicit value is authoritative and is not automatically moved to
 another port. See `docs/design/server-port-allocation.md` for the complete
 classification and precedence contract.
 
+The server bind host defaults to loopback (`127.0.0.1`). Use resolved
+`textus.server.host` configuration, or the lower-precedence
+`-Dtextus.server.host` JVM property, only when a different interface is
+required. Wildcard values such as `0.0.0.0` and `::` explicitly expose the
+server beyond loopback; the launcher handshake still publishes a reachable
+same-family loopback URL after the bind succeeds. The design document above is
+the authoritative host and port precedence contract.
+
 ## Component Implementation Rule
 
 Handwritten component logic should normally live in generated/custom

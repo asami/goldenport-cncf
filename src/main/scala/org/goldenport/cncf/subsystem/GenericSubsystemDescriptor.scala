@@ -20,7 +20,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug.  9, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -896,7 +896,7 @@ object GenericSubsystemDescriptor {
     assembly: Option[Shape]
   ): Consequence[String] =
     assembly.map(_.subsystemName).orElse(
-      descriptor.subsystemName.orElse(descriptor.componentId.map(_.name)).orElse(descriptor.componentName).orElse(descriptor.name)
+      descriptor.subsystemName.orElse(descriptor.componentId.map(_.localId.value())).orElse(descriptor.componentName).orElse(descriptor.name)
     ).map(_.trim).filter(_.nonEmpty) match {
       case Some(value) => Consequence.success(value)
       case None =>

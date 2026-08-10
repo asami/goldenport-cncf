@@ -3,13 +3,13 @@ package org.goldenport.cncf.cli
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.cncf.http.{HttpExecutionEngine, Http4sHttpServer}
+import org.goldenport.cncf.http.{HttpExecutionEngine, Http4sHttpServer, ServerEndpointPolicy}
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class ServerOperation(val subsystem: Subsystem) extends CliOperation {
@@ -17,9 +17,12 @@ class ServerOperation(val subsystem: Subsystem) extends CliOperation {
 
   def execute(req: Request): Int = {
     val args = make_component_args(req)
-    HttpExecutionEngine.Factory.forRuntime(subsystem) match {
-      case Consequence.Success(engine) =>
-        val server = new Http4sHttpServer(engine)
+    (for {
+      endpoint <- ServerEndpointPolicy.resolve(subsystem)
+      engine <- HttpExecutionEngine.Factory.forRuntime(subsystem)
+    } yield (endpoint, engine)) match {
+      case Consequence.Success((endpoint, engine)) =>
+        val server = Http4sHttpServer.forEndpoint(engine, endpoint)
         server.start(args)
         exit_success
       case Consequence.Failure(conclusion) =>

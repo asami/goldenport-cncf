@@ -17,7 +17,8 @@ import org.goldenport.Consequence
  * not component discovery inputs, so their classes are never factory-scanned.
  *
  * @since   Jul. 12, 2026
- * @version Jul. 29, 2026
+ *  version Jul. 29, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssemblyApiContract(
@@ -226,19 +227,26 @@ object AssemblyApiClassLoader {
   )
 
   private def _parse_descriptor(text: String): ParsedDescriptor = {
-    val json = parse(text).fold(throw _, identity)
+    val json = parse(text).fold(error => throw error, value => value)
     val component = json.hcursor.downField("component")
-    val componentname = component.get[String]("name").fold(throw _, identity)
-    val componentversion = component.get[String]("version").fold(throw _, identity)
+    val componentname = json.hcursor.get[String]("schemaVersion").fold(error => throw error, value => value) match {
+      case "cncf.component-api.v2" =>
+        val namespace = component.get[String]("namespace").fold(error => throw error, value => value)
+        val id = component.get[String]("id").fold(error => throw error, value => value)
+        s"$namespace.$id"
+      case _ =>
+        component.get[String]("name").fold(error => throw error, value => value)
+    }
+    val componentversion = component.get[String]("version").fold(error => throw error, value => value)
     val contracts = json.hcursor.get[Vector[Json]]("provided").getOrElse(Vector.empty).map { value =>
       val c = value.hcursor
       AssemblyApiContract(
         componentName = componentname,
         componentVersion = componentversion,
-        apiClass = c.get[String]("apiClass").fold(throw _, identity),
+        apiClass = c.get[String]("apiClass").fold(error => throw error, value => value),
         packages = c.get[Vector[String]]("packages").getOrElse(Vector.empty),
-        abiHash = c.get[String]("abiHash").fold(throw _, identity),
-        artifactPath = c.get[String]("artifactPath").fold(throw _, identity)
+        abiHash = c.get[String]("abiHash").fold(error => throw error, value => value),
+        artifactPath = c.get[String]("artifactPath").fold(error => throw error, value => value)
       )
     }
     val requirements = json.hcursor.get[Vector[Json]]("required").getOrElse(Vector.empty).map { value =>
@@ -246,7 +254,7 @@ object AssemblyApiClassLoader {
       AssemblyApiRequirement(
         componentName = componentname,
         componentVersion = componentversion,
-        apiClass = c.get[String]("apiClass").fold(throw _, identity),
+        apiClass = c.get[String]("apiClass").fold(error => throw error, value => value),
         required = c.get[Boolean]("required").getOrElse(true)
       )
     }

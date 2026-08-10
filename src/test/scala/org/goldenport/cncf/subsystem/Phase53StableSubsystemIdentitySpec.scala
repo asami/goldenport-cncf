@@ -7,7 +7,8 @@ import java.util.Comparator
 import scala.util.Using
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.component.{ComponentDescriptor, ComponentId}
+import org.goldenport.cncf.config.SubsystemInstanceId
 import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 30, 2026
- * @version Aug.  1, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -45,6 +46,27 @@ final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers
       nameresult.subsystemName shouldBe "display-like-name"
     }
 
+    "project a label-safe Subsystem identity from a canonical qualified Component ID" in {
+      Given("a canonical Component descriptor for org.simplemodeling.textus.ArtScene")
+      val componentid = ComponentId("org.simplemodeling.textus.ArtScene")
+      val descriptor = ComponentDescriptor(
+        name = Some(componentid.name),
+        componentName = Some(componentid.name),
+        version = Some("0.1.0"),
+        schemaVersion = Some(3),
+        componentId = Some(componentid)
+      )
+      val canonicalpath = Path.of("target", "test-tmp", "phase-53", "canonical-artscene.car")
+
+      When("implicit Subsystem projection derives and validates the default identity")
+      val result = GenericSubsystemDescriptor.fromComponentDescriptor(canonicalpath, descriptor).toOption.get
+      val identity = SubsystemInstanceId.default(result.subsystemName)
+
+      Then("the local Component ID is used as a valid Subsystem identity")
+      result.subsystemName shouldBe "ArtScene"
+      identity shouldBe a[Consequence.Success[_]]
+    }
+
     "prefer an adjacent assembly Subsystem identity over every Component descriptor identity" in {
       Given("a component CAR whose adjacent assembly and Component descriptor identities differ")
       _with_work_directory { directory =>
@@ -52,7 +74,7 @@ final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers
         val assemblydescriptor = directory.resolve("assembly-descriptor.yaml")
         Files.writeString(
           componentdescriptor,
-          """{"name":"display-name","component":"component-name","componentName":"component-name","subsystemName":"component-subsystem","version":"0.1.0"}""",
+          """{"schemaVersion":3,"component":{"namespace":"org.goldenport.fixture","id":"ComponentName","version":"0.1.0"},"subsystemName":"component-subsystem"}""",
           StandardCharsets.UTF_8
         )
         Files.writeString(
@@ -60,7 +82,8 @@ final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers
           """subsystem: assembly-subsystem
             |version: 0.1.0
             |components:
-            |  - name: component-name
+            |  - namespace: org.goldenport.fixture
+            |    id: ComponentName
             |    version: 0.1.0
             |""".stripMargin,
           StandardCharsets.UTF_8

@@ -117,10 +117,31 @@ The selected automatic port is printed when the HTTP server has bound
 successfully. Clients connecting to one of several local servers should use
 that endpoint or an explicitly configured base URL.
 
-After a successful bind, the runtime publishes the selected loopback endpoint
+## Host Binding and Exposure
+
+`textus.server.host` controls the HTTP bind host. CNCF binds to
+`127.0.0.1` by default so a local development server is not exposed on other
+interfaces accidentally. An operator must explicitly select `0.0.0.0`, `::`,
+or another host address when remote access is intended.
+
+Host selection uses this precedence:
+
+1. resolved `textus.server.host` configuration;
+2. the `-Dtextus.server.host` JVM system property;
+3. the loopback default `127.0.0.1`.
+
+Resolved port configuration keeps the port precedence documented above even
+when the host comes from the JVM property. Invalid host values fail startup
+instead of falling back to a broader interface.
+
+After a successful bind, the runtime publishes the actual bound endpoint
 through the process-local `textus.server.bound-base-url` handshake property.
 The CNCF and Textus launchers use this internal signal to delay optional Textus
 Control Center registration until the actual default or additional-instance
 port is known. The property is cleared when the server stops. It is not a user
 configuration key and does not replace the explicit public `base-url` override
 used when a server is exposed through a proxy or a different host name.
+For wildcard bindings, the handshake advertises a reachable loopback address
+in the same address family: `127.0.0.1` for IPv4 wildcard and `[::1]` for IPv6
+wildcard. This handshake remains process-local and does not advertise a public
+proxy address.

@@ -22,7 +22,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @since   Mar. 27, 2026
  *  version Apr. 24, 2026
  *  version May.  4, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentletDescriptor(
@@ -236,7 +236,7 @@ object ComponentDescriptor {
     schemaversion: Option[Int]
   ): Consequence[Option[ComponentStyleSnapshot]] =
     schemaversion match {
-      case Some(2) =>
+      case Some(2) | Some(3) =>
         _record_value(rec, List("componentStyle"))
           .map { style =>
             io.circe.parser.parse(RecordEncoder.json(style)).fold(
@@ -244,12 +244,17 @@ object ComponentDescriptor {
               json => ComponentStyleCatalog.snapshotC(_preserve_empty_snapshot_fields(style, json)).map(Some(_))
             )
           }
-          .getOrElse(Consequence.argumentMissing("componentStyle for descriptor schemaVersion 2"))
+          .getOrElse {
+            if (schemaversion.contains(2))
+              Consequence.argumentMissing("componentStyle for descriptor schemaVersion 2")
+            else
+              Consequence.success(None)
+          }
       case Some(version) if version > 3 =>
         Consequence.argumentInvalid(s"Unsupported component descriptor schemaVersion: $version")
       case _ =>
         if (_record_value(rec, List("componentStyle")).isDefined)
-          Consequence.argumentInvalid("componentStyle is only valid for component descriptor schemaVersion 2")
+          Consequence.argumentInvalid("componentStyle is only valid for component descriptor schemaVersion 2 or 3")
         else
           Consequence.success(None)
     }

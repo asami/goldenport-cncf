@@ -11,7 +11,7 @@ import org.goldenport.Consequence
  * defaults or a subsequently changed catalog.
  *
  * @since   Jul. 31, 2026
- * @version Jul. 31, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentStyleId private (family: String, name: String, major: Int) {
@@ -389,7 +389,7 @@ object ComponentStyleCatalog {
     Either.cond(values == values.distinct && values == values.sorted, (), s"$context must be unique and canonical-order")
 
   private def _unique(values: Vector[String], context: String): Either[String, Unit] =
-    Either.cond(values.distinct.size == values.size, (), s"Duplicate $context identities: ${values.groupBy(identity).collect { case (k, xs) if xs.size > 1 => k }.toVector.sorted.mkString(", ")}")
+    Either.cond(values.distinct.size == values.size, (), s"Duplicate $context identities: ${values.groupBy(value => value).collect { case (k, xs) if xs.size > 1 => k }.toVector.sorted.mkString(", ")}")
 
   private def _major_compatible(values: Vector[String], context: String): Either[String, Unit] = {
     val incompatible = values.groupBy(_.takeWhile(_ != '@')).collect {

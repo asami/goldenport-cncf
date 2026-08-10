@@ -9,7 +9,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
 
 /*
  * @since   Aug.  4, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object HttpRuntimeBindingAdmissionFixture {
@@ -41,7 +41,11 @@ object HttpRuntimeBindingAdmissionFixture {
     operationDispatcherOption: Option[WebOperationDispatcher] = None
   ): Http4sHttpServer = {
     admit(engine.runtimeSubsystem)
-    new Http4sHttpServer(engine, operationDispatcherOption = operationDispatcherOption)
+    Http4sHttpServer.forEndpoint(
+      engine,
+      ServerEndpointPolicy.Endpoint(ServerEndpointPolicy.DEFAULT_HOST, Http4sHttpServer.defaultPort),
+      operationDispatcherOption
+    )
   }
 
   def admit(subsystem: Subsystem): Unit =

@@ -39,7 +39,7 @@ import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.schema.{Multiplicity, ValueDomain, XFileBundle, XString}
 import org.goldenport.value.BaseContent
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
-import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory, ServerPortPolicy}
+import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory, ServerEndpointPolicy}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemFactory, Subsystem, SubsystemExecutionProfile, SubsystemUserMode, SystemNode, SystemNodeConstruction}
@@ -67,7 +67,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug.  6, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -4521,10 +4521,10 @@ class CncfRuntime() extends GlobalObservable {
   def startServer(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)
     (for {
-      port <- _server_port(subsystem)
+      endpoint <- _server_endpoint(subsystem)
       engine <- HttpExecutionEngine.Factory.forRuntime(subsystem)
     } yield {
-      val server = new Http4sHttpServer(engine, port)
+      val server = Http4sHttpServer.forEndpoint(engine, endpoint)
       server.start(args)
       0
     }) match {
@@ -4538,10 +4538,10 @@ class CncfRuntime() extends GlobalObservable {
 
   def startServer(subsystem: Subsystem, args: Array[String]): Unit = {
     (for {
-      port <- _server_port(subsystem)
+      endpoint <- _server_endpoint(subsystem)
       engine <- HttpExecutionEngine.Factory.forRuntime(subsystem)
     } yield {
-      val server = new Http4sHttpServer(engine, port)
+      val server = Http4sHttpServer.forEndpoint(engine, endpoint)
       server.start(args)
     }) match {
       case Consequence.Success(_) =>
@@ -4551,10 +4551,10 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _server_port(
+  private def _server_endpoint(
     subsystem: Subsystem
-  ): Consequence[Int] =
-    ServerPortPolicy.resolve(subsystem)
+  ): Consequence[ServerEndpointPolicy.Endpoint] =
+    ServerEndpointPolicy.resolve(subsystem)
 
   def executeClient(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)

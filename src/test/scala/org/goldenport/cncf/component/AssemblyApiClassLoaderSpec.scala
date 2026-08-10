@@ -1,6 +1,7 @@
 /*
  * @since   Jul. 12, 2026
- * @version Jul. 29, 2026
+ *  version Jul. 29, 2026
+ * @version Aug. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 package org.goldenport.cncf.component
@@ -18,6 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Assembly API classloader" should {
+    "validate compatibility and assembly API admission" which {
     "retain the former descriptor-path symbol as a compatibility alias" in {
       Given("the canonical component API descriptor path constant")
 
@@ -112,6 +114,9 @@ final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with Gi
       loader should be theSameInstanceAs runtimeparent
     }
 
+    }
+
+    "load descriptor-declared APIs from CAR and SAR archives" which {
     "load only the descriptor-declared nested API JAR from a CAR" in {
       Given("a CAR with a component API descriptor and nested API JAR")
       val classname = classOf[AssemblyApiFixture].getName
@@ -133,6 +138,25 @@ final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with Gi
       metadata.artifacts.head.classes.keySet should contain (classname)
     }
 
+    "load a canonical v2 component API descriptor" in {
+      Given("a CAR whose component API descriptor carries canonical namespace and ID")
+      val classname = classOf[AssemblyApiFixture].getName
+      val bytes = _class_bytes(classname)
+      val car = Files.createTempFile("assembly-api-canonical-", ".car")
+      val descriptor =
+        s"""{"schemaVersion":"cncf.component-api.v2","component":{"namespace":"org.goldenport.fixture","id":"Provider","version":"1.0.0"},"provided":[{"apiClass":"$classname","packages":["org.goldenport.cncf.component"],"abiHash":"sha256:one","artifactPath":"spi/provider-api.jar"}],"required":[]}"""
+      _zip(car, Vector(
+        AssemblyApiClassLoader.DESCRIPTOR_PATH -> descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        "spi/provider-api.jar" -> _jar_bytes(classname, bytes)
+      ))
+
+      When("the canonical API metadata is preflighted")
+      val metadata = AssemblyApiClassLoader.loadCar(car).toOption.get
+
+      Then("the qualified component identity is retained")
+      metadata.artifacts.map(_.contract.componentName) shouldBe Vector("org.goldenport.fixture.Provider")
+    }
+
     "preflight component APIs from CARs nested in a SAR" in {
       Given("a SAR containing one provider CAR with a component API")
       val classname = classOf[AssemblyApiFixture].getName
@@ -151,6 +175,7 @@ final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with Gi
 
       Then("the nested provider API participates in the assembly classloader")
       metadata.artifacts.map(_.contract.apiClass) shouldBe Vector(classname)
+    }
     }
   }
 
