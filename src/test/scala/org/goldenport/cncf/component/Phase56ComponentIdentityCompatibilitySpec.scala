@@ -3,6 +3,7 @@ package org.goldenport.cncf.component
 import java.nio.file.Path
 
 import org.goldenport.Consequence
+import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, SubsystemAssemblyAdmission}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -10,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityCompatibilitySpec
@@ -40,6 +41,9 @@ final class Phase56ComponentIdentityCompatibilitySpec
   )
   private val _e8 = afterWord(
     "in spec:phase-56-component-identity-compatibility, example:E8, rules:CID06-R2,R4, phase:56, slice:CID-06A"
+  )
+  private val _e9 = afterWord(
+    "in spec:phase-56-component-identity-compatibility, example:E9, rules:CID06-R1,R3, phase:56, slice:CID-06A"
   )
 
   "Phase 56 Component identity compatibility" should {
@@ -204,6 +208,45 @@ final class Phase56ComponentIdentityCompatibilitySpec
             )
           case Consequence.Success(_) =>
             fail("ambiguous bare assembly binding was admitted")
+        }
+      }
+      }
+    }
+
+    "runtime componentlet compatibility behavior (E9)" which {
+      "E9 adapt a unique owning component alias to its canonical participant identity" must _e9 {
+      "when an admitted componentlet reports its owning component name in instance metadata" in {
+        Given("Spec: docs/spec/component-identity.md; Rules: 1,8,9; Example: E9 componentlet owning alias")
+        val participantid = ComponentId("org.example.TextusScraperAi")
+        val metadata = ComponentInstanceMetadata("textus-scraper", "static-default").copy(
+          componentId = Some(participantid)
+        )
+        val component = new Component() {}
+        component.initialize(ComponentInit(
+          subsystem = org.goldenport.cncf.testutil.TestComponentFactory.emptySubsystem("phase-56-cid06-componentlet"),
+          core = Component.Core.create(
+            participantid.name,
+            participantid,
+            metadata.instanceId,
+            Protocol.empty
+          ),
+          origin = ComponentOrigin.Builtin,
+          participantRole = Component.ParticipantRole.Componentlet,
+          instanceMetadata = Some(metadata)
+        ))
+        When("the runtime compatibility adapter resolves the owning component alias")
+        val result = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          "textus-scraper",
+          ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(Vector(component)),
+          ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+        )
+        Then("the alias adapts to the unchanged canonical participant identity")
+        result.toConsequence match {
+          case Consequence.Success(admission) =>
+            admission.componentid shouldBe participantid
+            admission.notice.map(_.alias) shouldBe Some("textus-scraper")
+          case Consequence.Failure(conclusion) =>
+            fail(conclusion.show)
         }
       }
       }

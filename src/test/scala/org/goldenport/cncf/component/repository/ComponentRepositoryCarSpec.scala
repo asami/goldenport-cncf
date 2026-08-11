@@ -19,7 +19,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.{ComponentParameterProvenance, RuntimeConfig}
-import org.goldenport.cncf.component.{AssemblyApiClassLoader, CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentFactory, ComponentId, ComponentInstanceId, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver, RepositoryParameterProbeComponent, RepositoryParameterProbeFactory}
+import org.goldenport.cncf.component.{AssemblyApiClassLoader, CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver, RepositoryParameterProbeComponent, RepositoryParameterProbeFactory}
 import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.SpiResolver
@@ -37,7 +37,7 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jul. 31, 2026
- * @version Aug.  9, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -699,7 +699,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(bootstrap.configuration)
 
           Then("the component identity supplies the subsystem and binding names")
-          descriptor.map(_.subsystemName) shouldBe Some("org.example.Cwitter")
+          descriptor.map(_.subsystemName) shouldBe Some("Cwitter")
           descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("org.example.Cwitter")
         }
       }
@@ -1550,7 +1550,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           version = Some("0.1.0"),
           componentName = Some(componentid),
           schemaVersion = Some(3),
-          componentId = Some(ComponentId(componentid))
+          componentId = Some(org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentid))
         )
         val params = ComponentCreate(
           subsystem,
@@ -1629,6 +1629,19 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         val providercomponents = repository.discover().toVector
         val consumer = new Component() with AiRunnerSocket
+        val consumerid = TestComponentFactory.componentId("component_repository_car_ai_runner_consumer")
+        consumer.initialize(
+          ComponentInit(
+            subsystem,
+            Component.Core.create(
+              consumerid.name,
+              consumerid,
+              ComponentInstanceId.default(consumerid),
+              Protocol.empty
+            ),
+            ComponentOrigin.Builtin
+          )
+        )
 
         When("SPI resolver wires the CAR provider into the consumer socket")
         val resolved = SpiResolver.resolve(providercomponents :+ consumer)
@@ -2205,7 +2218,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             version = Some("0.0.1"),
             componentName = Some(componentid),
             schemaVersion = Some(3),
-            componentId = Some(ComponentId(componentid))
+            componentId = Some(org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentid))
           ))
         )
 
@@ -2258,14 +2271,14 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             version = Some("0.1.0"),
             componentName = Some(appid),
             schemaVersion = Some(3),
-            componentId = Some(ComponentId(appid))
+            componentId = Some(org.goldenport.cncf.testutil.TestComponentFactory.componentId(appid))
           ),
           ComponentDescriptor(
             name = Some(dependencyid),
             version = Some("0.1.0"),
             componentName = Some(dependencyid),
             schemaVersion = Some(3),
-            componentId = Some(ComponentId(dependencyid))
+            componentId = Some(org.goldenport.cncf.testutil.TestComponentFactory.componentId(dependencyid))
           )
         )
         val claims = ComponentRepository.developmentComponentClaims(Vector(dev, dependencies))
@@ -2902,7 +2915,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     componentid: String,
     release: String
   ): Unit = {
-    val id = ComponentId(componentid)
+    val id = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentid)
     val coordinate = ComponentReleaseCoordinate.require(id.sharedIdentity, release)
     val artifactname = coordinate.mavenArtifactId()
     Files.writeString(

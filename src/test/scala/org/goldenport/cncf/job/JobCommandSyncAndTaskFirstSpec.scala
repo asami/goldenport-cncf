@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May. 31, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobCommandSyncAndTaskFirstSpec
@@ -87,9 +87,9 @@ final class JobCommandSyncAndTaskFirstSpec
     subsystem: org.goldenport.cncf.subsystem.Subsystem
   ): Component = {
     val component = new Component() {}
-    val id = ComponentId("job_command_sync_task_first_spec")
+    val id = ComponentId("org.goldenport.cncf.test.JobCommandSyncTaskFirstSpec")
     val core = Component.Core.create(
-      name = "job_command_sync_task_first_spec",
+      name = id.name,
       componentid = id,
       instanceid = ComponentInstanceId.default(id),
       protocol = Protocol.empty,

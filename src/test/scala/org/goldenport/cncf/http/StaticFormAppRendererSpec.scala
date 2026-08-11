@@ -74,7 +74,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug.  6, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -258,7 +258,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.createDirectories(devroot.resolve("src").resolve("main").resolve("web"))
       val subsystem = _management_console_fixture_subsystem()
         .add(Vector(TestComponentFactory.create("dev_component", Protocol.empty)))
-      subsystem.components.find(_.name == "dev_component").getOrElse(fail("dev component missing")).withArtifactMetadata(
+      val devcomponent = subsystem.findComponent("dev_component").getOrElse(fail("dev component missing"))
+      devcomponent.withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata(
           sourceType = "component-dev-dir",
           name = "dev-component",
@@ -273,7 +274,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the observable contract for render component development directory diagnostics on system admin page holds")
       html should include ("Component Development Directories")
-      html should include ("dev_component")
+      html should include (devcomponent.name)
       html should include (devroot.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt").toString)
       html should include (devroot.resolve("src").resolve("main").resolve("web").toString)
     }
@@ -403,10 +404,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the observable contract for render system admin knowledge pages holds")
       index should include ("System Knowledge")
-      index should include ("knowledge_component")
+      index should include (component.displayName)
       index should include ("/web/system/admin/knowledge/knowledge_component")
-      detail should include ("System Knowledge knowledge_component")
+      detail should include (s"System Knowledge ${component.displayName}")
       detail should include ("node-customer")
+      detail should include ("/web/system/admin/knowledge/knowledge_component/nodes/node-customer")
+      detail should not include (s"/web/system/admin/knowledge/${component.name}/nodes/node-customer")
       detail should include ("rel-1")
       detail should include ("frame-1")
       detail should include ("fact-1")
@@ -462,13 +465,51 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the pages expose component identity and published Information metadata")
       index should include ("System Information")
-      index should include ("information_component")
+      index should include (component.displayName)
       index should include ("/web/system/admin/information/information_component")
-      detail should include ("System Information information_component")
+      detail should include (s"System Information ${component.displayName}")
       detail should include ("Knowledge Import")
       detail should include ("paper")
       detail should include ("published")
       _renderer.renderSystemAdminInformationComponent(subsystem, "missing") shouldBe None
+    }
+
+    "reject ambiguous display aliases in system admin projection routes" in {
+      Given("two qualified components sharing one system admin display alias")
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
+      val first = TestComponentFactory.create(
+        "org.example.First",
+        Protocol.empty,
+        displayName = Some("shared-console")
+      )
+      val second = TestComponentFactory.create(
+        "org.example.Second",
+        Protocol.empty,
+        displayName = Some("shared-console")
+      )
+      subsystem.add(Vector(first, second))
+
+      When("system Information and Knowledge selectors are rendered")
+      val information = _renderer.renderSystemAdminInformation(subsystem).body
+      val knowledge = _renderer.renderSystemAdminKnowledge(subsystem).body
+      val ambiguousinformation = _renderer.renderSystemAdminInformationComponent(subsystem, "shared-console")
+      val ambiguousknowledge = _renderer.renderSystemAdminKnowledgeComponent(subsystem, "shared-console")
+      val firstinformation = _renderer.renderSystemAdminInformationComponent(subsystem, first.name)
+      val secondinformation = _renderer.renderSystemAdminInformationComponent(subsystem, second.name)
+      val firstknowledge = _renderer.renderSystemAdminKnowledgeComponent(subsystem, first.name)
+      val secondknowledge = _renderer.renderSystemAdminKnowledgeComponent(subsystem, second.name)
+
+      Then("ambiguous display aliases are rejected and qualified routes remain distinct")
+      information should include (s"/web/system/admin/information/${first.name}")
+      information should include (s"/web/system/admin/information/${second.name}")
+      knowledge should include (s"/web/system/admin/knowledge/${first.name}")
+      knowledge should include (s"/web/system/admin/knowledge/${second.name}")
+      ambiguousinformation shouldBe None
+      ambiguousknowledge shouldBe None
+      firstinformation should not be empty
+      secondinformation should not be empty
+      firstknowledge should not be empty
+      secondknowledge should not be empty
     }
 
     "render Blob admin read-only pages" in {
@@ -1226,7 +1267,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render read-only system and component manual pages" in {
       Given("the prerequisites for render read-only system and component manual pages")
       val subsystem = _aggregate_http_fixture_subsystem()
-      subsystem.components.find(_.name == "notice_board").foreach { component =>
+      subsystem.findComponent("notice_board").foreach { component =>
         val componentlets = Vector(
           ComponentletDescriptor(
             name = "notice-admin",
@@ -1278,7 +1319,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       systemdocumenthtml should include ("/help/system")
       systemdocumenthtml should include ("/openapi.json")
       systemdocumenthtml should include ("User Guide")
-      componentdocumenthtml should include ("notice_board Documents")
+      componentdocumenthtml should include ("org.goldenport.cncf.test.NoticeBoard Documents")
       componentdocumenthtml should include ("Generated Help")
       componentdocumenthtml should include ("/help/notice-board")
       componentdocumenthtml should include ("/openapi.json")
@@ -1288,7 +1329,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       systemhtml should include ("MCP endpoint")
       systemhtml should include ("/help/notice-board")
       systemhtml should include ("class=\"card manual-card shadow-sm\"")
-      componenthtml should include ("notice_board Specification")
+      componenthtml should include ("NoticeBoard Specification")
       componenthtml should include ("Help")
       componenthtml should include ("Describe")
       componenthtml should include ("Schema")
@@ -1435,7 +1476,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       aliasmanualhtml should include ("approve-notice-aggregate")
       openapiresponse.status.code shouldBe 200
       openapijson should include (""""openapi"""")
-      openapijson should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
+      openapijson should include ("/rest/v1/org-goldenport-cncf-test-notice-board/notice-aggregate/approve-notice-aggregate")
       canonicalopenapiresponse.status.code shouldBe 200
       canonicalopenapijson shouldBe openapijson
       helpresponse.status.code shouldBe 200
@@ -1445,7 +1486,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       helpopenapijson should include (""""openapi"""")
       helpopenapijson shouldBe canonicalopenapijson
       manresponse.status.code shouldBe 200
-      manhtml should include ("notice_board Documents")
+      manhtml should include ("org.goldenport.cncf.test.NoticeBoard Documents")
       manhtml should include ("Packaged component documents")
     }
 
@@ -1456,7 +1497,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Vector("manual/index.md" -> "# Notice Board Reference Manual\n\nCanonical CAR manual content.\n")
       )
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
-      val component = subsystem.components.find(x => org.goldenport.cncf.naming.NamingConventions.equivalentByNormalized(x.name, "notice-board")).getOrElse(fail("notice-board component is missing"))
+      val component = subsystem.findComponent("notice-board").getOrElse(fail("notice-board component is missing"))
       component.withArtifactMetadata(org.goldenport.cncf.component.Component.ArtifactMetadata(
         sourceType = "car",
         name = "notice-board",
@@ -1775,7 +1816,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val component = _notice_fixture_component(subsystem)
       val notices = component.entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.toVector
       given EntityPersistent[NoticeEntity] = _notice_persistent
-      given ExecutionContext = subsystem.components.find(_.name == "admin").getOrElse(fail("admin component is missing")).logic.executionContext()
+      given ExecutionContext = subsystem.findComponent("admin").getOrElse(fail("admin component is missing")).logic.executionContext()
       notices.foreach { notice =>
         org.goldenport.cncf.entity.EntityStore.standard().save(notice)
           .getOrElse(fail(s"admin notice fixture seed failed: ${notice.id.print}"))
@@ -1845,7 +1886,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val source = notice.id
       val sourceid = source.value
       given EntityPersistent[NoticeEntity] = _notice_persistent
-      given ExecutionContext = subsystem.components.find(_.name == "admin").getOrElse(fail("admin component is missing")).logic.executionContext()
+      given ExecutionContext = subsystem.findComponent("admin").getOrElse(fail("admin component is missing")).logic.executionContext()
       org.goldenport.cncf.entity.EntityStore.standard().save(notice)
         .getOrElse(fail(s"admin notice fixture seed failed: ${notice.id.print}"))
       val root = _tag_record_response(
@@ -2020,7 +2061,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render delegated collection storage shape in component admin entity type page" in {
       Given("the prerequisites for render delegated collection storage shape in component admin entity type page")
       val subsystem = _aggregate_http_fixture_subsystem()
-      subsystem.components.find(_.name == "notice_board").foreach { component =>
+      subsystem.findComponent("notice_board").foreach { component =>
         component.withComponentDescriptors(Vector(ComponentDescriptor(
           name = Some(component.name),
           componentName = Some(component.name),
@@ -3311,7 +3352,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       componentroot.status.code shouldBe 404
       componentroot.as[String].unsafeRunSync() should not include ("Forms")
       formindex.status.code shouldBe 200
-      formindex.as[String].unsafeRunSync() should include ("art_scene Forms")
+      formindex.as[String].unsafeRunSync() should include ("org.goldenport.cncf.test.ArtScene Forms")
     }
 
     "serve explicit component Web entry app from the component root" in {
@@ -3356,7 +3397,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       }
       admin.as[String].unsafeRunSync() should not include ("Entry ArtScene")
       formindex.status.code shouldBe 200
-      formindex.as[String].unsafeRunSync() should include ("art_scene Forms")
+      formindex.as[String].unsafeRunSync() should include ("org.goldenport.cncf.test.ArtScene Forms")
     }
 
     "prefer explicit Web route aliases over component Web entry shortcuts" in {
@@ -3779,10 +3820,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("textus_knowledge_editor", Protocol.empty),
         TestComponentFactory.create("textus_user_notification", Protocol.empty)
       ))
-      subsystem.components.find(_.name == "textus_knowledge_editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
+      subsystem.findComponent("textus_knowledge_editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0", component = Some("textus-knowledge-editor"), archivePath = Some(editorroot.toString))
       )
-      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(notificationroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -3945,10 +3986,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("textus_user_notification", Protocol.empty),
         TestComponentFactory.create("editor", Protocol.empty)
       ))
-      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(notificationroot.toString))
       )
-      subsystem.components.find(_.name == "editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
+      subsystem.findComponent("editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "editor", "0.1.0", component = Some("editor"), archivePath = Some(editorroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -4008,7 +4049,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.createDirectories(secondroot.resolve("src").resolve("main").resolve("web"))
       val singlesubsystem = _management_console_fixture_subsystem()
         .add(Vector(TestComponentFactory.create("single_shell", Protocol.empty)))
-      singlesubsystem.components.find(_.name == "single_shell").getOrElse(fail("single component missing")).withArtifactMetadata(
+      singlesubsystem.findComponent("single_shell").getOrElse(fail("single component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "single-shell", "0.1.0", archivePath = Some(singleroot.toString))
       )
       val multisubsystem = _management_console_fixture_subsystem()
@@ -4016,10 +4057,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           TestComponentFactory.create("first_shell", Protocol.empty),
           TestComponentFactory.create("second_shell", Protocol.empty)
         ))
-      multisubsystem.components.find(_.name == "first_shell").getOrElse(fail("first component missing")).withArtifactMetadata(
+      multisubsystem.findComponent("first_shell").getOrElse(fail("first component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "first-shell", "0.1.0", archivePath = Some(firstroot.toString))
       )
-      multisubsystem.components.find(_.name == "second_shell").getOrElse(fail("second component missing")).withArtifactMetadata(
+      multisubsystem.findComponent("second_shell").getOrElse(fail("second component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "second-shell", "0.1.0", archivePath = Some(secondroot.toString))
       )
 
@@ -4139,10 +4180,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("blog_component", Protocol.empty),
         TestComponentFactory.create("textus_user_notification", Protocol.empty)
       ))
-      subsystem.components.find(_.name == "blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
+      subsystem.findComponent("blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "blog-component", "0.1.0", component = Some("blog-component"), archivePath = Some(shellroot.toString))
       )
-      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -4221,10 +4262,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("blog_component", Protocol.empty),
         TestComponentFactory.create("textus_user_notification", Protocol.empty)
       ))
-      subsystem.components.find(_.name == "blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
+      subsystem.findComponent("blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "blog-component", "0.1.0", component = Some("blog-component"), archivePath = Some(shellroot.toString))
       )
-      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -4283,7 +4324,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
         ))
       ).add(Vector(TestComponentFactory.create("textus_user_notification", Protocol.empty)))
-      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -4806,7 +4847,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val html = _renderer.renderComponentAdminEntityEdit(subsystem, componentname, entitypath, recordid).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
       Then("the canonical route is used in form, value, and navigation contracts")
-      html should include ("notice_board Notice Edit")
+      html should include ("org.goldenport.cncf.test.NoticeBoard Notice Edit")
       html should include ("Edit Notice")
       html should include ("<form method=\"post\"")
       html should include ("class=\"admin-form\"")
@@ -5324,11 +5365,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         html should include ("class=\"btn-group btn-group-sm\"")
         html should include ("created")
         html should include ("alice")
-        html should include ("/web/notice-board/admin/data/audit/audit_1")
+        html should include ("/web/org-goldenport-cncf-test-notice-board/admin/data/audit/audit_1")
         firstpage should include ("Page 1")
         firstpage should include ("page=2&amp;pageSize=1")
         secondpage should include ("Page 2")
-        secondpage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/data/audit?page=3&amp;pageSize=1\">Next")
+        secondpage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/org-goldenport-cncf-test-notice-board/admin/data/audit?page=3&amp;pageSize=1\">Next")
         totalpage should include ("total 2")
         totalpage should include ("includeTotal=true")
         unsupportedtotalpage should include ("alert-warning")
@@ -5338,17 +5379,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         detail should include ("alice")
         detail should include ("class=\"card admin-card")
         detail should include ("class=\"btn btn-primary\"")
-        detail should include ("/web/notice-board/admin/data/audit")
-        detail should include ("/web/notice-board/admin")
+        detail should include ("/web/org-goldenport-cncf-test-notice-board/admin/data/audit")
+        detail should include ("/web/org-goldenport-cncf-test-notice-board/admin")
         edit should include ("name=\"action\"")
         edit should include ("value=\"created\"")
         edit should include ("class=\"admin-form\"")
-        edit should include ("/web/notice-board/admin/data/audit/audit_1")
-        edit should include ("/web/notice-board/admin/data/audit")
-        newly should include ("/form/notice-board/admin/data/audit/create")
+        edit should include ("/web/org-goldenport-cncf-test-notice-board/admin/data/audit/audit_1")
+        edit should include ("/web/org-goldenport-cncf-test-notice-board/admin/data/audit")
+        newly should include ("/form/org-goldenport-cncf-test-notice-board/admin/data/audit/create")
         newly should include ("class=\"admin-form\"")
-        newly should include ("/web/notice-board/admin/data/audit")
-        newly should include ("/web/notice-board/admin/data")
+        newly should include ("/web/org-goldenport-cncf-test-notice-board/admin/data/audit")
+        newly should include ("/web/org-goldenport-cncf-test-notice-board/admin/data")
       }
       }
     }
@@ -5635,7 +5676,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val html = _renderer.renderComponentAdminViewDetail(subsystem, "notice_board", "notice_view").map(_.body).getOrElse(fail("component view detail admin is missing"))
 
       Then("the observable contract for render component view read page from a live ViewSpace fixture holds")
-      html should include ("notice_board Notice View View")
+      html should include ("org.goldenport.cncf.test.NoticeBoard Notice View View")
       html should include ("Notice View metadata")
       html should include ("class=\"card admin-card")
       html should include ("class=\"table table-sm table-hover align-middle\"")
@@ -5644,12 +5685,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("recent")
       html should include ("Read result")
       html should include ("notice summary")
-      html should include ("/web/notice-board/admin/views/notice-view/notice%20summary")
+      html should include ("/web/org-goldenport-cncf-test-notice-board/admin/views/notice-view/notice%20summary")
       html should include ("Result pages")
       html should not include ("Edit")
       html should not include ("New")
       html should not include ("Create")
-      html should include ("/web/notice-board/admin/views")
+      html should include ("/web/org-goldenport-cncf-test-notice-board/admin/views")
     }
 
     "render component view instance detail page through context-aware read" in {
@@ -5661,7 +5702,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", id).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
       Then("the observable contract for render component view instance detail page through context-aware read holds")
-      html should include ("notice_board Notice View View Detail")
+      html should include ("org.goldenport.cncf.test.NoticeBoard Notice View View Detail")
       html should include ("class=\"card admin-card")
       html should include (id)
       html should include ("label")
@@ -5669,7 +5710,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("notice detail notice_1")
       html should not include ("Edit")
       html should not include ("Update")
-      html should include ("/web/notice-board/admin/views/notice-view")
+      html should include ("/web/org-goldenport-cncf-test-notice-board/admin/views/notice-view")
     }
 
     "reject a foreign canonical instance locator without rendering Admin reads or aggregate operations" in {
@@ -5840,7 +5881,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val html = _renderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate").map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
 
       Then("the observable contract for render component aggregate read page from a live AggregateSpace fixture holds")
-      html should include ("notice_board Notice Aggregate Aggregate")
+      html should include ("org.goldenport.cncf.test.NoticeBoard Notice Aggregate Aggregate")
       html should include ("Notice Aggregate metadata")
       html should include ("class=\"card admin-card")
       html should include ("class=\"table table-sm table-hover align-middle\"")
@@ -5850,7 +5891,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Read result")
       html should include ("<th>id</th><th>Short ID</th><th>label</th><th>status</th><th>Actions</th>")
       html should include ("notice_1")
-      html should include (s"/web/notice-board/admin/aggregates/notice-aggregate/${id}")
+      html should include (s"/web/org-goldenport-cncf-test-notice-board/admin/aggregates/notice-aggregate/${id}")
       html should include ("Result pages")
       html should include ("Operations")
       html should include ("create-notice-aggregate")
@@ -5862,10 +5903,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Read aggregate")
       html should include ("Run update command")
       html should include ("btn-warning")
-      html should include ("/form/notice-board/notice-aggregate/create-notice-aggregate")
-      html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate")
+      html should include ("/form/org-goldenport-cncf-test-notice-board/notice-aggregate/create-notice-aggregate")
+      html should include ("/form/org-goldenport-cncf-test-notice-board/notice-aggregate/approve-notice-aggregate")
       html should not include ("approve-notice-aggregate__success.html")
-      html should include ("/web/notice-board/admin/aggregates")
+      html should include ("/web/org-goldenport-cncf-test-notice-board/admin/aggregates")
     }
 
     "render component aggregate list with descriptor field columns" in {
@@ -5893,7 +5934,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("<th>note</th>")
       html.indexOf("<th>id</th>") should be < html.indexOf("<th>label</th>")
       html.indexOf("<th>label</th>") should be < html.indexOf("<th>note</th>")
-      html should include (s"/web/notice-board/admin/aggregates/notice-aggregate/${id}")
+      html should include (s"/web/org-goldenport-cncf-test-notice-board/admin/aggregates/notice-aggregate/${id}")
     }
 
     "render component aggregate instance detail page through context-aware read" in {
@@ -5905,7 +5946,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", id).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
       Then("the observable contract for render component aggregate instance detail page through context-aware read holds")
-      html should include ("notice_board Notice Aggregate Aggregate Detail")
+      html should include ("org.goldenport.cncf.test.NoticeBoard Notice Aggregate Aggregate Detail")
       html should include ("class=\"card admin-card")
       html should include (id)
       html should include ("label")
@@ -5916,12 +5957,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Read aggregate")
       html should include ("Run update command")
       html should not include ("Create aggregate")
-      html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?")
-      html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?")
+      html should include ("/form/org-goldenport-cncf-test-notice-board/notice-aggregate/approve-notice-aggregate?")
+      html should include ("/form/org-goldenport-cncf-test-notice-board/notice-aggregate/read-notice-aggregate?")
       html should include (s"id=${id}")
       html should include ("crud.success.href=")
       html should not include ("textus.admin.principalId=system")
-      html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
+      html should include ("/web/org-goldenport-cncf-test-notice-board/admin/aggregates/notice-aggregate")
     }
 
     "render component aggregate instance detail with descriptor field schema" in {
@@ -6591,30 +6632,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
     }
 
-    "specify selector to Web HTML, Form API, and REST operation path mapping" in {
-      Given("the prerequisites for specify selector to Web HTML, Form API, and REST operation path mapping")
+    "resolve a stable Web alias while retaining canonical Form API identity" in {
+      Given("a stable admitted Web alias and a canonical component identity")
       val subsystem = _form_type_fixture_subsystem()
+      val componentalias = "notice-board"
+      val canonicalcomponentpath = "org-goldenport-cncf-test-notice-board"
 
       val definition = _renderer.renderOperationFormDefinition(
         subsystem,
-        "notice_board",
+        componentalias,
         "notice",
         "post_secret_notice"
       ).map(_.body).getOrElse(fail("operation form definition is missing"))
-      When("specify selector to Web HTML, Form API, and REST operation path mapping is exercised")
+      When("the Web alias is resolved to its form definition")
       val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
 
-      Then("the observable contract for specify selector to Web HTML, Form API, and REST operation path mapping holds")
-      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.notice.post-secret-notice")
-      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice")
-      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/form/notice-board/notice/post-secret-notice")
-      json.hcursor.downField("actions").downN(0).downField("path").as[String].toOption shouldBe Some("/form/notice-board/notice/post-secret-notice")
-      json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice")
-      org.goldenport.cncf.naming.NamingConventions.toNormalizedPath(
-        "notice_board",
-        "notice",
-        "post_secret_notice"
-      ) shouldBe "/notice-board/notice/post-secret-notice"
+      Then("the alias resolves without replacing canonical Component or Form API identity")
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some(s"${canonicalcomponentpath}.notice.post-secret-notice")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some(s"/form-api/${canonicalcomponentpath}/notice/post-secret-notice")
+      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some(s"/form/${canonicalcomponentpath}/notice/post-secret-notice")
+      json.hcursor.downField("actions").downN(0).downField("path").as[String].toOption shouldBe Some(s"/form/${canonicalcomponentpath}/notice/post-secret-notice")
+      json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some(s"/form-api/${canonicalcomponentpath}/notice/post-secret-notice")
     }
 
     "dispatch Form API POST to the canonical REST operation request" in {
@@ -6651,7 +6689,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the observable contract for dispatch Form API POST to the canonical REST operation request holds")
       response.status.code shouldBe 200
-      dispatcher.paths should contain ("/notice-board/notice/post-secret-notice")
+      dispatcher.paths should contain ("/org-goldenport-cncf-test-notice-board/notice/post-secret-notice")
       dispatcher.forms.last.getString("body") shouldBe Some("hello")
       dispatcher.forms.last.getString("accessToken") shouldBe Some("abc")
       dispatcher.forms.last.getString("crud.origin.href") shouldBe None
@@ -7528,12 +7566,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for serve operation form definition API from the same resolved Web schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-      json.hcursor.downField("selector").as[String].toOption shouldBe Some(selector)
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.notice.post-secret-notice")
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("operation")
       json.hcursor.downField("method").as[String].toOption shouldBe Some("POST")
-      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice")
-      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/form/notice-board/notice/post-secret-notice")
-      json.hcursor.downField("actions").downN(2).downField("path").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice/validate")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form-api/org-goldenport-cncf-test-notice-board/notice/post-secret-notice")
+      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/form/org-goldenport-cncf-test-notice-board/notice/post-secret-notice")
+      json.hcursor.downField("actions").downN(2).downField("path").as[String].toOption shouldBe Some("/form-api/org-goldenport-cncf-test-notice-board/notice/post-secret-notice/validate")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("body")
       fields.downN(0).downField("label").as[String].toOption shouldBe Some("Notice body")
       fields.downN(0).downField("type").as[String].toOption shouldBe Some("select")
@@ -8216,11 +8254,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for serve admin entity form definition API from EntityRuntimeDescriptor schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.entity.notice")
       json.hcursor.downField("surface").as[String].toOption shouldBe Some("entity")
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-entity")
-      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/create")
-      json.hcursor.downField("actions").downN(5).downField("path").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/{id}/update")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/org-goldenport-cncf-test-notice-board/admin/entities/notice/create")
+      json.hcursor.downField("actions").downN(5).downField("path").as[String].toOption shouldBe Some("/form/org-goldenport-cncf-test-notice-board/admin/entities/notice/{id}/update")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("shortid")
       fields.downN(2).downField("name").as[String].toOption shouldBe Some("body")
@@ -8256,10 +8294,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for serve admin entity update form definition API from detail view fields holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.entity.notice")
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-entity-update")
-      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/notice_1/update")
-      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/entities/notice/notice_1/edit")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/org-goldenport-cncf-test-notice-board/admin/entities/notice/notice_1/update")
+      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/org-goldenport-cncf-test-notice-board/admin/entities/notice/notice_1/edit")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("title")
       fields.downN(2).downField("name").as[String].toOption shouldBe None
@@ -8761,7 +8799,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for serve admin entity form definition API from merged Schema and WebDescriptor controls holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.entity.notice")
       json.hcursor.downField("surface").as[String].toOption shouldBe Some("entity")
       json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
       names shouldBe Vector("id", "body", "status")
@@ -8795,10 +8833,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
         response.status.code shouldBe 200
         response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-        json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.data.audit")
+        json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.data.audit")
         json.hcursor.downField("surface").as[String].toOption shouldBe Some("data")
         json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-data")
-        json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/data/audit/new")
+        json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/org-goldenport-cncf-test-notice-board/admin/data/audit/new")
         fieldnames shouldBe Vector("id", "action", "actor")
       }
       }
@@ -8827,12 +8865,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
         response.status.code shouldBe 200
         response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-        json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.data.audit")
+        json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.data.audit")
         json.hcursor.downField("surface").as[String].toOption shouldBe Some("data")
         json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-data-update")
-        json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/notice-board/admin/data/audit/audit_1/update")
-        json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/data/audit/audit_1/edit")
-        json.hcursor.downField("actions").downN(3).downField("path").as[String].toOption shouldBe Some("/form/notice-board/admin/data/audit/audit_1/update")
+        json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/org-goldenport-cncf-test-notice-board/admin/data/audit/audit_1/update")
+        json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/org-goldenport-cncf-test-notice-board/admin/data/audit/audit_1/edit")
+        json.hcursor.downField("actions").downN(3).downField("path").as[String].toOption shouldBe Some("/form/org-goldenport-cncf-test-notice-board/admin/data/audit/audit_1/update")
         fieldnames shouldBe Vector("id", "action", "actor")
       }
       }
@@ -8861,7 +8899,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         val actor = _json_field(fields, "actor")
 
         response.status.code shouldBe 200
-        json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.data.audit")
+        json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.data.audit")
         json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
         names shouldBe Vector("id", "action", "actor")
         action.downField("type").as[String].toOption shouldBe Some("select")
@@ -8924,11 +8962,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for serve admin view form definition API from resolved view schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.view.notice-view")
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.view.notice-view")
       json.hcursor.downField("surface").as[String].toOption shouldBe Some("view")
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-view")
       json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
-      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/notice-board/admin/views/notice-view")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/org-goldenport-cncf-test-notice-board/admin/views/notice-view")
       json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
       json.hcursor.downField("actions").downN(0).downField("name").as[String].toOption shouldBe Some("list")
       json.hcursor.downField("actions").downN(1).downField("name").as[String].toOption shouldBe Some("detail")
@@ -8991,14 +9029,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for serve admin aggregate form definition API from resolved aggregate schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.aggregate.notice-aggregate")
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.aggregate.notice-aggregate")
       json.hcursor.downField("surface").as[String].toOption shouldBe Some("aggregate")
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-aggregate")
       json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
-      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/notice-board/admin/aggregates/notice-aggregate")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/org-goldenport-cncf-test-notice-board/admin/aggregates/notice-aggregate")
       json.hcursor.downField("actions").downN(0).downField("name").as[String].toOption shouldBe Some("list")
       json.hcursor.downField("actions").downN(1).downField("name").as[String].toOption shouldBe Some("detail")
-      json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some("/web/notice-board/admin/aggregates/notice-aggregate/{id}")
+      json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some("/web/org-goldenport-cncf-test-notice-board/admin/aggregates/notice-aggregate/{id}")
       json.hcursor.downField("actions").downN(2).downField("name").as[String].toOption shouldBe None
       json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
@@ -9031,7 +9069,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for validate operation form API input without executing the operation holds")
       invalid.status.code shouldBe 200
       invalid.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
-      invalidjson.hcursor.downField("selector").as[String].toOption shouldBe Some(selector)
+      invalidjson.hcursor.downField("selector").as[String].toOption shouldBe Some("org-goldenport-cncf-test-notice-board.notice.post-secret-notice")
       invalidjson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(false)
       invalidjson.hcursor.downField("errors").downN(0).downField("field").as[String].toOption shouldBe Some("body")
       invalidjson.hcursor.downField("errors").downN(0).downField("code").as[String].toOption shouldBe Some("required")
@@ -9573,7 +9611,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).body
 
       Then("the operation schema, values, hidden context, and canonical HTML Form ingress are present")
-      html should include ("action=\"/form/notice-board/notice-aggregate/approve-notice-aggregate\"")
+      html should include ("action=\"/form/org-goldenport-cncf-test-notice-board/notice-aggregate/approve-notice-aggregate\"")
       html should include ("data-textus-widget=\"textus:operation-form\"")
       html should include ("type=\"hidden\"")
       html should include ("name=\"id\"")
@@ -9843,7 +9881,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       setcookie should include ("SameSite=Lax")
       getresponse.headers.get(org.typelevel.ci.CIString("Cache-Control")).map(_.head.value) shouldBe
         Some("private, no-store")
-      html should include ("action=\"/form/notice-admin/notice-aggregate/approve-notice-aggregate\"")
+      html should include ("action=\"/form/org-goldenport-cncf-test-notice-admin/notice-aggregate/approve-notice-aggregate\"")
       WebCsrf.isValid(None, token) shouldBe true
 
       And("only a matching browser submission reaches operation dispatch")
@@ -14504,9 +14542,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     val ownersubsystem = subsystem
     val provider = new Component {
       override val core: Component.Core = Component.Core.create(
-        "StaticWebAuthentication",
-        ComponentId("static_web_authentication"),
-        ComponentInstanceId.default(ComponentId("static_web_authentication")),
+        "org.goldenport.cncf.test.StaticWebAuthentication",
+        ComponentId("org.goldenport.cncf.test.StaticWebAuthentication"),
+        ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.StaticWebAuthentication")),
         Protocol.empty
       )
       override def subsystem: Option[Subsystem] = Some(ownersubsystem)
@@ -14551,7 +14589,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     configuration: Configuration = Configuration.empty
   ): Subsystem = {
     val subsystem = _aggregate_http_fixture_subsystem(configuration)
-    subsystem.components.find(_.name == "notice_board").foreach { component =>
+    subsystem.findComponent("notice_board").foreach { component =>
       val componentlets = Vector(
         ComponentletDescriptor(
           name = "notice-admin",
@@ -14649,8 +14687,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     protocol: Protocol = Protocol.empty,
     origin: org.goldenport.cncf.component.ComponentOrigin = org.goldenport.cncf.component.ComponentOrigin.Builtin
   ): org.goldenport.cncf.component.Component = {
-    val componentid = org.goldenport.cncf.component.ComponentId(componentidname)
-    val instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(componentid)
+    val componentid = TestComponentFactory.componentId(name)
+    val instanceid = org.goldenport.cncf.component.ComponentInstanceId(componentid, componentidname)
     val factory = new org.goldenport.cncf.component.Component.SinglePrimaryBundleFactory {
       override protected def create_Component(params: org.goldenport.cncf.component.ComponentCreate): org.goldenport.cncf.component.Component =
         component
@@ -14659,9 +14697,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         params: org.goldenport.cncf.component.ComponentCreate,
         comp: org.goldenport.cncf.component.Component
       ): org.goldenport.cncf.component.Component.Core =
-        org.goldenport.cncf.component.Component.Core.create(name, componentid, instanceid, protocol, this)
+        org.goldenport.cncf.component.Component.Core.create(componentid.name, componentid, instanceid, protocol, this)
     }
-    val core = org.goldenport.cncf.component.Component.Core.create(name, componentid, instanceid, protocol, factory)
+    val core = org.goldenport.cncf.component.Component.Core.create(componentid.name, componentid, instanceid, protocol, factory)
     component.initialize(
       org.goldenport.cncf.component.ComponentInit(
         TestComponentFactory.emptySubsystem("test"),
@@ -14972,7 +15010,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private def _notice_fixture_component(
     subsystem: Subsystem
   ): Component =
-    subsystem.components.find(_.name == "notice_board").getOrElse(fail("notice fixture component is missing"))
+    subsystem.findComponent("notice_board").getOrElse(fail("notice fixture component is missing"))
 
   private def _schema(names: String*): Schema =
     Schema(names.toVector.map { name =>

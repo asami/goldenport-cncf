@@ -6,6 +6,7 @@ import java.time.{Clock, Instant, ZoneOffset}
 import java.nio.file.Path
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.security.OperationAuthorizationRule
@@ -21,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the provider-neutral internal Operation source.
  *
  * @since   Jul. 21, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationToolSourceSpec
@@ -222,7 +223,7 @@ final class OperationToolSourceSpec
         case Consequence.Failure(conclusion) => conclusion.status.webCode.code shouldBe 403
         case _ => fail("authorization denial was not returned")
       }
-      result.display should include("tool.time.now")
+      result.display should include(BuiltinComponentIdentity.TOOL.name + ".time.now")
     }
 
     "enforce invocation input and call-count limits before dispatch" in {

@@ -34,7 +34,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 20, 2026
  *  version Jun. 19, 2026
- * @version Aug.  6, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -205,6 +205,7 @@ trait StaticFormAppRendererSystemAdminPart {
   ): Option[Component] =
     subsystem.components.find(x =>
       NamingConventions.equivalentByNormalized(x.name, name) ||
+        NamingConventions.equivalentByNormalized(x.displayName, name) ||
         x.artifactMetadata.toVector.exists { metadata =>
           metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
             NamingConventions.equivalentByNormalized(metadata.name, name)
@@ -483,11 +484,11 @@ trait StaticFormAppRendererSystemAdminPart {
       componentFormsPath: Option[String]
   ): String = {
     val profile = webDescriptor.adminProfile
-    val descriptorPath = componentFormsPath
+    val descriptorpath = componentFormsPath
       .map(_.stripPrefix("/form/"))
       .map(componentPath => s"/web/${componentPath}/admin/descriptor")
       .getOrElse("/web/system/admin/descriptor")
-    val componentBlocks = components.map { component =>
+    val componentblocks = components.map { component =>
       val services = component.protocol.services.services.map { service =>
         val operations = service.operations.operations.toVector.map { operation =>
           val path = NamingConventions.toNormalizedPath(component.name, service.name, operation.name)
@@ -497,55 +498,55 @@ trait StaticFormAppRendererSystemAdminPart {
       }.mkString("\n")
       val version = component.artifactMetadata.map(_.version).getOrElse("unversioned")
       val componentlets = componentlet_table(component)
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val entityCount = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).size
-      val dataCount = admin_surface_selector_count(webDescriptor, Some(componentPath), "data")
-      val aggregateCount = component.aggregateDefinitions.size
-      val viewCount = component.viewDefinitions.size
-      val formsCount = component.protocol.services.services.map(_.operations.operations.toVector.size).sum
-      val componentAdminPages = webDescriptor.adminPagesFor(componentPath)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val entitycount = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).size
+      val datacount = admin_surface_selector_count(webDescriptor, Some(componentpath), "data")
+      val aggregatecount = component.aggregateDefinitions.size
+      val viewcount = component.viewDefinitions.size
+      val formscount = component.protocol.services.services.map(_.operations.operations.toVector.size).sum
+      val componentadminpages = webDescriptor.adminPagesFor(componentpath)
       val cards = admin_entry_cards(Vector(
         admin_entry_card(
           "Entities",
-          s"${pluralize(entityCount, "runtime descriptor", "runtime descriptors")} ready for list/detail/new/edit.",
-          s"/web/${componentPath}/admin/entities",
-          Some(entityCount.toString)
+          s"${pluralize(entitycount, "runtime descriptor", "runtime descriptors")} ready for list/detail/new/edit.",
+          s"/web/${componentpath}/admin/entities",
+          Some(entitycount.toString)
         ),
         admin_entry_card(
           "Data",
-          if (dataCount > 0)
-            s"${pluralize(dataCount, "descriptor surface", "descriptor surfaces")} available through data admin."
+          if (datacount > 0)
+            s"${pluralize(datacount, "descriptor surface", "descriptor surfaces")} available through data admin."
           else
             "Open descriptor-backed data collections and concrete datastore records.",
-          s"/web/${componentPath}/admin/data",
-          Some(dataCount.toString)
+          s"/web/${componentpath}/admin/data",
+          Some(datacount.toString)
         ),
         admin_entry_card(
           "Aggregates",
-          s"${pluralize(aggregateCount, "aggregate", "aggregates")} available for read/list drill-down.",
-          s"/web/${componentPath}/admin/aggregates",
-          Some(aggregateCount.toString)
+          s"${pluralize(aggregatecount, "aggregate", "aggregates")} available for read/list drill-down.",
+          s"/web/${componentpath}/admin/aggregates",
+          Some(aggregatecount.toString)
         ),
         admin_entry_card(
           "Views",
-          s"${pluralize(viewCount, "view definition", "view definitions")} available for read-only inspection.",
-          s"/web/${componentPath}/admin/views",
-          Some(viewCount.toString)
+          s"${pluralize(viewcount, "view definition", "view definitions")} available for read-only inspection.",
+          s"/web/${componentpath}/admin/views",
+          Some(viewcount.toString)
         ),
         admin_entry_card(
           "Descriptor",
           "Inspect routes, forms, auth controls, and admin surfaces.",
-          s"/web/${componentPath}/admin/descriptor"
+          s"/web/${componentpath}/admin/descriptor"
         ),
         admin_entry_card(
           "Forms",
-          s"${pluralize(formsCount, "operation form", "operation forms")} available for controlled execution.",
-          s"/form/${componentPath}",
-          Some(formsCount.toString)
+          s"${pluralize(formscount, "operation form", "operation forms")} available for controlled execution.",
+          s"/form/${componentpath}",
+          Some(formscount.toString)
         )
       ))
-      val componentOwnedAdminPages = component_owned_admin_pages(componentAdminPages)
-      val technicalDetails =
+      val componentownedadminpages = component_owned_admin_pages(componentadminpages)
+      val technicaldetails =
         s"""<details class="mt-3">
            |  <summary>Technical details</summary>
            |  <div class="mt-3">
@@ -559,26 +560,26 @@ trait StaticFormAppRendererSystemAdminPart {
         component.name,
         s"""<p class="text-body-secondary">Version ${escape(version)}</p>
            |${cards}
-           |${componentOwnedAdminPages}
-           |${technicalDetails}""".stripMargin
+           |${componentownedadminpages}
+           |${technicaldetails}""".stripMargin
       )
     }.mkString("\n")
-    val componentInventory =
+    val componentinventory =
       if (componentFormsPath.isEmpty)
         system_admin_component_inventory(components)
       else
         ""
-    val runtimeRows =
+    val runtimerows =
       s"""<tr><th>CNCF version</th><td>${escape(CncfVersion.current)}</td></tr>
          |<tr><th>Subsystem</th><td>${escape(subsystemName)}</td></tr>
          |<tr><th>Subsystem version</th><td>${escape(subsystemVersion.getOrElse("unversioned"))}</td></tr>
          |<tr><th>Components</th><td>${components.size}</td></tr>""".stripMargin
-    val runtimeCard =
+    val runtimecard =
       admin_card(
         "Runtime",
-        admin_table(None, runtimeRows, tableClass = "table table-sm align-middle mb-0")
+        admin_table(None, runtimerows, tableClass = "table table-sm align-middle mb-0")
       )
-    val primaryNav = Vector(
+    val primarynav = Vector(
       "Application admin" -> "/web/admin",
       "Dashboard" -> dashboardPath,
       "Performance details" -> performancePath,
@@ -591,15 +592,15 @@ trait StaticFormAppRendererSystemAdminPart {
       subtitle = subtitle,
       body =
         s"""<section data-textus-page="generated-admin" data-textus-section="admin-root"${ux_profile_attr(profile)}>
-           |${runtimeCard}
-           |${admin_nav_card(primaryNav)}
-           |${componentInventory}
+           |${runtimecard}
+           |${admin_nav_card(primarynav)}
+           |${componentinventory}
            |${admin_operational_details(operationalDetails)}
            |${component_admin_actions(componentFormsPath)}
-           |${admin_card("Web Descriptor", web_descriptor_summary(webDescriptor, descriptorPath))}
+           |${admin_card("Web Descriptor", web_descriptor_summary(webDescriptor, descriptorpath))}
            |${admin_runtime_configuration(runtimeConfiguration)}
            |${admin_job_control(runtimeConfiguration)}
-           |${componentBlocks}
+           |${componentblocks}
            |</section>""".stripMargin
     )
   }
@@ -619,35 +620,35 @@ trait StaticFormAppRendererSystemAdminPart {
     webDescriptor: WebDescriptor
   ): String = {
     val cards = subsystem.components.toVector.flatMap { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      val entityCount = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).size
-      val dataCount = admin_surface_selector_count(webDescriptor, Some(componentPath), "data")
-      val aggregateCount = component.aggregateDefinitions.size
-      val viewCount = component.viewDefinitions.size
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val entitycount = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).size
+      val datacount = admin_surface_selector_count(webDescriptor, Some(componentpath), "data")
+      val aggregatecount = component.aggregateDefinitions.size
+      val viewcount = component.viewDefinitions.size
       val entries = Vector(
-        Option.when(entityCount > 0)(admin_entry_card(
+        Option.when(entitycount > 0)(admin_entry_card(
           "Entities",
-          s"${pluralize(entityCount, "runtime descriptor", "runtime descriptors")} available for application operations.",
-          s"/web/${componentPath}/admin/entities",
-          Some(entityCount.toString)
+          s"${pluralize(entitycount, "runtime descriptor", "runtime descriptors")} available for application operations.",
+          s"/web/${componentpath}/admin/entities",
+          Some(entitycount.toString)
         )),
-        Option.when(dataCount > 0)(admin_entry_card(
+        Option.when(datacount > 0)(admin_entry_card(
           "Data",
-          s"${pluralize(dataCount, "descriptor surface", "descriptor surfaces")} available for application operations.",
-          s"/web/${componentPath}/admin/data",
-          Some(dataCount.toString)
+          s"${pluralize(datacount, "descriptor surface", "descriptor surfaces")} available for application operations.",
+          s"/web/${componentpath}/admin/data",
+          Some(datacount.toString)
         )),
-        Option.when(aggregateCount > 0)(admin_entry_card(
+        Option.when(aggregatecount > 0)(admin_entry_card(
           "Aggregates",
-          s"${pluralize(aggregateCount, "aggregate", "aggregates")} available for application operations.",
-          s"/web/${componentPath}/admin/aggregates",
-          Some(aggregateCount.toString)
+          s"${pluralize(aggregatecount, "aggregate", "aggregates")} available for application operations.",
+          s"/web/${componentpath}/admin/aggregates",
+          Some(aggregatecount.toString)
         )),
-        Option.when(viewCount > 0)(admin_entry_card(
+        Option.when(viewcount > 0)(admin_entry_card(
           "Views",
-          s"${pluralize(viewCount, "view definition", "view definitions")} available for application operations.",
-          s"/web/${componentPath}/admin/views",
-          Some(viewCount.toString)
+          s"${pluralize(viewcount, "view definition", "view definitions")} available for application operations.",
+          s"/web/${componentpath}/admin/views",
+          Some(viewcount.toString)
         ))
       ).flatten
       Option.when(entries.nonEmpty) {
@@ -655,7 +656,7 @@ trait StaticFormAppRendererSystemAdminPart {
           component.name,
           s"""<p class="text-body-secondary">Application-facing generic admin surfaces.</p>
              |${admin_entry_cards(entries)}
-             |${admin_action_row(Vector("Component admin" -> s"/web/${componentPath}/admin"), primary = false)}""".stripMargin
+             |${admin_action_row(Vector("Component admin" -> s"/web/${componentpath}/admin"), primary = false)}""".stripMargin
         )
       }
     }
@@ -789,14 +790,14 @@ trait StaticFormAppRendererSystemAdminPart {
     webDescriptor: WebDescriptor,
     components: Vector[Component]
   ): String = {
-    val systemPages = webDescriptor.adminPagesForAudience(WebDescriptor.AdminAudience.System)
-    val systemPageLinks =
-      if (systemPages.isEmpty)
+    val systempages = webDescriptor.adminPagesForAudience(WebDescriptor.AdminAudience.System)
+    val systempagelinks =
+      if (systempages.isEmpty)
         ""
       else
         s"""<div class="mt-3">
            |  <h3 class="h6">System Admin Pages</h3>
-           |  ${component_owned_admin_pages_list(systemPages)}
+           |  ${component_owned_admin_pages_list(systempages)}
            |</div>""".stripMargin
     s"""<div class="row g-3">
       |  <div class="col-12 col-lg-6">
@@ -821,7 +822,7 @@ trait StaticFormAppRendererSystemAdminPart {
       |    </section>
       |  </div>
       |</div>
-      |${systemPageLinks}
+      |${systempagelinks}
       |${component_dev_dir_diagnostics(components)}""".stripMargin
   }
 
@@ -832,7 +833,7 @@ trait StaticFormAppRendererSystemAdminPart {
       component.artifactMetadata.toVector.filter(_.sourceType == "component-dev-dir").map { metadata =>
         val base = metadata.archivePath.map(p => Paths.get(p).toAbsolutePath.normalize)
         val classpath = base.map(_.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt"))
-        val webRoots = base.toVector.flatMap { path =>
+        val webroots = base.toVector.flatMap { path =>
           Vector(path.resolve("car.d").resolve("web"), path.resolve("src").resolve("main").resolve("web"), path.resolve("web"))
             .filter(Files.isDirectory(_))
         }.map(path => escape(path.toString)).mkString("<br>")
@@ -840,7 +841,7 @@ trait StaticFormAppRendererSystemAdminPart {
            |  <td><code>${escape(component.name)}</code></td>
            |  <td><code>${escape(base.map(_.toString).getOrElse(""))}</code></td>
            |  <td><code>${escape(classpath.map(_.toString).getOrElse(""))}</code></td>
-           |  <td>${if (webRoots.isEmpty) "<span class=\"text-body-secondary\">No Web root</span>" else webRoots}</td>
+           |  <td>${if (webroots.isEmpty) "<span class=\"text-body-secondary\">No Web root</span>" else webroots}</td>
            |</tr>""".stripMargin
       }
     }
@@ -901,12 +902,12 @@ trait StaticFormAppRendererSystemAdminPart {
     formsPath: Option[String]
   ): String =
     formsPath.map { path =>
-      val componentPath = path.stripPrefix("/form/")
+      val componentpath = path.stripPrefix("/form/")
       s"""<section class="admin-section">
          |  <h2 class="h5">Component Admin</h2>
          |  <p>Use Application Admin for ordinary operator workflows. This component page remains available for component-specific drill-down and technical reference.</p>
          |  ${admin_action_row(Vector("Application admin" -> "/web/admin"), primary = false)}
-         |  ${component_admin_management_cards(componentPath, path)}
+         |  ${component_admin_management_cards(componentpath, path)}
          |  <details class="mt-3">
          |    <summary>Technical details</summary>
          |    <div class="mt-3">
@@ -934,13 +935,13 @@ trait StaticFormAppRendererSystemAdminPart {
   protected def component_admin_management_links(
     formsPath: String
   ): String = {
-    val componentPath = formsPath.stripPrefix("/form/")
+    val componentpath = formsPath.stripPrefix("/form/")
     s"""<h3 class="h6">Managed Data</h3>
        |${admin_link_list_group(Vector(
-         "Entity CRUD" -> s"/web/${componentPath}/admin/entities",
-         "Data CRUD" -> s"/web/${componentPath}/admin/data",
-         "Aggregate CRUD" -> s"/web/${componentPath}/admin/aggregates",
-         "View read" -> s"/web/${componentPath}/admin/views",
+         "Entity CRUD" -> s"/web/${componentpath}/admin/entities",
+         "Data CRUD" -> s"/web/${componentpath}/admin/data",
+         "Aggregate CRUD" -> s"/web/${componentpath}/admin/aggregates",
+         "View read" -> s"/web/${componentpath}/admin/views",
          "Tags" -> "/web/admin/tags"
        ))}""".stripMargin
   }
@@ -1438,12 +1439,12 @@ trait StaticFormAppRendererSystemAdminPart {
     selector: String,
     componentSegment: Option[String]
   ): Option[String] = {
-    def component_from_selector: Option[(String, String)] =
+    def _component_from_selector_(): Option[(String, String)] =
       selector.split("\\.", 3).toVector match {
         case Vector(component, surface, name) => Some(component -> s"${surface}.${name}")
         case _ => None
       }
-    component_from_selector.flatMap {
+    _component_from_selector_().flatMap {
       case (component, rest) => admin_surface_relative_path(rest).map(path => s"/web/${component}/admin/${path}")
     }.orElse(
       componentSegment.flatMap(component =>
@@ -1456,9 +1457,9 @@ trait StaticFormAppRendererSystemAdminPart {
     selector: String,
     componentSegment: Option[String]
   ): String = {
-    val maybePath =
+    val maybepath =
       web_descriptor_admin_surface_path(selector, componentSegment)
-    maybePath match {
+    maybepath match {
       case Some(path) => s"""<a href="${escape(path)}"><code>${escape(path)}</code></a>"""
       case None => """<span class="text-secondary">Deferred or unsupported</span>"""
     }
@@ -1468,9 +1469,9 @@ trait StaticFormAppRendererSystemAdminPart {
     selector: String,
     componentSegment: Option[String]
   ): String = {
-    val maybePath =
+    val maybepath =
       web_descriptor_admin_surface_path(selector, componentSegment)
-    maybePath match {
+    maybepath match {
       case Some(path) => s"""<a href="${escape(path)}"><code>${escape(selector)}</code></a>"""
       case None => s"""<code>${escape(selector)}</code>"""
     }
@@ -1539,12 +1540,12 @@ trait StaticFormAppRendererSystemAdminPart {
     components: Vector[Component]
   ): String = {
     val rows = components.sortBy(_.name).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
       s"""<tr>
          |  <td>${escape(component.name)}</td>
-         |  <td><a href="/web/${componentPath}/admin">Component admin</a></td>
-         |  <td><a href="/web/${componentPath}/admin/descriptor">Descriptor</a></td>
-         |  <td><a href="/form/${componentPath}">Forms</a></td>
+         |  <td><a href="/web/${componentpath}/admin">Component admin</a></td>
+         |  <td><a href="/web/${componentpath}/admin/descriptor">Descriptor</a></td>
+         |  <td><a href="/form/${componentpath}">Forms</a></td>
          |</tr>""".stripMargin
     }.mkString("\n")
     admin_card(
@@ -1583,7 +1584,7 @@ trait StaticFormAppRendererSystemAdminPart {
     componentSegment: Option[String] = None
   ): String = {
     val forms = web_descriptor_form_asset_entries(descriptor, componentSegment)
-    val scopeRows =
+    val scoperows =
       Vector(web_descriptor_asset_scope_row("global", "web.assets", descriptor.assets)) ++
         Vector(web_descriptor_theme_scope_row("global", "web.theme", descriptor.theme)) ++
         descriptor.apps.map(app =>
@@ -1596,7 +1597,7 @@ trait StaticFormAppRendererSystemAdminPart {
           case (selector, _, _, _, form) =>
             web_descriptor_asset_scope_row("form", selector, form.assets)
         }
-    val resolvedRows = forms.flatMap {
+    val resolvedrows = forms.flatMap {
       case (selector, component, service, operation, _) =>
         Vector(
           web_descriptor_resolved_asset_row(
@@ -1616,28 +1617,28 @@ trait StaticFormAppRendererSystemAdminPart {
           )
         )
     }
-    val scopeBody =
-      if (scopeRows.isEmpty)
+    val scopebody =
+      if (scoperows.isEmpty)
         """<tr><td colspan="5" class="text-secondary">No descriptor asset scopes are configured.</td></tr>"""
       else
-        scopeRows.mkString("\n")
-    val resolvedBody =
-      if (resolvedRows.isEmpty)
+        scoperows.mkString("\n")
+    val resolvedbody =
+      if (resolvedrows.isEmpty)
         """<tr><td colspan="5" class="text-secondary">No form asset compositions are resolved for this scope.</td></tr>"""
       else
-        resolvedRows.mkString("\n")
+        resolvedrows.mkString("\n")
     s"""<article>
        |  <h2 id="asset-composition">Asset Composition <a class="btn btn-sm btn-outline-secondary ms-2" href="#completed-descriptor">Completed JSON</a></h2>
        |  <p>Configured descriptor asset scopes and completed Static Form page asset lists.</p>
        |  <h3>Configured Scopes</h3>
        |  <div class="table-responsive"><table class="table table-sm align-middle">
        |    <thead><tr><th>Scope</th><th>Selector</th><th>Auto complete</th><th>CSS</th><th>JS</th></tr></thead>
-       |    <tbody>${scopeBody}</tbody>
+       |    <tbody>${scopebody}</tbody>
        |  </table></div>
        |  <h3>Resolved Form Pages</h3>
        |  <div class="table-responsive"><table class="table table-sm align-middle">
        |    <thead><tr><th>Form</th><th>Page</th><th>Auto complete</th><th>CSS</th><th>JS</th></tr></thead>
-       |    <tbody>${resolvedBody}</tbody>
+       |    <tbody>${resolvedbody}</tbody>
        |  </table></div>
        |</article>""".stripMargin
   }
@@ -1711,14 +1712,14 @@ trait StaticFormAppRendererSystemAdminPart {
       "theme" -> web_descriptor_theme_json(app.theme),
       "assets" -> web_descriptor_assets_json(app.assets)
     )
-    val optionalFields = Vector(
+    val optionalfields = Vector(
       app.root.map("root" -> Json.fromString(_)),
       app.route.map("route" -> Json.fromString(_))
     ).flatten
-    if (optionalFields.isEmpty)
+    if (optionalfields.isEmpty)
       configured
     else
-      configured.deepMerge(Json.obj(optionalFields*))
+      configured.deepMerge(Json.obj(optionalfields*))
   }
 
   protected def web_descriptor_app_list(
@@ -1783,25 +1784,25 @@ trait StaticFormAppRendererSystemAdminPart {
     }
 
   protected def performance_page(subsystem: Subsystem): String = {
-    val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
-    val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
-    val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
-    val authorizationDiagnostics = RuntimeDashboardMetrics.authorizationDiagnosticCounts
-    val authorizationDiagnosticRecords = RuntimeDashboardMetrics.authorizationDiagnosticRecords
-    val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
+    val htmlrequests = RuntimeDashboardMetrics.htmlSnapshot
+    val actioncalls = RuntimeDashboardMetrics.actionCallSnapshot
+    val authorizationdecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
+    val authorizationdiagnostics = RuntimeDashboardMetrics.authorizationDiagnosticCounts
+    val authorizationdiagnosticrecords = RuntimeDashboardMetrics.authorizationDiagnosticRecords
+    val dslchokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val validation = RuntimeDashboardMetrics.validationSnapshot
-    val validationDiagnostics = RuntimeDashboardMetrics.validationDiagnosticCounts
-    val validationDiagnosticRecords = RuntimeDashboardMetrics.validationDiagnosticRecords
-    val operationRequestValidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot
-    val operationRequestValidationDiagnostics = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts
-    val operationRequestValidationDiagnosticRecords = RuntimeDashboardMetrics.operationRequestValidationDiagnosticRecords
-    val blobOperations = RuntimeDashboardMetrics.blobOperationSnapshot
-    val blobDiagnostics = RuntimeDashboardMetrics.blobDiagnosticCounts
-    val blobDiagnosticRecords = RuntimeDashboardMetrics.blobDiagnosticRecords
+    val validationdiagnostics = RuntimeDashboardMetrics.validationDiagnosticCounts
+    val validationdiagnosticrecords = RuntimeDashboardMetrics.validationDiagnosticRecords
+    val operationrequestvalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot
+    val operationrequestvalidationdiagnostics = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts
+    val operationrequestvalidationdiagnosticrecords = RuntimeDashboardMetrics.operationRequestValidationDiagnosticRecords
+    val bloboperations = RuntimeDashboardMetrics.blobOperationSnapshot
+    val blobdiagnostics = RuntimeDashboardMetrics.blobDiagnosticCounts
+    val blobdiagnosticrecords = RuntimeDashboardMetrics.blobDiagnosticRecords
     val jobs = job_metrics(subsystem)
-    def card(title: String, body: String, id: Option[String] = None): String =
+    def _card_(title: String, body: String, id: Option[String] = None): String =
       s"""<div class="col-12">${admin_card(title, body, id)}</div>"""
-    val navigationCard = card(
+    val navigationcard = _card_(
       "Navigation",
       """<nav class="nav nav-pills flex-column flex-sm-row gap-2">
         |  <a class="nav-link border" href="/web/system/dashboard">System dashboard</a>
@@ -1813,69 +1814,69 @@ trait StaticFormAppRendererSystemAdminPart {
         |</nav>""".stripMargin,
       Some("performance-navigation")
     )
-    val assemblyActions = admin_action_row(Vector(
+    val assemblyactions = admin_action_row(Vector(
       "Warning detail" -> "/web/system/admin/assembly/warnings",
       "Assembly report" -> "/web/system/admin/assembly/report"
     ), primary = false)
-    val assemblyCard = card(
+    val assemblycard = _card_(
       "Assembly warnings",
       s"""<p><span class="badge text-bg-secondary">${assembly_warning_count(subsystem)}</span> warning(s).</p>
-         |${assemblyActions}""".stripMargin
+         |${assemblyactions}""".stripMargin
     )
-    val recentErrorsCard = card(
+    val recenterrorscard = _card_(
       "Recent errors",
       s"""<p class="text-secondary">HTTP 4xx/5xx entries shown as Dashboard recent failures. They are diagnostics and do not change runtime Health.</p>
-         |${recent_errors_table(htmlRequests.recent)}""".stripMargin,
+         |${recent_errors_table(htmlrequests.recent)}""".stripMargin,
       Some("recent-errors")
     )
-    val actionCallActions = admin_action_row(Vector(
+    val actioncallactions = admin_action_row(Vector(
       "Execution history" -> "/form/admin/execution/history",
       "Latest calltree" -> "/form/admin/execution/calltree"
     ), primary = false)
-    val actionCallCard = card(
+    val actioncallcard = _card_(
       "ActionCall",
-      s"""${summary_table(actionCalls.summary)}
-         |${actionCallActions}""".stripMargin
+      s"""${summary_table(actioncalls.summary)}
+         |${actioncallactions}""".stripMargin
     )
-    val authorizationCard = card(
+    val authorizationcard = _card_(
       "Authorization",
-      s"""${summary_table(authorizationDecisions.summary)}
+      s"""${summary_table(authorizationdecisions.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${diagnostics_table(authorizationDiagnostics, authorizationDiagnosticRecords, Some("authorization"))}""".stripMargin,
+         |${diagnostics_table(authorizationdiagnostics, authorizationdiagnosticrecords, Some("authorization"))}""".stripMargin,
       Some("authorization")
     )
-    val validationCard = card(
+    val validationcard = _card_(
       "Validation",
       s"""${summary_table(validation.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${diagnostics_table(validationDiagnostics, validationDiagnosticRecords, Some("validation"))}""".stripMargin
+         |${diagnostics_table(validationdiagnostics, validationdiagnosticrecords, Some("validation"))}""".stripMargin
     )
-    val operationRequestValidationCard = card(
+    val operationrequestvalidationcard = _card_(
       "Operation Request Validation",
-      s"""${summary_table(operationRequestValidation.summary)}
+      s"""${summary_table(operationrequestvalidation.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${diagnostics_table(operationRequestValidationDiagnostics, operationRequestValidationDiagnosticRecords, Some("operation-request-validation"))}""".stripMargin
+         |${diagnostics_table(operationrequestvalidationdiagnostics, operationrequestvalidationdiagnosticrecords, Some("operation-request-validation"))}""".stripMargin
     )
-    val blobOperationsCard = card(
+    val bloboperationscard = _card_(
       "Blob operations",
-      s"""${summary_table(blobOperations.summary)}
+      s"""${summary_table(bloboperations.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${diagnostics_table(blobDiagnostics, blobDiagnosticRecords, Some("blob"))}""".stripMargin
+         |${diagnostics_table(blobdiagnostics, blobdiagnosticrecords, Some("blob"))}""".stripMargin
     )
     val cards = Vector(
-      navigationCard,
-      assemblyCard,
-      card("HTML request", summary_table(htmlRequests.summary), Some("html-requests")),
-      card("Latency", latency_table(htmlRequests.recent)),
-      card("Recent requests", recent_requests_table(htmlRequests.recent)),
-      recentErrorsCard,
-      actionCallCard,
-      authorizationCard,
-      card("DSL Chokepoints", summary_table(dslChokepoints.summary)),
-      validationCard,
-      operationRequestValidationCard,
-      blobOperationsCard,
-      card("Jobs", jobs_table(jobs), Some("jobs"))
+      navigationcard,
+      assemblycard,
+      _card_("HTML request", summary_table(htmlrequests.summary), Some("html-requests")),
+      _card_("Latency", latency_table(htmlrequests.recent)),
+      _card_("Recent requests", recent_requests_table(htmlrequests.recent)),
+      recenterrorscard,
+      actioncallcard,
+      authorizationcard,
+      _card_("DSL Chokepoints", summary_table(dslchokepoints.summary)),
+      validationcard,
+      operationrequestvalidationcard,
+      bloboperationscard,
+      _card_("Jobs", jobs_table(jobs), Some("jobs"))
     ).mkString("\n")
     simple_page(
       title = "System Performance",
@@ -1899,24 +1900,28 @@ trait StaticFormAppRendererSystemAdminPart {
     currentPath: String,
     childNames: Vector[String]
   ): String = {
-    val componentpath = NamingConventions.toNormalizedSegment(component.name)
-    val target = selector.getOrElse(component.name)
+    val componentpath = NamingConventions.toNormalizedSegment(component.displayName)
+    val target = selector.getOrElse(component.displayName)
+    val iscomponentroot = selector.exists { candidate =>
+      NamingConventions.equivalentByNormalized(component.name, candidate) ||
+        NamingConventions.equivalentByNormalized(component.displayName, candidate)
+    }
     val help = manual_projection_or_error("Help", target)(HelpProjection.project(component, selector))
     val describe = manual_projection_or_error("Describe", target)(DescribeProjection.project(component, selector))
     val schema = manual_projection_or_error("Schema", target)(SchemaProjection.project(component, selector))
-    val childLinks = manual_child_links(currentPath, childNames)
-    val componentletCard =
-      if (selector.exists(NamingConventions.equivalentByNormalized(component.name, _)))
+    val childlinks = manual_child_links(currentPath, childNames)
+    val componentletcard =
+      if (iscomponentroot)
         manual_componentlet_section(component)
       else
         ""
-    val storageShapeCard =
-      if (selector.exists(NamingConventions.equivalentByNormalized(component.name, _)))
+    val storageshapecard =
+      if (iscomponentroot)
         manual_storage_shape_section(describe)
       else
         ""
-    val authorizationPolicyCard =
-      if (selector.exists(NamingConventions.equivalentByNormalized(component.name, _)))
+    val authorizationpolicycard =
+      if (iscomponentroot)
         manual_authorization_policy_section(describe)
       else
         ""
@@ -1933,10 +1938,10 @@ trait StaticFormAppRendererSystemAdminPart {
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
-         |${manual_card("Children", childLinks)}
-         |${componentletCard}
-         |${storageShapeCard}
-         |${authorizationPolicyCard}
+         |${manual_card("Children", childlinks)}
+         |${componentletcard}
+         |${storageshapecard}
+         |${authorizationpolicycard}
          |${manual_projection_card("Help", currentPath, help, Some("help"))}
          |${manual_projection_card("Describe", currentPath, describe, Some("describe"))}
          |${manual_projection_card("Schema", currentPath, schema, Some("schema"))}""".stripMargin
@@ -1950,7 +1955,7 @@ trait StaticFormAppRendererSystemAdminPart {
     val help = manual_projection_or_error("Help", "system")(HelpProjection.project(component, None))
     val describe = manual_projection_or_error("Describe", "system")(DescribeProjection.project(component, None))
     val schema = manual_projection_or_error("Schema", "system")(SchemaProjection.project(component, None))
-    val componentLinks = manual_component_links(subsystem.components)
+    val componentlinks = manual_component_links(subsystem.components)
     val body =
       s"""${manual_card("Specification navigation",
          s"""<p>This generated specification is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
@@ -1962,7 +1967,7 @@ trait StaticFormAppRendererSystemAdminPart {
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
-         |${manual_card("Components", componentLinks)}
+         |${manual_card("Components", componentlinks)}
          |${manual_card("Console handoff", """<p class="mb-0">Use <a href="/web/console">System Console</a> for controlled operation entry. Specification pages remain read-only and do not inline operation actions.</p>""")}
          |${manual_authorization_policy_section(describe)}
          |${manual_projection_card("Help", "/help/system", help, Some("help"))}
@@ -1978,8 +1983,8 @@ trait StaticFormAppRendererSystemAdminPart {
       web_empty_state("No component reference entries.")
     else
       components.sortBy(_.name).map { component =>
-        val segment = NamingConventions.toNormalizedSegment(component.name)
-        s"""<a class="btn btn-sm btn-outline-primary" href="/help/${escape(segment)}">${escape(component.name)}</a>"""
+        val segment = NamingConventions.toNormalizedSegment(component.displayName)
+        s"""<a class="btn btn-sm btn-outline-primary" href="/help/${escape(segment)}">${escape(component.displayName)}</a>"""
       }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
   protected def manual_component_document_links(
@@ -1989,8 +1994,8 @@ trait StaticFormAppRendererSystemAdminPart {
       web_empty_state("No component document entries.")
     else
       components.sortBy(_.name).map { component =>
-        val segment = NamingConventions.toNormalizedSegment(component.name)
-        s"""<a class="btn btn-sm btn-outline-primary" href="/man/${escape(segment)}">${escape(component.name)}</a>"""
+        val segment = NamingConventions.toNormalizedSegment(component.displayName)
+        s"""<a class="btn btn-sm btn-outline-primary" href="/man/${escape(segment)}">${escape(component.displayName)}</a>"""
       }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
   protected def manual_child_links(
@@ -2045,8 +2050,8 @@ trait StaticFormAppRendererSystemAdminPart {
     currentPath: String,
     record: Record
   ): String = {
-    val recordType = record.getString("type").getOrElse("")
-    recordType match {
+    val recordtype = record.getString("type").getOrElse("")
+    recordtype match {
       case "operation" =>
         manual_operation_summary(currentPath, record)
       case "service" =>
@@ -2068,8 +2073,8 @@ trait StaticFormAppRendererSystemAdminPart {
     val name = record.getString("name").getOrElse("subsystem")
     val summary = record.getString("summary").getOrElse("")
     val children = manual_seq_values(record.asMap.get("children"))
-    val detailComponents = manual_record_values(record.asMap.get("details")).get("components").map(x => manual_seq_values(Some(x))).getOrElse(Vector.empty)
-    val components = if (detailComponents.nonEmpty) detailComponents else children
+    val detailcomponents = manual_record_values(record.asMap.get("details")).get("components").map(x => manual_seq_values(Some(x))).getOrElse(Vector.empty)
+    val components = if (detailcomponents.nonEmpty) detailcomponents else children
     s"""<p class="mb-3">${escape(if (summary.nonEmpty) summary else s"Subsystem: $name")}</p>
        |${manual_kv_summary(Vector(
          "Name" -> name,
@@ -2086,7 +2091,7 @@ trait StaticFormAppRendererSystemAdminPart {
     val aggregates = manual_record_seq(record.asMap.get("aggregates")).flatMap(_.getString("name"))
     val views = manual_record_seq(record.asMap.get("views")).flatMap(_.getString("name"))
     val relationships = manual_record_seq(record.asMap.get("relationshipDefinitions"))
-    val operationDefs = manual_record_seq(record.asMap.get("operationDefinitions")).flatMap(_.getString("name"))
+    val operationdefs = manual_record_seq(record.asMap.get("operationDefinitions")).flatMap(_.getString("name"))
     val artifact = manual_record_values(record.asMap.get("artifact"))
     s"""<p class="mb-3">${escape(record.getString("summary").getOrElse(s"Component ${record.getString("name").getOrElse("")}"))}</p>
        |${manual_kv_summary(Vector(
@@ -2099,7 +2104,7 @@ trait StaticFormAppRendererSystemAdminPart {
          "Aggregate count" -> aggregates.size.toString,
          "View count" -> views.size.toString,
          "Relationship count" -> relationships.size.toString,
-         "Operation definition count" -> operationDefs.size.toString
+         "Operation definition count" -> operationdefs.size.toString
        ))}
        |${manual_badges("Services", services)}
        |${manual_badges("Componentlets", componentlets)}
@@ -2117,15 +2122,15 @@ trait StaticFormAppRendererSystemAdminPart {
         val kind = escape(r.getString("kind").getOrElse(""))
         val source = escape(r.getString("sourceEntityName").getOrElse(""))
         val target = escape(r.getString("targetEntityName").getOrElse(""))
-        val targetModel = escape(r.getString("targetModelKind").getOrElse(""))
+        val targetmodel = escape(r.getString("targetModelKind").getOrElse(""))
         val storage = escape(r.getString("storageMode").getOrElse(""))
         val parent = escape(r.getString("parentIdField").getOrElse(""))
         val value = escape(r.getString("valueField").getOrElse(""))
         val sort = escape(r.getString("sortOrderField").getOrElse(""))
         val domain = escape(r.getString("associationDomain").getOrElse(""))
-        val targetKind = escape(r.getString("targetKind").getOrElse(""))
+        val targetkind = escape(r.getString("targetKind").getOrElse(""))
         val lifecycle = escape(r.getString("lifecyclePolicy").getOrElse(""))
-        s"<tr><td>$name</td><td>$kind</td><td>$source</td><td>$target</td><td>$targetModel</td><td>$storage</td><td>$parent</td><td>$value</td><td>$sort</td><td>$domain</td><td>$targetKind</td><td>$lifecycle</td></tr>"
+        s"<tr><td>$name</td><td>$kind</td><td>$source</td><td>$target</td><td>$targetmodel</td><td>$storage</td><td>$parent</td><td>$value</td><td>$sort</td><td>$domain</td><td>$targetkind</td><td>$lifecycle</td></tr>"
       }.mkString("\n")
       s"""<section class="mt-3">
          |  <h3 class="h6">Relationships</h3>
@@ -2145,8 +2150,8 @@ trait StaticFormAppRendererSystemAdminPart {
     if (entities.isEmpty)
       ""
     else {
-      val summaryRows = entities.map(manual_storage_shape_summary_row).mkString("\n")
-      val fieldTables = entities.map(manual_storage_shape_field_table).mkString("\n")
+      val summaryrows = entities.map(manual_storage_shape_summary_row).mkString("\n")
+      val fieldtables = entities.map(manual_storage_shape_field_table).mkString("\n")
       manual_card(
         "Storage shape",
         s"""<p class="mb-3">Effective SimpleEntity storage-shape metadata from the component projection.</p>
@@ -2154,11 +2159,11 @@ trait StaticFormAppRendererSystemAdminPart {
            |  <table class="table table-sm table-hover align-middle manual-summary-table">
            |    <thead><tr><th>Entity</th><th>Collection</th><th>Memory policy</th><th>Working-set policy</th><th>Storage policy</th></tr></thead>
            |    <tbody>
-           |      ${summaryRows}
+           |      ${summaryrows}
            |    </tbody>
            |  </table>
            |</div>
-           |${fieldTables}""".stripMargin,
+           |${fieldtables}""".stripMargin,
         Some("storage-shape")
       )
     }
@@ -2172,8 +2177,8 @@ trait StaticFormAppRendererSystemAdminPart {
       case Some(p) if AuthorizationPolicyProjection.hasVisiblePolicy(p) =>
         val roles = manual_record_seq(p.asMap.get("roleDefinitions"))
         val resources = manual_record_seq(p.asMap.get("resourcePolicies"))
-        val blobRequirements = manual_record_seq(p.asMap.get("blobOperationRequirements"))
-        val roleTable =
+        val blobrequirements = manual_record_seq(p.asMap.get("blobOperationRequirements"))
+        val roletable =
           if (roles.isEmpty)
             web_empty_state("No role definitions are configured.")
           else
@@ -2183,7 +2188,7 @@ trait StaticFormAppRendererSystemAdminPart {
                |    <tbody>${roles.map(manual_authorization_role_row).mkString("\n")}</tbody>
                |  </table>
                |</div>""".stripMargin
-        val resourceTable =
+        val resourcetable =
           if (resources.isEmpty)
             web_empty_state("No resource policies are configured.")
           else
@@ -2193,25 +2198,25 @@ trait StaticFormAppRendererSystemAdminPart {
                |    <tbody>${resources.map(manual_authorization_resource_row).mkString("\n")}</tbody>
                |  </table>
                |</div>""".stripMargin
-        val blobRequirementTable =
-          if (blobRequirements.isEmpty)
+        val blobrequirementtable =
+          if (blobrequirements.isEmpty)
             ""
           else
             s"""<h3 class="h6 mt-3">Blob operation requirements</h3>
                |<div class="table-responsive">
                |  <table class="table table-sm table-hover align-middle manual-authorization-blob-requirements">
                |    <thead><tr><th>Operation</th><th>Family</th><th>Resource</th><th>Action</th><th>Requirement</th></tr></thead>
-               |    <tbody>${blobRequirements.map(manual_authorization_blob_requirement_row).mkString("\n")}</tbody>
+               |    <tbody>${blobrequirements.map(manual_authorization_blob_requirement_row).mkString("\n")}</tbody>
                |  </table>
                |</div>""".stripMargin
         manual_card(
           "Authorization policies",
           s"""<p class="mb-3">Read-only view of descriptor-backed authorization policy and Blob operation requirements.</p>
              |<h3 class="h6">Resource policies</h3>
-             |${resourceTable}
+             |${resourcetable}
              |<h3 class="h6 mt-3">Role definitions</h3>
-             |${roleTable}
-             |${blobRequirementTable}
+             |${roletable}
+             |${blobrequirementtable}
              |${manual_raw_details("Authorization policies", p)}""".stripMargin,
           Some("authorization-policies")
         )
@@ -2270,12 +2275,12 @@ trait StaticFormAppRendererSystemAdminPart {
   protected def manual_storage_shape_field_table(
     record: Record
   ): String = {
-    val entityName = record.getString("entityName").getOrElse("")
+    val entityname = record.getString("entityName").getOrElse("")
     val shape = manual_record_values(record.asMap.get("storageShape"))
     val fields = manual_record_seq(shape.get("fields"))
     if (fields.isEmpty)
       s"""<section class="mt-3">
-         |  <h3 class="h6">${escape(entityName)} fields</h3>
+         |  <h3 class="h6">${escape(entityname)} fields</h3>
          |  ${web_empty_state("No storage-shape field metadata.")}
          |</section>""".stripMargin
     else {
@@ -2290,7 +2295,7 @@ trait StaticFormAppRendererSystemAdminPart {
            |</tr>""".stripMargin
       }.mkString("\n")
       s"""<section class="mt-3">
-         |  <h3 class="h6">${escape(entityName)} fields</h3>
+         |  <h3 class="h6">${escape(entityname)} fields</h3>
          |  <div class="table-responsive">
          |    <table class="table table-sm table-hover align-middle manual-storage-shape-fields">
          |      <thead><tr><th>Logical name</th><th>Storage name</th><th>Classification</th><th>Storage kind</th><th>Data type</th><th>Source</th></tr></thead>
@@ -2321,47 +2326,47 @@ trait StaticFormAppRendererSystemAdminPart {
     currentPath: String,
     record: Record
   ): String = {
-    val qualifiedName = record.getString("name").getOrElse("")
-    val qualifiedSegments = qualifiedName.split("\\.").toVector.filter(_.nonEmpty)
-    val component = record.getString("component").orElse(qualifiedSegments.headOption).getOrElse("")
-    val service = record.getString("service").orElse(qualifiedSegments.lift(1)).getOrElse("")
-    val operation = qualifiedSegments.lift(2).orElse(Option(qualifiedName).filter(_.nonEmpty)).getOrElse("")
+    val qualifiedname = record.getString("name").getOrElse("")
+    val qualifiedsegments = qualifiedname.split("\\.").toVector.filter(_.nonEmpty)
+    val component = record.getString("component").orElse(qualifiedsegments.headOption).getOrElse("")
+    val service = record.getString("service").orElse(qualifiedsegments.lift(1)).getOrElse("")
+    val operation = qualifiedsegments.lift(2).orElse(Option(qualifiedname).filter(_.nonEmpty)).getOrElse("")
     val selector = manual_selector_map(record)
     val details = manual_record_values(record.asMap.get("details"))
     val arguments = details.get("arguments").map(x => manual_seq_values(Some(x))).getOrElse(Vector.empty)
     val returns = details.get("returns").map(x => manual_seq_values(Some(x))).getOrElse(Vector.empty)
     val description = details.get("description").map(x => manual_seq_values(Some(x))).getOrElse(Vector.empty).mkString(" ")
-    val selectorText = selector.get("canonical").flatMap(manual_scalar).orElse(record.getString("selector")).getOrElse(qualifiedName)
-    val restPath = selector.get("rest").flatMap(manual_scalar).map(manual_canonical_rest_path).getOrElse(s"/rest/v1/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}")
-    val formPath = s"/form/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}"
-    val formApiPath = s"/form-api/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}"
-    val describeArgumentRows = manual_record_seq(record.asMap.get("arguments")).map(manual_parameter_row)
-    val parameterRows =
-      if (describeArgumentRows.nonEmpty)
-        describeArgumentRows
+    val selectortext = selector.get("canonical").flatMap(manual_scalar).orElse(record.getString("selector")).getOrElse(qualifiedname)
+    val restpath = selector.get("rest").flatMap(manual_scalar).map(manual_canonical_rest_path).getOrElse(s"/rest/v1/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}")
+    val formpath = s"/form/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}"
+    val formapipath = s"/form-api/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}"
+    val describeargumentrows = manual_record_seq(record.asMap.get("arguments")).map(manual_parameter_row)
+    val parameterrows =
+      if (describeargumentrows.nonEmpty)
+        describeargumentrows
       else
         manual_schema_parameters_from_help(details, component, service, operation)
     s"""<p class="mb-3">${escape(record.getString("summary").getOrElse("Operation reference"))}</p>
        |${if (description.nonEmpty) s"""<p class="mb-3">${escape(description)}</p>""" else ""}
        |${manual_kv_summary(Vector(
-         "Selector" -> selectorText,
+         "Selector" -> selectortext,
          "Component" -> component,
          "Service" -> service,
          "Operation" -> operation,
-         "Arguments" -> (if (parameterRows.nonEmpty) parameterRows.size else arguments.size).toString,
+         "Arguments" -> (if (parameterrows.nonEmpty) parameterrows.size else arguments.size).toString,
          "Returns" -> returns.mkString(", ")
        ))}
        |${manual_link_group(Vector(
          "Web specification" -> currentPath,
-         "REST" -> restPath,
-         "Form" -> formPath,
-         "Form API" -> formApiPath,
+         "REST" -> restpath,
+         "Form" -> formpath,
+         "Form API" -> formapipath,
        "OpenAPI JSON" -> "/openapi.json"
       ))}
        |${manual_child_entity_binding_summary(record)}
        |${manual_association_binding_summary(record)}
        |${manual_image_binding_summary(record)}
-       |${manual_parameter_table(parameterRows)}
+       |${manual_parameter_table(parameterrows)}
        |${manual_response_summary(returns)}""".stripMargin
   }
 
@@ -2470,8 +2475,8 @@ trait StaticFormAppRendererSystemAdminPart {
   protected def manual_schema_summary(
     record: Record
   ): String = {
-    val targetType = record.getString("targetType").getOrElse(record.getString("type").getOrElse(""))
-    targetType match {
+    val targettype = record.getString("targetType").getOrElse(record.getString("type").getOrElse(""))
+    targettype match {
       case "operation" =>
         val request = manual_record_values(record.asMap.get("request"))
         val response = manual_record_values(record.asMap.get("response"))
@@ -2754,7 +2759,7 @@ trait StaticFormAppRendererSystemAdminPart {
     io.circe.parser.parse(jsontext).toOption.map(json_to_yaml).getOrElse(jsontext)
 
   protected def json_to_yaml(json: Json): String = {
-    def go(value: Json, indent: Int): String = {
+    def _go_(value: Json, indent: Int): String = {
       val pad = "  " * indent
       value.fold(
         jsonNull = "null",
@@ -2769,8 +2774,8 @@ trait StaticFormAppRendererSystemAdminPart {
               jsonBoolean = b => s"${pad}- ${b}",
               jsonNumber = n => s"${pad}- ${n}",
               jsonString = s => s"${pad}- ${yaml_quote(s)}",
-              jsonArray = _ => s"${pad}-\n${go(item, indent + 1)}",
-              jsonObject = _ => s"${pad}-\n${go(item, indent + 1)}"
+              jsonArray = _ => s"${pad}-\n${_go_(item, indent + 1)}",
+              jsonObject = _ => s"${pad}-\n${_go_(item, indent + 1)}"
             )
           }.mkString("\n"),
         jsonObject = obj =>
@@ -2781,13 +2786,13 @@ trait StaticFormAppRendererSystemAdminPart {
               jsonBoolean = b => s"${pad}${key}: ${b}",
               jsonNumber = n => s"${pad}${key}: ${n}",
               jsonString = s => s"${pad}${key}: ${yaml_quote(s)}",
-              jsonArray = _ => s"${pad}${key}:\n${go(item, indent + 1)}",
-              jsonObject = _ => s"${pad}${key}:\n${go(item, indent + 1)}"
+              jsonArray = _ => s"${pad}${key}:\n${_go_(item, indent + 1)}",
+              jsonObject = _ => s"${pad}${key}:\n${_go_(item, indent + 1)}"
             )
           }.mkString("\n")
       )
     }
-    go(json, 0)
+    _go_(json, 0)
   }
 
   protected def yaml_quote(s: String): String =
@@ -2805,8 +2810,8 @@ trait StaticFormAppRendererSystemAdminPart {
     body: String,
     id: Option[String] = None
   ): String = {
-    val idText = id.map(x => s""" id="${escape(x)}"""").getOrElse("")
-    s"""<article${idText} class="card manual-card shadow-sm">
+    val idtext = id.map(x => s""" id="${escape(x)}"""").getOrElse("")
+    s"""<article${idtext} class="card manual-card shadow-sm">
        |  <div class="card-body">
        |    <h2 class="card-title h5">${escape(title)}</h2>
        |    ${body}

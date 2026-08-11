@@ -5,7 +5,7 @@ import org.goldenport.protocol.Protocol
 
 /*
  * @since   Apr. 23, 2026
- * @version Apr. 23, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class _ImplBackedComponent extends Component
@@ -20,9 +20,9 @@ object ComponentFactory extends Component.BundleFactory {
       comp: Component
     ): Component.Core =
       Component.Core.create(
-        "impl-backed-primary",
-        ComponentId("impl_backed_primary"),
-        ComponentInstanceId.default(ComponentId("impl_backed_primary")),
+        "org.goldenport.cncf.test.ImplBackedPrimary",
+        ComponentId("org.goldenport.cncf.test.ImplBackedPrimary"),
+        ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ImplBackedPrimary")),
         Protocol.empty,
         this
       )

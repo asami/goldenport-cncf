@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 28, 2026
  *  version Apr. 22, 2026
  *  version May. 11, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -28,7 +28,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenT
     "expose event read and job event observation routes" in {
       Given("an admitted command subsystem with an observed job")
       val subsystem = RuntimeBindingAdmissionFixture.default(mode = Some("command"))
-      val admin = subsystem.components.find(_.name == "admin").get
+      val admin = subsystem.findComponent("admin").get
       val ctx = ExecutionContext.create()
       val jobid = admin.logic.submitJob(
         List(SleepTask(ActionId.generate(), 10L)),
@@ -144,7 +144,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenT
     "expose dead-letter and poison metadata for event-triggered failures" in {
       Given("an admitted command subsystem with a retryable failed job")
       val subsystem = RuntimeBindingAdmissionFixture.default(mode = Some("command"))
-      val admin = subsystem.components.find(_.name == "admin").get
+      val admin = subsystem.findComponent("admin").get
       val ctx = ExecutionContext.create()
       val jobid = admin.logic.submitJob(
         List(FailureTask(

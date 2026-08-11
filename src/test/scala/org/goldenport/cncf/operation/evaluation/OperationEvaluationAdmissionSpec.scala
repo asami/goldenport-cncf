@@ -41,7 +41,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for declared operation-evaluation admission.
  *
  * @since   Jul. 23, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAdmissionSpec
@@ -606,9 +606,9 @@ final class OperationEvaluationAdmissionSpec
       )
     )
     val component   = new AdmissionComponent(metadata)
-    val componentid = ComponentId("evaluation_admission")
+    val componentid = ComponentId("org.goldenport.cncf.test.EvaluationAdmission")
     val core = Component.Core.create(
-      "evaluation_admission",
+      componentid.name,
       componentid,
       ComponentInstanceId.default(componentid),
       protocol

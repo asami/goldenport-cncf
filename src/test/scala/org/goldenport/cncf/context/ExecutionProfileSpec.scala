@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionProfileSpec
@@ -607,7 +607,7 @@ final class ExecutionProfileSpec
       nextcall.executionContext.executionControl.invocation.map(_.key) should not be
         call.executionContext.executionControl.invocation.map(_.key)
       call.executionContext.executionControl.invocation.map(_.operationSelector) shouldBe
-        Some(s"${component.name}.price.calculate")
+        Some(s"${component.componentId.name}.price.calculate")
       call.executionContext.runtime.unitOfWork.executionContext.executionControl shouldBe
         call.executionContext.executionControl
     }

@@ -6,7 +6,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   May. 20, 2026
- * @version May. 25, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererInformationPart {
@@ -31,10 +31,16 @@ trait StaticFormAppRendererInformationPart {
         admin_empty_table_cell(7, "No components are loaded.")
       else
         projections.map { projection =>
-          val path = escape_path_segment(projection.componentName)
+          val component = InformationSpaceProjection
+            .componentOption(subsystem.components, projection.componentName)
+          val displayname = component.map(_.displayName).getOrElse(projection.componentName)
+          val selector = component
+            .map(InformationSpaceProjection.componentSelector(subsystem.components, _))
+            .getOrElse(projection.componentName)
+          val path = escape_path_segment(selector)
           val counts = projection.counts
           s"""<tr>
-             |  <td><a href="/web/system/admin/information/${path}">${escape(projection.componentName)}</a></td>
+             |  <td><a href="/web/system/admin/information/${path}">${escape(displayname)}</a></td>
              |  <td>${counts.informationCount}</td>
              |  <td>${counts.validationIssueCount}</td>
              |  <td>${counts.resolutionCandidateCount}</td>
@@ -97,7 +103,7 @@ trait StaticFormAppRendererInformationPart {
       s"""<tr><td><code>${escape(information.id.print)}</code></td><td><code>${escape(conflict.conflictKey)}</code></td><td>${escape(conflict.fieldPath)}</td><td>${escape(conflict.state.label)}</td><td>${escape(conflict.resolution.getOrElse(""))}</td></tr>"""
     }.mkString("\n")
     simple_page(
-      title = s"System Information ${component.name}",
+      title = s"System Information ${component.displayName}",
       subtitle = "Component InformationSpace compact projection",
       body =
         s"""${admin_nav_card(Vector(
@@ -105,7 +111,7 @@ trait StaticFormAppRendererInformationPart {
              "System admin" -> "/web/system/admin"
            ))}
            |${admin_card("Counts", field_table(Vector(
-             "Component" -> component.name,
+             "Component" -> component.displayName,
              "Information" -> projection.counts.informationCount.toString,
              "Validation issues" -> projection.counts.validationIssueCount.toString,
              "Resolution candidates" -> projection.counts.resolutionCandidateCount.toString,

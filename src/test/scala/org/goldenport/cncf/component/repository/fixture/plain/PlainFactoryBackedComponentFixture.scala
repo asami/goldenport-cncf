@@ -5,7 +5,7 @@ import org.goldenport.protocol.Protocol
 
 /*
  * @since   Apr. 23, 2026
- * @version Apr. 23, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class _PlainFactoryBackedComponent extends Component
@@ -19,9 +19,9 @@ final class ComponentFactory extends Component.Factory {
     comp: Component
   ): Component.Core =
     Component.Core.create(
-      "plain-factory-primary",
-      ComponentId("plain_factory_primary"),
-      ComponentInstanceId.default(ComponentId("plain_factory_primary")),
+      "org.goldenport.cncf.test.PlainFactoryPrimary",
+      ComponentId("org.goldenport.cncf.test.PlainFactoryPrimary"),
+      ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.PlainFactoryPrimary")),
       Protocol.empty,
       this
     )

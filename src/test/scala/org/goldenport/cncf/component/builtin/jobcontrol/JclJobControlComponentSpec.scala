@@ -29,7 +29,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -47,18 +47,18 @@ final class JclJobControlComponentSpec
         """jobs:
           |  - name: first
           |    target:
-          |      action: jcl_fixture.command.ok
+          |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |    parameters:
           |      orderId: a-1
           |    submit:
           |      persistence: ephemeral
           |      requestSummary: first-run
 	          |    onFailure:
-	          |      action: jcl_fixture.command.hook
+	          |      action: org.goldenport.cncf.test.JclFixture.command.hook
 	          |      parameters:
 	          |        reason: fail
 	          |    compensation:
-	          |      action: jcl_fixture.command.compensate
+	          |      action: org.goldenport.cncf.test.JclFixture.command.compensate
 	          |      parameters:
 	          |        step: first
 	          |""".stripMargin
@@ -75,10 +75,10 @@ final class JclJobControlComponentSpec
       val jobs = _records(record.asMap("jobs"))
       jobs.size shouldBe 1
       jobs.head.getString("name") shouldBe Some("first")
-      jobs.head.getRecord("target").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.ok")
+      jobs.head.getRecord("target").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.ok")
       jobs.head.getRecord("submit").flatMap(_.getString("persistence")) shouldBe Some("Ephemeral")
-      jobs.head.getRecord("on-failure").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.hook")
-      jobs.head.getRecord("compensation").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.compensate")
+      jobs.head.getRecord("on-failure").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.hook")
+      jobs.head.getRecord("compensation").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.compensate")
       }
     }
 
@@ -91,7 +91,7 @@ final class JclJobControlComponentSpec
           |    {
           |      "name": "json-first",
           |      "target": {
-          |        "action": "jcl_fixture.command.ok"
+          |        "action": "org.goldenport.cncf.test.JclFixture.command.ok"
           |      },
           |      "parameters": {
           |        "orderId": "json-1"
@@ -104,7 +104,7 @@ final class JclJobControlComponentSpec
           |  <job>
           |    <name>xml-first</name>
           |    <target>
-          |      <action>jcl_fixture.command.ok</action>
+          |      <action>org.goldenport.cncf.test.JclFixture.command.ok</action>
           |    </target>
           |    <parameters>
           |      <orderId>xml-1</orderId>
@@ -116,7 +116,7 @@ final class JclJobControlComponentSpec
           |  {
           |    name = "hocon-first"
           |    target {
-          |      action = "jcl_fixture.command.ok"
+          |      action = "org.goldenport.cncf.test.JclFixture.command.ok"
           |    }
           |    parameters {
           |      orderId = "hocon-1"
@@ -158,7 +158,7 @@ final class JclJobControlComponentSpec
           |  "job": {
           |    "name": "stored-json",
           |    "target": {
-          |      "action": "jcl_fixture.command.ok"
+          |      "action": "org.goldenport.cncf.test.JclFixture.command.ok"
           |    },
           |    "parameters": {
           |      "orderId": "stored-json-1"
@@ -197,16 +197,16 @@ final class JclJobControlComponentSpec
         """job:
           |  name: profile-job
           |  target:
-          |    action: jcl_fixture.command.ok
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  profile:
           |    expectedStatus: succeeded
           |    eventChain:
-          |      - action: jcl_fixture.command.ok
+          |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |        emits:
           |          - event: order.accepted
           |            occurrence: possible
           |            receivers:
-          |              - action: jcl_fixture.command.hook
+          |              - action: org.goldenport.cncf.test.JclFixture.command.hook
           |                guard: order.hasHook
           |                occurrence: possible
           |""".stripMargin
@@ -226,7 +226,7 @@ final class JclJobControlComponentSpec
       profile.getString("expectedStatus") shouldBe Some("Succeeded")
       val chain = _records(profile.asMap("eventChain"))
       chain.size shouldBe 1
-      chain.head.getString("action") shouldBe Some("jcl_fixture.command.ok")
+      chain.head.getString("action") shouldBe Some("org.goldenport.cncf.test.JclFixture.command.ok")
       val emits = _records(chain.head.asMap("emits"))
       emits.head.getString("event") shouldBe Some("order.accepted")
       _records(emits.head.asMap("receivers")).head.getString("guard") shouldBe Some("order.hasHook")
@@ -249,7 +249,7 @@ final class JclJobControlComponentSpec
         """jobs:
           |  - name: invalid
           |    target:
-          |      action: jcl_fixture.command.ok
+          |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |      workflow:
           |        definition: sales-order-approval
           |        registration: approval
@@ -265,17 +265,17 @@ final class JclJobControlComponentSpec
         """jobs:
           |  - name: invalid
           |    target:
-          |      action: jcl_fixture.command.ok
+          |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |      branch: x
           |""".stripMargin
       val invalidprofile =
         """job:
           |  name: invalid
           |  target:
-          |    action: jcl_fixture.command.ok
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  profile:
           |    eventChain:
-          |      - action: jcl_fixture.command.ok
+          |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |        emits:
           |          - event: order.accepted
           |            occurrence: always
@@ -305,16 +305,16 @@ final class JclJobControlComponentSpec
         """job:
           |  name: reusable-ok
           |  target:
-          |    action: jcl_fixture.command.ok
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  parameters:
           |    orderId: reusable-1
           |  profile:
           |    expectedStatus: succeeded
           |    eventChain:
-          |      - action: jcl_fixture.command.ok
+          |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |  flow:
           |    steps:
-          |      - action: jcl_fixture.command.ok
+          |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |  onEvent:
           |    receivers: []
           |""".stripMargin
@@ -370,7 +370,7 @@ final class JclJobControlComponentSpec
         """job:
           |  name: operation-bound-ok
           |  target:
-          |    action: jcl_fixture.command.ok
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  profile:
           |    expectedStatus: succeeded
           |""".stripMargin
@@ -385,8 +385,8 @@ final class JclJobControlComponentSpec
       )
 
       When("the operation is executed through ComponentLogic")
-      val component = _component_for(fixture.subsystem, "jcl_fixture.command.ok")
-      val request = _build_request(fixture.subsystem.resolver, "jcl_fixture.command.ok", Nil)
+      val component = _component_for(fixture.subsystem, "org.goldenport.cncf.test.JclFixture.command.ok")
+      val request = _build_request(fixture.subsystem.resolver, "org.goldenport.cncf.test.JclFixture.command.ok", Nil)
       val action = component.logic.makeOperationRequest(request).toOption.collect {
         case action: Action => action
       }.getOrElse(fail("action missing"))
@@ -413,9 +413,9 @@ final class JclJobControlComponentSpec
         """job:
           |  name: operation-bound-compensation
           |  target:
-          |    action: jcl_fixture.command.ok
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  compensation:
-          |    action: jcl_fixture.command.compensate
+          |    action: org.goldenport.cncf.test.JclFixture.command.compensate
           |""".stripMargin
       _execute(
         fixture.subsystem,
@@ -428,8 +428,8 @@ final class JclJobControlComponentSpec
       )
 
       When("the operation completes and a later same-job continuation fails")
-      val component = _component_for(fixture.subsystem, "jcl_fixture.command.ok")
-      val request = _build_request(fixture.subsystem.resolver, "jcl_fixture.command.ok", Nil)
+      val component = _component_for(fixture.subsystem, "org.goldenport.cncf.test.JclFixture.command.ok")
+      val request = _build_request(fixture.subsystem.resolver, "org.goldenport.cncf.test.JclFixture.command.ok", Nil)
       val action = component.logic.makeOperationRequest(request).toOption.collect {
         case action: Action => action
       }.getOrElse(fail("action missing"))
@@ -449,7 +449,7 @@ final class JclJobControlComponentSpec
       Then("the root task carries and runs the JobDefinition compensation action")
       response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
       val root = model.tasks.tasks.find(_.operation.exists(_.endsWith(".ok"))).getOrElse(fail("root task missing"))
-      root.compensationActionRef shouldBe Some("jcl_fixture.command.compensate")
+      root.compensationActionRef shouldBe Some("org.goldenport.cncf.test.JclFixture.command.compensate")
       model.tasks.tasks.exists(_.operation.exists(_.endsWith(".compensate"))) shouldBe true
       root.compensationStatus shouldBe Some("succeeded")
       fixture.trace.exists(_.startsWith("compensate:")) shouldBe true
@@ -464,13 +464,13 @@ final class JclJobControlComponentSpec
         """job:
           |  name: compare-ok
           |  target:
-          |    action: jcl_fixture.command.ok
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  parameters:
           |    orderId: profile-1
           |  profile:
           |    expectedStatus: succeeded
           |    eventChain:
-          |      - action: jcl_fixture.command.ok
+          |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
 
       When("the job is submitted and compared")
@@ -503,11 +503,11 @@ final class JclJobControlComponentSpec
         """job:
           |  name: compare-status-mismatch
           |  target:
-          |    action: jcl_fixture.command.ok
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  profile:
           |    expectedStatus: failed
           |    eventChain:
-          |      - action: jcl_fixture.command.ok
+          |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
 
       When("the job is submitted, compared, and reconstructed")
@@ -549,7 +549,7 @@ final class JclJobControlComponentSpec
         """jobs:
           |  - name: single-ok
           |    target:
-          |      action: jcl_fixture.command.ok
+          |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |    parameters:
           |      orderId: one
           |""".stripMargin
@@ -557,21 +557,21 @@ final class JclJobControlComponentSpec
         """jobs:
           |  - name: ok
           |    target:
-          |      action: jcl_fixture.command.ok
+          |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |    parameters:
           |      orderId: a
           |  - name: fail
           |    target:
-          |      action: jcl_fixture.command.fail
+          |      action: org.goldenport.cncf.test.JclFixture.command.fail
           |    parameters:
           |      orderId: b
           |    onFailure:
-          |      action: jcl_fixture.command.hook
+          |      action: org.goldenport.cncf.test.JclFixture.command.hook
           |      parameters:
           |        reason: after-fail
           |  - name: skipped
           |    target:
-          |      action: jcl_fixture.command.ok
+          |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |    parameters:
           |      orderId: c
           |""".stripMargin
@@ -719,7 +719,7 @@ final class JclJobControlComponentSpec
         s"""jobs:
            |  - name: direct
            |    target:
-           |      action: jcl_fixture.command.ok
+           |      action: org.goldenport.cncf.test.JclFixture.command.ok
            |    parameters:
            |      orderId: direct-1
            |  - name: wf-ok
@@ -737,12 +737,12 @@ final class JclJobControlComponentSpec
            |    parameters:
            |      orderId: ${pendingid.value}
            |    onFailure:
-           |      action: jcl_fixture.command.hook
+           |      action: org.goldenport.cncf.test.JclFixture.command.hook
            |      parameters:
            |        reason: workflow-no-progress
            |  - name: skipped
            |    target:
-           |      action: jcl_fixture.command.ok
+           |      action: org.goldenport.cncf.test.JclFixture.command.ok
            |    parameters:
            |      orderId: never
            |""".stripMargin
@@ -811,6 +811,8 @@ final class JclJobControlComponentSpec
   ): Component = {
     given EntityPersistent[SalesOrder] = _persistent
     val component = new Component() {
+      override def displayName: String = "org.goldenport.cncf.test.JclFixture"
+
       override def workflowDefinitions: Vector[WorkflowDefinition] = definitions
       override def operationDefinitions: Vector[CmlOperationDefinition] =
         Vector("ok", "fail", "hook", "compensate", "advanceOrder").map { name =>
@@ -851,9 +853,9 @@ final class JclJobControlComponentSpec
       )
     )
     component.entitySpace.registerEntity("salesOrder", _collection(entities))
-    val componentid = ComponentId("jcl_fixture")
+    val componentid = ComponentId("org.goldenport.cncf.test.JclFixture")
     val instanceid = ComponentInstanceId.default(componentid)
-    val core = Component.Core.create("jcl_fixture", componentid, instanceid, protocol)
+    val core = Component.Core.create(componentid.name, componentid, instanceid, protocol)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 

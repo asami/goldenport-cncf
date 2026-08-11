@@ -30,7 +30,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56RuntimeIdentityProjectionSpec
@@ -469,7 +469,7 @@ final class Phase56RuntimeIdentityProjectionSpec
     instance: String = "default",
     isdefault: Boolean = false
   ): Component = {
-    val id = ComponentId(componentid)
+    val id = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentid)
     val effectivesubsystem = Option(subsystem).getOrElse(TestComponentFactory.emptySubsystem(componentid))
     val metadata =
       if (instance == "default" && !isdefault) None

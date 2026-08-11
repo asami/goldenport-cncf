@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Job worker correlation in automatic capture.
  *
  * @since   Jul. 23, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationJobCaptureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -35,9 +35,9 @@ final class OperationEvaluationJobCaptureSpec extends AnyWordSpec with Matchers 
       )
       val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
       val component = new EvaluationComponent
-      val componentid = ComponentId("evaluation_job")
+      val componentid = ComponentId("org.goldenport.cncf.test.EvaluationJob")
       val core = Component.Core.create(
-        "evaluation_job",
+        componentid.name,
         componentid,
         ComponentInstanceId.default(componentid),
         protocol

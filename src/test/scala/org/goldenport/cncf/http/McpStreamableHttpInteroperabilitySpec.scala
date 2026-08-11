@@ -8,6 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.comcast.ip4s.{Host, Port}
 import io.circe.parser.parse
 import org.goldenport.{Consequence}
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.cncf.mcp.client.*
@@ -23,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Streamable HTTP client boundaries.
  *
  * @since   Jul. 21, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpStreamableHttpInteroperabilitySpec
@@ -35,7 +36,7 @@ final class McpStreamableHttpInteroperabilitySpec
     "initialize list and invoke one admitted Operation through a real loopback server" in {
       Given("the production MCP route and production JDK Streamable HTTP client on a real loopback socket")
       val subsystem = DefaultSubsystemFactory.default(Some("mcp-loopback-interoperability"))
-      subsystem.components.find(_.name == "admin").foreach(_.withMcpReadyServices(Set("system")))
+      subsystem.findComponent(BuiltinComponentIdentity.ADMIN).foreach(_.withMcpReadyServices(Set("system")))
       val route = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(
         ExecutionContext.create(),

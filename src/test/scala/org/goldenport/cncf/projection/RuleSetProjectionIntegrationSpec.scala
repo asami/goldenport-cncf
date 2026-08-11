@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * subsystem introspection projections.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuleSetProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -65,9 +65,9 @@ final class RuleSetProjectionIntegrationSpec extends AnyWordSpec with Matchers w
     val owner = subsystem
     val component = new Component() {
       override val core: Component.Core = Component.Core.create(
-        "catalog",
-        ComponentId("catalog"),
-        ComponentInstanceId.default(ComponentId("catalog")),
+        "org.goldenport.cncf.test.Catalog",
+        ComponentId("org.goldenport.cncf.test.Catalog"),
+        ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.Catalog")),
         Protocol.empty
       )
 

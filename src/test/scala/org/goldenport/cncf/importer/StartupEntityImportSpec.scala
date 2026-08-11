@@ -24,7 +24,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Mar. 27, 2026
  *  version Apr. 10, 2026
  *  version Apr. 14, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StartupEntityImportSpec
@@ -32,11 +32,11 @@ final class StartupEntityImportSpec
   with Matchers
   with GivenWhenThen {
 
-  private val collectionId = EntityCollectionId("test", "a", "person")
-  private val p1IdText = "test-a-entity-ec1_4_test_1_a_6_person-1742198400000-abcd1234"
-  private val p2IdText = "test-a-entity-ec1_4_test_1_a_6_person-1742198400000-abcd1235"
-  private val p1Id = _parse_entity_id(p1IdText)
-  private val p2Id = _parse_entity_id(p2IdText)
+  private val _collection_id = EntityCollectionId("test", "a", "person")
+  private val _p1_id_text = "test-a-entity-ec1_4_test_1_a_6_person-1742198400000-abcd1234"
+  private val _p2_id_text = "test-a-entity-ec1_4_test_1_a_6_person-1742198400000-abcd1235"
+  private val _p1_id = _parse_entity_id(_p1_id_text)
+  private val _p2_id = _parse_entity_id(_p2_id_text)
 
   "Startup import for cncf.import.entity.file" should {
     "import entities from a URL via UnitOfWork-backed fetch" in {
@@ -47,7 +47,7 @@ final class StartupEntityImportSpec
         s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: $p1IdText
+          |      - id: $_p1_id_text
           |        name: url-entity
           |        age: 20
           |""".stripMargin
@@ -77,7 +77,7 @@ final class StartupEntityImportSpec
 
         Then("the URL content is imported")
         val space = subsystem.globalRuntimeContext.config.entityStoreSpace
-        val entity = _person(p1Id, "url-entity", 20)
+        val entity = _person(_p1_id, "url-entity", 20)
         space.load(UnitOfWorkOp.EntityStoreLoad(entity.id, _persistent)) shouldBe
           Consequence.success(Some(entity))
       } finally {
@@ -96,7 +96,7 @@ final class StartupEntityImportSpec
         s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: $p1IdText
+          |      - id: $_p1_id_text
           |        name: default-entity
           |        age: 20
           |""".stripMargin
@@ -113,7 +113,7 @@ final class StartupEntityImportSpec
 
         Then("the default entity directory is imported")
         val space = subsystem.globalRuntimeContext.config.entityStoreSpace
-        val entity = _person(p1Id, "default-entity", 20)
+        val entity = _person(_p1_id, "default-entity", 20)
         space.load(UnitOfWorkOp.EntityStoreLoad(entity.id, _persistent)) shouldBe
           Consequence.success(Some(entity))
       } finally {
@@ -130,7 +130,7 @@ final class StartupEntityImportSpec
         s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: $p1IdText
+          |      - id: $_p1_id_text
           |        name: taro
           |        age: 20
           |""".stripMargin
@@ -147,7 +147,7 @@ final class StartupEntityImportSpec
 
         Then("the entity is available through the entity-store route")
         val space = subsystem.globalRuntimeContext.config.entityStoreSpace
-        val entity = _person(p1Id, "taro", 20)
+        val entity = _person(_p1_id, "taro", 20)
         space.load(UnitOfWorkOp.EntityStoreLoad(entity.id, _persistent)) shouldBe
           Consequence.success(Some(entity))
       } finally {
@@ -166,7 +166,7 @@ final class StartupEntityImportSpec
         s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: $p1IdText
+          |      - id: $_p1_id_text
           |        name: nested-first
           |        age: 10
           |""".stripMargin
@@ -176,7 +176,7 @@ final class StartupEntityImportSpec
         s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: $p2IdText
+          |      - id: $_p2_id_text
           |        name: root-second
           |        age: 11
           |""".stripMargin
@@ -193,8 +193,8 @@ final class StartupEntityImportSpec
 
         Then("all entities are available through the entity-store route")
         val space = subsystem.globalRuntimeContext.config.entityStoreSpace
-        val first = _person(p1Id, "nested-first", 10)
-        val second = _person(p2Id, "root-second", 11)
+        val first = _person(_p1_id, "nested-first", 10)
+        val second = _person(_p2_id, "root-second", 11)
         space.load(UnitOfWorkOp.EntityStoreLoad(first.id, _persistent)) shouldBe
           Consequence.success(Some(first))
         space.load(UnitOfWorkOp.EntityStoreLoad(second.id, _persistent)) shouldBe
@@ -307,24 +307,24 @@ final class StartupEntityImportSpec
       Given("a bootstrap cwd with both explicit entity config and a default entity.d directory")
       val cwd = Files.createTempDirectory("cncf-startup-entity-override")
       val dir = Files.createDirectories(cwd.resolve("entity.d"))
-      val defaultFile = dir.resolve("default.yaml")
-      val explicitFile = cwd.resolve("explicit.yaml")
+      val defaultfile = dir.resolve("default.yaml")
+      val explicitfile = cwd.resolve("explicit.yaml")
       Files.writeString(
-        defaultFile,
+        defaultfile,
         s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: $p2IdText
+          |      - id: $_p2_id_text
           |        name: default-entity
           |        age: 20
           |""".stripMargin
       )
       Files.writeString(
-        explicitFile,
+        explicitfile,
         s"""entitystore:
           |  - collection: test.a.person
           |    records:
-          |      - id: $p1IdText
+          |      - id: $_p1_id_text
           |        name: explicit-entity
           |        age: 21
           |""".stripMargin
@@ -333,7 +333,7 @@ final class StartupEntityImportSpec
       When("bootstrapping the runtime")
       val runtime = new CncfRuntime()
       try {
-        val subsystem = _initialize(runtime, cwd, Some(explicitFile.toString))
+        val subsystem = _initialize(runtime, cwd, Some(explicitfile.toString))
         given ExecutionContext = _execution_context(
           subsystem.globalRuntimeContext.config.dataStoreSpace,
           subsystem.globalRuntimeContext.config.entityStoreSpace
@@ -341,8 +341,8 @@ final class StartupEntityImportSpec
 
         Then("both sources are imported in deterministic order")
         val space = subsystem.globalRuntimeContext.config.entityStoreSpace
-        val explicit = _person(p1Id, "explicit-entity", 21)
-        val default = _person(p2Id, "default-entity", 20)
+        val explicit = _person(_p1_id, "explicit-entity", 21)
+        val default = _person(_p2_id, "default-entity", 20)
         space.load(UnitOfWorkOp.EntityStoreLoad(explicit.id, _persistent)) shouldBe
           Consequence.success(Some(explicit))
         space.load(UnitOfWorkOp.EntityStoreLoad(default.id, _persistent)) shouldBe
@@ -367,7 +367,7 @@ final class StartupEntityImportSpec
 
         Then("startup succeeds without importing any entities")
         val space = subsystem.globalRuntimeContext.config.entityStoreSpace
-        space.load(UnitOfWorkOp.EntityStoreLoad(p1Id, _persistent)) shouldBe Consequence.success(None)
+        space.load(UnitOfWorkOp.EntityStoreLoad(_p1_id, _persistent)) shouldBe Consequence.success(None)
       } finally {
         runtime.closeEmbedding()
       }
@@ -410,9 +410,9 @@ final class StartupEntityImportSpec
   private def _initialize(
     runtime: CncfRuntime,
     cwd: Path,
-    importPath: Option[String]
+    importpath: Option[String]
   ) = {
-    val args = importPath match {
+    val args = importpath match {
       case Some(path) => _args(cwd, path)
       case None => _args(cwd)
     }
@@ -431,16 +431,16 @@ final class StartupEntityImportSpec
 
   private def _args(
     cwd: Path,
-    importPath: String = ""
+    importpath: String = ""
   ): Array[String] =
-    if (importPath.isEmpty)
+    if (importpath.isEmpty)
       Array(
         s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}"
       )
     else
       Array(
         s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}",
-        s"--cncf.import.entity.file=${importPath}"
+        s"--cncf.import.entity.file=${importpath}"
       )
 
   private def _http_server(
@@ -466,10 +466,11 @@ final class StartupEntityImportSpec
   ): Seq[Component] = {
     val component = new Component() {}
     val name = "startup_entity_registry"
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val core = Component.Core.create(
-      name,
-      ComponentId(name),
-      ComponentInstanceId.default(ComponentId(name)),
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
       Protocol.Builder().build()
     )
     component.initialize(
@@ -483,15 +484,15 @@ final class StartupEntityImportSpec
     Seq(component)
   }
 
-  private def _collection(): EntityCollection[_PersonEntity] = {
-    given EntityPersistent[_PersonEntity] = _persistent
-    val storerealm = new EntityRealm[_PersonEntity](
+  private def _collection(): EntityCollection[PersonEntity] = {
+    given EntityPersistent[PersonEntity] = _persistent
+    val storerealm = new EntityRealm[PersonEntity](
       entityName = "person",
-      loader = EntityLoader[_PersonEntity](_ => None),
-      state = new _IdRef[EntityRealmState[_PersonEntity]](EntityRealmState(Map.empty))
+      loader = EntityLoader[PersonEntity](_ => None),
+      state = new IdRef[EntityRealmState[PersonEntity]](EntityRealmState(Map.empty))
     )
     val descriptor = EntityDescriptor(
-      collectionId = collectionId,
+      collectionId = _collection_id,
       plan = EntityRuntimePlan(
         entityName = "person",
         memoryPolicy = EntityMemoryPolicy.StoreOnly,
@@ -502,7 +503,7 @@ final class StartupEntityImportSpec
       ),
       persistent = _persistent
     )
-    new EntityCollection[_PersonEntity](
+    new EntityCollection[PersonEntity](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, None)
     )
@@ -512,19 +513,19 @@ final class StartupEntityImportSpec
     id: EntityId,
     name: String,
     age: Int
-  ): _PersonEntity =
-    _PersonEntity(id, name, age)
+  ): PersonEntity =
+    PersonEntity(id, name, age)
 
-  private def _persistent: EntityPersistent[_PersonEntity] =
-    new EntityPersistent[_PersonEntity] {
-      def id(e: _PersonEntity): EntityId = e.id
-      def toRecord(e: _PersonEntity): Record = e.toRecord()
-      def fromRecord(r: Record): Consequence[_PersonEntity] = {
+  private def _persistent: EntityPersistent[PersonEntity] =
+    new EntityPersistent[PersonEntity] {
+      def id(e: PersonEntity): EntityId = e.id
+      def toRecord(e: PersonEntity): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[PersonEntity] = {
         val m = r.asMap
         (m.get("id"), m.get("name"), m.get("age")) match {
           case (Some(id), Some(name), Some(age)) =>
-            val entityId = EntityId.parse(id.toString)
-            val ageValue = age match {
+            val entityid = EntityId.parse(id.toString)
+            val agevalue = age match {
               case n: Number => Consequence.success(n.intValue())
               case x =>
                 scala.util.Try(x.toString.toInt).toOption match {
@@ -532,9 +533,9 @@ final class StartupEntityImportSpec
                   case None => Consequence.argumentInvalid("invalid person record")
                 }
             }
-            (entityId, ageValue) match {
-              case (Consequence.Success(parsed), Consequence.Success(parsedAge)) =>
-                Consequence.success(_PersonEntity(parsed, name.toString, parsedAge))
+            (entityid, agevalue) match {
+              case (Consequence.Success(parsed), Consequence.Success(parsedage)) =>
+                Consequence.success(PersonEntity(parsed, name.toString, parsedage))
               case (Consequence.Failure(conclusion), _) =>
                 Consequence.operationInvalid(conclusion.show)
               case (_, Consequence.Failure(conclusion)) =>
@@ -555,8 +556,8 @@ final class StartupEntityImportSpec
     }
 
   private def _execution_context(
-    dataStoreSpace: org.goldenport.cncf.datastore.DataStoreSpace,
-    entityStoreSpace: org.goldenport.cncf.entity.EntityStoreSpace
+    datastorespace: org.goldenport.cncf.datastore.DataStoreSpace,
+    entitystorespace: org.goldenport.cncf.entity.EntityStoreSpace
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "startup_entity_import"),
@@ -571,8 +572,8 @@ final class StartupEntityImportSpec
         parent = None,
         observabilityContext = observability,
         httpDriverOption = Some(FakeHttpDriver.okText("nop")),
-        datastore = Some(DataStoreContext(dataStoreSpace)),
-        entitystore = Some(EntityStoreContext(entityStoreSpace))
+        datastore = Some(DataStoreContext(datastorespace)),
+        entitystore = Some(EntityStoreContext(entitystorespace))
       ),
       unitOfWorkSupplier = () => new org.goldenport.cncf.unitofwork.UnitOfWork(context),
       unitOfWorkInterpreterFn = new (org.goldenport.cncf.unitofwork.UnitOfWorkOp ~> Consequence) {
@@ -587,7 +588,7 @@ final class StartupEntityImportSpec
     context
   }
 
-  private final case class _PersonEntity(
+  private final case class PersonEntity(
     id: EntityId,
     name: String,
     age: Int
@@ -600,7 +601,7 @@ final class StartupEntityImportSpec
       )
   }
 
-  private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+  private final class IdRef[A](initial: A) extends Ref[cats.Id, A] {
     private var _value: A = initial
     def get: A = _value
     def set(a: A): Unit = _value = a

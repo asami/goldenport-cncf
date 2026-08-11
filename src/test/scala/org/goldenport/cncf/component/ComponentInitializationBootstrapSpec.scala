@@ -2,6 +2,7 @@ package org.goldenport.cncf.component
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.security.MessageDigest
 import java.util.Comparator
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
@@ -33,7 +34,6 @@ import org.goldenport.cncf.subsystem.{
   GenericSubsystemFactory
 }
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.cncf.testutil.DevelopmentRuntimeManifestFixture
 import org.goldenport.protocol.spec as spec
 import org.goldenport.observation.{Cause, Descriptor}
 import org.scalatest.GivenWhenThen
@@ -44,7 +44,7 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Jul. 22, 2026
- * @version Aug.  6, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationBootstrapSpec
@@ -67,7 +67,11 @@ final class ComponentInitializationBootstrapSpec
           .total
         val subsystem = TestComponentFactory.emptySubsystem("initialization-bootstrap")
         val descriptor = ComponentDescriptor(
-          componentName = Some("parameter_probe"),
+          name = Some("org.goldenport.cncf.test.ParameterProbe"),
+          componentName = Some("org.goldenport.cncf.test.ParameterProbe"),
+          version = Some("0.1.0"),
+          schemaVersion = Some(3),
+          componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe")),
           config = Map("provider.limit" -> "12")
         )
 
@@ -100,7 +104,7 @@ final class ComponentInitializationBootstrapSpec
           .points
           .find { point =>
             point.scope == "component-initialization.parameter-resolution" &&
-              point.labels.get("component").contains("parameter_probe") &&
+              point.labels.get("component").contains("org.goldenport.cncf.test.parameterprobe") &&
               point.labels.get("parameter").contains("provider.limit") &&
               point.labels.get("provenance").contains("packaged-default")
           }
@@ -120,7 +124,7 @@ final class ComponentInitializationBootstrapSpec
         val component = result.toOption.value.asInstanceOf[ComponentOwnedDescriptorParameterProbeComponent]
         component.limit shouldBe Some(17)
         component.provenance shouldBe Some(ComponentParameterProvenance.PackagedDefault)
-        component.componentDescriptors.flatMap(_.componentName) shouldBe Vector("generated_parameter_probe")
+        component.componentDescriptors.flatMap(_.componentName) shouldBe Vector("org.goldenport.cncf.test.ComponentOwnedParameterProbe")
       }
 
       "deliver only opaque secret references through component initialization" in {
@@ -128,7 +132,7 @@ final class ComponentInitializationBootstrapSpec
         val locator = "vault://runtime/private-provider-token"
         val subsystem = TestComponentFactory.emptySubsystem("initialization-secret-reference")
         val descriptor = ComponentDescriptor(
-          componentName = Some("secret_parameter_probe"),
+          componentName = Some("org.goldenport.cncf.test.SecretParameterProbe"),
           config = Map("provider.token-ref" -> locator)
         )
 
@@ -153,7 +157,13 @@ final class ComponentInitializationBootstrapSpec
       "isolate named component instance settings" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; one factory and two assembly instances with different values")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-instances")
-        val descriptor = ComponentDescriptor(componentName = Some("parameter_probe"))
+        val descriptor = ComponentDescriptor(
+          name = Some("org.goldenport.cncf.test.ParameterProbe"),
+          componentName = Some("org.goldenport.cncf.test.ParameterProbe"),
+          version = Some("0.1.0"),
+          schemaVersion = Some(3),
+          componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe"))
+        )
         val base = ComponentCreate(
           subsystem,
           ComponentOrigin.Repository("phase-47"),
@@ -163,18 +173,28 @@ final class ComponentInitializationBootstrapSpec
         When("each named instance is materialized independently")
         val first = ParameterProbeFactory.createPrimaryC(
           base.withInstanceMetadata(
-            ComponentInstanceMetadata("parameter_probe", "first", Map("provider.limit" -> "3"))
+            ComponentInstanceMetadata(
+              "org.goldenport.cncf.test.ParameterProbe",
+              "first",
+              Map("provider.limit" -> "3"),
+              componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe"))
+            )
           )
         ).toOption.value.asInstanceOf[ParameterProbeComponent]
         val second = ParameterProbeFactory.createPrimaryC(
           base.withInstanceMetadata(
-            ComponentInstanceMetadata("parameter_probe", "second", Map("provider.limit" -> "8"))
+            ComponentInstanceMetadata(
+              "org.goldenport.cncf.test.ParameterProbe",
+              "second",
+              Map("provider.limit" -> "8"),
+              componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe"))
+            )
           )
         ).toOption.value.asInstanceOf[ParameterProbeComponent]
 
         Then("each immutable snapshot retains only its selected instance value")
-        first.instanceId shouldBe ComponentInstanceId("parameter_probe", "first")
-        second.instanceId shouldBe ComponentInstanceId("parameter_probe", "second")
+        first.instanceId shouldBe ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("parameter_probe"), "first")
+        second.instanceId shouldBe ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("parameter_probe"), "second")
         first.limit shouldBe Some(3)
         second.limit shouldBe Some(8)
         first.provenance shouldBe Some(ComponentParameterProvenance.SubsystemInstance)
@@ -186,9 +206,10 @@ final class ComponentInitializationBootstrapSpec
           ParameterProbeFactory.createPrimaryC(
             base.withInstanceMetadata(
               ComponentInstanceMetadata(
-                "parameter_probe",
+                "org.goldenport.cncf.test.ParameterProbe",
                 s"generated$value",
-                Map("provider.limit" -> value.toString)
+                Map("provider.limit" -> value.toString),
+                componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe"))
               )
             )
           ).toOption.exists { component =>
@@ -223,7 +244,11 @@ final class ComponentInitializationBootstrapSpec
             )
           )
         val descriptor = ComponentDescriptor(
-          componentName = Some("parameter_probe"),
+          name = Some("org.goldenport.cncf.test.ParameterProbe"),
+          componentName = Some("org.goldenport.cncf.test.ParameterProbe"),
+          version = Some("0.1.0"),
+          schemaVersion = Some(3),
+          componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe")),
           config = Map("provider.limit" -> "22")
         )
 
@@ -235,9 +260,10 @@ final class ComponentInitializationBootstrapSpec
               ComponentOrigin.Repository("phase-47"),
               Vector(descriptor),
               Some(ComponentInstanceMetadata(
-                "parameter_probe",
+                "org.goldenport.cncf.test.ParameterProbe",
                 "layered",
-                Map("provider.limit" -> "11")
+                Map("provider.limit" -> "11"),
+                componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe"))
               ))
             )
           ).toOption.value.asInstanceOf[ParameterProbeComponent]
@@ -263,7 +289,11 @@ final class ComponentInitializationBootstrapSpec
             path = repositorydir,
             subsystemName = "repository-assembly-parameter",
             componentBindings = Vector(
-              GenericSubsystemComponentBinding("repository_parameter_probe")
+              GenericSubsystemComponentBinding(
+                "org.goldenport.cncf.test.RepositoryParameterProbe",
+                version = Some(CncfVersion.current),
+                componentId = Some(ComponentId("org.goldenport.cncf.test.RepositoryParameterProbe"))
+              )
             ),
             config = Map("provider.limit" -> "33")
           )
@@ -271,9 +301,11 @@ final class ComponentInitializationBootstrapSpec
             subsystemName = "repository-instance-parameter",
             componentBindings = Vector(
               GenericSubsystemComponentBinding(
-                "repository_parameter_probe",
+                "org.goldenport.cncf.test.RepositoryParameterProbe",
+                version = Some(CncfVersion.current),
                 instance = Some("configured"),
-                config = Map("provider.limit" -> "44")
+                config = Map("provider.limit" -> "44"),
+                componentId = Some(ComponentId("org.goldenport.cncf.test.RepositoryParameterProbe"))
               )
             )
           )
@@ -282,12 +314,15 @@ final class ComponentInitializationBootstrapSpec
           val assemblycomponent = GenericSubsystemFactory
             .default(assemblydescriptor, configuration = configuration)
             .components
-            .find(_.name == "repository_parameter_probe")
+            .find(_.name == "org.goldenport.cncf.test.RepositoryParameterProbe")
             .value
           val instancecomponent = GenericSubsystemFactory
             .default(instancedescriptor, configuration = configuration)
             .components
-            .find(_.name == "repository_parameter_probe")
+            .find(component =>
+              component.name == "org.goldenport.cncf.test.RepositoryParameterProbe" &&
+                component.instanceMetadata.exists(_.instance == "configured")
+            )
             .value
 
           Then("assembly defaults are available before discovery and instance settings override them")
@@ -314,8 +349,10 @@ final class ComponentInitializationBootstrapSpec
           )
           val artifactname = "textus-repository-parameter-probe"
           val binding = GenericSubsystemComponentBinding(
-            artifactname,
-            config = Map("provider.limit" -> "47")
+            "org.goldenport.cncf.test.RepositoryParameterProbe",
+            version = Some(CncfVersion.current),
+            config = Map("provider.limit" -> "47"),
+            componentId = Some(ComponentId("org.goldenport.cncf.test.RepositoryParameterProbe"))
           )
           val descriptor = GenericSubsystemDescriptor(
             path = repositorydir,
@@ -327,21 +364,32 @@ final class ComponentInitializationBootstrapSpec
           val component = GenericSubsystemFactory
             .default(descriptor, configuration = configuration)
             .components
-            .find(_.name == "repository_parameter_probe")
+            .find(_.name == "org.goldenport.cncf.test.RepositoryParameterProbe")
             .value
 
           Then("factory bootstrap retains the source alias pair while the generated core retains its runtime name")
-          component.core.name shouldBe "repository_parameter_probe"
-          component.instanceMetadata.map(_.componentName) shouldBe Some(artifactname)
+          component.core.name shouldBe "org.goldenport.cncf.test.RepositoryParameterProbe"
+          component.instanceMetadata.map(_.componentName) shouldBe Some(
+            "org.goldenport.cncf.test.RepositoryParameterProbe"
+          )
           component.instanceMetadata.map(_.instance) shouldBe Some("default")
           component.initializationParameters
             .resolve(RepositoryParameterProbeFactory.limitKey)
             .toOption
             .flatMap(_.value) shouldBe Some(47)
-          component.componentDescriptors.headOption.flatMap(_.name) shouldBe Some(artifactname)
-          component.componentDescriptors.headOption.flatMap(_.componentName) shouldBe Some(
-            "repository_parameter_probe"
+          component.componentDescriptors.headOption.flatMap(_.name) shouldBe Some(
+            "org.goldenport.cncf.test.RepositoryParameterProbe"
           )
+          component.componentDescriptors.headOption.flatMap(_.componentName) shouldBe Some(
+            "org.goldenport.cncf.test.RepositoryParameterProbe"
+          )
+          component.artifactMetadata.map(_.name) shouldBe Some(
+            "org.goldenport.cncf.test.RepositoryParameterProbe"
+          )
+          component.artifactMetadata.flatMap(_.component) shouldBe Some(
+            "org.goldenport.cncf.test.RepositoryParameterProbe"
+          )
+          component.artifactMetadata.flatMap(_.effectiveExtensions.get("artifactAlias")) shouldBe Some(artifactname)
         }
       }
 
@@ -358,7 +406,13 @@ final class ComponentInitializationBootstrapSpec
           .getOrElse("malformed", 0L)
         val privatepayload = "credential-value-from-/private/runtime/provider.conf"
         val subsystem = TestComponentFactory.emptySubsystem("initialization-invalid")
-        val missingdescriptor = ComponentDescriptor(componentName = Some("parameter_probe"))
+        val missingdescriptor = ComponentDescriptor(
+          name = Some("org.goldenport.cncf.test.ParameterProbe"),
+          componentName = Some("org.goldenport.cncf.test.ParameterProbe"),
+          version = Some("0.1.0"),
+          schemaVersion = Some(3),
+          componentId = Some(ComponentId("org.goldenport.cncf.test.ParameterProbe"))
+        )
         val malformeddescriptor = missingdescriptor.copy(
           config = Map("provider.limit" -> privatepayload)
         )
@@ -410,8 +464,8 @@ final class ComponentInitializationBootstrapSpec
 
         When("the component-parameter bootstrap owner records the failure")
         ComponentParameterBootstrapObservation.record(
-          ComponentId("bounded_bootstrap_probe"),
-          ComponentInstanceId("bounded_bootstrap_probe", "default"),
+          ComponentId("org.goldenport.cncf.test.BoundedBootstrapProbe"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("bounded_bootstrap_probe"), "default"),
           Vector.empty,
           result
         )
@@ -429,8 +483,10 @@ final class ComponentInitializationBootstrapSpec
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a development repository and a malformed required instance setting")
         _with_parameter_repository { repositorydir =>
           val binding = GenericSubsystemComponentBinding(
-            "repository_parameter_probe",
-            config = Map("provider.limit" -> "invalid")
+            "org.goldenport.cncf.test.RepositoryParameterProbe",
+            version = Some(CncfVersion.current),
+            config = Map("provider.limit" -> "invalid"),
+            componentId = Some(ComponentId("org.goldenport.cncf.test.RepositoryParameterProbe"))
           )
           val descriptor = GenericSubsystemDescriptor(
             path = repositorydir,
@@ -469,11 +525,11 @@ final class ComponentInitializationBootstrapSpec
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a componentlet declaration owned by one packaged component descriptor")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-componentlet")
         val descriptor = ComponentDescriptor(
-          componentName = Some("parameter_probe"),
-          componentlets = Vector(ComponentletDescriptor("parameter_probe_admin"))
+          componentName = Some("org.goldenport.cncf.test.ParameterProbe"),
+          componentlets = Vector(ComponentletDescriptor("org.goldenport.cncf.test.ParameterProbeAdmin"))
         )
         val metadata = ComponentInstanceMetadata(
-          "parameter_probe",
+          "org.goldenport.cncf.test.ParameterProbe",
           "operator",
           Map("provider.limit" -> "21")
         )
@@ -489,7 +545,7 @@ final class ComponentInitializationBootstrapSpec
         ).toOption.value.asInstanceOf[ParameterProbeComponent]
 
         Then("the participant keeps its own identity and the owner's instance settings")
-        component.instanceId shouldBe ComponentInstanceId("parameter_probe_admin", "operator")
+        component.instanceId shouldBe ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("parameter_probe_admin"), "operator")
         component.limit shouldBe Some(21)
       }
 
@@ -522,7 +578,7 @@ final class ComponentInitializationBootstrapSpec
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a collaborator component with one declared initialization parameter")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-special")
         val descriptor = ComponentDescriptor(
-          componentName = Some("special_probe"),
+          componentName = Some("org.goldenport.cncf.test.SpecialProbe"),
           config = Map("provider.limit" -> "34")
         )
         val component = SpecialProbeFactory.createPrimaryC(
@@ -533,7 +589,7 @@ final class ComponentInitializationBootstrapSpec
           )
         ).toOption.value.asInstanceOf[SpecialProbeComponent]
         val entry = CollaboratorRepository.CollaboratorEntry(
-          "special_probe",
+          "org.goldenport.cncf.test.SpecialProbe",
           new api.Collaborator {
             def invoke(call: api.ActionCall): api.Consequence =
               new api.SuccessConsequence("unused")
@@ -568,7 +624,7 @@ final class ComponentInitializationBootstrapSpec
           ComponentCreate(subsystem, ComponentOrigin.Repository("phase-47"))
         ).toOption.value
         val entry = CollaboratorRepository.CollaboratorEntry(
-          "failing_special_probe",
+          "org.goldenport.cncf.test.FailingSpecialProbe",
           new api.Collaborator {
             def invoke(call: api.ActionCall): api.Consequence =
               new api.SuccessConsequence("unused")
@@ -595,7 +651,7 @@ final class ComponentInitializationBootstrapSpec
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E14; a factory route and two packaged dynamic parameter names")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-dynamic-path")
         val descriptor = ComponentDescriptor(
-          componentName = Some("dynamic_path_probe"),
+          componentName = Some("org.goldenport.cncf.test.DynamicPathProbe"),
           config = Map(
             "provider.profiles.standard.model" -> "standard-model",
             "provider.profiles.deep.model" -> "deep-model"
@@ -623,7 +679,7 @@ final class ComponentInitializationBootstrapSpec
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E14; one factory statically declares a canonical name its route expands")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-dynamic-path-collision")
         val descriptor = ComponentDescriptor(
-          componentName = Some("dynamic_path_static_collision"),
+          componentName = Some("org.goldenport.cncf.test.DynamicPathStaticCollision"),
           config = Map("provider.profiles.standard.model" -> "standard-model")
         )
 
@@ -674,13 +730,7 @@ final class ComponentInitializationBootstrapSpec
       Using.resource(classOf[RepositoryParameterProbeFactory].getClassLoader.getResourceAsStream(factoryresource)) { in =>
         Files.copy(in, factoryclass)
       }
-      DevelopmentRuntimeManifestFixture.write(
-        repositorydir,
-        classdir,
-        artifactname,
-        CncfVersion.current,
-        "repository_parameter_probe"
-      )
+      _write_parameter_repository_fixture(repositorydir, classdir, artifactname)
       body(repositorydir)
     } finally {
       Using.resource(Files.walk(repositorydir)) { stream =>
@@ -692,6 +742,55 @@ final class ComponentInitializationBootstrapSpec
       }
     }
   }
+
+  private def _write_parameter_repository_fixture(
+    repositorydir: Path,
+    classdir: Path,
+    artifactname: String
+  ): Unit = {
+    val cncfdir = Files.createDirectories(repositorydir.resolve("target/cncf.d"))
+    val cardir = Files.createDirectories(repositorydir.resolve("src/main/car"))
+    val classpath = cncfdir.resolve("runtime-classpath.txt")
+    val descriptor = cncfdir.resolve("component-descriptor.json")
+    val abi = cardir.resolve("abi-manifest.json")
+    val namespace = "org.goldenport.cncf.test"
+    val component = "RepositoryParameterProbe"
+    val release = CncfVersion.current
+    Files.writeString(classpath, classdir.toString, StandardCharsets.UTF_8)
+    Files.writeString(
+      descriptor,
+      s"""{"schemaVersion":3,"component":{"namespace":"$namespace","id":"$component","version":"$release"},"extensions":{"artifactAlias":"$artifactname"}}""",
+      StandardCharsets.UTF_8
+    )
+    Files.writeString(
+      abi,
+      s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"$namespace","id":"$component","version":"$release"},"abi":{"version":1,"exports":{"components":[{"namespace":"$namespace","id":"$component"}],"operations":[],"entities":[]},"dependencies":[]}}""",
+      StandardCharsets.UTF_8
+    )
+    val evidence = Vector(
+      ("target/cncf.d/runtime-classpath.txt", _sha256(classpath), Some(_sha256("project:target/classes".getBytes(StandardCharsets.UTF_8)))),
+      ("target/cncf.d/component-descriptor.json", _sha256(descriptor), None),
+      ("src/main/car/abi-manifest.json", _sha256(abi), None)
+    )
+    val entries = evidence.map { case (path, digest, logical) =>
+      val logicalfield = logical.map(value => s"\"logicalSha256\":\"$value\",").getOrElse("")
+      s"{$logicalfield\"path\":\"$path\",\"sha256\":\"$digest\"}"
+    }.mkString("[", ",", "]")
+    val evidencedigest = _sha256(evidence.map { case (path, digest, logical) =>
+      s"$path\t$digest\t${logical.getOrElse("")}"
+    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
+    val artifact = "test-repository-parameter-probe"
+    Files.writeString(
+      cncfdir.resolve("car-runtime-manifest.json"),
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$artifact","version":"$release","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      StandardCharsets.UTF_8
+    )
+  }
+
+  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
+
+  private def _sha256(bytes: Array[Byte]): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
   private final class ParameterProbeComponent extends Component {
     var limit: Option[Int] = None
@@ -710,7 +809,11 @@ final class ComponentInitializationBootstrapSpec
 
     override def componentDescriptors: Vector[ComponentDescriptor] =
       Vector(ComponentDescriptor(
-        componentName = Some("generated_parameter_probe"),
+        name = Some("org.goldenport.cncf.test.ComponentOwnedParameterProbe"),
+        version = Some("0.1.0"),
+        componentName = Some("org.goldenport.cncf.test.ComponentOwnedParameterProbe"),
+        schemaVersion = Some(3),
+        componentId = Some(ComponentId("org.goldenport.cncf.test.ComponentOwnedParameterProbe")),
         config = Map("provider.limit" -> "17")
       ))
 
@@ -732,8 +835,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "parameter_probe",
-        ComponentId("parameter_probe"),
+        "org.goldenport.cncf.test.ParameterProbe",
+        ComponentId("org.goldenport.cncf.test.ParameterProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -747,8 +850,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "component_owned_parameter_probe",
-        ComponentId("component_owned_parameter_probe"),
+        "org.goldenport.cncf.test.ComponentOwnedParameterProbe",
+        ComponentId("org.goldenport.cncf.test.ComponentOwnedParameterProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -762,8 +865,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "parameter_probe_admin",
-        ComponentId("parameter_probe_admin"),
+        "org.goldenport.cncf.test.ParameterProbeAdmin",
+        ComponentId("org.goldenport.cncf.test.ParameterProbeAdmin"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -789,8 +892,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "secret_parameter_probe",
-        ComponentId("secret_parameter_probe"),
+        "org.goldenport.cncf.test.SecretParameterProbe",
+        ComponentId("org.goldenport.cncf.test.SecretParameterProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -801,8 +904,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "empty_parameter_probe",
-        ComponentId("empty_parameter_probe"),
+        "org.goldenport.cncf.test.EmptyParameterProbe",
+        ComponentId("org.goldenport.cncf.test.EmptyParameterProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -842,8 +945,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "dynamic_path_probe",
-        ComponentId("dynamic_path_probe"),
+        "org.goldenport.cncf.test.DynamicPathProbe",
+        ComponentId("org.goldenport.cncf.test.DynamicPathProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -871,8 +974,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "dynamic_path_static_collision",
-        ComponentId("dynamic_path_static_collision"),
+        "org.goldenport.cncf.test.DynamicPathStaticCollision",
+        ComponentId("org.goldenport.cncf.test.DynamicPathStaticCollision"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -897,8 +1000,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "special_probe",
-        ComponentId("special_probe"),
+        "org.goldenport.cncf.test.SpecialProbe",
+        ComponentId("org.goldenport.cncf.test.SpecialProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -914,8 +1017,8 @@ final class ComponentInitializationBootstrapSpec
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
       spec_create(
-        "failing_special_probe",
-        ComponentId("failing_special_probe"),
+        "org.goldenport.cncf.test.FailingSpecialProbe",
+        ComponentId("org.goldenport.cncf.test.FailingSpecialProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }
@@ -935,8 +1038,8 @@ final class RepositoryParameterProbeFactory extends Component.PrimaryComponentFa
 
   protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
     spec_create(
-      "repository_parameter_probe",
-      ComponentId("repository_parameter_probe"),
+      "org.goldenport.cncf.test.RepositoryParameterProbe",
+      ComponentId("org.goldenport.cncf.test.RepositoryParameterProbe"),
       Vector.empty[spec.ServiceDefinition]
     )
 }

@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Jul. 25, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStateMachineBootstrapSpec
@@ -76,9 +76,9 @@ final class ComponentFactoryStateMachineBootstrapSpec
     }
 
     val core = Component.Core.create(
-      name = "state_machine_bootstrap_spec",
-      componentid = ComponentId("state_machine_bootstrap_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("state_machine_bootstrap_spec")),
+      name = "org.goldenport.cncf.test.StateMachineBootstrapSpec",
+      componentid = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(

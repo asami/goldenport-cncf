@@ -19,7 +19,7 @@ import org.goldenport.record.io.RecordEncoder
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- * @version Jul. 26, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -55,6 +55,12 @@ class DataStoreSpace {
       case None => clearBoundDataStore()
     }
 
+  /**
+   * Compatibility entry point. A noncanonical component name cannot select a
+   * local datastore; use a canonical ComponentDataStore.Request for local
+   * component binding.
+   */
+  @deprecated("Use a canonical ComponentDataStore.Request for local component binding", "0.5.2")
   def useApplicationDataStore(
     params: org.goldenport.cncf.config.ResolvedParameters,
     componentName: String,
@@ -62,6 +68,12 @@ class DataStoreSpace {
   ): DataStoreSpace =
     useApplicationDataStore(ComponentDataStore.Environment(params), componentName, name)
 
+  /**
+   * Compatibility entry point. A noncanonical component name cannot select a
+   * local datastore; use a canonical ComponentDataStore.Request for local
+   * component binding.
+   */
+  @deprecated("Use a canonical ComponentDataStore.Request for local component binding", "0.5.2")
   def useApplicationDataStore(
     environment: ComponentDataStore.Environment,
     componentName: String,
@@ -72,27 +84,38 @@ class DataStoreSpace {
       case None => this
     }
 
+  /**
+   * Compatibility entry point. A noncanonical component name cannot select a
+   * local datastore; use a canonical ComponentDataStore.Request for local
+   * component binding.
+   */
+  @deprecated("Use a canonical ComponentDataStore.Request for local component binding", "0.5.2")
   def bindApplicationDataStore(
     environment: ComponentDataStore.Environment,
     componentName: String,
     name: String
   ): Unit =
-    ComponentDataStore.resolveForDataStoreSpace(environment, ComponentDataStore.Request(componentName, name)) match {
+    bindApplicationDataStore(environment, ComponentDataStore.Request(componentName, name))
+
+  private[cncf] def bindApplicationDataStore(
+    environment: ComponentDataStore.Environment,
+    request: ComponentDataStore.Request
+  ): Unit =
+    ComponentDataStore.resolveForDataStoreSpace(environment, request) match {
       case Some(datastore) => bindDataStore(datastore)
       case None => clearBoundDataStore()
     }
 
   private[cncf] def bindManagedApplicationDataStoreC(
     environment: ComponentDataStore.Environment,
-    componentName: String,
-    name: String,
+    request: ComponentDataStore.Request,
     binding: SystemNodeDataStoreBinding,
     lease: SystemNodeResourceLease,
     key: SqlDataStoreIdentity.HmacKey
   ): Consequence[Unit] =
     ComponentDataStore.resolveManagedForDataStoreSpaceC(
       environment,
-      ComponentDataStore.Request(componentName, name),
+      request,
       binding,
       lease,
       key

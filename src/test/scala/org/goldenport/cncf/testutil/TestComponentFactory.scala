@@ -12,7 +12,7 @@ import org.goldenport.cncf.path.AliasResolver
  *  version Jan. 14, 2026
  *  version Feb. 15, 2026
  *  version Apr. 15, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object TestComponentFactory {
@@ -105,23 +105,28 @@ object TestComponentFactory {
     name: String,
     protocol: Protocol,
     serviceFactoryOpt: Option[Component.ServiceFactory] = None,
-    subsystem: Subsystem = emptySubsystem("test")
+    subsystem: Subsystem = emptySubsystem("test"),
+    displayName: Option[String] = None
   ): Component = {
-    val componentid = ComponentId(name)
+    val componentid = componentId(name)
     val instanceid = ComponentInstanceId.default(componentid)
+    val componentname = componentid.name
+    val displayname = displayName.getOrElse(name)
     val factory: Component.SinglePrimaryBundleFactory = new Component.SinglePrimaryBundleFactory {
       override def serviceFactory: Component.ServiceFactory =
         serviceFactoryOpt.getOrElse(Component.ServiceFactory.empty)
 
       override protected def create_Component(params: ComponentCreate): Component =
-        new Component() {}
+        new Component() {
+          override def displayName: String = displayname
+        }
 
       override protected def create_Core(
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          name,
+          componentid.name,
           componentid,
           instanceid,
           protocol,
@@ -130,12 +135,22 @@ object TestComponentFactory {
     }
 
     val core = Component.Core.create(
-      name,
+      componentid.name,
       componentid,
       instanceid,
       protocol,
       factory
     )
     factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin)).primary
+  }
+
+  def componentId(name: String): ComponentId =
+    if (name.contains('.')) ComponentId(name)
+    else ComponentId(s"org.goldenport.cncf.test.${_component_local_id(name)}")
+
+  private def _component_local_id(name: String): String = {
+    val tokens = name.split("[^A-Za-z0-9]+").toVector.filter(_.nonEmpty)
+    val localid = tokens.map(token => token.head.toUpper + token.tail).mkString
+    if (localid.nonEmpty) localid else "Component"
   }
 }

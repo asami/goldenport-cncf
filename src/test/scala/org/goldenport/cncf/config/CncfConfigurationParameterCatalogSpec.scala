@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalogSpec
@@ -516,13 +516,13 @@ final class CncfConfigurationParameterCatalogSpec
     )
 
   private def _component_class_target: CncfConfigurationTarget.ComponentClass =
-    _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("Catalog")))
+    _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("org.goldenport.cncf.test.Catalog")))
 
   private def _component_instance_target: CncfConfigurationTarget.ComponentInstance =
     _take(
       CncfConfigurationTarget.ComponentInstance.create(
         _take(SubsystemInstanceId.create("platform", "default")),
-        ComponentInstanceId("Catalog", "default")
+        ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("Catalog"), "default")
       )
     )
 

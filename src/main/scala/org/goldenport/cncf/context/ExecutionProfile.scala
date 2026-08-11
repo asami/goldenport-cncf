@@ -15,7 +15,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ExecutionProfileMode(val name: String) {
@@ -447,7 +447,7 @@ final class ExecutionProfileRuntime private[context] (
 
   private def _normalized_selector(value: String): String = {
     val selector = Option(value).map(_.trim).filter(_.nonEmpty).getOrElse("unknown")
-    selector.toLowerCase(Locale.ROOT)
+    selector
   }
 }
 

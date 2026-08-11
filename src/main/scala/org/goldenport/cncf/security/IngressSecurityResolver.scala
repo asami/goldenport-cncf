@@ -22,7 +22,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -166,14 +166,27 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val request = AuthenticationRequest(attributes)
     profile.currentUserEvidence match {
       case SubsystemCurrentUserEvidence.Fixed =>
-        if (_has_local_subject_override_material(request))
-          Consequence.securityPermissionDenied("Fixed user profile does not admit authentication ingress evidence.")
-        else
+        if (!_has_local_subject_override_material(request))
           _resolved_local_subject(base)
             .map(Consequence.success)
             .getOrElse(Consequence.securityPermissionDenied("Fixed user profile requires a configured local subject."))
             .flatMap(_resolve_with_security(base, attributes, caps, _))
             .map(_apply_fixed_profile_formatting)
+        else {
+          val providers = _resolved_authentication_providers(base)
+          if (providers.isEmpty)
+            Consequence.securityPermissionDenied("Fixed user profile requires a service authentication provider.")
+          else
+            _resolve_authenticated_security(providers, base, request).flatMap {
+              case Some(security) if security.subjectKind == SubjectKind.Service =>
+                _resolve_with_security(base, attributes, caps, security)
+                  .map(_apply_fixed_profile_formatting)
+              case Some(_) =>
+                Consequence.securityPermissionDenied("Fixed user profile requires a service authentication subject.")
+              case None =>
+                Consequence.securityPermissionDenied("Authentication provider did not authenticate the fixed service.")
+            }
+        }
       case SubsystemCurrentUserEvidence.Authenticated =>
         val providers = _resolved_authentication_providers(base)
         if (providers.isEmpty)

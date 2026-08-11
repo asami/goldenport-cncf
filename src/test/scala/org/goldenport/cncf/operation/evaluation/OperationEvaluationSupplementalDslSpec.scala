@@ -61,7 +61,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for transaction-aware supplemental evaluation DSL.
  *
  * @since   Jul. 23, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationSupplementalDslSpec
@@ -563,9 +563,9 @@ final class OperationEvaluationSupplementalDslSpec
         spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(operations))
       )
     )))
-    val componentid = ComponentId(componentname)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentname)
     val core = Component.Core.create(
-      componentname,
+      componentid.name,
       componentid,
       ComponentInstanceId.default(componentid),
       protocol

@@ -2,6 +2,7 @@ package org.goldenport.cncf.datastore
 
 import java.nio.file.{Files, Path, Paths}
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.config.{ConfigurationAccess, ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.datastore.sql.{SqlDataStore, SqlDataStoreIdentity}
 import org.goldenport.cncf.subsystem.{SystemNodeDataStoreBinding, SystemNodeResourceLease}
@@ -9,7 +10,7 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Jul.  6, 2026
- * @version Jul. 12, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDataStore {
@@ -40,8 +41,37 @@ object ComponentDataStore {
     componentName: String,
     name: String = "application"
   ) {
-    val normalizedComponentName: String = normalize_component(componentName)
-    val normalizedName: String = normalize_name(name)
+    def normalizedComponentName: String =
+      canonicalComponentId
+        .map(x => _normalize_component(x.localId.value()))
+        .getOrElse(_normalize_component(componentName))
+
+    def normalizedName: String = _normalize_name(name)
+
+    /**
+     * A canonical identity is derived only from a namespace-qualified request
+     * component name. Compatibility request strings remain noncanonical.
+     */
+    def canonicalComponentId: Option[ComponentId] =
+      _canonical_component_id(componentName)
+
+    def canonicalComponentName: Option[String] = canonicalComponentId.map(_.name)
+
+    def canonicalComponentNamespace: Option[String] =
+      canonicalComponentId.map(_.namespace.value())
+
+    def canonicalComponentSelector: Option[String] =
+      canonicalComponentId.map { componentid =>
+        s"${componentid.namespace.value()}.${_normalize_component(componentid.localId.value())}"
+      }
+  }
+
+  object Request {
+    def forComponent(
+      componentId: ComponentId,
+      name: String = "application"
+    ): Request =
+      Request(componentId.name, name)
   }
 
   def resolve(
@@ -113,8 +143,10 @@ object ComponentDataStore {
     key: SqlDataStoreIdentity.HmacKey
   ): Consequence[Option[DataStore]] = {
     val prefixes = _component_datastore_prefixes(request)
-    val managedlocal = () => _managed_local_c(environment, prefixes, request, binding, lease, key)
-    val manageddedicated = () => _managed_sql_c(environment, prefixes, request, binding, lease, key)
+    val managedlocal = () => _managed_local_c(environment, prefixes.getOrElse(Vector.empty), request, binding, lease, key)
+    val manageddedicated = () => prefixes
+      .map(prefix => _managed_sql_c(environment, prefix, request, binding, lease, key))
+      .getOrElse(Consequence.success(None))
     val managedbasic = () => _managed_sql_c(environment, Vector("textus.datastore", "cncf.datastore"), request, binding, lease, key)
     _policy(environment, request) match {
       case Policy.LocalOnly => managedlocal()
@@ -248,7 +280,7 @@ object ComponentDataStore {
     first.flatMap(_.map(value => Consequence.success(Some(value))).getOrElse(second))
 
   private def _logical_name(request: Request): String =
-    s"${request.normalizedComponentName}/${request.normalizedName}"
+    s"${request.canonicalComponentName.getOrElse(request.normalizedComponentName)}/${request.normalizedName}"
 
   private def _identity_properties(config: SqlDataStore.Config): Map[String, String] =
     Map("normalize-column-names" -> config.normalizeColumnNames.toString)
@@ -256,9 +288,8 @@ object ComponentDataStore {
   private def _dedicated(
     environment: Environment,
     request: Request
-  ): Option[DataStore] = {
-    _sql(environment, _component_datastore_prefixes(request))
-  }
+  ): Option[DataStore] =
+    _component_datastore_prefixes(request).flatMap(_sql(environment, _))
 
   private def _basic(
     environment: Environment
@@ -271,7 +302,7 @@ object ComponentDataStore {
   ): DataStore = {
     val path = _local_path(environment, request)
     Files.createDirectories(path.getParent)
-    SqlDataStore.sqlite(path.toString, config = _sql_config(environment, _component_datastore_prefixes(request) ++ Vector(
+    SqlDataStore.sqlite(path.toString, config = _sql_config(environment, _component_datastore_prefixes(request).getOrElse(Vector.empty) ++ Vector(
       "textus.datastore",
       "cncf.datastore"
     )))
@@ -281,23 +312,42 @@ object ComponentDataStore {
     environment: Environment,
     request: Request
   ): Path =
-    _first(environment, Vector(
-      s"textus.local-data.${request.normalizedComponentName}.${request.normalizedName}.path",
-      s"cncf.local-data.${request.normalizedComponentName}.${request.normalizedName}.path"
-    )).map(Paths.get(_)).getOrElse {
-      val dir =
-        _first(environment, Vector(
-          s"textus.local-data.${request.normalizedComponentName}.dir",
-          s"cncf.local-data.${request.normalizedComponentName}.dir"
-        )).map(Paths.get(_)).getOrElse {
-          val root =
-            _first(environment, Vector("textus.local-data.root", "cncf.local-data.root"))
-              .map(Paths.get(_))
-              .getOrElse(Paths.get(System.getProperty("user.home"), ".cncf"))
-          root.resolve(request.normalizedComponentName)
-        }
-      dir.resolve(s"${request.normalizedName}.db")
+    request.canonicalComponentId
+      .map(_canonical_local_path(environment, request, _))
+      .getOrElse(throw new IllegalArgumentException(
+        s"Canonical namespace-qualified component identity is required for local datastore ${request.normalizedComponentName}/${request.normalizedName}"
+      ))
+
+  private def _canonical_local_path(
+    environment: Environment,
+    request: Request,
+    componentid: ComponentId
+  ): Path =
+    val selector = request.canonicalComponentSelector.getOrElse(
+      throw new IllegalArgumentException("Canonical namespace-qualified component selector is required for local datastore")
+    )
+    _first(environment, _local_path_override_keys(selector, request.normalizedName)).map(Paths.get(_)).getOrElse {
+      _first(environment, _local_directory_override_keys(selector)).map(Paths.get(_)).getOrElse {
+        _first(environment, Vector("textus.local-data.root", "cncf.local-data.root"))
+          .map(Paths.get(_))
+          .getOrElse(Paths.get(System.getProperty("user.home"), ".cncf", "components"))
+          .resolve(componentid.namespace.value())
+          .resolve(request.normalizedComponentName)
+      }.resolve("datastores")
+        .resolve(s"${request.normalizedName}.db")
     }.toAbsolutePath.normalize
+
+  private def _local_path_override_keys(selector: String, name: String): Vector[String] =
+    Vector(
+      s"textus.local-data.$selector.$name.path",
+      s"cncf.local-data.$selector.$name.path"
+    )
+
+  private def _local_directory_override_keys(selector: String): Vector[String] =
+    Vector(
+      s"textus.local-data.$selector.dir",
+      s"cncf.local-data.$selector.dir"
+    )
 
   private def _sql(
     environment: Environment,
@@ -410,23 +460,37 @@ object ComponentDataStore {
       .getOrElse(Policy.default)
 
   private def _policy_keys(request: Request): Vector[String] =
-    Vector(
-      s"textus.component.${request.normalizedComponentName}.datastores.${request.normalizedName}.policy",
-      s"cncf.component.${request.normalizedComponentName}.datastores.${request.normalizedName}.policy",
+    _canonical_component_datastore_prefixes(request).getOrElse(Vector.empty).map(prefix =>
+      s"$prefix.policy"
+    ) ++ Vector(
       s"textus.component.datastores.${request.normalizedName}.policy",
       s"cncf.component.datastores.${request.normalizedName}.policy"
     )
 
-  private def _component_datastore_prefixes(request: Request): Vector[String] = {
+  private def _component_datastore_prefixes(request: Request): Option[Vector[String]] =
+    Some(_datastore_prefixes(
+      request.canonicalComponentSelector.getOrElse(request.normalizedComponentName),
+      request.normalizedName
+    ))
+
+  private def _canonical_component_datastore_prefixes(request: Request): Option[Vector[String]] =
+    request.canonicalComponentSelector.map(selector =>
+      _datastore_prefixes(selector, request.normalizedName)
+    )
+
+  private def _datastore_prefixes(
+    selector: String,
+    name: String
+  ): Vector[String] = {
     val named = Vector(
-      s"textus.component.${request.normalizedComponentName}.datastores.${request.normalizedName}",
-      s"cncf.component.${request.normalizedComponentName}.datastores.${request.normalizedName}"
+      s"textus.component.$selector.datastores.$name",
+      s"cncf.component.$selector.datastores.$name"
     )
     val legacy =
-      if (request.normalizedName == "application")
+      if (name == "application")
         Vector(
-          s"textus.component.${request.normalizedComponentName}.datastore",
-          s"cncf.component.${request.normalizedComponentName}.datastore"
+          s"textus.component.$selector.datastore",
+          s"cncf.component.$selector.datastore"
         )
       else
         Vector.empty
@@ -488,7 +552,12 @@ object ComponentDataStore {
       }
     }
 
-  def normalize_component(value: String): String = {
+  private def _canonical_component_id(value: String): Option[ComponentId] =
+    Option(value).map(_.trim).filter(_.contains('.')).flatMap { qualifiedid =>
+      scala.util.Try(ComponentId(qualifiedid)).toOption
+    }
+
+  private def _normalize_component(value: String): String = {
     val source = Option(value)
       .getOrElse("")
       .trim
@@ -500,7 +569,7 @@ object ComponentDataStore {
     if (normalized.nonEmpty) normalized else "component"
   }
 
-  def normalize_name(value: String): String = {
+  private def _normalize_name(value: String): String = {
     val normalized = Option(value).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT).map {
       case c if c.isLetterOrDigit || c == '-' || c == '_' => c
       case _ => '-'

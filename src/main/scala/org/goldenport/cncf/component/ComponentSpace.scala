@@ -6,7 +6,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * @since   Jan.  8, 2026
  *  version Jan. 15, 2026
  *  version Apr. 24, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentSpace(
@@ -103,7 +103,8 @@ final class ComponentSpace(
 
 object ComponentSpace {
   private def _matches_component_name(component: Component, name: String): Boolean =
-    NamingConventions.equivalentByNormalized(component.displayName, name) ||
+    NamingConventions.equivalentByNormalized(component.name, name) ||
+      NamingConventions.equivalentByNormalized(component.displayName, name) ||
       component.artifactMetadata.toVector.exists { metadata =>
         metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
           NamingConventions.equivalentByNormalized(metadata.name, name)

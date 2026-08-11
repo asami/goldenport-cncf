@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 22, 2026
- * @version Aug. 6, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -39,24 +39,24 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
 
         When("CNCF selects contexts for the primary and componentlet")
         val primary = ComponentParameterContext.select(
-          ComponentId("provider"),
-          ComponentInstanceId("provider", "tenant_a"),
+          ComponentId("org.goldenport.cncf.test.Provider"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider"), "tenant_a"),
           Vector(descriptor),
           Vector(metadata)
         )
         val componentlet = ComponentParameterContext.select(
-          ComponentId("provider_admin"),
-          ComponentInstanceId("provider_admin", "tenant_a"),
+          ComponentId("org.goldenport.cncf.test.ProviderAdmin"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider_admin"), "tenant_a"),
           Vector(descriptor),
           Vector(metadata)
         )
 
         Then("both contexts retain their exact runtime participant identity and one owning descriptor")
         primary.toOption.map(_.componentInstanceId) shouldBe Some(
-          ComponentInstanceId("provider", "tenant_a")
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider"), "tenant_a")
         )
         componentlet.toOption.map(_.componentInstanceId) shouldBe Some(
-          ComponentInstanceId("provider_admin", "tenant_a")
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider_admin"), "tenant_a")
         )
         componentlet.toOption.map(_.descriptor) shouldBe Some(descriptor)
       }
@@ -100,8 +100,8 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
     "E10 reject missing and ambiguous packaged descriptor ownership" must _e10_metadata {
       "when no descriptor or two descriptors claim the target component" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; missing and duplicate descriptor candidates")
-        val componentid = ComponentId("provider")
-        val instanceid = ComponentInstanceId("provider", "default")
+        val componentid = ComponentId("org.goldenport.cncf.test.Provider")
+        val instanceid = ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider"), "default")
         val metadata = Vector(ComponentInstanceMetadata("provider"))
 
         When("CNCF selects each invalid descriptor context")
@@ -130,8 +130,8 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
       "when assembly metadata cannot identify exactly one requested instance" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; one descriptor and invalid instance selections")
         val descriptor = Vector(_descriptor)
-        val componentid = ComponentId("provider")
-        val instanceid = ComponentInstanceId("provider", "first")
+        val componentid = ComponentId("org.goldenport.cncf.test.Provider")
+        val instanceid = ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider"), "first")
         val first = ComponentInstanceMetadata("provider", "first")
 
         When("CNCF selects missing duplicate and inconsistent identities")
@@ -149,7 +149,7 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
         )
         val mismatched = ComponentParameterContext.select(
           componentid,
-          ComponentInstanceId("other", "first"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("other"), "first"),
           descriptor,
           Vector(first)
         )
@@ -204,8 +204,8 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
 
         When("a component context is requested using only the artifact name")
         val result = ComponentParameterContext.select(
-          ComponentId("provider_artifact"),
-          ComponentInstanceId("provider_artifact", "default"),
+          ComponentId("org.goldenport.cncf.test.ProviderArtifact"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider_artifact"), "default"),
           Vector(descriptor),
           Vector(metadata)
         )
@@ -230,8 +230,8 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
 
         When("CNCF selects the primary component context through its artifact-named instance")
         val result = ComponentParameterContext.select(
-          ComponentId("UserAccount"),
-          ComponentInstanceId("textus-user-account", "tenant_a"),
+          ComponentId("org.goldenport.cncf.test.UserAccount"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-user-account"), "tenant_a"),
           Vector(descriptor),
           Vector(metadata)
         )
@@ -243,7 +243,7 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
 
         Then("the context retains the requested artifact-named instance and resolves only its assembly configuration")
         result.toOption.map(_.componentInstanceId) shouldBe Some(
-          ComponentInstanceId("textus-user-account", "tenant_a")
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-user-account"), "tenant_a")
         )
         result.toOption.map(_.descriptor) shouldBe Some(descriptor)
         resolved.toOption.map(_.value) shouldBe Some(Some("artifact-bound"))
@@ -265,8 +265,8 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
 
         When("CNCF validates the componentlet context using the artifact-named instance")
         val result = ComponentParameterContext.select(
-          ComponentId("UserAccountAdmin"),
-          ComponentInstanceId("textus-user-account", "tenant_a"),
+          ComponentId("org.goldenport.cncf.test.UserAccountAdmin"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-user-account"), "tenant_a"),
           Vector(descriptor),
           Vector(metadata)
         )
@@ -292,8 +292,8 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
     metadata: Vector[ComponentInstanceMetadata]
   ): Consequence[ComponentParameterContext] =
     ComponentParameterContext.select(
-      ComponentId("provider"),
-      ComponentInstanceId("provider", instance),
+      ComponentId("org.goldenport.cncf.test.Provider"),
+      ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider"), instance),
       descriptors,
       metadata
     )

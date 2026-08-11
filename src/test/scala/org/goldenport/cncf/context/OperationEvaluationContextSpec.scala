@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the operation-evaluation runtime carrier.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -258,11 +258,11 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
     name: String,
     component: A
   ): A = {
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     component.initialize(ComponentInit(
       subsystem = subsystem,
       core = Component.Core.create(
-        name = name,
+        name = componentid.name,
         componentid = componentid,
         instanceid = ComponentInstanceId.default(componentid),
         protocol = Protocol.empty

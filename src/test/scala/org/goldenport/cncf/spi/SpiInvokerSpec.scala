@@ -14,7 +14,7 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, Com
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.DomainEvent
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.operation.evaluation.{OperationEvaluationStartFact, OperationEvaluationTerminalFact}
+import org.goldenport.cncf.operation.evaluation.{OperationEvaluationName, OperationEvaluationStartFact, OperationEvaluationTerminalFact}
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink}
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 11, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiInvokerSpec
@@ -307,7 +307,7 @@ final class SpiInvokerSpec
       fixture.evaluationsink.facts.collect {
         case fact: OperationEvaluationStartFact => fact.correlation.operation.component.print
         case fact: OperationEvaluationTerminalFact => fact.correlation.operation.component.print
-      } should contain only "test_provider"
+      } should contain only OperationEvaluationName.parseC(fixture.provider.componentId.name).toOption.get.print
     }
 
     "produce the same business result as ordinary subsystem dispatch" in {
@@ -379,7 +379,7 @@ final class SpiInvokerSpec
         path = Path.of("<spi-invoker-authorization>"),
         subsystemName = "spi-invoker-authorization",
         operationAuthorization = Map(
-          "test_provider.api.echo" -> OperationAuthorizationRule(deny = true)
+          s"${fixture.provider.componentId.name}.api.echo" -> OperationAuthorizationRule(deny = true)
         )
       ))
       given ExecutionContext = ExecutionContext.create()
@@ -586,10 +586,15 @@ private object InvocationFixture {
   ): InvocationProviderComponent = {
     val provider = new InvocationProviderComponent(instance)
     val protocol = _protocol(provider)
-    val componentid = ComponentId("test_provider")
-    val metadata = ComponentInstanceMetadata("test_provider", instance, purposes = purposes)
+    val componentid = ComponentId("org.goldenport.cncf.test.TestProvider")
+    val metadata = ComponentInstanceMetadata(
+      "test_provider",
+      instance,
+      purposes = purposes,
+      componentId = Some(componentid)
+    )
     val core = Component.Core.create(
-      name = "test_provider",
+      name = componentid.name,
       componentid = componentid,
       instanceid = metadata.instanceId,
       protocol = protocol
@@ -611,10 +616,10 @@ private object InvocationFixture {
   ): (InvocationConsumerComponent, InvocationSocket) = {
     val socket = new InvocationSocket(socketname)
     val consumer = new InvocationConsumerComponent(socket)
-    val componentid = ComponentId(name)
-    val metadata = ComponentInstanceMetadata(name, "default")
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
+    val metadata = ComponentInstanceMetadata(name, "default", componentId = Some(componentid))
     val core = Component.Core.create(
-      name = name,
+      name = componentid.name,
       componentid = componentid,
       instanceid = metadata.instanceId,
       protocol = Protocol.empty
@@ -636,10 +641,10 @@ private object InvocationFixture {
   ): (BoundInvocationConsumerComponent, BoundInvocationSocket) = {
     val socket = new BoundInvocationSocket(socketname)
     val consumer = new BoundInvocationConsumerComponent(socket)
-    val componentid = ComponentId(name)
-    val metadata = ComponentInstanceMetadata(name, "default")
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
+    val metadata = ComponentInstanceMetadata(name, "default", componentId = Some(componentid))
     val core = Component.Core.create(
-      name = name,
+      name = componentid.name,
       componentid = componentid,
       instanceid = metadata.instanceId,
       protocol = Protocol.empty

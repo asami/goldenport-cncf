@@ -1,6 +1,7 @@
 package org.goldenport.cncf.projection
 
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.component.{Component, ComponentInstanceId}
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, SecurityRoleDefinition}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem}
@@ -13,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 28, 2026
- * @version Apr. 28, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthorizationPolicyProjectionSpec
@@ -127,9 +128,9 @@ final class AuthorizationPolicyProjectionSpec
     val component = new Component() {
       override val core: Component.Core =
         Component.Core.create(
-          "blob",
-          ComponentId("blob"),
-          ComponentInstanceId.default(ComponentId("blob")),
+          BuiltinComponentIdentity.BLOB.name,
+          BuiltinComponentIdentity.BLOB,
+          ComponentInstanceId.default(BuiltinComponentIdentity.BLOB),
           Protocol.empty
         )
       override def subsystem: Option[Subsystem] = Some(owner)

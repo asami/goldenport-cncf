@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 25, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -1335,13 +1335,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
   private def _component(
     componentname: String,
     archivepath: Path
-  ): Component =
+  ): Component = {
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentname)
     new Component() {
       override val core: Component.Core =
         Component.Core.create(
-          componentname,
-          ComponentId(componentname.replace("-", "_")),
-          ComponentInstanceId.default(ComponentId(componentname.replace("-", "_"))),
+          componentid.name,
+          componentid,
+          ComponentInstanceId.default(componentid),
           Protocol.empty
         )
     }.withArtifactMetadata(
@@ -1353,6 +1354,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
         archivePath = Some(archivepath.toString)
       )
     )
+  }
 
   private def _write_zip(
     path: Path,

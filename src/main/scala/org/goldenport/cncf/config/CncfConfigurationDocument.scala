@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait CncfConfigurationDocumentLocation
@@ -28,7 +28,9 @@ object CncfConfigurationDocumentLocation {
 
   object ComponentClass {
     def create(component: String): Consequence[ComponentClass] =
-      CncfConfigurationTarget.ComponentClass.create(ComponentId(component)).map(new ComponentClass(_))
+      ComponentId.parseC(component)
+        .flatMap(CncfConfigurationTarget.ComponentClass.create)
+        .map(new ComponentClass(_))
   }
 
   final class SubsystemInstance private[cncf] (
@@ -56,9 +58,11 @@ object CncfConfigurationDocumentLocation {
     ): Consequence[ComponentInstance] =
       for {
         subsystemidentity <- SubsystemInstanceId.create(subsystem, subsystemInstance)
+        componentid <- ComponentId.parseC(component)
+        componentinstanceid <- ComponentInstanceId.createC(componentid, componentInstance)
         target <- CncfConfigurationTarget.ComponentInstance.create(
           subsystemidentity,
-          ComponentInstanceId(component, componentInstance)
+          componentinstanceid
         )
       } yield new ComponentInstance(target)
   }

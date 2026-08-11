@@ -8,7 +8,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * admitted canonical ComponentId candidate set.
  *
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object ComponentIdentityCompatibilityAdapter {
@@ -158,12 +158,13 @@ private[cncf] object ComponentIdentityCompatibilityAdapter {
 
   def runtimeAliasCandidates(components: Seq[Component]): Vector[AliasCandidate] = {
     val values = Option(components).toVector.flatten.filter(_ != null).map { component =>
+      val instancealiases = component.instanceMetadata.toVector.map(_.componentName)
       val metadataaliases = component.artifactMetadata.toVector.flatMap { metadata =>
         Vector(Some(metadata.name), metadata.component).flatten
       }
       AliasCandidate(
         component.componentId,
-        (Vector(component.displayName) ++ metadataaliases)
+        (Vector(component.displayName) ++ instancealiases ++ metadataaliases)
           .filter(_.nonEmpty)
           .distinct
       )

@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -181,7 +181,7 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
         val property = Prop.forAll(values) { case (initializationvalue, operationvalue) =>
           val subsystem = TestComponentFactory.emptySubsystem("configuration-coexistence")
           val descriptor = ComponentDescriptor(
-            componentName = Some("configuration_coexistence_probe"),
+            componentName = Some("org.goldenport.cncf.test.ConfigurationCoexistenceProbe"),
             config = Map("provider.mode" -> initializationvalue)
           )
           InitializationCoexistenceProbeFactory.createPrimaryC(
@@ -325,8 +325,8 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
       comp: Component
     ): Component.Core =
       spec_create(
-        "configuration_coexistence_probe",
-        ComponentId("configuration_coexistence_probe"),
+        "org.goldenport.cncf.test.ConfigurationCoexistenceProbe",
+        ComponentId("org.goldenport.cncf.test.ConfigurationCoexistenceProbe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }

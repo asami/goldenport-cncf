@@ -474,29 +474,31 @@ descriptor:
 project:
   component:
     config:
-      textus.component.<component>.datastores.application.policy: local-default
+      textus.component.<namespace>.<normalized-local-id>.datastores.application.policy: local-default
 ```
 
-Named component datastore keys use the normalized component name and store
-name. The generated entity store uses the `application` store:
+Named component datastore keys use the namespace-qualified canonical selector
+`<namespace>.<normalized-local-id>` and store name. The generated entity store
+uses the `application` store:
 
 ```properties
-textus.component.<component>.datastores.application.kind=sqlite
-textus.component.<component>.datastores.application.sqlite.path=/path/to/component.db
-textus.component.<component>.datastores.application.sql.normalize-column-names=true
+textus.component.<namespace>.<normalized-local-id>.datastores.application.kind=sqlite
+textus.component.<namespace>.<normalized-local-id>.datastores.application.sqlite.path=/path/to/component.db
+textus.component.<namespace>.<normalized-local-id>.datastores.application.sql.normalize-column-names=true
 ```
 
 For MySQL/JDBC deployments:
 
 ```properties
-textus.component.<component>.datastores.application.kind=mysql
-textus.component.<component>.datastores.application.jdbc.url=jdbc:mysql://localhost:3306/app
-textus.component.<component>.datastores.application.jdbc.user=app
-textus.component.<component>.datastores.application.jdbc.password=secret
+textus.component.<namespace>.<normalized-local-id>.datastores.application.kind=mysql
+textus.component.<namespace>.<normalized-local-id>.datastores.application.jdbc.url=jdbc:mysql://localhost:3306/app
+textus.component.<namespace>.<normalized-local-id>.datastores.application.jdbc.user=app
+textus.component.<namespace>.<normalized-local-id>.datastores.application.jdbc.password=secret
 ```
 
-The legacy `textus.component.<component>.datastore.*` alias remains accepted
-for the `application` store.
+The application-store compatibility alias remains
+`textus.component.<namespace>.<normalized-local-id>.datastore.*`. Local-ID-only
+component keys are not consulted for canonical Component requests.
 
 The basic runtime datastore is used only when it is persistent, for example:
 
@@ -514,16 +516,35 @@ textus.datastore.kind=in-memory
 If the policy falls back to local data storage, the default location is:
 
 ```text
-~/.cncf/<component>/application.db
+~/.cncf/components/<namespace>/<normalized-local-id>/datastores/application.db
 ```
+
+For example, `org.simplemodeling.textus.ArtScene` uses:
+
+```text
+~/.cncf/components/org.simplemodeling.textus/art-scene/datastores/application.db
+```
+
+Named stores replace only the filename, for example
+`datastores/crawler-cache.db`. Version, catalog source, artifact name, and Web
+alias do not participate in this path. See the normative
+[Component Local Datastore Layout specification](../spec/component-local-datastore-layout.md)
+for canonical projection, override precedence, and migration responsibility.
 
 The fallback location can be redirected with the existing local-data keys:
 
 ```properties
-textus.local-data.root=/path/to/root
-textus.local-data.<component>.dir=/path/to/component-dir
-textus.local-data.<component>.application.path=/path/to/application.db
+textus.local-data.root=/path/to/component-data-root
+textus.local-data.<namespace>.<normalized-local-id>.dir=/path/to/component-dir
+textus.local-data.<namespace>.<normalized-local-id>.application.path=/path/to/application.db
 ```
+
+The root override replaces `~/.cncf/components`; deterministic namespace,
+local-ID, `datastores`, and store-name segments remain below it. A complete
+path override may intentionally select another layout. CNCF does not probe a
+legacy local path or silently migrate an existing database; copy or migrate
+local data explicitly before starting a runtime that adopts the canonical
+layout, using the safe migration checklist in the specification.
 
 Framework-owned persistence adapters can request a named side-car datastore
 through the internal DSL by passing a store name:

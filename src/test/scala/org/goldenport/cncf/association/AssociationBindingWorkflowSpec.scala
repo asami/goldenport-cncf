@@ -36,7 +36,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Executable specification for BI-04 operation-level Association binding.
  *
  * @since   Apr. 30, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AssociationBindingWorkflowSpec
@@ -732,9 +732,9 @@ final class AssociationBindingWorkflowSpec
         )
     }
     val core = Component.Core.create(
-      name = "association_binding_adapter_spec",
-      componentid = ComponentId("association_binding_adapter_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("association_binding_adapter_spec")),
+      name = "org.goldenport.cncf.test.AssociationBindingAdapterSpec",
+      componentid = ComponentId("org.goldenport.cncf.test.AssociationBindingAdapterSpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.AssociationBindingAdapterSpec")),
       protocol = protocol
     )
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))

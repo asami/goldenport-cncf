@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for operation-evaluation correlation across Job attempts.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationJobContextSpec
@@ -275,12 +275,12 @@ final class OperationEvaluationJobContextSpec
     sink: DeterministicCorpusEvaluationSink
   ): ResumeCaptureComponent = {
     val component = new ResumeCaptureComponent
-    val componentid = ComponentId("evaluation_job_resume")
+    val componentid = ComponentId("org.goldenport.cncf.test.EvaluationJobResume")
     component.installSpi(sink)
     component.initialize(ComponentInit(
       subsystem,
       Component.Core.create(
-        "evaluation_job_resume",
+        componentid.name,
         componentid,
         ComponentInstanceId.default(componentid),
         Protocol.empty

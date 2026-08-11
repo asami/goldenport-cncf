@@ -37,7 +37,7 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 30, 2026
  *  version May. 18, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ChildEntityBindingWorkflowSpec
@@ -426,9 +426,9 @@ final class ChildEntityBindingWorkflowSpec
         )
     }
     val core = Component.Core.create(
-      name = "child_entity_binding_spec",
-      componentid = ComponentId("child_entity_binding_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("child_entity_binding_spec")),
+      name = "org.goldenport.cncf.test.ChildEntityBindingSpec",
+      componentid = ComponentId("org.goldenport.cncf.test.ChildEntityBindingSpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ChildEntityBindingSpec")),
       protocol = protocol
     )
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))

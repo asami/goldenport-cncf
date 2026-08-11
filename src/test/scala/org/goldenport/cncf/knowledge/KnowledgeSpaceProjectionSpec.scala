@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May. 17, 2026
  *  version May. 18, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class KnowledgeSpaceProjectionSpec
@@ -110,7 +111,7 @@ final class KnowledgeSpaceProjectionSpec
       val node = KnowledgeSpaceProjection.nodeOption(component, customer.id).getOrElse(fail("missing node projection"))
 
       Then("the projections expose stable status, counts, and semantic indexes")
-      projection.componentName shouldBe "knowledge_component"
+      projection.componentName shouldBe component.name
       projection.counts shouldBe KnowledgeWorkingSetCounts(
         nodeCount = 2,
         relationshipCount = 1,
@@ -125,6 +126,7 @@ final class KnowledgeSpaceProjectionSpec
       projection.sourceDiagnostics.providerStatus shouldBe "not_attached"
       projection.sourceDiagnostics.storage shouldBe "memory"
       record.asMap.keySet should contain allOf ("component", "status", "counts", "source_diagnostics", "frames", "nodes", "relationships", "facts", "evidence", "provenance")
+      record.asMap("component") shouldBe component.name
       node.relationshipsFrom shouldBe Vector(relationship)
       node.relationshipsTo shouldBe Vector.empty
       node.frames shouldBe Vector(frame)
@@ -173,9 +175,38 @@ final class KnowledgeSpaceProjectionSpec
       val result = KnowledgeSpaceProjection.lookupEntity(Vector(second, first), "customer", "customer-1")
 
       Then("the component projections are returned in deterministic name order")
-      result.map(_.componentName) shouldBe Vector("first", "second")
+      result.map(_.componentName) shouldBe Vector(first.name, second.name)
       result.map(_.node.id) shouldBe Vector(firstnode.id, secondnode.id)
       result.map(_.toRecord.asMap.keySet.contains("node")) shouldBe Vector(true, true)
+    }
+
+    "reject ambiguous presentation selectors while preserving qualified component identity" in {
+      Given("two qualified components sharing one display name")
+      val first = TestComponentFactory.create(
+        "org.example.First",
+        Protocol.empty,
+        displayName = Some("shared-knowledge")
+      )
+      val second = TestComponentFactory.create(
+        "org.example.Second",
+        Protocol.empty,
+        displayName = Some("shared-knowledge")
+      )
+      val components = Vector(first, second)
+
+      When("the shared presentation selector and qualified selectors are resolved")
+      val ambiguous = KnowledgeSpaceProjection.componentOption(components, "shared-knowledge")
+      val firstresolved = KnowledgeSpaceProjection.componentOption(components, first.name)
+      val secondresolved = KnowledgeSpaceProjection.componentOption(components, second.name)
+      val firstselector = KnowledgeSpaceProjection.componentSelector(components, first)
+      val secondselector = KnowledgeSpaceProjection.componentSelector(components, second)
+
+      Then("ambiguous presentation aliases are rejected and qualified identity remains exact")
+      ambiguous shouldBe None
+      firstresolved shouldBe Some(first)
+      secondresolved shouldBe Some(second)
+      firstselector shouldBe first.name
+      secondselector shouldBe second.name
     }
 
     "render external identifier keys without colon ambiguity" in {

@@ -31,7 +31,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 12, 2026
- * @version Jul.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec
@@ -116,9 +116,9 @@ class ClientComponentSpec
 
   private def _bootstrap_core(): Component.Core = {
     val name = "bootstrap"
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
-    Component.Core.create(name, componentId, instanceId, Protocol.empty)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
+    val instanceid = ComponentInstanceId.default(componentid)
+    Component.Core.create(name, componentid, instanceid, Protocol.empty)
   }
 
   private def _execute_request(

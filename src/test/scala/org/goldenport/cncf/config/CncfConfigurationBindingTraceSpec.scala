@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationBindingTraceSpec
@@ -31,7 +31,7 @@ final class CncfConfigurationBindingTraceSpec
           Given("one exact parameter witness and one containing-Subsystem-qualified ComponentInstance")
           val parameter = _parameter
           val subsystem = _take(SubsystemInstanceId.default("orders"))
-          val component = ComponentInstanceId("catalog", "default")
+          val component = ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("catalog"), "default")
           val target = _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, component))
           val binding = _take(ConfigurationBinding.initial(_candidate(parameter, target, "production")))
 
@@ -56,7 +56,7 @@ final class CncfConfigurationBindingTraceSpec
             Gen.oneOf("default", "blue", "green")
           ) { (subsystemname, instancename) =>
             val subsystem = _take(SubsystemInstanceId.default(subsystemname))
-            val target = _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId("catalog", instancename)))
+            val target = _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("catalog"), instancename)))
             val binding = _take(ConfigurationBinding.initial(_candidate(parameter, target, "production")))
             val trace = _take(ConfigurationBindingTrace.from(_take(ConfigurationBindingCollection.from(Vector(binding)))))
 

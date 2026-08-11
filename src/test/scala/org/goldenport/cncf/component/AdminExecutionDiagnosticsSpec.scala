@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminExecutionDiagnosticsSpec
@@ -97,8 +97,7 @@ final class AdminExecutionDiagnosticsSpec
   }
 
   private def _admin_component(subsystem: org.goldenport.cncf.subsystem.Subsystem): Component =
-    subsystem.components
-      .collectFirst { case comp if comp.name == "admin" => comp }
+    subsystem.findComponent("admin")
       .getOrElse(fail("admin component not found"))
 
   private def _execute(

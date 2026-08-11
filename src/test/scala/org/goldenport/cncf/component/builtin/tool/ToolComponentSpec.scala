@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 21, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -494,7 +494,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
         result match {
           case Consequence.Failure(conclusion) =>
             conclusion.status.webCode.code shouldBe 403
-            conclusion.display should include ("tool.web.search")
+            conclusion.display should include ("org.goldenport.cncf.Tool.web.search")
           case other =>
             fail(s"expected authorization failure but got $other")
         }

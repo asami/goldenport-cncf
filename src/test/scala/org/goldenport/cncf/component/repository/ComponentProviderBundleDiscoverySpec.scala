@@ -9,7 +9,7 @@ import org.goldenport.protocol.Protocol
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentProviderBundleDiscoverySpec
@@ -23,16 +23,16 @@ final class ComponentProviderBundleDiscoverySpec
 
       When("provider resolves the class source")
       val provided = ComponentProvider.provide(
-        ComponentSource.ClassDef(classOf[_ProvidedComponent], "test"),
+        ComponentSource.ClassDef(classOf[ProvidedComponent], "test"),
         subsystem,
         ComponentOrigin.Repository("provider-test")
       )
 
       Then("the primary runtime participant is returned")
       val component = provided.getOrElse(fail("component was not provided"))
-      component.name shouldBe "provided-primary"
+      component.name shouldBe "org.goldenport.cncf.test.ProvidedPrimary"
       component.isPrimaryParticipant shouldBe true
-      component.factoryOption shouldBe Some(_ProvidedComponent.Factory.PrimaryFactory)
+      component.factoryOption shouldBe Some(ProvidedComponent.Factory.PrimaryFactory)
     }
 
     "resolve an impl factory when the accepted component class already lives under impl" in {
@@ -48,7 +48,7 @@ final class ComponentProviderBundleDiscoverySpec
 
       Then("the sibling impl factory is used instead of no-arg component instantiation")
       val component = provided.getOrElse(fail("component was not provided"))
-      component.name shouldBe "impl-backed-primary"
+      component.name shouldBe "org.goldenport.cncf.test.ImplBackedPrimary"
       component.isPrimaryParticipant shouldBe true
       component.factoryOption shouldBe Some(org.goldenport.cncf.component.repository.fixture.impl.ComponentFactory.PrimaryFactory)
     }
@@ -66,7 +66,7 @@ final class ComponentProviderBundleDiscoverySpec
 
       Then("the plain factory is used instead of no-arg component instantiation")
       val component = provided.getOrElse(fail("component was not provided"))
-      component.name shouldBe "plain-factory-primary"
+      component.name shouldBe "org.goldenport.cncf.test.PlainFactoryPrimary"
       component.isPrimaryParticipant shouldBe true
       component.factoryOption.getOrElse(fail("factory was not attached")).getClass.getName shouldBe
         "org.goldenport.cncf.component.repository.fixture.plain.ComponentFactory"
@@ -74,22 +74,22 @@ final class ComponentProviderBundleDiscoverySpec
   }
 }
 
-final class _ProvidedComponent extends Component
+final class ProvidedComponent extends Component
 
-object _ProvidedComponent {
+object ProvidedComponent {
   object Factory extends Component.BundleFactory {
     object PrimaryFactory extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
-        new _ProvidedComponent
+        new ProvidedComponent
 
       protected def create_Core(
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          "provided-primary",
-          ComponentId("provided_primary"),
-          ComponentInstanceId.default(ComponentId("provided_primary")),
+          "org.goldenport.cncf.test.ProvidedPrimary",
+          ComponentId("org.goldenport.cncf.test.ProvidedPrimary"),
+          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProvidedPrimary")),
           Protocol.empty,
           this
         )
@@ -104,9 +104,9 @@ object _ProvidedComponent {
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          "provided-componentlet",
-          ComponentId("provided_componentlet"),
-          ComponentInstanceId.default(ComponentId("provided_componentlet")),
+          "org.goldenport.cncf.test.ProvidedComponentlet",
+          ComponentId("org.goldenport.cncf.test.ProvidedComponentlet"),
+          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProvidedComponentlet")),
           Protocol.empty,
           this
         )

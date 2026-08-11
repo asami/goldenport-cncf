@@ -13,12 +13,14 @@ import org.goldenport.cncf.config.{
 }
 import org.goldenport.cncf.context.{
   CorrelationId,
+  Capability,
   ExecutionContext,
   GlobalRuntimeContext,
   PrincipalId,
   ScopeContext,
   ScopeKind,
   SecurityLevel,
+  SubjectKind,
   TraceId
 }
 import org.goldenport.cncf.path.AliasResolver
@@ -55,10 +57,14 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 28, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _fixed_profile_service_ingress_e1 = afterWord(
+    "in spec:fixed-profile-service-ingress, example:E1, rules:R1,R2,R3, phase:M2"
+  )
+
   "IngressSecurityResolver" should {
     "resolve direct privilege and context" which {
       "resolve anonymous privilege when no protocol security attributes are present" in {
@@ -442,6 +448,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
         Given("a subsystem with a configured local subject")
         val subsystem = _subsystem(
           fallbackenabled = true,
+          providers = Vector.empty,
           localsubject = Some(_local_subject)
         )
         val base = subsystem.components.head.logic.executionContext()
@@ -455,6 +462,68 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
 
         Then("the profile refuses to switch construction paths")
         result shouldBe a[Consequence.Failure[_]]
+      }
+
+      "E1 accept a provider-authenticated Service while rejecting user and unmatched ingress" must _fixed_profile_service_ingress_e1 {
+        "admit only the provider-authenticated Service subject" in {
+          Given("Spec: docs/spec/fixed-profile-service-ingress.md; Rules: R1,R2,R3; Example: E1")
+          val subsystem = _subsystem(
+            fallbackenabled = false,
+            localsubject = Some(_local_subject),
+            providers = Vector(
+              _provider(
+                "launcher-registration-provider",
+                request =>
+                  request.accessToken match {
+                    case Some("launcher-service-token") =>
+                      Consequence.success(Some(AuthenticationResult(
+                        PrincipalId("launcher-service"),
+                        capabilities = Set(Capability("launcher_registration")),
+                        level = SecurityLevel("service"),
+                        subjectKind = SubjectKind.Service
+                      )))
+                    case Some("ordinary-user-token") =>
+                      Consequence.success(Some(AuthenticationResult(PrincipalId("ordinary-user"))))
+                    case _ =>
+                      Consequence.success(None)
+                  }
+              )
+            )
+          )
+          val base = subsystem.components.head.logic.executionContext()
+
+          When("the fixed profile resolves the service token and an ordinary user token")
+          val service = IngressSecurityResolver.resolve(
+            SubsystemExecutionProfile.Fixed,
+            base,
+            Map("access_token" -> "launcher-service-token")
+          )
+          val ordinaryuser = IngressSecurityResolver.resolve(
+            SubsystemExecutionProfile.Fixed,
+            base,
+            Map("access_token" -> "ordinary-user-token")
+          )
+          val unmatched = IngressSecurityResolver.resolve(
+            SubsystemExecutionProfile.Fixed,
+            base,
+            Map("access_token" -> "unmatched-token")
+          )
+
+          Then("only the service retains provider identity and canonical runtime bindings")
+          service shouldBe a[Consequence.Success[_]]
+          val resolved = service.toOption.get.executionContext
+          resolved.security.principal.id.value shouldBe "launcher-service"
+          resolved.security.subjectKind shouldBe SubjectKind.Service
+          resolved.security.level shouldBe SecurityLevel("service")
+          resolved.security.hasCapability("launcher_registration") shouldBe true
+          SecuritySubject.from(resolved.security).isProviderAuthenticated shouldBe true
+          resolved.runtime.dataStoreSpace should be theSameInstanceAs base.runtime.dataStoreSpace
+          resolved.runtime.entityStoreSpace should be theSameInstanceAs base.runtime.entityStoreSpace
+          resolved.runtime.unitOfWork.executionContext.security.principal.id shouldBe resolved.security.principal.id
+          resolved.security.principal.id.value should not be "standalone-local"
+          ordinaryuser shouldBe a[Consequence.Failure[_]]
+          unmatched shouldBe a[Consequence.Failure[_]]
+        }
       }
 
       "admit a typed fixed-user profile before ingress and keep it authoritative over hostile request values" in {
@@ -1122,12 +1191,13 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       )
     )
     val ownersubsystem = subsystem
+    val componentid = ComponentId("org.goldenport.cncf.security.Dummy")
     val component = new Component() {
       override val core: Component.Core =
         Component.Core.create(
-          "Dummy",
-          ComponentId("dummy"),
-          ComponentInstanceId.default(ComponentId("dummy")),
+          componentid.name,
+          componentid,
+          ComponentInstanceId.default(componentid),
           Protocol.empty
         )
       override def subsystem: Option[Subsystem]                            = Some(ownersubsystem)

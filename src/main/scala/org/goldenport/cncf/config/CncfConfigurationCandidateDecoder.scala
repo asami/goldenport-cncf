@@ -14,7 +14,7 @@ import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfConfigurationCandidateDecoder {
@@ -132,7 +132,8 @@ object CncfConfigurationCandidateDecoder {
       case (acc, field) =>
         for {
           inputs <- acc
-          target <- CncfConfigurationTarget.ComponentClass.create(ComponentId(field.name))
+          componentid <- ComponentId.parseC(field.name)
+          target <- CncfConfigurationTarget.ComponentClass.create(componentid)
           node <- _object(field.value, s"$prefix.${field.name}")
           config <- _named(node, "config").fold(Consequence.success(Vector.empty)) { values =>
             _configs(values, target, s"$prefix.${field.name}.config", schema)
@@ -195,7 +196,9 @@ object CncfConfigurationCandidateDecoder {
               componentnode <- _object(component.value, s"$prefix.components.${component.name}")
               instances <- _named(componentnode, "instances").fold(Consequence.success(Vector.empty)) { values =>
                 _objects(values, s"$prefix.components.${component.name}.instances").flatMap { trees =>
-                  _component_instances(subsystem, component.name, trees.flatMap(_.fields), schema, s"$prefix.components.${component.name}.instances")
+                  ComponentId.parseC(component.name).flatMap { componentid =>
+                    _component_instances(subsystem, componentid, trees.flatMap(_.fields), schema, s"$prefix.components.${component.name}.instances")
+                  }
                 }
               }
             } yield inputs ++ instances
@@ -205,7 +208,7 @@ object CncfConfigurationCandidateDecoder {
 
   private def _component_instances(
     subsystem: SubsystemInstanceId,
-    component: String,
+    componentid: ComponentId,
     fields: Vector[ConfigurationDocument.Field],
     schema: CncfConfigurationDocumentSchema,
     prefix: String
@@ -214,7 +217,8 @@ object CncfConfigurationCandidateDecoder {
       case (acc, instance) =>
         for {
           inputs <- acc
-          target <- CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId(component, instance.name))
+          instanceid <- ComponentInstanceId.createC(componentid, instance.name)
+          target <- CncfConfigurationTarget.ComponentInstance.create(subsystem, instanceid)
           node <- _object(instance.value, s"$prefix.${instance.name}")
           config <- _named(node, "config").fold(Consequence.success(Vector.empty)) { values =>
             _configs(values, target, s"$prefix.${instance.name}.config", schema)

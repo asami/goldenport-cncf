@@ -1,6 +1,8 @@
 package org.goldenport.cncf.spec
 
 import cats.data.NonEmptyVector
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -16,36 +18,40 @@ import io.circe.parser.parse
 /*
  * @since   Jan. 20, 2026
  *  version Apr. 30, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OpenApiProjectorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
 
   "OpenApiProjector" should {
     "produce Phase 2.8 compliant OpenAPI output" in {
+      Given("the default subsystem with canonical Blob and Client operations")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
+
+      When("the subsystem is projected to OpenAPI")
       val json = parse(OpenApiProjector.forSubsystem(subsystem)).fold(
         err => fail(s"OpenAPI JSON parse failed: ${err.getMessage}"),
         identity
       )
 
-      val topCursor = json.hcursor
-      topCursor.get[String]("openapi") shouldBe Right("3.0.0")
-      val pathsCursor = topCursor.downField("paths")
-      val pathsObject = pathsCursor.focus
+      Then("all projected paths retain operation, response, multipart, and method contracts")
+      val topcursor = json.hcursor
+      topcursor.get[String]("openapi") shouldBe Right("3.0.0")
+      val pathscursor = topcursor.downField("paths")
+      val pathsobject = pathscursor.focus
         .flatMap(_.asObject)
         .getOrElse(fail("paths object is missing"))
-      pathsObject.values should not be empty
+      pathsobject.values should not be empty
 
-      pathsObject.toMap.foreach { case (path, entryJson) =>
-        val methodObject = entryJson.asObject.getOrElse(
+      pathsobject.toMap.foreach { case (path, entryjson) =>
+        val methodobject = entryjson.asObject.getOrElse(
           fail(s"expected object for path $path")
         )
-        methodObject.toMap.foreach { case (method, methodJson) =>
-          val methodCursor = pathsCursor.downField(path).downField(method)
-          methodCursor.get[String]("operationId").map(_.trim).getOrElse("") should not be empty
-          methodCursor.downField("parameters").focus should not be empty
-          methodCursor
+        methodobject.toMap.foreach { case (method, methodjson) =>
+          val methodcursor = pathscursor.downField(path).downField(method)
+          methodcursor.get[String]("operationId").map(_.trim).getOrElse("") should not be empty
+          methodcursor.downField("parameters").focus should not be empty
+          methodcursor
             .downField("responses")
             .downField("200")
             .downField("content")
@@ -55,16 +61,17 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers with GivenWhe
         }
       }
 
-      val registerBlobPath = pathsObject.keys.find(_.endsWith("/blob/blob/register-blob"))
+      val registerblobpath = pathsobject.keys.find(_ ==
+        s"/rest/v1${NamingConventions.toNormalizedPath(BuiltinComponentIdentity.BLOB.name, "blob", "register_blob")}")
         .getOrElse(fail("register_blob path missing"))
-      val registerBlob = pathsCursor.downField(registerBlobPath).downField("POST")
-      registerBlob
+      val registerblob = pathscursor.downField(registerblobpath).downField("POST")
+      registerblob
         .downField("requestBody")
         .downField("content")
         .downField("multipart/form-data")
         .downField("schema")
         .get[String]("type") shouldBe Right("object")
-      registerBlob
+      registerblob
         .downField("requestBody")
         .downField("content")
         .downField("multipart/form-data")
@@ -72,21 +79,24 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers with GivenWhe
         .downField("properties")
         .downField("payload")
         .get[String]("format") shouldBe Right("binary")
-      val registerParameters = registerBlob.downField("parameters").focus
+      val registerparameters = registerblob.downField("parameters").focus
         .flatMap(_.asArray)
         .getOrElse(fail("register_blob parameters are missing"))
-      registerParameters.flatMap(_.hcursor.get[String]("name").toOption) should not contain "payload"
+      registerparameters.flatMap(_.hcursor.get[String]("name").toOption) should not contain "payload"
 
-      val clientPostMethods = pathsCursor.downField("/rest/v1/client/http/post")
+      val clientpostpath = s"/rest/v1${NamingConventions.toNormalizedPath(BuiltinComponentIdentity.CLIENT.name, "http", "post")}"
+      val clientpostmethods = pathscursor.downField(clientpostpath)
         .focus
         .flatMap(_.asObject)
-        .getOrElse(fail("/client/http/post path missing"))
+        .getOrElse(fail(s"$clientpostpath path missing"))
         .keys
-      clientPostMethods should contain("POST")
-      clientPostMethods should not contain "GET"
+      clientpostmethods should contain("POST")
+      clientpostmethods should not contain "GET"
+
     }
 
     "project filebundle parameters as multipart binary request bodies" in {
+      Given("a component operation with one filebundle property")
       val subsystem = TestComponentFactory.emptySubsystem("openapi-filebundle")
       val operation = spec.OperationDefinition(
         content = BaseContent.simple("importBundle"),
@@ -110,12 +120,15 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers with GivenWhe
       )
       subsystem.add(component)
 
+      When("the component is projected to OpenAPI")
       val json = parse(OpenApiProjector.forSubsystem(subsystem)).fold(
         err => fail(s"OpenAPI JSON parse failed: ${err.getMessage}"),
         identity
       )
-      val op = json.hcursor.downField("paths").downField("/rest/v1/bundle/import/import-bundle").downField("POST")
+      val bundlepath = s"/rest/v1${NamingConventions.toNormalizedPath(component.componentId.name, service.name, operation.name)}"
+      val op = json.hcursor.downField("paths").downField(bundlepath).downField("POST")
 
+      Then("the filebundle property remains a multipart binary field")
       op.downField("requestBody")
         .downField("content")
         .downField("multipart/form-data")
@@ -123,6 +136,7 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers with GivenWhe
         .downField("properties")
         .downField("bundle")
         .get[String]("format") shouldBe Right("binary")
+
     }
 
     "project locale-aware text constraints without collapsing the API value to one string" in {
@@ -163,9 +177,10 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers with GivenWhe
         err => fail(s"OpenAPI JSON parse failed: ${err.getMessage}"),
         identity
       )
+      val publisherpath = s"/rest/v1${NamingConventions.toNormalizedPath(component.componentId.name, service.name, operation.name)}"
       val requestschema = json.hcursor
         .downField("paths")
-        .downField("/rest/v1/publisher/message/publish-message")
+        .downField(publisherpath)
         .downField("POST")
         .downField("requestBody")
         .downField("content")

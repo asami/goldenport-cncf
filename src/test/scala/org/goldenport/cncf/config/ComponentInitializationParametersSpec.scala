@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationParametersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -272,8 +272,8 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
         When("the CNCF resolver and bootstrap observer handle the thrown exception")
         val result = ComponentInitializationParameters.create(Vector(key), resolver)
         ComponentParameterBootstrapObservation.record(
-          ComponentId("throwing_decoder_probe"),
-          ComponentInstanceId("throwing_decoder_probe", "default"),
+          ComponentId("org.goldenport.cncf.test.ThrowingDecoderProbe"),
+          ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("throwing_decoder_probe"), "default"),
           Vector(key),
           result
         )

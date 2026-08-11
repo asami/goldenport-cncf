@@ -28,6 +28,11 @@ Current component composition design:
 - `generation-compatibility-contract.md`
 - `typed-component-api-and-multi-instance-spi.md`
 
+Current component persistence design:
+
+- `component-local-datastore-layout.md` (non-normative rationale; see
+  `docs/spec/component-local-datastore-layout.md` for the contract)
+
 Current operation contract design:
 
 - `predefined-result-catalog.md`

@@ -33,7 +33,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormPart {
@@ -278,16 +278,17 @@ trait StaticFormAppRendererFormPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val componentschemapath = NamingConventions.toNormalizedSegment(componentName)
       val entitypath = NamingConventions.toNormalizedSegment(entityName)
       val webschema = WebSchemaResolver.resolveEntity(
         component,
-        componentpath,
+        componentschemapath,
         entitypath,
         webDescriptor,
-        admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
+        admin_entity_schema_fields(subsystem, component, componentschemapath, entitypath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${componentpath}.entity.${entitypath}")
       val displayschema = admin_entity_create_schema(component, entitypath, webschema)
       form_definition_json(
         displayschema,
@@ -316,16 +317,17 @@ trait StaticFormAppRendererFormPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val componentschemapath = NamingConventions.toNormalizedSegment(componentName)
       val entitypath = NamingConventions.toNormalizedSegment(entityName)
       val webschema = WebSchemaResolver.resolveEntity(
         component,
-        componentpath,
+        componentschemapath,
         entitypath,
         webDescriptor,
-        admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
+        admin_entity_schema_fields(subsystem, component, componentschemapath, entitypath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${componentpath}.entity.${entitypath}")
       val displayfields = admin_entity_display_fields(component, entitypath, "detail", webschema.fieldNames)
       val displayschema = webschema.copy(fields = admin_display_web_fields(webschema.fields, displayfields))
       form_definition_json(
@@ -352,15 +354,16 @@ trait StaticFormAppRendererFormPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val componentschemapath = NamingConventions.toNormalizedSegment(componentName)
       val datapath = NamingConventions.toNormalizedSegment(dataName)
       val webschema = WebSchemaResolver.resolveData(
-        componentpath,
+        componentschemapath,
         datapath,
         webDescriptor,
-        admin_data_schema_fields(subsystem, componentpath, datapath),
+        admin_data_schema_fields(subsystem, componentschemapath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${componentpath}.data.${datapath}")
       form_definition_json(
         webschema,
         FormDefinitionNavigation(
@@ -388,15 +391,16 @@ trait StaticFormAppRendererFormPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val componentschemapath = NamingConventions.toNormalizedSegment(componentName)
       val datapath = NamingConventions.toNormalizedSegment(dataName)
       val webschema = WebSchemaResolver.resolveData(
-        componentpath,
+        componentschemapath,
         datapath,
         webDescriptor,
-        admin_data_schema_fields(subsystem, componentpath, datapath),
+        admin_data_schema_fields(subsystem, componentschemapath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${componentpath}.data.${datapath}")
       form_definition_json(
         webschema,
         FormDefinitionNavigation(
@@ -421,19 +425,20 @@ trait StaticFormAppRendererFormPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val componentschemapath = NamingConventions.toNormalizedSegment(componentName)
       val viewpath = NamingConventions.toNormalizedSegment(viewname)
       val definition = view_definition(component, viewname)
       val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(viewpath, "view").getOrElse(viewpath))
       val webschema = WebSchemaResolver.resolveView(
         component,
-        componentpath,
+        componentschemapath,
         viewpath,
         Some(entityname),
         webDescriptor,
         viewFields = definition.flatMap(_.fieldsFor("summary")).orElse(admin_entity_view_fields(component, entityname, "summary")),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${componentpath}.view.${viewpath}")
       form_definition_json(
         webschema,
         FormDefinitionNavigation(
@@ -456,19 +461,20 @@ trait StaticFormAppRendererFormPart {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
-      val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val componentpath = NamingConventions.toNormalizedSegment(component.name)
+      val componentschemapath = NamingConventions.toNormalizedSegment(componentName)
       val aggregatepath = NamingConventions.toNormalizedSegment(aggregateName)
       val definition = aggregate_definition(component, aggregateName)
       val entityname = definition.map(_.entityName).getOrElse(strip_surface_suffix(aggregatepath, "aggregate").getOrElse(aggregatepath))
       val webschema = WebSchemaResolver.resolveAggregate(
         component,
-        componentpath,
+        componentschemapath,
         aggregatepath,
         Some(entityname),
         webDescriptor,
         viewFields = admin_entity_view_fields(component, entityname, "summary"),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${componentpath}.aggregate.${aggregatepath}")
       form_definition_json(
         webschema,
         FormDefinitionNavigation(
@@ -516,6 +522,7 @@ trait StaticFormAppRendererFormPart {
   ): Option[FormValidationResult] =
     find_component(subsystem, componentName).map { component =>
       val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val canonicalcomponentpath = NamingConventions.toNormalizedSegment(component.name)
       val entitypath = NamingConventions.toNormalizedSegment(entityName)
       val webschema = WebSchemaResolver.resolveEntity(
         component,
@@ -524,7 +531,7 @@ trait StaticFormAppRendererFormPart {
         webDescriptor,
         admin_entity_schema_fields(subsystem, component, componentpath, entitypath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${canonicalcomponentpath}.entity.${entitypath}")
       val formschema = view match {
         case Some("create") => admin_entity_create_schema(component, entitypath, webschema)
         case Some(v) =>
@@ -544,6 +551,7 @@ trait StaticFormAppRendererFormPart {
   ): Option[FormValidationResult] =
     find_component(subsystem, componentName).map { component =>
       val componentpath = NamingConventions.toNormalizedSegment(componentName)
+      val canonicalcomponentpath = NamingConventions.toNormalizedSegment(component.name)
       val datapath = NamingConventions.toNormalizedSegment(dataName)
       val webschema = WebSchemaResolver.resolveData(
         componentpath,
@@ -551,7 +559,7 @@ trait StaticFormAppRendererFormPart {
         webDescriptor,
         admin_data_schema_fields(subsystem, componentpath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
-      )
+      ).copy(selector = s"${canonicalcomponentpath}.data.${datapath}")
       validate_form(webschema, values)
     }
 
@@ -1083,18 +1091,19 @@ trait StaticFormAppRendererFormPart {
       operation <- service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationname))
       context <- {
         val selectorcandidates = operation_selector_candidates(component, componentName, service.name, operation.name)
-        val resolvedselector = selectorcandidates.find(selector =>
+        val descriptorselector = selectorcandidates.find(selector =>
           webDescriptor.form.contains(selector) ||
             webDescriptor.exposureOf(selector) != WebDescriptor.Exposure.Internal
         ).orElse(selectorcandidates.headOption).getOrElse(operation_selector(component.name, service.name, operation.name))
-        if (!webDescriptor.isFormEnabled(resolvedselector))
+        if (!webDescriptor.isFormEnabled(descriptorselector))
           None
         else {
-          val componentpath = NamingConventions.toNormalizedSegment(componentName)
+          val componentpath = NamingConventions.toNormalizedSegment(component.name)
+          val descriptorcomponentpath = NamingConventions.toNormalizedSegment(componentName)
           val servicepath = NamingConventions.toNormalizedSegment(service.name)
           val operationpath = NamingConventions.toNormalizedSegment(operation.name)
-          val formdescriptor = webDescriptor.form.get(resolvedselector)
-          val adminfields = webDescriptor.adminOperationFields(componentpath, "aggregate", servicepath, operationpath)
+          val formdescriptor = webDescriptor.form.get(descriptorselector)
+          val adminfields = webDescriptor.adminOperationFields(descriptorcomponentpath, "aggregate", servicepath, operationpath)
           val descriptorcontrols =
             if (formdescriptor.exists(_.controls.nonEmpty))
               formdescriptor.map(_.controls).getOrElse(Map.empty)
@@ -1107,7 +1116,7 @@ trait StaticFormAppRendererFormPart {
             else
               cml_operation_parameters(component, service.name, operation.name)
           val basewebschema = WebSchemaResolver.resolveOperationControls(
-            resolvedselector,
+            operation_selector(component.name, service.name, operation.name),
             operationparameters ++ cmlparameters,
             descriptorcontrols
           )
@@ -1349,6 +1358,17 @@ trait StaticFormAppRendererFormPart {
         FormValidationMessage(Some(key), "unknown-field", s"${key} is not defined in the form schema.")
       }
     FormValidationResult(webschema, values, errors, warnings)
+  }
+
+  protected def equivalent_form_schema(
+    lhs: WebSchemaResolver.ResolvedWebSchema,
+    rhs: WebSchemaResolver.ResolvedWebSchema
+  ): Boolean = {
+    def _surface_key_(selector: String): String =
+      selector.split("\\.", 2).lift(1).getOrElse(selector)
+
+    lhs.surface == rhs.surface &&
+      (lhs.selector == rhs.selector || _surface_key_(lhs.selector) == _surface_key_(rhs.selector))
   }
 
   protected def validate_operation_form(
@@ -1597,20 +1617,20 @@ trait StaticFormAppRendererFormPart {
     val datatype = field.dataType.map(_.toLowerCase(java.util.Locale.ROOT)).getOrElse("")
     val controltype = field.controlType.toLowerCase(java.util.Locale.ROOT)
     val label = field.label.getOrElse(field.name)
-    def error(code: String, expected: String): Option[FormValidationMessage] =
+    def _error_(code: String, expected: String): Option[FormValidationMessage] =
       Some(FormValidationMessage(Some(field.name), code, s"${label} must be ${expected}."))
     if (is_boolean_type(datatype, controltype) && !is_boolean_value(value))
-      error("datatype", "a boolean value")
+      _error_("datatype", "a boolean value")
     else if (is_integer_type(datatype) && !value.toLongOption.isDefined)
-      error("datatype", "an integer")
+      _error_("datatype", "an integer")
     else if (is_number_type(datatype, controltype) && !scala.util.Try(BigDecimal(value)).isSuccess)
-      error("datatype", "a number")
+      _error_("datatype", "a number")
     else if (is_date_type(datatype, controltype) && !scala.util.Try(java.time.LocalDate.parse(value)).isSuccess)
-      error("datatype", "a date value")
+      _error_("datatype", "a date value")
     else if (is_datetime_type(datatype, controltype) && !is_datetime_value(value))
-      error("datatype", "a datetime value")
+      _error_("datatype", "a datetime value")
     else if (is_record_control_type(controltype) && new RecordDecoder().json(value).toOption.isEmpty)
-      error("datatype", "a JSON object")
+      _error_("datatype", "a JSON object")
     else
       None
   }

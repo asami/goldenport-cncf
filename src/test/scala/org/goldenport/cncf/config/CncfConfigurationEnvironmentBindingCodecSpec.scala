@@ -7,6 +7,11 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
+/*
+ * @since   Aug.  4, 2026
+ * @version Aug. 11, 2026
+ * @author  ASAMI, Tomoharu
+ */
 final class CncfConfigurationEnvironmentBindingCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _e1 = afterWord("in spec:phase-55-environment-binding-codec, example:E1, rules:GCF08B-R1,R2, phase:55, slice:GCF-08B")
   private val _e2 = afterWord("in spec:phase-55-environment-binding-codec, example:E2, rules:GCF08B-R3,R4, phase:55, slice:GCF-08B")
@@ -26,9 +31,9 @@ final class CncfConfigurationEnvironmentBindingCodecSpec extends AnyWordSpec wit
           val subsystem = _take(SubsystemInstanceId.create("platförm", "default"))
           val targets = Vector[CncfConfigurationTarget](
             CncfConfigurationTarget.Global,
-            _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("Widget"))),
+            _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("org.goldenport.cncf.test.Widget"))),
             _take(CncfConfigurationTarget.SubsystemInstance.create(subsystem)),
-            _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId("Widget", "primary")))
+            _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("Widget"), "primary")))
           )
           When("each target reference is round-tripped through a name")
           val names = targets.map(x => _take(_codec.encode(_take(ConfigurationBindingReference.create(_parameter.id, x)))))

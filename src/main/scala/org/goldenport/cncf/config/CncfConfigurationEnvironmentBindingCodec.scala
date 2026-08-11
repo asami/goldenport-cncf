@@ -12,15 +12,13 @@ import org.goldenport.configuration.{CanonicalParameterId, ConfigurationBindingR
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationEnvironmentBindingCodec private (
   catalog: CncfConfigurationParameterCatalog
 ) {
   private val _prefix = "TEXTUS_BINDING_"
-  private val _component_label_pattern = "[A-Za-z][A-Za-z0-9_]*".r
-
   def decode(
     value: String
   ): Consequence[ConfigurationBindingReference[CncfConfigurationTarget]] =
@@ -92,7 +90,7 @@ final class CncfConfigurationEnvironmentBindingCodec private (
     (marker, fields) match {
       case ("G", Vector()) => Consequence.success(CncfConfigurationTarget.Global)
       case ("C", Vector(component)) =>
-        _decode_component_identity(component).flatMap(x => CncfConfigurationTarget.ComponentClass.create(ComponentId(x)))
+        _decode_component_id(component).flatMap(CncfConfigurationTarget.ComponentClass.create)
       case ("S", Vector(subsystem, instance)) =>
         for {
           subsystemvalue <- _decode_subsystem_identity(subsystem, "subsystem")
@@ -104,12 +102,13 @@ final class CncfConfigurationEnvironmentBindingCodec private (
         for {
           subsystemvalue <- _decode_subsystem_identity(subsystem, "subsystem")
           instancevalue <- _decode_subsystem_identity(instance, "instance")
-          componentvalue <- _decode_component_identity(component)
-          componentinstancevalue <- _decode_component_identity(componentinstance)
+          componentid <- _decode_component_id(component)
+          componentinstancevalue <- _decode_identity(componentinstance)
           identity <- SubsystemInstanceId.create(subsystemvalue, instancevalue)
+          instanceid <- ComponentInstanceId.createC(componentid, componentinstancevalue)
           target <- CncfConfigurationTarget.ComponentInstance.create(
             identity,
-            ComponentInstanceId(componentvalue, componentinstancevalue)
+            instanceid
           )
         } yield target
       case _ => Consequence.configurationInvalid("CNCF configuration environment binding target is invalid")
@@ -154,13 +153,8 @@ final class CncfConfigurationEnvironmentBindingCodec private (
       case ch => ch.toUpper.toString
     }.mkString
 
-  private def _decode_component_identity(value: String): Consequence[String] =
-    _decode_identity(value).flatMap { identity =>
-      if (_component_label_pattern.matches(identity))
-        Consequence.success(identity)
-      else
-        Consequence.configurationInvalid("CNCF configuration component identity is invalid")
-    }
+  private def _decode_component_id(value: String): Consequence[ComponentId] =
+    _decode_identity(value).flatMap(ComponentId.parseC)
 
   private def _decode_subsystem_identity(
     value: String,

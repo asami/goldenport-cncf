@@ -7,7 +7,7 @@ import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  2, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemInstanceId private (
@@ -143,10 +143,10 @@ object CncfConfigurationTarget {
   }
 
   private def _is_valid_component(value: ComponentId): Boolean =
-    value != null && _is_valid_label(value.name)
+    value != null && value.name.contains('.') && _is_valid_label(value.localId.value())
 
   private def _is_valid_component_instance(value: ComponentInstanceId): Boolean =
-    value != null && _is_valid_label(value.name) && _is_valid_label(value.instance)
+    value != null && _is_valid_component(value.componentId) && _is_valid_label(value.instance)
 
   private def _is_valid_label(value: String): Boolean =
     Option(value).exists(_component_label_pattern.matches)

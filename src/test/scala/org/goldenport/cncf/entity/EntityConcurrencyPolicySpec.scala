@@ -28,7 +28,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 26, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConcurrencyPolicySpec
@@ -216,9 +216,9 @@ final class EntityConcurrencyPolicySpec
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(_plan("person"))
     }
-    val componentid = ComponentId(componentname)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentname)
     val core = Component.Core.create(
-      name = componentname,
+      name = componentid.name,
       componentid = componentid,
       instanceid = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty

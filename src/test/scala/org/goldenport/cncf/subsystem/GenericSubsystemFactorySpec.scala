@@ -25,6 +25,7 @@ import org.goldenport.cncf.component.repository.fixture.spi.{
   PlainAiRunner,
   PlainAiRunnerProviderComponent
 }
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -40,7 +41,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -429,11 +430,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           val primarydir = root.resolve("devdirsample")
           val primaryclassdir = primarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
           _copy_test_package_classes(classOf[devdirsample.DevDirSampleComponent], primaryclassdir)
-          _write_runtime_classpath(primarydir, primaryclassdir, "devdirsample", "0.1.0-SNAPSHOT", "devdirsample", "org.goldenport.fixture.DevDirSample")
+          _write_runtime_classpath(primarydir, primaryclassdir, "0.1.0-SNAPSHOT", "org.goldenport.fixture.DevDirSample")
           val secondarydir = root.resolve("secondarydevdirsample")
           val secondaryclassdir = secondarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
           _copy_test_package_classes(classOf[secondarydevdirsample.SecondaryDevDirSampleComponent], secondaryclassdir)
-          _write_runtime_classpath(secondarydir, secondaryclassdir, "secondarydevdirsample", "0.1.0-SNAPSHOT", "secondarydevdirsample", "org.goldenport.fixture.SecondaryDevDirSample")
+          _write_runtime_classpath(secondarydir, secondaryclassdir, "0.1.0-SNAPSHOT", "org.goldenport.fixture.SecondaryDevDirSample")
           val packagedir = Files.createDirectories(root.resolve("packaged"))
           val packagedjar = _create_fake_component_jar(root.resolve("assets").resolve("packaged-main.jar"))
           val packageddescriptor = root.resolve("packaged-descriptor.json")
@@ -512,9 +513,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         _write_runtime_classpath(
           developmentdir,
           classdir,
-          "identity-component",
           "0.1.0-SNAPSHOT",
-          "identity-component",
           "org.goldenport.fixture.DevDirSample"
         )
         val packageddescriptor = root.resolve("identity-component-descriptor.json")
@@ -546,8 +545,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val packaged = GenericSubsystemFactory.resolveDescriptorC(packagedconfiguration).toOption.flatten.get
 
         Then("the descriptor-owned Component identity is stable across the two paths")
-        development.subsystemName shouldBe "org.goldenport.fixture.DevDirSample"
-        packaged.subsystemName shouldBe "org.goldenport.fixture.DevDirSample"
+        development.subsystemName shouldBe "DevDirSample"
+        packaged.subsystemName shouldBe "DevDirSample"
       }
       }
     }
@@ -925,7 +924,14 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       "when exercising: resolve descriptor components from the default standard repository using name and version without repository config" in {
       Given("a CAR in the default user repository and no explicit repository setting")
       _with_temp_dir { homedir =>
-        val cachedir = homedir.resolve(".cncf").resolve("cache").resolve("car").resolve("org.goldenport.cncf.Specification").resolve("0.1.0")
+        val componentid = ComponentId("org.goldenport.cncf.Specification")
+        val coordinate = ComponentReleaseCoordinate.require(componentid.sharedIdentity, "0.1.0")
+        val cachedir = homedir
+          .resolve(".cncf")
+          .resolve("cache")
+          .resolve("car")
+          .resolve(coordinate.carRepositoryRelativePath())
+          .getParent
         Files.createDirectories(cachedir)
         val fakecomponentjar = _create_fake_component_jar(homedir.resolve("assets").resolve("component-main.jar"))
         val componentdescriptor = homedir.resolve("component-descriptor.json")
@@ -934,7 +940,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           _canonical_descriptor_json("org.goldenport.cncf.Specification", "0.1.0")
         )
         _create_car(
-          cachedir.resolve("org.goldenport.cncf.Specification-0.1.0.car"),
+          homedir
+            .resolve(".cncf")
+            .resolve("cache")
+            .resolve("car")
+            .resolve(coordinate.carRepositoryRelativePath()),
           Seq(
             "component/main.jar" -> fakecomponentjar,
             "component-descriptor.json" -> componentdescriptor
@@ -1090,11 +1100,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
   private def _write_runtime_classpath(
     componentdir: Path,
     classdir: Path,
-    name: String,
     version: String,
-    component: String,
     componentid: String
   ): Unit = {
+    val canonicalcomponentid = ComponentId(componentid)
+    val coordinate = ComponentReleaseCoordinate.require(canonicalcomponentid.sharedIdentity, version)
     val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
     val cardir = componentdir.resolve("src").resolve("main").resolve("car")
     val descriptor = file.getParent.resolve("component-descriptor.json")
@@ -1109,7 +1119,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     Files.writeString(cardir.resolve("component-descriptor.json"), Files.readString(descriptor, StandardCharsets.UTF_8), StandardCharsets.UTF_8)
     Files.writeString(
       cardir.resolve("abi-manifest.json"),
-      s"""{"format":"cozy.car.abi-manifest.v1","car":{"name":"$componentid","version":"$version"},"abi":{"exports":{"components":[{"name":"$componentid"}]}}}""",
+      s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"${canonicalcomponentid.namespace.value()}","id":"${canonicalcomponentid.localId.value()}","version":"$version"},"abi":{"version":1,"exports":{"components":[{"namespace":"${canonicalcomponentid.namespace.value()}","id":"${canonicalcomponentid.localId.value()}"}],"operations":[],"entities":[]},"dependencies":[]}}""",
       StandardCharsets.UTF_8
     )
     val classpathidentity = s"project:${componentdir.relativize(classdir).toString.replace('\\', '/')}"
@@ -1127,7 +1137,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     }.mkString("\n").getBytes(StandardCharsets.UTF_8))
     Files.writeString(
       file.getParent.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$componentid","version":"$version","component":"$componentid"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"${coordinate.mavenArtifactId()}","version":"$version","component":"${canonicalcomponentid.localId.value()}"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
       StandardCharsets.UTF_8
     )
   }
@@ -1136,7 +1146,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     componentid: String,
     release: String
   ): String =
-    s"""{"schemaVersion":2,"name":"$componentid","version":"$release","component":{"name":"$componentid"},"componentStyle":{"apiVersion":"cncf.textus/v1","provider":"cncf","id":"full-fledged-with-standalone@1","version":1,"parameterSchema":{"type":"object","properties":{},"required":[],"additionalProperties":false},"parameters":{},"provides":{"bundles":["domain.full@1"],"capabilities":["user.fixed-context-compatible@1","user.multi-user@1"],"effective":["domain.aggregate@1","domain.command@1","domain.domain-event@1","domain.entity@1","domain.optimistic-concurrency@1","domain.persistence@1","domain.projection@1","domain.query@1","domain.transaction@1","user.fixed-context-compatible@1","user.multi-user@1"]},"requires":{"subsystemCapabilities":["datastore.optimistic-concurrency@1","datastore.persistent@1","datastore.transactional@1","user-context.current@1"]}}}"""
+    _canonical_descriptor_json(componentid, release)
 
   private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
 

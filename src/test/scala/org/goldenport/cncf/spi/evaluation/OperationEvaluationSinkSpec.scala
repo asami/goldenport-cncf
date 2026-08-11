@@ -3,10 +3,10 @@ package org.goldenport.cncf.spi.evaluation
 import java.time.{Duration, Instant}
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.operation.evaluation.{CorpusCandidateFact, ExperimentObservationFact, OperationEvaluationAttemptId, OperationEvaluationCorrelation, OperationEvaluationCrossSinkPolicy, OperationEvaluationCrossSinkRoute, OperationEvaluationDeliveryResult, OperationEvaluationDeliveryStatus, OperationEvaluationExecutionId, OperationEvaluationFactId, OperationEvaluationLabel, OperationEvaluationMeasurement, OperationEvaluationOperationIdentity, OperationEvaluationOutcome, OperationEvaluationSinkIdentity, OperationEvaluationStartFact, OperationEvaluationTerminalFact, OperationEvaluationText}
+import org.goldenport.cncf.operation.evaluation.{CorpusCandidateFact, ExperimentObservationFact, OperationEvaluationAttemptId, OperationEvaluationCorrelation, OperationEvaluationCrossSinkPolicy, OperationEvaluationCrossSinkRoute, OperationEvaluationDeliveryResult, OperationEvaluationDeliveryStatus, OperationEvaluationExecutionId, OperationEvaluationFactId, OperationEvaluationLabel, OperationEvaluationMeasurement, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationOutcome, OperationEvaluationSinkIdentity, OperationEvaluationStartFact, OperationEvaluationTerminalFact, OperationEvaluationText}
 import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiResolver, SpiSelection, SpiTraceMetadata}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.Protocol
@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the Phase 48 Corpus and Experiment sink SPI.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -30,8 +30,17 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
     "provide independent disabled Corpus and Experiment capabilities when no provider is connected" in {
       Given("optional Corpus and Experiment consumer sockets without provider components")
       given ExecutionContext = ExecutionContext.create()
-      val corpusconsumer = CorpusConsumerComponent()
-      val experimentconsumer = ExperimentConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("evaluation_sink_disabled")
+      val corpusconsumer = _initialized_component(
+        subsystem,
+        "org.goldenport.cncf.test.CorpusConsumer",
+        CorpusConsumerComponent()
+      )
+      val experimentconsumer = _initialized_component(
+        subsystem,
+        "org.goldenport.cncf.test.ExperimentConsumer",
+        ExperimentConsumerComponent()
+      )
       val start = _start_fact("disabled-start")
 
       When("the common SPI resolver installs the available component graph")
@@ -129,6 +138,10 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
       val before = RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.total
       val candidate = _candidate_fact("private corpus evidence")
       val observation = _observation_fact("private experiment label")
+      val corpusconsumername = _success(OperationEvaluationName.parseC(corpusconsumer.name)).print
+      val corpusprovidername = _success(OperationEvaluationName.parseC(corpusprovider.name)).print
+      val experimentconsumername = _success(OperationEvaluationName.parseC(experimentconsumer.name)).print
+      val experimentprovidername = _success(OperationEvaluationName.parseC(experimentprovider.name)).print
 
       When("the resolver installs each provider and the consumer invokes both standard sinks")
       val resolution = SpiResolver.resolve(Vector(corpusprovider, experimentprovider, corpusconsumer, experimentconsumer))
@@ -142,10 +155,10 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
       corpusresult.toOption.map(_.status) shouldBe Some(OperationEvaluationDeliveryStatus.Delivered)
       experimentresult.toOption.map(_.status) shouldBe Some(OperationEvaluationDeliveryStatus.Delivered)
       corpusresult.toOption.map(_.factId) shouldBe Some(candidate.id)
-      corpusresult.toOption.map(_.sink.toRecord.getString("socketComponent")) shouldBe Some(Some("catalog"))
-      corpusresult.toOption.map(_.sink.toRecord.getString("providerComponent")) shouldBe Some(Some("textus_corpus"))
-      experimentresult.toOption.map(_.sink.toRecord.getString("socketComponent")) shouldBe Some(Some("pricing"))
-      experimentresult.toOption.map(_.sink.toRecord.getString("providerComponent")) shouldBe Some(Some("textus_experiment"))
+      corpusresult.toOption.map(_.sink.toRecord.getString("socketComponent")) shouldBe Some(Some(corpusconsumername))
+      corpusresult.toOption.map(_.sink.toRecord.getString("providerComponent")) shouldBe Some(Some(corpusprovidername))
+      experimentresult.toOption.map(_.sink.toRecord.getString("socketComponent")) shouldBe Some(Some(experimentconsumername))
+      experimentresult.toOption.map(_.sink.toRecord.getString("providerComponent")) shouldBe Some(Some(experimentprovidername))
       corpusfake.facts shouldBe Vector(candidate)
       experimentfake.facts shouldBe Vector(observation)
       val calltree = summon[ExecutionContext].observability.callTreeContext.build().getOrElse(fail("calltree missing")).toRecord.print
@@ -253,8 +266,9 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
     "preserve an installed sink failure without replacing its Conclusion" in {
       Given("a Corpus provider that rejects one delivery with a structured failure")
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
-      val provider = FailingCorpusProviderComponent()
-      val consumer = CorpusConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("evaluation_sink_failure")
+      val provider = _initialized_component(subsystem, "failing_corpus_provider", FailingCorpusProviderComponent())
+      val consumer = _initialized_component(subsystem, "corpus_consumer", CorpusConsumerComponent())
       val recordsbefore = RuntimeDashboardMetrics.spiDiagnosticRecords
 
       When("the resolved consumer submits a candidate")
@@ -368,11 +382,11 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
     name: String,
     component: A
   ): A = {
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     component.initialize(ComponentInit(
       subsystem = subsystem,
       core = Component.Core.create(
-        name = name,
+        name = componentid.name,
         componentid = componentid,
         instanceid = ComponentInstanceId.default(componentid),
         protocol = Protocol.empty

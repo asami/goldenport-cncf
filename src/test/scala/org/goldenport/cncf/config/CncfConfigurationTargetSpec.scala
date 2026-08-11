@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  2, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationTargetSpec
@@ -47,8 +47,11 @@ final class CncfConfigurationTargetSpec
         "when all initial target factories are used" in {
           Given("one validated Component and Subsystem instance")
           val subsystem = _take(SubsystemInstanceId.default("orders"))
-          val component = ComponentId("catalog")
-          val instance = ComponentInstanceId("catalog", "default")
+          val component = ComponentId("org.goldenport.cncf.test.Catalog")
+          val instance = ComponentInstanceId(
+            org.goldenport.cncf.testutil.TestComponentFactory.componentId("catalog"),
+            "default"
+          )
 
           When("the four target forms are constructed")
           val componentclass = _take(CncfConfigurationTarget.ComponentClass.create(component))
@@ -59,9 +62,11 @@ final class CncfConfigurationTargetSpec
           Vector(CncfConfigurationTarget.Global, componentclass, subsystemtarget, componenttarget).size shouldBe 4
           CncfConfigurationTarget.ComponentInstance.create(null, instance).isSuccess shouldBe false
           CncfConfigurationTarget.ComponentClass.create(null).isSuccess shouldBe false
-          CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId(" ", "default")).isSuccess shouldBe false
-          CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId("a-b", "default")).isSuccess shouldBe false
-          componentclass shouldBe _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("catalog")))
+          val blankcomponentinstance = ComponentInstanceId.createC(" ", "default")
+          val malformedcomponentinstance = ComponentInstanceId.createC("a-b", "default")
+          blankcomponentinstance.flatMap(instance => CncfConfigurationTarget.ComponentInstance.create(subsystem, instance)).isSuccess shouldBe false
+          malformedcomponentinstance.flatMap(instance => CncfConfigurationTarget.ComponentInstance.create(subsystem, instance)).isSuccess shouldBe false
+          componentclass shouldBe _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("org.goldenport.cncf.test.Catalog")))
           componenttarget shouldBe _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, instance))
         }
       }

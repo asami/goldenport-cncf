@@ -34,7 +34,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
  *  version Apr. 29, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec
@@ -50,7 +50,7 @@ final class BlobComponentSpec
       val component = subsystem.findComponent("blob")
 
       Then("the builtin Blob component is available")
-      component.map(_.name) shouldBe Some("blob")
+      component.map(_.name) shouldBe Some("org.goldenport.cncf.Blob")
     }
 
     "fail startup deterministically for invalid BlobStore configuration" in {

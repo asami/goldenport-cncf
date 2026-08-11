@@ -32,7 +32,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Aug.  9, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -1276,18 +1276,70 @@ object ComponentRepository extends GlobalObservable {
     baseDir: Path,
     componentName: String,
     version: Option[String]
-  ): Consequence[Option[GenericSubsystemDescriptor]] =
+  ): Consequence[Option[GenericSubsystemDescriptor]] = {
     if (!Files.isDirectory(baseDir))
       Consequence.success(None)
-    else
-      _resolve_requested_component_artifact(baseDir, componentName, version)
+    else {
+      val artifacts = _resolve_requested_component_artifact(baseDir, componentName, version)
         .filter(artifact => artifact.kind == ArtifactKind.Car || artifact.kind == ArtifactKind.CarDir)
-        .foldLeft(Consequence.success(Option.empty[GenericSubsystemDescriptor])) { (z, artifact) =>
-          z.flatMap {
-            case some @ Some(_) => Consequence.success(some)
-            case None => _component_subsystem_defaults_c(artifact, componentName, version)
+      val resolved =
+        if (artifacts.nonEmpty)
+          artifacts.foldLeft(Consequence.success(Option.empty[GenericSubsystemDescriptor])) { (z, artifact) =>
+            z.flatMap {
+              case some @ Some(_) => Consequence.success(some)
+              case None => _component_subsystem_defaults_c(artifact, componentName, version)
+            }
           }
+        else
+          Consequence.success(None)
+      resolved.flatMap {
+        case some @ Some(_) => Consequence.success(some)
+        case None => _unversioned_component_descriptor_result_c(baseDir, componentName, version)
+      }
+    }
+  }
+
+  private def _unversioned_component_descriptor_result_c(
+    baseDir: Path,
+    componentname: String,
+    version: Option[String]
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    _find_unversioned_component_descriptor(baseDir, componentname, version) match {
+      case Some(path) =>
+        version match {
+          case Some(requestedversion) =>
+            Consequence.resourceInvalid(
+              s"component descriptor has no release for requested version: component=${componentname}, version=${requestedversion}, path=${path}"
+            )
+          case None =>
+            Consequence.success(None)
         }
+      case None =>
+        Consequence.success(None)
+    }
+
+  private def _find_unversioned_component_descriptor(
+    baseDir: Path,
+    componentname: String,
+    version: Option[String]
+  ): Option[Path] =
+    version.flatMap { _ =>
+      val requestedid = ComponentId.parseC(componentname).toOption
+      _list_artifacts(baseDir).iterator.collect {
+        case Artifact(path, ArtifactKind.Car | ArtifactKind.CarDir) => path
+      }.find { path =>
+        ComponentDescriptorLoader.probeArchiveComponentIdentityC(path).toOption match {
+          case Some((componentid, descriptorversion)) =>
+            descriptorversion.isEmpty && requestedid.contains(componentid)
+          case None if requestedid.isEmpty =>
+            ComponentDescriptorLoader.loadArchiveRaw(path).toOption.exists { descriptor =>
+              descriptor.version.isEmpty && _matches_component_descriptor(descriptor, componentname)
+            }
+          case _ =>
+            false
+        }
+      }
+    }
 
   private def _component_subsystem_defaults_c(
     artifact: Artifact,

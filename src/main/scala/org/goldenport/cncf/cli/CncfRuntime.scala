@@ -24,7 +24,7 @@ import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInit, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentIdentityCompatibilityAdapter, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.config.{ClientConfig, CncfAssemblyConfigurationProjection, CncfConfigurationArgumentBindingAdmission, CncfConfigurationArgumentBindingAssignment, CncfConfigurationArgumentBindingCodec, CncfConfigurationEnvironmentBindingAdmission, CncfConfigurationEnvironmentBindingAssignment, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, CncfRuntimeConfigurationProjection, RepositoryBootstrapPolicy, ResolvedStandaloneUserProfile, RuntimeConfig, RuntimeDefaults, RuntimeExecutionProfileConfiguration, RuntimeFileConfigLoader, RuntimeProcessExitPolicy, RuntimeTestDescriptor, StandaloneUserProfileBindingProjection, StandaloneUserProfileResolver, SubsystemInstanceId, SystemNodeShutdownConfiguration}
 import org.goldenport.cncf.config.ConfigurationAccess
@@ -67,7 +67,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 10, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -2530,15 +2530,121 @@ object CncfRuntime extends GlobalObservable {
     subsystem: Subsystem,
     selector: String
   ): Consequence[(String, String, String)] = {
-    val registry = _component_operation_fqns(subsystem).flatMap(_to_canonical_path)
-    val builtins = subsystem.components.collect {
-      case c if c.origin == org.goldenport.cncf.component.ComponentOrigin.Builtin => c.name
-    }.toSet
-    PathResolution.resolve(selector, registry, builtins) match {
-      case PathResolutionResult.Success(path) =>
-        Consequence.success((path.component, path.service, path.operation))
-      case PathResolutionResult.Failure(reason) =>
+    _resolve_selector_with_path_resolution_impl(subsystem, selector)
+  }
+
+  private def _resolve_selector_with_path_resolution_impl(
+    subsystem: Subsystem,
+    selector: String
+  ): Consequence[(String, String, String)] = {
+    val registry = subsystem.components.flatMap { comp =>
+      comp.protocol.services.services.flatMap { service =>
+        service.operations.operations.toVector.map { operation =>
+          CanonicalPath(comp.componentId.name, service.name, operation.name)
+        }
+      }
+    }.toVector
+    val componentids = registry.map(_.component).distinct
+    _path_resolution_segments(selector, componentids) match {
+      case Left(reason) =>
         Consequence.argumentInvalid(s"path-resolution failed: $reason")
+      case Right(segments) =>
+        val componentalias = segments.head
+        ComponentIdentityCompatibilityAdapter.resolveAliases(
+          componentalias,
+          ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(subsystem.components),
+          ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+        ) match {
+          case result: ComponentIdentityCompatibilityAdapter.Canonical =>
+            _resolve_canonical_path(
+              segments,
+              result.componentid.name,
+              registry,
+              subsystem.components.collect {
+                case comp if comp.origin == ComponentOrigin.Builtin => comp.componentId.name
+              }.toSet
+            )
+          case result: ComponentIdentityCompatibilityAdapter.Adapted =>
+            _resolve_canonical_path(
+              segments,
+              result.componentid.name,
+              registry,
+              subsystem.components.collect {
+                case comp if comp.origin == ComponentOrigin.Builtin => comp.componentId.name
+              }.toSet
+            )
+          case ComponentIdentityCompatibilityAdapter.Rejected(rejection) =>
+            Consequence.argumentInvalid(
+              s"path-resolution failed: ${rejection.diagnostic}"
+            )
+        }
+    }
+  }
+
+  private def _path_resolution_segments(
+    selector: String,
+    componentids: Vector[String]
+  ): Either[String, Vector[String]] = {
+    val normalized = Option(selector).getOrElse("").trim
+    if (normalized.isEmpty) {
+      Left("selector is required")
+    } else if (normalized.contains("/")) {
+      val segments = normalized.split("/").toVector.map(_.trim).filter(_.nonEmpty)
+      if (segments.isEmpty) Left("selector is required") else Right(segments)
+    } else if (normalized.contains("\\")) {
+      val segments = normalized.split("\\\\").toVector.map(_.trim).filter(_.nonEmpty)
+      if (segments.isEmpty) Left("selector is required") else Right(segments)
+    } else {
+      val rawsegments = normalized.split("\\.").toVector.map(_.trim).filter(_.nonEmpty)
+      val knownprefix = componentids.sortBy(id => -id.length).find { id =>
+        normalized == id || normalized.startsWith(s"$id.")
+      }
+      knownprefix match {
+        case Some(componentid) =>
+          val suffix = normalized.drop(componentid.length).stripPrefix(".")
+          Right(componentid +: suffix.split("\\.").toVector.map(_.trim).filter(_.nonEmpty))
+        case None if rawsegments.size >= 4 =>
+          Right(Vector(rawsegments.dropRight(2).mkString("."), rawsegments(rawsegments.size - 2), rawsegments.last))
+        case None if rawsegments.nonEmpty =>
+          Right(rawsegments)
+        case None =>
+          Left("selector is required")
+      }
+    }
+  }
+
+  private def _resolve_canonical_path(
+    segments: Vector[String],
+    componentid: String,
+    registry: Vector[CanonicalPath],
+    builtins: Set[String]
+  ): Consequence[(String, String, String)] = {
+    segments match {
+      case Vector(_) =>
+        val matches = registry.filter(_.component == componentid)
+        if (matches.isEmpty) {
+          Consequence.argumentInvalid("path-resolution failed: component not found")
+        } else if (builtins.exists(NamingConventions.equivalentByNormalized(componentid, _))) {
+          Consequence.argumentInvalid("path-resolution failed: builtin components do not allow omission")
+        } else {
+          val services = matches.map(_.service).distinct
+          val operations = matches.map(_.operation).distinct
+          if (services.size == 1 && operations.size == 1) {
+            val path = matches.head
+            Consequence.success((path.component, path.service, path.operation))
+          } else {
+            Consequence.argumentInvalid("path-resolution failed: component has multiple services or operations")
+          }
+        }
+      case _ =>
+        val canonicalselector =
+          (componentid +: segments.tail).mkString("/")
+        PathResolution.resolve(canonicalselector, registry, builtins) match {
+          case PathResolutionResult.Success(path) =>
+            Consequence.success((path.component, path.service, path.operation))
+          case PathResolutionResult.Failure(reason) =>
+            Consequence.argumentInvalid(s"path-resolution failed: $reason")
+        }
     }
   }
 
@@ -2606,14 +2712,6 @@ object CncfRuntime extends GlobalObservable {
       .orElse(if (options.json) Some("json") else None)
       .orElse(suffixformat)
       .getOrElse(RuntimeDefaults.defaultFormat(mode))
-
-  private def _to_canonical_path(fqn: String): Option[CanonicalPath] =
-    fqn.split("\\.", 3) match {
-      case Array(component, service, operation) =>
-        Some(CanonicalPath(component, service, operation))
-      case _ =>
-        None
-    }
 
   private def _normalize_meta_selector(
     subsystem: Subsystem,
@@ -3775,7 +3873,16 @@ class CncfRuntime() extends GlobalObservable {
     args: Array[String],
     extracomponents: Subsystem => Seq[Component]
   ): Int = {
-    val normalizedargs = _normalize_help_aliases(args)
+    val residualargs = args.headOption.flatMap(RunMode.from) match {
+      case Some(_) =>
+        val admitted = CncfRuntime._admit_configuration_binding_arguments(args.tail).residualArguments.toArray
+        val stripped = CncfRuntime._strip_configuration_args(admitted)
+        (args.head +: stripped).toArray
+      case None =>
+        val admitted = CncfRuntime._admit_configuration_binding_arguments(args).residualArguments.toArray
+        CncfRuntime._strip_configuration_args(admitted)
+    }
+    val normalizedargs = _normalize_help_aliases(residualargs)
     _execute_top_level_help(normalizedargs) match {
       case Some(code) => return code
       case None => ()
@@ -3784,7 +3891,7 @@ class CncfRuntime() extends GlobalObservable {
       _print_usage()
       return 2
     }
-    _initialize_consequence(_initialize(normalizedargs, extracomponents)) match {
+    _initialize_consequence(_initialize(args, extracomponents)) match {
       case Consequence.Success(subsystem) =>
         try {
           normalizedargs.headOption.flatMap(RunMode.from) match {
@@ -5514,20 +5621,7 @@ class CncfRuntime() extends GlobalObservable {
     subsystem: Subsystem,
     selector: String
   ): Consequence[(String, String, String)] = {
-    val registry = subsystem.components.flatMap { comp =>
-      comp.protocol.services.services.flatMap { service =>
-        service.operations.operations.toVector.map(op => CanonicalPath(comp.name, service.name, op.name))
-      }
-    }
-    val builtins = subsystem.components.collect {
-      case c if c.origin == org.goldenport.cncf.component.ComponentOrigin.Builtin => c.name
-    }.toSet
-    PathResolution.resolve(selector, registry, builtins) match {
-      case PathResolutionResult.Success(path) =>
-        Consequence.success((path.component, path.service, path.operation))
-      case PathResolutionResult.Failure(reason) =>
-        Consequence.argumentInvalid(s"path-resolution failed: $reason")
-    }
+    CncfRuntime._resolve_selector_with_path_resolution_impl(subsystem, selector)
   }
 
   private def _resolve_selector_with_operation_resolver(

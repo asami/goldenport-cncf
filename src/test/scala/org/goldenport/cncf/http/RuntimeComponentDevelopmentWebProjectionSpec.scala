@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author ASAMI, Tomoharu
  */
 final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen with BeforeAndAfterAll {
@@ -393,7 +393,7 @@ final class RuntimeComponentDevelopmentWebProjectionSpec extends AnyWordSpec wit
     componentid: String,
     displayname: String
   ): Component = {
-    val id = ComponentId(componentid)
+    val id = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentid)
     val component = new Component() {
       override def displayName: String = displayname
     }

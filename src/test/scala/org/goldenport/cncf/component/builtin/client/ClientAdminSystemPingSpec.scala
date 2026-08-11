@@ -41,7 +41,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 29, 2026
  *  version Apr. 11, 2026
  *  version May.  2, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -352,13 +352,13 @@ class ClientAdminSystemPingSpec
   }
 
   private def _response_pong(): HttpResponse = {
-    val contentType = ContentType(
+    val contenttype = ContentType(
       MimeType("text/plain"),
       Some(StandardCharsets.UTF_8)
     )
     HttpResponse.Text(
       HttpStatus.Ok,
-      contentType,
+      contenttype,
       Bag.text("pong", StandardCharsets.UTF_8)
     )
   }
@@ -376,9 +376,9 @@ class ClientAdminSystemPingSpec
 
   private def _bootstrap_core(): Component.Core = {
     val name = "bootstrap"
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
-    Component.Core.create(name, componentId, instanceId, Protocol.empty)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
+    val instanceid = ComponentInstanceId.default(componentid)
+    Component.Core.create(name, componentid, instanceid, Protocol.empty)
   }
 
   private def _client_action_from_request(
@@ -538,14 +538,14 @@ class ClientAdminSystemPingSpec
     uow: UnitOfWork,
     interpreter: UnitOfWorkInterpreter
   ): RuntimeContext = {
-    val idInterpreter = new (UnitOfWorkOp ~> Consequence) {
+    val idinterpreter = new (UnitOfWorkOp ~> Consequence) {
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         Consequence(interpreter.execute(fa))
     }
     new RuntimeContext(
       core = _runtime_core("client-admin-system-ping-spec-runtime", driver, observability),
       unitOfWorkSupplier = () => uow,
-      unitOfWorkInterpreterFn = idInterpreter,
+      unitOfWorkInterpreterFn = idinterpreter,
       commitAction = uowArg => {
         val _ = uowArg.commit()
         ()
@@ -563,14 +563,14 @@ class ClientAdminSystemPingSpec
     driver: HttpDriver,
     observability: ObservabilityContext
   ): RuntimeContext = {
-    val idInterpreter = new (UnitOfWorkOp ~> Consequence) {
+    val idinterpreter = new (UnitOfWorkOp ~> Consequence) {
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
     }
     new RuntimeContext(
       core = _runtime_core("client-admin-system-ping-spec-bootstrap-runtime", driver, observability),
       unitOfWorkSupplier = () => throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork"),
-      unitOfWorkInterpreterFn = idInterpreter,
+      unitOfWorkInterpreterFn = idinterpreter,
       commitAction = _ => (),
       abortAction = _ => (),
       disposeAction = _ => (),

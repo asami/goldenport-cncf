@@ -12,6 +12,8 @@ Current Web/widget specs:
 
 Current runtime/I18N specs:
 
+- `component-local-datastore-layout.md`
+- `fixed-profile-service-ingress.md`
 - `entity-collection-identity.md`
 - `generation-compatibility-contract.md`
 - `i18n-text-normalization.md`

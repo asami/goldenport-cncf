@@ -34,7 +34,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -391,7 +391,7 @@ case class ComponentLogic(
     ctx: ExecutionContext
   ): Consequence[Option[JobDefinitionEntity]] =
     component.subsystem
-      .flatMap(_.components.find(_.name == org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent.name))
+      .flatMap(_.findComponent(org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent.name))
       .flatMap(_.port.get[org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent.JobService]) match {
         case Some(service) =>
           given ExecutionContext = ctx
@@ -497,31 +497,31 @@ case class ComponentLogic(
     val flatparams = (action.arguments.map(x => x.name -> x.value.toString) ++
       action.properties.map(x => x.name -> x.value.toString)).toMap
     val record = action.request.toRecord
-    def param(key: String): Option[String] =
+    def _param_(key: String): Option[String] =
       flatparams.get(key)
         .orElse(record.getString(key))
         .orElse(record.getString(PathName(key.split("\\.").toVector)))
         .map(_.trim)
         .filter(_.nonEmpty)
-    param("cncf.job.input.storage").map { storage =>
-      val created = param("cncf.job.input.createdAt")
+    _param_("cncf.job.input.storage").map { storage =>
+      val created = _param_("cncf.job.input.createdAt")
         .flatMap(x => scala.util.Try(java.time.Instant.parse(x)).toOption)
         .getOrElse(now)
       val payload = JobInputPayload(
         storage = storage,
-        fieldName = param("cncf.job.input.fieldName"),
-        filename = param("cncf.job.input.filename"),
-        contentType = param("cncf.job.input.contentType"),
-        byteSize = param("cncf.job.input.byteSize").flatMap(x => scala.util.Try(x.toLong).toOption),
-        sha256 = param("cncf.job.input.sha256"),
-        inlineBase64 = param("cncf.job.input.inlineBase64"),
-        blobId = param("cncf.job.input.blobId"),
+        fieldName = _param_("cncf.job.input.fieldName"),
+        filename = _param_("cncf.job.input.filename"),
+        contentType = _param_("cncf.job.input.contentType"),
+        byteSize = _param_("cncf.job.input.byteSize").flatMap(x => scala.util.Try(x.toLong).toOption),
+        sha256 = _param_("cncf.job.input.sha256"),
+        inlineBase64 = _param_("cncf.job.input.inlineBase64"),
+        blobId = _param_("cncf.job.input.blobId"),
         createdAt = created
       )
-      val retention = param("cncf.job.input.retention")
+      val retention = _param_("cncf.job.input.retention")
         .flatMap(JobInputRetentionPolicy.parse)
         .getOrElse(JobInputRetentionPolicy.Ttl)
-      val ttl = param("cncf.job.input.ttlSeconds")
+      val ttl = _param_("cncf.job.input.ttlSeconds")
         .flatMap(x => scala.util.Try(java.time.Duration.ofSeconds(x.toLong)).toOption)
         .getOrElse(JobInput.DefaultTtl)
       JobInput(Vector(payload), retention, ttl, created)

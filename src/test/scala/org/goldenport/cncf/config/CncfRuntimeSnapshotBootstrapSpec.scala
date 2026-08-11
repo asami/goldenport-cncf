@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeSnapshotBootstrapSpec
@@ -299,9 +299,9 @@ final class CncfRuntimeSnapshotBootstrapSpec
         val identity = SubsystemInstanceId.default(DefaultSubsystemFactory.subsystemName).getOrElse(fail("Subsystem identity is required"))
         val subsystemfile = cwd.resolve(".textus").resolve("subsystems").resolve(identity.subsystem)
           .resolve("instances").resolve(identity.instance).resolve("config.yaml")
-        val componentfile = cwd.resolve(".textus").resolve("components").resolve("ExampleComponent").resolve("config.yaml")
+        val componentfile = cwd.resolve(".textus").resolve("components").resolve("org.goldenport.cncf.test.ExampleComponent").resolve("config.yaml")
         val componentinstancefile = cwd.resolve(".textus").resolve("subsystems").resolve(identity.subsystem)
-          .resolve("instances").resolve(identity.instance).resolve("components").resolve("ExampleComponent")
+          .resolve("instances").resolve(identity.instance).resolve("components").resolve("org.goldenport.cncf.test.ExampleComponent")
           .resolve("instances").resolve("primary").resolve("config.yaml")
         Files.createDirectories(subsystemfile.getParent)
         Files.createDirectories(componentfile.getParent)

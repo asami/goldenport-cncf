@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 11, 2026
- * @version Jul. 24, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
@@ -130,7 +130,7 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       val job = component.jobEngine.listJobs().headOption.getOrElse(fail("debug job missing"))
       job.calltree should not be empty
       val calltree = job.calltree.map(_.show).getOrElse("")
-      calltree should include ("action:operation_definition_semantics_spec.entity.fetchPerson")
+      calltree should include ("action:org.goldenport.cncf.test.OperationDefinitionSemanticsSpec.entity.fetchPerson")
       calltree should include ("kind=action")
       calltree should include ("operation=fetchPerson")
       calltree should include ("response_type")
@@ -160,7 +160,7 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       Then("the inline calltree contains the action and its nested UoW span")
       result.toOption.map(_.print) shouldBe Some("uow-ok")
       val calltree = debugctx.runtime.executionMetadata.inlineCallTree.map(_.show).getOrElse("")
-      calltree should include ("action:operation_definition_semantics_spec.entity.fetchWithUow")
+      calltree should include ("action:org.goldenport.cncf.test.OperationDefinitionSemanticsSpec.entity.fetchWithUow")
       calltree should include ("uow:http:get")
     }
 
@@ -456,9 +456,9 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         )
     }
     val core = Component.Core.create(
-      name = "operation_definition_semantics_spec",
-      componentid = ComponentId("operation_definition_semantics_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("operation_definition_semantics_spec")),
+      name = "org.goldenport.cncf.test.OperationDefinitionSemanticsSpec",
+      componentid = ComponentId("org.goldenport.cncf.test.OperationDefinitionSemanticsSpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.OperationDefinitionSemanticsSpec")),
       protocol = protocol
     )
     val subsystem = TestComponentFactory.emptySubsystem("operation_definition_semantics_spec")

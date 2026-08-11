@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 25, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRevisionBindingSpec
@@ -195,15 +195,16 @@ final class ComponentFactoryRevisionBindingSpec
         Some(EntityRevisionRepresentation.Detached)
       )
       val componentname = "revision_binding_componentlet"
+      val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentname)
       val component = _component(
         Vector("componentlet_entity"),
         Vector(modeldescriptor),
         componentname
       )
       val bundledescriptor = ComponentDescriptor(
-        componentName = Some("revision_binding_bundle"),
+        componentName = Some(componentid.name),
         componentlets = Vector(
-          ComponentletDescriptor(name = componentname)
+          ComponentletDescriptor(name = componentid.name)
         ),
         entityRuntimeDescriptors = Vector(collectiondescriptor)
       )
@@ -346,9 +347,9 @@ final class ComponentFactoryRevisionBindingSpec
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         entitynames.map(_plan)
     }
-    val componentid = ComponentId(componentname)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentname)
     val core = Component.Core.create(
-      name = componentname,
+      name = componentid.name,
       componentid = componentid,
       instanceid = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
@@ -361,7 +362,7 @@ final class ComponentFactoryRevisionBindingSpec
         origin = ComponentOrigin.Builtin,
         componentDescriptors = Vector(
           ComponentDescriptor(
-            componentName = Some(componentname),
+            componentName = Some(componentid.name),
             entityRuntimeDescriptors = descriptors
           )
         )

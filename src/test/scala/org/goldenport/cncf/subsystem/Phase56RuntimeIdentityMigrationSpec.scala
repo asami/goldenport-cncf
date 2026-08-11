@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  7, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56RuntimeIdentityMigrationSpec
@@ -181,7 +181,7 @@ final class Phase56RuntimeIdentityMigrationSpec
           val result = GenericSubsystemDescriptor.load(path)
 
           Then("the binding identity is rejected without trimming")
-          _assert_failure(result, "component binding identity must not include surrounding whitespace")
+          _assert_failure(result, "component binding name must be a nonempty string without surrounding whitespace")
         }
       }
 

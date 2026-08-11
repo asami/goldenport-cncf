@@ -12,13 +12,11 @@ import org.goldenport.configuration.{ConfigurationBindingQualifierCodec, Configu
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfConfigurationBindingQualifierCodec
   extends ConfigurationBindingQualifierCodec[CncfConfigurationTarget] {
-  private val _component_label_pattern = "[A-Za-z][A-Za-z0-9_]*".r
-
   def decode(value: Option[String]): Consequence[CncfConfigurationTarget] =
     value match {
       case None => Consequence.success(CncfConfigurationTarget.Global)
@@ -44,7 +42,7 @@ object CncfConfigurationBindingQualifierCodec
       val parts = text.split("/", -1).toVector
       parts.headOption match {
         case Some("c") if parts.size == 2 =>
-          _decode_component_label(parts(1)).flatMap(x => CncfConfigurationTarget.ComponentClass.create(ComponentId(x)))
+          _decode_component_id(parts(1)).flatMap(CncfConfigurationTarget.ComponentClass.create)
         case Some("s") if parts.size == 3 =>
           for {
             subsystem <- _decode_subsystem_label(parts(1), "subsystem")
@@ -56,22 +54,18 @@ object CncfConfigurationBindingQualifierCodec
           for {
             subsystem <- _decode_subsystem_label(parts(1), "subsystem")
             subsysteminstance <- _decode_subsystem_label(parts(2), "instance")
-            component <- _decode_component_label(parts(3))
-            componentinstance <- _decode_component_label(parts(4))
+            componentid <- _decode_component_id(parts(3))
+            componentinstance <- _decode_segment(parts(4))
             identity <- SubsystemInstanceId.create(subsystem, subsysteminstance)
-            target <- CncfConfigurationTarget.ComponentInstance.create(identity, ComponentInstanceId(component, componentinstance))
+            instanceid <- ComponentInstanceId.createC(componentid, componentinstance)
+            target <- CncfConfigurationTarget.ComponentInstance.create(identity, instanceid)
           } yield target
         case _ => Consequence.configurationInvalid("CNCF configuration binding qualifier is invalid")
       }
     }
 
-  private def _decode_component_label(value: String): Consequence[String] =
-    _decode_segment(value).flatMap { text =>
-      if (_component_label_pattern.matches(text))
-        Consequence.success(text)
-      else
-        Consequence.configurationInvalid("CNCF configuration component identity is invalid")
-    }
+  private def _decode_component_id(value: String): Consequence[ComponentId] =
+    _decode_segment(value).flatMap(ComponentId.parseC)
 
   private def _decode_subsystem_label(
     value: String,

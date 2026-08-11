@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentR
  * is not a source of subsystem capability authority.
  *
  * @since   Jul. 31, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object SubsystemAssemblyAdmission {
@@ -55,11 +55,11 @@ object SubsystemAssemblyAdmission {
       _discover_static_descriptors_c(admitted.descriptor, repositories).flatMap { discovered =>
         val discovereddescriptor =
           if (discovered.isEmpty) admitted.descriptor
-          else admitted.descriptor.copy(componentDescriptorOverrides = discovered.map(_.descriptor))
+          else admitted.descriptor.copy(componentDescriptorOverrides = discovered.map(_.descriptor).distinct)
         val discoverednotices = admitted.notices ++ discovered.flatMap(_.notices)
         if (_requires_descriptor_closure(discovereddescriptor))
           _resolve_descriptors_c(discovereddescriptor, repositories).flatMap { descriptors =>
-            val resolved = admitted.descriptor.copy(componentDescriptorOverrides = descriptors.map(_.descriptor))
+            val resolved = admitted.descriptor.copy(componentDescriptorOverrides = descriptors.map(_.descriptor).distinct)
             verifyC(resolved).map(_ => DetailedAdmission(resolved, (discoverednotices ++ descriptors.flatMap(_.notices)).distinct))
           }
         else

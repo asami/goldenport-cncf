@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Jul. 25, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec
@@ -253,7 +253,7 @@ final class ComponentFactoryAggregateViewBootstrapSpec
     protocol: Protocol,
     component: Component
   ): Component = {
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val instanceid = ComponentInstanceId.default(componentid)
     val factory = new Component.SinglePrimaryBundleFactory {
       override protected def create_Component(params: ComponentCreate): Component =
@@ -263,10 +263,10 @@ final class ComponentFactoryAggregateViewBootstrapSpec
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
-        Component.Core.create(name, componentid, instanceid, protocol, this)
+        Component.Core.create(componentid.name, componentid, instanceid, protocol, this)
     }
 
-    val core = Component.Core.create(name, componentid, instanceid, protocol, factory)
+    val core = Component.Core.create(componentid.name, componentid, instanceid, protocol, factory)
     val params = ComponentInit(
       subsystem = TestComponentFactory.emptySubsystem("test"),
       core = core,

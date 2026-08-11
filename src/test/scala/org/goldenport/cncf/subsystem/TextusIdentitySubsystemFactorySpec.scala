@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 26, 2026
  *  version Apr. 24, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TextusIdentitySubsystemFactorySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -55,8 +55,8 @@ final class TextusIdentitySubsystemFactorySpec extends AnyWordSpec with Matchers
         val subsystem = TextusIdentitySubsystemFactory.default(configuration = configuration)
         val names = subsystem.components.map(_.name).sorted
 
-        Then("the descriptor-selected UserAccount component is installed")
-        names shouldBe Vector("UserAccount")
+        Then("the descriptor-selected UserAccount component is installed with its qualified runtime identity")
+        names shouldBe Vector("org.goldenport.cncf.test.UserAccount")
       }
     }
   }
@@ -104,10 +104,18 @@ object TextusIdentityDevFixtureComponent extends Component.Factory {
     params: ComponentCreate,
     component: Component
   ): Component.Core = {
-    val _ = (params, component)
-    val componentid = ComponentId("user_account")
+    val _ = params
+    component.withArtifactMetadata(
+      Component.ArtifactMetadata(
+        sourceType = "test",
+        name = "textus-user-account",
+        version = "0.1.0",
+        component = Some("textus-user-account")
+      )
+    )
+    val componentid = ComponentId("org.goldenport.cncf.test.UserAccount")
     Component.Core.create(
-      "UserAccount",
+      componentid.name,
       componentid,
       ComponentInstanceId.default(componentid),
       Protocol.empty,

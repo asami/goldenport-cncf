@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 19, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -66,7 +66,7 @@ final class AliasResolutionSpec
         Then("the canonical selector is resolved")
         parsed match {
         case Consequence.Success(request) =>
-            request.component.value shouldBe "admin"
+            request.component.value shouldBe "org.goldenport.cncf.Admin"
             request.service.value shouldBe "system"
           request.operation shouldBe "ping"
           case other =>
@@ -94,7 +94,7 @@ final class AliasResolutionSpec
         Then("the canonical selector is resolved")
         parsed match {
         case Consequence.Success(request) =>
-            request.component.value shouldBe "admin"
+            request.component.value shouldBe "org.goldenport.cncf.Admin"
             request.service.value shouldBe "system"
           request.operation shouldBe "ping"
           case other =>

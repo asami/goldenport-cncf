@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererKnowledgePart {
@@ -66,12 +66,18 @@ trait StaticFormAppRendererKnowledgePart {
         admin_empty_table_cell(13, "No components are loaded.")
       else
         projections.map { projection =>
-          val path = escape_path_segment(projection.componentName)
+          val component = KnowledgeSpaceProjection
+            .componentOption(subsystem.components, projection.componentName)
+          val displayname = component.map(_.displayName).getOrElse(projection.componentName)
+          val selector = component
+            .map(KnowledgeSpaceProjection.componentSelector(subsystem.components, _))
+            .getOrElse(projection.componentName)
+          val path = escape_path_segment(selector)
           val status = projection.status
           val counts = projection.counts
           val source = projection.sourceDiagnostics
           s"""<tr>
-             |  <td><a href="/web/system/admin/knowledge/${path}">${escape(projection.componentName)}</a></td>
+             |  <td><a href="/web/system/admin/knowledge/${path}">${escape(displayname)}</a></td>
              |  <td><span class="badge text-bg-secondary">${escape(status.state.label)}</span></td>
              |  <td>${escape(source.sourceKind)}</td>
              |  <td>${escape(source.providerStatus)}</td>
@@ -115,7 +121,7 @@ trait StaticFormAppRendererKnowledgePart {
     component: Component
   ): String = {
     val projection = KnowledgeSpaceProjection.component(component)
-    val path = escape_path_segment(component.name)
+    val path = escape_path_segment(KnowledgeSpaceProjection.componentSelector(subsystem.components, component))
     val previewlimit = renderer_config.previewLimit
     val sortednodes = projection.nodes.sortBy(_.id.print)
     val sortedrelationships = projection.relationships.sortBy(_.id.print)
@@ -167,7 +173,7 @@ trait StaticFormAppRendererKnowledgePart {
     val frames = knowledge_frame_rows(framepreview, emptycolspan = 8, "No knowledge frames are loaded.")
     val facts = knowledge_fact_rows(factpreview, emptycolspan = 6, "No knowledge facts are loaded.")
     simple_page(
-      title = s"System Knowledge ${component.name}",
+      title = s"System Knowledge ${component.displayName}",
       subtitle = "Component KnowledgeSpace compact projection",
       body =
         s"""${admin_nav_card(Vector(
@@ -177,7 +183,7 @@ trait StaticFormAppRendererKnowledgePart {
            |${admin_card(
              "Status",
              field_table(Vector(
-               "Component" -> component.name,
+               "Component" -> component.displayName,
                "Subsystem" -> subsystem.name,
                "State" -> projection.status.state.label,
                "Ready" -> projection.status.isReady.toString,
@@ -234,7 +240,13 @@ trait StaticFormAppRendererKnowledgePart {
     subsystem: Subsystem,
     projection: org.goldenport.cncf.knowledge.KnowledgeNodeProjection
   ): String = {
-    val componentpath = escape_path_segment(projection.componentName)
+    val component = KnowledgeSpaceProjection
+      .componentOption(subsystem.components, projection.componentName)
+    val displayname = component.map(_.displayName).getOrElse(projection.componentName)
+    val selector = component
+      .map(KnowledgeSpaceProjection.componentSelector(subsystem.components, _))
+      .getOrElse(projection.componentName)
+    val componentpath = escape_path_segment(selector)
     val node = projection.node
     val externalids = knowledge_external_identifier_table(node.identity.externalIdentifiers)
     val from =
@@ -260,7 +272,7 @@ trait StaticFormAppRendererKnowledgePart {
     val operations = knowledge_operations_table(node.operations)
     simple_page(
       title = s"Knowledge Node ${node.id.print}",
-      subtitle = s"${projection.componentName} KnowledgeSpace node detail",
+      subtitle = s"${displayname} KnowledgeSpace node detail",
       body =
         s"""${admin_nav_card(Vector(
              "Component knowledge" -> s"/web/system/admin/knowledge/${componentpath}",

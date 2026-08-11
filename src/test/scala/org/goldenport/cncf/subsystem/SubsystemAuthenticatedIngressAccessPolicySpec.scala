@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  6, 2026
- * @version Aug.  6, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemAuthenticatedIngressAccessPolicySpec
@@ -161,9 +161,9 @@ final class SubsystemAuthenticatedIngressAccessPolicySpec
       override def authenticationProviders: Vector[AuthenticationProvider] =
         Vector(_authentication_provider)
     }
-    val componentid = ComponentId("domain")
+    val componentid = ComponentId("org.goldenport.cncf.test.Domain")
     val core = Component.Core.create(
-      name = "domain",
+      name = componentid.name,
       componentid = componentid,
       instanceid = ComponentInstanceId.default(componentid),
       protocol = protocol

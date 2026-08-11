@@ -14,7 +14,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Apr. 24, 2026
- * @version Jul. 25, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetPolicySpec
@@ -150,9 +150,9 @@ final class ComponentFactoryWorkingSetPolicySpec
         }
     }.withComponentDescriptors(descriptors)
     val core = Component.Core.create(
-      name = "policy_spec",
-      componentid = ComponentId("policy_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("policy_spec")),
+      name = "org.goldenport.cncf.test.PolicySpec",
+      componentid = ComponentId("org.goldenport.cncf.test.PolicySpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.PolicySpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(

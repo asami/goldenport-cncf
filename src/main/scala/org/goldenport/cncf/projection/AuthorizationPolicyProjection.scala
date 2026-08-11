@@ -2,12 +2,13 @@ package org.goldenport.cncf.projection
 
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, SecurityRoleDefinition, SecuritySubject}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, Subsystem}
 
 /*
  * @since   Apr. 28, 2026
- * @version Apr. 28, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object AuthorizationPolicyProjection {
@@ -112,7 +113,7 @@ object AuthorizationPolicyProjection {
   private def _has_blob_component(
     components: Vector[Component]
   ): Boolean =
-    components.exists(c => SecuritySubject.normalize(c.name) == SecuritySubject.normalize("blob"))
+    components.exists(_.componentId == BuiltinComponentIdentity.BLOB)
 
   private val _blob_requirements: Vector[(String, String, String, String, String)] = Vector(
     ("register_blob", "collection", "blob", "create", "Blob metadata collection create before payload write"),

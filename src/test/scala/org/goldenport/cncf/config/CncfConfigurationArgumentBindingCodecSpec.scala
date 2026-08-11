@@ -7,6 +7,11 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
+/*
+ * @since   Aug.  3, 2026
+ * @version Aug. 11, 2026
+ * @author  ASAMI, Tomoharu
+ */
 final class CncfConfigurationArgumentBindingCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _e1 = afterWord("in spec:phase-55-command-argument-binding-codec, example:E1, rules:GCF08C-R1,R2, phase:55, slice:GCF-08C")
   private val _e2 = afterWord("in spec:phase-55-command-argument-binding-codec, example:E2, rules:GCF08C-R3,R4, phase:55, slice:GCF-08C")
@@ -25,9 +30,9 @@ final class CncfConfigurationArgumentBindingCodecSpec extends AnyWordSpec with M
           Given("four canonical target assignments, including empty and equals-containing raw values")
           val inputs = Vector(
             "--textus.binding=textus.codec.example=",
-            "--textus.binding=@c/Widget:textus.codec.example=plain",
+            "--textus.binding=@c/org%2Egoldenport%2Ecncf%2Etest%2EWidget:textus.codec.example=plain",
             "--textus.binding=@s/platform/default:textus.codec.example=a=b",
-            "--textus.binding=@i/platform/default/Widget/primary:textus.codec.example=value"
+            "--textus.binding=@i/platform/default/org%2Egoldenport%2Ecncf%2Etest%2EWidget/primary:textus.codec.example=value"
           )
           When("the codec decodes and re-encodes each atomic argument")
           val assignments = inputs.map(x => _take(_codec.decode(x)))

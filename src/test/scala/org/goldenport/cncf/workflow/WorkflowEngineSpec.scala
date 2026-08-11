@@ -25,7 +25,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   Apr. 22, 2026
  *  version May.  4, 2026
- * @version Jul. 15, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowEngineSpec
@@ -59,7 +59,7 @@ final class WorkflowEngineSpec
           )
         ),
         trace = trace,
-        entities = Vector(_SalesOrder(entityid, "approved"))
+        entities = Vector(SalesOrder(entityid, "approved"))
       ) { fixture =>
         When("matching event is received")
         val result = fixture.component.eventReception.get.receive(
@@ -105,7 +105,7 @@ final class WorkflowEngineSpec
           )
         ),
         trace = trace,
-        entities = Vector(_SalesOrder(entityid, "approved"))
+        entities = Vector(SalesOrder(entityid, "approved"))
       ) { fixture =>
         val input = ReceptionInput(
           name = "sales-order.changed",
@@ -148,7 +148,7 @@ final class WorkflowEngineSpec
           )
         ),
         trace = trace,
-        entities = Vector(_SalesOrder(entityid, "approved"))
+        entities = Vector(SalesOrder(entityid, "approved"))
       ) { fixture =>
         When("entity id is missing")
         val missingid = fixture.subsystem.workflowEngine.handle(
@@ -224,7 +224,7 @@ final class WorkflowEngineSpec
           )
         ),
         trace = trace,
-        entities = Vector(_SalesOrder(entityid, "approved"))
+        entities = Vector(SalesOrder(entityid, "approved"))
       ) { fixture =>
         When("the event matches multiple registrations")
         val _ = fixture.component.eventReception.get.receive(
@@ -272,7 +272,7 @@ final class WorkflowEngineSpec
               )
             ),
             trace = ArrayBuffer.empty,
-            entities = Vector(_SalesOrder(_entity_id("priority_2"), "approved"))
+            entities = Vector(SalesOrder(_entity_id("priority_2"), "approved"))
           )
 
           val ex = intercept[IllegalStateException] {
@@ -284,7 +284,7 @@ final class WorkflowEngineSpec
     }
   }
 
-  private final case class _Fixture(
+  private final case class Fixture(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     component: Component
   )
@@ -292,23 +292,23 @@ final class WorkflowEngineSpec
   private def _with_fixture[A](
     workflowdefinitions: Vector[WorkflowDefinition],
     trace: ArrayBuffer[String],
-    entities: Vector[_SalesOrder]
-  )(body: _Fixture => A): A =
+    entities: Vector[SalesOrder]
+  )(body: Fixture => A): A =
     withWorkflowSubsystem(s"workflow-spec-${_seed.incrementAndGet()}") { subsystem =>
       val component = _component(subsystem, workflowdefinitions, trace, entities)
       val factory = new ComponentFactory()
       val bootstrapped = factory.bootstrap(component)
       subsystem.add(bootstrapped)
-      body(_Fixture(subsystem, bootstrapped))
+      body(Fixture(subsystem, bootstrapped))
     }
 
   private def _component(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     definitions: Vector[WorkflowDefinition],
     trace: ArrayBuffer[String],
-    entities: Vector[_SalesOrder]
+    entities: Vector[SalesOrder]
   ): Component = {
-    given EntityPersistent[_SalesOrder] = _persistent
+    given EntityPersistent[SalesOrder] = _persistent
     val protocol = Protocol(
       services = spec.ServiceDefinitionGroup(
         Vector(
@@ -316,9 +316,9 @@ final class WorkflowEngineSpec
             name = "workflow",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _WorkflowOperation("advanceOrder", trace),
-                _WorkflowOperation("advanceOrderLow", trace),
-                _WorkflowOperation("advanceOrderHigh", trace)
+                WorkflowOperation("advanceOrder", trace),
+                WorkflowOperation("advanceOrderLow", trace),
+                WorkflowOperation("advanceOrderHigh", trace)
               )
             )
           )
@@ -340,28 +340,28 @@ final class WorkflowEngineSpec
     }
     component.entitySpace.registerEntity("salesOrder", _collection(entities))
     val name = s"workflow_component_${_seed.incrementAndGet()}"
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val instanceid = ComponentInstanceId.default(componentid)
-    val core = Component.Core.create(name, componentid, instanceid, protocol)
+    val core = Component.Core.create(componentid.name, componentid, instanceid, protocol)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 
   private def _collection(
-    entities: Vector[_SalesOrder]
-  )(using EntityPersistent[_SalesOrder]): EntityCollection[_SalesOrder] = {
+    entities: Vector[SalesOrder]
+  )(using EntityPersistent[SalesOrder]): EntityCollection[SalesOrder] = {
     val entitymap = entities.map(x => x.id -> x).toMap
-    val storerealm = new EntityRealm[_SalesOrder](
+    val storerealm = new EntityRealm[SalesOrder](
       entityName = "salesOrder",
       loader = EntityLoader(id => entitymap.get(id)),
-      state = new _IdRef[EntityRealmState[_SalesOrder]](EntityRealmState(Map.empty))
+      state = new IdRef[EntityRealmState[SalesOrder]](EntityRealmState(Map.empty))
     )
     entities.foreach(storerealm.put)
     val descriptor = EntityDescriptor[
-      _SalesOrder
+      SalesOrder
     ](
       collectionId = _collection_id,
       plan = EntityRuntimePlan[
-        _SalesOrder
+        SalesOrder
       ](
         entityName = "salesOrder",
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
@@ -370,16 +370,16 @@ final class WorkflowEngineSpec
         maxPartitions = 4,
         maxEntitiesPerPartition = 16
       ),
-      persistent = summon[EntityPersistent[_SalesOrder]]
+      persistent = summon[EntityPersistent[SalesOrder]]
     )
-    new EntityCollection[_SalesOrder](
+    new EntityCollection[SalesOrder](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, None)
     )
   }
 
   private def _await_job_completion(
-    fixture: _Fixture,
+    fixture: Fixture,
     jobid: org.goldenport.cncf.job.JobId
   ): Unit = {
     awaitCondition {
@@ -394,17 +394,17 @@ final class WorkflowEngineSpec
   ): EntityId =
     EntityId("workflow", entropy, _collection_id)
 
-  private def _persistent: EntityPersistent[_SalesOrder] = new EntityPersistent[_SalesOrder] {
-    def id(e: _SalesOrder): EntityId = e.id
-    def toRecord(e: _SalesOrder): Record = e.toRecord()
-    def fromRecord(r: Record): Consequence[_SalesOrder] =
+  private def _persistent: EntityPersistent[SalesOrder] = new EntityPersistent[SalesOrder] {
+    def id(e: SalesOrder): EntityId = e.id
+    def toRecord(e: SalesOrder): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[SalesOrder] =
       Consequence.notImplemented("not used in WorkflowEngineSpec")
   }
 
   private val _seed = new AtomicInteger(0)
 }
 
-private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+private final class IdRef[A](initial: A) extends Ref[cats.Id, A] {
   private var _value: A = initial
 
   def get: A = synchronized { _value }
@@ -463,7 +463,7 @@ private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
   }
 }
 
-private final case class _SalesOrder(
+private final case class SalesOrder(
   id: EntityId,
   status: String
 ) {
@@ -474,7 +474,7 @@ private final case class _SalesOrder(
     )
 }
 
-private final case class _WorkflowOperation(
+private final case class WorkflowOperation(
   opname: String,
   trace: ArrayBuffer[String]
 ) extends spec.OperationDefinition {
@@ -486,19 +486,19 @@ private final case class _WorkflowOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_WorkflowAction(req, opname, trace))
+    Consequence.success(WorkflowAction(req, opname, trace))
 }
 
-private final case class _WorkflowAction(
+private final case class WorkflowAction(
   request: Request,
   opname: String,
   trace: ArrayBuffer[String]
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _WorkflowActionCall(core, opname, trace)
+    WorkflowActionCall(core, opname, trace)
 }
 
-private final case class _WorkflowActionCall(
+private final case class WorkflowActionCall(
   core: ActionCall.Core,
   opname: String,
   trace: ArrayBuffer[String]

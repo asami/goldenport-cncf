@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Apr. 10, 2026
  *  version May. 31, 2026
- * @version Jul. 15, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec
@@ -34,14 +34,14 @@ final class ComponentFactoryEventReceptionBootstrapSpec
     "propagate working-set entity names to reception and enforce keep-resident pub-sub" in {
       Given("component with working-set entity marker and empty memory realm")
       val id = EntityId("m", "a", _cid)
-      val entity = _BootEntity(id, "suzuki")
-      given EntityPersistent[_BootEntity] = _persistent
+      val entity = BootEntity(id, "suzuki")
+      given EntityPersistent[BootEntity] = _persistent
 
       val component = new Component() {}
       component.withWorkingSetEntityNames(Set("customer"))
       component.entitySpace.registerEntity("customer", _collection(id, entity))
 
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
@@ -106,7 +106,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
           )
       }, subsystem)
 
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
@@ -184,7 +184,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
           )
       }, subsystem)
 
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
@@ -251,7 +251,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
             )
           )
       }, subsystem)
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
@@ -299,7 +299,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
           )
       }, subsystem)
 
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
@@ -416,8 +416,8 @@ final class ComponentFactoryEventReceptionBootstrapSpec
         )
       )
       calls.toVector shouldBe Vector("notice.sync")
-      attrs.head.get(EventReception.StandardAttribute.SourceComponent) shouldBe Some("publisher")
-      attrs.head.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("public-notice")
+      attrs.head.get(EventReception.StandardAttribute.SourceComponent) shouldBe Some("org.goldenport.cncf.test.Publisher")
+      attrs.head.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("org.goldenport.cncf.test.PublicNotice")
     }
 
     "not register metadata-only componentlet as an event reception participant" in {
@@ -440,8 +440,8 @@ final class ComponentFactoryEventReceptionBootstrapSpec
 
       Then("no runtime reception is materialized for metadata-only componentlets")
       bootstrapped.eventReception shouldBe empty
-      subsystem.eventReceptions.contains("notice-board") shouldBe false
-      subsystem.eventReceptions.contains("public-notice") shouldBe false
+      subsystem.eventReceptions.contains("org.goldenport.cncf.test.NoticeBoard") shouldBe false
+      subsystem.eventReceptions.contains("org.goldenport.cncf.test.PublicNotice") shouldBe false
     }
 
     "register bootstrapped reception into subsystem-owned facilities" in {
@@ -474,7 +474,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
 
       Then("subsystem exposes the shared event reception facility")
       bootstrapped.eventReception.nonEmpty shouldBe true
-      subsystem.eventReceptions.get("boot_component") shouldBe bootstrapped.eventReception
+      subsystem.eventReceptions.get("org.goldenport.cncf.test.BootComponent") shouldBe bootstrapped.eventReception
       bootstrapped.eventStore shouldBe Some(subsystem.eventStore)
       subsystem.eventBus should not be null
     }
@@ -505,14 +505,14 @@ final class ComponentFactoryEventReceptionBootstrapSpec
 
   private def _collection(
     id: EntityId,
-    entity: _BootEntity
-  )(using EntityPersistent[_BootEntity]): EntityCollection[_BootEntity] = {
-    val storerealm = new EntityRealm[_BootEntity](
+    entity: BootEntity
+  )(using EntityPersistent[BootEntity]): EntityCollection[BootEntity] = {
+    val storerealm = new EntityRealm[BootEntity](
       entityName = "customer",
-      loader = EntityLoader[_BootEntity](x => if (x == id) Some(entity) else None),
-      state = new _IdRef2[EntityRealmState[_BootEntity]](EntityRealmState(Map.empty))
+      loader = EntityLoader[BootEntity](x => if (x == id) Some(entity) else None),
+      state = new EventReceptionIdRef[EntityRealmState[BootEntity]](EntityRealmState(Map.empty))
     )
-    val memoryrealm = new PartitionedMemoryRealm[_BootEntity](
+    val memoryrealm = new PartitionedMemoryRealm[BootEntity](
       strategy = PartitionStrategy.byOrganizationMonthUTC,
       idOf = _.id
     )
@@ -526,19 +526,19 @@ final class ComponentFactoryEventReceptionBootstrapSpec
         maxPartitions = 4,
         maxEntitiesPerPartition = 16
       ),
-      persistent = summon[EntityPersistent[_BootEntity]]
+      persistent = summon[EntityPersistent[BootEntity]]
     )
-    new EntityCollection[_BootEntity](
+    new EntityCollection[BootEntity](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, Some(memoryrealm))
     )
   }
 
-  private def _persistent: EntityPersistent[_BootEntity] =
-    new EntityPersistent[_BootEntity] {
-      def id(e: _BootEntity): EntityId = e.id
-      def toRecord(e: _BootEntity): Record = e.toRecord()
-      def fromRecord(r: Record): Consequence[_BootEntity] =
+  private def _persistent: EntityPersistent[BootEntity] =
+    new EntityPersistent[BootEntity] {
+      def id(e: BootEntity): EntityId = e.id
+      def toRecord(e: BootEntity): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[BootEntity] =
         Consequence.notImplemented("not used in this spec")
     }
 
@@ -549,14 +549,14 @@ final class ComponentFactoryEventReceptionBootstrapSpec
     componentidlabel: String = ""
   ): Component = {
     val idlabel = if (componentidlabel.nonEmpty) componentidlabel else name
-    val componentid = ComponentId(idlabel)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(idlabel)
     val instanceid = ComponentInstanceId.default(componentid)
-    val core = Component.Core.create(name, componentid, instanceid, Protocol.empty)
+    val core = Component.Core.create(componentid.name, componentid, instanceid, Protocol.empty)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 }
 
-private final case class _BootEntity(
+private final case class BootEntity(
   id: EntityId,
   name: String
 ) extends EntityPersistable {
@@ -567,12 +567,12 @@ private final case class _BootEntity(
     )
 }
 
-private final class _InMemoryCommitRecorder extends CommitRecorder {
+private final class InMemoryCommitRecorder extends CommitRecorder {
   private var _entries: Vector[String] = Vector.empty
   def record(entry: String): Unit = _entries = _entries :+ entry
 }
 
-private final class _IdRef2[A](initial: A) extends Ref[cats.Id, A] {
+private final class EventReceptionIdRef[A](initial: A) extends Ref[cats.Id, A] {
   private var _value: A = initial
 
   def get: A = synchronized { _value }

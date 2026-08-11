@@ -33,7 +33,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -90,7 +90,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
-      body should include("path: \"/debug/http/echo\"")
+      body should include("path: \"/org-goldenport-cncf-debug/http/echo\"")
       body should include("method: \"POST\"")
     }
 
@@ -482,7 +482,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
-      body should include("path: \"/debug/http/echo\"")
+      body should include("path: \"/org-goldenport-cncf-debug/http/echo\"")
       body should include("method: \"POST\"")
     }
 
@@ -1150,9 +1150,9 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     new Component() {
       override val core: Component.Core =
         Component.Core.create(
-          "session_provider",
-          ComponentId("session_provider"),
-          ComponentInstanceId.default(ComponentId("session_provider")),
+          "org.goldenport.cncf.test.SessionProvider",
+          ComponentId("org.goldenport.cncf.test.SessionProvider"),
+          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.SessionProvider")),
           Protocol.empty
         )
       override def authenticationProviders: Vector[AuthenticationProvider] =

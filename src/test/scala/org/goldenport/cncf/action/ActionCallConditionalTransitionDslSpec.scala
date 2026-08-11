@@ -61,7 +61,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallConditionalTransitionDslSpec
@@ -116,9 +116,9 @@ final class ActionCallConditionalTransitionDslSpec
 
         Then("both helpers use the executing component as provider owner")
         standardcapture.transition.map(_.componentOwner) shouldBe
-          Some(DataStoreComponentOwner.create("phase49-dsl").TAKE)
+          Some(DataStoreComponentOwner.create("org.goldenport.cncf.test.Phase49Dsl").TAKE)
         internalcapture.transition.map(_.componentOwner) shouldBe
-          Some(DataStoreComponentOwner.create("phase49-dsl").TAKE)
+          Some(DataStoreComponentOwner.create("org.goldenport.cncf.test.Phase49Dsl").TAKE)
 
         And("ServiceInternal changes only the admitted authorization mode")
         _authorization_shape(standardcapture.transition) shouldBe
@@ -470,7 +470,7 @@ final class ActionCallConditionalTransitionDslSpec
             .flatMap(_.calltree)
             .map(_.toRecord.print)
             .getOrElse(fail("conditional-transition CallTree missing"))
-        rendered should include("action:phase49-dsl.conditional_transition")
+        rendered should include("action:org.goldenport.cncf.test.Phase49Dsl.conditional_transition")
         rendered should include("uow:entitystore:conditional-transition")
         rendered should include("space:entitystore:conditional-transition")
         rendered should include(
@@ -611,9 +611,9 @@ final class ActionCallConditionalTransitionDslSpec
     rootpersistent: EntityPersistent[Root] = _root_persistent
   ) extends Component {
     override val core: Component.Core = Component.Core.create(
-      "phase49-dsl",
-      ComponentId("phase49_dsl"),
-      ComponentInstanceId.default(ComponentId("phase49_dsl")),
+      "org.goldenport.cncf.test.Phase49Dsl",
+      ComponentId("org.goldenport.cncf.test.Phase49Dsl"),
+      ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.Phase49Dsl")),
       Protocol.empty
     )
 
@@ -688,7 +688,7 @@ final class ActionCallConditionalTransitionDslSpec
 
       override def request: Request =
         Request(
-          component = Some("phase49-dsl"),
+          component = Some("org.goldenport.cncf.test.Phase49Dsl"),
           service = None,
           operation = "conditional_transition",
           arguments = Nil,

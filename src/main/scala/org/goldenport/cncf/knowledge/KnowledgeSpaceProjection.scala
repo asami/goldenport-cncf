@@ -2,11 +2,11 @@ package org.goldenport.cncf.knowledge
 
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.component.ComponentIdentityCompatibilityAdapter
 
 /*
  * @since   May. 17, 2026
- * @version May. 18, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentKnowledgeProjection(
@@ -107,8 +107,35 @@ object KnowledgeSpaceProjection {
   def componentOption(
     components: Vector[Component],
     componentname: String
-  ): Option[Component] =
-    components.find(x => _matches_component_name(x, componentname))
+  ): Option[Component] = {
+    val candidates = ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(components)
+    ComponentIdentityCompatibilityAdapter.resolveAliases(
+      componentname,
+      candidates,
+      ComponentIdentityCompatibilityAdapter.Surface.WebPath
+    ) match {
+      case result: ComponentIdentityCompatibilityAdapter.Canonical =>
+        components.find(_.componentId == result.componentid)
+      case result: ComponentIdentityCompatibilityAdapter.Adapted =>
+        components.find(_.componentId == result.componentid)
+      case _: ComponentIdentityCompatibilityAdapter.Rejected =>
+        None
+    }
+  }
+
+  def componentSelector(components: Vector[Component], component: Component): String =
+    ComponentIdentityCompatibilityAdapter.resolveAliases(
+      component.displayName,
+      ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(components),
+      ComponentIdentityCompatibilityAdapter.Surface.WebPath
+    ) match {
+      case result: ComponentIdentityCompatibilityAdapter.Canonical if result.componentid == component.componentId =>
+        component.displayName
+      case result: ComponentIdentityCompatibilityAdapter.Adapted if result.componentid == component.componentId =>
+        component.displayName
+      case _ =>
+        component.name
+    }
 
   def nodeOption(
     component: Component,
@@ -155,13 +182,4 @@ object KnowledgeSpaceProjection {
     }
   }
 
-  private def _matches_component_name(
-    component: Component,
-    name: String
-  ): Boolean =
-    NamingConventions.equivalentByNormalized(component.name, name) ||
-      component.artifactMetadata.toVector.exists { metadata =>
-        metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
-          NamingConventions.equivalentByNormalized(metadata.name, name)
-      }
 }

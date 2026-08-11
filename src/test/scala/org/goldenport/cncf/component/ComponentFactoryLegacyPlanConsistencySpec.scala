@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Jul. 25, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryLegacyPlanConsistencySpec
@@ -50,9 +50,9 @@ final class ComponentFactoryLegacyPlanConsistencySpec
   private def _component(): Component = {
     val component = new Component() {}
     val core = Component.Core.create(
-      name = "legacy_plan_consistency_spec",
-      componentid = ComponentId("legacy_plan_consistency_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("legacy_plan_consistency_spec")),
+      name = "org.goldenport.cncf.test.LegacyPlanConsistencySpec",
+      componentid = ComponentId("org.goldenport.cncf.test.LegacyPlanConsistencySpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.LegacyPlanConsistencySpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(

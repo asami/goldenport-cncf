@@ -15,7 +15,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author ASAMI, Tomoharu
  */
 class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen with TableDrivenPropertyChecks {
@@ -641,9 +641,9 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
         )
       )
     )
-    val componentid = org.goldenport.cncf.component.ComponentId(canonicalname)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(canonicalname)
     val core = org.goldenport.cncf.component.Component.Core.create(
-      name = canonicalname,
+      name = componentid.name,
       componentid = componentid,
       instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(componentid),
       protocol = protocol

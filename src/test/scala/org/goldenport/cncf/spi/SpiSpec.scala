@@ -18,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  2, 2026
- * @version Jul. 29, 2026
+ *  version Jul. 29, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
@@ -55,13 +56,20 @@ final class SpiSpec
     "collect application-purpose registrations through Component.Port at bootstrap" in {
       Given("an application registration output and a Textus AI registration input socket")
       given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_application_purpose_registration")
       val registrationset = new AiRunnerApplicationPurposeRegistrationSocketSet {}
-      val application = new Component() {}
-        .withPort(Component.Port.of(AiRunnerApplicationPurposeRegistration(Vector(
+      val application = _initialized_component(
+        subsystem,
+        "application",
+        new Component() {}.withPort(Component.Port.of(AiRunnerApplicationPurposeRegistration(Vector(
           AiRunnerApplicationPurpose("sanpomap-scenario-generation", "structured-extraction")
         ))))
-      val runtime = new Component() {}
-        .withPort(Component.Port.input(registrationset))
+      )
+      val runtime = _initialized_component(
+        subsystem,
+        "runtime",
+        new Component() {}.withPort(Component.Port.input(registrationset))
+      )
 
       When("SPI resolution runs across the bootstrap component set")
       val result = SpiResolver.resolve(Vector(application, runtime))
@@ -72,12 +80,32 @@ final class SpiSpec
         Vector("sanpomap-scenario-generation")
     }
 
+    "reject an uninitialized component before resolving a canonical SPI selector" in {
+      Given("an uninitialized SPI consumer with an explicit canonical selector")
+      given ExecutionContext = ExecutionContext.create()
+      val consumer = ConsumerComponent()
+      val binding = SpiRuntimeBinding(
+        SpiSocketSelector(Some("consumer"), "ai-runner"),
+        SpiProviderSelector(component = Some("provider"))
+      )
+
+      When("SPI resolution validates the selector candidates")
+      val result = SpiResolver.resolve(Vector(consumer), Vector(binding))
+
+      Then("resolution returns a structured identity failure before alias resolution")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+        "SPI component identity is not initialized"
+      )
+    }
+
     "resolve automatic and compatibility providers" which {
     "inject a provider component into a matching socket component" in {
       Given("a provider component and a consumer component with an AI runner socket")
       given ExecutionContext = ExecutionContext.create()
-      val provider = ProviderComponent("provider-a")
-      val consumer = ConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_automatic_provider")
+      val provider = _initialized_component(subsystem, "provider", ProviderComponent("provider-a"))
+      val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
 
       When("SPI resolution runs across the loaded component set")
       val result = SpiResolver.resolve(Vector(provider, consumer))
@@ -90,8 +118,9 @@ final class SpiSpec
     "resolve one provider once when it is exposed through both the component and its port" in {
       Given("one provider instance exposed through the component SPI and its output port")
       given ExecutionContext = ExecutionContext.create()
-      val provider = PortBackedProviderComponent("provider-a")
-      val consumer = ConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_port_backed_provider")
+      val provider = _initialized_component(subsystem, "provider", PortBackedProviderComponent("provider-a"))
+      val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
 
       When("SPI resolution collects the component's providers")
       val result = SpiResolver.resolve(Vector(provider, consumer))
@@ -119,8 +148,8 @@ final class SpiSpec
       text should include ("spi:ai-runner.generate")
       text should include ("calltree_kind=spi")
       text should include ("contract=ai-runner")
-      text should include ("provider_component=trace_provider")
-      text should include ("socket_component=trace_consumer")
+      text should include (s"provider_component=${provider.componentId.name}")
+      text should include (s"socket_component=${consumer.componentId.name}")
       text should include ("selection_basis=assembly-binding")
       text should include ("outcome=success")
       text should not include ("secret prompt")
@@ -162,9 +191,13 @@ final class SpiSpec
     "inject a direct Component.Port SPI service into a matching socket component" in {
       Given("a component port containing the requested SPI service")
       given ExecutionContext = ExecutionContext.create()
-      val provider = new Component() {}
-        .withPort(Component.Port.of(AiRunnerImplementation("direct")))
-      val consumer = ConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_direct_port_provider")
+      val provider = _initialized_component(
+        subsystem,
+        "provider",
+        new Component() {}.withPort(Component.Port.of(AiRunnerImplementation("direct")))
+      )
+      val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
 
       When("SPI resolution runs")
       val result = SpiResolver.resolve(Vector(provider, consumer))
@@ -191,11 +224,18 @@ final class SpiSpec
     "install an output provider without ambiguity when another port entry is an input socket" in {
       Given("one direct output provider and one input socket-looking port entry")
       given ExecutionContext = ExecutionContext.create()
-      val provider = new Component() {}
-        .withPort(Component.Port.of(AiRunnerImplementation("direct")))
-      val input = new Component() {}
-        .withPort(Component.Port.input(InputRunnerSocket("input-only")))
-      val consumer = ConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_output_and_input_port")
+      val provider = _initialized_component(
+        subsystem,
+        "provider",
+        new Component() {}.withPort(Component.Port.of(AiRunnerImplementation("direct")))
+      )
+      val input = _initialized_component(
+        subsystem,
+        "input",
+        new Component() {}.withPort(Component.Port.input(InputRunnerSocket("input-only")))
+      )
+      val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
 
       When("SPI resolution runs")
       val result = SpiResolver.resolve(Vector(provider, input, consumer))
@@ -220,9 +260,10 @@ final class SpiSpec
     "return deterministic failure when providers are ambiguous" in {
       Given("two equivalent providers for one socket")
       given ExecutionContext = ExecutionContext.create()
-      val provider1 = ProviderComponent("provider-a")
-      val provider2 = ProviderComponent("provider-b")
-      val consumer = ConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_ambiguous_providers")
+      val provider1 = _initialized_component(subsystem, "provider-a", ProviderComponent("provider-a"))
+      val provider2 = _initialized_component(subsystem, "provider-b", ProviderComponent("provider-b"))
+      val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
 
       When("SPI resolution runs")
       val result = SpiResolver.resolve(Vector(provider1, provider2, consumer))
@@ -230,10 +271,7 @@ final class SpiSpec
       Then("resolution fails rather than choosing implicitly")
       result shouldBe a[Consequence.Failure[_]]
       val failure = result.asInstanceOf[Consequence.Failure[_]].conclusion.display
-      failure should include ("ProviderComponent")
-      failure should include ("uninitialized")
-      failure should include ("unknown")
-      failure should include (classOf[AiRunnerProvider].getName)
+      failure should include ("ambiguous SPI providers")
     }
     }
 
@@ -515,6 +553,73 @@ final class SpiSpec
       Then("resolution reports provider ambiguity")
       result shouldBe a[Consequence.Failure[_]]
       result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("ambiguous SPI providers")
+    }
+
+    "select only the exact namespace-qualified provider component" in {
+      Given("two admitted providers sharing a local ID in different namespaces")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi-qualified-selector")
+      val alphaid = ComponentId("org.alpha.Catalog")
+      val betaid = ComponentId("org.beta.Catalog")
+      val consumerid = ComponentId("org.example.Consumer")
+      val alpha = _initialized_component_with_id(subsystem, alphaid, ProviderComponent("alpha"))
+      val beta = _initialized_component_with_id(subsystem, betaid, ProviderComponent("beta"))
+      val consumer = _initialized_component_with_id(subsystem, consumerid, ConsumerComponent())
+      val binding = SpiRuntimeBinding(
+        SpiSocketSelector(Some(consumerid.name), "ai-runner"),
+        SpiProviderSelector(component = Some(alphaid.name))
+      )
+
+      When("an SPI binding selects the qualified canonical provider ID")
+      val result = SpiResolver.resolve(Vector(alpha, beta, consumer), Vector(binding))
+
+      Then("only the matching namespace provider is installed")
+      result shouldBe a[Consequence.Success[_]]
+      consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "alpha:hello"
+    }
+
+    "reject an ambiguous bare provider alias across admitted canonical components" in {
+      Given("two admitted canonical providers with the same presentation alias")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi-ambiguous-alias")
+      val alpha = _initialized_component_with_id(
+        subsystem,
+        ComponentId("org.alpha.Catalog"),
+        ProviderComponent("alpha")
+      )
+      val beta = _initialized_component_with_id(
+        subsystem,
+        ComponentId("org.beta.Catalog"),
+        ProviderComponent("beta")
+      )
+      val consumerid = ComponentId("org.example.Consumer")
+      val consumer = _initialized_component_with_id(subsystem, consumerid, ConsumerComponent())
+      val binding = SpiRuntimeBinding(
+        SpiSocketSelector(Some(consumerid.name), "ai-runner"),
+        SpiProviderSelector(component = Some("catalog"))
+      )
+
+      When("the shared bare alias is used as an SPI provider selector")
+      val result = SpiResolver.resolve(Vector(alpha, beta, consumer), Vector(binding))
+
+      Then("SPI resolution fails closed instead of selecting either provider")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.ambiguous")
+    }
+
+    "retain the canonical component ID in fallback SPI member metadata" in {
+      Given("a provider exposing only its canonical Component.Core identity")
+      given ExecutionContext = ExecutionContext.create()
+      val componentid = ComponentId("org.example.FallbackProvider")
+      val provider = FallbackMetadataProviderComponent(componentid)
+
+      When("SPI assembly creates its programmatic provider metadata")
+      val resolution = SpiResolver.resolveAssembly(Vector(provider)).toOption.get
+      val metadata = resolution.componentApiResolver._providers.head.metadata
+
+      Then("the fallback retains the canonical ComponentId and default instance label")
+      metadata.instanceId.componentId shouldBe componentid
+      metadata.instanceId shouldBe ComponentInstanceId(componentid, "default")
     }
     }
 
@@ -817,28 +922,32 @@ final class SpiSpec
       val optionalsetresult = SpiResolver.resolve(Vector(optionalsetconsumer), Vector(optionalsetbinding))
       val requiredresult = SpiResolver.resolve(Vector(requiredconsumer), Vector(requiredbinding))
 
-      Then("optional inputs may remain empty while the required set fails")
-      optionalresult shouldBe a[Consequence.Success[_]]
+      Then("unknown provider aliases fail closed for every cardinality")
+      optionalresult shouldBe a[Consequence.Failure[_]]
       optional.isSpiInstalled shouldBe false
-      optionalsetresult shouldBe a[Consequence.Success[_]]
+      optionalsetresult shouldBe a[Consequence.Failure[_]]
       optionalset.spiMembers shouldBe empty
       requiredresult shouldBe a[Consequence.Failure[_]]
-      requiredresult.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("required SPI socket set is empty")
+      Vector(optionalresult, optionalsetresult, requiredresult).foreach { result =>
+        result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+          "component.identity.compatibility.unsupported"
+        )
+      }
     }
 
     "apply a typed runtime policy before priority and default selection" in {
       Given("two resolved members and a policy that rejects the default member")
       val defaultmember = ResolvedSpiMember[AiRunner](
         AiRunnerImplementation("default"),
-        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId("textus-scraper", "default"), priority = 100, isDefault = true)
+        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "default"), priority = 100, isDefault = true)
       )
       val allowedmember = ResolvedSpiMember[AiRunner](
         AiRunnerImplementation("allowed"),
-        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId("textus-scraper", "allowed"), priority = 10)
+        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "allowed"), priority = 10)
       )
       val othercontract = ResolvedSpiMember[AiRunner](
         AiRunnerImplementation("other-contract"),
-        SpiMemberMetadata("other-runner", "textus-scraper", ComponentInstanceId("textus-scraper", "other"), priority = 1000)
+        SpiMemberMetadata("other-runner", "textus-scraper", ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "other"), priority = 1000)
       )
       val policy = new ComponentSelectionPolicy {
         def accept(member: SpiMemberMetadata, selector: ComponentSelector): Consequence[Boolean] =
@@ -863,23 +972,81 @@ final class SpiSpec
         ComponentSelector(component = Some("textus-scraper"))
       ).flatMap(_.generate(AiGenerateRequest("subsystem"))).toOption.get.text shouldBe "allowed:subsystem"
     }
+
+    "select a Component API by its exact qualified canonical component ID" in {
+      Given("two resolved component APIs with the same local ID in different namespaces")
+      given ExecutionContext = ExecutionContext.create()
+      val alphaid = ComponentId("org.alpha.Catalog")
+      val betaid = ComponentId("org.beta.Catalog")
+      val resolver = ComponentApiResolver(Vector(
+        _component_api_member(alphaid, "catalog", "alpha"),
+        _component_api_member(betaid, "catalog", "beta")
+      ))
+
+      When("the Component API selector uses the exact canonical alpha ID")
+      val result = resolver.resolve(
+        SpiContract("ai-runner", classOf[AiRunner]),
+        ComponentSelector(component = Some(alphaid.name))
+      )
+
+      Then("only the matching canonical provider is selected")
+      result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "alpha:hello"
+    }
+
+    "adapt a unique legacy Component API presentation alias to its canonical component ID" in {
+      Given("one resolved component API with a non-authoritative legacy presentation alias")
+      given ExecutionContext = ExecutionContext.create()
+      val componentid = ComponentId("org.example.Catalog")
+      val resolver = ComponentApiResolver(Vector(
+        _component_api_member(componentid, "legacy-catalog", "catalog")
+      ))
+
+      When("the Component API selector uses the unique legacy alias")
+      val result = resolver.resolve(
+        SpiContract("ai-runner", classOf[AiRunner]),
+        ComponentSelector(component = Some("legacy catalog"))
+      )
+
+      Then("the admitted canonical provider remains the selected identity authority")
+      result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "catalog:hello"
+    }
+
+    "reject an ambiguous shared Component API presentation alias" in {
+      Given("two resolved component APIs sharing one legacy presentation alias")
+      given ExecutionContext = ExecutionContext.create()
+      val resolver = ComponentApiResolver(Vector(
+        _component_api_member(ComponentId("org.alpha.Catalog"), "shared-catalog", "alpha"),
+        _component_api_member(ComponentId("org.beta.Search"), "shared-catalog", "beta")
+      ))
+
+      When("the Component API selector uses the shared alias")
+      val result = resolver.resolve(
+        SpiContract("ai-runner", classOf[AiRunner]),
+        ComponentSelector(component = Some("shared catalog"))
+      )
+
+      Then("selection fails closed rather than choosing either canonical provider")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.ambiguous")
+    }
     }
 
     "resolve provider variations and standard contracts" which {
     "select a provider by mode and engine" in {
       Given("two providers with different selections")
       given ExecutionContext = ExecutionContext.create()
-      val provider1 = ProviderComponent(
+      val subsystem = TestComponentFactory.emptySubsystem("spi_provider_selection")
+      val provider1 = _initialized_component(subsystem, "local-provider", ProviderComponent(
         providername = "local",
         selection = SpiSelection(mode = Some("local"), engine = Some("ollama"))
-      )
-      val provider2 = ProviderComponent(
+      ))
+      val provider2 = _initialized_component(subsystem, "remote-provider", ProviderComponent(
         providername = "remote",
         selection = SpiSelection(mode = Some("remote"), engine = Some("http"))
-      )
-      val consumer = ConsumerComponent(
+      ))
+      val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent(
         selection = SpiSelection(mode = Some("remote"), engine = Some("http"))
-      )
+      ))
 
       When("SPI resolution runs")
       val result = SpiResolver.resolve(Vector(provider1, provider2, consumer))
@@ -892,10 +1059,11 @@ final class SpiSpec
     "inject GeoResolver and ToolchainRunner providers through CNCF-owned SPI contracts" in {
       Given("provider components and consumer components for non-AI SPI contracts")
       given ExecutionContext = ExecutionContext.create()
-      val geoprovider = GeoResolverProviderComponent()
-      val geoconsumer = GeoResolverConsumerComponent()
-      val toolprovider = ToolchainRunnerProviderComponent()
-      val toolconsumer = ToolchainRunnerConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_standard_contracts")
+      val geoprovider = _initialized_component(subsystem, "geo-provider", GeoResolverProviderComponent())
+      val geoconsumer = _initialized_component(subsystem, "geo-consumer", GeoResolverConsumerComponent())
+      val toolprovider = _initialized_component(subsystem, "toolchain-provider", ToolchainRunnerProviderComponent())
+      val toolconsumer = _initialized_component(subsystem, "toolchain-consumer", ToolchainRunnerConsumerComponent())
 
       When("SPI resolution runs")
       val result = SpiResolver.resolve(Vector(geoprovider, geoconsumer, toolprovider, toolconsumer))
@@ -920,20 +1088,57 @@ final class SpiSpec
     component: A,
     metadata: Option[ComponentInstanceMetadata] = None
   ): A = {
-    val componentid = ComponentId(name.map(ch => if (ch.isLetterOrDigit || ch == '_') ch else '_'))
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
+    val canonicalmetadata = metadata.map(_.copy(componentId = Some(componentid)))
     val core = Component.Core.create(
-      name = name,
+      name = componentid.name,
       componentid = componentid,
-      instanceid = metadata.map(_.instanceId).getOrElse(ComponentInstanceId.default(componentid)),
+      instanceid = canonicalmetadata.map(_.instanceId).getOrElse(ComponentInstanceId.default(componentid)),
       protocol = Protocol.empty
     )
     val init = ComponentInit(
       subsystem = subsystem,
       core = core,
       origin = ComponentOrigin.Builtin,
-      instanceMetadata = metadata
+      instanceMetadata = canonicalmetadata
     )
     component.initialize(init)
+    component
+  }
+
+  private def _component_api_member(
+    componentid: ComponentId,
+    presentationalias: String,
+    providername: String
+  ): ResolvedSpiMember[AiRunner] =
+    ResolvedSpiMember(
+      AiRunnerImplementation(providername),
+      SpiMemberMetadata(
+        contract = "ai-runner",
+        component = presentationalias,
+        instanceId = ComponentInstanceId(componentid, "default")
+      )
+    )
+
+  private def _initialized_component_with_id[A <: Component](
+    subsystem: org.goldenport.cncf.subsystem.Subsystem,
+    componentid: ComponentId,
+    component: A,
+    metadata: Option[ComponentInstanceMetadata] = None
+  ): A = {
+    val canonicalmetadata = metadata.map(_.copy(componentId = Some(componentid)))
+    val core = Component.Core.create(
+      name = componentid.name,
+      componentid = componentid,
+      instanceid = canonicalmetadata.map(_.instanceId).getOrElse(ComponentInstanceId.default(componentid)),
+      protocol = Protocol.empty
+    )
+    component.initialize(ComponentInit(
+      subsystem = subsystem,
+      core = core,
+      origin = ComponentOrigin.Builtin,
+      instanceMetadata = canonicalmetadata
+    ))
     component
   }
 
@@ -943,11 +1148,12 @@ final class SpiSpec
     component: A,
     metadata: ComponentInstanceMetadata
   ): A = {
-    val componentid = ComponentId(participantname.map(ch => if (ch.isLetterOrDigit || ch == '_') ch else '_'))
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(participantname)
+    val canonicalmetadata = metadata.copy(componentId = Some(componentid))
     val core = Component.Core.create(
-      name = participantname,
+      name = componentid.name,
       componentid = componentid,
-      instanceid = ComponentInstanceId(participantname, metadata.instance),
+      instanceid = ComponentInstanceId(componentid.name, metadata.instance),
       protocol = Protocol.empty
     )
     component.initialize(
@@ -956,7 +1162,7 @@ final class SpiSpec
         core = core,
         origin = ComponentOrigin.Builtin,
         participantRole = Component.ParticipantRole.Componentlet,
-        instanceMetadata = Some(metadata)
+        instanceMetadata = Some(canonicalmetadata)
       )
     )
     component
@@ -968,6 +1174,23 @@ final class SpiSpec
   ) extends Component with SpiProviderComponent {
     def spiProviders: Vector[SpiProvider[?]] =
       Vector(AiRunnerProvider(providername, selection))
+  }
+
+  private final case class FallbackMetadataProviderComponent(
+    componentid: ComponentId
+  ) extends Component with SpiProviderComponent {
+    private val _canonical_core = Component.Core.create(
+      name = componentid.name,
+      componentid = componentid,
+      instanceid = ComponentInstanceId.default(componentid),
+      protocol = Protocol.empty
+    )
+
+    override def core: Component.Core = _canonical_core
+    override def coreOption: Option[Component.Core] = None
+
+    def spiProviders: Vector[SpiProvider[?]] =
+      Vector(AiRunnerProvider("fallback", SpiSelection()))
   }
 
   private final case class PortBackedProviderComponent(providername: String)

@@ -10,6 +10,7 @@ import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder, StructuredLogEvent}
 import org.goldenport.observation.calltree.CallTree
@@ -19,7 +20,7 @@ import org.goldenport.observation.calltree.CallTree
  *  version Jan. 29, 2026
  *  version Apr. 25, 2026
  *  version May. 11, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -542,8 +543,15 @@ object ObservabilityEngine {
       }
     }
 
+  private val _execution_admin_operations: Set[String] = Set(
+    "admin.execution.history",
+    "admin.execution.calltree",
+    s"${BuiltinComponentIdentity.ADMIN.name}.execution.history",
+    s"${BuiltinComponentIdentity.ADMIN.name}.execution.calltree"
+  )
+
   private def _is_execution_admin_operation(operation: String): Boolean =
-    operation == "admin.execution.history" || operation == "admin.execution.calltree"
+    _execution_admin_operations.contains(operation)
 
   private def _normalize_origin_slot(value: String): String = {
     val normalized = Option(value).map(_.trim.toLowerCase(Locale.ROOT)).getOrElse("")

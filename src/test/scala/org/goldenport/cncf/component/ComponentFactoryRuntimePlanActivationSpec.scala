@@ -1,5 +1,7 @@
 package org.goldenport.cncf.component
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
@@ -11,7 +13,7 @@ import org.goldenport.cncf.entity.aggregate.AggregateDefinition
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimePlan, PartitionStrategy, WorkingSetDefinition}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiSelection}
-import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocket}
+import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRecordRequest, AiRecordResponse, AiRunner as AiRunnerSpi, AiRunnerSocket}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -22,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 24, 2026
  *  version May.  3, 2026
- * @version Jul. 26, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -92,7 +94,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
 
       When("the raw component is added to the subsystem")
       subsystem.add(component)
-      val resolved = subsystem.findComponent("runtime_plan_activation_direct_add")
+      val componentid = TestComponentFactory.componentId("runtime_plan_activation_direct_add")
+      val resolved = subsystem.findComponent(componentid)
         .getOrElse(fail("missing bootstrapped component"))
       val collection = resolved.entity[Any]("person")
 
@@ -111,7 +114,7 @@ final class ComponentFactoryRuntimePlanActivationSpec
         "spi_provider",
         new Component() with SpiProviderComponent {
           def spiProviders: Vector[SpiProvider[?]] =
-            Vector(_AiRunnerProvider("factory"))
+            Vector(AiRunnerProvider("factory"))
         }
       )
       val consumer = _initialized_component(
@@ -151,13 +154,15 @@ final class ComponentFactoryRuntimePlanActivationSpec
         "runtime_component_override_provider",
         new Component() with SpiProviderComponent {
           def spiProviders: Vector[SpiProvider[?]] =
-            Vector(_AiRunnerProvider("development"))
+            Vector(AiRunnerProvider("development"))
         }
       )
 
       When("runtime assembly upserts the preferred development component")
       subsystem.upsert(Vector(development))
-      val matching = subsystem.components.toVector.filter(_.name == "runtime_component_override_provider")
+      val componentid = TestComponentFactory.componentId("runtime_component_override_provider")
+      val instanceid = ComponentInstanceId.default(componentid)
+      val matching = subsystem.components.toVector.filter(_.instanceId == instanceid)
 
       Then("the obsolete packaged instance is replaced rather than retained beside it")
       matching should have size 1
@@ -174,7 +179,7 @@ final class ComponentFactoryRuntimePlanActivationSpec
           "runtime_extra_spi_provider",
           new Component() with SpiProviderComponent {
             def spiProviders: Vector[SpiProvider[?]] =
-              Vector(_AiRunnerProvider("runtime-extra"))
+              Vector(AiRunnerProvider("runtime-extra"))
           }
         )
         val consumer = _initialized_component(
@@ -190,12 +195,15 @@ final class ComponentFactoryRuntimePlanActivationSpec
       val subsystem = CncfRuntime.buildSubsystem(
         extracomponents = extras,
         mode = Some(RunMode.Command),
-        args = Array("--no-default-components")
+        args = Array(
+          s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+          "--no-default-components"
+        )
       )
       val socket = consumeropt.getOrElse(fail("missing runtime extra consumer"))
 
       Then("the runtime extra socket receives the provider SPI")
-      subsystem.components.toVector.map(_.name) should contain("runtime_extra_spi_consumer")
+      subsystem.components.toVector.map(_.name) should contain("org.goldenport.cncf.test.RuntimeExtraSpiConsumer")
       socket.isSpiInstalled shouldBe true
       given ExecutionContext = ExecutionContext.create()
       socket.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "runtime-extra:hello"
@@ -209,11 +217,31 @@ final class ComponentFactoryRuntimePlanActivationSpec
     value shouldBe expected
   }
 
+  private lazy val _controlled_test_descriptor_path: Path = {
+    val path = Files.createTempFile("cncf-component-factory-runtime-plan-", ".yaml")
+    Files.writeString(
+      path,
+      """kind: test-descriptor
+        |execution:
+        |  profile: controlled
+        |  key: component-factory-runtime-plan-activation-spec
+        |  time:
+        |    mode: manual
+        |    start-at: 2026-08-11T00:00:00Z
+        |  random:
+        |    mode: seeded
+        |    seed: component-factory-runtime-plan-activation-spec
+        |""".stripMargin,
+      StandardCharsets.UTF_8
+    )
+    path
+  }
+
   private def _component_with_runtime_plan(): Component = {
     val component = new Component() with EntityRuntimePlanProvider {
       private val _cid = EntityCollectionId("sys", "sys", "person")
-      private val _first = _Entity(EntityId("tokyo", "sales", _cid), "taro")
-      private val _second = _Entity(EntityId("tokyo", "sales", _cid), "jiro")
+      private val _first = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "taro")
+      private val _second = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(
@@ -228,9 +256,9 @@ final class ComponentFactoryRuntimePlanActivationSpec
         )
     }
     val core = Component.Core.create(
-      name = "runtime_plan_activation_spec",
-      componentid = ComponentId("runtime_plan_activation_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("runtime_plan_activation_spec")),
+      name = "org.goldenport.cncf.test.RuntimePlanActivationSpec",
+      componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanActivationSpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.RuntimePlanActivationSpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(
@@ -258,9 +286,9 @@ final class ComponentFactoryRuntimePlanActivationSpec
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(AggregateDefinition(name = "facility", entityName = "facility"))
     }
-    val componentid = ComponentId("runtime_plan_canonical_name_spec")
+    val componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanCanonicalNameSpec")
     val core = Component.Core.create(
-      name = "runtime_plan_canonical_name_spec",
+      name = componentid.name,
       componentid = componentid,
       instanceid = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
@@ -293,9 +321,9 @@ final class ComponentFactoryRuntimePlanActivationSpec
           AggregateDefinition(name = "facility-title", entityName = "Facility")
         )
     }
-    val componentid = ComponentId("runtime_plan_ambiguous_name_spec")
+    val componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanAmbiguousNameSpec")
     val core = Component.Core.create(
-      name = "runtime_plan_ambiguous_name_spec",
+      name = componentid.name,
       componentid = componentid,
       instanceid = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
@@ -313,8 +341,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
   private def _component_factory_bundle(): Component.SinglePrimaryBundleFactory =
     new Component.SinglePrimaryBundleFactory with EntityRuntimePlanProvider {
       private val _cid = EntityCollectionId("sys", "sys", "person")
-      private val _first = _Entity(EntityId("tokyo", "sales", _cid), "taro")
-      private val _second = _Entity(EntityId("tokyo", "sales", _cid), "jiro")
+      private val _first = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "taro")
+      private val _second = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(
@@ -336,9 +364,9 @@ final class ComponentFactoryRuntimePlanActivationSpec
         comp: Component
       ): Component.Core =
         Component.Core.create(
-          name = "runtime_plan_activation_direct_add",
-          componentid = ComponentId("runtime_plan_activation_direct_add"),
-          instanceid = ComponentInstanceId.default(ComponentId("runtime_plan_activation_direct_add")),
+          name = "org.goldenport.cncf.test.RuntimePlanActivationDirectAdd",
+          componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanActivationDirectAdd"),
+          instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.RuntimePlanActivationDirectAdd")),
           protocol = Protocol.empty,
           factory = this
         )
@@ -349,9 +377,9 @@ final class ComponentFactoryRuntimePlanActivationSpec
     name: String,
     component: Component
   ): Component = {
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val core = Component.Core.create(
-      name = name,
+      name = componentid.name,
       componentid = componentid,
       instanceid = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
@@ -364,26 +392,26 @@ final class ComponentFactoryRuntimePlanActivationSpec
     component.initialize(params)
   }
 
-  private final case class _AiRunnerProvider(
+  private final case class AiRunnerProvider(
     name: String
-  ) extends SpiProvider[AiRunner] {
+  ) extends SpiProvider[AiRunnerSpi] {
     def supports(
-      contract: SpiContract[AiRunner],
+      contract: SpiContract[AiRunnerSpi],
       selection: SpiSelection
     )(using ExecutionContext): Boolean =
       contract.name == "ai-runner" &&
-        contract.runtimeClass == classOf[AiRunner]
+        contract.runtimeClass == classOf[AiRunnerSpi]
 
     def provide(
-      contract: SpiContract[AiRunner],
+      contract: SpiContract[AiRunnerSpi],
       selection: SpiSelection
-    )(using ExecutionContext): Consequence[AiRunner] =
-      Consequence.success(_AiRunner(name))
+    )(using ExecutionContext): Consequence[AiRunnerSpi] =
+      Consequence.success(AiRunner(name))
   }
 
-  private final case class _AiRunner(
+  private final case class AiRunner(
     name: String
-  ) extends AiRunner {
+  ) extends AiRunnerSpi {
     def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
       Consequence.success(AiGenerateResponse(s"$name:${req.prompt}"))
 
@@ -394,7 +422,7 @@ final class ComponentFactoryRuntimePlanActivationSpec
       Consequence.success(AiChatResponse(AiMessage("assistant", name)))
   }
 
-  private final case class _Entity(
+  private final case class RuntimePlanEntity(
     id: EntityId,
     name: String
   ) extends EntityPersistable {

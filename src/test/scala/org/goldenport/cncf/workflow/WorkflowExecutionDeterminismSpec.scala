@@ -13,7 +13,7 @@ import org.scalatest.propspec.AnyPropSpec
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowExecutionDeterminismSpec
@@ -102,9 +102,9 @@ final class WorkflowExecutionDeterminismSpec
       override def workflowDefinitions: Vector[WorkflowDefinition] = Vector(definition)
     }
     val name = "workflow_determinism_component"
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val instanceid = ComponentInstanceId.default(componentid)
-    val core = Component.Core.create(name, componentid, instanceid, Protocol.empty)
+    val core = Component.Core.create(componentid.name, componentid, instanceid, Protocol.empty)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
     val bootstrapped = new ComponentFactory().bootstrap(component)
     subsystem.add(bootstrapped)

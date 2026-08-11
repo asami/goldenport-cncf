@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 21, 2026
  *  version Apr. 22, 2026
- * @version May. 11, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEngineTestFixture {
@@ -35,11 +35,11 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose event-triggered lineage and policy source on job inspection surfaces" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.components.find(_.name == "admin").get
-        val jobControl = subsystem.components.find(_.name == "job_control").get
-        val service = jobControl.port.get[JobControlComponent.JobService].get
-        val task = _ImmediateTask(ActionId.generate())
-        val jobId = admin.logic.submitJob(
+        val admin = subsystem.findComponent("admin").get
+        val jobcontrol = subsystem.findComponent("job_control").get
+        val service = jobcontrol.port.get[JobControlComponent.JobService].get
+        val task = ImmediateTask(ActionId.generate())
+        val jobid = admin.logic.submitJob(
           List(task),
           ExecutionContext.create(),
           JobSubmitOption(
@@ -70,7 +70,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
         ).toOption.get
         given ExecutionContext = ExecutionContext.test()
 
-        service.getJobStatus(jobId) match {
+        service.getJobStatus(jobid) match {
           case Consequence.Success(model) =>
             model.lineage.eventName shouldBe Some("person.created")
             model.lineage.sagaId shouldBe Some("saga-1")
@@ -90,14 +90,14 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose retry and recovery visibility on job inspection surfaces" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.components.find(_.name == "admin").get
-        val jobControl = subsystem.components.find(_.name == "job_control").get
-        val service = jobControl.port.get[JobControlComponent.JobService].get
-        val task = _FailureTask(
+        val admin = subsystem.findComponent("admin").get
+        val jobcontrol = subsystem.findComponent("job_control").get
+        val service = jobcontrol.port.get[JobControlComponent.JobService].get
+        val task = FailureTask(
           ActionId.generate(),
           Conclusion.simple("retry-now").copy(disposition = Disposition(Disposition.UserAction.RetryNow))
         )
-        val jobId = admin.logic.submitJob(
+        val jobid = admin.logic.submitJob(
           List(task),
           ExecutionContext.create(),
           JobSubmitOption(
@@ -107,9 +107,9 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
         ).toOption.get
         given ExecutionContext = ExecutionContext.test()
 
-        awaitServiceTerminalStatus(service, jobId)
+        _await_service_terminal_status(service, jobid)
 
-        service.getJobStatus(jobId) match {
+        service.getJobStatus(jobid) match {
           case Consequence.Success(model) =>
             model.retry.kind.print shouldBe "now"
             model.retry.attemptCount shouldBe 3
@@ -124,24 +124,24 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose scheduled start visibility on job inspection surfaces" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.components.find(_.name == "admin").get
-        val jobControl = subsystem.components.find(_.name == "job_control").get
-        val service = jobControl.port.get[JobControlComponent.JobService].get
-        val scheduledAt = Instant.now().plusMillis(150L)
-        val jobId = admin.logic.submitJob(
-          List(_ImmediateTask(ActionId.generate())),
+        val admin = subsystem.findComponent("admin").get
+        val jobcontrol = subsystem.findComponent("job_control").get
+        val service = jobcontrol.port.get[JobControlComponent.JobService].get
+        val scheduledat = Instant.now().plusMillis(150L)
+        val jobid = admin.logic.submitJob(
+          List(ImmediateTask(ActionId.generate())),
           ExecutionContext.create(),
           JobSubmitOption(
             persistence = JobPersistencePolicy.Persistent,
-            scheduledStartAt = Some(scheduledAt),
+            scheduledStartAt = Some(scheduledat),
             requestSummary = Some("tm-02-delayed-start")
           )
         ).toOption.get
         given ExecutionContext = ExecutionContext.test()
 
-        service.getJobStatus(jobId) match {
+        service.getJobStatus(jobid) match {
           case Consequence.Success(model) =>
-            model.scheduledStartAt shouldBe Some(scheduledAt)
+            model.scheduledStartAt shouldBe Some(scheduledat)
           case Consequence.Failure(conclusion) =>
             fail(conclusion.show)
         }
@@ -150,11 +150,11 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose Task Execution Tree and Task detail through job_control operations" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.components.find(_.name == "admin").get
-        val jobControl = subsystem.components.find(_.name == "job_control").get
-        val service = jobControl.port.get[JobControlComponent.JobService].get
-        val jobId = admin.logic.submitJob(
-          List(_ImmediateTask(ActionId.generate())),
+        val admin = subsystem.findComponent("admin").get
+        val jobcontrol = subsystem.findComponent("job_control").get
+        val service = jobcontrol.port.get[JobControlComponent.JobService].get
+        val jobid = admin.logic.submitJob(
+          List(ImmediateTask(ActionId.generate())),
           ExecutionContext.create(),
           JobSubmitOption(
             persistence = JobPersistencePolicy.Persistent,
@@ -163,20 +163,20 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
         ).toOption.get
         given ExecutionContext = ExecutionContext.test()
 
-        awaitServiceTerminalStatus(service, jobId)
-        val status = service.getJobStatus(jobId).toOption.get
-        val taskId = status.tasks.tasks.head.taskId
+        _await_service_terminal_status(service, jobid)
+        val status = service.getJobStatus(jobid).toOption.get
+        val taskid = status.tasks.tasks.head.taskId
 
-        service.getTaskExecutionTree(jobId) match {
+        service.getTaskExecutionTree(jobid) match {
           case Consequence.Success(tree) =>
-            tree.jobId shouldBe jobId
-            tree.roots.exists(_.taskId == taskId) shouldBe true
+            tree.jobId shouldBe jobid
+            tree.roots.exists(_.taskId == taskid) shouldBe true
           case Consequence.Failure(conclusion) =>
             fail(conclusion.show)
         }
-        service.getTaskDetail(jobId, taskId) match {
+        service.getTaskDetail(jobid, taskid) match {
           case Consequence.Success(detail) =>
-            detail.task.taskId shouldBe taskId
+            detail.task.taskId shouldBe taskid
             detail.events.exists(_.kind == "task.succeeded") shouldBe true
           case Consequence.Failure(conclusion) =>
             fail(conclusion.show)
@@ -185,7 +185,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
     }
   }
 
-  private final case class _ImmediateTask(
+  private final case class ImmediateTask(
     actionId: ActionId
   ) extends JobTask {
     def run(ctx: ExecutionContext): TaskOutcome = {
@@ -194,7 +194,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
     }
   }
 
-  private final case class _FailureTask(
+  private final case class FailureTask(
     actionId: ActionId,
     conclusion: Conclusion
   ) extends JobTask {
@@ -204,19 +204,19 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
     }
   }
 
-  private def awaitServiceTerminalStatus(
+  private def _await_service_terminal_status(
     service: JobControlComponent.JobService,
-    jobId: org.goldenport.cncf.job.JobId,
-    timeoutMillis: Long = 3000L
+    jobid: org.goldenport.cncf.job.JobId,
+    timeoutmillis: Long = 3000L
   )(using ExecutionContext): Unit = {
     val done = awaitCondition({
-      service.getJobStatus(jobId) match {
+      service.getJobStatus(jobid) match {
         case Consequence.Success(model) if Set("Succeeded", "Failed", "Cancelled").contains(model.status.toString) =>
           true
         case _ =>
           false
       }
-    }, timeoutMillis = timeoutMillis)
+    }, timeoutMillis = timeoutmillis)
     done shouldBe true
   }
 }

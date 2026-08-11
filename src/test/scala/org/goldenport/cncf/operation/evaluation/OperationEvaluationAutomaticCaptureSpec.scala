@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * chokepoint.
  *
  * @since   Jul. 23, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAutomaticCaptureSpec
@@ -1011,9 +1011,9 @@ final class OperationEvaluationAutomaticCaptureSpec
       spec.ServiceDefinition("operation", spec.OperationDefinitionGroup(operations))
     )))
     val component = new EvaluationComponent
-    val componentid = ComponentId(componentname)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentname)
     val core = Component.Core.create(
-      componentname,
+      componentid.name,
       componentid,
       ComponentInstanceId.default(componentid),
       protocol

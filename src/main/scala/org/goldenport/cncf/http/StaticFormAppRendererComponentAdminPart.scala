@@ -31,7 +31,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -122,8 +122,13 @@ trait StaticFormAppRendererComponentAdminPart {
       if (appcomponents.nonEmpty) appcomponents
       else subsystem.components
     val componentlinks = effectivecomponents.map { component =>
-      val path = NamingConventions.toNormalizedSegment(component.name)
-      val applinks = webDescriptor.routeAppsForComponent(component.name) match {
+      val path = NamingConventions.toNormalizedSegment(component.displayName)
+      val componentselectors =
+        (Vector(component.name, component.displayName) ++ component.artifactMetadata.toVector.flatMap(metadata =>
+          Vector(Some(metadata.name), metadata.component).flatten
+        )).distinct
+      val routeapps = componentselectors.flatMap(webDescriptor.routeAppsForComponent).distinct
+      val applinks = routeapps match {
         case Vector() =>
           Vector("App" -> s"/web/${escape(path)}")
         case Vector(app) =>
@@ -133,7 +138,7 @@ trait StaticFormAppRendererComponentAdminPart {
       }
       s"""<div class="list-group-item">
          |  <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
-         |    <strong>${escape(component.name)}</strong>
+         |    <strong>${escape(component.displayName)}</strong>
          |    ${admin_action_row(applinks ++ Vector(
            "Admin" -> s"/web/${escape(path)}/admin",
            "Manual" -> s"/man/${escape(path)}"
@@ -192,7 +197,7 @@ trait StaticFormAppRendererComponentAdminPart {
     for {
       component <- find_component(subsystem, componentName)
     } yield Page(manual_page(
-      title = s"${escape(component.name)} Specification",
+      title = s"${escape(component.displayName)} Specification",
       subtitle = "Generated component specification",
       component = component,
       selector = Some(component.name),
@@ -247,7 +252,7 @@ trait StaticFormAppRendererComponentAdminPart {
       component <- find_component(subsystem, componentName)
       service <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, serviceName))
     } yield Page(manual_page(
-      title = s"${escape(component.name)}.${escape(service.name)} Specification",
+      title = s"${escape(component.displayName)}.${escape(service.name)} Specification",
       subtitle = "Generated service specification",
       component = component,
       selector = Some(s"${component.name}.${service.name}"),
@@ -266,7 +271,7 @@ trait StaticFormAppRendererComponentAdminPart {
       service <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, serviceName))
       operation <- service.operations.operations.find(o => NamingConventions.equivalentByNormalized(o.name, operationName))
     } yield Page(manual_page(
-      title = s"${escape(component.name)}.${escape(service.name)}.${escape(operation.name)} Specification",
+      title = s"${escape(component.displayName)}.${escape(service.name)}.${escape(operation.name)} Specification",
       subtitle = "Generated operation specification",
       component = component,
       selector = Some(s"${component.name}.${service.name}.${operation.name}"),
@@ -598,7 +603,7 @@ trait StaticFormAppRendererComponentAdminPart {
         )
         val displayfields = admin_entity_display_fields(component, entitypath, "detail", webschema.fieldNames)
         val displayschema = webschema.copy(fields = admin_display_web_fields(webschema.fields, displayfields))
-        val effectivevalidation = validation.filter(_.webSchema.selector == displayschema.selector)
+        val effectivevalidation = validation.filter(result => equivalent_form_schema(result.webSchema, displayschema))
         val readrecord = admin_entity_read_record(
           subsystem,
           componentpath,
@@ -684,7 +689,7 @@ trait StaticFormAppRendererComponentAdminPart {
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       val displayschema = admin_entity_create_schema(component, entitypath, webschema)
-      val effectivevalidation = validation.filter(_.webSchema.selector == displayschema.selector)
+      val effectivevalidation = validation.filter(result => equivalent_form_schema(result.webSchema, displayschema))
       val hiddencontext = hidden_form_context_inputs(values)
       val controls = admin_new_controls(displayschema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectivevalidation)
       val imageattachments = admin_entity_image_attachment_controls("newImageAttachments")
@@ -2455,7 +2460,7 @@ trait StaticFormAppRendererComponentAdminPart {
         admin_data_schema_fields(subsystem, componentpath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val effectivevalidation = validation.filter(_.webSchema.selector == webschema.selector)
+      val effectivevalidation = validation.filter(result => equivalent_form_schema(result.webSchema, webschema))
       val hiddencontext = hidden_form_context_inputs(values)
       val controls = admin_record_controls(
         webschema.fields,
@@ -2510,7 +2515,7 @@ trait StaticFormAppRendererComponentAdminPart {
         admin_data_schema_fields(subsystem, componentpath, datapath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val effectivevalidation = validation.filter(_.webSchema.selector == webschema.selector)
+      val effectivevalidation = validation.filter(result => equivalent_form_schema(result.webSchema, webschema))
       val hiddencontext = hidden_form_context_inputs(values)
       val controls = admin_new_controls(webschema.fields, values, "dataFields", "id=record-1&#10;status=draft", effectivevalidation)
       val nav = admin_nav_card(Vector(

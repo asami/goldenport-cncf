@@ -1,8 +1,9 @@
 package org.goldenport.cncf.spi
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{Component, ComponentInstanceId, ExtensionPoint}
+import org.goldenport.cncf.component.{Component, ComponentIdentityCompatibilityAdapter, ComponentInstanceId, ExtensionPoint}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * Resolves SPI sockets from already loaded components.
@@ -12,7 +13,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * registry populated from an existing dependency.
  *
  * @since   Jul.  2, 2026
- * @version Jul. 29, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object SpiResolver {
@@ -34,21 +35,21 @@ object SpiResolver {
     val providers = _providers(components)
     val singles = _single_sockets(components)
     val sets = _socket_sets(components)
-    _validate_runtime_bindings(singles, sets, bindings).flatMap { _ =>
-      _resolve_socket_bindings(singles, sets, providers, bindings)
+    _validate_runtime_bindings(singles, sets, bindings, components).flatMap { _ =>
+      _resolve_socket_bindings(singles, sets, providers, bindings, components)
     }.flatMap { resolvedbindings =>
       val installedsingles = singles.filterNot(_.socket.isSpiInstalled).foldLeft(
         Consequence.success(Vector.empty[ResolvedSpiMember[?]])
       ) { (result, socket) =>
         result.flatMap { members =>
-          _install_single(socket, providers, bindings).map(_.fold(members)(members :+ _))
+          _install_single(socket, providers, bindings, components).map(_.fold(members)(members :+ _))
         }
       }
       installedsingles.flatMap { singlemembers =>
         val existingmembers = sets.filter(_.socket.isSpiInstalled).flatMap(_.socket.spiMembers)
         sets.filterNot(_.socket.isSpiInstalled).foldLeft(Consequence.success(singlemembers ++ existingmembers)) { (result, socket) =>
           result.flatMap { members =>
-            _install_set(socket, providers, bindings).map(members ++ _)
+            _install_set(socket, providers, bindings, components).map(members ++ _)
           }
         }
       }.map { members =>
@@ -148,21 +149,24 @@ object SpiResolver {
   private def _validate_runtime_bindings(
     singles: Vector[SingleSocketSlot],
     sets: Vector[SetSocketSlot],
-    bindings: Vector[SpiRuntimeBinding]
+    bindings: Vector[SpiRuntimeBinding],
+    components: Vector[Component]
   ): Consequence[Unit] =
     bindings.foldLeft(Consequence.success(())) { (result, binding) =>
       result.flatMap { _ =>
-        val singlematches = singles.filter(_single_socket_matches_selector(_, binding.socket))
-        val setmatches = sets.filter(_set_socket_matches_selector(_, binding.socket))
-        val matches = singlematches.size + setmatches.size
-        matches match {
-          case 1 => Consequence.success(())
-          case 0 =>
-            Consequence.serviceUnavailable(s"SPI socket not found: ${_socket_selector_display(binding.socket)}")
-          case size =>
-            Consequence.serviceUnavailable(
-              s"ambiguous SPI sockets: ${_socket_selector_display(binding.socket)}, candidates=${size}"
-            )
+        _validate_component_selector(binding.socket.component, components).flatMap { _ =>
+          val singlematches = singles.filter(_single_socket_matches_selector(_, binding.socket, components))
+          val setmatches = sets.filter(_set_socket_matches_selector(_, binding.socket, components))
+          val matches = singlematches.size + setmatches.size
+          matches match {
+            case 1 => Consequence.success(())
+            case 0 =>
+              Consequence.serviceUnavailable(s"SPI socket not found: ${_socket_selector_display(binding.socket)}")
+            case size =>
+              Consequence.serviceUnavailable(
+                s"ambiguous SPI sockets: ${_socket_selector_display(binding.socket)}, candidates=${size}"
+              )
+          }
         }
       }
     }
@@ -171,17 +175,18 @@ object SpiResolver {
     singles: Vector[SingleSocketSlot],
     sets: Vector[SetSocketSlot],
     providers: Vector[ProviderSlot],
-    bindings: Vector[SpiRuntimeBinding]
+    bindings: Vector[SpiRuntimeBinding],
+    components: Vector[Component]
   )(using ExecutionContext): Consequence[Vector[ResolvedSpiBinding]] = {
     val singleresult = singles.foldLeft(Consequence.success(Vector.empty[ResolvedSpiBinding])) { (result, socket) =>
       result.flatMap { resolved =>
-        _resolve_single_socket_binding(socket, providers, bindings).map(_.fold(resolved)(resolved :+ _))
+        _resolve_single_socket_binding(socket, providers, bindings, components).map(_.fold(resolved)(resolved :+ _))
       }
     }
     singleresult.flatMap { singlebindings =>
       sets.foldLeft(Consequence.success(singlebindings)) { (result, socket) =>
         result.flatMap { resolved =>
-          _resolve_set_socket_bindings(socket, providers, bindings).map(resolved ++ _)
+          _resolve_set_socket_bindings(socket, providers, bindings, components).map(resolved ++ _)
         }
       }
     }
@@ -190,33 +195,36 @@ object SpiResolver {
   private def _resolve_single_socket_binding(
     socket: SingleSocketSlot,
     providers: Vector[ProviderSlot],
-    bindings: Vector[SpiRuntimeBinding]
+    bindings: Vector[SpiRuntimeBinding],
+    components: Vector[Component]
   )(using ExecutionContext): Consequence[Option[ResolvedSpiBinding]] = {
     val rawsocket = socket.socket
     val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
-    _single_binding(socket, contract, bindings).flatMap { binding =>
-      val selection = _selection(rawsocket.spiSelection, binding)
-      val candidates = providers.filter { provider =>
-        _provider_matches_binding(provider, binding) &&
-          _is_healthy(provider.component) &&
-          provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
-      }
-      _select_default_instance(binding, candidates).flatMap {
-        case Vector(provider) =>
-          Consequence.success(Some(_resolved_binding(socket.component, rawsocket.spiSocketName, contract, provider, selection)))
-        case Vector() if !rawsocket.spiRequired =>
-          Consequence.success(None)
-        case Vector() =>
-          Consequence.serviceUnavailable(
-            s"SPI provider not found: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
-              s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection"
-          )
-        case xs =>
-          Consequence.serviceUnavailable(
-            s"ambiguous SPI providers: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
-              s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection, " +
-              s"candidates=${_candidate_display(xs)}"
-          )
+    _single_binding(socket, contract, bindings, components).flatMap { binding =>
+      _validate_component_selector(binding.flatMap(_.provider.component), components).flatMap { _ =>
+        val selection = _selection(rawsocket.spiSelection, binding)
+        val candidates = providers.filter { provider =>
+          _provider_matches_binding(provider, binding, components) &&
+            _is_healthy(provider.component) &&
+            provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
+        }
+        _select_default_instance(binding, candidates).flatMap {
+          case Vector(provider) =>
+            Consequence.success(Some(_resolved_binding(socket.component, rawsocket.spiSocketName, contract, provider, selection)))
+          case Vector() if !rawsocket.spiRequired =>
+            Consequence.success(None)
+          case Vector() =>
+            Consequence.serviceUnavailable(
+              s"SPI provider not found: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
+                s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection"
+            )
+          case xs =>
+            Consequence.serviceUnavailable(
+              s"ambiguous SPI providers: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
+                s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection, " +
+                s"candidates=${_candidate_display(xs)}"
+            )
+        }
       }
     }
   }
@@ -224,50 +232,58 @@ object SpiResolver {
   private def _resolve_set_socket_bindings(
     socket: SetSocketSlot,
     providers: Vector[ProviderSlot],
-    bindings: Vector[SpiRuntimeBinding]
+    bindings: Vector[SpiRuntimeBinding],
+    components: Vector[Component]
   )(using ExecutionContext): Consequence[Vector[ResolvedSpiBinding]] = {
     val rawsocket = socket.socket
     val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
     val matchedbindings = bindings.filter { binding =>
-      _set_socket_matches_selector(socket, binding.socket) && binding.socket.contract == contract.name
+      _set_socket_matches_selector(socket, binding.socket, components) && binding.socket.contract == contract.name
     }
     val requests = if (matchedbindings.isEmpty) Vector(None) else matchedbindings.map(Some(_))
-    val selected = requests.flatMap { binding =>
-      val selection = _selection(rawsocket.spiSelection, binding)
-      providers.filter { provider =>
-        _provider_matches_binding(provider, binding) &&
-          _is_healthy(provider.component) &&
-          provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
-      }.map(provider => (provider, selection))
-    }
-    val duplicate = selected.groupBy(x => _provider_instance_group_key(x._1)).collectFirst {
-      case (key, xs) if xs.size > 1 => key
-    }
-    duplicate match {
-      case Some(key) =>
-        Consequence.serviceUnavailable(s"duplicate SPI socket set provider instance: $key")
-      case None if rawsocket.spiRequired && selected.isEmpty =>
-        Consequence.serviceUnavailable(
-          s"required SPI socket set is empty: contract=${contract.name}, socket=${rawsocket.spiSocketName}"
-        )
-      case None =>
-        Consequence.success(selected.map { case (provider, selection) =>
-          _resolved_binding(socket.component, rawsocket.spiSocketName, contract, provider, selection)
-        })
+    requests.foldLeft(Consequence.success(Vector.empty[(ProviderSlot, SpiSelection)])) { (result, binding) =>
+      result.flatMap { selected =>
+        _validate_component_selector(binding.flatMap(_.provider.component), components).map { _ =>
+          val selection = _selection(rawsocket.spiSelection, binding)
+          val candidates = providers.filter { provider =>
+            _provider_matches_binding(provider, binding, components) &&
+              _is_healthy(provider.component) &&
+              provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
+          }
+          selected ++ candidates.map(_ -> selection)
+        }
+      }
+    }.flatMap { selected =>
+      val duplicate = selected.groupBy(x => _provider_instance_group_key(x._1)).collectFirst {
+        case (key, xs) if xs.size > 1 => key
+      }
+      duplicate match {
+        case Some(key) =>
+          Consequence.serviceUnavailable(s"duplicate SPI socket set provider instance: $key")
+        case None if rawsocket.spiRequired && selected.isEmpty =>
+          Consequence.serviceUnavailable(
+            s"required SPI socket set is empty: contract=${contract.name}, socket=${rawsocket.spiSocketName}"
+          )
+        case None =>
+          Consequence.success(selected.map { case (provider, selection) =>
+            _resolved_binding(socket.component, rawsocket.spiSocketName, contract, provider, selection)
+          })
+      }
     }
   }
 
   private def _install_single(
     socket: SingleSocketSlot,
     providers: Vector[ProviderSlot],
-    bindings: Vector[SpiRuntimeBinding]
+    bindings: Vector[SpiRuntimeBinding],
+    components: Vector[Component]
   )(using ExecutionContext): Consequence[Option[ResolvedSpiMember[Any]]] = {
     val rawsocket = socket.socket
     val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
-    _single_binding(socket, contract, bindings).flatMap { binding =>
+    _single_binding(socket, contract, bindings, components).flatMap { binding =>
       val selection = _selection(rawsocket.spiSelection, binding)
       val candidates = providers.filter { provider =>
-        _provider_matches_binding(provider, binding) &&
+        _provider_matches_binding(provider, binding, components) &&
           _is_healthy(provider.component) &&
           provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
       }
@@ -307,19 +323,20 @@ object SpiResolver {
   private def _install_set(
     socket: SetSocketSlot,
     providers: Vector[ProviderSlot],
-    bindings: Vector[SpiRuntimeBinding]
+    bindings: Vector[SpiRuntimeBinding],
+    components: Vector[Component]
   )(using ExecutionContext): Consequence[Vector[ResolvedSpiMember[?]]] = {
     val rawsocket = socket.socket
     val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
     val matchedbindings = bindings.filter { binding =>
-      _set_socket_matches_selector(socket, binding.socket) && binding.socket.contract == contract.name
+      _set_socket_matches_selector(socket, binding.socket, components) && binding.socket.contract == contract.name
     }
     val requests = if (matchedbindings.isEmpty) Vector(None) else matchedbindings.map(Some(_))
     requests.foldLeft(Consequence.success(Vector.empty[(ProviderSlot, SpiSelection)])) { (result, binding) =>
       result.map { selected =>
         val selection = _selection(rawsocket.spiSelection, binding)
         val candidates = providers.filter { provider =>
-          _provider_matches_binding(provider, binding) &&
+          _provider_matches_binding(provider, binding, components) &&
             _is_healthy(provider.component) &&
             provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
         }
@@ -427,7 +444,7 @@ object SpiResolver {
       contract = contract,
       component = _component_type(component),
       instanceId = _logical_instance_id(component).getOrElse(
-        ComponentInstanceId(_component_type(component), _component_instance(component).getOrElse("default"))
+        ComponentInstanceId(component.componentId, _component_instance(component).getOrElse("default"))
       ),
       purposes = instancemetadata.map(_.purposes.toSet).getOrElse(Set.empty),
       capabilities = instancemetadata.map(_.capabilities.toSet).getOrElse(Set.empty),
@@ -450,10 +467,11 @@ object SpiResolver {
   private def _single_binding(
     socket: SingleSocketSlot,
     contract: SpiContract[Any],
-    bindings: Vector[SpiRuntimeBinding]
+    bindings: Vector[SpiRuntimeBinding],
+    components: Vector[Component]
   ): Consequence[Option[SpiRuntimeBinding]] = {
     val matches = bindings.filter { binding =>
-      _single_socket_matches_selector(socket, binding.socket) &&
+      _single_socket_matches_selector(socket, binding.socket, components) &&
         binding.socket.contract == contract.name
     }
     matches match {
@@ -476,10 +494,11 @@ object SpiResolver {
 
   private def _provider_matches_binding(
     provider: ProviderSlot,
-    binding: Option[SpiRuntimeBinding]
+    binding: Option[SpiRuntimeBinding],
+    components: Vector[Component]
   ): Boolean =
     binding.forall { binding =>
-      _matches_component(binding.provider.component, _component_type(provider.component)) &&
+      _matches_component(binding.provider.component, provider.component, components) &&
         _matches_instance(binding.provider.instance, provider.component)
     }
 
@@ -517,59 +536,105 @@ object SpiResolver {
 
   private def _single_socket_matches_selector(
     socket: SingleSocketSlot,
-    selector: SpiSocketSelector
+    selector: SpiSocketSelector,
+    components: Vector[Component]
   ): Boolean =
     !selector.cardinality.isMany &&
       selector.cardinality.isRequired == socket.socket.spiRequired &&
-      _socket_identity_matches(socket.component, socket.socket.spiContract.name, socket.socket.spiSocketName, selector)
+      _socket_identity_matches(socket.component, socket.socket.spiContract.name, socket.socket.spiSocketName, selector, components)
 
   private def _set_socket_matches_selector(
     socket: SetSocketSlot,
-    selector: SpiSocketSelector
+    selector: SpiSocketSelector,
+    components: Vector[Component]
   ): Boolean =
     selector.cardinality.isMany &&
       selector.cardinality.isRequired == socket.socket.spiRequired &&
-      _socket_identity_matches(socket.component, socket.socket.spiContract.name, socket.socket.spiSocketName, selector)
+      _socket_identity_matches(socket.component, socket.socket.spiContract.name, socket.socket.spiSocketName, selector, components)
 
   private def _socket_identity_matches(
     component: Component,
     contract: String,
     socketname: String,
-    selector: SpiSocketSelector
+    selector: SpiSocketSelector,
+    components: Vector[Component]
   ): Boolean =
     selector.contract == contract &&
-      _matches_component(selector.component, _component_type(component)) &&
+      _matches_component(selector.component, component, components) &&
       _matches_instance(selector.instance, component) &&
-      selector.name.forall { name =>
-        ComponentInstanceId("socket", name).canonicalKey ==
-          ComponentInstanceId("socket", socketname).canonicalKey
-      }
+      selector.name.forall(name => NamingConventions.equivalentByNormalized(name, socketname))
 
   private def _is_healthy(component: Component): Boolean =
     !component.healthSnapshot.status.equalsIgnoreCase("error")
 
+  private def _validate_component_selector(
+    expected: Option[String],
+    components: Vector[Component]
+  ): Consequence[Unit] =
+    _validate_canonical_component_identities(components).flatMap { _ =>
+      expected match {
+        case Some(value) =>
+          ComponentIdentityCompatibilityAdapter.resolveAliases(
+            value.trim,
+            ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(components),
+            ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+          ).toConsequence.map(_ => ())
+        case None =>
+          Consequence.success(())
+      }
+    }
+
+  private def _validate_canonical_component_identities(
+    components: Vector[Component]
+  ): Consequence[Unit] =
+    components.foldLeft(Consequence.success(())) { (result, component) =>
+      result.flatMap { _ =>
+        Option(component).flatMap(_.coreOption).map(_.componentId) match {
+          case Some(componentid) if componentid != null =>
+            Consequence.success(())
+          case _ =>
+            Consequence.componentInvalid(
+              s"SPI component identity is not initialized: component=${Option(component).map(_.getClass.getName).getOrElse("null")}"
+            )
+        }
+      }
+    }
+
   private def _matches_component(
     expected: Option[String],
-    actual: String
+    component: Component,
+    components: Vector[Component]
   ): Boolean =
     expected.forall { value =>
-      ComponentInstanceId(value.trim, "default").canonicalKey ==
-        ComponentInstanceId(actual.trim, "default").canonicalKey
+      ComponentIdentityCompatibilityAdapter.resolveAliases(
+        value.trim,
+        ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(components),
+        ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+      ) match {
+        case resolved: ComponentIdentityCompatibilityAdapter.Canonical =>
+          component.componentId == resolved.componentid
+        case resolved: ComponentIdentityCompatibilityAdapter.Adapted =>
+          component.componentId == resolved.componentid
+        case _: ComponentIdentityCompatibilityAdapter.Rejected =>
+          false
+      }
     }
 
   private def _matches_instance(
     expected: Option[String],
     component: Component
   ): Boolean =
-    expected.forall { value =>
-      _logical_instance_id(component).exists { instanceid =>
-        ComponentInstanceId(_component_type(component), value).canonicalKey == instanceid.canonicalKey
-      }
-    }
+    expected.forall(value => _logical_instance_id(component).exists(_.instance == value.trim))
 
   private def _logical_instance_id(component: Component): Option[ComponentInstanceId] =
-    component.instanceMetadata.map(_.instanceId)
-      .orElse(component.coreOption.map(_.instanceId))
+    component.coreOption.map { core =>
+      ComponentInstanceId(
+        core.componentId,
+        component.instanceMetadata.map(_.instance).getOrElse(core.instanceId.instance)
+      )
+    }.orElse(component.instanceMetadata.flatMap(metadata =>
+      metadata.componentId.map(ComponentInstanceId(_, metadata.instance))
+    ))
 
   private def _selection(
     socket: SpiSelection,

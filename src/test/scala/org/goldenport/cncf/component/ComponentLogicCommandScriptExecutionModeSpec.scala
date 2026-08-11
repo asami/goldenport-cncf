@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
  *  version May. 31, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
@@ -520,9 +520,9 @@ final class ComponentLogicCommandScriptExecutionModeSpec
           )
         )
     }
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val core = Component.Core.create(
-      name,
+      componentid.name,
       componentid,
       ComponentInstanceId.default(componentid),
       Protocol.empty

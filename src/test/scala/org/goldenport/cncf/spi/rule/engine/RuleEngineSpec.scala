@@ -1,11 +1,14 @@
 package org.goldenport.cncf.spi.rule.engine
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.{Component, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.rule.{DecisionColumn, DecisionCondition, DecisionTable, DecisionTableId, DecisionTableRow, DecisionTableRowId, Fact, FactId, FactName, Rule, RuleConstraint, RuleConstraintMode, RuleDecisionTable, RuleDecisionTableBinding, RuleDerivation, RuleExpression, RuleFactValue, RuleFamily, RulePriority, RuleProgram, RuleSet, RuleSetId, RuleSetIdentity, RuleSetVersion, WorkingMemory}
 import org.goldenport.cncf.spi.{SpiProvider, SpiProviderComponent, SpiResolver, SpiSelection}
+import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * the common SPI resolver.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuleEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -49,8 +52,9 @@ final class RuleEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen 
     "evaluate tax and pricing decision tables through the installed RuleEngine" in {
       Given("a consumer RuleEngine socket with price and tax domain tables")
       given ExecutionContext = ExecutionContext.create()
-      val provider = BuiltinProviderComponent()
-      val consumer = RuleConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("rule_engine_tables")
+      val provider = _initialized_component(subsystem, "rule-engine-provider", BuiltinProviderComponent())
+      val consumer = _initialized_component(subsystem, "rule-engine-consumer", RuleConsumerComponent())
       val ruleset = _ruleset(Vector(
         _rule("price", RuleFamily.DecisionTable),
         _rule("tax-rate", RuleFamily.DecisionTable)
@@ -138,9 +142,10 @@ final class RuleEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen 
     "install built-in RuleEngine and InferenceEngine services through independent sockets" in {
       Given("one built-in provider component and separate consumer sockets")
       given ExecutionContext = ExecutionContext.create()
-      val provider = BuiltinProviderComponent()
-      val ruleconsumer = RuleConsumerComponent()
-      val inferenceconsumer = InferenceConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("rule_engine_sockets")
+      val provider = _initialized_component(subsystem, "rule-engine-provider", BuiltinProviderComponent())
+      val ruleconsumer = _initialized_component(subsystem, "rule-engine-consumer", RuleConsumerComponent())
+      val inferenceconsumer = _initialized_component(subsystem, "inference-engine-consumer", InferenceConsumerComponent())
       val evaluationruleset = _ruleset(Vector(_rule("tax", RuleFamily.Calculation)))
       val inferenceruleset = _ruleset(Vector(_rule("derive", RuleFamily.Derivation)))
 
@@ -158,8 +163,9 @@ final class RuleEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen 
     "allow an alternate provider to replace the built-in engine without changing the request model" in {
       Given("a consumer and an alternate provider with the same RuleEngine contract")
       given ExecutionContext = ExecutionContext.create()
-      val provider = AlternateProviderComponent()
-      val consumer = RuleConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("rule_engine_alternate")
+      val provider = _initialized_component(subsystem, "alternate-rule-engine-provider", AlternateProviderComponent())
+      val consumer = _initialized_component(subsystem, "alternate-rule-engine-consumer", RuleConsumerComponent())
       val ruleset = _ruleset(Vector(_rule("tax", RuleFamily.Calculation)))
       val program = _program(
         ruleset,
@@ -232,8 +238,9 @@ final class RuleEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen 
     "trace consumer-side RuleEngine evaluation without recording WorkingMemory values" in {
       Given("a RuleEngine socket resolved with a calltree-enabled consumer context")
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
-      val provider = BuiltinProviderComponent()
-      val consumer = RuleConsumerComponent()
+      val subsystem = TestComponentFactory.emptySubsystem("rule_engine_trace")
+      val provider = _initialized_component(subsystem, "trace-rule-engine-provider", BuiltinProviderComponent())
+      val consumer = _initialized_component(subsystem, "trace-rule-engine-consumer", RuleConsumerComponent())
       val ruleset = _ruleset(Vector(_rule("tax", RuleFamily.Calculation)))
       val program = _program(
         ruleset,
@@ -325,6 +332,25 @@ final class RuleEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen 
       case Consequence.Success(_) => false
       case Consequence.Failure(_) => true
     }
+
+  private def _initialized_component[A <: Component](
+    subsystem: Subsystem,
+    name: String,
+    component: A
+  ): A = {
+    val componentid = TestComponentFactory.componentId(name)
+    component.initialize(ComponentInit(
+      subsystem = subsystem,
+      core = Component.Core.create(
+        name = componentid.name,
+        componentid = componentid,
+        instanceid = ComponentInstanceId.default(componentid),
+        protocol = Protocol.empty
+      ),
+      origin = ComponentOrigin.Builtin
+    ))
+    component
+  }
 
   private final case class BuiltinProviderComponent() extends Component with SpiProviderComponent {
     def spiProviders: Vector[SpiProvider[?]] =

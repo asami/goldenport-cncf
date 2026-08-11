@@ -24,7 +24,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 23, 2026
  *  version May. 10, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -406,9 +406,9 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
     val component = new Component() {
       override val core: Component.Core =
         Component.Core.create(
-          "session_provider",
-          ComponentId("session_provider"),
-          ComponentInstanceId.default(ComponentId("session_provider")),
+          "org.goldenport.cncf.test.SessionProvider",
+          ComponentId("org.goldenport.cncf.test.SessionProvider"),
+          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.SessionProvider")),
           Protocol.empty
         )
       override def authenticationProviders: Vector[AuthenticationProvider] = Vector(provider)

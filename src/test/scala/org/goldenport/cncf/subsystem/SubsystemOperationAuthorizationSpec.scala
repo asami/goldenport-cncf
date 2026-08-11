@@ -15,17 +15,19 @@ import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec
 import org.goldenport.value.BaseContent
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
-final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matchers {
+final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Subsystem operation dispatch" should {
     "enforce operation authorization before dispatch for anonymous command-style requests" in {
+      Given("a production subsystem and an anonymous admin ping request")
       val subsystem = _subsystem(OperationMode.Production)
       val request = Request.of(
         component = "admin",
@@ -33,10 +35,14 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         operation = "ping"
       )
 
-      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
+      When("the request is dispatched")
+      val result = subsystem.executeOperationResponse(request)
+      Then("authorization rejects the request before dispatch")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "deny production admin operation by default even when ingress security resolves a system admin subject" in {
+      Given("a production subsystem with fallback system-admin ingress fields")
       val subsystem = _subsystem(OperationMode.Production)
       val request = Request.of(
         component = "admin",
@@ -49,10 +55,14 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         )
       )
 
-      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
+      When("the request is dispatched")
+      val result = subsystem.executeOperationResponse(request)
+      Then("the production default still denies the operation")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "deny production admin operation when enabled but ingress security only resolved fallback system admin fields" in {
+      Given("a production subsystem with web admin enabled and fallback identity fields")
       val subsystem = _subsystem(
         OperationMode.Production,
         RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
@@ -68,10 +78,14 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         )
       )
 
-      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
+      When("the request is dispatched")
+      val result = subsystem.executeOperationResponse(request)
+      Then("fallback identity fields do not bypass authorization")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "allow anonymous admin dispatch in develop mode when the operation parameters permit it" in {
+      Given("a develop subsystem that permits anonymous admin dispatch")
       val subsystem = _subsystem(OperationMode.Develop)
       val request = Request.of(
         component = "admin",
@@ -79,10 +93,14 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         operation = "ping"
       )
 
-      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Success[_]]
+      When("the request is dispatched")
+      val result = subsystem.executeOperationResponse(request)
+      Then("the operation succeeds")
+      result shouldBe a[Consequence.Success[_]]
     }
 
     "enforce a descriptor-provided operation authorization rule for operations without a provider" in {
+      Given("a production subsystem with a descriptor authorization rule")
       val subsystem = TestComponentFactory.subsystemWithConfig(
         Map(
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
@@ -122,10 +140,14 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         operation = "createPerson"
       )
 
-      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
+      When("the descriptor-bound operation is dispatched")
+      val result = subsystem.executeOperationResponse(request)
+      Then("the descriptor rule rejects the request")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "enforce a CML operation authorization rule carried by generated component metadata" in {
+      Given("a production subsystem with generated CML authorization metadata")
       val subsystem = TestComponentFactory.subsystemWithConfig(
         Map(
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name)
@@ -149,21 +171,24 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         operation = "createPerson"
       )
 
-      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
+      When("the generated operation is dispatched")
+      val result = subsystem.executeOperationResponse(request)
+      Then("the generated authorization rule rejects the request")
+      result shouldBe a[Consequence.Failure[_]]
     }
   }
 
   private def _subsystem(
-    operationMode: OperationMode,
+    operationmode: OperationMode,
     entries: (String, ConfigurationValue)*
   ): Subsystem = {
     val values = Map(
-        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(operationMode.name),
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(operationmode.name),
         RuntimeConfig.webDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("true")
       ) ++ entries.toMap
     val subsystem = TestComponentFactory.subsystemWithConfig(
       values,
-      name = s"subsystem-operation-authorization-${operationMode.name}"
+      name = s"subsystem-operation-authorization-${operationmode.name}"
     )
     _admit_runtime_operation_policy(subsystem, values)
     val admin = AdminComponent.Factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin)).primary
@@ -203,7 +228,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
     subsystem: Subsystem,
     rule: OperationAuthorizationRule
   ): Component = {
-    val operation = _CmlActionOperation("createPerson")
+    val operation = CmlActionOperation("createPerson")
     val service = spec.ServiceDefinition(
       name = "entity",
       operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation))
@@ -222,18 +247,18 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
           )
         )
     }
-    val componentId = ComponentId("domain")
+    val componentid = ComponentId("org.goldenport.cncf.test.Domain")
     val core = Component.Core.create(
-      name = "domain",
-      componentid = componentId,
-      instanceid = ComponentInstanceId.default(componentId),
+      name = componentid.name,
+      componentid = componentid,
+      instanceid = ComponentInstanceId.default(componentid),
       protocol = protocol
     )
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Main))
   }
 }
 
-private final case class _CmlActionOperation(
+private final case class CmlActionOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
@@ -244,17 +269,17 @@ private final case class _CmlActionOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_CmlAction(req))
+    Consequence.success(CmlAction(req))
 }
 
-private final case class _CmlAction(
+private final case class CmlAction(
   request: Request
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _CmlActionCall(core)
+    CmlActionCall(core)
 }
 
-private final case class _CmlActionCall(
+private final case class CmlActionCall(
   core: ActionCall.Core
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =

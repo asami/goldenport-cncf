@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationBindingStringCodecSpec
@@ -50,9 +50,9 @@ final class CncfConfigurationBindingStringCodecSpec
           val unicodeSubsystem = _take(SubsystemInstanceId.create("platförm", "default"))
           val targets = Vector[(CncfConfigurationTarget, String)](
             CncfConfigurationTarget.Global -> "textus.codec.example",
-            _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("Widget"))) -> "@c/Widget:textus.codec.example",
+            _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("org.goldenport.cncf.test.Widget"))) -> "@c/org%2Egoldenport%2Ecncf%2Etest%2EWidget:textus.codec.example",
             _take(CncfConfigurationTarget.SubsystemInstance.create(unicodeSubsystem)) -> "@s/platf%C3%B6rm/default:textus.codec.example",
-            _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId("Widget", "primary"))) -> "@i/platform/default/Widget/primary:textus.codec.example"
+            _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("Widget"), "primary"))) -> "@i/platform/default/org%2Egoldenport%2Ecncf%2Etest%2EWidget/primary:textus.codec.example"
           )
 
           When("each reference is serialized and deserialized")
@@ -82,7 +82,7 @@ final class CncfConfigurationBindingStringCodecSpec
             "@s/platform/%C3%28:textus.codec.example",
             "@s/platform/default/extra:textus.codec.example",
             "@x/platform:textus.codec.example",
-            "@i/platform/default/Widget:textus.codec.example",
+            "@i/platform/default/org%2Egoldenport%2Ecncf%2Etest%2EWidget:textus.codec.example",
             "@s/cafe%CC%81/default:textus.codec.example"
           )
 
@@ -106,7 +106,7 @@ final class CncfConfigurationBindingStringCodecSpec
           val alias = _codec.decode("@s/platform/default:cncf.codec.example")
           val unknown = _codec.decode("@s/platform/default:textus.unknown.parameter")
           val global = subsystemOnly.decode("textus.subsystem.user-mode")
-          val component = subsystemOnly.decode("@c/Widget:textus.subsystem.user-mode")
+          val component = subsystemOnly.decode("@c/org%2Egoldenport%2Ecncf%2Etest%2EWidget:textus.subsystem.user-mode")
 
           Then("only the canonical SubsystemInstance reference is admitted")
           canonical.isSuccess shouldBe true

@@ -1,8 +1,9 @@
 package org.goldenport.cncf.spi
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{Component, ComponentInstanceId, ExtensionPoint, Port, PortApi, ServiceContract, VariationPoint, VariationSelection}
+import org.goldenport.cncf.component.{Component, ComponentIdentityCompatibilityAdapter, ComponentInstanceId, ExtensionPoint, Port, PortApi, ServiceContract, VariationPoint, VariationSelection}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.record.Record
 
 /*
@@ -13,7 +14,7 @@ import org.goldenport.record.Record
  * source compatible while new code can import org.goldenport.cncf.spi.*.
  *
  * @since   Jul.  2, 2026
- * @version Jul. 11, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 type SpiContract[S] = ServiceContract[S]
@@ -317,7 +318,6 @@ final class ComponentApiResolver private (
       val metadata = provider.metadata.copy(contract = contract.name)
       if (
         !resolvedids.contains(_member_key(metadata)) &&
-          !metadata.healthStatus.equalsIgnoreCase("error") &&
           provider.provider.asInstanceOf[SpiProvider[S]].supports(contract, provider.selection)
       ) {
         val binding = _provider_binding(contract, selector, provider, metadata)
@@ -340,11 +340,15 @@ final class ComponentApiResolver private (
         None
       }
     }
-    val candidates = (resolved ++ unresolved).filter(candidate => _selector_matches(candidate.metadata, selector))
-    _filter_policy(candidates, selector, contract.name).flatMap { eligible =>
-      _select(eligible, selector, contract.name).flatMap { selected =>
-        selected.candidate.materialize().map { member =>
-          member.copy(service = _with_selection_context(member.service, selector, selected.basis))
+    _admit_component_selector(resolved ++ unresolved, selector)(_.metadata).flatMap { admitted =>
+      val candidates = admitted
+        .filter(candidate => _non_identity_selector_matches(candidate.metadata, selector))
+        .filterNot(_.metadata.healthStatus.equalsIgnoreCase("error"))
+      _filter_policy(candidates, selector, contract.name).flatMap { eligible =>
+        _select(eligible, selector, contract.name).flatMap { selected =>
+          selected.candidate.materialize().map { member =>
+            member.copy(service = _with_selection_context(member.service, selector, selected.basis))
+          }
         }
       }
     }
@@ -356,7 +360,7 @@ final class ComponentApiResolver private (
     socket: Option[SpiSocketRef] = None
   )(using ExecutionContext): Consequence[ResolvedSpiBinding] =
     socket match {
-      case Some(ref) if _canonical(ref.contract) != _canonical(contract.name) =>
+      case Some(ref) if !_equivalent(ref.contract, contract.name) =>
         Consequence.resourceInvalid(
           s"SPI socket contract does not match requested contract: socket=${ref.contract}, requested=${contract.name}"
         )
@@ -372,20 +376,22 @@ final class ComponentApiResolver private (
     socket: SpiSocketRef
   ): Consequence[ResolvedSpiBinding] = {
     val candidates = _bindings.filter { binding =>
-      binding.provider.contract == contract.name &&
+      _equivalent(binding.provider.contract, contract.name) &&
         binding.socket.exists(ref =>
-          _canonical(ref.component) == _canonical(socket.component) &&
-            _canonical(ref.name) == _canonical(socket.name) &&
-            _canonical(ref.contract) == _canonical(socket.contract) &&
-            socket.instance.forall(instance => ref.instance.exists(_canonical(_) == _canonical(instance)))
-        ) &&
-        _selector_matches(binding.metadata, selector)
+          _equivalent(ref.component, socket.component) &&
+            _equivalent(ref.name, socket.name) &&
+            _equivalent(ref.contract, socket.contract) &&
+            socket.instance.forall(instance => ref.instance.exists(_equivalent(_, instance)))
+        )
     }.map { binding =>
       ComponentApiCandidate(binding.metadata, () => Consequence.success(binding.copy(selector = selector)))
     }
-    _filter_policy(candidates, selector, contract.name).flatMap { eligible =>
-      _select(eligible, selector, contract.name, socketbound = true).flatMap { selected =>
-        selected.candidate.materialize().map(_.copy(selectionBasis = selected.basis))
+    _admit_component_selector(candidates, selector)(_.metadata).flatMap { admitted =>
+      val selectedcandidates = admitted.filter(candidate => _non_identity_selector_matches(candidate.metadata, selector))
+      _filter_policy(selectedcandidates, selector, contract.name).flatMap { eligible =>
+        _select(eligible, selector, contract.name, socketbound = true).flatMap { selected =>
+          selected.candidate.materialize().map(_.copy(selectionBasis = selected.basis))
+        }
       }
     }
   }
@@ -396,44 +402,46 @@ final class ComponentApiResolver private (
   )(using ExecutionContext): Consequence[ResolvedSpiBinding] = {
     val supported = _providers.flatMap { provider =>
       val metadata = provider.metadata.copy(contract = contract.name)
-      if (
-        provider.provider.asInstanceOf[SpiProvider[S]].supports(contract, provider.selection) &&
-          _selector_matches(metadata, selector)
-      ) {
+      if (provider.provider.asInstanceOf[SpiProvider[S]].supports(contract, provider.selection)) {
         Some(provider -> metadata)
       } else {
         None
       }
     }
-    val healthy = supported.filterNot(_._2.healthStatus.equalsIgnoreCase("error"))
-    if (supported.nonEmpty && healthy.isEmpty)
-      Consequence.serviceUnavailable(
-        s"component API providers are unhealthy: contract=${contract.name}, candidates=${supported.size}"
-      )
-    else {
-      val candidates = healthy.map { case (provider, metadata) =>
-        ComponentApiCandidate(
-          metadata,
-          () => Consequence.success(
-            ResolvedSpiBinding(
-              None,
-              SpiProviderRef(metadata.component, metadata.instanceId, contract.name),
-              metadata,
-              selector,
-              provider.selection,
-              SpiSelectionBasis.SoleCandidate,
-              provider.provider match {
-                case operationprovider: SpiOperationProvider => operationprovider.spiOperations(contract.name)
-                case _ => Vector.empty
-              },
-              provider.component
+    _admit_component_selector(supported, selector)(_._2).flatMap { admitted =>
+      val selectedproviders = admitted.filter { case (_, metadata) =>
+        _non_identity_selector_matches(metadata, selector)
+      }
+      val healthy = selectedproviders.filterNot(_._2.healthStatus.equalsIgnoreCase("error"))
+      if (selectedproviders.nonEmpty && healthy.isEmpty)
+        Consequence.serviceUnavailable(
+          s"component API providers are unhealthy: contract=${contract.name}, candidates=${selectedproviders.size}"
+        )
+      else {
+        val candidates = healthy.map { case (provider, metadata) =>
+          ComponentApiCandidate(
+            metadata,
+            () => Consequence.success(
+              ResolvedSpiBinding(
+                None,
+                SpiProviderRef(metadata.component, metadata.instanceId, contract.name),
+                metadata,
+                selector,
+                provider.selection,
+                SpiSelectionBasis.SoleCandidate,
+                provider.provider match {
+                  case operationprovider: SpiOperationProvider => operationprovider.spiOperations(contract.name)
+                  case _ => Vector.empty
+                },
+                provider.component
+              )
             )
           )
-        )
-      }
-      _filter_policy(candidates, selector, contract.name).flatMap { eligible =>
-        _select(eligible, selector, contract.name).flatMap { selected =>
-          selected.candidate.materialize().map(_.copy(selectionBasis = selected.basis))
+        }
+        _filter_policy(candidates, selector, contract.name).flatMap { eligible =>
+          _select(eligible, selector, contract.name).flatMap { selected =>
+            selected.candidate.materialize().map(_.copy(selectionBasis = selected.basis))
+          }
         }
       }
     }
@@ -482,7 +490,7 @@ final class ComponentApiResolver private (
       case xs =>
         val declared = xs.filter(_.metadata.isDefault)
         if (declared.nonEmpty) declared
-        else xs.filter(x => _canonical(x.metadata.instanceId.instance) == _canonical("default")) match {
+        else xs.filter(x => _equivalent(x.metadata.instanceId.instance, "default")) match {
           case Vector() => xs
           case defaults => defaults
         }
@@ -521,12 +529,37 @@ final class ComponentApiResolver private (
     else
       SpiSelectionBasis.ConventionalDefault
 
-  private def _selector_matches(metadata: SpiMemberMetadata, selector: ComponentSelector): Boolean =
-    selector.component.forall(x => _canonical(x) == _canonical(metadata.component)) &&
-      selector.instance.forall(x => _canonical(x) == _canonical(metadata.instanceId.instance)) &&
-      selector.purpose.forall(x => metadata.purposes.exists(_canonical(_) == _canonical(x))) &&
-      selector.capabilities.forall(x => metadata.capabilities.exists(_canonical(_) == _canonical(x))) &&
-      selector.tags.forall(x => metadata.tags.exists(_canonical(_) == _canonical(x)))
+  private def _non_identity_selector_matches(metadata: SpiMemberMetadata, selector: ComponentSelector): Boolean =
+    selector.instance.forall(x => _equivalent(x, metadata.instanceId.instance)) &&
+      selector.purpose.forall(x => metadata.purposes.exists(_equivalent(_, x))) &&
+      selector.capabilities.forall(x => metadata.capabilities.exists(_equivalent(_, x))) &&
+      selector.tags.forall(x => metadata.tags.exists(_equivalent(_, x)))
+
+  private def _admit_component_selector[A](
+    candidates: Vector[A],
+    selector: ComponentSelector
+  )(
+    metadata: A => SpiMemberMetadata
+  ): Consequence[Vector[A]] =
+    selector.component match {
+      case Some(value) =>
+        val aliases = candidates.map { candidate =>
+          val member = metadata(candidate)
+          ComponentIdentityCompatibilityAdapter.AliasCandidate(
+            member.instanceId.componentId,
+            Vector(member.component).filter(_.nonEmpty)
+          )
+        }
+        ComponentIdentityCompatibilityAdapter.resolveAliases(
+          value.trim,
+          aliases,
+          ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+        ).toConsequence.map { admitted =>
+          candidates.filter(candidate => metadata(candidate).instanceId.componentId == admitted.componentid)
+        }
+      case None =>
+        Consequence.success(candidates)
+    }
 
   private def _with_selection_context[S](
     service: S,
@@ -539,8 +572,9 @@ final class ComponentApiResolver private (
       case _ => service
     }
 
-  private def _canonical(value: String): String =
-    ComponentInstanceId("selector", value).canonicalKey
+  private def _equivalent(lhs: String, rhs: String): Boolean =
+    NamingConventions.toComparisonKey(Option(lhs).getOrElse("")) ==
+      NamingConventions.toComparisonKey(Option(rhs).getOrElse(""))
 
   private def _member_key(metadata: SpiMemberMetadata): String =
     s"${metadata.contract}/${metadata.instanceId.canonicalKey}"

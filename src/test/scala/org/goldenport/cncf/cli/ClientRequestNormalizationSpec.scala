@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 10, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -110,7 +110,7 @@ class ClientRequestNormalizationSpec
           req.service shouldBe Some("http")
           req.operation shouldBe "get"
           req.arguments shouldBe List(
-            Argument("path", "/rest/v1/admin/system/ping", None)
+            Argument("path", "/rest/v1/org-goldenport-cncf-admin/system/ping", None)
           )
           _property(req, "baseurl") shouldBe None
         case _ =>

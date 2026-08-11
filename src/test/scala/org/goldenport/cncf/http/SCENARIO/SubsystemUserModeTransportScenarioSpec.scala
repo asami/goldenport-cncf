@@ -32,7 +32,7 @@ import org.typelevel.ci.CIString
  * Component operation, which returns its received ExecutionContext principal.
  *
  * @since   Aug.  1, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -175,9 +175,9 @@ final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matc
   private def _authentication_component(owner: Subsystem): Component = {
     val component = new Component {
       override val core: Component.Core = Component.Core.create(
-        "TransportAuthentication",
-        ComponentId("transport_authentication"),
-        ComponentInstanceId.default(ComponentId("transport_authentication")),
+        "org.goldenport.cncf.test.TransportAuthentication",
+        ComponentId("org.goldenport.cncf.test.TransportAuthentication"),
+        ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.TransportAuthentication")),
         Protocol.empty
       )
       override def subsystem: Option[Subsystem] = Some(owner)
@@ -200,7 +200,7 @@ final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matc
   }
 
   private def _probe_component(owner: Subsystem): Component = {
-    val id = ComponentId("probe")
+    val id = ComponentId("org.goldenport.cncf.test.Probe")
     val protocol = Protocol(
       services = spec.ServiceDefinitionGroup(Vector(
         spec.ServiceDefinition(
@@ -212,7 +212,7 @@ final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matc
     )
     new Component {}.initialize(ComponentInit(
       owner,
-      Component.Core.create("probe", id, ComponentInstanceId.default(id), protocol),
+      Component.Core.create(id.name, id, ComponentInstanceId.default(id), protocol),
       ComponentOrigin.Main
     ))
   }

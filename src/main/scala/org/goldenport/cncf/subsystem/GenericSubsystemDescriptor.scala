@@ -20,7 +20,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug. 10, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -559,16 +559,57 @@ object GenericSubsystemDescriptor {
     if (overrides.isEmpty) {
       defaults
     } else {
-      def _key_(binding: GenericSubsystemComponentBinding): String =
-        binding.componentId
-          .orElse(ComponentId.parseC(binding.componentName).toOption)
-          .map(id => ComponentInstanceId(id, binding.instanceName).canonicalKey)
-          .getOrElse(_component_binding_instance_key(binding))
-      val overridebyid = overrides.map(x => _key_(x) -> x).toMap
-      val defaultids = defaults.map(_key_).toSet
-      defaults.map(x => overridebyid.get(_key_(x)).map(_merge_component_binding(x, _)).getOrElse(x)) ++
-        overrides.filterNot(x => defaultids.contains(_key_(x)))
+      val mergedoverrides = overrides.map { overridebinding =>
+        defaults
+          .filter(_component_binding_matches(_, overridebinding))
+          .foldLeft(overridebinding) { (merged, defaultbinding) =>
+            _merge_component_binding(defaultbinding, merged)
+          }
+      }
+      val (mergeddefaults, emittedoverrides) = defaults.foldLeft(
+        Vector.empty[GenericSubsystemComponentBinding] -> Set.empty[Int]
+      ) { case ((result, emitted), defaultbinding) =>
+        val matching = overrides.indices.filter { index =>
+          _component_binding_matches(defaultbinding, overrides(index))
+        }
+        val pending = matching.filterNot(emitted.contains)
+        val nextresult =
+          if (pending.nonEmpty)
+            result ++ pending.map(mergedoverrides)
+          else if (matching.isEmpty)
+            result :+ defaultbinding
+          else
+            result
+        nextresult -> (emitted ++ matching)
+      }
+      mergeddefaults ++ mergedoverrides.zipWithIndex.collect {
+        case (binding, index) if !emittedoverrides.contains(index) => binding
+      }
     }
+
+  private def _component_binding_matches(
+    defaults: GenericSubsystemComponentBinding,
+    overrides: GenericSubsystemComponentBinding
+  ): Boolean =
+    _component_binding_component_key(defaults) == _component_binding_component_key(overrides) &&
+      (defaults.instance.isEmpty ||
+        _component_binding_instance_key_for_merge(defaults) == _component_binding_instance_key_for_merge(overrides))
+
+  private def _component_binding_component_key(
+    binding: GenericSubsystemComponentBinding
+  ): String =
+    binding.componentId
+      .orElse(ComponentId.parseC(binding.componentName).toOption)
+      .map(id => s"canonical:${id.name}")
+      .getOrElse(s"legacy:${_comparison_key(runtimeComponentName(binding.componentName))}")
+
+  private def _component_binding_instance_key_for_merge(
+    binding: GenericSubsystemComponentBinding
+  ): String =
+    binding.componentId
+      .orElse(ComponentId.parseC(binding.componentName).toOption)
+      .map(id => ComponentInstanceId(id, binding.instanceName).canonicalKey)
+      .getOrElse(_component_binding_instance_key(binding))
 
   private def _merge_component_binding(
     defaults: GenericSubsystemComponentBinding,

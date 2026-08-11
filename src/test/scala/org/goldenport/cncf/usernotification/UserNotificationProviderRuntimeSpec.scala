@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  7, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -259,9 +259,9 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
       override def userNotificationProviders: Vector[UserNotificationProvider] =
         Vector(_provider(providername, sink, deliverylatch))
     }
-    val id = ComponentId("textus_user_notification")
+    val id = ComponentId("org.goldenport.cncf.test.TextusUserNotification")
     val core = Component.Core.create(
-      name = "UserNotification",
+      name = id.name,
       componentid = id,
       instanceid = ComponentInstanceId.default(id),
       protocol = Protocol.empty,

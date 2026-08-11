@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationBindingResolverSpec
@@ -28,9 +28,9 @@ final class CncfConfigurationBindingResolverSpec
       "E1 use Global alone or exactly Global, class, Subsystem, and qualified instance" must _e1 {
         "when a global request and a component request are constructed" in {
           Given("one Component, its containing Subsystem, and one ComponentInstance")
-          val component = ComponentId("catalog")
+          val component = ComponentId("org.goldenport.cncf.test.Catalog")
           val subsystem = _take(SubsystemInstanceId.default("orders"))
-          val instance = ComponentInstanceId("catalog", "default")
+          val instance = ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("catalog"), "default")
 
           When("CNCF adapts them to generic resolution contexts")
           val global = _take(CncfConfigurationResolutionContext.globalOnly)
@@ -44,7 +44,7 @@ final class CncfConfigurationBindingResolverSpec
             _take(CncfConfigurationTarget.SubsystemInstance.create(subsystem)),
             _take(CncfConfigurationTarget.ComponentInstance.create(subsystem, instance))
           )
-          CncfConfigurationResolutionContext.forComponent(component, subsystem, ComponentInstanceId("inventory", "default")).isSuccess shouldBe false
+          CncfConfigurationResolutionContext.forComponent(component, subsystem, ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("inventory"), "default")).isSuccess shouldBe false
         }
       }
     }
@@ -54,10 +54,10 @@ final class CncfConfigurationBindingResolverSpec
         "when candidates for two resident Subsystems use the same component class" in {
           Given("one generic parameter and two qualified CNCF component contexts")
           val parameter = _parameter
-          val component = ComponentId("catalog")
+          val component = ComponentId("org.goldenport.cncf.test.Catalog")
           val orders = _take(SubsystemInstanceId.default("orders"))
           val billing = _take(SubsystemInstanceId.default("billing"))
-          val instance = ComponentInstanceId("catalog", "default")
+          val instance = ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("catalog"), "default")
           val orderstarget = _take(CncfConfigurationTarget.ComponentInstance.create(orders, instance))
           val billingtarget = _take(CncfConfigurationTarget.ComponentInstance.create(billing, instance))
           val candidates = _candidates(Vector(

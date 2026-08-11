@@ -149,7 +149,7 @@ import org.goldenport.cncf.processexecution.{
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Aug.  1, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -484,11 +484,7 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
   protected final def bind_component_application_datastore_c(
     name: String = "application"
   ): Consequence[Unit] = {
-    val componentname =
-      component
-        .flatMap(_.coreOption.map(_.name))
-        .orElse(action.request.component)
-        .getOrElse("component")
+    val request = _component_datastore_request(name)
     val environment = ComponentDataStore.Environment(
       executionContext.runtime.resolvedParameters,
       _component_configuration
@@ -498,37 +494,38 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
         subsystem.bindManagedApplicationDataStoreC(
           executionContext.dataStoreSpace,
           environment,
-          componentname,
-          name
+          request
         )
       case None =>
-        Consequence(executionContext.dataStoreSpace.bindApplicationDataStore(environment, componentname, name))
+        Consequence(executionContext.dataStoreSpace.bindApplicationDataStore(environment, request))
     }
   }
 
   protected final def component_datastore(
     name: String = "application"
   ): DataStore = {
-    val componentname =
-      component
-        .flatMap(_.coreOption.map(_.name))
-        .orElse(action.request.component)
-        .getOrElse("component")
+    val request = _component_datastore_request(name)
     val environment = ComponentDataStore.Environment(
       executionContext.runtime.resolvedParameters,
       _component_configuration
     )
     component.flatMap(_.subsystem) match {
       case Some(subsystem) =>
-        subsystem.resolveManagedComponentDataStoreC(environment, componentname, name) match {
+        subsystem.resolveManagedComponentDataStoreC(environment, request) match {
           case Consequence.Success(datastore) => datastore
           case Consequence.Failure(conclusion) =>
             throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
         }
       case None =>
-        ComponentDataStore.resolve(environment, ComponentDataStore.Request(componentname, name))
+        ComponentDataStore.resolve(environment, request)
     }
   }
+
+  private def _component_datastore_request(name: String): ComponentDataStore.Request =
+    component
+      .flatMap(_.coreOption.map(_.componentId))
+      .map(componentid => ComponentDataStore.Request.forComponent(componentid, name))
+      .getOrElse(ComponentDataStore.Request(action.request.component.getOrElse("component"), name))
 
   protected final def config_int(key: String): Option[Int] =
     config_string(key).flatMap(_.toIntOption)

@@ -9,7 +9,7 @@ import org.goldenport.cncf.testutil.TestComponentFactory
 
 /*
  * @since   May. 27, 2026
- * @version May. 27, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class AssemblyReportSpec extends AnyWordSpec with Matchers {
@@ -31,9 +31,9 @@ class AssemblyReportSpec extends AnyWordSpec with Matchers {
     origin: ComponentOrigin
   ): Component = {
     val subsystem = TestComponentFactory.emptySubsystem("assembly-report-spec")
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val core = Component.Core.create(
-      name,
+      componentid.name,
       componentid,
       ComponentInstanceId.default(componentid),
       Protocol.empty

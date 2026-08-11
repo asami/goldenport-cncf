@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 package org.goldenport.cncf.component
@@ -120,7 +120,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
         customer = None,
         lines = Vector.empty
       )
-      val action = _AggregatePersistenceAction(
+      val action = AggregatePersistenceAction(
         Request.ofService("order", "createOrder"),
         aggregate
       )
@@ -160,7 +160,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
         customer = None,
         lines = Vector.empty
       )
-      val action = _AggregatePersistenceAction(
+      val action = AggregatePersistenceAction(
         Request.ofService("order", "createOrder"),
         aggregate
       )
@@ -194,7 +194,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
           spec.ServiceDefinition(
             name = "order",
             operations = spec.OperationDefinitionGroup(
-              operations = NonEmptyVector.of(_AggregateNoopOperation("loadOrderAggregate"))
+              operations = NonEmptyVector.of(AggregateNoopOperation("loadOrderAggregate"))
             )
           )
         )
@@ -245,7 +245,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
     protocol: Protocol,
     component: Component
   ): Component = {
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val instanceid = ComponentInstanceId.default(componentid)
     val factory = new Component.SinglePrimaryBundleFactory {
       override protected def create_Component(params: ComponentCreate): Component =
@@ -255,10 +255,10 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
         params: ComponentCreate,
         comp: Component
       ): Component.Core =
-        Component.Core.create(name, componentid, instanceid, protocol, this)
+        Component.Core.create(componentid.name, componentid, instanceid, protocol, this)
     }
 
-    val core = Component.Core.create(name, componentid, instanceid, protocol, factory)
+    val core = Component.Core.create(componentid.name, componentid, instanceid, protocol, factory)
     val params = ComponentInit(
       subsystem = TestComponentFactory.emptySubsystem("aggregate_default_spec"),
       core = core,
@@ -361,7 +361,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
     )
 }
 
-private final case class _AggregateNoopOperation(
+private final case class AggregateNoopOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
@@ -375,15 +375,15 @@ private final case class _AggregateNoopOperation(
     Consequence.notImplemented("not used")
 }
 
-private final case class _AggregatePersistenceAction(
+private final case class AggregatePersistenceAction(
   request: Request,
   aggregate: org.goldenport.cncf.component.entity.aggregate.Order
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _AggregatePersistenceActionCall(core, aggregate)
+    AggregatePersistenceActionCall(core, aggregate)
 }
 
-private final case class _AggregatePersistenceActionCall(
+private final case class AggregatePersistenceActionCall(
   core: ActionCall.Core,
   aggregate: org.goldenport.cncf.component.entity.aggregate.Order
 ) extends ProcedureActionCall {

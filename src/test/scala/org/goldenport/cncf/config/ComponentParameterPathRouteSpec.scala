@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  5, 2026
- * @version Aug.  5, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentParameterPathRouteSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -498,8 +498,8 @@ final class ComponentParameterPathRouteSpec extends AnyWordSpec with Matchers wi
     subsysteminstance: Map[String, String]
   ): ComponentParameterContext =
     ComponentParameterContext.select(
-      ComponentId("provider"),
-      ComponentInstanceId("provider", "default"),
+      ComponentId("org.goldenport.cncf.test.Provider"),
+      ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("provider"), "default"),
       Vector(ComponentDescriptor(name = Some("provider"), componentName = Some("provider"))),
       Vector(ComponentInstanceMetadata("provider", config = subsysteminstance))
     ).toOption.get

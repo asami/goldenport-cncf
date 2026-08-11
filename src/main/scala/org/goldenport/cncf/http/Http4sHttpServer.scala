@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Aug. 10, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -70,7 +70,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 10, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -4693,7 +4693,7 @@ final class Http4sHttpServer(
     componentname: String,
     messages: Map[String, String]
   ): Map[String, String] = {
-    val component = NamingConventions.toNormalizedSegment(componentname)
+    val component = _dispatch_component_segment(componentname)
     val allowedkeys = engine.webDescriptor.form.iterator.collect {
       case (selector, form)
           if selector.split("\\.", 2).headOption
@@ -4701,7 +4701,7 @@ final class Http4sHttpServer(
         form.successMessageKey.toVector ++ form.failureMessageKey.toVector
     }.flatten.toSet
     val flash = req.cookies
-      .find(_.name == WebFlash.cookieName(componentname))
+      .find(_.name == WebFlash.cookieName(component))
       .flatMap(cookie => WebFlash.decode(cookie.content))
       .filter(value => allowedkeys.contains(value.messageKey))
       .flatMap(value => messages.get(value.messageKey).map(value -> _))
@@ -6703,7 +6703,7 @@ final class Http4sHttpServer(
     req: org.http4s.Request[IO],
     componentname: String
   ): Option[String] =
-    req.cookies.find(_.name == WebFlash.cookieName(componentname)).map(_.content)
+    req.cookies.find(_.name == WebFlash.cookieName(_dispatch_component_segment(componentname))).map(_.content)
 
   private def _flash_cookie(
     componentname: String,
@@ -6712,7 +6712,7 @@ final class Http4sHttpServer(
   ): Option[ResponseCookie] =
     WebFlash.encode(WebFlash.Value(variant, messagekey)).map { content =>
       ResponseCookie(
-        name = WebFlash.cookieName(componentname),
+        name = WebFlash.cookieName(_dispatch_component_segment(componentname)),
         content = content,
         path = Some("/web"),
         httpOnly = true,
@@ -6723,7 +6723,7 @@ final class Http4sHttpServer(
 
   private def _expired_flash_cookie(componentname: String): ResponseCookie =
     ResponseCookie(
-      name = WebFlash.cookieName(componentname),
+      name = WebFlash.cookieName(_dispatch_component_segment(componentname)),
       content = "",
       path = Some("/web"),
       httpOnly = true,

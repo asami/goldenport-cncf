@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  2, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationCandidateDecoderSpec
@@ -49,15 +49,15 @@ final class CncfConfigurationCandidateDecoderSpec
           candidates.bindings.size shouldBe 4
           candidates.bindings.map(_.target) should contain allOf (
             CncfConfigurationTarget.Global,
-            _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("Catalog"))),
+            _take(CncfConfigurationTarget.ComponentClass.create(ComponentId("org.goldenport.cncf.test.Catalog"))),
             _subsystem,
             _component_instance
           )
           candidates.bindings.map(_.provenance.inputPath) should contain allOf (
             Some("global.config.textus.application.mode"),
-            Some("components.Catalog.config.textus.application.mode"),
+            Some("components.org.goldenport.cncf.test.Catalog.config.textus.application.mode"),
             Some("subsystems.platform.instances.default.config.textus.application.mode"),
-            Some("subsystems.platform.instances.default.components.Catalog.instances.default.config.textus.application.mode")
+            Some("subsystems.platform.instances.default.components.org.goldenport.cncf.test.Catalog.instances.default.config.textus.application.mode")
           )
         }
 
@@ -157,7 +157,7 @@ final class CncfConfigurationCandidateDecoderSpec
         ConfigurationDocument.Field(
           "components",
           ConfigurationDocument.Object(
-            Vector(ConfigurationDocument.Field("Catalog", _component_class(_config("textus.application.mode", "production"))))
+            Vector(ConfigurationDocument.Field("org.goldenport.cncf.test.Catalog", _component_class(_config("textus.application.mode", "production"))))
           )
         ),
         ConfigurationDocument.Field(
@@ -182,7 +182,7 @@ final class CncfConfigurationCandidateDecoderSpec
                                   ConfigurationDocument.Object(
                                     Vector(
                                       ConfigurationDocument.Field(
-                                        "Catalog",
+                                        "org.goldenport.cncf.test.Catalog",
                                         ConfigurationDocument.Object(
                                           Vector(
                                             ConfigurationDocument.Field(
@@ -223,9 +223,9 @@ final class CncfConfigurationCandidateDecoderSpec
     CncfExternalDocumentScenarioInput(
       Vector(
         _batch(CncfConfigurationDocumentLocation.Consolidated, _consolidated_global(_config("textus.application.mode", "production")), "home", "global"),
-        _batch(_take(CncfConfigurationDocumentLocation.ComponentClass.create("Catalog")), _config("textus.application.mode", "production"), "home", "component"),
+        _batch(_take(CncfConfigurationDocumentLocation.ComponentClass.create("org.goldenport.cncf.test.Catalog")), _config("textus.application.mode", "production"), "home", "component"),
         _batch(_take(CncfConfigurationDocumentLocation.SubsystemInstance.create("platform", "default")), _config("textus.application.mode", "production"), "home", "subsystem"),
-        _batch(_take(CncfConfigurationDocumentLocation.ComponentInstance.create("platform", "default", "Catalog", "default")), _config("textus.application.mode", "production"), "home", "component-instance")
+        _batch(_take(CncfConfigurationDocumentLocation.ComponentInstance.create("platform", "default", "org.goldenport.cncf.test.Catalog", "default")), _config("textus.application.mode", "production"), "home", "component-instance")
       ),
       _schema
     )
@@ -258,7 +258,7 @@ final class CncfConfigurationCandidateDecoderSpec
         identity <- SubsystemInstanceId.create("platform", "default")
         target <- CncfConfigurationTarget.ComponentInstance.create(
           identity,
-          org.goldenport.cncf.component.ComponentInstanceId("Catalog", "default")
+          org.goldenport.cncf.component.ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("Catalog"), "default")
         )
       } yield target
     )

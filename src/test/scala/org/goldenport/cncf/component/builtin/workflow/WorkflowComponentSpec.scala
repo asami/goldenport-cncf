@@ -30,7 +30,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowComponentSpec
@@ -138,8 +138,8 @@ final class WorkflowComponentSpec
         arguments = List(Argument("id", instance.id.value))
       )
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val jobstatus = fixture.subsystem.components
-        .find(_.name == "job_control")
+      val jobstatus = fixture.subsystem
+        .findComponent("job_control")
         .flatMap(_.port.get[JobControlComponent.JobService])
         .getOrElse(fail("job_control service missing"))
         .getJobStatus(instance.relatedJobIds.head)
@@ -228,9 +228,9 @@ final class WorkflowComponentSpec
     }
     component.entitySpace.registerEntity("salesOrder", _collection(entities))
     val name = s"workflow_projection_component_${_seed.incrementAndGet()}"
-    val componentid = ComponentId(name)
+    val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val instanceid = ComponentInstanceId.default(componentid)
-    val core = Component.Core.create(name, componentid, instanceid, protocol)
+    val core = Component.Core.create(componentid.name, componentid, instanceid, protocol)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 

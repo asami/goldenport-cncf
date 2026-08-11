@@ -10,22 +10,25 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.simplemodeling.model.value.SecurityAttributes
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 28, 2026
- * @version Apr. 29, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
-final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers {
-  private val _blobCollection = EntityCollectionId("cncf", "builtin", "blob")
-  private val _blobId = EntityId("cncf", "blob_1", _blobCollection)
+final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _blob_collection = EntityCollectionId("cncf", "builtin", "blob")
+  private val _blob_id = EntityId("cncf", "blob_1", _blob_collection)
 
   "OperationAccessPolicy resource policies" should {
     "deny Blob collection create without the configured collection capability" in {
+      Given("a Blob collection create request without the configured capability")
       given ExecutionContext = _context(capabilities = Set.empty)
 
+      When("the unit of work is authorized")
       val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "domain",
@@ -35,12 +38,15 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
         )
       )
 
+      Then("authorization is denied")
       result shouldBe a[Consequence.Failure[_]]
     }
 
     "allow Blob collection create with the configured collection capability" in {
+      Given("a Blob collection create request with the configured capability")
       given ExecutionContext = _context(capabilities = Set("collection:blob:create"))
 
+      When("the unit of work is authorized")
       val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "domain",
@@ -50,51 +56,60 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
         )
       )
 
+      Then("authorization succeeds")
       result shouldBe Consequence.unit
     }
 
     "require execute permission for Blob delete when collection policy overrides delete" in {
-      given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
+      Given("an owned Blob delete request without execute permission")
+      given ExecutionContext = _context(capabilities = Set.empty, principalid = "owner")
       val record = _record(SecurityAttributes.ownedBy("owner"))
 
+      When("the overridden unit of work is authorized")
       val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "domain",
           resourceType = Some("blob"),
           collectionName = Some("blob"),
-          targetId = Some(_blobId),
+          targetId = Some(_blob_id),
           accessKind = "delete"
         ),
         _ => Consequence.success(Some(record))
       )
 
+      Then("authorization is denied")
       result shouldBe a[Consequence.Failure[_]]
     }
 
     "allow Blob delete when owner has execute permission for override policy" in {
-      given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
+      Given("an owned Blob delete request with execute permission")
+      given ExecutionContext = _context(capabilities = Set.empty, principalid = "owner")
       val security = SecurityAttributes.ownedBy(
         "owner",
         owner = SecurityAttributes.Rights.Permissions.full
       )
       val record = _record(security)
 
+      When("the overridden unit of work is authorized")
       val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "domain",
           resourceType = Some("blob"),
           collectionName = Some("blob"),
-          targetId = Some(_blobId),
+          targetId = Some(_blob_id),
           accessKind = "delete"
         ),
         _ => Consequence.success(Some(record))
       )
 
+      Then("authorization succeeds")
       result shouldBe Consequence.unit
     }
 
     "require association-domain capability for Blob attachment create and delete" in {
-      {
+      Given("Blob attachment requests with and without the association capability")
+      When("each attachment request is authorized")
+      val denied = {
         given ExecutionContext = _context(capabilities = Set.empty)
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
           UnitOfWorkAuthorization(
@@ -103,9 +118,9 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
             collectionName = Some("cncf-blob-association"),
             accessKind = "create"
           )
-        ) shouldBe a[Consequence.Failure[_]]
+        )
       }
-      {
+      val allowed = {
         given ExecutionContext = _context(capabilities = Set("association:blob_attachment:create"))
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
           UnitOfWorkAuthorization(
@@ -114,12 +129,18 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
             collectionName = Some("cncf-blob-association"),
             accessKind = "create"
           )
-        ) shouldBe Consequence.unit
+        )
       }
+
+      Then("only the capability-bearing request succeeds")
+      denied shouldBe a[Consequence.Failure[_]]
+      allowed shouldBe Consequence.unit
     }
 
     "require store capability for BlobStore status" in {
-      {
+      Given("BlobStore status requests with and without the store capability")
+      When("each status request is authorized")
+      val denied = {
         given ExecutionContext = _context(capabilities = Set.empty)
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
           UnitOfWorkAuthorization(
@@ -128,9 +149,9 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
             collectionName = Some("blob-payload-store"),
             accessKind = "status"
           )
-        ) shouldBe a[Consequence.Failure[_]]
+        )
       }
-      {
+      val allowed = {
         given ExecutionContext = _context(capabilities = Set("store:blobstore:status"))
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
           UnitOfWorkAuthorization(
@@ -139,68 +160,86 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
             collectionName = Some("blob-payload-store"),
             accessKind = "status"
           )
-        ) shouldBe Consequence.unit
+        )
       }
+
+      Then("only the capability-bearing request succeeds")
+      denied shouldBe a[Consequence.Failure[_]]
+      allowed shouldBe Consequence.unit
     }
 
     "record missing capability as an authorization diagnostic" in {
+      Given("a BlobStore status request without its capability")
       val before = RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("capability", 0L)
       given ExecutionContext = _context(capabilities = Set.empty)
 
-      OperationAccessPolicy.authorizeUnitOfWorkDefault(
+      When("the request is authorized")
+      val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "store",
           resourceType = Some("blobstore"),
           collectionName = Some("blob-payload-store"),
           accessKind = "status"
         )
-      ) shouldBe a[Consequence.Failure[_]]
+      )
 
+      Then("a capability diagnostic is recorded")
+      result shouldBe a[Consequence.Failure[_]]
       RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("capability", 0L) should be > before
     }
 
     "record permission override denial as a permission diagnostic" in {
+      Given("an owned Blob delete request without execute permission")
       val before = RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("permission", 0L)
-      given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
+      given ExecutionContext = _context(capabilities = Set.empty, principalid = "owner")
       val record = _record(SecurityAttributes.ownedBy("owner"))
 
-      OperationAccessPolicy.authorizeUnitOfWorkDefault(
+      When("the overridden request is authorized")
+      val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "domain",
           resourceType = Some("blob"),
           collectionName = Some("blob"),
-          targetId = Some(_blobId),
+          targetId = Some(_blob_id),
           accessKind = "delete"
         ),
         _ => Consequence.success(Some(record))
-      ) shouldBe a[Consequence.Failure[_]]
+      )
 
+      Then("a permission diagnostic is recorded")
+      result shouldBe a[Consequence.Failure[_]]
       RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("permission", 0L) should be > before
     }
 
     "record natural-condition denial as an ABAC diagnostic" in {
+      Given("a Blob read request with a mismatched natural condition")
       val before = RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("abac", 0L)
-      given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
+      given ExecutionContext = _context(capabilities = Set.empty, principalid = "owner")
       val record = Record.create(_record(SecurityAttributes.ownedBy("owner")).asMap.toVector :+ ("tenantId" -> "tenant-b"))
 
-      OperationAccessPolicy.authorizeUnitOfWorkDefault(
+      When("the natural-condition request is authorized")
+      val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "domain",
           resourceType = Some("blob"),
           collectionName = Some("blob"),
-          targetId = Some(_blobId),
+          targetId = Some(_blob_id),
           accessKind = "read",
           naturalConditions = EntityAbacCondition.parse("tenantId=subject.tenantId:read").toVector
         ),
         _ => Consequence.success(Some(record))
-      ) shouldBe a[Consequence.Failure[_]]
+      )
 
+      Then("an ABAC diagnostic is recorded")
+      result shouldBe a[Consequence.Failure[_]]
       RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("abac", 0L) should be > before
     }
 
     "preserve existing behavior when no resource policy is configured" in {
+      Given("an unconfigured resource request")
       given ExecutionContext = _context(capabilities = Set.empty, policies = AuthorizationResourcePolicies.empty)
 
+      When("the request is authorized")
       val result = OperationAccessPolicy.authorizeUnitOfWorkDefault(
         UnitOfWorkAuthorization(
           resourceFamily = "domain",
@@ -210,6 +249,7 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
         )
       )
 
+      Then("authorization remains successful")
       result shouldBe Consequence.unit
     }
   }
@@ -219,7 +259,7 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
 
   private def _context(
     capabilities: Set[String],
-    principalId: String = "subject",
+    principalid: String = "subject",
     policies: AuthorizationResourcePolicies = _policies
   ): ExecutionContext = {
     val subsystem = _subsystem(policies)
@@ -227,12 +267,12 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
     val base = ExecutionContext.create(SecurityContext.Privilege.User)
     val security = base.security.copy(
       principal = new Principal {
-        val id: PrincipalId = PrincipalId(principalId)
+        val id: PrincipalId = PrincipalId(principalid)
         val attributes: Map[String, String] = Map.empty
       },
       capabilities = capabilities.map(Capability.apply)
     )
-    ExecutionContext.withSecurityContext(base.withScope(component.scopeContext), security)
+    ExecutionContext.withSecurityContext(base, security).withScope(component.scopeContext)
   }
 
   private def _subsystem(
@@ -266,9 +306,9 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
     val component = new Component() {
       override val core: Component.Core =
         Component.Core.create(
-          "Blob",
-          ComponentId("blob"),
-          ComponentInstanceId.default(ComponentId("blob")),
+          "org.goldenport.cncf.test.Blob",
+          ComponentId("org.goldenport.cncf.test.Blob"),
+          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.Blob")),
           Protocol.empty
         )
       override def subsystem: Option[Subsystem] = Some(owner)

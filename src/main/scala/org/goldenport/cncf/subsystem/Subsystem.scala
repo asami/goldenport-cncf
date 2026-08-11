@@ -71,7 +71,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -792,14 +792,12 @@ final class Subsystem(
   private[cncf] def bindManagedApplicationDataStoreC(
     dataStoreSpace: org.goldenport.cncf.datastore.DataStoreSpace,
     environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment,
-    componentName: String,
-    datastoreName: String
+    request: org.goldenport.cncf.datastore.ComponentDataStore.Request
   ): Consequence[Unit] =
     _with_managed_datastore_lease_c { lease =>
       dataStoreSpace.bindManagedApplicationDataStoreC(
         environment,
-        componentName,
-        datastoreName,
+        request,
         _datastore_binding,
         lease,
         _system_node.hmacKey
@@ -808,8 +806,7 @@ final class Subsystem(
 
   private[cncf] def resolveManagedComponentDataStoreC(
     environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment,
-    componentName: String,
-    datastoreName: String
+    request: org.goldenport.cncf.datastore.ComponentDataStore.Request
   ): Consequence[org.goldenport.cncf.datastore.DataStore] =
     Option(_active_datastore_lease.get()) match {
       case Some(lease) =>
@@ -817,7 +814,7 @@ final class Subsystem(
           org.goldenport.cncf.datastore.ComponentDataStore
             .resolveManagedForDataStoreSpaceC(
               environment,
-              org.goldenport.cncf.datastore.ComponentDataStore.Request(componentName, datastoreName),
+              request,
               _datastore_binding,
               inherited,
               _system_node.hmacKey
@@ -1264,7 +1261,7 @@ final class Subsystem(
       for {
         route <- _resolve_spi_route(binding, selector)
         request = Request.of(
-          component = binding.provider.component,
+          component = binding.provider.instanceId.componentId.name,
           service = route._2.name,
           operation = route._3.name,
           properties = record.fields.map(field => Property(field.key, field.value.single, None)).toList
@@ -1745,6 +1742,7 @@ final class Subsystem(
           Some(provider.operationAuthorization(policy))
         case _ =>
           _cml_operation_authorization_rule(component, operation.name)
+            .orElse(descriptor.flatMap(_.operationAuthorizationRule(selector)))
             .orElse(descriptor.flatMap(_.operationAuthorizationRule(displayselector)))
       }
       rule match {

@@ -3,6 +3,8 @@ package org.goldenport.cncf.cli
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 
 import java.io.{ByteArrayOutputStream, PrintStream}
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import cats.data.NonEmptyVector
 import org.goldenport.cncf.CncfVersion
@@ -26,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Jan. 18, 2026
  *  version May.  2, 2026
  *  version Jun. 29, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -56,7 +58,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("admin")
+          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
         case Consequence.Failure(c) =>
@@ -73,7 +75,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("admin")
+          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
           req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
@@ -91,7 +93,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("admin")
+          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
           req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
@@ -112,7 +114,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("sample")
+          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.test.Sample")
           req.service.getOrElse(fail("missing service")).shouldBe("presentation")
           req.operation.shouldBe("validatePresentation")
           req.properties.exists(p => p.name == "presentationDsl" && p.value == "presentation:") shouldBe true
@@ -167,7 +169,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("admin")
+          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
           req.service.getOrElse(fail("missing service")).shouldBe("meta")
           req.operation.shouldBe("operations")
           req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing forwarded service argument")) shouldBe "admin.system"
@@ -202,7 +204,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("domain")
+          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.test.Domain")
           req.service.getOrElse(fail("missing service")).shouldBe("meta")
           req.operation.shouldBe("help")
           req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing component argument")) shouldBe "domain"
@@ -220,7 +222,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component shouldBe Some("admin")
+          req.component shouldBe Some("org.goldenport.cncf.Admin")
           req.service shouldBe Some("component")
           req.operation shouldBe "list"
         case Consequence.Failure(c) =>
@@ -237,7 +239,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component shouldBe Some("admin")
+          req.component shouldBe Some("org.goldenport.cncf.Admin")
           req.service shouldBe Some("meta")
           req.operation shouldBe "describe"
         case Consequence.Failure(c) =>
@@ -254,7 +256,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component shouldBe Some("admin")
+          req.component shouldBe Some("org.goldenport.cncf.Admin")
           req.service shouldBe Some("meta")
           req.operation shouldBe "describe"
         case Consequence.Failure(c) =>
@@ -505,25 +507,31 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for print command protocol help for run command help")
       When("the command help route is run")
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "help"))
+        CncfRuntime().run(Array("command", s"--textus.test.descriptor=${_controlled_test_descriptor_path}", "help"))
       }
       Then("the command protocol help is rendered")
-      code shouldBe 0
-      out.contains("CNCF Command Help") shouldBe true
-      out.contains("cncf command <selector> [args...]") shouldBe true
-      out.contains("cncf command meta.mcp") shouldBe true
-      out.contains("cncf command spec.export.mcp") shouldBe true
-      out.contains("AI/MCP Navigation") shouldBe true
+      withClue(out) {
+        code shouldBe 0
+      }
+      withClue(out) {
+        out.contains("CNCF Command Help") shouldBe true
+        out.contains("cncf command <selector> [args...]") shouldBe true
+        out.contains("cncf command meta.mcp") shouldBe true
+        out.contains("cncf command spec.export.mcp") shouldBe true
+        out.contains("AI/MCP Navigation") shouldBe true
+      }
     }
 
     "print subsystem help for run command meta.help" in {
       Given("the preconditions for print subsystem help for run command meta.help")
       When("the command meta.help route is run")
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "meta.help"))
+        CncfRuntime().run(Array("command", s"--textus.test.descriptor=${_controlled_test_descriptor_path}", "meta.help"))
       }
       Then("the subsystem help is rendered")
-      code shouldBe 0
+      withClue(out) {
+        code shouldBe 0
+      }
       out.contains("type: subsystem") shouldBe true
       out.contains("components:") shouldBe true
     }
@@ -532,12 +540,16 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for print command protocol help for run command --help")
       When("the command --help route is run")
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "--help"))
+        CncfRuntime().run(Array("command", s"--textus.test.descriptor=${_controlled_test_descriptor_path}", "--help"))
       }
       Then("the command protocol help is rendered")
-      code shouldBe 0
-      out.contains("CNCF Command Help") shouldBe true
-      out.contains("cncf command <selector> [args...]") shouldBe true
+      withClue(out) {
+        code shouldBe 0
+      }
+      withClue(out) {
+        out.contains("CNCF Command Help") shouldBe true
+        out.contains("cncf command <selector> [args...]") shouldBe true
+      }
     }
 
     "print server command help for run server help" in {
@@ -604,7 +616,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the generated domain help command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.runWithExtraComponents(
-          Array("command", "domain.entity.createPerson", "--help"),
+          Array(
+            s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+            "command",
+            "domain.entity.createPerson",
+            "--help"
+          ),
           subsystem => {
             val domain = TestComponentFactory.create("domain", protocol)
             domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
@@ -621,7 +638,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the domain help alias command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.executeCommand(
-          Array("help", "domain"),
+          Array(s"--textus.test.descriptor=${_controlled_test_descriptor_path}", "help", "domain"),
           subsystem => {
             val domain = TestComponentFactory.create("domain", Protocol.empty)
             domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
@@ -651,7 +668,11 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the domain entity help alias command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.executeCommand(
-          Array("help", "domain.entity"),
+          Array(
+            s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+            "help",
+            "domain.entity"
+          ),
           subsystem => {
             val domain = TestComponentFactory.create("domain", protocol)
             domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
@@ -670,7 +691,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the YAML format command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.executeCommand(
-          Array("domain.meta.describe", "--format", "yaml"),
+          Array(
+            s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+            "domain.meta.describe",
+            "--format",
+            "yaml"
+          ),
           subsystem => {
             val domain = TestComponentFactory.create("domain", Protocol.empty)
             domain.withArtifactMetadata(
@@ -695,7 +721,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the JSON format command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.executeCommand(
-          Array("domain.meta.describe", "--format", "json"),
+          Array(
+            s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+            "domain.meta.describe",
+            "--format",
+            "json"
+          ),
           subsystem => {
             val domain = TestComponentFactory.create("domain", Protocol.empty)
             domain.withArtifactMetadata(
@@ -720,7 +751,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the text format command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.executeCommand(
-          Array("domain.meta.describe", "--format", "text"),
+          Array(
+            s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+            "domain.meta.describe",
+            "--format",
+            "text"
+          ),
           subsystem => {
             val domain = TestComponentFactory.create("domain", Protocol.empty)
             domain.withArtifactMetadata(
@@ -745,10 +781,17 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for execute run-path with --path-resolution and dot selector")
       When("the path-resolution command is run")
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "--path-resolution", "admin.component"))
+        CncfRuntime().run(Array(
+          "command",
+          s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+          "--path-resolution",
+          "admin.component"
+        ))
       }
       Then("the path-resolution command succeeds")
-      code shouldBe 0
+      withClue(out) {
+        code shouldBe 0
+      }
       out.toLowerCase.contains("path-resolution failed") shouldBe false
     }
 
@@ -827,6 +870,26 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
     }
   }
 
+  private lazy val _controlled_test_descriptor_path: Path = {
+    val path = Files.createTempFile("cncf-command-execute-component-", ".yaml")
+    Files.writeString(
+      path,
+      """kind: test-descriptor
+        |execution:
+        |  profile: controlled
+        |  key: command-execute-component-spec
+        |  time:
+        |    mode: manual
+        |    start-at: 2026-08-11T00:00:00Z
+        |  random:
+        |    mode: seeded
+        |    seed: command-execute-component-spec
+        |""".stripMargin,
+      StandardCharsets.UTF_8
+    )
+    path
+  }
+
   private def _subsystem_with_domain() = {
     val domain = TestComponentFactory.create("domain", Protocol.empty)
     domain.withArtifactMetadata(
@@ -883,6 +946,6 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       }
     outps.flush()
     errps.flush()
-    (code, out.toString("UTF-8"))
+    (code, out.toString("UTF-8") + err.toString("UTF-8"))
   }
 }

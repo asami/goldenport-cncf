@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Mar. 25, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineProjectionSpec
@@ -106,9 +106,9 @@ final class StateMachineProjectionSpec
     }
 
     val core = Component.Core.create(
-      name = "projection_state_machine_spec",
-      componentid = ComponentId("projection_state_machine_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("projection_state_machine_spec")),
+      name = "org.goldenport.cncf.test.ProjectionStateMachineSpec",
+      componentid = ComponentId("org.goldenport.cncf.test.ProjectionStateMachineSpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProjectionStateMachineSpec")),
       protocol = Protocol.empty
     )
     val subsystem = TestComponentFactory.emptySubsystem("projection_state_machine_spec")
@@ -135,9 +135,9 @@ final class StateMachineProjectionSpec
     }
 
     val core = Component.Core.create(
-      name = "projection_state_machine_definition_spec",
-      componentid = ComponentId("projection_state_machine_definition_spec"),
-      instanceid = ComponentInstanceId.default(ComponentId("projection_state_machine_definition_spec")),
+      name = "org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec",
+      componentid = ComponentId("org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec"),
+      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec")),
       protocol = Protocol.empty
     )
     val subsystem = TestComponentFactory.emptySubsystem("projection_state_machine_definition_spec")
