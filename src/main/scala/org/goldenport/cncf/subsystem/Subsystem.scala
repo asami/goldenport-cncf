@@ -77,14 +77,14 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
 final class Subsystem(
   val name: String,
   val version: Option[String] = None,
-  @deprecatedName("scopeContext", "0.5.1") scopecontext: Option[ScopeContext] = None, // TODO
-  httpdriver: Option[HttpDriver] = None,
+  @deprecatedName("scopecontext", "0.5.2") scopeContext: Option[ScopeContext] = None, // TODO
+  @deprecatedName("httpdriver", "0.5.2") val httpDriver: Option[HttpDriver] = None,
   val configuration: ResolvedConfiguration,
   val aliasResolver: AliasResolver = GlobalRuntimeContext.current.map(_.aliasResolver).getOrElse(AliasResolver.empty),
-  @deprecatedName("runMode", "0.5.1")
-  runmode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server),
-  @deprecatedName("operationEvaluationCrossSinkPolicyOption", "0.5.1")
-  operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None,
+  @deprecatedName("runmode", "0.5.2")
+  runMode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server),
+  @deprecatedName("operationevaluationcrosssinkpolicyoption", "0.5.2")
+  operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] = None,
   private[cncf] systemnode: SystemNode = null
 ) {
   final case class ExecutionResult(
@@ -98,7 +98,7 @@ final class Subsystem(
   )
 
   private var _component_factory: ComponentFactory = new ComponentFactory(
-    workingsetclock = _find_global_runtime_context(scopecontext)
+    workingsetclock = _find_global_runtime_context(scopeContext)
       .map(_.executionProfileRuntime.runtimeClock.clock)
       .getOrElse(RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock)
   )
@@ -112,9 +112,8 @@ final class Subsystem(
   private[cncf] def systemNode: SystemNode = _system_node
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
-  private val _http_driver: Option[HttpDriver] = httpdriver
   private val _job_engine: JobEngine =
-    _find_global_runtime_context(scopecontext)
+    _find_global_runtime_context(scopeContext)
       .map(x => InMemoryJobEngine.create(x.executionProfileRuntime))
       .getOrElse(InMemoryJobEngine.create())
   private val _event_store: EventStore = EventStore.inMemory
@@ -147,12 +146,12 @@ final class Subsystem(
   private var _mcp_client_runtime: Option[CodexMcpRuntimeAssembly] = None
   private var _operation_tool_runtime: Option[OperationToolRuntimeRegistry] = None
   private val _operation_evaluation_cross_sink_policy =
-    operationevaluationcrosssinkpolicyoption
-      .orElse(scopecontext.flatMap(_.operationEvaluationCrossSinkPolicyOption))
+    operationEvaluationCrossSinkPolicyOption
+      .orElse(scopeContext.flatMap(_.operationEvaluationCrossSinkPolicyOption))
       .getOrElse(OperationEvaluationCrossSinkPolicy.disabled)
 
   private[cncf] def globalRuntimeContextOption: Option[GlobalRuntimeContext] =
-    _find_global_runtime_context(scopecontext).orElse(GlobalRuntimeContext.current)
+    _find_global_runtime_context(scopeContext).orElse(GlobalRuntimeContext.current)
 
   def globalRuntimeContext: GlobalRuntimeContext =
     globalRuntimeContextOption.getOrElse {
@@ -169,7 +168,6 @@ final class Subsystem(
       case None => None
     }
 
-  def httpDriver: Option[HttpDriver] = _http_driver
   def jobEngine: JobEngine = _job_engine
   def eventStore: EventStore = _event_store
   def eventBus: EventBus = _event_bus
@@ -683,7 +681,7 @@ final class Subsystem(
 
   // TODO SubsystemContext extends ScopeContext
   private val _subsystem_scope_context: ScopeContext =
-    scopecontext
+    scopeContext
       .map(ScopeContext.withOperationEvaluationCrossSinkPolicy(
         _,
         _operation_evaluation_cross_sink_policy
@@ -2390,7 +2388,7 @@ final class Subsystem(
     HttpStatus.fromInt(c.status.webCode.code).getOrElse(HttpStatus.InternalServerError)
 
   private val _alias_resolver: AliasResolver = aliasResolver
-  private val _http_run_mode: RunMode = runmode
+  private val _http_run_mode: RunMode = runMode
 
   // private def _ensure_system_context(
   //   component: Component

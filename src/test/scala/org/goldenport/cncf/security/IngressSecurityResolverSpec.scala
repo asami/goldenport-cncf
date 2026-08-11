@@ -50,6 +50,7 @@ import org.goldenport.configuration.{
   ResolvedConfiguration
 }
 import org.goldenport.protocol.{Property, Protocol, Request}
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -801,6 +802,243 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       }
     }
 
+    "preserve generated profile-bound ingress security invariants" which {
+      "admit cookie-only Fixed ingress as the configured standalone local user" in {
+        Given("bounded safe cookie names and session values with a Fixed local subject and no providers")
+        val cases = for {
+          cookiename <- _safe_security_value
+          sessionvalue <- _safe_security_value
+        } yield (cookiename, sessionvalue)
+
+        When("each generated cookie-only request is resolved through the Fixed profile")
+        val property = Prop.forAll(cases) { case (cookiename, sessionvalue) =>
+          val subsystem = _subsystem(
+            fallbackenabled = false,
+            providers = Vector.empty,
+            localsubject = Some(_local_subject)
+          )
+          val base = subsystem.components.head.logic.executionContext()
+          val resolution = IngressSecurityResolver.resolve(
+            SubsystemExecutionProfile.Fixed,
+            base,
+            Map("cookie" -> s"textus-session-$cookiename=$sessionvalue")
+          )
+          resolution.toOption.exists { resolved =>
+            val security = resolved.executionContext.security
+            security.principal.id.value == "standalone-local" &&
+              security.subjectKind == SubjectKind.User &&
+              security.hasCapability("user") &&
+              security.hasCapability("notification:read") &&
+              !SecuritySubject.from(security).isProviderAuthenticated
+          }
+        }
+        val result = Test.check(
+          Test.Parameters.default.withMinSuccessfulTests(40),
+          property
+        )
+
+        Then("at least forty generated cookie requests retain standalone local authority")
+        result.passed shouldBe true
+      }
+
+      "reject every explicit authentication material class without a Fixed-profile provider" in {
+        Given("bounded explicit authentication material with a Fixed local subject and no providers")
+        val cases = for {
+          authenticationclass <- Gen.oneOf(
+            "access_token",
+            "refresh_token",
+            "x-textus-session",
+            "federation.assertion",
+            "federation.authorization_code",
+            "federation.state"
+          )
+          value <- _safe_security_value
+        } yield (authenticationclass, value)
+
+        When("each generated explicit authentication request is resolved through the Fixed profile")
+        val property = Prop.forAll(cases) { case (authenticationclass, value) =>
+          val subsystem = _subsystem(
+            fallbackenabled = false,
+            providers = Vector.empty,
+            localsubject = Some(_local_subject)
+          )
+          val base = subsystem.components.head.logic.executionContext()
+          IngressSecurityResolver.resolve(
+            SubsystemExecutionProfile.Fixed,
+            base,
+            Map(authenticationclass -> value)
+          ) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+        }
+        val result = Test.check(
+          Test.Parameters.default.withMinSuccessfulTests(40),
+          property
+        )
+
+        Then("at least forty generated explicit authentication requests cannot bypass providers")
+        result.passed shouldBe true
+      }
+
+      "admit only generated provider Service results through Fixed ingress" in {
+        Given("generated access tokens, capabilities, and provider result kinds with a Fixed local subject")
+        val cases = for {
+          accesstoken <- _safe_security_value
+          capabilityname <- _safe_security_value
+          resultkind <- Gen.oneOf("service", "user", "none")
+        } yield (accesstoken, capabilityname, resultkind)
+
+        When("each generated provider result is resolved through the Fixed profile")
+        val property = Prop.forAll(cases) { case (accesstoken, capabilityname, resultkind) =>
+          val providerresult = resultkind match {
+            case "service" =>
+              Some(AuthenticationResult(
+                PrincipalId("generatedservice" + accesstoken),
+                capabilities = Set(Capability(capabilityname)),
+                level = SecurityLevel("service"),
+                subjectKind = SubjectKind.Service
+              ))
+            case "user" =>
+              Some(AuthenticationResult(PrincipalId("generateduser" + accesstoken)))
+            case "none" =>
+              None
+          }
+          val subsystem = _subsystem(
+            fallbackenabled = false,
+            localsubject = Some(_local_subject),
+            providers = Vector(_provider(
+              "generated-service-provider",
+              request =>
+                if (request.accessToken.contains(accesstoken))
+                  Consequence.success(providerresult)
+                else
+                  Consequence.success(None)
+            ))
+          )
+          val base = subsystem.components.head.logic.executionContext()
+          val resolution = IngressSecurityResolver.resolve(
+            SubsystemExecutionProfile.Fixed,
+            base,
+            Map("access_token" -> accesstoken)
+          )
+          resultkind match {
+            case "service" =>
+              resolution.toOption.exists { resolved =>
+                val security = resolved.executionContext.security
+                security.principal.id.value == "generatedservice" + accesstoken &&
+                  security.subjectKind == SubjectKind.Service &&
+                  security.level == SecurityLevel("service") &&
+                  security.hasCapability(capabilityname) &&
+                  SecuritySubject.from(security).isProviderAuthenticated
+              }
+            case _ =>
+              resolution match {
+                case Consequence.Failure(_) => true
+                case Consequence.Success(_) => false
+              }
+          }
+        }
+        val result = Test.check(
+          Test.Parameters.default.withMinSuccessfulTests(40),
+          property
+        )
+
+        Then("at least forty generated cases admit only provider-authenticated Service identities")
+        result.passed shouldBe true
+      }
+
+      "isolate generated authenticated and controlled profiles from fixed-user admission" in {
+        Given("a fixed-user collection and generated profile-specific authentication evidence")
+        val cases = for {
+          profile <- Gen.oneOf(
+            SubsystemExecutionProfile.Authenticated,
+            SubsystemExecutionProfile.ControlledTest
+          )
+          principalvalue <- _safe_security_value
+          accesstoken <- _safe_security_value
+        } yield (profile, principalvalue, accesstoken)
+
+        When("each generated non-Fixed profile admits the fixed-user collection before resolving ingress")
+        val property = Prop.forAll(cases) { case (profile, principalvalue, accesstoken) =>
+          profile match {
+            case SubsystemExecutionProfile.Authenticated =>
+              val principalid = "generatedprovider" + principalvalue
+              val subsystem = _subsystem(
+                fallbackenabled = false,
+                localsubject = Some(_local_subject),
+                providers = Vector(_provider(
+                  "generated-profile-provider",
+                  request =>
+                    if (request.accessToken.contains(accesstoken))
+                      Consequence.success(Some(AuthenticationResult(
+                        PrincipalId(principalid),
+                        attributes = Map(
+                          "locale" -> "fr-FR",
+                          "timeZone" -> "America/Los_Angeles"
+                        )
+                      )))
+                    else
+                      Consequence.success(None)
+                ))
+              )
+              val base = subsystem.components.head.logic.executionContext()
+              val admitted = subsystem.admitRuntimeConfigurationBindingsC(
+                _fixed_user_collection,
+                profile
+              )
+              val resolution = IngressSecurityResolver.resolve(
+                profile,
+                base,
+                Map("access_token" -> accesstoken)
+              )
+              admitted.isSuccess && subsystem.resolvedStandaloneUserProfile.isEmpty && resolution.toOption.exists { resolved =>
+                val security = resolved.executionContext.security
+                security.principal.id.value == principalid &&
+                  security.principal.id.value != "fixed-user" &&
+                  security.principal.id.value != "standalone-local" &&
+                  resolved.executionContext.runtime.context.formatting.locale == Locale.forLanguageTag("fr-FR") &&
+                  resolved.executionContext.runtime.context.formatting.timezone == ZoneId.of("America/Los_Angeles")
+              }
+            case SubsystemExecutionProfile.ControlledTest =>
+              val principalid = "generatedcontrolled" + principalvalue
+              val subsystem = _subsystem(
+                fallbackenabled = false,
+                localsubject = Some(_local_subject)
+              )
+              val base = subsystem.components.head.logic.executionContext()
+              val admitted = subsystem.admitRuntimeConfigurationBindingsC(
+                _fixed_user_collection,
+                profile
+              )
+              val resolution = IngressSecurityResolver.resolve(
+                profile,
+                base,
+                Map(
+                  "principal.id" -> principalid,
+                  "locale" -> "en-US"
+                )
+              )
+              admitted.isSuccess && subsystem.resolvedStandaloneUserProfile.isEmpty && resolution.toOption.exists { resolved =>
+                val security = resolved.executionContext.security
+                security.principal.id.value == principalid &&
+                  security.principal.id.value != "fixed-user" &&
+                  security.principal.id.value != "standalone-local" &&
+                  resolved.executionContext.runtime.context.formatting.locale == Locale.forLanguageTag("en-US") &&
+                  resolved.executionContext.runtime.context.formatting.timezone != ZoneId.of("Europe/Paris")
+              }
+          }
+        }
+        val result = Test.check(
+          Test.Parameters.default.withMinSuccessfulTests(30),
+          property
+        )
+
+        Then("at least thirty generated non-Fixed resolutions retain only their profile-specific identity and formatting")
+        result.passed shouldBe true
+      }
+    }
+
     "preserve local-subject and privilege-fallback semantics" which {
       "prefer a provider-authenticated subject over the configured local subject" in {
         Given("a subsystem with a provider and a configured local subject")
@@ -1300,6 +1538,9 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       attributes = Map("installation" -> "standalone"),
       securityLevel = Some("user")
     )
+
+  private val _safe_security_value: Gen[String] =
+    Gen.nonEmptyListOf(Gen.alphaNumChar).map(_.take(24).mkString)
 
   private def _fixed_user_collection: ConfigurationBindingCollection[CncfConfigurationTarget] = {
     val candidates = Vector[ConfigurationBindingCandidate[?, CncfConfigurationTarget]](

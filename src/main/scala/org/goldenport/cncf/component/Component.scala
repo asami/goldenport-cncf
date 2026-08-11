@@ -61,7 +61,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -249,7 +249,7 @@ abstract class Component() extends Component.Core.Holder {
     this
   }
 
-  def install_binding[Req, S](
+  def installBinding[Req, S](
     name: String,
     req: Req
   )(using ExecutionContext): Consequence[Component] =
@@ -259,6 +259,13 @@ abstract class Component() extends Component.Core.Holder {
       case None =>
         Consequence.serviceUnavailable(s"binding not found: $name")
     }
+
+  @deprecated("Use installBinding.", "0.5.2")
+  def install_binding[Req, S](
+    name: String,
+    req: Req
+  )(using ExecutionContext): Consequence[Component] =
+    installBinding(name, req)
 
   def withPort(port: Component.Port): Component = {
     _port = port
@@ -521,9 +528,12 @@ object Component {
   }
 
   final case class AggregateCollectionBinding(
-    aggregate_name: String,
+    @deprecatedName("aggregate_name", "0.5.2") aggregateName: String,
     collection: AggregateCollection[?]
-  )
+  ) {
+    @deprecated("Use aggregateName.", "0.5.2")
+    def aggregate_name: String = aggregateName
+  }
 
   final case class Binding[Req, S](
     port: org.goldenport.cncf.component.Port[Req, S]
@@ -761,25 +771,25 @@ object Component {
 
     def create(
       name: String,
-      componentid: ComponentId,
-      instanceid: ComponentInstanceId,
+      @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
+      @deprecatedName("instanceid", "0.5.2") instanceId: ComponentInstanceId,
       protocol: Protocol
     ): Core = {
-      create(name, componentid, instanceid, protocol, InMemoryJobEngine.create())
+      create(name, componentId, instanceId, protocol, InMemoryJobEngine.create())
     }
 
     def create(
       name: String,
-      componentid: ComponentId,
-      instanceid: ComponentInstanceId,
+      @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
+      @deprecatedName("instanceid", "0.5.2") instanceId: ComponentInstanceId,
       protocol: Protocol,
       jobEngine: JobEngine
     ): Core = {
       val mergedprotocol = _with_default_services(protocol)
       Core(
         name,
-        componentid,
-        instanceid,
+        componentId,
+        instanceId,
         mergedprotocol,
         ProtocolLogic(mergedprotocol),
         None,
@@ -790,14 +800,14 @@ object Component {
 
     def create(
       name: String,
-      componentid: ComponentId,
-      instanceid: ComponentInstanceId,
+      @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
+      @deprecatedName("instanceid", "0.5.2") instanceId: ComponentInstanceId,
       protocol: Protocol,
       factory: Component.Factory
     ): Core = create(
       name,
-      componentid,
-      instanceid,
+      componentId,
+      instanceId,
       protocol,
       ProtocolLogic(protocol),
       factory,
@@ -807,8 +817,8 @@ object Component {
 
     def create(
       name: String,
-      componentid: ComponentId,
-      instanceid: ComponentInstanceId,
+      @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
+      @deprecatedName("instanceid", "0.5.2") instanceId: ComponentInstanceId,
       protocol: Protocol,
       protocolLogic: ProtocolLogic,
       factory: Component.Factory,
@@ -818,8 +828,8 @@ object Component {
       val mergedprotocol = _with_default_services(protocol)
       Core(
         name,
-        componentid,
-        instanceid,
+        componentId,
+        instanceId,
         mergedprotocol,
         ProtocolLogic(mergedprotocol),
         Some(factory),
@@ -1073,37 +1083,26 @@ object Component {
           throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
       }
 
-    // private def _resolve_core(
-    //   params: ComponentInitParams,
-    //   comp: Component
-    // ): Component.Core = {
-    //   try {
-    //     comp.core
-    //   } catch {
-    //     case NonFatal(_) => params.core
-    //   }
-    // }
-
     protected final def spec_create(
       name: String,
-      componentid: ComponentId,
+      @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
       service: ServiceDefinition
     ): Component.Core =
-      spec_create(name, componentid, Vector(service))
+      spec_create(name, componentId, Vector(service))
 
     protected final def spec_create(
       name: String,
-      componentid: ComponentId,
+      @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
       services: Seq[ServiceDefinition]
     ): Component.Core = {
       val protocol = Protocol(
         services = ServiceDefinitionGroup(services),
         handler = ProtocolHandler.default
       )
-      val instanceid = ComponentInstanceId.default(componentid)
+      val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
         name,
-        componentid,
+        componentId,
         instanceid,
         protocol,
         this
@@ -1181,11 +1180,11 @@ object Component {
 
   def create(
     name: String,
-    componentid: ComponentId,
-    instanceid: ComponentInstanceId,
+    @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
+    @deprecatedName("instanceid", "0.5.2") instanceId: ComponentInstanceId,
     protocol: Protocol
   ): Component = {
-    val core = Core.create(name, componentid, instanceid, protocol)
+    val core = Core.create(name, componentId, instanceId, protocol)
     val r = Instance(core)
     core.serviceFactory.setup(r)
     r
@@ -1193,129 +1192,15 @@ object Component {
 
   def create(
     name: String,
-    componentid: ComponentId,
-    instanceid: ComponentInstanceId,
+    @deprecatedName("componentid", "0.5.2") componentId: ComponentId,
+    @deprecatedName("instanceid", "0.5.2") instanceId: ComponentInstanceId,
     protocol: Protocol,
     applicationConfig: ApplicationConfig
   ): Component = {
-    val c = create(name, componentid, instanceid, protocol)
+    val c = create(name, componentId, instanceId, protocol)
     c.withApplicationConfig(applicationConfig)
     c
   }
-
-  // def create(
-  //   name: String,
-  //   componentid: ComponentId,
-  //   instanceid: ComponentInstanceId,
-  //   protocol: Protocol,
-  //   serviceFactory: ServiceFactory
-  // ): Component = {
-  //   val core = Core.create(
-  //     name,
-  //     componentid,
-  //     instanceid,
-  //     protocol,
-  //     ProtocolLogic(protocol),
-  //     ActionEngine.create(),
-  //     InMemoryJobEngine.create(),
-  //     serviceFactory
-  //   )
-  //   val r = Instance(core)
-  //   serviceFactory.setup(r)
-  //   r
-  // }
-
-  // def create(
-  //   name: String,
-  //   componentid: ComponentId,
-  //   instanceid: ComponentInstanceId,
-  //   protocol: Protocol,
-  //   protocolLogic: ProtocolLogic,
-  //   actionEngine: ActionEngine,
-  //   jobEngine: JobEngine,
-  //   serviceFactory: ServiceFactory
-  // ): Component = {
-  //   val core = Core.create(
-  //     name,
-  //     componentid,
-  //     instanceid,
-  //     protocol,
-  //     protocolLogic,
-  //     actionEngine,
-  //     jobEngine,
-  //     serviceFactory
-  //   )
-  //   val r = Instance(core)
-  //   serviceFactory.setup(r)
-  //   r
-  // }
-
-  // def create(
-  //   name: String,
-  //   componentid: ComponentId,
-  //   instanceid: ComponentInstanceId,
-  //   protocol: Protocol
-  // ): Component = {
-  //   val servicefactory = ServiceFactory()
-  //   create(name, componentid, instanceid, protocol, servicefactory)
-  // }
-
-  // def create(
-  //   name: String,
-  //   componentid: ComponentId,
-  //   instanceid: ComponentInstanceId,
-  //   protocol: Protocol,
-  //   applicationConfig: ApplicationConfig
-  // ): Component = {
-  //   val c = create(name, componentid, instanceid, protocol)
-  //   c.withApplicationConfig(applicationConfig)
-  //   val conf = applicationConfig.config.getOrElse(org.goldenport.cncf.config.model.Config.empty)
-  //   c
-  // }
-
-  // def create(
-  //   name: String,
-  //   componentid: ComponentId,
-  //   instanceid: ComponentInstanceId,
-  //   protocol: Protocol,
-  //   serviceFactory: ServiceFactory
-  // ): Component = {
-  //   val r = create(
-  //     name,
-  //     componentid,
-  //     instanceid,
-  //     protocol,
-  //     ProtocolLogic(protocol),
-  //     ActionEngine.create(),
-  //     InMemoryJobEngine.create(),
-  //     serviceFactory
-  //   )
-  //   serviceFactory.setup(r)
-  //   r
-  // }
-
-  // def create(
-  //   name: String,
-  //   componentid: ComponentId,
-  //   instanceid: ComponentInstanceId,
-  //   protocol: Protocol,
-  //   protocolLogic: ProtocolLogic,
-  //   actionEngine: ActionEngine,
-  //   jobEngine: JobEngine,
-  //   serviceFactory: ServiceFactory
-  // ): Component = {
-  //   val core = Core(
-  //     name,
-  //     componentid,
-  //     instanceid,
-  //     protocol,
-  //     protocolLogic,
-  //     actionEngine,
-  //     jobEngine,
-  //     serviceFactory
-  //   )
-  //   Instance(core)
-  // }
   
   trait HealthContributor {
     def name: String

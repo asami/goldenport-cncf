@@ -19,7 +19,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Aug.  9, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -466,7 +466,7 @@ object GenericSubsystemFactory {
               )
           }
         ),
-        httpdriver = Some(runtimeconfig.httpDriver),
+        httpDriver = Some(runtimeconfig.httpDriver),
         configuration = configuration,
         aliasResolver = aliasresolver,
         runMode = runmode
@@ -628,7 +628,7 @@ object GenericSubsystemFactory {
               )
           }
         ),
-        httpdriver = Some(runtimeconfig.httpDriver),
+        httpDriver = Some(runtimeconfig.httpDriver),
         configuration = configuration,
         aliasResolver = aliasresolver,
         runMode = runmode

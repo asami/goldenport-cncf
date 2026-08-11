@@ -14,7 +14,7 @@ import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 
 /*
  * @since   Jul. 28, 2026
- * @version Aug.  9, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object CarArchiveFixture {
@@ -84,13 +84,25 @@ object CarArchiveFixture {
           case _ =>
             val nestedname = cursor.downField("component").get[String]("name").toOption
             val name = cursor.get[String]("name").toOption.orElse(nestedname)
-            val component = cursor.get[String]("component").toOption.orElse(nestedname).orElse(name)
+            val component = cursor.get[String]("component").toOption
+              .orElse(cursor.get[String]("componentName").toOption)
+              .orElse(nestedname)
+              .orElse(name)
             val version = cursor.get[String]("version").toOption
             for {
-              n <- name.map(_.trim).filter(_.nonEmpty)
               v <- version.map(_.trim).filter(_.nonEmpty)
               c <- component.map(_.trim).filter(_.nonEmpty)
-            } yield (n, v, c)
+              coordinate <- ComponentId.parseC(c).toOption match {
+                case Some(componentid) =>
+                  val result = ComponentReleaseCoordinate.create(componentid.sharedIdentity, v)
+                  if (result.isSuccess())
+                    Some((result.value().get().mavenArtifactId(), v, componentid.name))
+                  else
+                    None
+                case None =>
+                  name.map(_.trim).filter(_.nonEmpty).map(n => (n, v, c))
+              }
+            } yield coordinate
         }
       }
     }

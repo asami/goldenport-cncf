@@ -34,7 +34,7 @@ does not change Phase 53 contracts or completion criteria.
 
 ## HYG-P53-003 — CAR fixture component-name coordinate alias
 
-- Status: OPEN
+- Status: RESOLVED
 - Discovery: Phase 53 CS-05C focused re-review, 2026-08-01
 - Repository/path: `cloud-native-component-framework`,
   `src/test/scala/org/goldenport/cncf/component/testutil/CarArchiveFixture.scala`
@@ -46,10 +46,17 @@ does not change Phase 53 contracts or completion criteria.
 - Boundary: CNCF test-fixture hygiene. Extend coordinate extraction and add a
   runtime-admission regression separately; CS-05C uses canonical `component`
   evidence and does not change fixture infrastructure.
+- Resolution evidence: `cncf-goal-task-cncf-hygiene-20260811-01` adds the
+  canonical `componentName` coordinate projection and the directly covering
+  `CarRuntimeAdmissionSpec` structural runtime/ABI evidence regression. Focused
+  validation passed 126/126 tests in invocation
+  `15908-20260811T071918Z`; the final focused re-review passed. The task commit
+  is gated on the repository full `test`, so this resolution is not persisted
+  if final validation fails.
 
 ## HYG-P53-004 — Legacy HTTP executable-specification prose normalization
 
-- Status: OPEN (user-authorized defer, 2026-08-02)
+- Status: RESOLVED
 - Discovery: PM-53-01 focused re-review, 2026-08-02
 - Repository/path: `cloud-native-component-framework`,
   `src/test/scala/org/goldenport/cncf/http/AuthenticationWebSessionSpec.scala`
@@ -61,3 +68,10 @@ does not change Phase 53 contracts or completion criteria.
   mode-admission behavior, security result, or validation result is affected.
 - Boundary: a dedicated HTTP executable-specification hygiene task. Do not
   reopen PM-53-01 or change the Subsystem user-mode contract.
+- Resolution evidence: `cncf-goal-task-cncf-hygiene-20260811-01` applies the
+  admitted local-name and Given/When/Then normalization in
+  `AuthenticationWebSessionSpec` and `Http4sHttpServerDispatchSpec` without
+  behavior changes. Focused validation passed 126/126 tests in invocation
+  `15908-20260811T071918Z`; the final focused re-review passed. The task commit
+  is gated on the repository full `test`, so this resolution is not persisted
+  if final validation fails.

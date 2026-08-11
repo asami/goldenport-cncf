@@ -6,7 +6,7 @@ commit boundary.
 
 ## HYG-20260811-01 — Private helper naming
 
-- Status: `OPEN`
+- Status: `RESOLVED`
 - Discovery: Aug. 11, 2026, `cncf-validated-commit` focused review
 - Repository: `cloud-native-component-framework`
 - Location: `src/main/scala/org/goldenport/cncf/security/AuthenticationProviderRuntime.scala`, `_first_match_`
@@ -20,10 +20,16 @@ commit boundary.
   programs and the rename is unrelated to the security behavior being committed.
 - Proposed task: rename the private member to `_first_match` and run its directly
   covering authentication-provider specifications.
+- Resolution evidence: `cncf-goal-task-cncf-hygiene-20260811-01` renames the
+  class-level helper and all four callers without changing traversal behavior.
+  Focused validation passed 126/126 tests in invocation
+  `15908-20260811T071918Z`; the final focused re-review passed. The task commit
+  is gated on the repository full `test`, so this resolution is not persisted
+  if final validation fails.
 
 ## HYG-20260811-02 — Security property-based coverage
 
-- Status: `OPEN`
+- Status: `RESOLVED`
 - Discovery: Aug. 11, 2026, `cncf-validated-commit` focused review
 - Repository: `cloud-native-component-framework`
 - Location: `src/test/scala/org/goldenport/cncf/security/IngressSecurityResolverSpec.scala`
@@ -40,3 +46,10 @@ commit boundary.
 - Proposed task: define bounded generators for token, explicit-session, cookie,
   federation, provider-result, and execution-profile combinations, then add
   invariants without weakening the narrative examples.
+- Resolution evidence: `cncf-goal-task-cncf-hygiene-20260811-01` adds bounded
+  `IngressSecurityResolverSpec` properties for cookie/local, explicit-provider,
+  service-provider, and non-Fixed-profile isolation invariants. Focused
+  validation passed 126/126 tests in invocation
+  `15908-20260811T071918Z`; the final focused re-review passed. The task commit
+  is gated on the repository full `test`, so this resolution is not persisted
+  if final validation fails.

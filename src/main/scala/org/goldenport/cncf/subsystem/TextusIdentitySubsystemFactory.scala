@@ -12,7 +12,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Mar. 26, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object TextusIdentitySubsystemFactory {
@@ -105,7 +105,7 @@ object TextusIdentitySubsystemFactory {
               )
           }
         ),
-        httpdriver = Some(runtimeconfig.httpDriver),
+        httpDriver = Some(runtimeconfig.httpDriver),
         configuration = configuration,
         aliasResolver = aliasresolver,
         runMode = runmode

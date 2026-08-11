@@ -48,7 +48,7 @@ import cats.~>
  *  version Apr. 25, 2026
  *  version May. 31, 2026
  *  version Jul. 31, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -954,34 +954,3 @@ object ExecutionContextId {
       entropy = Some(idgeneration.opaqueId(s"execution-context.$purpose"))
     )
 }
-// final case class ExecutionContext(
-//   executionId: UniversalId,
-//   timestamp: Instant,
-//   environment: EnvironmentContext,
-//   security: Option[SecurityContext],
-//   observability: ObservabilityContext,
-//   resolvedConfig: ResolvedConfig,
-//   runtime: RuntimeContext
-// )
-
-// object ExecutionContext {
-//   // TEMPORARY builder (to be refined after demo)
-//   def build(
-//     runtime: RuntimeContext,
-//     resolvedConfig: ResolvedConfig,
-//     environment: EnvironmentContext,
-//     security: Option[SecurityContext] = None,
-//     observability: ObservabilityContext = ObservabilityContext.empty,
-//     executionId: UniversalId = UniversalId.generate("exec"),
-//     timestamp: Instant = Instant.now()
-//   ): ExecutionContext =
-//     ExecutionContext(
-//       executionId = executionId,
-//       timestamp = timestamp,
-//       environment = environment,
-//       security = security,
-//       observability = observability,
-//       resolvedConfig = resolvedConfig,
-//       runtime = runtime
-//     )
-// }

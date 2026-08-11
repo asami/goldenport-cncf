@@ -4,10 +4,11 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 import java.util.Comparator
-import java.util.zip.{ZipEntry, ZipOutputStream}
+import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 import scala.jdk.CollectionConverters._
-import scala.util.Try
+import scala.util.{Try, Using}
 
+import io.circe.parser.parse
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,9 +18,14 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.component.testutil.LegacyDeferredReleaseCarFixture
+import org.goldenport.cncf.component.testutil.{CarArchiveFixture, LegacyDeferredReleaseCarFixture}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 
+/*
+ * @since   Jul. 28, 2026
+ * @version Aug. 11, 2026
+ * @author  ASAMI, Tomoharu
+ */
 final class CarRuntimeAdmissionSpec
     extends AnyWordSpec
     with Matchers
@@ -116,6 +122,70 @@ final class CarRuntimeAdmissionSpec
 
           Then("the registered canonical identity is admitted through the legacy ABI boundary")
           admitted.toOption shouldBe Some(entry.componentid -> entry.release)
+        }
+      }
+
+      "emit canonical admission evidence from a qualified legacy componentName alias without using its display name as artifact identity" in {
+        _with_temp_dir { root =>
+          Given("a legacy descriptor with a human display name and a qualified componentName alias")
+          val content = root.resolve("content")
+          val descriptor = content.resolve("component-descriptor.json")
+          Files.createDirectories(content.resolve("component"))
+          Files.writeString(
+            descriptor,
+            s"""{
+               |  "name": "Fixture Display Name",
+               |  "componentName": "${_componentid.name}",
+               |  "version": "${_release}"
+               |}""".stripMargin,
+            StandardCharsets.UTF_8
+          )
+          Files.writeString(
+            content.resolve("component/main.jar"),
+            "component",
+            StandardCharsets.UTF_8
+          )
+          val archive = root.resolve("component-name-alias.car")
+
+          When("the fixture emits canonical runtime and ABI evidence from the qualified componentName alias")
+          CarArchiveFixture.write(
+            archive,
+            Vector(
+              "component-descriptor.json" -> descriptor,
+              "component/main.jar" -> content.resolve("component/main.jar")
+            )
+          )
+          val evidence = Using.resource(new ZipFile(archive.toFile)) { zip =>
+            def _read_archive_entry_(name: String): String =
+              Using.resource(zip.getInputStream(zip.getEntry(name))) { input =>
+                new String(input.readAllBytes(), StandardCharsets.UTF_8)
+              }
+
+            val runtimecursor = parse(_read_archive_entry_(CarRuntimeAdmission.MANIFEST_FILE))
+              .fold(error => fail(error.message), json => json)
+              .hcursor
+            val abicursor = parse(_read_archive_entry_(CarRuntimeAdmission.ABI_MANIFEST_FILE))
+              .fold(error => fail(error.message), json => json)
+              .hcursor
+            (
+              runtimecursor.downField("car").get[String]("name").toOption.get,
+              runtimecursor.downField("car").get[String]("version").toOption.get,
+              runtimecursor.downField("car").get[String]("component").toOption.get,
+              abicursor.get[String]("format").toOption.get,
+              abicursor.downField("component").get[String]("namespace").toOption.get,
+              abicursor.downField("component").get[String]("id").toOption.get,
+              abicursor.downField("component").get[String]("version").toOption.get
+            )
+          }
+
+          Then("the archive carries canonical runtime and ABI coordinates independently of the display name")
+          evidence._1 shouldBe _artifactname
+          evidence._2 shouldBe _release
+          evidence._3 shouldBe _componentid.name
+          evidence._4 shouldBe CarRuntimeAdmission.ABI_MANIFEST_FORMAT
+          evidence._5 shouldBe _componentid.namespace.value()
+          evidence._6 shouldBe _componentid.localId.value()
+          evidence._7 shouldBe _release
         }
       }
     }

@@ -15,7 +15,8 @@ import org.goldenport.cncf.collaborator.api
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait CollaboratorRepository {
@@ -54,16 +55,16 @@ object CollaboratorRepository {
     }
 
     private def _discover_from_jar(
-      jarPath: Path,
-      collaboratorApiUrl: Option[URL]
+      jarpath: Path,
+      collaboratorapiurl: Option[URL]
     ): Vector[CollaboratorEntry] = {
-      val origin = jarPath.getFileName.toString
-      val urls = collaboratorApiUrl match {
-        case Some(apiUrl) => Array(jarPath.toUri.toURL, apiUrl)
-        case None => Array(jarPath.toUri.toURL)
+      val origin = jarpath.getFileName.toString
+      val urls = collaboratorapiurl match {
+        case Some(apiurl) => Array(jarpath.toUri.toURL, apiurl)
+        case None => Array(jarpath.toUri.toURL)
       }
       val loader = new URLClassLoader(urls, null)
-      val classNames = Using.resource(new JarFile(jarPath.toFile)) { jar =>
+      val classnames = Using.resource(new JarFile(jarpath.toFile)) { jar =>
         jar
           .entries()
           .asScala
@@ -72,7 +73,7 @@ object CollaboratorRepository {
           .toVector
       }
       val services = _load_service_collaborators(loader, origin)
-      val candidates = classNames.flatMap(name => _load_class_collaborator(name, loader, origin))
+      val candidates = classnames.flatMap(name => _load_class_collaborator(name, loader, origin))
       _deduplicate(services ++ candidates)
     }
 
@@ -90,20 +91,20 @@ object CollaboratorRepository {
         .toVector
 
     private def _load_class_collaborator(
-      className: String,
+      classname: String,
       loader: ClassLoader,
       origin: String
     ): Option[CollaboratorEntry] = {
       try {
-        val cls = Class.forName(className, false, loader)
+        val cls = Class.forName(classname, false, loader)
         if (
           classOf[api.Collaborator].isAssignableFrom(cls) &&
           !cls.isInterface &&
           !Modifier.isAbstract(cls.getModifiers) &&
-          !className.endsWith("$")
+          !classname.endsWith("$")
         ) {
           val instance = cls.getDeclaredConstructor().newInstance().asInstanceOf[api.Collaborator]
-          Some(CollaboratorEntry(className, instance, loader, origin))
+          Some(CollaboratorEntry(classname, instance, loader, origin))
         } else {
           None
         }
@@ -122,9 +123,9 @@ object CollaboratorRepository {
         .values
         .toVector
 
-    private def _class_name_from_entry(entryName: String): String = {
-      val withoutExtension = entryName.substring(0, entryName.length - ".class".length)
-      withoutExtension.replace('/', '.').replace('\\', '.')
+    private def _class_name_from_entry(entryname: String): String = {
+      val withoutextension = entryname.substring(0, entryname.length - ".class".length)
+      withoutextension.replace('/', '.').replace('\\', '.')
     }
   }
 }

@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Aug.  1, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -723,7 +723,7 @@ final class ComponentFactory(
     storesnapshot: scala.collection.concurrent.TrieMap[EntityId, Any]
   ): EntityRealm[Any] = {
     given EntityPersistent[Any] = _entity_persistent_any
-    val state = new _IdRef[EntityRealmState[Any]](EntityRealmState(Map.empty))
+    val state = new IdRef[EntityRealmState[Any]](EntityRealmState(Map.empty))
     new EntityRealm[Any](
       entityName = name,
       loader = EntityLoader[Any](id => _load_entity_from_store(storesnapshot, id)),
@@ -761,7 +761,7 @@ final class ComponentFactory(
         Consequence.notImplemented("EntityPersistent[Any].fromRecord is not wired in bootstrap placeholder")
     }
 
-  private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+  private final class IdRef[A](initial: A) extends Ref[cats.Id, A] {
     private var _value: A = initial
 
     def get: A = synchronized {
@@ -852,7 +852,7 @@ final class ComponentFactory(
     val names = _aggregate_collection_names(component)
     val custombindings = component.factory.toVector.flatMap(_.aggregateCollectionBindings(component))
     names.foreach { name =>
-      custombindings.find(_.aggregate_name == name) match {
+      custombindings.find(_.aggregateName == name) match {
         case _ if aggregatespace.collectionOption[Any](name).isDefined =>
           ()
         case Some(binding) =>

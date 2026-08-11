@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionEngine
+import org.goldenport.cncf.entity.aggregate.AggregateCollection
 import org.goldenport.cncf.job.InMemoryJobEngine
 import org.goldenport.cncf.subsystem.{
   GenericSubsystemComponentBinding,
@@ -20,7 +21,7 @@ import scala.util.{Failure, Try}
 
 /*
  * @since   Aug.  7, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityContractSpec
@@ -135,6 +136,48 @@ final class Phase56ComponentIdentityContractSpec
         core.instanceId shouldBe instanceid
         core.instanceId.componentId shouldBe componentid
         core.instanceId.canonicalKey shouldBe "org.simplemodeling.textus.UserAccount@default"
+      }
+    }
+
+      "E2 retain identity through canonical named component API arguments" must _e2 {
+      "when Core and Component constructors use canonical identity labels" in {
+        Given("a qualified ComponentId, matching instance ID, and canonical aggregate binding label")
+        val componentid = ComponentId("org.simplemodeling.textus.UserAccount")
+        val instanceid = ComponentInstanceId.default(componentid)
+
+        When("the public Component APIs receive componentId, instanceId, and aggregateName arguments")
+        val core = Component.Core.create(
+          name = componentid.name,
+          componentId = componentid,
+          instanceId = instanceid,
+          protocol = Protocol.empty
+        )
+        val compatiblecore = Component.Core.create(
+          name = componentid.name,
+          componentid = componentid,
+          instanceid = instanceid,
+          protocol = Protocol.empty
+        )
+        val component = Component.create(
+          name = componentid.name,
+          componentId = componentid,
+          instanceId = instanceid,
+          protocol = Protocol.empty
+        )
+        val aggregate = Component.AggregateCollectionBinding(
+          aggregateName = "user_account",
+          collection = null.asInstanceOf[AggregateCollection[Any]]
+        )
+
+        Then("canonical names compile and preserve the exact component and aggregate identities")
+        core.componentId shouldBe componentid
+        core.instanceId shouldBe instanceid
+        compatiblecore.componentId shouldBe componentid
+        compatiblecore.instanceId shouldBe instanceid
+        component.core.componentId shouldBe componentid
+        component.core.instanceId shouldBe instanceid
+        aggregate.aggregateName shouldBe "user_account"
+        aggregate.aggregate_name shouldBe aggregate.aggregateName
       }
     }
 

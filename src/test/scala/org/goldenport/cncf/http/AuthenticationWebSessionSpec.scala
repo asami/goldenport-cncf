@@ -230,15 +230,15 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
     "define dedicated length limits for public auth identifiers" in {
       Given("identifier values at and beyond each public length boundary")
       When("the session and public-principal identifiers are parsed")
-      val validSession = SessionId.option("s" * SessionId.LENGTH_MAX).map(_.value)
-      val invalidSession = SessionId.option("s" * (SessionId.LENGTH_MAX + 1))
-      val validPrincipal = PublicPrincipalId.option("p" * PublicPrincipalId.LENGTH_MAX).map(_.value)
-      val invalidPrincipal = PublicPrincipalId.option("p" * (PublicPrincipalId.LENGTH_MAX + 1))
+      val validsession = SessionId.option("s" * SessionId.LENGTH_MAX).map(_.value)
+      val invalidsession = SessionId.option("s" * (SessionId.LENGTH_MAX + 1))
+      val validprincipal = PublicPrincipalId.option("p" * PublicPrincipalId.LENGTH_MAX).map(_.value)
+      val invalidprincipal = PublicPrincipalId.option("p" * (PublicPrincipalId.LENGTH_MAX + 1))
       Then("only values within their respective bounds are admitted")
-      validSession shouldBe Some("s" * SessionId.LENGTH_MAX)
-      invalidSession shouldBe None
-      validPrincipal shouldBe Some("p" * PublicPrincipalId.LENGTH_MAX)
-      invalidPrincipal shouldBe None
+      validsession shouldBe Some("s" * SessionId.LENGTH_MAX)
+      invalidsession shouldBe None
+      validprincipal shouldBe Some("p" * PublicPrincipalId.LENGTH_MAX)
+      invalidprincipal shouldBe None
     }
 
     "delegate exact login alias routes to provider-owned UI when configured" in {

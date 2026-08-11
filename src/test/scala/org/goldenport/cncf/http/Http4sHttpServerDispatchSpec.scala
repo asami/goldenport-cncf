@@ -168,6 +168,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("GET and HEAD requests are dispatched through the shared route surface")
       val getweb = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web"))).unsafeRunSync()
       val headweb = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web"))).unsafeRunSync()
       val headasset = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/assets/bootstrap.min.css"))).unsafeRunSync()
@@ -175,23 +176,30 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val headicons = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/assets/textus-material-icons.svg"))).unsafeRunSync()
       val postonly = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/blob/admin/associations/attach"))).unsafeRunSync()
       val headmcp = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/mcp"))).unsafeRunSync()
+      val headwebbody = headweb.body.compile.to(Array).unsafeRunSync().toVector
+      val headassetbody = headasset.body.compile.to(Array).unsafeRunSync().toVector
+      val headmaterialbody = headmaterial.body.compile.to(Array).unsafeRunSync().toVector
+      val headiconsbody = headicons.body.compile.to(Array).unsafeRunSync().toVector
+      val postonlybody = postonly.body.compile.to(Array).unsafeRunSync().toVector
+      val headmcpbody = headmcp.body.compile.to(Array).unsafeRunSync().toVector
 
+      Then("GET-backed HEAD responses retain metadata and omit response bodies")
       headweb.status shouldBe getweb.status
       headweb.contentType.map(_.mediaType) shouldBe getweb.contentType.map(_.mediaType)
-      headweb.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headwebbody shouldBe Vector.empty
       headasset.status.code shouldBe 200
       headasset.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
-      headasset.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headassetbody shouldBe Vector.empty
       headmaterial.status.code shouldBe 200
       headmaterial.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
-      headmaterial.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headmaterialbody shouldBe Vector.empty
       headicons.status.code shouldBe 200
       headicons.contentType.map(ct => s"${ct.mediaType.mainType}/${ct.mediaType.subType}") shouldBe Some("image/svg+xml")
-      headicons.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headiconsbody shouldBe Vector.empty
       postonly.status.code shouldBe 404
-      postonly.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      postonlybody shouldBe Vector.empty
       headmcp.status.code shouldBe 404
-      headmcp.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headmcpbody shouldBe Vector.empty
     }
 
     "keep web demo assist manifest disabled by default" in {
@@ -512,6 +520,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
       val server = _server(subsystem)
 
+      When("protected HTML and API form submissions are dispatched")
       val htmlresponse = server
         ._submit_operation_form(
           _post_form_request("/form/debug/http/echo", "body=hello"),
@@ -528,11 +537,14 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
           "echo"
         )
         .unsafeRunSync()
+      val htmlbody = htmlresponse.as[String].unsafeRunSync()
+      val apibody = apiresponse.as[String].unsafeRunSync()
 
+      Then("both protected submissions are rejected before form execution")
       htmlresponse.status.code shouldBe 403
       apiresponse.status.code shouldBe 403
-      htmlresponse.as[String].unsafeRunSync() should include ("Forbidden")
-      apiresponse.as[String].unsafeRunSync() should include ("Forbidden")
+      htmlbody should include ("Forbidden")
+      apibody should include ("Forbidden")
     }
 
     "return debug job id header for debug trace-job form-api requests" in {
@@ -903,16 +915,19 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("declared and undeclared component admin routes are dispatched")
       val applicationadmin = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/admin"))).unsafeRunSync()
       val declared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/notifications"))).unsafeRunSync()
       val undeclared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/unknown"))).unsafeRunSync()
       val applicationadminbody = applicationadmin.as[String].unsafeRunSync()
+      val declaredbody = declared.as[String].unsafeRunSync()
 
+      Then("only descriptor-declared component admin pages are rendered")
       applicationadmin.status.code shouldBe 200
       applicationadminbody should include ("Application Admin")
       applicationadminbody should include ("Notification Admin")
       declared.status.code shouldBe 200
-      declared.as[String].unsafeRunSync() should include ("Notification Admin")
+      declaredbody should include ("Notification Admin")
       undeclared.status.code shouldBe 404
     }
 
@@ -936,20 +951,25 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("observability summary, detail, and unknown routes are dispatched")
       val home = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability"))).unsafeRunSync()
       val metrics = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/metrics"))).unsafeRunSync()
       val diagnostics = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics"))).unsafeRunSync()
       val detail = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics/validation/ob04_format"))).unsafeRunSync()
       val unknown = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics/validation/missing"))).unsafeRunSync()
-
-      home.status.code shouldBe 200
-      home.as[String].unsafeRunSync() should include ("System Observability")
-      metrics.status.code shouldBe 200
-      metrics.as[String].unsafeRunSync() should include ("Observability Metrics")
-      diagnostics.status.code shouldBe 200
-      diagnostics.as[String].unsafeRunSync() should include ("ob04_format")
-      detail.status.code shouldBe 200
+      val homebody = home.as[String].unsafeRunSync()
+      val metricsbody = metrics.as[String].unsafeRunSync()
+      val diagnosticsbody = diagnostics.as[String].unsafeRunSync()
       val detailbody = detail.as[String].unsafeRunSync()
+
+      Then("the observability drill-down surface returns each documented response")
+      home.status.code shouldBe 200
+      homebody should include ("System Observability")
+      metrics.status.code shouldBe 200
+      metricsbody should include ("Observability Metrics")
+      diagnostics.status.code shouldBe 200
+      diagnosticsbody should include ("ob04_format")
+      detail.status.code shouldBe 200
       detailbody should include ("argument.invalid")
       detailbody should include ("1010401")
       unknown.status.code shouldBe 404
@@ -969,18 +989,23 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
+      When("knowledge index, component, node, and unknown routes are dispatched")
       val index = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge"))).unsafeRunSync()
       val componentpage = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/knowledge-component"))).unsafeRunSync()
       val nodepage = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/knowledge_component/nodes/node-1"))).unsafeRunSync()
       val unknowncomponent = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/missing"))).unsafeRunSync()
       val unknownnode = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/knowledge_component/nodes/missing"))).unsafeRunSync()
+      val indexbody = index.as[String].unsafeRunSync()
+      val componentbody = componentpage.as[String].unsafeRunSync()
+      val nodebody = nodepage.as[String].unsafeRunSync()
 
+      Then("the knowledge administration routes retain their declared status and content")
       index.status.code shouldBe 200
-      index.as[String].unsafeRunSync() should include ("System Knowledge")
+      indexbody should include ("System Knowledge")
       componentpage.status.code shouldBe 200
-      componentpage.as[String].unsafeRunSync() should include ("node-1")
+      componentbody should include ("node-1")
       nodepage.status.code shouldBe 200
-      nodepage.as[String].unsafeRunSync() should include ("Node One")
+      nodebody should include ("Node One")
       unknowncomponent.status.code shouldBe 404
       unknownnode.status.code shouldBe 404
     }

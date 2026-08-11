@@ -8,8 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- *  version Apr.  7, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PortBindingSpec
@@ -20,7 +20,7 @@ final class PortBindingSpec
   "PortApi" should {
     "resolve a service contract from a named requirement" in {
       Given("a requirement and a resolution-side port api")
-      val requirement = _Requirement("generate")
+      val requirement = Requirement("generate")
       val api = _port_api()
 
       When("the requirement is resolved")
@@ -28,7 +28,7 @@ final class PortBindingSpec
 
       Then("the expected service contract is returned")
       result.toOption.get.name shouldBe "generate-service"
-      result.toOption.get.runtimeClass shouldBe classOf[_GenerateService]
+      result.toOption.get.runtimeClass shouldBe classOf[GenerateService]
     }
   }
 
@@ -36,7 +36,7 @@ final class PortBindingSpec
     "expose the current normalized variation state" in {
       Given("a requirement with configured variation fields")
       given ExecutionContext = ExecutionContext.create()
-      val requirement = _Requirement(
+      val requirement = Requirement(
         capability = "generate",
         provider = Some("gemma"),
         mode = Some("local"),
@@ -58,7 +58,7 @@ final class PortBindingSpec
     "inject a new variation selection into the requirement" in {
       Given("a requirement and a variation selection")
       given ExecutionContext = ExecutionContext.create()
-      val requirement = _Requirement("generate")
+      val requirement = Requirement("generate")
       val variation = _variation_point()
       val selection = VariationSelection(
         provider = Some("remote-gemma"),
@@ -83,7 +83,7 @@ final class PortBindingSpec
       Given("a port definition with multiple extension points")
       given ExecutionContext = ExecutionContext.create()
       val binding = _binding()
-      val requirement = _Requirement(
+      val requirement = Requirement(
         capability = "generate",
         provider = Some("gemma"),
         mode = Some("local"),
@@ -101,7 +101,7 @@ final class PortBindingSpec
       Given("a port definition and an unsupported variation")
       given ExecutionContext = ExecutionContext.create()
       val binding = _binding()
-      val requirement = _Requirement(
+      val requirement = Requirement(
         capability = "generate",
         provider = Some("unknown"),
         mode = Some("remote"),
@@ -119,11 +119,11 @@ final class PortBindingSpec
   "Binding result and Component.Port registry" should {
     "remain separate from runtime invocation semantics" in {
       Given("an injected service stored in the component service registry")
-      val service = _GenerateServiceImpl("local-gemma")
+      val service = GenerateServiceImpl("local-gemma")
       val registry = Component.Port.of(service)
 
       When("the service is loaded from the registry")
-      val result = registry.get[_GenerateService]
+      val result = registry.get[GenerateService]
 
       Then("the injected service is retrieved directly without a runtime port invocation")
       result.map(_.generate("hello")) shouldBe Some("generated:local-gemma")
@@ -169,7 +169,7 @@ final class PortBindingSpec
       Given("a component with a named binding and an empty service registry")
       given ExecutionContext = ExecutionContext.create()
       val component = new Component() {}
-      val requirement = _Requirement(
+      val requirement = Requirement(
         capability = "generate",
         provider = Some("gemma"),
         mode = Some("local"),
@@ -178,13 +178,35 @@ final class PortBindingSpec
       component.withBinding("generate", _binding())
 
       When("the named binding is installed")
-      val result = component.install_binding[_Requirement, _GenerateService](
+      val result = component.installBinding[Requirement, GenerateService](
         name = "generate",
         req = requirement
       )
 
       Then("the resolved service is available from Component.Port")
-      result.toOption.get.port.get[_GenerateService].map(_.generate("hello")) shouldBe Some("generated:local-gemma")
+      result.toOption.get.port.get[GenerateService].map(_.generate("hello")) shouldBe Some("generated:local-gemma")
+    }
+
+    "install a named binding result through the deprecated forwarding API" in {
+      Given("a component with a named binding and an empty service registry")
+      given ExecutionContext = ExecutionContext.create()
+      val component = new Component() {}
+      val requirement = Requirement(
+        capability = "generate",
+        provider = Some("gemma"),
+        mode = Some("local"),
+        engine = Some("ollama")
+      )
+      component.withBinding("generate", _binding())
+
+      When("the named binding is installed through the compatible forwarding API")
+      val result = component.install_binding[Requirement, GenerateService](
+        name = "generate",
+        req = requirement
+      )
+
+      Then("the resolved service is available from Component.Port")
+      result.toOption.get.port.get[GenerateService].map(_.generate("hello")) shouldBe Some("generated:local-gemma")
     }
 
     "return failure when a requested named binding is missing" in {
@@ -194,9 +216,9 @@ final class PortBindingSpec
       component.withBinding("chat", _binding())
 
       When("a different binding name is installed")
-      val result = component.install_binding[_Requirement, _GenerateService](
+      val result = component.installBinding[Requirement, GenerateService](
         name = "generate",
-        req = _Requirement("generate")
+        req = Requirement("generate")
       )
 
       Then("an explicit failure is returned")
@@ -204,7 +226,7 @@ final class PortBindingSpec
     }
   }
 
-  private def _binding(): Component.Binding[_Requirement, _GenerateService] =
+  private def _binding(): Component.Binding[Requirement, GenerateService] =
     Component.Binding(
       org.goldenport.cncf.component.Port(
         api = _port_api(),
@@ -213,15 +235,15 @@ final class PortBindingSpec
       )
     )
 
-  private def _port_api(): PortApi[_Requirement, _GenerateService] =
-    new PortApi[_Requirement, _GenerateService] {
-      def resolve(req: _Requirement): Consequence[ServiceContract[_GenerateService]] =
+  private def _port_api(): PortApi[Requirement, GenerateService] =
+    new PortApi[Requirement, GenerateService] {
+      def resolve(req: Requirement): Consequence[ServiceContract[GenerateService]] =
         req.capability match {
           case "generate" =>
             Consequence.success(
               ServiceContract(
                 name = "generate-service",
-                runtimeClass = classOf[_GenerateService]
+                runtimeClass = classOf[GenerateService]
               )
             )
           case m =>
@@ -229,9 +251,9 @@ final class PortBindingSpec
         }
     }
 
-  private def _variation_point(): VariationPoint[_Requirement] =
-    new VariationPoint[_Requirement] {
-      def current(req: _Requirement)(using ExecutionContext): Consequence[VariationSelection] =
+  private def _variation_point(): VariationPoint[Requirement] =
+    new VariationPoint[Requirement] {
+      def current(req: Requirement)(using ExecutionContext): Consequence[VariationSelection] =
         Consequence.success(
           VariationSelection(
             provider = req.provider,
@@ -241,9 +263,9 @@ final class PortBindingSpec
         )
 
       def inject(
-        req: _Requirement,
+        req: Requirement,
         selection: VariationSelection
-      )(using ExecutionContext): Consequence[_Requirement] =
+      )(using ExecutionContext): Consequence[Requirement] =
         Consequence.success(
           req.copy(
             provider = selection.provider,
@@ -253,10 +275,10 @@ final class PortBindingSpec
         )
     }
 
-  private def _local_extension_point(): ExtensionPoint[_GenerateService] =
-    new ExtensionPoint[_GenerateService] {
+  private def _local_extension_point(): ExtensionPoint[GenerateService] =
+    new ExtensionPoint[GenerateService] {
       def supports(
-        contract: ServiceContract[_GenerateService],
+        contract: ServiceContract[GenerateService],
         variation: VariationSelection
       )(using ExecutionContext): Boolean =
         contract.name == "generate-service" &&
@@ -265,16 +287,16 @@ final class PortBindingSpec
           variation.engine.contains("ollama")
 
       def provide(
-        contract: ServiceContract[_GenerateService],
+        contract: ServiceContract[GenerateService],
         variation: VariationSelection
-      )(using ExecutionContext): Consequence[_GenerateService] =
-        Consequence.success(_GenerateServiceImpl("local-gemma"))
+      )(using ExecutionContext): Consequence[GenerateService] =
+        Consequence.success(GenerateServiceImpl("local-gemma"))
     }
 
-  private def _remote_extension_point(): ExtensionPoint[_GenerateService] =
-    new ExtensionPoint[_GenerateService] {
+  private def _remote_extension_point(): ExtensionPoint[GenerateService] =
+    new ExtensionPoint[GenerateService] {
       def supports(
-        contract: ServiceContract[_GenerateService],
+        contract: ServiceContract[GenerateService],
         variation: VariationSelection
       )(using ExecutionContext): Boolean =
         contract.name == "generate-service" &&
@@ -282,26 +304,26 @@ final class PortBindingSpec
           variation.mode.contains("remote")
 
       def provide(
-        contract: ServiceContract[_GenerateService],
+        contract: ServiceContract[GenerateService],
         variation: VariationSelection
-      )(using ExecutionContext): Consequence[_GenerateService] =
-        Consequence.success(_GenerateServiceImpl("remote-gemma"))
+      )(using ExecutionContext): Consequence[GenerateService] =
+        Consequence.success(GenerateServiceImpl("remote-gemma"))
     }
 
-  private final case class _Requirement(
+  private final case class Requirement(
     capability: String,
     provider: Option[String] = None,
     mode: Option[String] = None,
     engine: Option[String] = None
   )
 
-  private trait _GenerateService {
+  private trait GenerateService {
     def generate(prompt: String): String
   }
 
-  private final case class _GenerateServiceImpl(
+  private final case class GenerateServiceImpl(
     name: String
-  ) extends _GenerateService {
+  ) extends GenerateService {
     def generate(prompt: String): String =
       s"generated:$name"
   }

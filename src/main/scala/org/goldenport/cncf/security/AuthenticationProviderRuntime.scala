@@ -8,7 +8,7 @@ import org.goldenport.cncf.context.{ExecutionContext, ScopeContext}
  * Shared authentication-provider traversal rules.
  *
  * @since   Apr. 23, 2026
- * @version Apr. 23, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object AuthenticationProviderRuntime {
@@ -22,42 +22,42 @@ private[cncf] object AuthenticationProviderRuntime {
     base: ExecutionContext,
     request: AuthenticationRequest
   ): Consequence[Option[AuthenticationResult]] =
-    _first_match_(providers(base), _.authenticate(request)(using base))
+    _first_match(providers(base), _.authenticate(request)(using base))
 
   def login(
     base: ExecutionContext,
     request: AuthenticationRequest
   ): Consequence[Option[AuthenticationResult]] =
-    _first_match_(providers(base), _.login(request)(using base))
+    _first_match(providers(base), _.login(request)(using base))
 
   def current_session(
     base: ExecutionContext,
     request: AuthenticationRequest
   ): Consequence[Option[AuthenticationResult]] =
-    _first_match_(providers(base), _.currentSession(request)(using base))
+    _first_match(providers(base), _.currentSession(request)(using base))
 
   def logout(
     base: ExecutionContext,
     request: AuthenticationRequest
   ): Consequence[Option[org.goldenport.cncf.context.SessionContext]] =
-    _first_match_(providers(base), _.logout(request)(using base))
+    _first_match(providers(base), _.logout(request)(using base))
 
-  private def _first_match_[A](
+  private def _first_match[A](
     providers: Vector[AuthenticationProvider],
     f: AuthenticationProvider => Consequence[Option[A]]
   ): Consequence[Option[A]] = {
-    def go(rest: Vector[AuthenticationProvider]): Consequence[Option[A]] =
+    def _go_(rest: Vector[AuthenticationProvider]): Consequence[Option[A]] =
       rest.headOption match {
         case Some(provider) =>
           f(provider).flatMap {
             case Some(result) => Consequence.success(Some(result))
-            case None => go(rest.tail)
+            case None => _go_(rest.tail)
           }
         case None =>
           Consequence.success(None)
       }
 
-    go(providers)
+    _go_(providers)
   }
 
   @annotation.tailrec

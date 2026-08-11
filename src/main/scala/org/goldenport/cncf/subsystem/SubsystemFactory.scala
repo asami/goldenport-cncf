@@ -36,7 +36,7 @@ import org.goldenport.protocol.spec as spec
  *  version Mar. 29, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Aug.  3, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -260,7 +260,7 @@ object DefaultSubsystemFactory {
               )
           }
         ),
-        httpdriver = Some(driver),
+        httpDriver = Some(driver),
         configuration = configuration,
         aliasResolver = aliasResolver,
         runMode = runmode

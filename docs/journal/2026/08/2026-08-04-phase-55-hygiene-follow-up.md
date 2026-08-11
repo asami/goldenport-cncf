@@ -2,7 +2,7 @@
 
 ## HYG-P55-001 — Subsystem public constructor parameter naming
 
-- Status: OPEN (discovered 2026-08-04 during GCF-09H REVIEW)
+- Status: RESOLVED
 - Repository and location: `cloud-native-component-framework`,
   `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala`, primary
   constructor parameter labels.
@@ -18,11 +18,17 @@
 - Proposed boundary: a dedicated compatibility-preserving constructor API
   migration that inventories named-argument callers and provides an explicit
   deprecation/migration plan before renaming the canonical labels.
-- Resolution reference: none.
+- Resolution reference: `cncf-goal-task-cncf-hygiene-20260811-01`.
+- Resolution evidence: `cncf-goal-task-cncf-hygiene-20260811-01` applies the
+  source-compatible `@deprecatedName` constructor migration and updates the
+  admitted factory callsites. Focused validation passed 126/126 tests in
+  invocation `15908-20260811T071918Z`; the final focused re-review passed. The
+  task commit is gated on the repository full `test`, so this resolution is not
+  persisted if final validation fails.
 
 ## HYG-P55-002 — CollaboratorRepository naming hygiene
 
-- Status: OPEN (discovered 2026-08-04 during GCF-09J REVIEW)
+- Status: RESOLVED
 - Repository and location: `cloud-native-component-framework`,
   `src/main/scala/org/goldenport/cncf/backend/collaborator/CollaboratorRepository.scala`,
   private parameters and local values.
@@ -36,11 +42,17 @@
   incidental cleanup is therefore not admitted to this review-fix.
 - Proposed boundary: a dedicated Phase 55 hygiene task that reviews and repairs
   the complete file without mixing it into collaborator bootstrap behavior.
-- Resolution reference: none.
+- Resolution reference: `cncf-goal-task-cncf-hygiene-20260811-01`.
+- Resolution evidence: `cncf-goal-task-cncf-hygiene-20260811-01` completes
+  the private/local flatcase migration within `CollaboratorRepository` only.
+  Focused validation passed 126/126 tests in invocation
+  `15908-20260811T071918Z`; the final focused re-review passed. The task commit
+  is gated on the repository full `test`, so this resolution is not persisted
+  if final validation fails.
 
 ## HYG-P55-003 — Retired configuration symbols in dormant source comments
 
-- Status: OPEN (discovered 2026-08-04 during GCF-09K REVIEW)
+- Status: RESOLVED
 - Repository and locations: `cloud-native-component-framework`,
   `src/main/scala/org/goldenport/cncf/component/Component.scala` and
   `src/main/scala/org/goldenport/cncf/context/ExecutionContext.scala`, dormant
@@ -53,7 +65,15 @@
 - Proposed boundary: a dedicated hygiene task that reviews the complete dormant
   blocks and removes them or updates any retained example to generic
   configuration terminology.
-- Resolution reference: none.
+- Resolution reference: `cncf-goal-task-cncf-hygiene-20260811-01`.
+- Resolution evidence: `cncf-goal-task-cncf-hygiene-20260811-01` deliberately
+  removes the complete dormant construction/configuration comment blocks from
+  `Component.scala` and `ExecutionContext.scala`, including adjacent obsolete
+  overload sketches and `_resolve_core`, while retaining executable
+  configuration paths. Focused validation passed 126/126 tests in invocation
+  `15908-20260811T071918Z`; the final focused re-review passed. The task commit
+  is gated on the repository full `test`, so this resolution is not persisted
+  if final validation fails.
 
 ## HYG-P55-004 — ArtScene test-support public parameter naming
 
