@@ -1,11 +1,15 @@
 # Phase 57.1 - Plain Action Direct Execution
 
-status=planned
+status=in-progress
 split_from=[Phase 57](phase-57.md)
 depends_on=[Phase 57](phase-57.md)
 successor=[Phase 57.2](phase-57.2.md)
 checklist=[Phase 57.1 Checklist](phase-57.1-checklist.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
+completed=AES-01 Inventory and Contract Freeze
+next=AES-02 Failing-First Execution Matrix
+inventory=[AES-01 action execution inventory](../notes/phase-57.1-aes01-action-execution-inventory.md)
+spec=[Action execution semantics](../spec/action-execution-semantics.md)
 
 ## Goal
 
