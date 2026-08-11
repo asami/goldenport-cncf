@@ -444,6 +444,53 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
         subject.hasRole("user") shouldBe true
       }
 
+      "retain the trusted local subject when a stale Web session cookie is present" in {
+        Given("a fixed subsystem with a trusted local subject and a stale ArtScene session cookie")
+        val subsystem = _subsystem(
+          fallbackenabled = false,
+          localsubject = Some(_local_subject),
+          providers = Vector.empty
+        )
+        val base = subsystem.components.head.logic.executionContext()
+
+        When("the fixed profile resolves the stale session cookie")
+        val result = IngressSecurityResolver.resolve(
+          SubsystemExecutionProfile.Fixed,
+          base,
+          Map("cookie" -> "textus-session-textus-art-scene=stale-session")
+        )
+
+        Then("the configured local user remains authoritative and provider authentication is absent")
+        result shouldBe a[Consequence.Success[_]]
+        val security = result.toOption.get.executionContext.security
+        val subject  = SecuritySubject.from(security)
+        security.principal.id.value shouldBe "standalone-local"
+        security.subjectKind shouldBe SubjectKind.User
+        security.hasCapability("user") shouldBe true
+        security.hasCapability("notification:read") shouldBe true
+        subject.isProviderAuthenticated shouldBe false
+      }
+
+      "require provider authentication for an explicit session header" in {
+        Given("a fixed subsystem with a trusted local subject but no authentication provider")
+        val subsystem = _subsystem(
+          fallbackenabled = false,
+          localsubject = Some(_local_subject),
+          providers = Vector.empty
+        )
+        val base = subsystem.components.head.logic.executionContext()
+
+        When("the fixed profile receives an explicit session header")
+        val result = IngressSecurityResolver.resolve(
+          SubsystemExecutionProfile.Fixed,
+          base,
+          Map("x-textus-session" -> "explicit-session")
+        )
+
+        Then("the local subject does not bypass provider authentication")
+        result shouldBe a[Consequence.Failure[_]]
+      }
+
       "require explicit local-subject evidence for a fixed execution profile" in {
         Given("a subsystem with a configured local subject")
         val subsystem = _subsystem(

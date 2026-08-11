@@ -166,7 +166,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val request = AuthenticationRequest(attributes)
     profile.currentUserEvidence match {
       case SubsystemCurrentUserEvidence.Fixed =>
-        if (!_has_local_subject_override_material(request))
+        if (!_has_fixed_profile_authentication_material(request))
           _resolved_local_subject(base)
             .map(Consequence.success)
             .getOrElse(Consequence.securityPermissionDenied("Fixed user profile requires a configured local subject."))
@@ -505,6 +505,10 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     request.accessToken.exists(_.trim.nonEmpty) ||
       request.refreshToken.exists(_.trim.nonEmpty) ||
       request.hasFederationCallbackMaterial
+
+  private def _has_fixed_profile_authentication_material(request: AuthenticationRequest): Boolean =
+    _has_authentication_material(request) ||
+      AuthenticationRequest.findFirst(request.attributes, AuthenticationRequest.SESSION_ID_KEYS).isDefined
 
   private def _has_local_subject_override_material(request: AuthenticationRequest): Boolean =
     _has_authentication_material(request) || request.sessionId.exists(_.trim.nonEmpty)
