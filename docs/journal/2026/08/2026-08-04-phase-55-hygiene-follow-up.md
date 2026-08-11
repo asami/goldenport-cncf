@@ -77,7 +77,7 @@
 
 ## HYG-P55-004 — ArtScene test-support public parameter naming
 
-- Status: OPEN (discovered 2026-08-04 during GCF-10D RE_REVIEW)
+- Status: RESOLVED (2026-08-11; validation and task commit gated)
 - Repository and location: `textus-art-scene`,
   `src/test/scala/org/simplemodeling/textus/artscene/ArtSceneTestSupport.scala`,
   public `componentUnderTest` and `fixture` parameter labels and their named
@@ -96,4 +96,8 @@
 - Proposed boundary: a dedicated ArtScene test-support naming migration that
   inventories every named caller, renames the complete public helper surface,
   and validates the full ArtScene specification suite.
-- Resolution reference: none.
+- Resolution evidence: `cncf-goal-task-cross-project-hygiene-20260811-01`
+  renames the public ArtScene test-support parameters to canonical camelCase
+  and migrates every admitted named caller atomically. Final resolution remains
+  gated on the parent-selected validation and task commit; no invocation ID is
+  asserted here.
