@@ -19,7 +19,7 @@ import org.goldenport.schema.DataType
  * @since   Apr. 23, 2026
  *  version Apr. 24, 2026
  *  version May.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthComponent() extends Component {
@@ -129,13 +129,13 @@ object AuthComponent {
       }
 
     def currentSession(request: AuthenticationRequest)(using ExecutionContext): Consequence[SessionSummary] =
-      _with_auth_provider(ctx => AuthenticationProviderRuntime.current_session(ctx, request)).flatMap {
+      _with_auth_provider(ctx => AuthenticationProviderRuntime.currentSession(ctx, request)).flatMap {
         case Some(result) =>
           Consequence.success(_session_summary(result))
         case None =>
           _provider_session_request match {
             case Some(sessionrequest) =>
-              _with_auth_provider(ctx => AuthenticationProviderRuntime.current_session(ctx, sessionrequest)).map {
+              _with_auth_provider(ctx => AuthenticationProviderRuntime.currentSession(ctx, sessionrequest)).map {
                 case Some(result) => _session_summary(result)
                 case None => _security_summary.getOrElse(_anonymous_summary)
               }

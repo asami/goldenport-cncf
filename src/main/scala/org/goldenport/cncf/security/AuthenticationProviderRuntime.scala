@@ -30,7 +30,7 @@ private[cncf] object AuthenticationProviderRuntime {
   ): Consequence[Option[AuthenticationResult]] =
     _first_match(providers(base), _.login(request)(using base))
 
-  def current_session(
+  def currentSession(
     base: ExecutionContext,
     request: AuthenticationRequest
   ): Consequence[Option[AuthenticationResult]] =
