@@ -33,7 +33,7 @@ import org.goldenport.schema.DataConfidentiality
  *  version Apr. 25, 2026
  *  version May. 17, 2026
  *  version Jun. 18, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -93,6 +93,29 @@ class ActionEngine(
         runtime.setResolvedParameters(params)
         val inputattributes = _calltree_input_attributes(call, params)
         var leaveattributes: Map[String, String] = Map.empty
+        def _record_pre_execution_failure_(
+          conclusion: org.goldenport.Conclusion
+        ): Unit = {
+          leaveattributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
+          calltree.failure(
+            "io:error",
+            ConclusionDiagnostics.classify(conclusion).diagnosticKey,
+            _calltree_error_attributes(conclusion) + ("calltree_kind" -> "io-error")
+          )
+          executionoutcome = Some(Left(conclusion))
+          observe_leave(call, Consequence.Failure(conclusion))
+          val _ = ObservabilityEngine.build( // TODO
+            scope = ScopeContext(
+              kind = ScopeKind.Action,
+              name = call.action.name,
+              parent = None,
+              observabilityContext = ec.observability
+            ),
+            http = None,
+            operation = Some(OperationContext(call.action.name)),
+            outcome = Left(conclusion)
+          )
+        }
         def _record_thrown_failure_(e: Throwable): org.goldenport.Conclusion = {
           val primary = org.goldenport.Conclusion.from(e)
           val evaluationattemptid =
@@ -128,58 +151,76 @@ class ActionEngine(
             // Observation hooks apply only to executed actions.
             observe_enter(call)
             try {
-              val executed = call.execute()
-              val evaluationattemptid =
-                ec.operationEvaluation.correlation.map(_.attemptId)
-              val r = executed match {
-                case Consequence.Success(response) =>
-                  runtime.commitC(evaluationattemptid).map(_ => response)
-                case Consequence.Failure(primary) =>
-                  runtime.abortC(evaluationattemptid) match {
-                    case Consequence.Success(_) => Consequence.Failure(primary)
-                    case Consequence.Failure(cleanup) => Consequence.Failure(cleanup ++ primary)
+              def _execute_and_finalize_(): Consequence[OperationResponse] = {
+                val executed = call.execute()
+                val evaluationattemptid =
+                  ec.operationEvaluation.correlation.map(_.attemptId)
+                executed match {
+                  case Consequence.Success(response) =>
+                    runtime.commitC(evaluationattemptid).map(_ => response)
+                  case Consequence.Failure(primary) =>
+                    runtime.abortC(evaluationattemptid) match {
+                      case Consequence.Success(_) => Consequence.Failure(primary)
+                      case Consequence.Failure(cleanup) => Consequence.Failure(cleanup ++ primary)
+                    }
+                }
+              }
+              def _execute_and_record_(): Consequence[OperationResponse] =
+                try {
+                  val r = _execute_and_finalize_()
+                  r match {
+                    case Consequence.Success(response) =>
+                      leaveattributes = _calltree_output_attributes(call, response) + ("outcome" -> "success")
+                      executionoutcome = Some(Right(response))
+                    case Consequence.Failure(conclusion) =>
+                      leaveattributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
+                      calltree.failure(
+                        "io:error",
+                        ConclusionDiagnostics.classify(conclusion).diagnosticKey,
+                        _calltree_error_attributes(conclusion) +
+                          ("calltree_kind" -> "io-error")
+                      )
+                      executionoutcome = Some(Left(conclusion))
                   }
-              }
-              r match {
-                case Consequence.Success(response) =>
-                  leaveattributes = _calltree_output_attributes(call, response) + ("outcome" -> "success")
-                  executionoutcome = Some(Right(response))
-                case Consequence.Failure(conclusion) =>
-                  leaveattributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
-                  calltree.failure(
-                    "io:error",
-                    ConclusionDiagnostics.classify(conclusion).diagnosticKey,
-                    _calltree_error_attributes(conclusion) +
-                      ("calltree_kind" -> "io-error")
+                  observe_leave(call, r)
+                  val _ = ObservabilityEngine.build( // TODO
+                    scope = ScopeContext(
+                      kind = ScopeKind.Action,
+                      name = call.action.name,
+                      parent = None,
+                      observabilityContext = ec.observability
+                    ),
+                    http = None,
+                    operation = Some(OperationContext(call.action.name)),
+                    outcome = r match {
+                      case Consequence.Success(_) => Right(())
+                      case Consequence.Failure(c) => Left(c)
+                    }
                   )
-                  executionoutcome = Some(Left(conclusion))
+                  r
+                } catch {
+                  case NonFatal(e) =>
+                    Consequence.Failure(_record_thrown_failure_(e))
+                  case e: Throwable =>
+                    val _ = _record_thrown_failure_(e)
+                    e match {
+                      case _: InterruptedException => Thread.currentThread.interrupt()
+                      case _ => ()
+                    }
+                    throw e
+                }
+              val result = call.component.flatMap(_.subsystem) match {
+                case Some(subsystem) =>
+                  subsystem._with_managed_datastore_lease_c(_ => _execute_and_record_())
+                case None =>
+                  _execute_and_record_()
               }
-              observe_leave(call, r)
-              val _ = ObservabilityEngine.build( // TODO
-                scope = ScopeContext(
-                  kind = ScopeKind.Action,
-                  name = call.action.name,
-                  parent = None,
-                  observabilityContext = ec.observability
-                ),
-                http = None,
-                operation = Some(OperationContext(call.action.name)),
-                outcome = r match {
-                  case Consequence.Success(_) => Right(())
-                  case Consequence.Failure(c) => Left(c)
-                }
-              )
-              r
-            } catch {
-              case NonFatal(e) =>
-                Consequence.Failure(_record_thrown_failure_(e))
-              case e: Throwable =>
-                val _ = _record_thrown_failure_(e)
-                e match {
-                  case _: InterruptedException => Thread.currentThread.interrupt()
-                  case _ => ()
-                }
-                throw e
+              result match {
+                case Consequence.Failure(conclusion) if executionoutcome.isEmpty =>
+                  _record_pre_execution_failure_(conclusion)
+                  Consequence.Failure(conclusion)
+                case _ => result
+              }
             }
           } finally {
             var builtcalltree: Option[

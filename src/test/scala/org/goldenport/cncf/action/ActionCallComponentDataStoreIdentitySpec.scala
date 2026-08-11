@@ -2,13 +2,14 @@ package org.goldenport.cncf.action
 
 import java.nio.file.{Files, Path, Paths}
 import cats.syntax.all.*
+import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.ResolvedParameters
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext}
 import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore}
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.cncf.unitofwork.ExecUowM
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.operation.OperationResponse
@@ -19,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 10, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallComponentDataStoreIdentitySpec
@@ -37,6 +38,12 @@ final class ActionCallComponentDataStoreIdentitySpec
   )
   private val _e4 = afterWord(
     "in spec:component-local-datastore-layout, example:E4, rules:R1,R2,R5, phase:M2"
+  )
+  private val _e5 = afterWord(
+    "in spec:component-local-datastore-layout, example:E5, rules:R1,R2,R5, phase:M2"
+  )
+  private val _e6 = afterWord(
+    "in spec:component-local-datastore-layout, example:E6, rules:R1,R2,R5, phase:M2"
   )
 
   "Component-local datastore layout" should {
@@ -213,6 +220,80 @@ final class ActionCallComponentDataStoreIdentitySpec
         }
       }
     }
+
+    "E5 abort a thrown managed datastore action before releasing its lease" must _e5 {
+      "keep the SystemNode lease active during abort and release it after the action fails" in {
+        Given("Spec: docs/spec/component-local-datastore-layout.md; Rules: R1,R2,R5; Example: E5")
+        _with_temp_directory("art-scene-managed-datastore-throw") { root =>
+          val params = _params(Map(
+            "textus.local-data.root" -> root.toString,
+            "textus.component.org.simplemodeling.textus.art-scene.datastores.application.policy" -> "local-only"
+          ))
+          val subsystem = new Subsystem(
+            name = "art-scene-managed-throw",
+            configuration = _configuration(Map(
+              "textus.component.org.simplemodeling.textus.art-scene.datastores.application.policy" -> "local-only"
+            ))
+          )
+          val component = new ArtSceneComponent
+          component.initialize(ComponentInit(subsystem, component.core, ComponentOrigin.Builtin))
+          subsystem.add(component)
+          val (context, abortleasecount) = _abort_observing_execution_context(subsystem)
+          context.runtime.setResolvedParameters(params)
+          val call = new ThrowingManagedArtSceneApplicationDataStoreCall(context, component)
+          val canonicalpath = root
+            .resolve("org.simplemodeling.textus")
+            .resolve("art-scene")
+            .resolve("datastores")
+            .resolve("application.db")
+
+          When("ActionEngine invokes a managed datastore action that throws after binding storage")
+          val result = ActionEngine.create().execute(call)
+
+          Then("abort observes the active lease and the failed action releases it afterwards")
+          result.toOption shouldBe empty
+          abortleasecount() shouldBe Some(1)
+          subsystem.systemNode.activeLeaseCount shouldBe 0
+          Files.exists(canonicalpath) shouldBe true
+        }
+      }
+    }
+
+    "E6 record a failed action scope when managed lease admission is unavailable" must _e6 {
+      "leave the entered action scope once without invoking the action body" in {
+        Given("Spec: docs/spec/component-local-datastore-layout.md; Rules: R1,R2,R5; Example: E6")
+        val subsystem = new Subsystem(
+          name = "art-scene-released-binding",
+          configuration = _configuration(Map.empty)
+        )
+        val component = new ArtSceneComponent
+        component.initialize(ComponentInit(subsystem, component.core, ComponentOrigin.Builtin))
+        subsystem.add(component)
+        val shutdownresult = subsystem.shutdownC()
+        val (context, abortleasecount) = _abort_observing_execution_context(subsystem)
+        val call = new ReleasedBindingManagedArtSceneApplicationDataStoreCall(context, component)
+        val engine = new RecordingActionEngine
+
+        When("ActionEngine executes a component action after its subsystem binding has shut down")
+        val result = engine.execute(call)
+
+        Then("the lease-admission failure is observed once and the action body is never invoked")
+        shutdownresult.toOption should not be empty
+        result.toOption shouldBe empty
+        result match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.display.toLowerCase should include ("binding")
+          case Consequence.Success(_) =>
+            fail("E6 requires a released subsystem binding to reject lease admission")
+        }
+        call.wasExecuted shouldBe false
+        engine.enterCount shouldBe 1
+        engine.leaveCount shouldBe 1
+        engine.failureLeaveCount shouldBe 1
+        abortleasecount() shouldBe None
+        subsystem.systemNode.activeLeaseCount shouldBe 0
+      }
+    }
   }
 
   private def _params(values: Map[String, String]): ResolvedParameters =
@@ -238,6 +319,31 @@ final class ActionCallComponentDataStoreIdentitySpec
       try stream.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(path => Files.deleteIfExists(path))
       finally stream.close()
     }
+
+  private def _abort_observing_execution_context(
+    subsystem: Subsystem
+  ): (ExecutionContext, () => Option[Int]) = {
+    var abortleasecount: Option[Int] = None
+    val base = ExecutionContext.create()
+    lazy val context: ExecutionContext = ExecutionContext.create(runtime)
+    lazy val runtime = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "art-scene-managed-throw-runtime",
+        parent = None,
+        observabilityContext = base.observability
+      ),
+      unitOfWorkSupplier = () => new UnitOfWork(context),
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] =
+          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in ActionCallComponentDataStoreIdentitySpec")
+      },
+      commitAction = _ => (),
+      abortAction = _ => abortleasecount = Some(subsystem.systemNode.activeLeaseCount),
+      disposeAction = _ => (),
+      token = "art-scene-managed-throw-runtime"
+    )
+    (context, () => abortleasecount)
+  }
 
   private final class ArtSceneApplicationDataStoreCall(context: ExecutionContext)
     extends ProcedureActionCall
@@ -301,6 +407,110 @@ final class ActionCallComponentDataStoreIdentitySpec
 
     protected def build_Program: ExecUowM[OperationResponse] =
       use_component_application_datastore().map(_ => OperationResponse.void)
+  }
+
+  private final class ThrowingManagedArtSceneApplicationDataStoreCall(
+    context: ExecutionContext,
+    target: Component
+  ) extends ProcedureActionCall
+    with ActionCall.Core.Holder {
+    private val _action = new CommandAction {
+      override def createCall(core: ActionCall.Core): ActionCall =
+        throw new UnsupportedOperationException("not used in ActionCallComponentDataStoreIdentitySpec")
+
+      override def request: Request =
+        Request(
+          component = Some("ArtScene"),
+          service = None,
+          operation = "throw_after_component_application_datastore",
+          arguments = Nil,
+          switches = Nil,
+          properties = Nil
+        )
+    }
+
+    val core: ActionCall.Core = ActionCall.Core(
+      action = _action,
+      executionContext = context,
+      component = Some(target),
+      correlationId = None
+    )
+
+    def execute(): Consequence[OperationResponse] = {
+      given ExecutionContext = executionContext
+      val datastore = component_datastore("application")
+      val _ = datastore.create(
+        DataStore.CollectionId("marker"),
+        DataStore.StringEntryId("throw-marker"),
+        Record.data("value" -> "bound-before-throw")
+      )
+      throw new IllegalStateException("managed datastore action failure")
+    }
+  }
+
+  private final class ReleasedBindingManagedArtSceneApplicationDataStoreCall(
+    context: ExecutionContext,
+    target: Component
+  ) extends ProcedureActionCall
+    with ActionCall.Core.Holder {
+    private var _was_executed = false
+    private val _action = new CommandAction {
+      override def createCall(core: ActionCall.Core): ActionCall =
+        throw new UnsupportedOperationException("not used in ActionCallComponentDataStoreIdentitySpec")
+
+      override def request: Request =
+        Request(
+          component = Some("ArtScene"),
+          service = None,
+          operation = "released_component_datastore_binding",
+          arguments = Nil,
+          switches = Nil,
+          properties = Nil
+        )
+    }
+
+    val core: ActionCall.Core = ActionCall.Core(
+      action = _action,
+      executionContext = context,
+      component = Some(target),
+      correlationId = None
+    )
+
+    def wasExecuted: Boolean = _was_executed
+
+    def execute(): Consequence[OperationResponse] = {
+      _was_executed = true
+      Consequence.success(OperationResponse.void)
+    }
+  }
+
+  private final class RecordingActionEngine
+    extends ActionEngine(
+      ActionEngine.Config(),
+      org.goldenport.cncf.security.AuthorizationEngine.create()
+    ) {
+    private var _enter_count = 0
+    private var _leave_results = Vector.empty[Consequence[OperationResponse]]
+
+    def enterCount: Int = _enter_count
+
+    def leaveCount: Int = _leave_results.size
+
+    def failureLeaveCount: Int = _leave_results.count {
+      case Consequence.Failure(_) => true
+      case Consequence.Success(_) => false
+    }
+
+    override protected def observe_enter(
+      call: ActionCall
+    ): Unit =
+      _enter_count += 1
+
+    override protected def observe_leave(
+      call: ActionCall,
+      result: Consequence[OperationResponse]
+    ): Unit =
+      _leave_results = _leave_results :+ result
   }
 
   private final class ArtSceneComponent extends Component {
