@@ -1,8 +1,9 @@
 # Phase 57 - Runtime and Control Center Development Stabilization
 
-status=in-progress
+status=closed
 planned_at=2026-08-08
 split_approved_at=2026-08-09
+closed_at=2026-08-12
 depends_on=[Phase 56](phase-56.md)
 successor=[Phase 57.1](phase-57.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -65,14 +66,36 @@ v2, repository index v2, qualified Component identity, and development
 These results are pre-split completed history. Their exact unchanged-tree
 evidence may be reused for the Phase 57 Step commit.
 
-## Closure
+## Repair Closure
 
-- [ ] Freeze the exact reviewed path set and exclude unrelated prepare-hygiene
+- [x] Freeze the exact reviewed path set and exclude unrelated prepare-hygiene
   journals.
-- [ ] Reconcile current diff identities against the accepted review baseline.
-- [ ] Commit the runtime-stabilization accumulator without rerunning unchanged
+- [x] Reconcile current diff identities against the accepted review baseline.
+- [x] Commit the runtime-stabilization accumulator without rerunning unchanged
   focused evidence.
-- [ ] Record the commit and mark Phase 57 DONE before Phase 57.1 starts.
+- [x] Record the repair Step commit and mark Phase 57 DONE only after the post-repair final gate.
+
+Immutable pre-split accumulator evidence was committed in dependency order on
+2026-08-09:
+
+- CNCF framework: `0e8699371ed879f06ca53e794405365de2903f87`;
+- CNCF launcher: `596f80787b803e3e397e4d77299b20e8b4dcd345`; and
+- Textus Control Center: `4be82ad7eb9aa79750b05cf80725283cf8c1f021`.
+
+The post-split repair closed on 2026-08-12:
+
+- CNCF framework repair Step: `b51057d4ed0445376d4d4517b0d3c8b5362a55ec`;
+- Textus Control Center repair Step: `311ac999e3795ddf7036232f3f77deb806b8f0e4`;
+- final framework suite: 3,161/3,161, invocation
+  `46789-20260811T220546Z`;
+- final launcher suite: `CncfLauncherSpec: OK`, invocation
+  `48232-20260811T220857Z`; and
+- final Control Center suite: 66/66, invocation
+  `48476-20260811T220923Z`.
+
+The final standalone assembly and bootstrap checks also passed on the exact
+committed scripts. Phase 57 is closed. Phase 57.1 remains planned and has not
+started.
 
 ## Non-Goals
 

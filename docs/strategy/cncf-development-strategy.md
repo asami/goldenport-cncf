@@ -3063,12 +3063,22 @@ renumbering of Phase 58 or later.
 
 | Phase | Goal | Dependency |
 | --- | --- | --- |
-| [57](../phase/phase-57.md) | Commit the reviewed framework/launcher/Control Center runtime-stabilization accumulator. | Phase 56 |
+| [57](../phase/phase-57.md) | Closed: runtime-stabilization repair, Step commits, and final affected-repository gate completed. | Phase 56 |
 | [57.1](../phase/phase-57.1.md) | Inventory the Action contract and make plain `Action` return its direct synchronous response. | Phase 57 |
 | [57.2](../phase/phase-57.2.md) | Migrate explicit asynchronous callers and align transport/projection semantics. | Phase 57.1 |
 | [57.3](../phase/phase-57.3.md) | Remove unreleased runtime-side Component/CAR compatibility and fail closed. | Phase 57.2 |
 | [57.4](../phase/phase-57.4.md) | Remove Cozy/sbt-cozy build/publication compatibility and rebuild the canonical local warehouse. | Phase 57.3 |
 | [57.5](../phase/phase-57.5.md) | Remove overgrown document/source closure Specs and run the one series release gate. | Phase 57.4 |
+
+Phase 57 closed on 2026-08-12. Its immutable pre-split accumulator commits are CNCF
+framework `0e8699371ed879f06ca53e794405365de2903f87`, CNCF launcher
+`596f80787b803e3e397e4d77299b20e8b4dcd345`, and Textus Control Center
+`4be82ad7eb9aa79750b05cf80725283cf8c1f021`. The repair Step commits are CNCF
+framework `b51057d4ed0445376d4d4517b0d3c8b5362a55ec` and Textus Control Center
+`311ac999e3795ddf7036232f3f77deb806b8f0e4`. The final gate passed the framework
+suite (3,161/3,161), launcher suite (`CncfLauncherSpec: OK`), Control Center
+suite (66/66), and standalone assembly/bootstrap checks. Phase 57.1 remains
+planned and unstarted.
 
 The Action contract remains explicit: a plain unclassified `Action` is the
 simplest synchronous route; query and command semantics remain explicit; Job
