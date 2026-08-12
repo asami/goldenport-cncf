@@ -1,6 +1,7 @@
 # Phase 57.2 Checklist - Explicit Async Migration and Projection Alignment
 
-status=active
+status=closed
+closed_at=2026-08-12
 phase=[Phase 57.2 - Explicit Async Migration and Projection Alignment](phase-57.2.md)
 predecessor=[Phase 57.1](phase-57.1.md)
 successor=[Phase 57.3](phase-57.3.md)
@@ -9,6 +10,11 @@ successor=[Phase 57.3](phase-57.3.md)
 
 Stage Status:
 - Current status: DONE
+- Owner: Phase 57.2 AES-04.
+- Update rule: Update only if accepted AES-04 closure evidence changes; preserve
+  DONE while all three AES-04 checklist items remain checked.
+- Checklist closure basis: The three checked AES-04 checklist items below,
+  supported by accepted closure evidence and focused re-review, establish DONE.
 - AES-04A — Explicit Async Contract and Failing-First Matrix: COMPLETED/ACCEPTED.
 - AES-04B — Structured Post-Commit Async Handoff: COMPLETED/ACCEPTED.
 - Entry rule: Phase 57.1 is DONE.
@@ -62,3 +68,26 @@ findings were repaired; Luna focused re-review: PASS.
 - [x] Preserve exact direct responses and explicit Job metadata.
 - [x] Run focused and representative integration once.
 - [x] Review once and commit the accepted Phase.
+
+## Phase Closure
+
+Stage Status:
+- Current status: CLOSED
+- Owner: Phase 57.2 closure.
+- Update rule: Reopen/update only if accepted Phase closure evidence changes;
+  preserve CLOSED while all four Phase Closure checklist items remain checked.
+- Checklist closure basis: All four checked Phase Closure items below, including
+  accepted AES-04/AES-05 closure evidence and final full-gate evidence, establish
+  CLOSED.
+- Completion rule: AES-04 and AES-05 are DONE, accepted review evidence is
+  recorded, and the final full gate passes with the serialized lock released.
+
+- [x] Record accepted AES-04 closure evidence and focused re-review.
+- [x] Record accepted AES-05 closure evidence and focused re-review.
+- [x] Run the final Phase 57.2 full gate.
+- [x] Close Phase 57.2; retain Phase 57.3 as planned and unstarted.
+
+Final full-gate evidence: invocation `78634-20260812T093417Z` completed 440
+suites with 3,204/3,204 passed, 0 failed or aborted, 14 canceled, 1 ignored,
+and 46 pending; sbt and wrapper exits were 0/0 and the serialized lock was
+released. Phase 57.2 is closed.
