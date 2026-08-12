@@ -34,7 +34,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -171,7 +171,7 @@ case class ComponentLogic(
           case _: CommandAction =>
             _execute_command_action(task, action, scopedctx, taskdecorator)
           case _ =>
-            submitJob(List(taskdecorator(task)), scopedctx).map(jobid => OperationResponse.Scalar(jobid.value))
+            taskdecorator(task).run(scopedctx).result
       }
     }
   }

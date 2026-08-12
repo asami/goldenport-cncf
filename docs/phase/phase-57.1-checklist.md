@@ -5,7 +5,7 @@ phase=[Phase 57.1 - Plain Action Direct Execution](phase-57.1.md)
 predecessor=[Phase 57](phase-57.md)
 successor=[Phase 57.2](phase-57.2.md)
 completed=AES-01 Inventory and Contract Freeze; AES-02 Failing-First Execution Matrix
-next=AES-03 Plain Action Direct Execution
+active=AES-03 Plain Action Direct Execution
 inventory=[AES-01 action execution inventory](../notes/phase-57.1-aes01-action-execution-inventory.md)
 spec=[Action execution semantics](../spec/action-execution-semantics.md)
 matrix=[ComponentLogic plain Action execution](../../src/test/scala/org/goldenport/cncf/component/ComponentLogicPlainActionExecutionSpec.scala), [ActionEngine normal authorization](../../src/test/scala/org/goldenport/cncf/action/ActionEngineNormalAuthorizationSpec.scala)
@@ -43,7 +43,7 @@ Stage Status:
 ## AES-03: Plain Action Direct Execution
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: Phase 57.1 AES-03
 - Update rule: Update this block after the AES-03 runtime repair and focused validation; do not mark DONE while any AES-03 checklist item is unchecked.
 - Entry rule: AES-02 is DONE.

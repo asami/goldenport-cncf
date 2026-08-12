@@ -34,10 +34,10 @@ final class ComponentLogicPlainActionExecutionSpec
   private val _test_job_engines = ArrayBuffer.empty[JobEngine]
 
   private val _e1 = afterWord(
-    "in spec:action-execution-semantics, example:E1, rules:R1,R2,R3,R9,R10,R11,R12, phase:57.1, slice:AES-02"
+    "in spec:action-execution-semantics, example:E1, rules:R1,R2,R3,R9,R10,R11,R12, phase:57.1, slice:AES-03"
   )
   private val _e2 = afterWord(
-    "in spec:action-execution-semantics, example:E2, rules:R1,R3,R9, phase:57.1, slice:AES-02"
+    "in spec:action-execution-semantics, example:E2, rules:R1,R3,R9, phase:57.1, slice:AES-03"
   )
   private val _e3 = afterWord(
     "in spec:action-execution-semantics, example:E3, rules:R2,R4,R11, phase:57.1, slice:AES-02"
@@ -78,14 +78,12 @@ final class ComponentLogicPlainActionExecutionSpec
         val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(8), property)
 
         Then("each plain Action response is returned directly and no Job read model exists")
-        pendingUntilFixed {
-          checked.passed shouldBe true
-          payloads.foreach { response =>
-            val action = _plain_action("plain-default", response, componentname = Some(component.name))
-            val result = component.logic.executeAction(action, ExecutionContext.test())
-            result shouldBe Consequence.success(response)
-            _jobs(component) shouldBe empty
-          }
+        checked.passed shouldBe true
+        payloads.foreach { response =>
+          val action = _plain_action("plain-default", response, componentname = Some(component.name))
+          val result = component.logic.executeAction(action, ExecutionContext.test())
+          result shouldBe Consequence.success(response)
+          _jobs(component) shouldBe empty
         }
       }
 
@@ -100,11 +98,9 @@ final class ComponentLogicPlainActionExecutionSpec
         val result = component.logic.executeAction(action, context)
 
         Then("traceJob does not turn the plain route into a debug or persistent Job")
-        pendingUntilFixed {
-          result shouldBe Consequence.success(response)
-          _jobs(component) shouldBe empty
-          component.jobEngine.listJobs(persistentOnly = true) shouldBe empty
-        }
+        result shouldBe Consequence.success(response)
+        _jobs(component) shouldBe empty
+        component.jobEngine.listJobs(persistentOnly = true) shouldBe empty
       }
 
       "return a structured direct failure without Job state" in {
@@ -116,14 +112,12 @@ final class ComponentLogicPlainActionExecutionSpec
         val result = component.logic.executeAction(action, ExecutionContext.test())
 
         Then("the failure is synchronous and no Job or read-model state is created")
-        pendingUntilFixed {
-          result shouldBe a[Consequence.Failure[?]]
-          result match {
-            case Consequence.Failure(conclusion) => conclusion.show should include("plain failure")
-            case other => fail(s"expected structured failure, got $other")
-          }
-          _jobs(component) shouldBe empty
+        result shouldBe a[Consequence.Failure[?]]
+        result match {
+          case Consequence.Failure(conclusion) => conclusion.show should include("plain failure")
+          case other => fail(s"expected structured failure, got $other")
         }
+        _jobs(component) shouldBe empty
       }
       "bind ActionCall context to the action child scope" in {
         Given("Spec: docs/spec/action-execution-semantics.md; Rules: R9; Example: E1; a plain Action that records its bound ActionCall execution context")
@@ -139,12 +133,10 @@ final class ComponentLogicPlainActionExecutionSpec
         val result = component.logic.executeAction(action, ExecutionContext.test())
 
         Then("the ActionCall sees an Action child scope")
-        pendingUntilFixed {
-          result shouldBe Consequence.success(OperationResponse.Scalar("scope-response"))
-          val bound = observed.get().getOrElse(fail("ActionCall context was not captured"))
-          bound.scope.kind shouldBe ScopeKind.Action
-          bound.scope.name shouldBe action.name
-        }
+        result shouldBe Consequence.success(OperationResponse.Scalar("scope-response"))
+        val bound = observed.get().getOrElse(fail("ActionCall context was not captured"))
+        bound.scope.kind shouldBe ScopeKind.Action
+        bound.scope.name shouldBe action.name
       }
     }
 
@@ -161,18 +153,16 @@ final class ComponentLogicPlainActionExecutionSpec
         val result = component.logic.executeAction(action, supplied)
 
         Then("the direct response and supplied security/context boundary are retained")
-        pendingUntilFixed {
-          result shouldBe Consequence.success(response)
-          _jobs(component) shouldBe empty
-          val bound = observed.get().getOrElse(fail("bound ActionCall context was not observed"))
-          bound.security shouldBe supplied.security
-          bound.runtime shouldBe supplied.runtime
-          bound.idGeneration shouldBe supplied.idGeneration
-          bound.scope.kind shouldBe ScopeKind.Action
-          bound.scope.name shouldBe action.name
-          bound.operationEvaluation.invocation shouldBe None
-          bound.jobContext.jobId shouldBe None
-        }
+        result shouldBe Consequence.success(response)
+        _jobs(component) shouldBe empty
+        val bound = observed.get().getOrElse(fail("bound ActionCall context was not observed"))
+        bound.security shouldBe supplied.security
+        bound.runtime shouldBe supplied.runtime
+        bound.idGeneration shouldBe supplied.idGeneration
+        bound.scope.kind shouldBe ScopeKind.Action
+        bound.scope.name shouldBe action.name
+        bound.operationEvaluation.invocation shouldBe None
+        bound.jobContext.jobId shouldBe None
       }
     }
 
