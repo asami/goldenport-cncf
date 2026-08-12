@@ -1782,8 +1782,11 @@ gates and are closed.
 - Closed dashboard: `docs/phase/phase-51.md`
 - Closed checklist: `docs/phase/phase-51-checklist.md`
 
-Other 9.x items remain future development candidates until explicitly
-selected.
+Items explicitly assigned to a Phase are planned development items. Other 9.x
+items remain future development candidates until explicitly selected. A
+planned Phase may consume a candidate's existing boundary without closing or
+silently absorbing that candidate; each related item below states the retained
+ownership.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -1800,6 +1803,7 @@ independent 9.x items below rather than adding broad bullets back into 9.1.
 - `9.25 Structured Web/API Error Presentation`
 - `9.26 Web UI Multi-locale Message Control`
 - `9.46 Web Session CSRF Unification`
+- `9.46.1 ArtScene-driven Progressive Static Web Client Integration`
 
 ### 9.2 Event Mechanism Follow-ups
 Future event/runtime development item.
@@ -1822,6 +1826,17 @@ Future event/runtime development item.
   non-transactional / error event concepts.
 - Align richer Event reception policy and async/sync same-job continuation
   semantics with future executable JCL `events` / `onEvent` orchestration.
+
+Alignment with Phases 63-65:
+
+- Phase 63 owns the StateMachine-specific post-commit
+  `CommittedTransition` envelope and the rule that rollback emits no successful
+  transition.
+- Phase 64 consumes that envelope for Workflow with bounded idempotent delivery.
+- This candidate retains generic transaction outcome lanes, reception policy,
+  same-job continuation, source overrides, and future JCL event semantics.
+- A durable transition/contract failure diagnostic is observability evidence;
+  it is not automatically a transaction-failure domain event.
 
 ### 9.3 Security
 Future security development item.
@@ -1855,6 +1870,14 @@ is future hardening and operationalization.
 - Richer Grafana dashboards and sample 13 / 13a article-ready documentation,
   including where to inspect CNCF Web UI, Jaeger, Prometheus, and Grafana.
 - Broader observability validation in the heavy-test/release validation path.
+
+Alignment with Phases 63-65:
+
+- Phases 63-65 own only the minimum correlated transition, Workflow, and DbC
+  outcomes required for their executable acceptance, including lookup after a
+  domain UnitOfWork rollback.
+- This candidate retains platform-wide retention, cleanup, authorization,
+  payload-store, exporter, dashboard, durable-metrics, and operations policy.
 
 ### 9.5 Knowledge Structure Follow-ups
 Future knowledge/information development item.
@@ -2133,6 +2156,16 @@ Future error-model hardening item.
 - Additional source-error trace UX around `Conclusion.previous` beyond the
   initial Phase 24 dashboard drill-down and structured diagnostic grouping.
 
+Alignment with Phases 63-65:
+
+- Phase 63 owns the closed StateMachine outcome/facet vocabulary needed by its
+  runtime; Phase 65 owns contract violation and evaluator/admission semantics.
+- Phase 64 reuses those failures and the existing Job/Workflow vocabulary; it
+  does not introduce a parallel generic taxonomy.
+- This candidate retains broad message-only cleanup, stable compatibility and
+  numeric-ordering policy, generated catalogs, application codes, CLI exit
+  mapping, and general trace UX.
+
 ### 9.8 Media Attributes Model Cleanup
 Future platform development item.
 
@@ -2161,6 +2194,14 @@ Future platform development item.
 - Align this with the broader error model cleanup and event/job continuation
   policy.
 
+Alignment with Phase 64:
+
+- Workflow retry or next-Operation selection does not implicitly implement a
+  `ServiceCall` fallback.
+- This candidate remains independent and must use an explicit fallback policy;
+  a future Workflow step may invoke that policy only through its normal
+  Operation/ServiceCall boundary.
+
 ### 9.10 Compensation Recovery Events
 Future platform development item.
 
@@ -2176,6 +2217,14 @@ Future platform development item.
   It should integrate with admin diagnostics, Job/Event history, and future
   recovery dashboards.
 
+Alignment with Phases 63-64:
+
+- Phase 63 keeps external effects outside the local transition UnitOfWork, and
+  Phase 64 does not add an implicit compensation engine.
+- A compensating business action, when required, is an explicit Operation and
+  StateMachine transition. Compensation-of-compensation and human recovery
+  signals remain owned by this candidate.
+
 ### 9.11 Workflow Active-State Working Set Policy
 Future platform development item.
 
@@ -2188,6 +2237,19 @@ Future platform development item.
   policy is explicitly configured by an application.
 - Completed, cancelled, archived, or otherwise inactive workflow records should
   be evicted from the Working Set when their state changes.
+
+Alignment with Phase 64:
+
+- `entityKind = workflow` classifies a stateful business Entity such as
+  `SalesOrder`; it is not synonymous with WorkflowEngine `WorkflowInstance`.
+- Phase 63 supplies the verified business-Entity transition lifecycle, while
+  Phase 64 owns separate WorkflowInstance identity, persistence, history,
+  concurrency, retry/replay, and Job linkage.
+- Phase 64 does not require either object to be memory-resident and does not
+  close this Working Set candidate.
+- This candidate may consume both verified lifecycles, but each entity shape
+  needs an explicit state field, active values, and residency policy; no policy
+  is copied from SalesOrder to WorkflowInstance by name.
 
 ### 9.13 Distributed Component Runtime
 Future distributed-system development item.
@@ -2203,6 +2265,13 @@ Future distributed-system development item.
 - Current CNCF runtime hardening should preserve boundaries so a future
   distributed implementation can replace or extend the in-process `JobEngine`,
   Working Set, and View cache behavior.
+
+Alignment with Phase 64:
+
+- Phase 64 fixes process-local semantic identity, idempotency, and replay
+  boundaries but does not claim clustered Workflow/Event/Job ownership.
+- Distributed delivery, leader ownership, fencing, and cache coherence remain
+  with this candidate and Saga Management.
 
 ### 9.14 Job Management Follow-ups
 Future Job Management development item.
@@ -2234,6 +2303,14 @@ Future follow-ups:
   operator workflows. These should build on the Phase 22 Job/Event/notification
   boundaries rather than adding notification logic back into JobEngine.
 
+Alignment with Phase 64:
+
+- Phase 64 reuses the existing JobEngine submission, retry/dead-letter, and Job
+  linkage contracts for a Workflow-selected Operation.
+- It may add only the correlation/idempotency evidence required for that path;
+  executable JCL flow/events, JobDefinition rollout, durable Task Execution
+  Tree/history, CompositeQuery v2, and general Job UX remain in this candidate.
+
 ### 9.15 Saga Management
 Future distributed-collaboration development item.
 
@@ -2251,6 +2328,14 @@ Future distributed-collaboration development item.
 - Saga management should reuse the Job/JCL concepts where practical, but its
   ownership, persistence, compensation, and observability boundaries are
   distributed rather than local to one in-process JobEngine.
+
+Alignment with Phase 64:
+
+- Phase 64 is the local lightweight Workflow contract and establishes the
+  committed-transition and generic-Operation boundary that a future Saga may
+  reuse.
+- Cross-component/remote coordination, distributed compensation, remote retry,
+  and Saga persistence remain wholly owned by this candidate.
 
 ### 9.16 Persistent Materialized View Store
 Future scalability development item.
@@ -3065,7 +3150,7 @@ renumbering of Phase 58 or later.
 | --- | --- | --- |
 | [57](../phase/phase-57.md) | Closed: runtime-stabilization repair, Step commits, and final affected-repository gate completed. | Phase 56 |
 | [57.1](../phase/phase-57.1.md) | Closed: inventoried the Action contract and made plain `Action` return its direct synchronous response without an implicit Job. | Phase 57 |
-| [57.2](../phase/phase-57.2.md) | Migrate explicit asynchronous callers and align transport/projection semantics. | Phase 57.1 |
+| [57.2](../phase/phase-57.2.md) | Closed on 2026-08-12: migrated explicit asynchronous callers and aligned transport/projection semantics (AES-04/AES-05). | Phase 57.1 |
 | [57.3](../phase/phase-57.3.md) | Remove unreleased runtime-side Component/CAR compatibility and fail closed. | Phase 57.2 |
 | [57.4](../phase/phase-57.4.md) | Remove Cozy/sbt-cozy build/publication compatibility and rebuild the canonical local warehouse. | Phase 57.3 |
 | [57.5](../phase/phase-57.5.md) | Remove overgrown document/source closure Specs and run the one series release gate. | Phase 57.4 |
@@ -3085,7 +3170,12 @@ freeze `6ec9fb5ebd6be3ec5b390583e6197fabbdaae50a`, failing-first matrix
 `e1c64918c7a53e0c3254c81b6877a8fe61e3d33a`, and direct execution
 `d31302aa0a1e131e381a62e6e9b8767b03722c8f`. Focused Action/Component
 validation passed 49/49, the independent review passed, and the final framework
-suite passed 3,171/3,171. Phase 57.2 remains planned.
+suite passed 3,171/3,171. Phase 57.2 then completed AES-04 explicit async
+caller migration and AES-05 transport/projection alignment; its final full gate
+invocation `78634-20260812T093417Z` completed 440 suites with 3,204/3,204
+passed, 0 failed or aborted, 14 canceled, 1 ignored, and 46 pending, with
+sbt/wrapper exits 0/0 and the serialized lock released. Phase 57.3 remains
+planned and unstarted.
 
 The Action contract remains explicit: a plain unclassified `Action` is the
 simplest synchronous route; query and command semantics remain explicit; Job
@@ -3357,6 +3447,17 @@ OCC foundation.
   - promote verified behavior to design/specification before declaring either
     transport binding complete; and
   - schedule this item as an independent phase rather than expanding Phase 50.
+
+Alignment with Phases 63-65:
+
+- Phase 63 transition-occurrence identity and Phase 64 Workflow trigger/step
+  idempotency are internal execution identities, not REST or Web Form request
+  keys.
+- Phase 65 evaluates contracts when an Operation actually executes; a
+  transport replay that returns a previously recorded result does not execute
+  the Operation or re-evaluate its contracts.
+- The transport record/store, fingerprint, token, response replay, and
+  retention work remains owned by this candidate.
 
 ### 9.44 Information CML Runtime Canonicalization
 Planned for Phase 61 after Phase 60 closes.
@@ -3652,7 +3753,12 @@ Planned for Phase 62 after Phase 61 closes.
   - unsafe requests authenticated by a CNCF Web session require a token;
   - safe requests remain token-free;
   - HTML forms retain the admitted `csrf` field while JavaScript uses one
-    canonical CNCF token header and framework-owned helper;
+  canonical CNCF token header and framework-owned helper;
+  - Form API owns Web input definition and optional admission validation,
+    REST v1 owns canonical JSON Operation execution, and `/form` owns
+    browser-native HTML/PRG execution;
+  - direct Form API execution POST remains a protected compatibility path and
+    is not the target for new browser integrations;
   - explicit Bearer/OAuth/service-account/mTLS external REST does not require
     CSRF, but mixed credentials cannot silently downgrade to a weaker profile;
   - token verification precedes Operation dispatch and never replaces
@@ -3665,8 +3771,10 @@ Planned for Phase 62 after Phase 61 closes.
   - explicit Web-session/external/internal security profile resolution;
   - common issue/projection/extraction/verification/failure mechanism;
   - `/form-api` and Web REST adoption;
-  - CNCF-owned browser fetch/token helper;
-  - representative ArtScene or equivalent real HTTP acceptance;
+  - CNCF-owned browser facade with distinct form-definition, form-validation,
+    and Operation-execution responsibilities;
+  - CNCF-owned representative Static Web component and real HTTP acceptance,
+    independent of an ArtScene checkout or phase state;
   - structured diagnostics, audit, and non-leakage evidence; and
   - post-verification promotion of exact parameter and behavior contracts to
     `docs/spec` and `docs/design`.
@@ -3674,13 +3782,69 @@ Planned for Phase 62 after Phase 61 closes.
   - full OAuth/OIDC, mTLS, API gateway, developer portal, or broad CORS
     productization;
   - replacing authorization, idempotency, rate limiting, CSP, or XSS defenses;
-    and
-  - application-owned token generation or verification.
+  - application-owned token generation or verification; and
+  - ArtScene-specific interaction lifecycle and post-baseline reusable client
+    extensions, which are evaluated through Phase 62.1 after Phase 62 closes.
 - Planning references:
   - `docs/phase/phase-62.md`;
   - `docs/phase/phase-62-checklist.md`;
   - `docs/notes/web-session-csrf-unification-implementation.md`; and
   - `docs/journal/2026/07/2026-07-26-web-session-csrf-boundary.md`.
+
+### 9.46.1 ArtScene-driven Progressive Static Web Client Integration
+Planned for Phase 62.1 after Phase 62 closes. ArtScene Phase 13 is the driver.
+
+- Historical basis:
+  - Phase 62 establishes a complete CNCF-owned Web-session CSRF and browser
+    request baseline and closes without depending on a downstream application;
+  - ArtScene already has bounded Timeline, List, review, and follow enhancement
+    paths that can exercise the baseline as a real full application; and
+  - the previous ArtScene plan mixed server-rendered Textus widgets,
+    application-local enhancement, and the deferred Island Runtime.
+- Goal:
+  - start ArtScene Phase 13 only after Phase 62 closes and a consumable CNCF
+    artifact is available;
+  - use the ArtScene consumer trial to find reproducible browser-client gaps;
+  - promote only domain-neutral request, decoding, error, cancellation, and
+    packaging capabilities into CNCF; and
+  - close producer/consumer compatibility without reopening Phase 62.
+- Selected direction:
+  - a failed Phase 62 promise is a maintenance defect, not new Phase 62.1
+    scope;
+  - CNCF owns same-origin request security, Form API Web input adaptation, REST
+    v1 Operation execution, structured response/error decoding, and stable
+    browser-client contracts;
+  - new ArtScene query/command flows execute through REST v1; Form API is used
+    only for dynamic definition or optional Web input admission validation;
+  - direct Form API execution POST remains compatibility-only;
+  - ArtScene owns DOM rendering, busy/focus/history behavior,
+    latest-request-wins coordination, application messages, and domain policy;
+  - mandatory reusable gaps close in Phase 62.1 before ArtScene Phase 13;
+    optional candidates may move to a named future owner; and
+  - strategy item 9.21 retains island registry, props, lifecycle, loader, and
+    reusable JavaScript component runtime ownership.
+- Initial scope:
+  - Phase 62 artifact/API handoff and a closed gap-classification vocabulary;
+  - ArtScene Timeline/List/review/follow consumer trial;
+  - bounded generic request, cancellation, response/error, and asset extensions
+    admitted by executable evidence;
+  - CNCF fixture plus ArtScene development/packaged producer-consumer
+    acceptance; and
+  - real browser fallback, race, security rejection, recovery, navigation, and
+    non-leakage evidence.
+- Deferred scope:
+  - ArtScene presentation or business transitions;
+  - SPA/client-router/state-store behavior;
+  - full Island Architecture Runtime; and
+  - StateMachine, Workflow, and executable DbC, whose Phases 63-65 remain an
+    independent sequence after Phase 62.
+- Planning references:
+  - `docs/phase/phase-62.1.md`;
+  - `docs/phase/phase-62.1-checklist.md`;
+  - `docs/notes/artscene-driven-progressive-static-web-client-integration-provisional-specification.md`;
+  - `docs/journal/2026/08/2026-08-12-form-api-rest-web-boundary.md`;
+    and
+  - `docs/journal/2026/08/2026-08-12-artscene-driven-progressive-static-web-integration.md`.
 
 ### 9.47 Exact Entity ID Serialization and Collection Identity
 Completed in Phase 52.
@@ -4178,3 +4342,176 @@ Future development candidate. No phase is assigned yet.
     UserId migration, or diagnostics; and
   - it does not reopen Phase 53's accepted mode/configuration-carrier
     exclusion evidence.
+
+Alignment with Phase 63:
+
+- Phase 63 may require explicit generated/runtime evidence that a named
+  StateMachine guard or local action binding exists, but it does not establish
+  the general ComponentFactory purity policy.
+- Any minimal binding-evidence adapter added by Phase 63 must remain compatible
+  with this candidate and must not expose provider/configuration selection to
+  component code.
+
+### 9.54 CML StateMachine Runtime Completion
+Planned for Phase 63 after Phase 62 closes.
+
+- Historical basis:
+  - Phase 4 and the draft StateMachine boundary established canonical core
+    primitives and deterministic priority/declaration ordering;
+  - CML and SimpleModeler already carry StateMachine definitions and generated
+    transition-rule surfaces;
+  - CNCF already has planning/provider hooks, pre-persistence transition
+    validation, UnitOfWork, lifecycle observation, and CallTree integration;
+    and
+  - investigation found remaining end-to-end gaps around generated action
+    execution, named guard resolution, priority propagation, raw MVEL guards,
+    duplicated core/CNCF selection, execution-route bypasses, and rollback
+    diagnostics.
+- Goal:
+  - make one CML StateMachine definition executable through one canonical core
+    decision and CNCF UnitOfWork path;
+  - fix typed guard, named binding, candidate state, local action/effect,
+    persistence, committed-event, retry/replay, and failure semantics;
+  - publish one idempotent `CommittedTransition` envelope only after commit;
+    and
+  - preserve structured failure observability after rollback without leaking
+    entity/event/expression values.
+- Selected direction:
+  - core owns pure transition selection; CNCF adapts runtime context and owns
+    local execution, persistence, commit/rollback, and diagnostics;
+  - expression guards normalize to a closed, typed, versioned, pure
+    `PredicateProgram`; named guards/actions remain explicit bindings;
+  - candidate state and admitted local effects commit atomically;
+  - external I/O begins only after commit through Operation/Event/Job paths;
+  - create, save/update, patch, command, direct/unversioned, retry, and replay
+    paths cannot silently bypass the machine; and
+  - guard non-match, guard failure, action failure, persistence failure,
+    rollback, and interruption retain different structured meanings.
+- Initial scope:
+  - Cozy normalization and SimpleModeler generated definitions/ABI;
+  - the `pattern:state-machine`/`pattern:state-transition` vertical slice from
+    the provisional Aggregate method implementation candidates, without
+    absorbing other implementation kinds or patterns;
+  - core/CNCF selection unification and deterministic predicate evaluation;
+  - executable bounded local actions and candidate-state UnitOfWork behavior;
+  - explicit Operation/event trigger binding and committed-transition envelope;
+  - structured observability, compatibility migration, and non-leakage; and
+  - a generated `SalesOrder`/`SalesStatus` acceptance slice.
+- Deferred scope:
+  - Workflow progression, executable DbC, timers, parallel/human tasks,
+    compensation, connectors, distributed transactions, and arbitrary scripts.
+- Planning references:
+  - `docs/phase/phase-63.md`;
+  - `docs/phase/phase-63-checklist.md`;
+  - `docs/notes/cml-statemachine-runtime-completion-provisional-specification.md`;
+  - `docs/notes/aggregate-method-implementation-strategy.md`;
+    and
+  - `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md`.
+
+### 9.55 StateMachine-Workflow Alignment
+Planned for Phase 64 after Phase 63 closes.
+
+- Historical basis:
+  - Phase 14 delivered a lightweight event-triggered, entity-status-based
+    WorkflowEngine, independent WorkflowInstance, Job delegation, inspection,
+    retry/dead-letter, and JCL entrypoint baseline;
+  - the StateMachine boundary already says Workflow may consume state-machine
+    context while remaining outside local transition ownership; and
+  - the agreed reference model places `SalesStatus` under the `SalesOrder`
+    StateMachine and uses an external `SalesOrderWorkflow` for more substantial
+    cross-Operation orchestration.
+- Goal:
+  - connect a committed entity transition to a Workflow definition and
+    WorkflowInstance with explicit CML/generated bindings;
+  - let Workflow select the next Operation/Job without directly mutating
+    entity state;
+  - preserve domain state and WorkflowInstance state as separate authorities;
+    and
+  - make trigger delivery, duplicate/replay, concurrency, retry/recovery,
+    security, and cross-layer observability deterministic.
+- Selected direction:
+  - Workflow consumes Phase 63 `CommittedTransition`, never an attempted or
+    rolled-back transition;
+  - StateMachine owns local lifecycle, Workflow owns process progression, and
+    JobEngine owns asynchronous execution;
+  - `entityKind=workflow` remains the classification of a stateful business
+    Entity such as `SalesOrder` and is not treated as an alias for
+    WorkflowEngine `WorkflowInstance`;
+  - Workflow invokes the next Operation through normal generic invocation,
+    authorization, idempotency, UnitOfWork, and StateMachine boundaries;
+  - trigger occurrence and Workflow registration/instance identify one
+    idempotent progression decision; and
+  - Phase 14 raw-event/status-field and JCL synthetic triggers remain explicit
+    compatibility/entry variants, not inferred committed transitions.
+- Initial scope:
+  - typed committed-transition trigger and CML Workflow binding;
+  - generated Workflow definitions/ABI and sequential next-Operation choice;
+  - WorkflowInstance persistence, history, Job links, replay, and recovery;
+  - domain/workflow state projection, security, observability, and redaction;
+    and
+  - generated `SalesOrder`/`SalesStatus`/`SalesOrderWorkflow` acceptance.
+- Deferred scope:
+  - BPMN/DAG, branch/loop/parallel, timer-rich, human-task, compensation,
+    connector-heavy, and cross-organization orchestration; these use an
+    explicit specialist-engine boundary.
+- Planning references:
+  - `docs/phase/phase-64.md`;
+  - `docs/phase/phase-64-checklist.md`;
+  - `docs/notes/statemachine-workflow-alignment-provisional-specification.md`;
+  - `docs/notes/entity-kind-and-working-set-policy.md`;
+  - `docs/spec/component-descriptor-entity-classification-examples.md`;
+    and
+  - `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md`.
+
+### 9.56 CML Executable Design by Contract
+Planned for Phase 65 after Phase 64 closes.
+
+- Historical basis:
+  - CML and generated metadata already preserve operation
+    `PRECONDITION`/`POSTCONDITION`, Aggregate command `VALIDATE`, and Aggregate
+    `INVARIANT` declarations;
+  - SimpleModeling already provides structured invariant-, precondition-, and
+    postcondition-violation semantics; and
+  - current samples still rely on selected handwritten validation rather than
+    one automatic typed contract boundary.
+- Goal:
+  - introduce one typed, deterministic, side-effect-free contract program from
+    CML parsing through generation and CNCF execution;
+  - enforce executable contracts whenever their owning Operation executes,
+    including Operations selected by Workflow;
+  - evaluate preconditions, postconditions, and Aggregate invariants at exact
+    checkpoints around the Phase 63 StateMachine/UnitOfWork boundary; and
+  - retain structured correlated observability after rollback without
+    evaluating arbitrary code or leaking values.
+- Selected direction:
+  - descriptive prose remains non-executable and `VALIDATE` remains ordinary
+    expected validation unless explicitly classified as DbC;
+  - contract clauses reuse or conservatively extend Phase 63's closed
+    `PredicateProgram` rather than create another evaluator;
+  - unsupported or ill-typed required programs fail generation/admission and
+    executable contracts are always on;
+  - DbC does not own StateMachine transition selection or Workflow progression;
+  - a failed precondition prevents dispatch, a failed postcondition prevents
+    success commitment, and a failed invariant prevents invalid public state;
+    and
+  - clause, subject, phase, component/Operation/Aggregate, transition,
+    Workflow/Job, trace, and safe cause identities remain observable and
+    redacted.
+- Initial scope:
+  - semantic inventory and typed ContractProgram/evaluator contract;
+  - Cozy parsing and SimpleModeler generation/ABI;
+  - SimpleModeling violation/facet/serialization alignment;
+  - CNCF Operation/Aggregate enforcement around verified Phase 63/64 paths;
+  - CallTree/trace/metric/audit and Help/meta/JSON projection; and
+  - generated, property-based, focused, full, and cross-repository acceptance.
+- Deferred scope:
+  - arbitrary code/scripts, OCL/rule engines, theorem proving, distributed
+    contracts, inheritance variance, and reclassification of ordinary domain,
+    security, concurrency, or availability failures as DbC defects.
+- Planning references:
+  - `docs/phase/phase-65.md`;
+  - `docs/phase/phase-65-checklist.md`;
+  - `docs/notes/cml-executable-design-by-contract-provisional-specification.md`;
+  - `docs/journal/2026/08/2026-08-12-cml-executable-design-by-contract-consideration.md`;
+    and
+  - `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md`.

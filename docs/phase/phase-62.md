@@ -13,7 +13,9 @@ ingress contract for `/form-api`, Web-facing REST, and browser JavaScript.
 
 Phase 62 preserves the CSRF requirement. It closes the gap where application
 JavaScript can call an unsafe CNCF endpoint without a standard way to obtain
-and attach the required token.
+and attach the required token. The Phase closes against a CNCF-owned
+representative component and fixture; it does not depend on ArtScene Phase 13
+or another downstream application phase for its completion evidence.
 
 ## Dependency
 
@@ -30,8 +32,13 @@ API exposure distinction under strategy item 9.22.
 - Unsafe requests authenticated by a CNCF Web session require CSRF.
 - `/form-api` and Web-facing REST share one issuing, projection, extraction,
   verification, failure, and diagnostics mechanism.
-- Browser JavaScript uses a CNCF-owned helper or the equivalent explicit
-  canonical token header.
+- Form API remains the Web input definition and optional admission-validation
+  surface; REST v1 remains canonical JSON Operation execution.
+- Browser JavaScript uses a CNCF-owned facade or the equivalent explicit
+  canonical token header. The facade separates form definition/validation from
+  Operation execution even when it shares low-level request machinery.
+- Direct `POST /form-api/{component}/{service}/{operation}` execution remains a
+  protected compatibility route and is not the target for new browser clients.
 - External REST using an explicitly admitted non-cookie identity does not
   require CSRF and remains governed by external API authentication, scope,
   replay, quota, and gateway policy.
@@ -45,10 +52,10 @@ API exposure distinction under strategy item 9.22.
 | CS-01 | Inventory and contract freeze | Current Form, Form API, REST, Web session, token, and JavaScript behavior plus failing-first acceptance identities are fixed. | planned |
 | CS-02 | Ingress security profile | Web-session, external-API, and internal-service credential selection is deterministic and cannot silently choose a weaker CSRF policy. | planned |
 | CS-03 | Common CSRF mechanism | One CNCF Web-session guard owns token issue, projection, extraction, method policy, verification, failures, and diagnostics. | planned |
-| CS-04 | Form API adoption | `/form-api` validation and execution use the common guard while preserving normal HTML form submission. | planned |
-| CS-05 | Web REST adoption | Unsafe session-authenticated REST requests use the common guard; explicit external REST remains separately governed. | planned |
-| CS-06 | JavaScript contract | CNCF provides a safe standard fetch/token path and unsafe JavaScript calls without a token fail before dispatch. | planned |
-| CS-07 | Component and security acceptance | ArtScene and representative Form/REST paths pass real HTTP, authorization, audit, and non-leakage acceptance. | planned |
+| CS-04 | Form API adoption | `/form-api` validation and retained compatibility execution use the common guard while preserving normal HTML form submission. | planned |
+| CS-05 | Web REST adoption | Canonical browser Operation execution uses REST v1 with the common guard; explicit external REST remains separately governed. | planned |
+| CS-06 | JavaScript contract | CNCF provides one safe facade with distinct form-definition, form-validation, and Operation-execution responsibilities. | planned |
+| CS-07 | Framework component and security acceptance | A CNCF-owned representative component and Form/REST paths pass real HTTP, authorization, audit, and non-leakage acceptance. | planned |
 | CS-08 | Verification and contract promotion | Full validation passes and verified parameter/behavior contracts are promoted from notes to design/specification. | planned |
 
 ## Acceptance
@@ -58,14 +65,20 @@ API exposure distinction under strategy item 9.22.
 - HTML form-field and JavaScript-header transports follow one verified token
   contract.
 - JavaScript has a CNCF-owned supported way to attach the token.
+- New browser execution uses REST v1; Form API supplies dynamic Web input
+  definition and optional admission validation.
+- Operation Form API definitions advertise REST v1 as their JSON execution
+  action and do not direct new clients to the compatibility POST.
+- The retained direct Form API execution POST is tested as compatibility and is
+  not presented as the canonical browser execution contract.
 - Missing or invalid tokens fail with structured `403` responses before
   operation execution.
 - External REST exemption requires an explicit admitted non-cookie ingress
   profile.
 - Token values never appear in logs, CallTree, metrics, audit payloads, URLs,
   or error text.
-- ArtScene or another representative component proves the browser path through
-  the real CNCF HTTP boundary.
+- A CNCF-owned representative component proves the browser path through the
+  real CNCF HTTP boundary without requiring a downstream application checkout.
 - Final accepted header, field, cookie, method, profile, failure, and
   projection behavior is recorded under `docs/spec` and `docs/design`.
 
@@ -77,6 +90,9 @@ API exposure distinction under strategy item 9.22.
 - Making external service APIs use browser session cookies.
 - Letting application JavaScript generate or verify CNCF tokens.
 - Solving XSS, CSP, authorization, idempotency, or rate limiting through CSRF.
+- Closing the ArtScene progressive-interaction lifecycle or implementing a
+  reusable Island runtime. ArtScene-driven reusable follow-up belongs to Phase
+  62.1 after this baseline closes.
 
 ## Planning References
 
@@ -85,4 +101,6 @@ API exposure distinction under strategy item 9.22.
 - [Static Web Application Specification](../spec/static-web-application.md)
 - [Web Layer Design](../design/web-layer.md)
 - [Web Form API Schema](../design/web-form-api-schema.md)
+- [Form API and REST Web Boundary](../journal/2026/08/2026-08-12-form-api-rest-web-boundary.md)
 - [Phase 62 Checklist](phase-62-checklist.md)
+- [Phase 62.1 - ArtScene-driven Progressive Static Web Client Integration](phase-62.1.md)

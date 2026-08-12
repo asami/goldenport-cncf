@@ -88,7 +88,10 @@ Stage Status:
   regressing server-rendered forms.
 
 - [ ] Migrate `/form-api` validation POST.
-- [ ] Migrate `/form-api` execution POST.
+- [ ] Migrate the retained `/form-api` compatibility execution POST without
+  promoting it as the new browser execution contract.
+- [ ] Change Operation Form API definition `submitPath`/execution action
+  metadata to advertise REST v1 rather than direct Form API execution.
 - [ ] Preserve ordinary `/form` hidden-field submission and PRG behavior.
 - [ ] Verify authorization and validation still run in the correct order.
 - [ ] Verify rejected requests produce no Operation side effects.
@@ -115,6 +118,8 @@ Stage Status:
 - [ ] Verify CORS and `SameSite` do not bypass the guard.
 - [ ] Verify mixed credentials follow the deterministic CS-02 policy.
 - [ ] Add REST/OpenAPI security metadata needed to distinguish audiences.
+- [ ] Verify new Web-session browser query/command execution uses canonical
+  `/rest/v1` Operation envelopes rather than direct Form API execution.
 
 Evidence:
 - Pending.
@@ -129,36 +134,43 @@ Stage Status:
   perform unsafe Web-session requests.
 
 - [ ] Select one canonical page token projection.
-- [ ] Add a CNCF-owned fetch/token helper.
+- [ ] Add a CNCF-owned browser facade whose public responsibilities distinguish
+  form definition, form validation, and Operation execution.
 - [ ] Attach the token automatically for unsafe same-origin requests.
 - [ ] Refuse unsafe requests when the required token is unavailable.
 - [ ] Do not attach the token to untrusted cross-origin requests.
 - [ ] Keep token values out of URL, history, logs, errors, and demo manifests.
 - [ ] Add browser-level helper and page projection specifications.
 - [ ] Document direct `fetch` requirements for component developers.
+- [ ] Document Form API as Web input adaptation, REST v1 as canonical JSON
+  execution, `/form` as HTML/PRG execution, and direct Form API POST as
+  compatibility-only.
 
 Evidence:
 - Pending.
 
-## CS-07: Component and Security Acceptance
+## CS-07: Framework Component and Security Acceptance
 
 Stage Status:
 - Current status: PLANNED
-- Owner: CNCF and representative Component maintainers
+- Owner: CNCF HTTP, Web, security, and representative fixture maintainers
 - Entry rule: CS-06 is DONE.
-- Completion rule: Real component browser flows prove the common mechanism,
-  authorization continuity, and non-leakage.
+- Completion rule: CNCF-owned real component browser flows prove the common
+  mechanism, authorization continuity, and non-leakage without depending on a
+  downstream application phase.
 
-- [ ] Migrate the selected ArtScene or equivalent JavaScript flow.
-- [ ] Verify filter/validation and mutation requests through the real HTTP
-  server.
+- [ ] Provide a CNCF-owned representative Static Web JavaScript flow using the
+  canonical helper and token transport.
+- [ ] Verify Form API definition/validation and REST v1 query/mutation requests
+  through the real HTTP server.
 - [ ] Verify authenticated subject and capability authorization remain
   authoritative.
 - [ ] Verify CSRF failure cannot be hidden as a domain or operation error.
 - [ ] Verify audit and diagnostics identify the ingress and outcome without
   token values.
 - [ ] Update the CBD Support Security View review criteria for browser CSRF.
-- [ ] Record downstream evidence without mixing unrelated dirty work.
+- [ ] Record framework-fixture evidence without requiring an ArtScene checkout
+  or ArtScene Phase 13 state.
 
 Evidence:
 - Pending.
@@ -185,6 +197,9 @@ Stage Status:
   attachment.
 - [ ] Update strategy and phase evidence only after all completion criteria
   pass.
+- [ ] Record Phase 62 as an immutable browser-security baseline; route later
+  ArtScene-discovered reusable capabilities to Phase 62.1 instead of reopening
+  this checklist.
 
 Evidence:
 - Pending.
