@@ -31,10 +31,15 @@ Phase Plan Gate: PROCEED
 
 - AES-04A — Explicit Async Contract and Failing-First Matrix: COMPLETED/ACCEPTED.
 - AES-04B — Structured Post-Commit Async Handoff: COMPLETED/ACCEPTED.
-- AES-05 — Transport and Projection Alignment: IN_PROGRESS.
+- AES-05 — Transport and Projection Alignment: COMPLETED/ACCEPTED.
 - AES-05A — Explicit Execution Transport Metadata: COMPLETED/ACCEPTED.
-- Next Slice: AES-05B — Projection Alignment: ACTIVE PREPARATION
-  (implementation not started).
+- AES-05B — Projection Alignment: COMPLETED/ACCEPTED.
+  Implementation boundary: FormResultMetadata now consumes explicit
+  X-Textus-Execution-Result and authoritative X-Textus-Job-Id headers for
+  HTTP/Form annotation, template, and result-id extraction; legacy body
+  inference remains unchanged when execution-result metadata is absent.
+- Implementation steps complete; next: Phase 57 series release gate and final
+  full-gate/release commit.
 
 AES-04 closure evidence: focused validation invocation
 `88139-20260812T033747Z` passed 6 suites with 67 passed and 2 existing pending,
@@ -48,6 +53,12 @@ compatibility-safe ABI/concurrency/transport design. Luna focused re-review
 found only local naming violations (`runtimeTokens`, `policyTokens`,
 `deprecatedTokens` → flatcase), mechanically repaired by the parent (M0); no
 re-review was required.
+
+AES-05B closure evidence: focused validation invocation
+`59778-20260812T092530Z` passed 4 suites with 341/341, all exits 0/0 with the
+lock released. Explicit Form state alignment and Help/Describe/Schema static,
+plus Admin/JobControl explicit boundaries, were verified. Terra full review
+findings were repaired; Luna focused re-review: PASS.
 
 ## Closure
 

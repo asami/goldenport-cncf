@@ -26,11 +26,14 @@ all exits 0/0 with the lock released; focused re-review: PASS.
 ## AES-05: Transport and Projection Alignment
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Completed Slice: AES-05A — Explicit Execution Transport Metadata:
   COMPLETED/ACCEPTED.
-- Next Slice: AES-05B — Projection Alignment: ACTIVE PREPARATION
-  (implementation not started).
+- Completed Slice: AES-05B — Projection Alignment: COMPLETED/ACCEPTED.
+- Implementation boundary: FormResultMetadata now consumes explicit
+  X-Textus-Execution-Result and authoritative X-Textus-Job-Id headers for
+  HTTP/Form annotation, template, and result-id extraction; legacy body
+  inference remains unchanged when execution-result metadata is absent.
 - Owner: Phase 57.2 AES-05B.
 - Update rule: Record only evidence-backed status changes; retain unchecked
   items until their closure evidence is accepted.
@@ -49,7 +52,13 @@ found only local naming violations (`runtimeTokens`, `policyTokens`,
 `deprecatedTokens` → flatcase), mechanically repaired by the parent (M0); no
 re-review was required.
 
-- [ ] Align Request, HTTP/Form, Help, Admin, diagnostics, metrics, and CallTree.
-- [ ] Preserve exact direct responses and explicit Job metadata.
-- [ ] Run focused and representative integration once.
-- [ ] Review once and commit the accepted Phase.
+AES-05B closure evidence: focused validation invocation
+`59778-20260812T092530Z` passed 4 suites with 341/341, all exits 0/0 with the
+lock released. Explicit Form state alignment and Help/Describe/Schema static,
+plus Admin/JobControl explicit boundaries, were verified. Terra full review
+findings were repaired; Luna focused re-review: PASS.
+
+- [x] Align Request, HTTP/Form, Help, Admin, diagnostics, metrics, and CallTree.
+- [x] Preserve exact direct responses and explicit Job metadata.
+- [x] Run focused and representative integration once.
+- [x] Review once and commit the accepted Phase.

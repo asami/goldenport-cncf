@@ -74,7 +74,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -82,6 +82,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private val _test_csrf_token = WebCsrf.issue(None)
   private val _in_phase53_spec =
     afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-3, phase:53")
+  private val _aes05b = afterWord(
+    "in spec:action-execution-semantics, example:E9, rules:R13, phase:57.2, slice:AES-05B"
+  )
 
   "StaticFormAppRenderer" must _in_phase53_spec {
     "provide dashboard, system administration, Blob, and documentation contracts" which {
@@ -5646,6 +5649,110 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "result.action.approve.href" -> "/form/approve",
         "result.action.approve.method" -> "POST"
       )
+    }
+
+    "project form metadata from explicit execution transport state" must _aes05b {
+      Given("responses carrying direct, accepted-job, job-result, or no execution-result headers")
+      val directjsonresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        """{"jobId":"body-job","jobStatus":"running","message":"direct"}"""
+      ).withHeader(Record.data(
+        "X-Textus-Execution-Result" -> "direct",
+        "X-Textus-Job-Id" -> "stale-header-job"
+      ))
+      val directscalarresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        "cncf-job-body-job"
+      ).withHeader(Record.data(
+        "X-Textus-Execution-Result" -> "direct",
+        "X-Textus-Job-Id" -> "stale-header-job"
+      ))
+      val acceptedresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        """{"jobId":"body-job","jobStatus":"running"}"""
+      ).withHeader(Record.data(
+        "X-Textus-Execution-Result" -> "accepted-job",
+        "X-Textus-Job-Id" -> "cncf-job-authoritative"
+      ))
+      val jobresultresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        """{"jobId":"body-job","jobStatus":"completed"}"""
+      ).withHeader(Record.data(
+        "X-Textus-Execution-Result" -> "job-result",
+        "X-Textus-Job-Id" -> "cncf-job-authoritative-result"
+      ))
+      val acceptedwithoutidresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        """{"jobId":"body-job-without-header","jobStatus":"running"}"""
+      ).withHeader(Record.data(
+        "x-textus-execution-result" -> "AcCePtEd-JoB"
+      ))
+      val jobresultwithoutidresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        """{"jobId":"body-job-without-header","jobStatus":"completed"}"""
+      ).withHeader(Record.data(
+        "x-textus-execution-result" -> "JoB-ReSuLt"
+      ))
+      val duplicateheaderresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        """{"jobId":"body-job-duplicate","jobStatus":"running"}"""
+      ).withHeader(Record.data(
+        "x-textus-execution-result" -> "accepted-job",
+        "X-Textus-Execution-Result" -> "direct",
+        "x-textus-job-id" -> "cncf-job-first",
+        "X-Textus-Job-Id" -> "cncf-job-second"
+      ))
+      val legacyresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        "cncf-job-legacy"
+      )
+      val unknownresponse = HttpResponse.text(
+        HttpStatus.Ok,
+        "cncf-job-unknown"
+      ).withHeader(Record.data(
+        "X-Textus-Execution-Result" -> "future-result"
+      ))
+
+      When("form metadata is extracted from each response")
+      val directjsonmetadata = FormResultMetadata.fromHttpResponse(directjsonresponse)
+      val directscalarmetadata = FormResultMetadata.fromHttpResponse(directscalarresponse)
+      val acceptedmetadata = FormResultMetadata.fromHttpResponse(acceptedresponse)
+      val jobresultmetadata = FormResultMetadata.fromHttpResponse(jobresultresponse)
+      val acceptedwithoutidmetadata = FormResultMetadata.fromHttpResponse(acceptedwithoutidresponse)
+      val jobresultwithoutidmetadata = FormResultMetadata.fromHttpResponse(jobresultwithoutidresponse)
+      val duplicateheadermetadata = FormResultMetadata.fromHttpResponse(duplicateheaderresponse)
+      val legacymetadata = FormResultMetadata.fromHttpResponse(legacyresponse)
+      val unknownmetadata = FormResultMetadata.fromHttpResponse(unknownresponse)
+
+      Then("direct responses suppress body and stale-header Job IDs")
+      directjsonmetadata.jobId shouldBe None
+      directjsonmetadata.jobStatus shouldBe None
+      directscalarmetadata.jobId shouldBe None
+      directscalarmetadata.jobStatus shouldBe None
+
+      And("accepted-job responses use the authoritative header Job ID and status")
+      acceptedmetadata.jobId shouldBe Some("cncf-job-authoritative")
+      acceptedmetadata.jobStatus shouldBe Some("accepted")
+
+      And("job-result responses use the authoritative header Job ID and retain its result status")
+      jobresultmetadata.jobId shouldBe Some("cncf-job-authoritative-result")
+      jobresultmetadata.jobStatus shouldBe Some("completed")
+
+      And("recognized results use case-insensitive headers and values without body fallback")
+      acceptedwithoutidmetadata.jobId shouldBe None
+      acceptedwithoutidmetadata.jobStatus shouldBe None
+      jobresultwithoutidmetadata.jobId shouldBe None
+      jobresultwithoutidmetadata.jobStatus shouldBe Some("completed")
+
+      And("duplicate headers use the first matching field exposed by HttpResponse")
+      duplicateheadermetadata.jobId shouldBe Some("cncf-job-first")
+      duplicateheadermetadata.jobStatus shouldBe Some("accepted")
+
+      And("responses without execution-result state preserve legacy body inference")
+      legacymetadata.jobId shouldBe Some("cncf-job-legacy")
+
+      And("unknown execution-result values preserve legacy body inference")
+      unknownmetadata.jobId shouldBe Some("cncf-job-unknown")
     }
 
     }

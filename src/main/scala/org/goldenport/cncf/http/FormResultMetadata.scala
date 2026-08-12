@@ -16,7 +16,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * @since   Apr. 15, 2026
  *  version Apr. 21, 2026
  *  version May. 27, 2026
- * @version Jun. 18, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FormResultMetadata(
@@ -93,8 +93,24 @@ object FormResultMetadata {
       _json_action(json)
   }
 
-  def fromHttpResponse(response: HttpResponse): FormResultMetadata =
-    fromBody(response.getString.getOrElse(""))
+  def fromHttpResponse(response: HttpResponse): FormResultMetadata = {
+    val body = response.getString.getOrElse("")
+    val metadata = fromBody(body)
+    _execution_result(response) match {
+      case Some("direct") =>
+        metadata.copy(jobId = None, jobStatus = None)
+      case Some("accepted-job") =>
+        val jobid = _header_job_id(response)
+        metadata.copy(
+          jobId = jobid,
+          jobStatus = jobid.map(_ => "accepted")
+        )
+      case Some("job-result") =>
+        metadata.copy(jobId = _header_job_id(response))
+      case _ =>
+        metadata
+    }
+  }
 
   def fromBody(body: String): FormResultMetadata =
     _json_metadata_or_empty(body).getOrElse(
@@ -103,6 +119,16 @@ object FormResultMetadata {
         jobId = _scalar_job_id(body)
       )
     )
+
+  private def _execution_result(response: HttpResponse): Option[String] =
+    response.headerValue("X-Textus-Execution-Result")
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+      .filter(_.nonEmpty)
+
+  private def _header_job_id(response: HttpResponse): Option[String] =
+    response.headerValue("X-Textus-Job-Id")
+      .map(_.trim)
+      .filter(_.nonEmpty)
 
   def executionTemplateValues(
     metadata: RuntimeContext.ExecutionMetadata
