@@ -1,13 +1,15 @@
 package org.goldenport.cncf.http
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import org.goldenport.bag.Bag
+import org.goldenport.cncf.action.{CommandExecutionMode, CommandInterfaceMode}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, SecurityLevel, SessionContext, SubjectKind}
+import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, RuntimeContext, SecurityLevel, SessionContext, SubjectKind}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.job.JobId
@@ -17,10 +19,12 @@ import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationReque
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem, SubsystemUserMode}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.Consequence
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.protocol.Protocol
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
-import org.http4s.{MediaType, Method, Request as HRequest, Uri}
+import org.http4s.{Header, MediaType, Method, Request as HRequest, Response as HResponse, Status as HStatus, Uri}
 import org.http4s.headers.`Content-Type`
 import io.circe.parser.parse
 import org.scalatest.GivenWhenThen
@@ -33,12 +37,15 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _in_phase53_spec =
     afterWord("in spec:subsystem-user-mode-http-dispatch, example:PM-53-01, rules:PM-53-01, phase:53")
+  private val _e9 = afterWord(
+    "in spec:action-execution-semantics, example:E9, rules:R5,R6,R13, phase:57.2, slice:AES-05A"
+  )
 
   "Http4sHttpServer" must _in_phase53_spec {
     "HTTP operation, presentation, and protocol dispatch" which {
@@ -547,6 +554,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       apibody should include ("Forbidden")
     }
 
+    "E9 execution response transport metadata" must _e9 {
     "return debug job id header for debug trace-job form-api requests" in {
       Given("the prerequisites for return debug job id header for debug trace-job form-api requests")
       val root = Files.createTempDirectory("http4s-http-server-debug-trace-job-spec")
@@ -589,6 +597,197 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Then("the documented response contract holds")
       response.status.code shouldBe 200
       response.headers.get(ci"X-Textus-Job-Id").map(_.head.value).flatMap(JobId.parse(_).toOption) should not be empty
+      response.headers.get(ci"X-Textus-Execution-Mode").map(_.head.value) shouldBe Some("JobSync")
+      response.headers.get(ci"X-Textus-Execution-Result").map(_.head.value) shouldBe Some("job-result")
+    }
+
+    "return explicit Direct headers for form-api requests without trace-job admission" in {
+      Given("a public debug form-api operation without trace-job admission")
+      val root = Files.createTempDirectory(
+        Paths.get("target"),
+        "http4s-http-server-direct-metadata-spec"
+      )
+      val web = root.resolve("web.yaml")
+      try {
+        Files.writeString(
+          web,
+          """expose:
+            |  debug.http.echo: public
+            |form:
+            |  debug.http.echo:
+            |    enabled: true
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(web.toString))),
+          ConfigurationTrace.empty
+        )
+        val server = _server(DefaultSubsystemFactory.default(None, configuration))
+
+        When("the form-api request is submitted without debug trace-job")
+        val response = server
+          ._submit_operation_form_api(_post_form_request("/form-api/debug/http/echo", "body=hello"), "debug", "http", "echo")
+          .unsafeRunSync()
+
+        Then("the transport declares Direct mode/result and does not emit a Job identifier")
+        response.status.code shouldBe 200
+        response.headers.get(ci"X-Textus-Execution-Mode").map(_.head.value) shouldBe Some("Sync")
+        response.headers.get(ci"X-Textus-Execution-Result").map(_.head.value) shouldBe Some("direct")
+        response.headers.get(ci"X-Textus-Job-Id") shouldBe None
+      } finally {
+        Files.deleteIfExists(web)
+        Files.deleteIfExists(root)
+      }
+    }
+
+    "replace stale case-insensitive headers with authoritative accepted Job metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; accepted Job metadata and a response carrying duplicate stale execution headers")
+      val response = _with_stale_execution_headers(HResponse[IO](HStatus.Accepted))
+
+      When("the shared execution-metadata projector decorates the accepted response")
+      val projected = Http4sHttpServer._with_execution_metadata_headers(response, _accepted_execution_metadata, _accepted_execution_response)
+
+      Then("exactly one authoritative Job, execution-mode, and execution-result header remains")
+      projected.status shouldBe HStatus.Accepted
+      projected.headers.get(ci"X-Textus-Job-Id").map(_.head.value) shouldBe Some("accepted-job-42")
+      projected.headers.get(ci"X-Textus-Execution-Mode").map(_.head.value) shouldBe Some("JobAsync")
+      projected.headers.get(ci"X-Textus-Execution-Result").map(_.head.value) shouldBe Some("accepted-job")
+      projected.headers.headers.count(_.name == ci"X-Textus-Job-Id") shouldBe 1
+      projected.headers.headers.count(_.name == ci"X-Textus-Execution-Mode") shouldBe 1
+      projected.headers.headers.count(_.name == ci"X-Textus-Execution-Result") shouldBe 1
+    }
+
+    "preserve binary bytes while projecting accepted execution metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a binary response and accepted Job metadata")
+      val response = _with_stale_execution_headers(
+        HResponse[IO](HStatus.Ok)
+          .withBodyStream(fs2.Stream.emits(Array[Byte](0x01, 0x02, 0x03)).covary[IO])
+      )
+
+      When("the shared execution-metadata projector decorates the binary response")
+      val projected = Http4sHttpServer._with_execution_metadata_headers(response, _accepted_execution_metadata, _accepted_execution_response)
+
+      Then("the status and binary body remain unchanged")
+      projected.status shouldBe HStatus.Ok
+      projected.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector(1.toByte, 2.toByte, 3.toByte)
+    }
+
+    "preserve BadRequest status while projecting accepted execution metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a BadRequest response and accepted Job metadata")
+      val response = _with_stale_execution_headers(HResponse[IO](HStatus.BadRequest))
+
+      When("the shared execution-metadata projector decorates the BadRequest response")
+      val projected = Http4sHttpServer._with_execution_metadata_headers(response, _accepted_execution_metadata, _accepted_execution_response)
+
+      Then("the status remains BadRequest and the Job header is authoritative")
+      projected.status shouldBe HStatus.BadRequest
+      projected.headers.get(ci"X-Textus-Job-Id").map(_.head.value) shouldBe Some("accepted-job-42")
+    }
+
+    "remove stale Job headers when explicit Direct metadata has no identifier" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a response with stale Job headers and explicit Direct metadata")
+      val response = _with_stale_execution_headers(HResponse[IO](HStatus.Ok))
+      val metadata = RuntimeContext.ExecutionMetadata.empty
+
+      When("the shared execution-metadata projector decorates the direct response")
+      val projected = Http4sHttpServer._with_execution_metadata_headers(
+        response,
+        metadata,
+        Some(RuntimeContext.ExecutionResponseMetadata.direct)
+      )
+
+      Then("no Job header remains while direct execution headers are singular")
+      projected.status shouldBe HStatus.Ok
+      projected.headers.get(ci"X-Textus-Job-Id") shouldBe None
+      projected.headers.headers.count(_.name == ci"X-Textus-Execution-Mode") shouldBe 1
+      projected.headers.headers.count(_.name == ci"X-Textus-Execution-Result") shouldBe 1
+    }
+
+    "apply the kind-first Job header matrix for every explicit state" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R13; Example: E9; every response kind, identifier presence, and duplicate stale Job headers")
+      val cases = Vector(
+        ("direct", RuntimeContext.ExecutionResponseMetadata.direct, None, None),
+        ("accepted-with-id", _accepted_execution_response.get, Some("accepted-job-42"), Some("accepted-job-42")),
+        ("accepted-without-id", _accepted_execution_response.get, None, None),
+        ("result-with-id", _job_result_execution_response, Some("result-job-42"), Some("result-job-42")),
+        ("result-without-id", _job_result_execution_response, None, None)
+      )
+
+      When("each case is projected over a response carrying duplicate stale Job headers")
+      cases.foreach { case (label, executionresponse, jobid, expectedjobid) =>
+        val projected = Http4sHttpServer._with_execution_metadata_headers(
+          _with_stale_execution_headers(HResponse[IO](HStatus.Ok)),
+          RuntimeContext.ExecutionMetadata(responseJobId = jobid),
+          Some(executionresponse)
+        )
+
+        Then(s"$label retains only its kind-authorized Job header outcome")
+        projected.headers.get(ci"X-Textus-Job-Id").map(_.head.value) shouldBe expectedjobid
+        projected.headers.headers.count(_.name == ci"X-Textus-Job-Id") shouldBe expectedjobid.fold(0)(_ => 1)
+      }
+    }
+
+    "preserve a legacy Job header through the structured error rendering branch without metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a structured BadRequest response with a legacy Job header and no execution metadata")
+      val server = _server(DefaultSubsystemFactory.default(None))
+      val source = HttpResponse.Text(
+        HttpStatus.BadRequest,
+        ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
+        Bag.text("""{"error":"structured failure"}""", StandardCharsets.UTF_8)
+      ).withHeader(Record.data("X-Textus-Job-Id" -> "legacy-structured-job"))
+
+      When("the structured error rendering branch projects an absent execution response")
+      val response = server._to_http_response_with_metadata(
+        source,
+        None,
+        None,
+        None,
+        None,
+        RuntimeContext.ExecutionMetadata.empty
+      ).unsafeRunSync()
+
+      Then("the source status and legacy Job header remain observable")
+      response.status shouldBe HStatus.BadRequest
+      response.headers.get(ci"X-Textus-Job-Id").map(_.head.value) shouldBe Some("legacy-structured-job")
+    }
+
+    "replace a legacy Job header through the synthesized error rendering branch with accepted metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a synthesized BadRequest response with legacy headers and accepted Job metadata")
+      val server = _server(DefaultSubsystemFactory.default(None))
+      val source = HttpResponse.Text(
+        HttpStatus.BadRequest,
+        ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+        Bag.text("synthesized failure", StandardCharsets.UTF_8)
+      ).withHeader(Record.data("X-Textus-Job-Id" -> "legacy-synthesized-job"))
+      val metadata = RuntimeContext.ExecutionMetadata(
+        responseJobId = Some("accepted-synthesized-job")
+      )
+      val executionresponse = Some(RuntimeContext.ExecutionResponseMetadata(
+        admittedMode = CommandExecutionMode.JobAsync.toString,
+        effectiveMode = CommandExecutionMode.JobAsync,
+        interfaceMode = CommandInterfaceMode.Async,
+        managedByJob = true,
+        responseKind = RuntimeContext.ExecutionResponseKind.AcceptedJob
+      ))
+
+      When("the synthesized error rendering branch projects accepted Job metadata")
+      val response = server._to_http_response_with_metadata(
+        source,
+        None,
+        None,
+        None,
+        None,
+        metadata,
+        executionresponse
+      ).unsafeRunSync()
+
+      Then("the source status remains while authoritative metadata replaces the legacy Job header")
+      response.status shouldBe HStatus.BadRequest
+      response.headers.get(ci"X-Textus-Job-Id").map(_.head.value) shouldBe Some("accepted-synthesized-job")
+      response.headers.get(ci"X-Textus-Execution-Mode").map(_.head.value) shouldBe Some("JobAsync")
+      response.headers.get(ci"X-Textus-Execution-Result").map(_.head.value) shouldBe Some("accepted-job")
+    }
     }
 
     "render unauthorized operation-result widgets as inline page errors" in {
@@ -1158,6 +1357,38 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
     }
   }
+
+  private val _accepted_execution_metadata = RuntimeContext.ExecutionMetadata(
+    responseJobId = Some("accepted-job-42")
+  )
+
+  private val _accepted_execution_response = Some(RuntimeContext.ExecutionResponseMetadata(
+    admittedMode = CommandExecutionMode.JobAsync.toString,
+    effectiveMode = CommandExecutionMode.JobAsync,
+    interfaceMode = CommandInterfaceMode.Async,
+    managedByJob = true,
+    responseKind = RuntimeContext.ExecutionResponseKind.AcceptedJob
+  ))
+
+  private val _job_result_execution_response = RuntimeContext.ExecutionResponseMetadata(
+    admittedMode = CommandExecutionMode.JobSync.toString,
+    effectiveMode = CommandExecutionMode.JobSync,
+    interfaceMode = CommandInterfaceMode.Sync,
+    managedByJob = true,
+    responseKind = RuntimeContext.ExecutionResponseKind.JobResult
+  )
+
+  private val _stale_execution_headers = Vector(
+    Header.Raw(ci"x-textus-job-id", "stale-job"),
+    Header.Raw(ci"X-Textus-Job-Id", "stale-job-duplicate"),
+    Header.Raw(ci"x-textus-execution-mode", "stale-mode"),
+    Header.Raw(ci"X-Textus-Execution-Mode", "stale-mode-duplicate"),
+    Header.Raw(ci"x-textus-execution-result", "stale-result"),
+    Header.Raw(ci"X-Textus-Execution-Result", "stale-result-duplicate")
+  )
+
+  private def _with_stale_execution_headers(response: HResponse[IO]): HResponse[IO] =
+    _stale_execution_headers.foldLeft(response)(_.putHeaders(_))
 
   private def _server(subsystem: Subsystem): Http4sHttpServer =
     HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))

@@ -11,7 +11,7 @@ import org.goldenport.cncf.context.RuntimeContext
 
 /*
  * @since   Apr. 15, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 trait WebOperationDispatcher {
@@ -20,7 +20,10 @@ trait WebOperationDispatcher {
   def dispatch(request: HttpRequest): HttpResponse
 
   def dispatchWithMetadata(request: HttpRequest): HttpExecutionResult =
-    HttpExecutionResult(dispatch(request), RuntimeContext.ExecutionMetadata.empty)
+    dispatchWithExecutionResponse(request).toLegacy
+
+  def dispatchWithExecutionResponse(request: HttpRequest): HttpExecutionEnvelope =
+    HttpExecutionEnvelope(dispatch(request), RuntimeContext.ExecutionMetadata.empty, None)
 }
 
 object WebOperationDispatcher {
@@ -51,6 +54,9 @@ object WebOperationDispatcher {
 
     override def dispatchWithMetadata(request: HttpRequest): HttpExecutionResult =
       engine.executeWithMetadata(request)
+
+    override def dispatchWithExecutionResponse(request: HttpRequest): HttpExecutionEnvelope =
+      engine.executeWithExecutionResponse(request)
   }
 
   final case class Rest(

@@ -54,7 +54,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -1353,7 +1353,11 @@ final class InMemoryJobEngine(
       if (_can_run_next_task(jobid)) {
         try {
           _append_timeline(jobid, "job.scheduler.started", None, None, note)
-          _run_job_body(jobid, record.tasks, record.submittedContext)
+          _run_job_body(
+            jobid,
+            record.tasks,
+            ExecutionContext.withFreshExecutionResponseCell(record.submittedContext)
+          )
         } catch {
           case e: Throwable =>
             _handle_worker_failure(jobid, e)

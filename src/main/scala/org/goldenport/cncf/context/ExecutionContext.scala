@@ -48,7 +48,7 @@ import cats.~>
  *  version Apr. 25, 2026
  *  version May. 31, 2026
  *  version Jul. 31, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -172,6 +172,9 @@ object ExecutionContext {
     val core: CoreExecutionContext.Core,
     private[cncf] val cncfCore: CncfCore
   ) extends ExecutionContext {
+    private[cncf] var executionResponseCell: ExecutionResponseCell =
+      ExecutionResponseCell.empty
+
     def withScope(p: ScopeContext): Instance = {
       copy(cncfCore = cncfCore.withScope(p))
     }
@@ -179,8 +182,11 @@ object ExecutionContext {
     private[cncf] def copy(
       core: CoreExecutionContext.Core = this.core,
       cncfCore: CncfCore = this.cncfCore
-    ): Instance =
-      new Instance(core, cncfCore)
+    ): Instance = {
+      val copied = new Instance(core, cncfCore)
+      copied.executionResponseCell = executionResponseCell
+      copied
+    }
   }
 
   object Instance {
@@ -190,6 +196,125 @@ object ExecutionContext {
     ): Instance =
       new Instance(core, cncfCore)
   }
+
+  /**
+    * Mutable response transport state is deliberately owned by one execution
+    * context lineage rather than RuntimeContext diagnostics.  Ordinary context
+    * transforms share this cell; an asynchronous Job receives a fresh cell.
+    */
+  private[cncf] final case class ExecutionResponseState(
+    responseJobId: Option[String] = None,
+    debugJobId: Option[String] = None,
+    response: Option[RuntimeContext.ExecutionResponseMetadata] = None
+  )
+
+  private[cncf] final class ExecutionResponseCell private (
+    private var _value: ExecutionResponseState
+  ) {
+    def clear(): Unit = synchronized {
+      _value = ExecutionResponseState()
+    }
+
+    def note(value: RuntimeContext.ExecutionResponseMetadata): Unit = synchronized {
+      _value = _value.copy(response = Some(value))
+    }
+
+    def noteResponseJobId(value: String): Unit = synchronized {
+      _value = _value.copy(responseJobId = Some(value))
+    }
+
+    def noteDebugJobId(value: String): Unit = synchronized {
+      _value = _value.copy(debugJobId = Some(value))
+    }
+
+    def snapshot(): ExecutionResponseState = synchronized {
+      _value
+    }
+
+    def restore(value: ExecutionResponseState): Unit = synchronized {
+      _value = value
+    }
+  }
+
+  private[cncf] object ExecutionResponseCell {
+    def empty: ExecutionResponseCell = new ExecutionResponseCell(ExecutionResponseState())
+  }
+
+  private[cncf] def clearExecutionResponse(ctx: ExecutionContext): Unit =
+    ctx match {
+      case i: Instance => i.executionResponseCell.clear()
+      case _ => ()
+    }
+
+  private[cncf] def noteExecutionResponse(
+    ctx: ExecutionContext,
+    response: RuntimeContext.ExecutionResponseMetadata
+  ): Unit =
+    ctx match {
+      case i: Instance => i.executionResponseCell.note(response)
+      case _ => ()
+    }
+
+  private[cncf] def noteResponseJobId(
+    ctx: ExecutionContext,
+    jobid: String
+  ): Unit =
+    ctx match {
+      case i: Instance =>
+        i.executionResponseCell.noteResponseJobId(jobid)
+        i.runtime.noteResponseJobId(jobid) // legacy diagnostics projection only
+      case _ => ()
+    }
+
+  private[cncf] def noteDebugJobId(
+    ctx: ExecutionContext,
+    jobid: String
+  ): Unit =
+    ctx match {
+      case i: Instance =>
+        i.executionResponseCell.noteDebugJobId(jobid)
+        i.runtime.noteDebugJobId(jobid) // legacy diagnostics projection only
+      case _ => ()
+    }
+
+  private[cncf] def snapshotExecutionResponse(
+    ctx: ExecutionContext
+  ): ExecutionResponseState =
+    ctx match {
+      case i: Instance => i.executionResponseCell.snapshot()
+      case _ => ExecutionResponseState()
+    }
+
+  private[cncf] def restoreExecutionResponse(
+    ctx: ExecutionContext,
+    snapshot: ExecutionResponseState
+  ): Unit =
+    ctx match {
+      case i: Instance => i.executionResponseCell.restore(snapshot)
+      case _ => ()
+    }
+
+  private[cncf] def currentExecutionResponse(
+    ctx: ExecutionContext
+  ): Option[RuntimeContext.ExecutionResponseMetadata] =
+    snapshotExecutionResponse(ctx).response
+
+  private[cncf] def currentExecutionResponseState(
+    ctx: ExecutionContext
+  ): ExecutionResponseState =
+    snapshotExecutionResponse(ctx)
+
+  /** Derives an asynchronous new-Job context without sharing submitter response state. */
+  private[cncf] def withFreshExecutionResponseCell(
+    ctx: ExecutionContext
+  ): ExecutionContext =
+    ctx match {
+      case i: Instance =>
+        val copied = i.copy()
+        copied.executionResponseCell = ExecutionResponseCell.empty
+        copied
+      case _ => ctx
+    }
 
   def create(): ExecutionContext =
     _create(

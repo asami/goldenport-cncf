@@ -9,6 +9,7 @@ import scala.util.control.NonFatal
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.action.{CommandExecutionMode, CommandExecutionPolicy, CommandInterfaceMode}
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
 import org.goldenport.cncf.naming.PropertyValueResolver
@@ -246,6 +247,55 @@ object RuntimeContext {
 
   object ExecutionMetadata {
     val empty: ExecutionMetadata = ExecutionMetadata()
+  }
+
+  enum ExecutionResponseKind {
+    case Direct
+    case AcceptedJob
+    case JobResult
+
+    def transportValue: String = this match {
+      case Direct => "direct"
+      case AcceptedJob => "accepted-job"
+      case JobResult => "job-result"
+    }
+  }
+
+  final case class ExecutionResponseMetadata(
+    admittedMode: String = CommandExecutionMode.Sync.toString,
+    effectiveMode: CommandExecutionMode = CommandExecutionMode.Sync,
+    interfaceMode: CommandInterfaceMode = CommandInterfaceMode.Sync,
+    managedByJob: Boolean = false,
+    asyncContinuation: Boolean = false,
+    responseKind: ExecutionResponseKind = ExecutionResponseKind.Direct
+  )
+
+  object ExecutionResponseMetadata {
+    val direct: ExecutionResponseMetadata = ExecutionResponseMetadata()
+
+    val queryTraceJobResult: ExecutionResponseMetadata = ExecutionResponseMetadata(
+      admittedMode = CommandExecutionMode.JobSync.toString,
+      effectiveMode = CommandExecutionMode.JobSync,
+      interfaceMode = CommandInterfaceMode.Sync,
+      managedByJob = true,
+      responseKind = ExecutionResponseKind.JobResult
+    )
+
+    def command(
+      policy: CommandExecutionPolicy,
+      admittedMode: String,
+      responseKind: ExecutionResponseKind
+    ): ExecutionResponseMetadata = {
+      val mode = CommandExecutionMode.valueOf(policy.modeLabel)
+      ExecutionResponseMetadata(
+        admittedMode = admittedMode,
+        effectiveMode = mode,
+        interfaceMode = policy.interfaceMode,
+        managedByJob = policy.managedByJob,
+        asyncContinuation = policy.asyncContinuation,
+        responseKind = responseKind
+      )
+    }
   }
 
   final case class Context(

@@ -149,29 +149,48 @@ case class ComponentLogic(
     ctx: ExecutionContext,
     taskdecorator: ActionTask => JobTask
   ): Consequence[OperationResponse] = {
-    if (ctx.operationEvaluation.invocation.isEmpty)
+    // Public operations are evaluation-admitted before this method is called.  A
+    // child invocation alone arrives while its caller's Action scope is active.
+    val nested = ctx.scope.kind == ScopeKind.Action
+    val snapshot = if (nested) Some(ExecutionContext.snapshotExecutionResponse(ctx)) else None
+    val legacysnapshot = if (nested) Some(ctx.runtime.executionMetadata) else None
+    if (ctx.operationEvaluation.invocation.isEmpty) {
       ctx.runtime.clearExecutionMetadata()
-    val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
-    val scopedctx = ctx.withScope(actionscope)
-    val task = ActionTask(
-      ActionId.create("component.execute", scopedctx.clock.instant(), scopedctx.idGeneration),
-      action,
-      component.actionEngine,
-      Some(component)
-    )
-    _resolve_operation_kind(action) match {
-      case Some(ComponentLogic.OperationKind.Query) =>
-        _execute_query_action(taskdecorator(task), scopedctx)
-      case Some(ComponentLogic.OperationKind.Command) =>
-        _execute_command_action(task, action, scopedctx, taskdecorator)
-      case None =>
-        action match {
-          case _: QueryAction =>
-            _execute_query_action(taskdecorator(task), scopedctx)
-          case _: CommandAction =>
-            _execute_command_action(task, action, scopedctx, taskdecorator)
-          case _ =>
-            taskdecorator(task).run(scopedctx).result
+      if (!nested)
+        ExecutionContext.clearExecutionResponse(ctx)
+    }
+    try {
+      val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
+      val scopedctx = ctx.withScope(actionscope)
+      val task = ActionTask(
+        ActionId.create("component.execute", scopedctx.clock.instant(), scopedctx.idGeneration),
+        action,
+        component.actionEngine,
+        Some(component)
+      )
+      _resolve_operation_kind(action) match {
+        case Some(ComponentLogic.OperationKind.Query) =>
+          _execute_query_action(taskdecorator(task), scopedctx)
+        case Some(ComponentLogic.OperationKind.Command) =>
+          _execute_command_action(task, action, scopedctx, taskdecorator)
+        case None =>
+          action match {
+            case _: QueryAction =>
+              _execute_query_action(taskdecorator(task), scopedctx)
+            case _: CommandAction =>
+              _execute_command_action(task, action, scopedctx, taskdecorator)
+            case _ =>
+              _note_direct_response(scopedctx)
+              taskdecorator(task).run(scopedctx).result
+          }
+      }
+    } finally {
+      snapshot.foreach(ExecutionContext.restoreExecutionResponse(ctx, _))
+      legacysnapshot.foreach { previous =>
+        ctx.runtime.updateExecutionMetadata(_.copy(
+          responseJobId = previous.responseJobId,
+          debugJobId = previous.debugJobId
+        ))
       }
     }
   }
@@ -207,10 +226,15 @@ case class ComponentLogic(
         executionNotes = Vector("debug trace query")
       )
       submitJob(List(task), ctx, option).flatMap { jobid =>
-        _note_job_response(ctx, jobid)
+        _note_job_response(
+          ctx,
+          jobid,
+          RuntimeContext.ExecutionResponseMetadata.queryTraceJobResult
+        )
         awaitJobResult(jobid)
       }
     } else {
+      _note_direct_response(ctx)
       task.run(ctx).result
     }
 
@@ -220,17 +244,16 @@ case class ComponentLogic(
     ctx: ExecutionContext,
     taskdecorator: ActionTask => JobTask
   ): Consequence[OperationResponse] = {
-    val policy = action match {
+    val resolved = action match {
       case command: CommandAction =>
-        _effective_command_execution_policy(action, command, ctx)
+        _resolve_command_execution(action, command, ctx)
       case _ =>
-        ctx.framework.commandExecutionMode
-          .map(CommandExecutionPolicy.fromLegacyMode)
-          .orElse(_operation_execution_policy(action.request.operation))
-          .getOrElse(CommandExecutionPolicy.default)
+        _resolve_non_command_execution(action, ctx)
     }
+    val policy = resolved.policy
     val policyctx = ExecutionContext.withFrameworkCommandExecutionPolicy(ctx, policy)
     if (!policy.managedByJob) {
+      _note_direct_response(policyctx, policy, resolved.admittedmode)
       taskdecorator(task).run(policyctx).result
     } else {
       val runmode = policy.jobRunMode match {
@@ -247,7 +270,15 @@ case class ComponentLogic(
       _job_definition_submit_binding(action, option0, policyctx).flatMap { binding =>
         _task_with_compensation(task, binding.compensation, action, policyctx).flatMap { task1 =>
           submitJob(List(taskdecorator(task1)), policyctx, binding.option).flatMap { jobid =>
-            _note_job_response(policyctx, jobid)
+            val responsekind = policy.interfaceMode match {
+              case CommandInterfaceMode.Async => RuntimeContext.ExecutionResponseKind.AcceptedJob
+              case CommandInterfaceMode.Sync => RuntimeContext.ExecutionResponseKind.JobResult
+            }
+            _note_job_response(
+              policyctx,
+              jobid,
+              RuntimeContext.ExecutionResponseMetadata.command(policy, resolved.admittedmode, responsekind)
+            )
             policy.interfaceMode match {
               case CommandInterfaceMode.Async =>
                 Consequence.success(OperationResponse.Scalar(jobid.value))
@@ -278,26 +309,54 @@ case class ComponentLogic(
       case _ => None
     }
 
-  private def _effective_command_execution_policy(
+  private def _resolve_command_execution(
     action: Action,
     command: CommandAction,
     ctx: ExecutionContext
-  ): CommandExecutionPolicy =
-    ctx.framework.commandExecutionMode.map(CommandExecutionPolicy.fromLegacyMode).getOrElse {
-      _operation_execution_policy(action.request.operation).getOrElse {
+  ): ComponentLogic.ResolvedCommandExecution =
+    ctx.framework.commandExecutionMode.map { mode =>
+      ComponentLogic.ResolvedCommandExecution(CommandExecutionPolicy.fromLegacyMode(mode), mode.toString)
+    }.getOrElse {
+      _operation_execution_decision(action.request.operation).getOrElse {
         if (_is_command_script_combo(action))
-          CommandExecutionPolicy.default
+          ComponentLogic.ResolvedCommandExecution(
+            CommandExecutionPolicy.default,
+            CommandExecutionMode.SyncDirectNoJob.toString
+          )
         else
-          CommandExecutionPolicy.fromLegacyMode(command.commandExecutionMode)
+          ComponentLogic.ResolvedCommandExecution(
+            CommandExecutionPolicy.fromLegacyMode(command.commandExecutionMode),
+            command.commandExecutionMode.toString
+          )
       }
     }
 
-  private def _operation_execution_policy(
+  private def _resolve_non_command_execution(
+    action: Action,
+    ctx: ExecutionContext
+  ): ComponentLogic.ResolvedCommandExecution =
+    ctx.framework.commandExecutionMode.map { mode =>
+      ComponentLogic.ResolvedCommandExecution(CommandExecutionPolicy.fromLegacyMode(mode), mode.toString)
+    }.orElse(_operation_execution_decision(action.request.operation)).getOrElse(
+      ComponentLogic.ResolvedCommandExecution(
+        CommandExecutionPolicy.default,
+        CommandExecutionMode.SyncDirectNoJob.toString
+      )
+    )
+
+  private def _operation_execution_decision(
     operationname: String
-  ): Option[CommandExecutionPolicy] =
+  ): Option[ComponentLogic.ResolvedCommandExecution] =
     _operation_definition(operationname).flatMap { definition =>
-      definition.commandExecutionPolicy
-        .orElse(definition.execution.flatMap(CommandExecutionPolicy.fromLegacyExecution))
+      definition.commandExecutionPolicy.map { policy =>
+        ComponentLogic.ResolvedCommandExecution(policy, policy.modeLabel)
+      }.orElse {
+        definition.execution.flatMap { raw =>
+          CommandExecutionPolicy.fromLegacyExecution(raw).map { policy =>
+            ComponentLogic.ResolvedCommandExecution(policy, raw.trim)
+          }
+        }
+      }
     }
 
   private def _operation_definition(
@@ -605,12 +664,29 @@ case class ComponentLogic(
 
   private def _note_job_response(
     ctx: ExecutionContext,
-    jobid: JobId
+    jobid: JobId,
+    response: RuntimeContext.ExecutionResponseMetadata
   ): Unit = {
-    ctx.runtime.noteResponseJobId(jobid.value)
-    if (ctx.framework.traceJob)
-      ctx.runtime.noteDebugJobId(jobid.value)
+    ExecutionContext.noteResponseJobId(ctx, jobid.value)
+    ExecutionContext.noteExecutionResponse(ctx, response)
+    if (ctx.framework.traceJob) {
+      ExecutionContext.noteDebugJobId(ctx, jobid.value)
+    }
   }
+
+  private def _note_direct_response(
+    ctx: ExecutionContext,
+    policy: CommandExecutionPolicy = CommandExecutionPolicy.default,
+    admittedmode: String = CommandExecutionMode.Sync.toString
+  ): Unit =
+    ExecutionContext.noteExecutionResponse(
+      ctx,
+      RuntimeContext.ExecutionResponseMetadata.command(
+        policy,
+        admittedmode,
+        RuntimeContext.ExecutionResponseKind.Direct
+      )
+    )
 
   def executionContext(): ExecutionContext =
     _execution_context()
@@ -747,6 +823,10 @@ case class ComponentLogic(
 }
 
 object ComponentLogic {
+  private final case class ResolvedCommandExecution(
+    policy: CommandExecutionPolicy,
+    admittedmode: String
+  )
   private[cncf] def runtimeOperationMode(
     policy: Option[Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]]
   ): org.goldenport.cncf.config.OperationMode =

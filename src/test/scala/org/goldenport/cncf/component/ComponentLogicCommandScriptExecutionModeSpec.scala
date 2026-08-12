@@ -8,7 +8,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, CallerTransactionPolicy, 
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, IdGenerationContext, ScopeContext, ScopeKind, SecurityContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, IdGenerationContext, RuntimeContext, ScopeContext, ScopeKind, SecurityContext}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.dsl.script.ScriptAction
 import org.goldenport.cncf.event.{ActionCallDispatcher, CmlEventCategory, CmlEventDefinition, CmlSubscriptionDefinition, DispatchRoute, DomainEvent, EventBus, EventEngine, EventReception, EventReceptionCondition, EventReceptionExecutionPolicy, EventReceptionRule, EventStore, ReceptionOutcome}
@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
  *  version May. 31, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
@@ -38,6 +38,9 @@ final class ComponentLogicCommandScriptExecutionModeSpec
   with GivenWhenThen
   with BeforeAndAfterEach {
   private val _test_subsystems = ArrayBuffer.empty[Subsystem]
+  private val _e9 = afterWord(
+    "in spec:action-execution-semantics, example:E9, rules:R5,R6,R13, phase:57.2, slice:AES-05A"
+  )
 
   override protected def afterEach(): Unit =
     try
@@ -48,39 +51,77 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
   "ComponentLogic command/script execution mode" should {
-    "parse canonical and compatibility command execution mode names" in {
+    "command execution policy" which {
+    "parse canonical command execution mode names" in {
       Given("canonical production execution mode tokens")
-      CommandExecutionPolicy.parse("sync").map(_.modeLabel) shouldBe Some("Sync")
-      CommandExecutionPolicy.parse("job-sync").map(_.modeLabel) shouldBe Some("JobSync")
-      CommandExecutionPolicy.parse("job-async").map(_.modeLabel) shouldBe Some("JobAsync")
-      CommandExecutionPolicy.parse("job-sync-with-async-cont").map(_.modeLabel) shouldBe Some("JobSyncWithAsyncCont")
-      CommandExecutionPolicy.parse("job-sync-with-async-continuation").map(_.modeLabel) shouldBe Some("JobSyncWithAsyncCont")
+      val tokens = Vector(
+        "sync",
+        "job-sync",
+        "job-async",
+        "job-sync-with-async-cont",
+        "job-sync-with-async-continuation"
+      )
 
-      Then("legacy compatibility tokens still parse")
-      RuntimeConfig.parseCommandExecutionMode("job-sync") shouldBe Some(CommandExecutionMode.JobSync)
-      RuntimeConfig.parseCommandExecutionMode("job-async") shouldBe Some(CommandExecutionMode.JobAsync)
-      RuntimeConfig.parseCommandExecutionMode("job-sync-with-async-continuation") shouldBe Some(CommandExecutionMode.JobSyncWithAsyncCont)
-      CommandExecutionPolicy.parse("sync-direct-no-job").map(_.modeLabel) shouldBe Some("Sync")
-      CommandExecutionPolicy.parse("sync-job").map(_.modeLabel) shouldBe Some("JobSync")
-      CommandExecutionPolicy.parse("async-job").map(_.modeLabel) shouldBe Some("JobAsync")
-      CommandExecutionPolicy.parse("async-job-and-await").map(_.isDeprecatedCompatibilityMode) shouldBe Some(true)
-      CommandExecutionPolicy.parse("sync-job-async-interface").map(_.isDeprecatedCompatibilityMode) shouldBe Some(true)
+      When("the canonical production tokens are parsed")
+      val parsed = tokens.map(CommandExecutionPolicy.parse(_).map(_.modeLabel))
+
+      Then("each token resolves to its canonical execution mode")
+      parsed shouldBe Vector(
+        Some("Sync"),
+        Some("JobSync"),
+        Some("JobAsync"),
+        Some("JobSyncWithAsyncCont"),
+        Some("JobSyncWithAsyncCont")
+      )
     }
 
-    "parse command transaction semantics with strict defaults" in {
+    "preserve legacy command execution mode compatibility tokens" in {
+      Given("legacy command execution mode tokens")
+      val runtimetokens = Vector(
+        "job-sync",
+        "job-async",
+        "job-sync-with-async-continuation"
+      )
+      val policytokens = Vector("sync-direct-no-job", "sync-job", "async-job")
+      val deprecatedtokens = Vector("async-job-and-await", "sync-job-async-interface")
+
+      When("the compatibility tokens are parsed")
+      val runtimeparsed = runtimetokens.map(RuntimeConfig.parseCommandExecutionMode)
+      val policymodes = policytokens.map(CommandExecutionPolicy.parse(_).map(_.modeLabel))
+      val deprecated = deprecatedtokens.map(
+        CommandExecutionPolicy.parse(_).map(_.isDeprecatedCompatibilityMode)
+      )
+
+      Then("legacy compatibility tokens retain their documented interpretation")
+      runtimeparsed shouldBe Vector(
+        Some(CommandExecutionMode.JobSync),
+        Some(CommandExecutionMode.JobAsync),
+        Some(CommandExecutionMode.JobSyncWithAsyncCont)
+      )
+      policymodes shouldBe Vector(Some("Sync"), Some("JobSync"), Some("JobAsync"))
+      deprecated shouldBe Vector(Some(true), Some(true))
+    }
+
+    "apply strict transaction semantics to the default command policy" in {
       Given("default command execution policy")
+
+      When("the default policy is resolved")
       val default = CommandExecutionPolicy.default
 
-      Then("canonical command modes are transactionally strict unless explicitly relaxed")
+      Then("the default command mode retains strict transaction semantics")
       default.callerTransactionPolicy shouldBe CallerTransactionPolicy.JoinCaller
       default.eventTransactionRequirement shouldBe OperationEventTransactionRequirement.Required
       default.jobTransactionScope shouldBe JobTransactionScope.PerTask
       default.continuationEventTransactionRequirement shouldBe OperationEventTransactionRequirement.Required
+    }
 
-      When("descriptor-style policy properties override the defaults")
-      val parsed = CommandExecutionPolicy.parse(
+    "project explicit command transaction policy overrides" in {
+      Given("descriptor-style command transaction policy properties")
+      val properties =
         "managed-by-job=true,interface=sync,job-run=sync,caller-transaction-policy=new-transaction,event-transaction-requirement=best-effort,job-transaction-scope=whole-job,continuation-event-transaction-requirement=ignore"
-      ).getOrElse(fail("policy should parse"))
+
+      When("the explicit policy override is parsed")
+      val parsed = CommandExecutionPolicy.parse(properties).getOrElse(fail("policy should parse"))
 
       Then("the policy exposes the transaction semantics in its projection record")
       parsed.modeLabel shouldBe "JobSync"
@@ -93,13 +134,15 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       parsed.toRecord.getString("jobTransactionScope") shouldBe Some("whole-job")
       parsed.toRecord.getString("continuationEventTransactionRequirement") shouldBe Some("ignore")
     }
+    }
 
+    "command action execution" which {
     "use Sync for an unspecified command action" in {
+      Given("a command action without execution metadata")
       val component = _create_component("default_command_execution_mode", Protocol.empty)
       val action = _command_action("default_sync", "ok")
 
       _with_runtime_mode(RunMode.Command) {
-        Given("a command action without execution metadata")
         When("executing through ComponentLogic")
         val result = component.logic.executeAction(action)
 
@@ -110,12 +153,12 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "preserve explicit JobAsync command action behavior" in {
+      Given("a command action that explicitly requests JobAsync")
       val component = _create_component("explicit_async_command_execution_mode", Protocol.empty)
       val action = _command_action("explicit_async", "ok", mode = Some(CommandExecutionMode.JobAsync))
       val ctx = ExecutionContext.test()
 
       _with_runtime_mode(RunMode.Command) {
-        Given("a command action that explicitly requests JobAsync")
         When("executing through ComponentLogic")
         val response = component.logic.executeAction(action, ctx).toOption.getOrElse(fail("execution failed"))
         val jobid = response match {
@@ -131,7 +174,8 @@ final class ComponentLogicCommandScriptExecutionModeSpec
           _envelope_request("explicit_async", "job-async"),
           response,
           RunMode.Command,
-          ctx.runtime.executionMetadata
+          ctx.runtime.executionMetadata,
+          ExecutionContext.currentExecutionResponse(ctx)
         ) match {
           case Response.Json(value) =>
             value should include (""""data":null""")
@@ -183,13 +227,15 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       actionid.parts.minor shouldBe namespace.minor
       actionid.parts.timestamp shouldBe timestamp
     }
+    }
 
+    "SCRIPT action execution" which {
     "use Sync for command + SCRIPT combination" in {
+      Given("SCRIPT command action")
       val component = _create_component("script_execution_mode", Protocol.empty)
       val action = _script_action()
 
       _with_runtime_mode(RunMode.Command) {
-        Given("SCRIPT command action")
         When("executing through ComponentLogic in command runtime mode")
         val result = component.logic.executeAction(action)
 
@@ -199,12 +245,33 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       }
     }
 
+    "E9 command + SCRIPT response metadata" must _e9 {
+      "retain SyncDirectNoJob admission while using effective Sync" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a command + SCRIPT compatibility action without an overriding definition")
+        val component = _create_component("script_execution_transport_metadata", Protocol.empty)
+        val action = _script_action()
+        val ctx = ExecutionContext.test()
+
+        When("the command + SCRIPT action executes in command runtime mode")
+        val result = _with_runtime_mode(RunMode.Command) {
+          component.logic.executeAction(action, ctx)
+        }
+
+        Then("the explicit response metadata retains raw compatibility admission separately from effective Sync")
+        result shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+        val metadata = ExecutionContext.currentExecutionResponse(ctx).getOrElse(fail("execution response metadata missing"))
+        metadata.admittedMode shouldBe CommandExecutionMode.SyncDirectNoJob.toString
+        metadata.effectiveMode shouldBe CommandExecutionMode.Sync
+        metadata.responseKind shouldBe RuntimeContext.ExecutionResponseKind.Direct
+      }
+    }
+
     "use ScriptAction default JobSync outside command mode" in {
+      Given("SCRIPT action with default JobSync")
       val component = _create_component("script_execution_mode_non_command", Protocol.empty)
       val action = _script_action()
 
       _with_runtime_mode(RunMode.Script) {
-        Given("SCRIPT action with default JobSync")
         When("executing through ComponentLogic in script runtime mode")
         val result = component.logic.executeAction(action)
 
@@ -213,8 +280,11 @@ final class ComponentLogicCommandScriptExecutionModeSpec
         _metrics(component) shouldBe (0, 0, 1, 0)
       }
     }
+    }
 
+    "framework command execution mode" which {
     "allow framework meta parameter to force JobSync for command action" in {
+      Given("a command action with framework commandExecutionMode=JobSync")
       val component = _create_component("framework_meta_sync_job", Protocol.empty)
       val action = _command_action("meta_sync", "ok")
       val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
@@ -223,7 +293,6 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       )
 
       _with_runtime_mode(RunMode.Command) {
-        Given("a command action with framework commandExecutionMode=JobSync")
         When("executing through ComponentLogic")
         val result = component.logic.executeAction(action, ctx)
 
@@ -234,6 +303,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "record JobSyncWithAsyncCont primary command synchronously with continuation metadata" in {
+      Given("a command action with framework commandExecutionMode=JobSyncWithAsyncCont")
       val component = _create_component("framework_meta_job_sync_with_async_cont", Protocol.empty)
       val action = _command_action("meta_sync_async_cont", "ok")
       val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
@@ -242,7 +312,6 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       )
 
       _with_runtime_mode(RunMode.Command) {
-        Given("a command action with framework commandExecutionMode=JobSyncWithAsyncCont")
         When("executing through ComponentLogic")
         val result = component.logic.executeAction(action, ctx)
         val jobid = ctx.runtime.executionMetadata.responseJobId
@@ -261,7 +330,8 @@ final class ComponentLogicCommandScriptExecutionModeSpec
           _envelope_request("meta_sync_async_cont", "job-sync-with-async-cont"),
           result.toOption.getOrElse(fail("primary response is missing")),
           RunMode.Command,
-          ctx.runtime.executionMetadata
+          ctx.runtime.executionMetadata,
+          ExecutionContext.currentExecutionResponse(ctx)
         ) match {
           case Response.Json(value) =>
             value should include (""""data":"ok"""")
@@ -276,6 +346,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "drive JobSyncWithAsyncCont residual work through async Event continuation" in {
+      Given("a JobSyncWithAsyncCont command that emits an event with async new-job reception")
       val calls = ArrayBuffer.empty[String]
       val component = _event_component("job_sync_with_async_cont_event", calls)
       val action = _command_action("emitEvent", "unused")
@@ -285,7 +356,6 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       )
 
       _with_runtime_mode(RunMode.Command) {
-        Given("a JobSyncWithAsyncCont command that emits an event with async new-job reception")
         When("executing through ComponentLogic")
         val result = component.logic.executeAction(action, ctx)
 
@@ -320,6 +390,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "preserve deprecated AsyncJobAndAwait compatibility behavior" in {
+      Given("a command action with deprecated commandExecutionMode=AsyncJobAndAwait")
       val component = _create_component("framework_meta_async_job_and_await", Protocol.empty)
       val action = _command_action("meta_async_job_and_await", "ok")
       val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
@@ -328,7 +399,6 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       )
 
       _with_runtime_mode(RunMode.Command) {
-        Given("a command action with deprecated commandExecutionMode=AsyncJobAndAwait")
         When("executing through ComponentLogic")
         val result = component.logic.executeAction(action, ctx)
 
@@ -339,6 +409,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "preserve deprecated SyncJobAsyncInterface compatibility behavior" in {
+      Given("a command action with deprecated commandExecutionMode=SyncJobAsyncInterface")
       val component = _create_component("framework_meta_sync_job_async_interface", Protocol.empty)
       val executed = new AtomicBoolean(false)
       val action = _command_action("meta_sync_async_interface", "ok", executed)
@@ -348,7 +419,6 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       )
 
       _with_runtime_mode(RunMode.Command) {
-        Given("a command action with deprecated commandExecutionMode=SyncJobAsyncInterface")
         When("executing through ComponentLogic")
         val response = component.logic.executeAction(action, ctx).toOption.getOrElse(fail("execution failed"))
         val jobid = response match {
@@ -364,7 +434,9 @@ final class ComponentLogicCommandScriptExecutionModeSpec
         executed.get() shouldBe true
       }
     }
+    }
 
+    "event continuation action execution" which {
     "commit event continuation actions through ActionEngine" in {
       Given("an event continuation action with a post-commit callback")
       val component = _create_component("event_continuation_commit", Protocol.empty)
@@ -394,6 +466,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       Then("the normal action commit runs the callback")
       result shouldBe Consequence.success(OperationResponse.Scalar("committed"))
       callbackexecuted.get() shouldBe true
+    }
     }
   }
 

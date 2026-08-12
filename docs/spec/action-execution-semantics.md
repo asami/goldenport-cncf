@@ -197,6 +197,58 @@ by Job status/result consumers. Await and primary-result routes MUST surface
 that failure synchronously. No enqueue, submission, or admission failure may
 be converted into a successful `Unit` or Job-ID response.
 
+## Execution response transport metadata (R13)
+
+`RuntimeContext.ExecutionResponseMetadata` is the additive public record of
+the execution decision that produced an observable response. It is carried by
+an execution-context-owned response cell and additive execution envelopes;
+it MUST NOT change the arity or field order of `ExecutionMetadata`,
+`ExecutionResult`, `FormattedExecutionResult`, or `HttpExecutionResult`.
+`admittedMode` MUST
+preserve the raw label selected by R5 precedence: a framework legacy mode uses
+its exact enum label, a typed definition uses its policy mode label, a legacy
+definition uses its trimmed declared value, and concrete action fallback uses
+its exact legacy mode label. `effectiveMode` MUST be the normalized
+`CommandExecutionMode` derived from the selected policy. The raw admitted
+label and normalized effective mode are distinct observable values and MUST
+NOT be collapsed merely because they select equivalent behavior.
+
+For the command+SCRIPT compatibility default and generic Action classified as
+`COMMAND` default, `admittedMode` MUST be `SyncDirectNoJob` while
+`effectiveMode` is `Sync`.
+
+`responseKind` MUST be `Direct` for an immediate non-Job response,
+`AcceptedJob` when an asynchronous Job interface admits a Job and returns its
+identifier, and `JobResult` when the response is the result of a Job-managed
+execution. A `Direct` response MUST NOT create or imply Job metadata. An
+`AcceptedJob` or `JobResult` MAY expose a Job identifier only when execution
+metadata explicitly contains an authoritative response or debug Job ID.
+
+The formatter MUST derive Job envelope structure only from explicit execution
+metadata. It MUST NOT infer Job acceptance from a scalar value, a Job-ID-like
+shape, requested mode, configuration, or any other response shape. When an
+envelope is rendered, its `execution` record MUST expose `admitted-mode`,
+`effective-mode`, and `response-kind` from execution metadata when available.
+
+HTTP and Loopback transports MUST project `effectiveMode` as
+`X-Textus-Execution-Mode` and `responseKind` as
+`X-Textus-Execution-Result`. Projection is kind-first and must use this exact
+matrix after removing case-insensitive stale `X-Textus-Job-Id` values:
+
+| Explicit response state | Authoritative response/debug ID | Required Job header result |
+| --- | --- | --- |
+| absent | any | preserve the source header unchanged as legacy transport state |
+| `Direct` | any | remove every Job header |
+| `AcceptedJob` | present | emit exactly one authoritative Job header |
+| `AcceptedJob` | absent | remove every Job header |
+| `JobResult` | present | emit exactly one authoritative Job header |
+| `JobResult` | absent | remove every Job header |
+
+An async Job worker MUST derive a fresh response cell, so worker or nested
+response activity cannot erase its submitter's `AcceptedJob` state. Ordinary
+synchronous child execution shares the cell and restores its parent response
+state on return; diagnostics and operation-evaluation data remain separate.
+
 ## Stable executable examples
 
 The following examples are stable traceability anchors. Each example names the
@@ -256,6 +308,13 @@ observability, and structured-failure boundaries while retaining their distinct
 response timing. A post-commit dispatch failure retains committed transaction
 evidence and distinct terminal observability.
 
+### E9 — Execution response transport metadata (R5, R6, R13)
+
+Given a selected command policy and an HTTP, Loopback, or formatter response,
+when response metadata is projected, then the admitted label, normalized
+effective mode, response kind, Job envelope, and transport headers follow the
+explicit metadata without response-shape inference.
+
 ## Related executable specifications
 
 The following non-normative references identify executable specifications that
@@ -264,9 +323,14 @@ exercise portions of these rules:
 * `src/test/scala/org/goldenport/cncf/component/ComponentLogicOperationDefinitionSemanticsSpec.scala`
   covers operation-definition classification and query trace behavior (R2,
   R4).
-* `src/test/scala/org/goldenport/cncf/component/ComponentLogicCommandScriptExecutionModeSpec.scala`
-  and `src/test/scala/org/goldenport/cncf/job/JobCommandSyncAndTaskFirstSpec.scala`
-  cover command policy and Job response modes (R5, R6).
+* `src/test/scala/org/goldenport/cncf/component/ComponentLogicPlainActionExecutionSpec.scala`,
+  `ComponentLogicCommandScriptExecutionModeSpec.scala`,
+  `Http4sHttpServerDispatchSpec.scala`, `HttpDriverSpec.scala`, and
+  `OperationResponseFormatterSpec.scala` cover E9 explicit execution response
+  metadata, transport projection, command+SCRIPT compatibility, and controlled
+  async response-cell isolation (R5, R6, R13).
+* `src/test/scala/org/goldenport/cncf/job/JobCommandSyncAndTaskFirstSpec.scala`
+  covers Job command lifecycle behavior (R5, R6).
 * `src/test/scala/org/goldenport/cncf/job/JobPrimaryResultSpec.scala` and
   `JobQueryReadModelSpec.scala` cover Job result, primary-result, and read-model
   behavior (R6, R12).

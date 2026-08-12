@@ -7,6 +7,7 @@ import cats.data.NonEmptyVector
 import org.goldenport.datatype.I18nString
 import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.cncf.action.{CommandExecutionMode, CommandInterfaceMode}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{
@@ -33,13 +34,16 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 28, 2026
  *  version May. 31, 2026
  *  version Jun. 29, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResponseFormatterSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
+  private val _e9 = afterWord(
+    "in spec:action-execution-semantics, example:E9, rules:R5,R6,R13, phase:57.2, slice:AES-05A"
+  )
 
   "OperationResponseFormatter response contracts" should {
     "format structured responses" which {
@@ -129,8 +133,9 @@ final class OperationResponseFormatterSpec
         }
       }
 
-      "project JobId scalar into job metadata in canonical envelope" in {
-        Given("a JobAsync scalar JobId response")
+      "E9 execution response transport metadata" must _e9 {
+      "project explicitly accepted JobId scalar into job metadata in canonical envelope" in {
+        Given("a JobAsync scalar JobId response with explicit accepted-job metadata")
         val request = _request("domain.command", shape = "envelope", format = "json")
         val jobid = JobId(
           major = "cncf",
@@ -139,9 +144,25 @@ final class OperationResponseFormatterSpec
           entropy = Some("formatter_spec")
         ).value
         val response = OperationResponse.Scalar(jobid)
+        val metadata = RuntimeContext.ExecutionMetadata(
+          responseJobId = Some(jobid)
+        )
+        val executionresponse = Some(RuntimeContext.ExecutionResponseMetadata(
+          admittedMode = CommandExecutionMode.JobAsync.toString,
+          effectiveMode = CommandExecutionMode.JobAsync,
+          interfaceMode = CommandInterfaceMode.Async,
+          managedByJob = true,
+          responseKind = RuntimeContext.ExecutionResponseKind.AcceptedJob
+        ))
 
         When("formatting the response")
-        val formatted = OperationResponseFormatter.toResponse(request, response, RunMode.Command)
+        val formatted = OperationResponseFormatter.toResponse(
+          request,
+          response,
+          RunMode.Command,
+          metadata,
+          executionresponse
+        )
 
         Then("JobId is metadata and data is null")
         formatted match {
@@ -149,6 +170,70 @@ final class OperationResponseFormatterSpec
             value should include(""""data":null""")
             value should include(s""""job":{"id":"$jobid","status":"accepted"}""")
             value should not include """"result""""
+          case other =>
+            fail(s"unexpected response: ${other}")
+        }
+      }
+
+      "keep a JobId-looking direct scalar as data without a job root" in {
+        Given("a direct scalar whose value has the JobId syntax")
+        val request = _request("domain.command", shape = "envelope", format = "json")
+        val jobid = JobId(
+          major = "cncf",
+          minor = "job",
+          timestamp = Some(Instant.parse("2026-07-16T00:00:00Z")),
+          entropy = Some("direct_scalar")
+        ).value
+        val response = OperationResponse.Scalar(jobid)
+        val metadata = RuntimeContext.ExecutionMetadata.empty
+
+        When("formatting the direct response")
+        val formatted = OperationResponseFormatter.toResponse(
+          request,
+          response,
+          RunMode.Command,
+          metadata,
+          Some(RuntimeContext.ExecutionResponseMetadata.direct)
+        )
+
+        Then("the scalar remains data and the formatter does not infer a Job")
+        formatted match {
+          case Response.Json(value) =>
+            value should include(s"\"data\":\"$jobid\"")
+            value should include("\"response-kind\":\"direct\"")
+            value should not include "\"job\""
+          case other =>
+            fail(s"unexpected response: ${other}")
+        }
+      }
+
+      "keep a JobId-looking scalar as data when the no-metadata overload receives a Job request mode" in {
+        Given("a JobId-shaped scalar and a request that asks for a Job execution mode without runtime metadata")
+        val request = _request(
+          "domain.command",
+          shape = "envelope",
+          format = "json",
+          mode = Some("job-async")
+        )
+        val jobid = JobId(
+          major = "cncf",
+          minor = "job",
+          timestamp = Some(Instant.parse("2026-07-16T00:00:00Z")),
+          entropy = Some("no_metadata_scalar")
+        ).value
+
+        When("the no-metadata formatter overload formats the scalar")
+        val formatted = OperationResponseFormatter.toResponse(
+          request,
+          OperationResponse.Scalar(jobid),
+          RunMode.Command
+        )
+
+        Then("the scalar remains data and no Job root is inferred from request configuration")
+        formatted match {
+          case Response.Json(value) =>
+            value should include(s"\"data\":\"$jobid\"")
+            value should not include "\"job\""
           case other =>
             fail(s"unexpected response: ${other}")
         }
@@ -163,20 +248,37 @@ final class OperationResponseFormatterSpec
           mode = Some("job-sync-with-async-cont")
         )
         val response = OperationResponse.RecordResponse(Record.data("status" -> "ok"))
-        val metadata = RuntimeContext.ExecutionMetadata(responseJobId = Some("cncf-job-primary"))
+        val metadata = RuntimeContext.ExecutionMetadata(
+          responseJobId = Some("cncf-job-primary")
+        )
+        val executionresponse = Some(RuntimeContext.ExecutionResponseMetadata(
+          admittedMode = CommandExecutionMode.JobSyncWithAsyncCont.toString,
+          effectiveMode = CommandExecutionMode.JobSyncWithAsyncCont,
+          interfaceMode = CommandInterfaceMode.Sync,
+          managedByJob = true,
+          asyncContinuation = true,
+          responseKind = RuntimeContext.ExecutionResponseKind.JobResult
+        ))
 
         When("formatting the response")
         val formatted =
-          OperationResponseFormatter.toResponse(request, response, RunMode.Command, metadata)
+          OperationResponseFormatter.toResponse(
+            request,
+            response,
+            RunMode.Command,
+            metadata,
+            executionresponse
+          )
 
         Then("primary data, primary job, and continuation intent are separate roots")
         formatted match {
           case Response.Json(value) =>
             value should include(""""data":{"status":"ok"}""")
             value should include(
-              """"execution":{"interface-shape":"record","operation":"domain.command","requested-mode":"job-sync-with-async-cont","interface":"sync","managed-by-job":true,"async-continuation":true}"""
+              """"execution":{"interface-shape":"record","operation":"domain.command","requested-mode":"job-sync-with-async-cont","admitted-mode":"JobSyncWithAsyncCont","effective-mode":"JobSyncWithAsyncCont","interface":"sync","managed-by-job":true,"async-continuation":true,"response-kind":"job-result"}"""
             )
             value should include(""""job":{"id":"cncf-job-primary"}""")
+            value should not include """"status":"accepted"""
             value should include(
               """"continuation":{"mode":"event-async-same-job-task","policy":"async-same-job"}"""
             )
@@ -184,6 +286,7 @@ final class OperationResponseFormatterSpec
           case other =>
             fail(s"unexpected response: ${other}")
         }
+      }
       }
 
       "render inline debug under debug root" in {

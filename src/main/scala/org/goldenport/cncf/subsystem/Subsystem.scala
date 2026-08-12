@@ -36,7 +36,7 @@ import org.goldenport.cncf.entity.{
   EntityMutationAdapterDefaults,
   EntityRevisionTransport
 }
-import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult, WebExecutionResolutionPolicy}
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionEnvelope, HttpExecutionResult, WebExecutionResolutionPolicy}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
@@ -71,7 +71,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -92,10 +92,26 @@ final class Subsystem(
     metadata: RuntimeContext.ExecutionMetadata
   )
 
+  final case class ExecutionEnvelope(
+    response: OperationResponse,
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionResponse: Option[RuntimeContext.ExecutionResponseMetadata]
+  ) {
+    def toLegacy: ExecutionResult = ExecutionResult(response, metadata)
+  }
+
   final case class FormattedExecutionResult(
     response: Response,
     metadata: RuntimeContext.ExecutionMetadata
   )
+
+  final case class FormattedExecutionEnvelope(
+    response: Response,
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionResponse: Option[RuntimeContext.ExecutionResponseMetadata]
+  ) {
+    def toLegacy: FormattedExecutionResult = FormattedExecutionResult(response, metadata)
+  }
 
   private var _component_factory: ComponentFactory = new ComponentFactory(
     workingsetclock = _find_global_runtime_context(scopeContext)
@@ -844,11 +860,17 @@ final class Subsystem(
     }
 
   def executeHttpWithMetadata(req: HttpRequest): HttpExecutionResult = {
+    executeHttpWithExecutionResponse(req).toLegacy
+  }
+
+  def executeHttpWithExecutionResponse(
+    req: HttpRequest
+  ): HttpExecutionEnvelope = {
     _resolve_route(req) match {
       case Some((component, service, operation)) =>
-        _execute_http(component, service, operation, req)
+        _execute_http_with_execution_response(component, service, operation, req)
       case None =>
-        HttpExecutionResult(_not_found(), RuntimeContext.ExecutionMetadata.empty)
+        HttpExecutionEnvelope(_not_found(), RuntimeContext.ExecutionMetadata.empty, None)
     }
   }
 
@@ -857,16 +879,22 @@ final class Subsystem(
   }
 
   def executeResponseWithMetadata(request: Request): Consequence[FormattedExecutionResult] = {
-    executeWithMetadata(request).map { result =>
-      FormattedExecutionResult(
-        _to_response(request, result.response, result.metadata),
-        result.metadata
-      )
-    }
+    executeResponseWithExecutionResponse(request).map(_.toLegacy)
   }
 
+  def executeResponseWithExecutionResponse(
+    request: Request
+  ): Consequence[FormattedExecutionEnvelope] =
+    executeWithExecutionResponse(request).map { result =>
+      FormattedExecutionEnvelope(
+        _to_response(request, result.response, result.metadata, result.executionResponse),
+        result.metadata,
+        result.executionResponse
+      )
+    }
+
   def executeOperationResponse(request: Request): Consequence[OperationResponse] = {
-    executeWithMetadata(request).map(_.response)
+    executeWithExecutionResponse(request).map(_.response)
   }
 
   /** Executes an admitted component call without replacing the caller's execution context. */
@@ -914,14 +942,25 @@ final class Subsystem(
   }
 
   def executeWithMetadata(request: Request): Consequence[ExecutionResult] = {
-    _execute_with_metadata(request, None)
+    executeWithExecutionResponse(request).map(_.toLegacy)
   }
 
   def executeWithMetadata(
     request: Request,
     @deprecatedName("httpRequest", "0.5.1") httprequest: HttpRequest
   ): Consequence[ExecutionResult] =
-    _execute_with_metadata(request, Some(httprequest))
+    executeWithExecutionResponse(request, httprequest).map(_.toLegacy)
+
+  def executeWithExecutionResponse(
+    request: Request
+  ): Consequence[ExecutionEnvelope] =
+    _execute_with_execution_response(request, None)
+
+  def executeWithExecutionResponse(
+    request: Request,
+    httpRequest: HttpRequest
+  ): Consequence[ExecutionEnvelope] =
+    _execute_with_execution_response(request, Some(httpRequest))
 
   def executeQueryOnlyWithMetadata(
     request: Request
@@ -929,16 +968,17 @@ final class Subsystem(
     _execute_query_only_with_metadata(request, None)
   }
 
-  private def _execute_with_metadata(
+  private def _execute_with_execution_response(
     request: Request,
     httprequest: Option[HttpRequest]
-  ): Consequence[ExecutionResult] = {
+  ): Consequence[ExecutionEnvelope] = {
     val requestwithhttpproperties =
       httprequest
         .map(req => _with_framework_properties(request, req))
         .getOrElse(request)
     var lastexecutionmetadata = RuntimeContext.ExecutionMetadata.empty
-    val r: Consequence[ExecutionResult] = for {
+    var lastexecutionresponse = Option.empty[RuntimeContext.ExecutionResponseMetadata]
+    val r: Consequence[ExecutionEnvelope] = for {
       route <- _resolve_route(requestwithhttpproperties) match {
         case Some(r) =>
           Consequence.success(r)
@@ -966,10 +1006,12 @@ final class Subsystem(
           val executioncontext =
             _with_http_runtime_parameters(security.executionContext, httprequest)
           _execute_resolved_operation(route, normalizedrequest, executioncontext).map { result =>
-            lastexecutionmetadata = executioncontext.runtime.executionMetadata
-            ExecutionResult(result, lastexecutionmetadata)
+            lastexecutionmetadata = _execution_metadata(executioncontext)
+            lastexecutionresponse = ExecutionContext.currentExecutionResponse(executioncontext)
+            ExecutionEnvelope(result, lastexecutionmetadata, lastexecutionresponse)
           }.recoverWith { conclusion =>
-            lastexecutionmetadata = executioncontext.runtime.executionMetadata
+            lastexecutionmetadata = _execution_metadata(executioncontext)
+            lastexecutionresponse = ExecutionContext.currentExecutionResponse(executioncontext)
             Consequence.Failure(conclusion)
           }
         }
@@ -979,9 +1021,10 @@ final class Subsystem(
     httprequest match {
       case Some(_) =>
         r.recover { conclusion =>
-          ExecutionResult(
+          ExecutionEnvelope(
             OperationResponse.Http(_failure_response(conclusion)),
-            lastexecutionmetadata
+            lastexecutionmetadata,
+            lastexecutionresponse
           )
         }
       case None =>
@@ -1000,8 +1043,11 @@ final class Subsystem(
       val domainrequest = _domain_request(request)
       given ExecutionContext = executioncontext
       _authorize_operation(route, executioncontext).flatMap { _ =>
-        if (executioncontext.operationEvaluation.invocation.isEmpty)
+        if (executioncontext.operationEvaluation.invocation.isEmpty) {
           executioncontext.runtime.clearExecutionMetadata()
+          if (executioncontext.scope.kind != ScopeKind.Action)
+            ExecutionContext.clearExecutionResponse(executioncontext)
+        }
         val preparedcontext = _prepare_operation_evaluation_context(route, executioncontext)
         val attemptcapture = _operation_evaluation_attempt_capture(route)
         val operationdomainrequest = _operation_business_request(route, domainrequest)
@@ -1338,7 +1384,7 @@ final class Subsystem(
           Consequence.operationInvalid("CompositeQuery accepts only direct Query execution; trace-job is not allowed")
         } else
           _execute_resolved_operation(route, normalizedrequest, resolvedexecutioncontext, queryonly = true).map { response =>
-            ExecutionResult(response, resolvedexecutioncontext.runtime.executionMetadata)
+            ExecutionResult(response, _execution_metadata(resolvedexecutioncontext))
           }
       }
     } yield response
@@ -1704,8 +1750,11 @@ final class Subsystem(
     context: ExecutionContext
   ): Consequence[OperationResponse] =
     _with_managed_datastore_lease_c { _ => _authorize_operation(route, context).flatMap { _ =>
-      if (context.operationEvaluation.invocation.isEmpty)
+      if (context.operationEvaluation.invocation.isEmpty) {
         context.runtime.clearExecutionMetadata()
+        if (context.scope.kind != ScopeKind.Action)
+          ExecutionContext.clearExecutionResponse(context)
+      }
       val domainrequest = _domain_request(action.request)
       val preparedcontext = _prepare_operation_evaluation_context(route, context)
       val attemptcapture = _operation_evaluation_attempt_capture(route)
@@ -1802,6 +1851,31 @@ final class Subsystem(
     metadata: RuntimeContext.ExecutionMetadata
   ): Response =
     OperationResponseFormatter.toResponse(request, response, _http_run_mode, metadata)
+
+  private def _to_response(
+    request: Request,
+    response: OperationResponse,
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata]
+  ): Response =
+    OperationResponseFormatter.toResponse(
+      request,
+      response,
+      _http_run_mode,
+      metadata,
+      executionresponse
+    )
+
+  private def _execution_metadata(
+    ctx: ExecutionContext
+  ): RuntimeContext.ExecutionMetadata = {
+    val response = ExecutionContext.currentExecutionResponseState(ctx)
+    val diagnostics = ctx.runtime.executionMetadata
+    diagnostics.copy(
+      responseJobId = response.responseJobId.orElse(diagnostics.responseJobId),
+      debugJobId = response.debugJobId.orElse(diagnostics.debugJobId)
+    )
+  }
 
   private def _apply_request_glue(
     binding: Option[GenericSubsystemResolvedWiringBinding],
@@ -2091,15 +2165,15 @@ final class Subsystem(
       case _ => false
     }
 
-  private def _execute_http(
+  private def _execute_http_with_execution_response(
     component: Component,
     service: ServiceDefinition,
     operation: OperationDefinition,
     req: HttpRequest
-  ): HttpExecutionResult = {
+  ): HttpExecutionEnvelope = {
 //    _ensure_system_context(component)
     val _ = service
-    val r: Consequence[(HttpResponse, RuntimeContext.ExecutionMetadata)] = for {
+    val r: Consequence[(HttpResponse, RuntimeContext.ExecutionMetadata, Option[RuntimeContext.ExecutionResponseMetadata])] = for {
       ingress <- Consequence.fromOption(
         component.protocol.handler.ingresses
           .findByInput(classOf[HttpRequest]),
@@ -2133,17 +2207,17 @@ final class Subsystem(
       // Route HTTP ingress through the standard request execution path so
       // request-derived execution mode, security, and other ingress context
       // are applied consistently with command/client execution.
-      result <- _execute_with_metadata(normalized, Some(req))
+      result <- _execute_with_execution_response(normalized, Some(req))
       response = result.response match {
         case OperationResponse.Http(http) => http
-        case other => _egress(component).encode(operation, _to_response(normalized, other, result.metadata))
+        case other => _egress(component).encode(operation, _to_response(normalized, other, result.metadata, result.executionResponse))
       }
-    } yield response -> result.metadata
+    } yield (response, result.metadata, result.executionResponse)
     r match {
-      case Consequence.Success((res, metadata)) =>
-        HttpExecutionResult(res, metadata)
+      case Consequence.Success((res, metadata, executionresponse)) =>
+        HttpExecutionEnvelope(res, metadata, executionresponse)
       case Consequence.Failure(c) =>
-        HttpExecutionResult(_failure_response(c), RuntimeContext.ExecutionMetadata.empty)
+        HttpExecutionEnvelope(_failure_response(c), RuntimeContext.ExecutionMetadata.empty, None)
     }
   }
 

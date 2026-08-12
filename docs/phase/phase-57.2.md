@@ -31,12 +31,23 @@ Phase Plan Gate: PROCEED
 
 - AES-04A — Explicit Async Contract and Failing-First Matrix: COMPLETED/ACCEPTED.
 - AES-04B — Structured Post-Commit Async Handoff: COMPLETED/ACCEPTED.
-- AES-05 — Transport and Projection Alignment: PLANNED → ACTIVE PREPARATION
-  (next; implementation not started).
+- AES-05 — Transport and Projection Alignment: IN_PROGRESS.
+- AES-05A — Explicit Execution Transport Metadata: COMPLETED/ACCEPTED.
+- Next Slice: AES-05B — Projection Alignment: ACTIVE PREPARATION
+  (implementation not started).
 
 AES-04 closure evidence: focused validation invocation
 `88139-20260812T033747Z` passed 6 suites with 67 passed and 2 existing pending,
 all exits 0/0 with the lock released; focused re-review: PASS.
+
+AES-05A acceptance evidence: behavior-batch invocations `16280` (3 suites,
+40/40), `16689` (2 suites, 41/41), and `16985` (2 suites, 44/44), plus
+CommandScript GWT validation `41677` (1 suite, 16/16); all sbt/wrapper exits
+were 0/0 with the lock released. Sol full review accepted the
+compatibility-safe ABI/concurrency/transport design. Luna focused re-review
+found only local naming violations (`runtimeTokens`, `policyTokens`,
+`deprecatedTokens` → flatcase), mechanically repaired by the parent (M0); no
+re-review was required.
 
 ## Closure
 

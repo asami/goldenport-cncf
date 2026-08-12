@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -70,7 +70,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -512,8 +512,11 @@ final class Http4sHttpServer(
             res <- _rest_mutation_request(req, raw) match {
               case Consequence.Success(core) =>
                 _to_http_execution_response(
-                  executeWithMetadata(core),
-                  Some(req)
+                  engine.executeWithExecutionResponse(core),
+                  Some(req),
+                  None,
+                  None,
+                  None
                 )
               case Consequence.Failure(conclusion) =>
                 _web_error_response(
@@ -1124,16 +1127,16 @@ final class Http4sHttpServer(
       properties = List(org.goldenport.protocol.Property("id", id, None)) ++
         _session_id_(req).map(x => org.goldenport.protocol.Property("x-textus-session", x, None)).toList
     )
-    engine.runtimeSubsystem.executeWithMetadata(request) match {
+    engine.runtimeSubsystem.executeWithExecutionResponse(request) match {
       case Consequence.Success(result) =>
         result.response match {
           case org.goldenport.protocol.operation.OperationResponse.Http(response) =>
             if (_blob_if_none_match(req, response)) {
               RuntimeDashboardMetrics.recordBlobOperation("content", error = false)
-              IO.pure(_blob_not_modified_response(response, result.metadata))
+              IO.pure(_blob_not_modified_response(response, result.metadata, result.executionResponse))
             }
             else
-              _blob_content_response(req, response, result.metadata)
+              _blob_content_response(req, response, result.metadata, result.executionResponse)
           case other =>
             RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(ConclusionDiagnostics.unknown.diagnosticKey), diagnosticRecord = Some(ConclusionDiagnostics.unknown.toRecord))
             _web_error_response(Some("blob"), HStatus.InternalServerError, s"Blob content operation returned ${other.show}", req.uri.path.renderString)
@@ -1162,10 +1165,11 @@ final class Http4sHttpServer(
 
   private def _blob_not_modified_response(
     response: HttpResponse,
-    metadata: RuntimeContext.ExecutionMetadata
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata]
   ): HResponse[IO] =
     _blob_cache_headers(
-      _with_job_id_header(HResponse[IO](HStatus.NotModified), metadata),
+      Http4sHttpServer._with_execution_metadata_headers(HResponse[IO](HStatus.NotModified), metadata, executionresponse),
       response,
       Vector("ETag", "Last-Modified", "Cache-Control", "X-Content-Type-Options")
     )
@@ -1173,14 +1177,15 @@ final class Http4sHttpServer(
   private def _blob_content_response(
     req: HRequest[IO],
     response: HttpResponse,
-    metadata: RuntimeContext.ExecutionMetadata
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata]
   ): IO[HResponse[IO]] =
     response.getBinary match {
       case Some(binary) if response.code < 400 =>
         val mime = MediaType.parse(response.mime.value).fold(_ => MediaType.application.`octet-stream`, identity)
         val charset: Option[org.http4s.Charset] =
           response.charset.map(c => org.http4s.Charset.fromNioCharset(c))
-        val base = _with_job_id_header(HResponse[IO](HStatus.Ok), metadata)
+        val base = Http4sHttpServer._with_execution_metadata_headers(HResponse[IO](HStatus.Ok), metadata, executionresponse)
           .withBodyStream(fs2.io.readInputStream(IO(binary.openInputStream()), 8192, closeAfterUse = true))
           .withContentType(`Content-Type`(mime, charset))
         RuntimeDashboardMetrics.recordBlobOperation("content", error = false)
@@ -1199,7 +1204,7 @@ final class Http4sHttpServer(
           diagnosticKey = if (response.code >= 400) Some(ConclusionDiagnostics.unknown.diagnosticKey) else None,
           diagnosticRecord = if (response.code >= 400) Some(Http4sHttpServer.fallbackHttpDiagnosticRecord(response.code)) else None
         )
-        _to_http_response_with_metadata(response, Some(req), Some("blob"), Some("blob"), Some("read_blob"), metadata)
+        _to_http_response_with_metadata(response, Some(req), Some("blob"), Some("blob"), Some("read_blob"), metadata, executionresponse)
     }
 
   private def _blob_cache_headers(
@@ -2662,7 +2667,7 @@ final class Http4sHttpServer(
         out <- _operation_dispatch_form(app, service, operation, form) match {
           case Consequence.Success(dispatchform) =>
             val componentsegment = _dispatch_component_segment(app)
-            val result = _dispatch_operation_result(
+            val result = _dispatch_operation_execution(
               componentsegment,
               service,
               operation,
@@ -2797,7 +2802,15 @@ final class Http4sHttpServer(
     service: String,
     operation: String,
     request: HttpRequest
-  ): HttpExecutionResult = {
+  ): HttpExecutionResult =
+    _dispatch_operation_execution(app, service, operation, request).toLegacy
+
+  private[http] def _dispatch_operation_execution(
+    app: String,
+    service: String,
+    operation: String,
+    request: HttpRequest
+  ): HttpExecutionEnvelope = {
     given ExecutionContext = ExecutionContext.create()
     val context = DslChokepointContext(
       domain = "web",
@@ -2813,7 +2826,7 @@ final class Http4sHttpServer(
     )
     DslChokepointRunner.run(context) {
       DslChokepointRunner.phase(context, DslChokepointPhase.Method) {
-        org.goldenport.Consequence.success(_operation_dispatcher.dispatchWithMetadata(request))
+        org.goldenport.Consequence.success(_operation_dispatcher.dispatchWithExecutionResponse(request))
       }
     } match {
       case org.goldenport.Consequence.Success(response) =>
@@ -2828,13 +2841,14 @@ final class Http4sHttpServer(
           service = Some(service),
           operation = Some(operation)
         )
-        HttpExecutionResult(
+        HttpExecutionEnvelope(
             HttpResponse.Text(
             HttpStatus.fromInt(error.status).getOrElse(HttpStatus.InternalServerError),
             ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
             Bag.text(error.envelopeJson, StandardCharsets.UTF_8)
           ),
-          RuntimeContext.ExecutionMetadata.empty
+          RuntimeContext.ExecutionMetadata.empty,
+          None
         )
     }
   }
@@ -7384,6 +7398,23 @@ final class Http4sHttpServer(
   ): IO[org.http4s.Response[IO]] =
     _to_http_response_with_metadata(result.response, req, component, service, operation, result.metadata)
 
+  private def _to_http_execution_response(
+    result: HttpExecutionEnvelope,
+    req: Option[org.http4s.Request[IO]],
+    component: Option[String],
+    service: Option[String],
+    operation: Option[String]
+  ): IO[org.http4s.Response[IO]] =
+    _to_http_response_with_metadata(
+      result.response,
+      req,
+      component,
+      service,
+      operation,
+      result.metadata,
+      result.executionResponse
+    )
+
   private def _to_http_response(
     res: HttpResponse,
     req: Option[org.http4s.Request[IO]],
@@ -7393,13 +7424,14 @@ final class Http4sHttpServer(
   ): IO[org.http4s.Response[IO]] =
     _to_http_response_with_metadata(res, req, component, service, operation, RuntimeContext.ExecutionMetadata.empty)
 
-  private def _to_http_response_with_metadata(
+  private[http] def _to_http_response_with_metadata(
     res: HttpResponse,
     req: Option[org.http4s.Request[IO]],
     component: Option[String],
     service: Option[String],
     operation: Option[String],
-    metadata: RuntimeContext.ExecutionMetadata
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata] = None
   ): IO[org.http4s.Response[IO]] = {
     val status = res.code match {
       case 200 => HStatus.Ok
@@ -7416,7 +7448,7 @@ final class Http4sHttpServer(
     res.getBinary match {
       case Some(binary) if res.code < 400 =>
         return IO.pure(
-          _with_response_headers(_with_job_id_header(HResponse[IO](status), metadata), res)
+          Http4sHttpServer._with_execution_metadata_headers(_with_response_headers(HResponse[IO](status), res), metadata, executionresponse)
             .withBodyStream(fs2.io.readInputStream(IO(binary.openInputStream()), 8192, closeAfterUse = true))
             .withContentType(contenttype)
         )
@@ -7429,7 +7461,7 @@ final class Http4sHttpServer(
       val charset: Option[org.http4s.Charset] =
         res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
       IO.pure(
-        _with_job_id_header(HResponse[IO](status), metadata)
+        Http4sHttpServer._with_execution_metadata_headers(_with_response_headers(HResponse[IO](status), res), metadata, executionresponse)
           .withEntity(body)
           .withContentType(`Content-Type`(mime, charset))
       )
@@ -7445,14 +7477,19 @@ final class Http4sHttpServer(
         operation = operation
       )
       if (_prefers_yaml(req))
-        _error_yaml_response(error)
+        _error_yaml_response(error).map { response =>
+          Http4sHttpServer._with_execution_metadata_headers(_with_response_headers(response, res), metadata, executionresponse)
+        }
       else
-        _error_json_response(error)
+        _error_json_response(error).map { response =>
+          Http4sHttpServer._with_execution_metadata_headers(_with_response_headers(response, res), metadata, executionresponse)
+        }
     } else {
       val response =
-        _with_response_headers(
-          _with_job_id_header(HResponse[IO](status), metadata),
-          res
+        Http4sHttpServer._with_execution_metadata_headers(
+          _with_response_headers(HResponse[IO](status), res),
+          metadata,
+          executionresponse
         )
           .withEntity(body)
           .withContentType(contenttype)
@@ -7528,17 +7565,6 @@ final class Http4sHttpServer(
       z.putHeaders(Header.Raw(CIString(field.key), field.value.single.toString))
     }
 
-  private def _with_job_id_header(
-    response: HResponse[IO],
-    metadata: RuntimeContext.ExecutionMetadata
-  ): HResponse[IO] =
-    metadata.responseJobId.orElse(metadata.debugJobId) match {
-      case Some(jobid) if jobid.nonEmpty =>
-        response.putHeaders(Header.Raw(CIString("X-Textus-Job-Id"), jobid))
-      case _ =>
-        response
-    }
-
   private def _prefers_yaml(
     req: Option[org.http4s.Request[IO]]
   ): Boolean =
@@ -7606,6 +7632,60 @@ object Http4sHttpServer {
   val LEGACY_PORT_PROPERTY_KEY = "cncf.server.port"
   val BOUND_BASE_URL_PROPERTY_KEY = "textus.server.bound-base-url"
   val DEMO_ASSIST_MANIFEST_QUERY_KEY = "textus.demo.manifest"
+
+  private[http] def _with_execution_metadata_headers(
+    response: HResponse[IO],
+    metadata: RuntimeContext.ExecutionMetadata
+  ): HResponse[IO] =
+    _with_execution_metadata_headers(response, metadata, None)
+
+  private[http] def _with_execution_metadata_headers(
+    response: HResponse[IO],
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata]
+  ): HResponse[IO] =
+    executionresponse match {
+      case None => response
+      case Some(execution) =>
+        val withexecution = _replace_response_header(
+          _replace_response_header(
+            response,
+            CIString("X-Textus-Execution-Mode"),
+            execution.effectiveMode.toString
+          ),
+          CIString("X-Textus-Execution-Result"),
+          execution.responseKind.transportValue
+        )
+        execution.responseKind match {
+          case RuntimeContext.ExecutionResponseKind.Direct =>
+            _remove_response_header(withexecution, CIString("X-Textus-Job-Id"))
+          case RuntimeContext.ExecutionResponseKind.AcceptedJob |
+              RuntimeContext.ExecutionResponseKind.JobResult =>
+            metadata.responseJobId.orElse(metadata.debugJobId).filter(_.nonEmpty) match {
+              case Some(jobid) =>
+                _replace_response_header(withexecution, CIString("X-Textus-Job-Id"), jobid)
+              case None =>
+                _remove_response_header(withexecution, CIString("X-Textus-Job-Id"))
+            }
+        }
+    }
+
+  private def _replace_response_header(
+    response: HResponse[IO],
+    name: CIString,
+    value: String
+  ): HResponse[IO] =
+    response.withHeaders(org.http4s.Headers(
+      response.headers.headers.filterNot(_.name == name) :+ Header.Raw(name, value)
+    ))
+
+  private def _remove_response_header(
+    response: HResponse[IO],
+    name: CIString
+  ): HResponse[IO] =
+    response.withHeaders(org.http4s.Headers(
+      response.headers.headers.filterNot(_.name == name)
+    ))
 
   private[http] def _publish_bound_base_url(host: String, port: Int): Unit = {
     val clienthost = host match {

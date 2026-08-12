@@ -3,9 +3,15 @@ package org.goldenport.cncf.http
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
+import org.goldenport.bag.Bag
+import org.goldenport.cncf.action.{CommandExecutionMode, CommandInterfaceMode}
+import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.protocol.Property
+import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -14,13 +20,16 @@ import scala.util.Try
 /*
  * @since   Apr. 25, 2026
  *  version Jul. 21, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpDriverSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
+  private val _e9 = afterWord(
+    "in spec:action-execution-semantics, example:E9, rules:R5,R6,R13, phase:57.2, slice:AES-05A"
+  )
 
   "UrlConnectionHttpDriver" should {
     "preserve response headers from the server" in {
@@ -200,6 +209,115 @@ final class HttpDriverSpec
   }
 
   "LoopbackHttpDriver" should {
+    "E9 execution response transport metadata" must _e9 {
+    "project explicit Direct metadata headers without a Job identifier" in {
+      Given("a loopback server backed by the default subsystem and a direct debug query")
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
+      val driver = new LoopbackHttpDriver(
+        LoopbackHttpServer.fromEngine(new HttpExecutionEngine(subsystem))
+      )
+
+      When("the query is executed without trace-job admission")
+      val response = driver.get("/debug/http/echo")
+
+      Then("the direct execution headers are explicit and no Job header is inferred")
+      response.code shouldBe 200
+      response.headerValue("X-Textus-Execution-Mode") shouldBe Some("Sync")
+      response.headerValue("X-Textus-Execution-Result") shouldBe Some("direct")
+      response.headerValue("X-Textus-Job-Id") shouldBe None
+    }
+
+    "remove a stale Job header when explicit Direct metadata has no Job identifier" in {
+      Given("a loopback server whose direct query response carries a stale Job header")
+      val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
+      val driver = new LoopbackHttpDriver(
+        LoopbackHttpServer.fromEngine(new HttpExecutionEngine(subsystem))
+      )
+
+      When("the direct query is executed without trace-job admission")
+      val response = driver.get("/debug/http/echo?x-textus-job-id=stale-job")
+
+      Then("the authoritative Direct metadata removes every stale Job header")
+      response.code shouldBe 200
+      response.headerValue("X-Textus-Execution-Result") shouldBe Some("direct")
+      response.headerValue("X-Textus-Job-Id") shouldBe None
+      response.header.fields.count(_.key.equalsIgnoreCase("X-Textus-Job-Id")) shouldBe 0
+    }
+
+    "apply the kind-first Job header matrix for every explicit state" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R13; Example: E9; every response kind, identifier presence, and duplicate stale Job headers")
+      val accepted = RuntimeContext.ExecutionResponseMetadata(
+        admittedMode = CommandExecutionMode.JobAsync.toString,
+        effectiveMode = CommandExecutionMode.JobAsync,
+        interfaceMode = CommandInterfaceMode.Async,
+        managedByJob = true,
+        responseKind = RuntimeContext.ExecutionResponseKind.AcceptedJob
+      )
+      val result = RuntimeContext.ExecutionResponseMetadata(
+        admittedMode = CommandExecutionMode.JobSync.toString,
+        effectiveMode = CommandExecutionMode.JobSync,
+        interfaceMode = CommandInterfaceMode.Sync,
+        managedByJob = true,
+        responseKind = RuntimeContext.ExecutionResponseKind.JobResult
+      )
+      val cases = Vector(
+        ("direct", RuntimeContext.ExecutionResponseMetadata.direct, None, None),
+        ("accepted-with-id", accepted, Some("accepted-job-42"), Some("accepted-job-42")),
+        ("accepted-without-id", accepted, None, None),
+        ("result-with-id", result, Some("result-job-42"), Some("result-job-42")),
+        ("result-without-id", result, None, None)
+      )
+      val stale = HttpResponse.Text(
+        HttpStatus.Ok,
+        ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+        Bag.text("ok", StandardCharsets.UTF_8)
+      ).withHeader(Record.data(
+        "X-Textus-Job-Id" -> "stale-job",
+        "x-textus-job-id" -> "stale-job-duplicate"
+      ))
+
+      When("each case projects over duplicate stale Job headers")
+      cases.foreach { case (label, executionresponse, jobid, expectedjobid) =>
+        val projected = HttpExecutionResponseProjector.project(
+          stale,
+          RuntimeContext.ExecutionMetadata(responseJobId = jobid),
+          Some(executionresponse)
+        )
+
+        Then(s"$label retains only its kind-authorized Job header outcome")
+        projected.headerValue("X-Textus-Job-Id") shouldBe expectedjobid
+        projected.header.fields.count(_.key.equalsIgnoreCase("X-Textus-Job-Id")) shouldBe expectedjobid.fold(0)(_ => 1)
+      }
+    }
+
+    "preserve legacy execution and Job headers without explicit metadata" in {
+      Given("a legacy response with execution-result, execution-mode, and duplicate Job headers")
+      val legacy = HttpResponse.Text(
+        HttpStatus.Ok,
+        ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+        Bag.text("ok", StandardCharsets.UTF_8)
+      ).withHeader(Record.data(
+        "X-Textus-Execution-Mode" -> "LegacyMode",
+        "X-Textus-Execution-Result" -> "legacy-result",
+        "X-Textus-Job-Id" -> "legacy-job",
+        "x-textus-job-id" -> "legacy-job-duplicate"
+      ))
+
+      When("the loopback-compatible execution projector receives no additive response metadata")
+      val projected = HttpExecutionEnvelope(
+        legacy,
+        RuntimeContext.ExecutionMetadata.empty,
+        None
+      ).toLegacy.response
+
+      Then("every legacy execution and Job header remains exactly observable")
+      projected.header.fields shouldBe legacy.header.fields
+      projected.headerValue("X-Textus-Execution-Mode") shouldBe Some("LegacyMode")
+      projected.headerValue("X-Textus-Execution-Result") shouldBe Some("legacy-result")
+      projected.headerValue("X-Textus-Job-Id") shouldBe Some("legacy-job")
+      projected.header.fields.count(_.key.equalsIgnoreCase("X-Textus-Job-Id")) shouldBe 2
+    }
+
     "preserve debug job metadata as a response header" in {
       Given("a loopback server backed by the default subsystem")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
@@ -213,6 +331,8 @@ final class HttpDriverSpec
       Then("the response exposes the retained job id as an HTTP header")
       response.code shouldBe 200
       response.headerValue("X-Textus-Job-Id").flatMap(JobId.parse(_).toOption) should not be empty
+      response.headerValue("X-Textus-Execution-Mode") shouldBe Some("JobSync")
+      response.headerValue("X-Textus-Execution-Result") shouldBe Some("job-result")
     }
 
     "let debug job metadata override an existing job header case-insensitively" in {
@@ -223,11 +343,18 @@ final class HttpDriverSpec
       )
 
       When("the request asks to run through a debug trace job")
-      val response = driver.get("/debug/http/echo?textus.debug.trace-job=true&x-textus-job-id=stale-job")
+      val response = driver.get(
+        "/debug/http/echo?textus.debug.trace-job=true&x-textus-job-id=stale-job&x-textus-execution-mode=stale&x-textus-execution-result=stale"
+      )
 
       Then("the metadata job id is the observable job header")
       response.headerValue("X-Textus-Job-Id").flatMap(JobId.parse(_).toOption) should not be empty
       response.header.fields.count(_.key.equalsIgnoreCase("X-Textus-Job-Id")) shouldBe 1
+      response.headerValue("X-Textus-Execution-Mode") shouldBe Some("JobSync")
+      response.headerValue("X-Textus-Execution-Result") shouldBe Some("job-result")
+      response.header.fields.count(_.key.equalsIgnoreCase("X-Textus-Execution-Mode")) shouldBe 1
+      response.header.fields.count(_.key.equalsIgnoreCase("X-Textus-Execution-Result")) shouldBe 1
+    }
     }
   }
 }

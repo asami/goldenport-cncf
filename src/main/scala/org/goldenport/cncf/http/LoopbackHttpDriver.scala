@@ -14,7 +14,7 @@ import org.goldenport.record.Record
  * @since   Jan. 20, 2026
  *  version Feb.  7, 2026
  *  version Apr. 29, 2026
- * @version Jul.  3, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LoopbackHttpDriver(
@@ -60,24 +60,8 @@ final class LoopbackHttpDriver(
 
   private def _execute(
     req: HttpRequest
-  ): HttpResponse = {
-    val result = server.executeWithMetadata(req)
-    result.metadata.responseJobId.orElse(result.metadata.debugJobId) match {
-      case Some(jobid) if jobid.nonEmpty =>
-        result.response.withHeader(_replace_header(result.response.header, "X-Textus-Job-Id", jobid))
-      case _ =>
-        result.response
-    }
-  }
-
-  private def _replace_header(
-    header: Record,
-    name: String,
-    value: String
-  ): Record = {
-    val remaining = header.fields.filterNot(_.key.equalsIgnoreCase(name))
-    Record(remaining) ++ Record.data(name -> value)
-  }
+  ): HttpResponse =
+    server.executeWithMetadata(req).response
 
   private def _build_request(
     method: HttpRequest.Method,

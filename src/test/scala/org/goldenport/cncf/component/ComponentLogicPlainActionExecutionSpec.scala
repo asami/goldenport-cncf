@@ -1,14 +1,16 @@
 package org.goldenport.cncf.component
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import scala.collection.mutable.ArrayBuffer
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, QueryAction}
-import org.goldenport.cncf.context.{ExecutionContext, ScopeKind, SecurityContext}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, CommandExecutionPolicy, QueryAction}
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeKind, SecurityContext}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine, JobId, JobPersistencePolicy, JobStatus}
 import org.goldenport.cncf.operation.CmlOperationDefinition
+import org.goldenport.cncf.operation.evaluation.{OperationEvaluationExecutionReport, OperationEvaluationOperationIdentity}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
@@ -42,8 +44,8 @@ final class ComponentLogicPlainActionExecutionSpec
   private val _e3 = afterWord(
     "in spec:action-execution-semantics, example:E3, rules:R2,R4,R11, phase:57.1, slice:AES-02"
   )
-  private val _e4 = afterWord(
-    "in spec:action-execution-semantics, example:E4, rules:R2,R5,R6, phase:57.1, slice:AES-02"
+  private val _e9 = afterWord(
+    "in spec:action-execution-semantics, example:E9, rules:R5,R6,R13, phase:57.2, slice:AES-05A"
   )
 
   override protected def afterEach(): Unit =
@@ -81,9 +83,13 @@ final class ComponentLogicPlainActionExecutionSpec
         checked.passed shouldBe true
         payloads.foreach { response =>
           val action = _plain_action("plain-default", response, componentname = Some(component.name))
-          val result = component.logic.executeAction(action, ExecutionContext.test())
+          val context = ExecutionContext.test()
+          val result = component.logic.executeAction(action, context)
           result shouldBe Consequence.success(response)
           _jobs(component) shouldBe empty
+          ExecutionContext.currentExecutionResponse(context) shouldBe Some(
+            RuntimeContext.ExecutionResponseMetadata.direct
+          )
         }
       }
 
@@ -174,11 +180,15 @@ final class ComponentLogicPlainActionExecutionSpec
         val action = _query_action("query-direct", response, Some(component.name))
 
         When("the query executes normally")
-        val direct = component.logic.executeAction(action, ExecutionContext.test())
+        val context = ExecutionContext.test()
+        val direct = component.logic.executeAction(action, context)
 
         Then("the default query route returns directly without a Job")
         direct shouldBe Consequence.success(response)
         _jobs(component) shouldBe empty
+        ExecutionContext.currentExecutionResponse(context) shouldBe Some(
+          RuntimeContext.ExecutionResponseMetadata.direct
+        )
       }
 
       "trace QueryAction through one persistent synchronous Job explicitly" in {
@@ -198,26 +208,33 @@ final class ComponentLogicPlainActionExecutionSpec
         jobs.head.persistence shouldBe JobPersistencePolicy.Persistent
         jobs.head.status shouldBe JobStatus.Succeeded
         jobs.head.result shouldBe Some(response)
+        ExecutionContext.currentExecutionResponse(tracecontext) shouldBe Some(
+          RuntimeContext.ExecutionResponseMetadata.queryTraceJobResult
+        )
       }
     }
 
-    "E4 command policy and response mode" must _e4 {
+    "E9 execution response transport metadata" must _e9 {
       "execute a CommandAction directly by default" in {
-        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2,R5,R6; Example: E4; a CommandAction with the default synchronous direct policy")
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a CommandAction with the default synchronous direct policy")
         val component = _routed_component("command-direct-default", "command-direct", "COMMAND")
         val response = OperationResponse.Scalar("command-response")
         val action = _command_action("command-direct", response, CommandExecutionMode.Sync, Some(component.name))
 
         When("the command executes")
-        val result = component.logic.executeAction(action, ExecutionContext.test())
+        val context = ExecutionContext.test()
+        val result = component.logic.executeAction(action, context)
 
         Then("the command response is direct and no Job is created")
         result shouldBe Consequence.success(response)
         _jobs(component) shouldBe empty
+        ExecutionContext.currentExecutionResponse(context) shouldBe Some(
+          RuntimeContext.ExecutionResponseMetadata.direct
+        )
       }
 
       "return a parseable submitted JobId for an explicitly asynchronous CommandAction" in {
-        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2,R5,R6; Example: E4; a CommandAction with explicit JobAsync policy and a non-starting scheduler")
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a CommandAction with explicit JobAsync policy and a non-starting scheduler")
         val executed = new AtomicBoolean(false)
         val manualengine = InMemoryJobEngine.create(
           InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false)
@@ -237,7 +254,8 @@ final class ComponentLogicPlainActionExecutionSpec
         )
 
         When("the command executes")
-        val result = component.logic.executeAction(action, ExecutionContext.test())
+        val context = ExecutionContext.test()
+        val result = component.logic.executeAction(action, context)
 
         Then("the asynchronous interface returns a submitted persistent JobId without executing the ActionCall")
         val value = result match {
@@ -251,6 +269,215 @@ final class ComponentLogicPlainActionExecutionSpec
         job.status shouldBe JobStatus.Submitted
         job.result shouldBe None
         job.persistence shouldBe JobPersistencePolicy.Persistent
+        ExecutionContext.currentExecutionResponse(context).map(_.responseKind) shouldBe Some(
+          RuntimeContext.ExecutionResponseKind.AcceptedJob
+        )
+        ExecutionContext.currentExecutionResponse(context).map(_.admittedMode) shouldBe Some("JobAsync")
+      }
+
+      "retain the selected admission label across framework, definition, and action precedence" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; CommandActions with competing execution authorities")
+        val component = _routed_component(
+          "command-admission-precedence",
+          "command-admission",
+          "COMMAND",
+          commandpolicy = Some(CommandExecutionPolicy())
+        )
+        val action = _command_action("command-admission", OperationResponse.Scalar("ok"), CommandExecutionMode.SyncDirectNoJob, Some(component.name))
+
+        When("framework legacy, typed definition, and action fallback authority are selected")
+        val framework = ExecutionContext.withFrameworkCommandExecutionMode(ExecutionContext.test(), CommandExecutionMode.SyncDirectNoJob)
+        component.logic.executeAction(action, framework) shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+        val frameworkmetadata = ExecutionContext.currentExecutionResponse(framework).getOrElse(fail("framework metadata missing"))
+        val definition = ExecutionContext.test()
+        component.logic.executeAction(action, definition) shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+        val definitionmetadata = ExecutionContext.currentExecutionResponse(definition).getOrElse(fail("definition metadata missing"))
+
+        Then("the raw admitted authority and normalized effective policy remain distinct")
+        frameworkmetadata.admittedMode shouldBe "SyncDirectNoJob"
+        frameworkmetadata.effectiveMode shouldBe CommandExecutionMode.Sync
+        definitionmetadata.admittedMode shouldBe "Sync"
+        definitionmetadata.effectiveMode shouldBe CommandExecutionMode.Sync
+      }
+    }
+
+    "E9 execution response transport metadata" must _e9 {
+      "retain raw action fallback admission when no definition policy exists" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a CommandAction whose definition has no typed or legacy execution policy")
+        val component = _routed_component("command-action-fallback", "command-action-fallback", "COMMAND")
+        val action = _command_action(
+          "command-action-fallback",
+          OperationResponse.Scalar("action-fallback-response"),
+          CommandExecutionMode.SyncDirectNoJob,
+          Some(component.name)
+        )
+        val context = ExecutionContext.test()
+
+        When("the command selects its concrete action legacy mode")
+        val result = component.logic.executeAction(action, context)
+
+        Then("the admitted label retains the raw action mode while effective policy is normalized")
+        result shouldBe Consequence.success(OperationResponse.Scalar("action-fallback-response"))
+        ExecutionContext.currentExecutionResponse(context).map(_.admittedMode) shouldBe Some("SyncDirectNoJob")
+        ExecutionContext.currentExecutionResponse(context).map(_.effectiveMode) shouldBe Some(CommandExecutionMode.Sync)
+      }
+
+      "retain the default raw admission for a generic Action classified as COMMAND" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; a generic Action classified as COMMAND without framework or definition policy")
+        val component = _routed_component("generic-command-default", "generic-command-default", "COMMAND")
+        val action = _plain_action(
+          "generic-command-default",
+          OperationResponse.Scalar("generic-command-response"),
+          componentname = Some(component.name)
+        )
+        val context = ExecutionContext.test()
+
+        When("the classified generic command selects its default execution policy")
+        val result = component.logic.executeAction(action, context)
+
+        Then("the admitted legacy default remains distinct from the effective synchronous mode")
+        result shouldBe Consequence.success(OperationResponse.Scalar("generic-command-response"))
+        ExecutionContext.currentExecutionResponse(context).map(_.admittedMode) shouldBe Some("SyncDirectNoJob")
+        ExecutionContext.currentExecutionResponse(context).map(_.effectiveMode) shouldBe Some(CommandExecutionMode.Sync)
+      }
+
+      "restore outer direct metadata after nested managed, failing, and throwing child actions" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; an outer Action that invokes managed, failing, and throwing child Actions through its Action scope")
+        val manualengine = InMemoryJobEngine.create(
+          InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false)
+        )
+        val component = _routed_component(
+          "nested-response-metadata",
+          "outer-direct",
+          "OTHER",
+          jobengine = Some(manualengine),
+          additionaldefinitions = Vector(
+            CmlOperationDefinition(
+              name = "child-accepted",
+              kind = "COMMAND",
+              commandExecutionPolicy = Some(CommandExecutionPolicy(
+                interfaceMode = org.goldenport.cncf.action.CommandInterfaceMode.Async,
+                jobRunMode = org.goldenport.cncf.action.CommandJobRunMode.Async,
+                managedByJob = true
+              )),
+              inputType = "ChildInput",
+              outputType = "ChildOutput",
+              inputValueKind = "COMMAND_VALUE"
+            ),
+            CmlOperationDefinition(
+              name = "child-failure",
+              kind = "COMMAND",
+              inputType = "ChildInput",
+              outputType = "ChildOutput",
+              inputValueKind = "COMMAND_VALUE"
+            ),
+            CmlOperationDefinition(
+              name = "child-throw",
+              kind = "COMMAND",
+              inputType = "ChildInput",
+              outputType = "ChildOutput",
+              inputValueKind = "COMMAND_VALUE"
+            )
+          )
+        )
+        val accepted = _command_action(
+          "child-accepted",
+          OperationResponse.Scalar("not-run"),
+          CommandExecutionMode.JobAsync,
+          Some(component.name)
+        )
+        val failure = _command_failure_action("child-failure", Some(component.name))
+        val throwing = _command_failure_action("child-throw", Some(component.name), throwfailure = true)
+        val thrown = new AtomicReference[Option[Throwable]](None)
+        val outer = _nested_outer_action(component, accepted, failure, throwing, thrown)
+        val context = ExecutionContext.prepareOperationEvaluation(
+          ExecutionContext.test(),
+          OperationEvaluationOperationIdentity.fromResolvedRoute(
+            component.name,
+            "entity",
+            "outer-direct"
+          )
+        ).getOrElse(fail("outer operation evaluation context was not prepared"))
+        context.runtime.updateExecutionMetadata(_.copy(
+          operationEvaluation = Some(OperationEvaluationExecutionReport.empty),
+          traceId = Some("outer-trace"),
+          executionId = Some("outer-execution")
+        ))
+
+        When("the outer direct Action invokes accepted, failing, and throwing children")
+        val result = component.logic.executeAction(outer, context)
+
+        Then("the outer response fields are restored while evaluation and diagnostics remain accumulated")
+        result shouldBe Consequence.success(OperationResponse.Scalar("outer-response"))
+        thrown.get() should not be empty
+        _jobs(component) should have size 1
+        _jobs(component).head.status shouldBe JobStatus.Submitted
+        ExecutionContext.currentExecutionResponse(context).map(_.responseKind) shouldBe Some(
+          RuntimeContext.ExecutionResponseKind.Direct
+        )
+        context.runtime.executionMetadata.responseJobId shouldBe None
+        context.runtime.executionMetadata.debugJobId shouldBe None
+        context.runtime.executionMetadata.operationEvaluation shouldBe Some(OperationEvaluationExecutionReport.empty)
+        context.runtime.executionMetadata.traceId should not be empty
+        context.runtime.executionMetadata.traceId should not be Some("outer-trace")
+        context.runtime.executionMetadata.executionId should not be empty
+        context.runtime.executionMetadata.executionId should not be Some("outer-execution")
+        context.runtime.executionMetadata.failure shouldBe None
+      }
+
+      "isolate accepted parent metadata from a controlled asynchronous Job worker" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; an AcceptedJob parent and a worker that records a separate direct response while held at a barrier")
+        val manualengine = InMemoryJobEngine.create(
+          InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false)
+        )
+        val component = _routed_component(
+          "async-response-cell-isolation",
+          "async-response-cell-isolation",
+          "COMMAND",
+          jobengine = Some(manualengine)
+        )
+        val workerstarted = new CountDownLatch(1)
+        val workerrelease = new CountDownLatch(1)
+        val action = _command_action(
+          "async-response-cell-isolation",
+          OperationResponse.Scalar("worker-response"),
+          CommandExecutionMode.JobAsync,
+          Some(component.name),
+          duringexecute = { workercontext =>
+            ExecutionContext.noteExecutionResponse(
+              workercontext,
+              RuntimeContext.ExecutionResponseMetadata.direct
+            )
+            workerstarted.countDown()
+            workerrelease.await(5, TimeUnit.SECONDS) shouldBe true
+          }
+        )
+        val parentcontext = ExecutionContext.test()
+
+        When("the parent returns AcceptedJob and the manually drained worker enters its response activity")
+        val result = component.logic.executeAction(action, parentcontext)
+        val worker = new Thread(() => {
+          val _ = manualengine.drainOne()
+          ()
+        })
+        worker.start()
+
+        Then("the parent AcceptedJob response state remains intact until the worker is released")
+        try {
+          workerstarted.await(5, TimeUnit.SECONDS) shouldBe true
+          val acceptedjobid = result.toOption.collect {
+            case OperationResponse.Scalar(value) => value.toString
+          }.getOrElse(fail("AcceptedJob response id is missing"))
+          ExecutionContext.currentExecutionResponse(parentcontext).map(_.responseKind) shouldBe Some(
+            RuntimeContext.ExecutionResponseKind.AcceptedJob
+          )
+          ExecutionContext.currentExecutionResponseState(parentcontext).responseJobId shouldBe Some(acceptedjobid)
+          result shouldBe a[Consequence.Success[?]]
+        } finally {
+          workerrelease.countDown()
+          worker.join(5000L)
+        }
+        worker.isAlive shouldBe false
       }
     }
 
@@ -266,7 +493,9 @@ final class ComponentLogicPlainActionExecutionSpec
     name: String,
     operationname: String,
     kind: String,
-    jobengine: Option[JobEngine] = None
+    jobengine: Option[JobEngine] = None,
+    commandpolicy: Option[CommandExecutionPolicy] = None,
+    additionaldefinitions: Vector[CmlOperationDefinition] = Vector.empty
   ): Component = {
     val protocol = Protocol(
       services = spec.ServiceDefinitionGroup(
@@ -287,11 +516,12 @@ final class ComponentLogicPlainActionExecutionSpec
           CmlOperationDefinition(
             name = operationname,
             kind = kind,
+            commandExecutionPolicy = commandpolicy,
             inputType = "PlainInput",
             outputType = "PlainOutput",
             inputValueKind = if (kind == "COMMAND") "COMMAND_VALUE" else "QUERY_VALUE"
           )
-        )
+        ) ++ additionaldefinitions
     }
     val subsystem = TestComponentFactory.emptySubsystem(s"$name-subsystem")
     _test_subsystems += subsystem
@@ -385,7 +615,8 @@ final class ComponentLogicPlainActionExecutionSpec
     response: OperationResponse,
     mode: CommandExecutionMode,
     componentname: Option[String] = None,
-    executed: AtomicBoolean = new AtomicBoolean(false)
+    executed: AtomicBoolean = new AtomicBoolean(false),
+    duringexecute: ExecutionContext => Unit = _ => ()
   ): CommandAction =
     new CommandAction() {
       val request = componentname.map(name => Request.of(
@@ -402,8 +633,73 @@ final class ComponentLogicPlainActionExecutionSpec
           override val core: ActionCall.Core = captured
 
           override def execute(): Consequence[OperationResponse] = {
+            duringexecute(executionContext)
             executed.set(true)
             Consequence.success(response)
+          }
+        }
+      }
+    }
+
+  private def _command_failure_action(
+    operationname: String,
+    componentname: Option[String],
+    throwfailure: Boolean = false
+  ): CommandAction =
+    new CommandAction() {
+      val request = componentname.map(name => Request.of(
+        component = name,
+        service = "entity",
+        operation = operationname
+      )).getOrElse(Request.ofOperation(operationname))
+
+      override def createCall(core: ActionCall.Core): ActionCall = {
+        val captured = core
+        new ActionCall {
+          override val core: ActionCall.Core = captured
+          override def execute(): Consequence[OperationResponse] = {
+            val diagnostic = if (throwfailure) "nested child throw" else "nested child failure"
+            executionContext.runtime.noteExecutionDiagnostics(
+              Some(s"$diagnostic-trace"),
+              Some(s"$diagnostic-execution"),
+              Some(diagnostic)
+            )
+            if (throwfailure)
+              throw new scala.util.control.ControlThrowable {}
+            else
+              Consequence.operationInvalid(diagnostic)
+          }
+        }
+      }
+    }
+
+  private def _nested_outer_action(
+    targetcomponent: Component,
+    accepted: CommandAction,
+    failure: CommandAction,
+    throwing: CommandAction,
+    thrown: AtomicReference[Option[Throwable]]
+  ): Action =
+    new Action {
+      val request: Request = Request.of(
+        component = targetcomponent.name,
+        service = "entity",
+        operation = "outer-direct"
+      )
+
+      override def createCall(core: ActionCall.Core): ActionCall = {
+        val captured = core
+        new ActionCall {
+          override val core: ActionCall.Core = captured
+          override def execute(): Consequence[OperationResponse] = {
+            targetcomponent.logic.executeAction(accepted, executionContext) shouldBe a[Consequence.Success[?]]
+            targetcomponent.logic.executeAction(failure, executionContext) shouldBe a[Consequence.Failure[?]]
+            try {
+              targetcomponent.logic.executeAction(throwing, executionContext)
+            } catch {
+              case e: scala.util.control.ControlThrowable => thrown.set(Some(e))
+            }
+            Consequence.success(OperationResponse.Scalar("outer-response"))
           }
         }
       }
