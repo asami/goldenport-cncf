@@ -28,7 +28,7 @@ import org.goldenport.observation.{Cause, Taxonomy}
  *  version Mar. 24, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {
@@ -944,7 +944,7 @@ object EventReception {
             ),
             executionNotes = Vector("event no matched subscription")
           )
-          val task = _NoMatchEventTask(
+          val task = NoMatchEventTask(
             ActionId.create("event.reception.no_match", ctx.clock.instant(), ctx.idGeneration),
             input
           )
@@ -1168,7 +1168,7 @@ object EventReception {
       scope.core.kind == org.goldenport.cncf.context.ScopeKind.Action ||
         scope.core.parent.exists(_has_action_scope)
 
-    private final case class _NoMatchEventTask(
+    private final case class NoMatchEventTask(
       actionId: ActionId,
       input: ReceptionInput
     ) extends JobTask {
@@ -1240,7 +1240,7 @@ object EventReception {
       if (_listeners.nonEmpty) {
         _listeners.toVector
       } else if (hasactionbinding) {
-        Vector(_ActionRouteStateMachineListener(dispatcher))
+        Vector(ActionRouteStateMachineListener(dispatcher))
       } else {
         Vector.empty
       }
@@ -1525,7 +1525,7 @@ object EventReception {
         }
       }
 
-    private final case class _ResolvedExecutionPolicy(
+    private final case class ResolvedExecutionPolicy(
       ruleName: String,
       policy: EventReceptionExecutionPolicy,
       boundary: EventOriginBoundary,
@@ -1548,14 +1548,14 @@ object EventReception {
     private def _resolve_execution_policy(
       subscription: CmlSubscriptionDefinition,
       event: ReceptionDomainEvent
-    )(using ExecutionContext): Consequence[_ResolvedExecutionPolicy] = {
+    )(using ExecutionContext): Consequence[ResolvedExecutionPolicy] = {
       val eventdef = definitions.find(_.name == event.name)
       val category = eventdef.map(_.category)
       _resolve_origin_boundary(event).flatMap { boundary =>
         _select_rule(event, boundary, category) match {
           case Some((rule, _)) =>
             val policy = rule.policy
-            val base = _ResolvedExecutionPolicy(
+            val base = ResolvedExecutionPolicy(
               ruleName = rule.name,
               policy = policy,
               boundary = boundary,
@@ -1581,7 +1581,7 @@ object EventReception {
                 s"compatibility:${_continuation_mode_name(compatibility)}"
               else
                 s"default:${_origin_boundary_name(boundary)}"
-            val base = _ResolvedExecutionPolicy(
+            val base = ResolvedExecutionPolicy(
               ruleName = rulename,
               policy = policy,
               boundary = boundary,
@@ -1598,8 +1598,8 @@ object EventReception {
     }
 
     private def _resolve_transaction_requirement(
-      base: _ResolvedExecutionPolicy
-    ): Consequence[_ResolvedExecutionPolicy] = {
+      base: ResolvedExecutionPolicy
+    ): Consequence[ResolvedExecutionPolicy] = {
       val effectivecapability = EventTransactionCapability.compose(
         base.eventTransactionCapability,
         base.receptionTransactionCapability
@@ -1672,7 +1672,7 @@ object EventReception {
         EventTransactionCapability.Unsupported
 
     private def _validate_supported_policy(
-      resolved: _ResolvedExecutionPolicy
+      resolved: ResolvedExecutionPolicy
     ): Consequence[Unit] =
       (resolved.policy.timing, resolved.policy.jobRelation, resolved.policy.transactionRelation) match {
         case (EventExecutionTiming.Async, EventJobRelation.SameJob, EventTransactionRelation.SameTransaction) =>
@@ -1796,7 +1796,7 @@ object EventReception {
     private def _dispatch_event_action(
       actionname: String,
       event: ReceptionDomainEvent,
-      resolved: _ResolvedExecutionPolicy
+      resolved: ResolvedExecutionPolicy
     )(using ctx: ExecutionContext): Consequence[Unit] = {
       val eventwithsaga = _with_saga_identity(ctx, event, resolved)
       val dispatchctx = _dispatch_execution_context(ctx, eventwithsaga, resolved)
@@ -1815,26 +1815,25 @@ object EventReception {
               )
               resolved.policy.timing match {
                 case EventExecutionTiming.Sync =>
-                  val task = _DispatchActionTask(
+                  val task = DispatchActionTask(
                     ActionId.create("event.reception.same_job_sync", dispatchctx.clock.instant(), dispatchctx.idGeneration),
                     actionname,
                     eventwithsaga
                   )
                   engine.runTaskInJobSync(jobid, task, dispatchctx).map(_ => ())
                 case EventExecutionTiming.Async =>
-                  val task = _DispatchActionTask(
+                  val task = DispatchActionTask(
                     ActionId.create("event.reception.same_job_async", dispatchctx.clock.instant(), dispatchctx.idGeneration),
                     actionname,
                     eventwithsaga
                   )
                   val enqueue = () => engine.enqueueTaskInJob(jobid, task, dispatchctx).map(_ => ())
-                  if (_has_action_scope(dispatchctx.cncfCore.scope))
-                    dispatchctx.runtime.unitOfWork.stagePostCommit {
-                      val _ = enqueue()
-                    }
-                  else
-                    val _ = enqueue()
-                  Consequence.unit
+                  if (_has_action_scope(dispatchctx.cncfCore.scope)) {
+                    dispatchctx.runtime.unitOfWork.stagePostCommitC(enqueue())
+                    Consequence.unit
+                  } else {
+                    enqueue()
+                  }
               }
             case None if resolved.policy.timing == EventExecutionTiming.Sync =>
               dispatcher match {
@@ -1878,16 +1877,14 @@ object EventReception {
                       s"event reception policy source: ${resolved.policySource.print}"
                     )
                   )
-                  val task = _DispatchActionTask(
+                  val task = DispatchActionTask(
                     ActionId.create("event.reception.new_job_async", submitctx.clock.instant(), submitctx.idGeneration),
                     actionname,
                     eventwithsaga
                   )
                   val submit = () => engine.submit(List(task), submitctx, option)
                   if (_has_action_scope(dispatchctx.cncfCore.scope)) {
-                    dispatchctx.runtime.unitOfWork.stagePostCommit {
-                      val _ = submit()
-                    }
+                    dispatchctx.runtime.unitOfWork.stagePostCommitC(submit().map(_ => ()))
                     Consequence.unit
                   } else {
                     submit().map(_ => ())
@@ -1901,7 +1898,7 @@ object EventReception {
 
     private def _job_parameters(
       event: ReceptionDomainEvent,
-      resolved: _ResolvedExecutionPolicy
+      resolved: ResolvedExecutionPolicy
     ): Map[String, String] =
       event.attributes ++ Map(
         "event.name" -> event.name,
@@ -1927,7 +1924,7 @@ object EventReception {
       event: ReceptionDomainEvent,
       subscription: CmlSubscriptionDefinition,
       targetid: String,
-      resolved: _ResolvedExecutionPolicy
+      resolved: ResolvedExecutionPolicy
     )(using ctx: ExecutionContext): Consequence[ReceptionDomainEvent] = {
       val withsaga = _with_saga_identity(ctx, event, resolved)
       val attrs0 = withsaga.attributes + ("targetId" -> targetid) + ("target" -> targetid)
@@ -2114,7 +2111,7 @@ object EventReception {
     private def _job_submission_context(
       ctx: ExecutionContext,
       event: ReceptionDomainEvent,
-      resolved: _ResolvedExecutionPolicy
+      resolved: ResolvedExecutionPolicy
     ): ExecutionContext =
       resolved.policy.sagaRelation match {
         case EventSagaRelation.SameSaga =>
@@ -2143,7 +2140,7 @@ object EventReception {
     private def _dispatch_execution_context(
       ctx: ExecutionContext,
       event: ReceptionDomainEvent,
-      resolved: _ResolvedExecutionPolicy
+      resolved: ResolvedExecutionPolicy
     ): ExecutionContext = {
       val sagaid = event.attributes.get(StandardAttribute.SagaId).filter(_.nonEmpty).orElse(ctx.observability.sagaId)
       val observability = resolved.policy.sagaRelation match {
@@ -2159,7 +2156,7 @@ object EventReception {
     private def _with_saga_identity(
       ctx: ExecutionContext,
       event: ReceptionDomainEvent,
-      resolved: _ResolvedExecutionPolicy
+      resolved: ResolvedExecutionPolicy
     ): ReceptionDomainEvent = {
       val sagaid = resolved.policy.sagaRelation match {
         case EventSagaRelation.SameSaga =>
@@ -2200,7 +2197,7 @@ object EventReception {
     private def _correlation_value_for_saga(
       ctx: ExecutionContext,
       event: ReceptionDomainEvent,
-      resolved: _ResolvedExecutionPolicy,
+      resolved: ResolvedExecutionPolicy,
       sagaid: String
     ): String =
       resolved.policy.sagaRelation match {
@@ -2234,7 +2231,7 @@ object EventReception {
       )
     }
 
-    private final case class _DispatchActionTask(
+    private final case class DispatchActionTask(
       actionId: ActionId,
       actionName: String,
       event: ReceptionDomainEvent
@@ -2379,7 +2376,7 @@ object EventReception {
       }
   }
 
-  private final case class _ActionRouteStateMachineListener(
+  private final case class ActionRouteStateMachineListener(
     dispatcher: ActionCallDispatcher
   ) extends StateMachineEventListener {
     def onEvent(

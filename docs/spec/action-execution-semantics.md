@@ -106,6 +106,11 @@ controls cleanup (`DeleteOnCompletion`, `Ttl`, or `Keep`) and is not selected
 directly by `JobSubmitOption`. A direct route MUST NOT materialize Job input or
 Job read-model state merely because a request contains input-shaped fields.
 
+Explicit Job intent alone MAY create or continue Job work. No response shape,
+ambient context, debug setting, or inferred downstream need MAY create Job work
+when an explicit Job intent is absent. Unsupported or ambiguous execution
+intent MUST fail deterministically as a structured `Consequence.Failure`.
+
 ## Event continuation and dispatch (R7)
 
 Synchronous event dispatch MUST execute through the dispatcher and bound action
@@ -117,12 +122,12 @@ asynchronous dispatch MUST submit an explicitly configured Job. Event policy,
 transaction relation, saga/correlation lineage, and authorization MUST remain
 in force.
 
-In the current EventReception behavior, the staged post-commit callback for
-new-Job asynchronous submission discards the returned `Consequence`; same-Job
-asynchronous enqueue also discards its returned `Consequence`. Consequently,
-the outer dispatch MAY return `Unit` while a submission or enqueue rejection is
-neither surfaced nor recorded. This is a defined current exception to the
-immediate failure reporting in R12.
+An immediate same-Job enqueue or new-Job submission admission failure MUST be
+returned as `Consequence.Failure`; it MUST NOT be converted to dispatch
+success, `Unit`, or a Job ID. When an admitted asynchronous enqueue or
+submission is deferred to post-commit processing, its callback MUST return its
+structured `Consequence` to UnitOfWork commit processing. A callback failure is
+an observable post-commit dispatch failure.
 
 ## Authorization distinctions (R8)
 
@@ -160,6 +165,11 @@ The shared Action execution boundary MUST commit the bound UnitOfWork on
 successful completion, abort it on action failure, and dispose terminal
 runtime resources. Direct and Job-managed routing MUST NOT bypass ActionCall
 DSL, ActionCall authorization, managed datastore lease, or terminal cleanup.
+When a post-commit callback fails, the primary transaction remains committed:
+the failure is a post-commit dispatch failure, not a transaction abort or
+rollback. Terminal resource and observability evidence MUST distinguish
+committed-with-post-commit-failure from aborted termination and MUST NOT claim
+rollback.
 
 ## Observability and diagnostics (R11)
 
@@ -174,20 +184,18 @@ including the explicit query trace-Job exception (R4, R6).
 ## Failure semantics and asynchronous timing (R12)
 
 Expected direct-action execution failures MUST remain structured
-`Consequence.Failure(Conclusion)` values. A Job submission or admission
-failure, including invalid `JobSubmitOption`, unavailable JobEngine, or
-rejected policy, MUST remain a failure when the synchronous path returns it and
-MUST NOT be represented as a successful Job-ID response.
+`Consequence.Failure(Conclusion)` values. A Job enqueue, submission, or
+admission failure, including invalid `JobSubmitOption`, unavailable JobEngine,
+or rejected policy, MUST remain a failure and MUST NOT be represented as a
+successful `Unit` or Job-ID response. This applies both to immediate paths and
+to the structured result reported by post-commit processing.
 
 After a true asynchronous Job is accepted, an asynchronous interface MAY
 return a successful Job ID before terminal worker outcome is known. A later
 worker failure MUST settle as terminal `JobResult.Failure` and MUST be exposed
 by Job status/result consumers. Await and primary-result routes MUST surface
-that failure synchronously. Event reception that submits a new Job in a
-post-commit callback MAY return dispatch success (`Unit`) before that Job has a
-Job ID, as described in R7; this is not a successful Job-ID claim. No
-submission/admission failure may be converted into a successful Job-ID
-response.
+that failure synchronously. No enqueue, submission, or admission failure may
+be converted into a successful `Unit` or Job-ID response.
 
 ## Stable executable examples
 
@@ -222,14 +230,17 @@ primary-result responses follow the selected mode.
 
 Given explicit Job intent and a `JobSubmitOption`, when the Job is submitted,
 then the selected persistence, run mode, input-retention policy, context,
-observability, lifecycle, and terminal failure result are preserved.
+observability, lifecycle, and terminal failure result are preserved. Rejected
+admission returns `Consequence.Failure`, while an accepted Job may return its
+ID before a later terminal `JobResult.Failure`.
 
-### E6 — Event continuation timing (R7, R9, R12)
+### E6 — Event continuation timing (R7, R9, R10, R12)
 
 Given synchronous, same-Job, or new-Job event continuation, when the selected
 dispatch path runs, then authorization, context, transaction relation, and
-correlation are preserved and immediate submission is distinguished from later
-worker outcome, including the current post-commit `Unit` exception.
+correlation are preserved; enqueue and submission admission failures remain
+structured; and an admitted post-commit failure is observed without claiming a
+transaction rollback.
 
 ### E7 — Authorization boundaries (R1, R8, R11)
 
@@ -242,7 +253,8 @@ failure, event-commit, and observation behavior remains distinct.
 Given either a direct route or an explicit Job-managed route, when the action
 executes, then both use the same ActionCall, authorization, UnitOfWork,
 observability, and structured-failure boundaries while retaining their distinct
-response timing.
+response timing. A post-commit dispatch failure retains committed transaction
+evidence and distinct terminal observability.
 
 ## Related executable specifications
 

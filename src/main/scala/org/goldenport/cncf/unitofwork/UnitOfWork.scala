@@ -3,6 +3,7 @@ package org.goldenport.cncf.unitofwork
 import cats.Applicative
 import scala.collection.mutable
 import scala.util.{Try, Success, Failure}
+import scala.util.control.NonFatal
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.ConsequenceT
@@ -35,7 +36,7 @@ import org.goldenport.cncf.operation.evaluation.{
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
  *  version Apr. 28, 2026
- * @version Jul. 23, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -50,9 +51,10 @@ class UnitOfWork(
 //  private var _shell_command_executor: Option[ShellCommandExecutor] = None
   private val _dirty_entities: mutable.Map[EntityId, Entity] = mutable.Map.empty
   private var _pending_events: Vector[DomainEvent] = Vector.empty
-  private var _post_commit_callbacks: Vector[() => Unit] = Vector.empty
+  private var _post_commit_callbacks: Vector[() => Consequence[Unit]] = Vector.empty
   private val _operation_evaluation_supplemental_buffer = operationevaluationsupplementalbuffer
   private var _last_commit_result: Option[Consequence[CommitResult]] = None
+  private var _last_commit_termination: Option[UnitOfWorkTermination] = None
   private var _last_abort_result: Option[Consequence[AbortResult]] = None
   private val _resource_registry = new UnitOfWorkResourceRegistry
 
@@ -130,6 +132,8 @@ class UnitOfWork(
   def commit(
     events: Seq[DomainEvent]
   ): Consequence[CommitResult] = {
+    var termination = UnitOfWorkTermination.Aborted
+    var postcommitcontrol: Option[Throwable] = None
     val result = try {
       val tx = TransactionContext.create(context.transactionContext)
       val all = _pending_events ++ events.toVector
@@ -146,8 +150,7 @@ class UnitOfWork(
           recorder.record("UnitOfWork.abort")
           eventengine.abort(tx) // TODO
           tx.abort()
-          _pending_events = Vector.empty
-          _post_commit_callbacks = Vector.empty
+          _clear_pending_commit_state()
           Consequence.stateConflict(reason)
         case None =>
           recorder.record("UnitOfWork.commit")
@@ -156,20 +159,41 @@ class UnitOfWork(
           _pending_events = Vector.empty
           val callbacks = _post_commit_callbacks
           _post_commit_callbacks = Vector.empty
-          callbacks.foreach(_())
-          Consequence.success(())
+          termination = UnitOfWorkTermination.Committed
+          _run_post_commit_callbacks_c(callbacks)
       }
     } catch {
       case e: Throwable =>
-        Consequence.Failure(Conclusion.from(e))
+        if (termination == UnitOfWorkTermination.Committed) {
+          postcommitcontrol = Some(e)
+          Consequence.Failure(Conclusion.from(e))
+        } else {
+          _clear_pending_commit_state()
+          Consequence.Failure(Conclusion.from(e))
+        }
     }
-    val termination = result match {
-      case _: Consequence.Success[CommitResult] => UnitOfWorkTermination.Committed
-      case _ => UnitOfWorkTermination.Aborted
+    val completed = try {
+      _complete_c(result, termination)
+    } catch {
+      case cleanup: Throwable =>
+        postcommitcontrol match {
+          case Some(control) =>
+            Consequence.Failure(Conclusion.from(cleanup) ++ Conclusion.from(control))
+          case None =>
+            throw cleanup
+        }
     }
-    val completed = _complete_c(result, termination)
+    _last_commit_termination = Some(termination)
     _last_commit_result = Some(completed)
-    completed
+    postcommitcontrol match {
+      case Some(control) =>
+        _attach_cleanup_diagnostic(control, completed)
+        if (control.isInstanceOf[InterruptedException])
+          Thread.currentThread.interrupt()
+        throw control
+      case None =>
+        completed
+    }
   }
 
   def abort(): Consequence[AbortResult] = {
@@ -239,10 +263,23 @@ class UnitOfWork(
   def lastCommitResult: Option[Consequence[CommitResult]] =
     _last_commit_result
 
+  def lastCommitTermination: Option[UnitOfWorkTermination] =
+    _last_commit_termination
+
   def lastAbortResult: Option[Consequence[AbortResult]] =
     _last_abort_result
 
   def stagePostCommit(callback: => Unit): Unit =
+    stagePostCommitC {
+      try {
+        callback
+        Consequence.unit
+      } catch {
+        case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+      }
+    }
+
+  def stagePostCommitC(callback: => Consequence[Unit]): Unit =
     _post_commit_callbacks = _post_commit_callbacks :+ (() => callback)
 
   def executionContext: ExecutionContext = context
@@ -260,6 +297,52 @@ class UnitOfWork(
             Consequence.Failure(cleanup ++ primary)
         }
       case _ => result
+    }
+
+  private def _clear_pending_commit_state(): Unit = {
+    _pending_events = Vector.empty
+    _post_commit_callbacks = Vector.empty
+  }
+
+  private def _run_post_commit_callbacks_c(
+    callbacks: Vector[() => Consequence[Unit]]
+  ): Consequence[Unit] = {
+    var failures = Vector.empty[Conclusion]
+    callbacks.foreach { callback =>
+      _run_post_commit_callback_c(callback) match {
+        case Consequence.Failure(conclusion) => failures = failures :+ conclusion
+        case Consequence.Success(_) => ()
+      }
+    }
+    failures.reduceOption(_ ++ _).map(Consequence.Failure(_)).getOrElse(Consequence.unit)
+  }
+
+  private def _run_post_commit_callback_c(
+    callback: () => Consequence[Unit]
+  ): Consequence[Unit] =
+    try {
+      callback()
+    } catch {
+      case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+    }
+
+  private def _attach_cleanup_diagnostic(
+    control: Throwable,
+    completed: Consequence[CommitResult]
+  ): Unit =
+    completed match {
+      case Consequence.Failure(conclusion) =>
+        conclusion.causes
+          .flatMap(_.getException)
+          .find(_ ne control)
+          .foreach { cleanup =>
+            try {
+              control.addSuppressed(cleanup)
+            } catch {
+              case NonFatal(_) => ()
+            }
+          }
+      case _ => ()
     }
 
 }

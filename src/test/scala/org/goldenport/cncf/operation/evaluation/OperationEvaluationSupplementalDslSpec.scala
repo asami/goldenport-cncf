@@ -61,7 +61,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for transaction-aware supplemental evaluation DSL.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationSupplementalDslSpec
@@ -70,6 +70,7 @@ final class OperationEvaluationSupplementalDslSpec
     with GivenWhenThen
     with BeforeAndAfterEach {
   private val _subsystems = ArrayBuffer.empty[Subsystem]
+  private val _aes04_e8 = afterWord("in spec:action-execution-semantics, example:E8, rules:R7,R10,R11,R12, phase:57.2, slice:AES-04B")
 
   override protected def afterEach(): Unit =
     try {
@@ -298,20 +299,23 @@ final class OperationEvaluationSupplementalDslSpec
         }
       }
 
-      "discard a candidate when UnitOfWork commit fails" in {
-        Given("an operation whose post-commit callback fails after staging")
-        val fixture = _corpus_fixture()
+      "E8 post-commit consequence handoff" must _aes04_e8 {
+        "report committed transaction evidence when a post-commit callback fails" in {
+          Given("Spec: docs/spec/action-execution-semantics.md; Rules: R7,R10,R11,R12; Example: E8; an operation whose legacy post-commit callback fails after staging a corpus candidate")
+          val fixture = _corpus_fixture()
 
-        When("the UnitOfWork reports commit failure")
-        val result = fixture.subsystem.executeOperationResponse(
-          _request(fixture.component.name, "corpusCommitFailure")
-        )
+          When("business state commits before the callback reports its post-commit failure")
+          val result = fixture.subsystem.executeOperationResponse(
+            _request(fixture.component.name, "corpusPostCommitFailure")
+          )
 
-        Then("the commit failure is canonical and no supplemental provider call occurs")
-        result shouldBe a[Consequence.Failure[_]]
-        fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
-        fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
-          OperationEvaluationOutcome.Failure
+          Then("the surfaced post-commit failure retains committed termination at the supplemental terminal provider")
+          result shouldBe a[Consequence.Failure[_]]
+          fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
+          fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
+            OperationEvaluationOutcome.Failure
+          fixture.commitstates.get() shouldBe Vector(true)
+        }
       }
 
       "retain cleanup diagnostics when an ActionCall throws during abort" in {
@@ -520,7 +524,7 @@ final class OperationEvaluationSupplementalDslSpec
         SupplementalOperation("corpusFunctional", SupplementalMode.CorpusFunctional),
         SupplementalOperation("corpusProcedure", SupplementalMode.CorpusProcedure),
         SupplementalOperation("corpusFailure", SupplementalMode.CorpusFailure),
-        SupplementalOperation("corpusCommitFailure", SupplementalMode.CorpusCommitFailure),
+        SupplementalOperation("corpusPostCommitFailure", SupplementalMode.CorpusPostCommitFailure),
         SupplementalOperation("corpusSecret", SupplementalMode.CorpusSecret),
         SupplementalOperation("corpusTimeout", SupplementalMode.CorpusTimeout),
         SupplementalOperation("corpusNested", SupplementalMode.CorpusNested),
@@ -664,7 +668,7 @@ private enum SupplementalMode {
   case CorpusFunctional
   case CorpusProcedure
   case CorpusFailure
-  case CorpusCommitFailure
+  case CorpusPostCommitFailure
   case CorpusSecret
   case CorpusTimeout
   case CorpusNested
@@ -696,14 +700,20 @@ private final case class CommitObservingCorpusEvaluationSink(
   def recordTerminal(
     fact: OperationEvaluationTerminalFact
   )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+    if (fact.outcome == OperationEvaluationOutcome.Failure)
+      _record_commit_state()
     underlying.recordTerminal(fact)
 
   def submitCandidate(
     fact: CorpusCandidateFact
   )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] = {
-    val committed = context.runtime.unitOfWork.lastCommitResult.exists(_.isSuccess)
-    commitstates.updateAndGet(_ :+ committed)
+    _record_commit_state()
     underlying.submitCandidate(fact)
+  }
+
+  private def _record_commit_state()(using context: ExecutionContext): Unit = {
+    val committed = context.runtime.unitOfWork.lastCommitTermination.contains(UnitOfWorkTermination.Committed)
+    commitstates.updateAndGet(_ :+ committed)
   }
 }
 
@@ -811,12 +821,12 @@ private final case class SupplementalProcedureActionCall(
           _ <- corpus_candidate(summary = Some("must be discarded"))
           _ <- exec_from[Unit](Consequence.argumentInvalid("planned supplemental failure"))
         } yield OperationResponse.Scalar("unreachable"))
-      case SupplementalMode.CorpusCommitFailure =>
+      case SupplementalMode.CorpusPostCommitFailure =>
         execution_context.runtime.unitOfWork.stagePostCommit(
           throw new IllegalStateException("planned supplemental commit failure")
         )
         executeProgram(for {
-          _ <- corpus_candidate(summary = Some("must not survive commit failure"))
+          _ <- corpus_candidate(summary = Some("committed post-commit failure"))
         } yield OperationResponse.Scalar("unreachable"))
       case SupplementalMode.CorpusSecret =>
         executeProgram(for {

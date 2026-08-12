@@ -18,7 +18,7 @@ import org.goldenport.cncf.operation.evaluation.{
   OperationEvaluationDeliveryDiagnostic,
   OperationEvaluationExecutionReport
 }
-import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp, UnitOfWorkTermination}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
 import org.goldenport.datatype.{I18nBrief, I18nDescription, I18nLabel, I18nString, I18nSummary, I18nText, I18nTitle}
@@ -32,7 +32,7 @@ import org.goldenport.util.StringUtils
  *  version Apr. 28, 2026
  *  version May. 10, 2026
  *  version Jun. 18, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -65,10 +65,10 @@ final class RuntimeContext(
     try {
       commitaction(unitOfWork)
       val result = unitOfWork.lastCommitResult.getOrElse(Consequence.unit)
-      result match {
-        case Consequence.Success(_) =>
+      unitOfWork.lastCommitTermination match {
+        case Some(UnitOfWorkTermination.Committed) =>
           attemptid.foreach(unitOfWork.markOperationEvaluationSupplementalCommitted)
-        case Consequence.Failure(_) =>
+        case _ =>
           attemptid.foreach(unitOfWork.discardOperationEvaluationSupplemental)
       }
       result
