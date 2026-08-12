@@ -3064,7 +3064,7 @@ renumbering of Phase 58 or later.
 | Phase | Goal | Dependency |
 | --- | --- | --- |
 | [57](../phase/phase-57.md) | Closed: runtime-stabilization repair, Step commits, and final affected-repository gate completed. | Phase 56 |
-| [57.1](../phase/phase-57.1.md) | Inventory the Action contract and make plain `Action` return its direct synchronous response. | Phase 57 |
+| [57.1](../phase/phase-57.1.md) | Closed: inventoried the Action contract and made plain `Action` return its direct synchronous response without an implicit Job. | Phase 57 |
 | [57.2](../phase/phase-57.2.md) | Migrate explicit asynchronous callers and align transport/projection semantics. | Phase 57.1 |
 | [57.3](../phase/phase-57.3.md) | Remove unreleased runtime-side Component/CAR compatibility and fail closed. | Phase 57.2 |
 | [57.4](../phase/phase-57.4.md) | Remove Cozy/sbt-cozy build/publication compatibility and rebuild the canonical local warehouse. | Phase 57.3 |
@@ -3079,6 +3079,13 @@ framework `b51057d4ed0445376d4d4517b0d3c8b5362a55ec` and Textus Control Center
 suite (3,161/3,161), launcher suite (`CncfLauncherSpec: OK`), Control Center
 suite (66/66), and standalone assembly/bootstrap checks. Phase 57.1 remains
 planned and unstarted.
+
+Phase 57.1 subsequently closed on 2026-08-12. Its Step commits are contract
+freeze `6ec9fb5ebd6be3ec5b390583e6197fabbdaae50a`, failing-first matrix
+`e1c64918c7a53e0c3254c81b6877a8fe61e3d33a`, and direct execution
+`d31302aa0a1e131e381a62e6e9b8767b03722c8f`. Focused Action/Component
+validation passed 49/49, the independent review passed, and the final framework
+suite passed 3,171/3,171. Phase 57.2 remains planned.
 
 The Action contract remains explicit: a plain unclassified `Action` is the
 simplest synchronous route; query and command semantics remain explicit; Job
