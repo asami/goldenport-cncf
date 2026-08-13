@@ -31,6 +31,7 @@ import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.protocol.Protocol
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -38,7 +39,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec
@@ -499,6 +501,82 @@ final class GenericSubsystemFactorySpec
           "configured component requires canonical namespace/id/version"
         )
       }
+      }
+    }
+
+    "E17 ignore a structured component configuration namespace as a legacy selector" must _metadata("E17") {
+      "when exercising: ignore a structured component configuration namespace as a legacy selector" in {
+      Given("a structured component configuration namespace with an art-scene datastore branch")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.componentNameKey -> ConfigurationValue.ObjectValue(Map(
+            "art-scene" -> ConfigurationValue.ObjectValue(Map(
+              "datastore" -> ConfigurationValue.ObjectValue(Map(
+                "type" -> ConfigurationValue.StringValue("local"),
+                "path" -> ConfigurationValue.StringValue("work/art-scene")
+              ))
+            ))
+          ))
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("scalar component lookup and static and runtime descriptor resolution evaluate the namespace")
+      val componentname = RuntimeConfig.getString(configuration, RuntimeConfig.componentNameKey)
+      val staticresult = GenericSubsystemFactory.resolveDescriptorC(configuration)
+      val runtimeresult = GenericSubsystemFactory.runtimeResolveDescriptorC(
+        configuration,
+        Some(RepositoryBootstrapPolicy())
+      )
+
+      Then("the namespace is not treated as a legacy selector at either descriptor boundary")
+      componentname shouldBe None
+      staticresult shouldBe a[Consequence.Success[_]]
+      runtimeresult shouldBe a[Consequence.Success[_]]
+      staticresult.toOption.flatten shouldBe None
+      runtimeresult.toOption.flatten shouldBe None
+      }
+    }
+
+    "E18 preserve scalar configuration values without coercing structured values" must _metadata("E18") {
+      "when exercising: preserve scalar configuration values without coercing structured values" in {
+      Given("generated scalar and structured values at the exact component configuration key")
+      val scalarvalues: Gen[(ConfigurationValue, Option[String])] = Gen.frequency(
+        3 -> Gen.alphaNumStr.suchThat(_.nonEmpty).map { value =>
+          ConfigurationValue.StringValue(value) -> Some(value)
+        },
+        2 -> Gen.choose(-100000, 100000).map { value =>
+          ConfigurationValue.NumberValue(BigDecimal(value)) -> Some(value.toString)
+        },
+        1 -> Gen.oneOf(true, false).map { value =>
+          ConfigurationValue.BooleanValue(value) -> Some(value.toString)
+        }
+      )
+      val structuredvalues: Gen[(ConfigurationValue, Option[String])] = Gen.frequency(
+        2 -> Gen.alphaNumStr.map { value =>
+          ConfigurationValue.ObjectValue(Map(
+            "art-scene" -> ConfigurationValue.StringValue(value)
+          )) -> None
+        },
+        2 -> Gen.listOf(Gen.alphaNumStr).map { values =>
+          ConfigurationValue.ListValue(values.map(ConfigurationValue.StringValue.apply)) -> None
+        },
+        1 -> Gen.const(ConfigurationValue.NullValue -> None)
+      )
+      val property = Prop.forAll(Gen.oneOf(scalarvalues, structuredvalues)) {
+        case (value, expected) =>
+          val configuration = ResolvedConfiguration(
+            Configuration(Map(RuntimeConfig.componentNameKey -> value)),
+            ConfigurationTrace.empty
+          )
+          RuntimeConfig.getString(configuration, RuntimeConfig.componentNameKey) == expected
+      }
+
+      When("the scalar-versus-structured access property is checked")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+
+      Then("all scalar values retain their text while every structured value remains unavailable")
+      checked.passed shouldBe true
       }
     }
 

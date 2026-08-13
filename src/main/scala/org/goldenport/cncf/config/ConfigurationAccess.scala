@@ -7,7 +7,8 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
  * @since   Mar. 13, 2026
  *  version Mar. 24, 2026
  *  version Apr. 15, 2026
- * @version Jul.  2, 2026
+ *  version Jul.  2, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConfigurationAccess {
@@ -53,7 +54,7 @@ object ConfigurationAccess {
     conf: ResolvedConfiguration,
     key: String
   ): Option[String] =
-    conf.get[String](key).toOption.flatten
+    conf.configuration.values.get(key).flatMap(_as_string)
 
   private def _from_object_path(
     conf: ResolvedConfiguration,
