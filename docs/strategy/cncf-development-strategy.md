@@ -3151,8 +3151,8 @@ renumbering of Phase 58 or later.
 | [57](../phase/phase-57.md) | Closed: runtime-stabilization repair, Step commits, and final affected-repository gate completed. | Phase 56 |
 | [57.1](../phase/phase-57.1.md) | Closed: inventoried the Action contract and made plain `Action` return its direct synchronous response without an implicit Job. | Phase 57 |
 | [57.2](../phase/phase-57.2.md) | Closed on 2026-08-12: migrated explicit asynchronous callers and aligned transport/projection semantics (AES-04/AES-05). | Phase 57.1 |
-| [57.3](../phase/phase-57.3.md) | Remove unreleased runtime-side Component/CAR compatibility and fail closed. | Phase 57.2 |
-| [57.4](../phase/phase-57.4.md) | Remove Cozy/sbt-cozy build/publication compatibility and rebuild the canonical local warehouse. | Phase 57.3 |
+| [57.3](../phase/phase-57.3.md) | Closed: removed unreleased runtime-side Component/CAR compatibility and now fails closed. | Phase 57.2 |
+| [57.4](../phase/phase-57.4.md) | Closed on 2026-08-14: retired build/publication compatibility and rebuilt the canonical local warehouse. | Phase 57.3 |
 | [57.5](../phase/phase-57.5.md) | Remove overgrown document/source closure Specs and run the one series release gate. | Phase 57.4 |
 
 Phase 57 closed on 2026-08-12. Its immutable pre-split accumulator commits are CNCF
@@ -3174,8 +3174,20 @@ suite passed 3,171/3,171. Phase 57.2 then completed AES-04 explicit async
 caller migration and AES-05 transport/projection alignment; its final full gate
 invocation `78634-20260812T093417Z` completed 440 suites with 3,204/3,204
 passed, 0 failed or aborted, 14 canceled, 1 ignored, and 46 pending, with
-sbt/wrapper exits 0/0 and the serialized lock released. Phase 57.3 remains
-planned and unstarted.
+sbt/wrapper exits 0/0 and the serialized lock released. Phase 57.3 then
+completed runtime-side compatibility retirement. Its framework final gate
+invocation `69427-20260813T043639Z` passed 440 suites with 3,224/3,224, and
+launcher invocation `70587-20260813T043931Z` completed with no failure or
+abort; both returned SBT/wrapper exits 0/0 with the serialized lock released.
+Phase 57.4 closed on 2026-08-14. Cozy commit
+`98436875582e31b83959c4638fcd0152f63c8cc0` and sbt-cozy commit
+`7e37adff5fdfd8d4dbca6b86ef92d90bcc5683cc` retire the unreleased producer
+compatibility. The active local warehouse was rebuilt empty with four
+canonical `-SNAPSHOT` CARs; the prior warehouse remains a forensic sibling.
+The final sbt-cozy suite passed 144/144. The final Cozy suite exposed only
+separable article-media fixture/concurrency failures outside AES-06B; their
+exact nonzero evidence is retained as `HYG-P57.4-003` rather than overstated as
+an all-tests pass.
 
 The Action contract remains explicit: a plain unclassified `Action` is the
 simplest synchronous route; query and command semantics remain explicit; Job
