@@ -42,8 +42,8 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val registry = McpClientRuntimeRegistry.createC(
         Vector(beta, alpha),
         _transport_binding(Map(
-          alpha.id -> new _FakeTransport(Map(_server_id("alpha-server") -> Vector.empty)),
-          beta.id -> new _FakeTransport(Map(_server_id("beta-server") -> Vector.empty))
+          alpha.id -> new FakeTransport(Map(_server_id("alpha-server") -> Vector.empty)),
+          beta.id -> new FakeTransport(Map(_server_id("beta-server") -> Vector.empty))
         ))
       ).toOption.get
 
@@ -71,7 +71,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val registry = McpClientRuntimeRegistry.createC(
         Vector(admitted),
         _transport_binding(
-          new _FakeTransport(Map(_server_id("catalog") -> Vector.empty)),
+          new FakeTransport(Map(_server_id("catalog") -> Vector.empty)),
           Set(admitted.id)
         )
       ).toOption.get
@@ -91,7 +91,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       given ExecutionContext = ExecutionContext.create()
       val serverset = _server_set("research", "catalog")
       val tool = _tool("catalog", "paper.search")
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
       val registry = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -126,7 +126,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val registry = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(
-          new _FakeTransport(Map(_server_id("catalog") -> Vector(remotetool))),
+          new FakeTransport(Map(_server_id("catalog") -> Vector(remotetool))),
           Set(serverset.id)
         )
       ).toOption.get
@@ -155,7 +155,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       evidence._2.toOption.map(_.tools.map(_.identity.print)) shouldBe
         Some(Vector("catalog/tool.time.now"))
       evidence._3 shouldBe Vector.empty
-      evidence._4.map(_.name) should contain ("tool.time.now")
+      evidence._4.map(_.name) should contain ("org.goldenport.cncf.Tool.time.now")
     }
 
     "reject infrastructure variation at the consumer Port boundary" in {
@@ -164,7 +164,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val serverset = _server_set("research", "catalog")
       val registry = McpClientRuntimeRegistry.createC(
         Vector(serverset),
-        _transport_binding(new _FakeTransport(Map(_server_id("catalog") -> Vector.empty)), Set(serverset.id))
+        _transport_binding(new FakeTransport(Map(_server_id("catalog") -> Vector.empty)), Set(serverset.id))
       ).toOption.get
 
       When("the caller tries to override transport selection")
@@ -182,7 +182,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       given ExecutionContext = ExecutionContext.create()
       val admitted = _server_set("admitted", "catalog")
       val requested = _server_set_id("missing")
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector.empty))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector.empty))
       val registry = McpClientRuntimeRegistry.createC(
         Vector(admitted),
         _transport_binding(fake, Set(admitted.id))
@@ -200,7 +200,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       Given("an admitted catalog and a call naming another tool")
       given ExecutionContext = ExecutionContext.create()
       val serverset = _server_set("research", "catalog")
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(_tool("catalog", "paper.search"))))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(_tool("catalog", "paper.search"))))
       val registry = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -224,7 +224,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val admitted = _tool("catalog", "paper.search")
       val denied = _tool("catalog", "paper.delete")
       val serverset = _server_set("research", "catalog", Set(admitted.identity.toolName))
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(denied, admitted)))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(denied, admitted)))
       val registry = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -246,7 +246,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       given ExecutionContext = ExecutionContext.create()
       val tool = _tool("catalog", "paper.search")
       val serverset = _server_set("research", "catalog", Set(tool.identity.toolName))
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
       val registry = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -284,7 +284,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val tool = _tool("catalog", "paper.search")
       val limits = McpClientLimits.createC(30000L, 1, 1024L, 1024L, 1).toOption.get
       val serverset = _server_set("research", "catalog", limits = limits)
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
       val service = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -320,7 +320,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val serverset = _server_set("research", "catalog", limits = limits)
       val entered = new CountDownLatch(1)
       val release = new CountDownLatch(1)
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
       val service = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -353,7 +353,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
       val tool = _tool("catalog", "paper.search")
       val serverset = _server_set("research", "catalog", Set(tool.identity.toolName))
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
       val service = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -408,7 +408,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val serverset = _server_set("concurrent", "catalog", Set(tool.identity.toolName), limits)
       val entered = new CountDownLatch(2)
       val release = new CountDownLatch(1)
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
       val service = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -449,7 +449,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val serverset = _server_set("lifecycle", "catalog", Set(tool.identity.toolName))
       val entered = new CountDownLatch(1)
       val release = new CountDownLatch(1)
-      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
+      val fake = new FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
       val registry = McpClientRuntimeRegistry.createC(
         Vector(serverset),
         _transport_binding(fake, Set(serverset.id))
@@ -489,14 +489,14 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val closeorder = ArrayBuffer.empty[String]
       val alpha = _server_set("alpha", "alpha-server")
       val zeta = _server_set("zeta", "zeta-server")
-      val alphatransport = new _FakeTransport(
+      val alphatransport = new FakeTransport(
         Map(_server_id("alpha-server") -> Vector.empty),
         onclose = () => {
           closeorder.synchronized(closeorder += "alpha")
           throw new IllegalStateException("expected alpha cleanup failure")
         }
       )
-      val zetatransport = new _FakeTransport(
+      val zetatransport = new FakeTransport(
         Map(_server_id("zeta-server") -> Vector.empty),
         onclose = () => closeorder.synchronized(closeorder += "zeta")
       )
@@ -520,7 +520,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       given ExecutionContext = ExecutionContext.create()
       val alpha = _server_set("alpha", "alpha-server")
       val zeta = _server_set("zeta", "zeta-server")
-      val alphatransport = new _FakeTransport(Map(_server_id("alpha-server") -> Vector.empty))
+      val alphatransport = new FakeTransport(Map(_server_id("alpha-server") -> Vector.empty))
 
       When("registry assembly fails while binding the second normalized server set")
       val result = McpClientRuntimeRegistry.createC(
@@ -583,7 +583,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       variation = McpClientTransportSelectionPoint
     ))
 
-  private final class _FakeTransport(
+  private final class FakeTransport(
     catalogs: Map[McpServerId, Vector[McpClientTool]],
     blocking: Option[(CountDownLatch, CountDownLatch)] = None,
     onclose: () => Unit = () => ()

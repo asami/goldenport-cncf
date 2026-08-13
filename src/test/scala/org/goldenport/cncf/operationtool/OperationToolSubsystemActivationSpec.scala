@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for subsystem-owned Operation tool activation.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationToolSubsystemActivationSpec
@@ -62,27 +62,27 @@ final class OperationToolSubsystemActivationSpec
     "install admitted services into existing and subsequently added sockets" in {
       Given("one admitted Operation and two consumer-owned sockets")
       given ExecutionContext = ExecutionContext.create()
-      val toolSetId = OperationToolSetId.parseC("builtin-tools").toOption.get
-      val firstSocket = _socket(toolSetId)
-      val secondSocket = _socket(toolSetId)
+      val toolsetid = OperationToolSetId.parseC("builtin-tools").toOption.get
+      val firstsocket = _socket(toolsetid)
+      val secondsocket = _socket(toolsetid)
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      subsystem.add(_component("first_consumer", firstSocket))
+      subsystem.add(_component("first_consumer", firstsocket))
 
       When("the subsystem activates the policy and later adds another consumer")
       val activation = subsystem.activateOperationToolRuntimeC(_policy_file())
-      subsystem.add(_component("second_consumer", secondSocket))
+      subsystem.add(_component("second_consumer", secondsocket))
 
       Then("both sockets receive the same admitted service")
       activation.isSuccess shouldBe true
-      firstSocket.service(toolSetId).isSuccess shouldBe true
-      secondSocket.service(toolSetId).isSuccess shouldBe true
+      firstsocket.service(toolsetid).isSuccess shouldBe true
+      secondsocket.service(toolsetid).isSuccess shouldBe true
       subsystem.shutdownC().isSuccess shouldBe true
     }
 
     "retain no registry when a required Operation is absent" in {
       Given("a policy naming an Operation outside the assembled subsystem")
       given ExecutionContext = ExecutionContext.create()
-      val path = _policy_file("missing.service.operation")
+      val path = _policy_file("org.goldenport.cncf.Missing.service.operation")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
 
       When("runtime activation validates exact admission")
@@ -96,7 +96,7 @@ final class OperationToolSubsystemActivationSpec
   }
 
   private def _policy_file(
-    operation: String = "admin.system.ping"
+    operation: String = "org.goldenport.cncf.Admin.system.ping"
   ): Path = {
     val directory = Files.createTempDirectory("cncf-operation-tool-subsystem")
     val policy = directory.resolve("operation-tools.yaml")
@@ -110,8 +110,8 @@ final class OperationToolSubsystemActivationSpec
     policy
   }
 
-  private def _socket(toolSetId: OperationToolSetId): OperationToolSocket =
-    OperationToolSocket.createC(Vector(OperationToolRequirement(toolSetId))).toOption.get
+  private def _socket(toolsetid: OperationToolSetId): OperationToolSocket =
+    OperationToolSocket.createC(Vector(OperationToolRequirement(toolsetid))).toOption.get
 
   private def _component(
     name: String,

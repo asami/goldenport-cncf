@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -33,8 +33,8 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
       Then("complete component service operation identities are sorted independently of SAR order")
       catalog.isSuccess shouldBe true
       catalog.toOption.map(_.map(_.name)) shouldBe Some(Vector(
-        "alpha-search.Query.find",
-        "zeta-search.Query.find"
+        "org.goldenport.cncf.AlphaSearch.Query.find",
+        "org.goldenport.cncf.ZetaSearch.Query.find"
       ))
     }
 
@@ -50,7 +50,7 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
       Then("both catalogs fail with the same attributable identity conflict")
       forwardcatalog.isSuccess shouldBe false
       reversecatalog.isSuccess shouldBe false
-      forwardcatalog.display should include ("duplicate MCP tool identities: shared-search.Query.find")
+      forwardcatalog.display should include ("duplicate MCP tool identities: org.goldenport.cncf.SharedSearch.Query.find")
       reversecatalog.display shouldBe forwardcatalog.display
     }
 
@@ -65,7 +65,7 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
         Some(McpProtocolRevision.PREFERRED.print)
       ))
       val called = _json(adapter.handle(
-        """{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"shared-search.Query.find","arguments":{}}}""",
+        """{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"org.goldenport.cncf.SharedSearch.Query.find","arguments":{}}}""",
         Some(McpProtocolRevision.PREFERRED.print)
       ))
 
@@ -73,7 +73,7 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
       listed.hcursor.downField("error").get[Int]("code") shouldBe Right(-32603)
       called.hcursor.downField("error").get[Int]("code") shouldBe Right(-32603)
       listed.hcursor.downField("error").get[String]("message").toOption.getOrElse("") should include (
-        "duplicate MCP tool identities: shared-search.Query.find"
+        "duplicate MCP tool identities: org.goldenport.cncf.SharedSearch.Query.find"
       )
       called.hcursor.downField("error").get[String]("message") shouldBe
         listed.hcursor.downField("error").get[String]("message")

@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for runtime-owned Operation tool admission policy.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationToolRuntimeConfigurationSpec
@@ -24,7 +24,7 @@ final class OperationToolRuntimeConfigurationSpec
         "toolSets" -> Vector(
           Record.data(
             "id" -> "research",
-            "operations" -> Vector("tool.web.fetch"),
+            "operations" -> Vector("org.goldenport.cncf.Tool.web.fetch"),
             "limits" -> Record.data(
               "maximumCalls" -> 3,
               "maximumInputBytes" -> 2048,
@@ -34,7 +34,7 @@ final class OperationToolRuntimeConfigurationSpec
           ),
           Record.data(
             "id" -> "builtin",
-            "operations" -> Vector("admin.system.ping")
+            "operations" -> Vector("org.goldenport.cncf.Admin.system.ping")
           )
         )
       )
@@ -54,25 +54,25 @@ final class OperationToolRuntimeConfigurationSpec
       Given("a duplicate logical identity and a fractional execution limit")
       val duplicate = Record.data(
         "toolSets" -> Vector(
-          Record.data("id" -> "builtin", "operations" -> Vector("admin.system.ping")),
-          Record.data("id" -> "builtin", "operations" -> Vector("tool.time.now"))
+          Record.data("id" -> "builtin", "operations" -> Vector("org.goldenport.cncf.Admin.system.ping")),
+          Record.data("id" -> "builtin", "operations" -> Vector("org.goldenport.cncf.Tool.time.now"))
         )
       )
       val fractional = Record.data(
         "toolSets" -> Vector(Record.data(
           "id" -> "builtin",
-          "operations" -> Vector("admin.system.ping"),
+          "operations" -> Vector("org.goldenport.cncf.Admin.system.ping"),
           "limits" -> Record.data("maximumCalls" -> 1.5)
         ))
       )
 
       When("the invalid policies are decoded")
-      val duplicateResult = OperationToolRuntimeConfiguration.decodeC(duplicate)
-      val fractionalResult = OperationToolRuntimeConfiguration.decodeC(fractional)
+      val duplicateresult = OperationToolRuntimeConfiguration.decodeC(duplicate)
+      val fractionalresult = OperationToolRuntimeConfiguration.decodeC(fractional)
 
       Then("both fail before a runtime registry can be created")
-      duplicateResult.isFaillure shouldBe true
-      fractionalResult.isFaillure shouldBe true
+      duplicateresult.isFaillure shouldBe true
+      fractionalresult.isFaillure shouldBe true
     }
   }
 }

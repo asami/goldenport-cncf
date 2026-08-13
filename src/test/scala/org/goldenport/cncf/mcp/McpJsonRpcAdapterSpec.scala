@@ -130,11 +130,11 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       Then("ready operations from the primary admin and builtin tool participants are listed")
       tools should not be empty
       val toolnames = tools.map(_.hcursor.get[String]("name").toOption.getOrElse(""))
-      toolnames should contain ("admin.system.ping")
-      toolnames should contain ("tool.resource.read")
-      toolnames should contain ("tool.time.now")
-      toolnames should contain ("tool.decimal.calculate")
-      all(toolnames.map(name => name.startsWith("admin.system.") || name.startsWith("tool."))) shouldBe true
+      toolnames should contain ("org.goldenport.cncf.Admin.system.ping")
+      toolnames should contain ("org.goldenport.cncf.Tool.resource.read")
+      toolnames should contain ("org.goldenport.cncf.Tool.time.now")
+      toolnames should contain ("org.goldenport.cncf.Tool.decimal.calculate")
+      all(toolnames.map(name => name.startsWith("org.goldenport.cncf.Admin.system.") || name.startsWith("org.goldenport.cncf.Tool."))) shouldBe true
     }
 
     "project integer and boolean parameter schemas" in {
@@ -149,7 +149,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       val tools = json.hcursor.downField("result").downField("tools").focus
         .flatMap(_.asArray)
         .getOrElse(fail("tools are missing"))
-      val deleteblob = tools.find(_.hcursor.get[String]("name").contains("blob.blob.admin_delete_blob"))
+      val deleteblob = tools.find(_.hcursor.get[String]("name").contains("org.goldenport.cncf.Blob.blob.admin_delete_blob"))
         .getOrElse(fail("blob admin delete tool is missing"))
       val force = deleteblob.hcursor
         .downField("inputSchema")
@@ -158,7 +158,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
         .get[String]("type")
       Then("boolean and integer parameters retain their JSON schema types")
       force shouldBe Right("boolean")
-      val listblob = tools.find(_.hcursor.get[String]("name").contains("blob.blob.admin_list_blobs"))
+      val listblob = tools.find(_.hcursor.get[String]("name").contains("org.goldenport.cncf.Blob.blob.admin_list_blobs"))
         .getOrElse(fail("blob admin list tool is missing"))
       val limit = listblob.hcursor
         .downField("inputSchema")
@@ -174,7 +174,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).foreach(_.withMcpReadyServices(Set("system")))
       val adapter = new McpJsonRpcAdapter(subsystem)
       val raw =
-        """{"jsonrpc":"2.0","id":"x2","method":"tools/call","params":{"name":"admin.system.ping","arguments":{}}}"""
+        """{"jsonrpc":"2.0","id":"x2","method":"tools/call","params":{"name":"org.goldenport.cncf.Admin.system.ping","arguments":{}}}"""
 
       When("the tool is called through MCP JSON-RPC")
       val json = _response_json(adapter.handle(raw, _protocol_header))
@@ -191,7 +191,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).foreach(_.withMcpReadyServices(Set("blob")))
       val adapter = new McpJsonRpcAdapter(subsystem)
       val raw =
-        """{"jsonrpc":"2.0","id":"x2-property","method":"tools/call","params":{"name":"blob.blob.admin_get_blob","arguments":{"id":"missing-for-test"}}}"""
+        """{"jsonrpc":"2.0","id":"x2-property","method":"tools/call","params":{"name":"org.goldenport.cncf.Blob.blob.admin_get_blob","arguments":{"id":"missing-for-test"}}}"""
 
       When("the MCP arguments are converted into a CNCF request")
       val json = _response_json(adapter.handle(raw, _protocol_header))
@@ -206,7 +206,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val adapter = new McpJsonRpcAdapter(subsystem)
       val raw =
-        """{"jsonrpc":"2.0","id":"x2b","method":"tools/call","params":{"name":"admin.system.ping","arguments":{}}}"""
+        """{"jsonrpc":"2.0","id":"x2b","method":"tools/call","params":{"name":"org.goldenport.cncf.Admin.system.ping","arguments":{}}}"""
 
       When("the unpublished operation is called through MCP")
       val json = _response_json(adapter.handle(raw, _protocol_header))
@@ -249,12 +249,12 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
         .flatMap(_.asArray).getOrElse(Vector.empty)
         .flatMap(_.hcursor.get[String]("name").toOption)
       val called = _response_json(adapter.handle(
-        """{"jsonrpc":"2.0","id":"configured-call","method":"tools/call","params":{"name":"admin.system.ping","arguments":{}}}""",
+        """{"jsonrpc":"2.0","id":"configured-call","method":"tools/call","params":{"name":"org.goldenport.cncf.Admin.system.ping","arguments":{}}}""",
         _protocol_header
       ))
 
       Then("the runtime policy narrows both discovery and invocation")
-      names should not contain "admin.system.ping"
+      names should not contain "org.goldenport.cncf.Admin.system.ping"
       called.hcursor.downField("error").get[Int]("code") shouldBe Right(-32602)
     }
 
