@@ -15,7 +15,7 @@ import io.circe.Json
 import io.circe.parser.parse
 import org.http4s.{MediaType, Method, Request, Uri}
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
@@ -35,6 +35,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentId, ComponentInstanceId, ComponentletDescriptor}
 import org.goldenport.cncf.testutil.DevelopmentRuntimeManifestFixture
@@ -74,12 +75,14 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug. 12, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _renderer = StaticFormAppRenderer()
   private val _test_csrf_token = WebCsrf.issue(None)
+  private val _notice_board_component_name = ComponentId("org.goldenport.cncf.test.NoticeBoard").name
+  private val _embedded_notice_board_component_name = ComponentId("org.goldenport.cncf.test.EmbeddedNoticeBoard").name
   private val _in_phase53_spec =
     afterWord("in spec:static-web-execution-context-projection, example:PM-53-01, rules:SWEP-3, phase:53")
   private val _aes05b = afterWord(
@@ -261,7 +264,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.createDirectories(devroot.resolve("src").resolve("main").resolve("web"))
       val subsystem = _management_console_fixture_subsystem()
         .add(Vector(TestComponentFactory.create("dev_component", Protocol.empty)))
-      val devcomponent = subsystem.findComponent("dev_component").getOrElse(fail("dev component missing"))
+      val devcomponent = subsystem.findComponent(ComponentId("org.goldenport.cncf.test.DevComponent")).getOrElse(fail("dev component missing"))
       devcomponent.withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata(
           sourceType = "component-dev-dir",
@@ -326,7 +329,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("the prerequisites for render system admin knowledge pages")
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       subsystem.add(TestComponentFactory.create("knowledge_component", Protocol.empty))
-      val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
+      val component = subsystem.findComponent(ComponentId("org.goldenport.cncf.test.KnowledgeComponent")).getOrElse(fail("knowledge component missing"))
       val ext = ExternalKnowledgeIdentifier.entity("customer", "customer-1")
       val provenance = KnowledgeProvenance(KnowledgeProvenanceId("prov-1"), "renderer-spec", Some("cncf"))
       val evidence = KnowledgeEvidence(
@@ -447,7 +450,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("a subsystem containing published Information")
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
-      val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
+      val component = subsystem.findComponent(ComponentId("org.goldenport.cncf.test.InformationComponent")).getOrElse(fail("information component missing"))
       given ExecutionContext = component.logic.executionContext()
       val batch = _success(component.informationSpace.registerInformation(
         "paper",
@@ -513,6 +516,48 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       secondinformation should not be empty
       firstknowledge should not be empty
       secondknowledge should not be empty
+    }
+
+    "reject ambiguous aliases in component dashboard presentation while resolving an exact component ID" in {
+      Given("two components sharing both display and artifact presentation aliases")
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
+      val first = TestComponentFactory.create(
+        "org.example.FirstDashboard",
+        Protocol.empty,
+        displayName = Some("shared-dashboard")
+      )
+      val second = TestComponentFactory.create(
+        "org.example.SecondDashboard",
+        Protocol.empty,
+        displayName = Some("shared-dashboard")
+      )
+      first.withArtifactMetadata(Component.ArtifactMetadata(
+        sourceType = "spec",
+        name = "shared-dashboard",
+        version = "1.0.0",
+        component = Some("shared-dashboard"),
+        componentId = Some(first.componentId)
+      ))
+      second.withArtifactMetadata(Component.ArtifactMetadata(
+        sourceType = "spec",
+        name = "shared-dashboard",
+        version = "1.0.0",
+        component = Some("shared-dashboard"),
+        componentId = Some(second.componentId)
+      ))
+      subsystem.add(Vector(first, second))
+
+      When("the admin dashboard state selector uses the shared presentation alias")
+      val ambiguous = _renderer.renderDashboardState(subsystem, Some("shared-dashboard"))
+
+      And("the selector uses the exact qualified component identity")
+      val canonical = _renderer.renderDashboardState(subsystem, Some(first.componentId.name))
+
+      Then("the ambiguous selector dispatches no component result and the canonical selector resolves the intended component")
+      ambiguous shouldBe None
+      val canonicalbody = canonical.map(_.body).getOrElse(fail("canonical dashboard state is missing"))
+      canonicalbody should include (first.componentId.name)
+      canonicalbody should not include second.componentId.name
     }
 
     "render Blob admin read-only pages" in {
@@ -1270,7 +1315,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render read-only system and component manual pages" in {
       Given("the prerequisites for render read-only system and component manual pages")
       val subsystem = _aggregate_http_fixture_subsystem()
-      subsystem.findComponent("notice_board").foreach { component =>
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.NoticeBoard")).foreach { component =>
         val componentlets = Vector(
           ComponentletDescriptor(
             name = "notice-admin",
@@ -1500,7 +1545,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Vector("manual/index.md" -> "# Notice Board Reference Manual\n\nCanonical CAR manual content.\n")
       )
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
-      val component = subsystem.findComponent("notice-board").getOrElse(fail("notice-board component is missing"))
+      val component = subsystem.findComponent(ComponentId("org.goldenport.cncf.test.NoticeBoard")).getOrElse(fail("notice-board component is missing"))
       component.withArtifactMetadata(org.goldenport.cncf.component.Component.ArtifactMetadata(
         sourceType = "car",
         name = "notice-board",
@@ -1819,7 +1864,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val component = _notice_fixture_component(subsystem)
       val notices = component.entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.toVector
       given EntityPersistent[NoticeEntity] = _notice_persistent
-      given ExecutionContext = subsystem.findComponent("admin").getOrElse(fail("admin component is missing")).logic.executionContext()
+      given ExecutionContext = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).getOrElse(fail("admin component is missing")).logic.executionContext()
       notices.foreach { notice =>
         org.goldenport.cncf.entity.EntityStore.standard().save(notice)
           .getOrElse(fail(s"admin notice fixture seed failed: ${notice.id.print}"))
@@ -1889,7 +1934,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val source = notice.id
       val sourceid = source.value
       given EntityPersistent[NoticeEntity] = _notice_persistent
-      given ExecutionContext = subsystem.findComponent("admin").getOrElse(fail("admin component is missing")).logic.executionContext()
+      given ExecutionContext = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).getOrElse(fail("admin component is missing")).logic.executionContext()
       org.goldenport.cncf.entity.EntityStore.standard().save(notice)
         .getOrElse(fail(s"admin notice fixture seed failed: ${notice.id.print}"))
       val root = _tag_record_response(
@@ -1956,14 +2001,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val searchpage = _page_body(_renderer.renderAdminTags(subsystem, Map(
         "tagSpace" -> "admin-tag-space",
-        "component" -> "tag",
+        "component" -> BuiltinComponentIdentity.TAG.name,
         "entity" -> "tag",
         "tagRef" -> rootpath,
         "role" -> "tag"
       )), "Tag search page")
       val appsearchpage = _page_body(_renderer.renderAppTags(subsystem, Map(
         "tagSpace" -> "admin-tag-space",
-        "component" -> "tag",
+        "component" -> BuiltinComponentIdentity.TAG.name,
         "entity" -> "tag",
         "tagRef" -> rootpath,
         "role" -> "tag"
@@ -1971,7 +2016,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val emptytagpage = _page_body(_renderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-empty-tag-space")), "empty Tag admin page")
       val emptysearchpage = _page_body(_renderer.renderAdminTags(subsystem, Map(
         "tagSpace" -> "admin-tag-space",
-        "component" -> "tag",
+        "component" -> BuiltinComponentIdentity.TAG.name,
         "entity" -> "tag",
         "tagRef" -> rootpath,
         "role" -> "missing-role"
@@ -2024,7 +2069,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       emptytagpage should include ("alert alert-secondary")
       searchpage should include ("admin-tag-root.child")
       searchpage should include (childid)
-      searchpage should include ("/web/tag/admin/entities/tag/")
+      searchpage should include ("/web/org-goldenport-cncf-tag/admin/entities/tag/")
       searchpage should include ("Tag search result")
       searchpage should include ("class=\"badge text-bg-light border align-self-start\">")
       appsearchpage should include ("Tag search result")
@@ -2064,7 +2109,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "render delegated collection storage shape in component admin entity type page" in {
       Given("the prerequisites for render delegated collection storage shape in component admin entity type page")
       val subsystem = _aggregate_http_fixture_subsystem()
-      subsystem.findComponent("notice_board").foreach { component =>
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.NoticeBoard")).foreach { component =>
         component.withComponentDescriptors(Vector(ComponentDescriptor(
           name = Some(component.name),
           componentName = Some(component.name),
@@ -2171,7 +2216,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val stored = _load_notice_store_record(subsystem, updated.id)
       stored.getString("title") shouldBe Some("board updated")
       stored.getString("author") shouldBe Some("bob")
-      dispatcher.paths should contain ("/admin/entity/update")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/update")
       dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some(recordid)
     }
 
@@ -2229,7 +2274,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       canonicalresponse.as[String].unsafeRunSync() should include ("Unknown entity route id")
       foreignresponse.status.code shouldBe 400
       foreignresponse.as[String].unsafeRunSync() should include ("Unknown entity route id")
-      dispatcher.paths should not contain ("/admin/entity/update")
+      dispatcher.paths should not contain ("/org.goldenport.cncf.Admin/entity/update")
     }
 
     "reject a stale component entity update form without replacing the committed Entity" in {
@@ -2354,7 +2399,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
         Some(s"/web/notice-board/admin/entities/notice/${recordid}")
       collection.storage.storeRealm.values.exists(x => x.id.value == recordid && x.title == "board redirected") shouldBe true
-      dispatcher.paths should contain ("/admin/entity/update")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/update")
     }
 
     "redisplay component entity update form with submitted values when admin stayOnError is enabled" in {
@@ -2432,7 +2477,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("type=\"hidden\" name=\"crud.origin.href\" value=\"/web/notice-board/admin/entities/notice?page=2\"")
       html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
       html should include ("type=\"hidden\" name=\"search.author\" value=\"bob\"")
-      dispatcher.paths should not contain ("/admin/entity/update")
+      dispatcher.paths should not contain ("/org.goldenport.cncf.Admin/entity/update")
     }
 
     "validate component entity update forms by detail view fields before full schema fields" in {
@@ -2471,7 +2516,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Entity record was applied")
       html should include ("Applied</th><td>true")
       collection.storage.storeRealm.values.exists(x => x.id.value == recordid && x.title == "detail only") shouldBe true
-      dispatcher.paths should contain ("/admin/entity/update")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/update")
     }
 
     "reject component entity update forms when a required detail view field is empty" in {
@@ -2508,7 +2553,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("title is required.")
       html should include ("is-invalid")
       html should not include ("name=\"author\"")
-      dispatcher.paths should not contain ("/admin/entity/update")
+      dispatcher.paths should not contain ("/org.goldenport.cncf.Admin/entity/update")
     }
 
     "apply component entity create form POST through EntityCollection into EntityStoreSpace" in {
@@ -2541,14 +2586,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val stored = _load_notice_store_record(subsystem, created.id)
       stored.getString("title") shouldBe Some("new notice")
       stored.getString("author") shouldBe Some("bob")
-      dispatcher.paths should contain ("/admin/entity/create")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/create")
     }
 
     "create an Embedded SimpleEntity through the admin operation without accepting managed revision input" in {
       Given("an Embedded revision collection and a create request containing only application fields")
       val subsystem = _embedded_revision_fixture_subsystem()
       val component = subsystem
-        .findComponent("embedded_notice_board")
+        .findComponent(ComponentId("org.goldenport.cncf.test.EmbeddedNoticeBoard"))
         .getOrElse(fail("embedded fixture component is missing"))
       val collection =
         component.entitySpace.entity[EmbeddedNoticeEntity]("notice")
@@ -2557,11 +2602,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val response = _success(
         subsystem.executeOperationResponse(
           GRequest.of(
-            component = "admin",
+            component = BuiltinComponentIdentity.ADMIN.name,
             service = "entity",
             operation = "create",
             arguments = List(
-              Argument("component", "embedded-notice-board", None),
+              Argument("component", _embedded_notice_board_component_name, None),
               Argument("entity", "notice", None),
               Argument("title", "embedded create", None)
             )
@@ -2582,18 +2627,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("an Embedded Entity whose revision binding belongs to a non-Admin component")
       val subsystem = _embedded_revision_fixture_subsystem()
       val component = subsystem
-        .findComponent("embedded_notice_board")
+        .findComponent(ComponentId("org.goldenport.cncf.test.EmbeddedNoticeBoard"))
         .getOrElse(fail("embedded fixture component is missing"))
       val collection =
         component.entitySpace.entity[EmbeddedNoticeEntity]("notice")
       _success(
         subsystem.executeOperationResponse(
           GRequest.of(
-            component = "admin",
+            component = BuiltinComponentIdentity.ADMIN.name,
             service = "entity",
             operation = "create",
             arguments = List(
-              Argument("component", "embedded-notice-board", None),
+              Argument("component", _embedded_notice_board_component_name, None),
               Argument("entity", "notice", None),
               Argument("title", "embedded read", None)
             )
@@ -2609,7 +2654,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         subsystem,
         "entity",
         "read",
-        "component" -> "embedded-notice-board",
+        "component" -> _embedded_notice_board_component_name,
         "entity" -> "notice",
         "id" -> created.id.value
       )
@@ -2617,7 +2662,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         subsystem,
         "entity",
         "list",
-        "component" -> "embedded-notice-board",
+        "component" -> _embedded_notice_board_component_name,
         "entity" -> "notice"
       )
 
@@ -2636,18 +2681,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("an Embedded Entity and REST adapter profiles paired with conflicting body versions")
       val subsystem = _embedded_revision_fixture_subsystem()
       val component = subsystem
-        .findComponent("embedded_notice_board")
+        .findComponent(ComponentId("org.goldenport.cncf.test.EmbeddedNoticeBoard"))
         .getOrElse(fail("embedded fixture component is missing"))
       val collection =
         component.entitySpace.entity[EmbeddedNoticeEntity]("notice")
       _success(
         subsystem.executeOperationResponse(
           GRequest.of(
-            component = "admin",
+            component = BuiltinComponentIdentity.ADMIN.name,
             service = "entity",
             operation = "create",
             arguments = List(
-              Argument("component", "embedded-notice-board", None),
+              Argument("component", _embedded_notice_board_component_name, None),
               Argument("entity", "notice", None),
               Argument("title", "before REST updates", None)
             )
@@ -2661,11 +2706,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       When("idempotent and strict REST profiles update through their framework-owned revision sources")
       val idempotent = subsystem.executeOperationResponse(
         GRequest.of(
-          component = "admin",
+          component = BuiltinComponentIdentity.ADMIN.name,
           service = "entity",
           operation = "update",
           arguments = List(
-            Argument("component", "embedded-notice-board", None),
+            Argument("component", _embedded_notice_board_component_name, None),
             Argument("entity", "notice", None),
             Argument("id", created.id.value, None),
             Argument("title", "idempotent REST update", None),
@@ -2682,11 +2727,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val strict = subsystem.executeOperationResponse(
         GRequest.of(
-          component = "admin",
+          component = BuiltinComponentIdentity.ADMIN.name,
           service = "entity",
           operation = "update",
           arguments = List(
-            Argument("component", "embedded-notice-board", None),
+            Argument("component", _embedded_notice_board_component_name, None),
             Argument("entity", "notice", None),
             Argument("id", created.id.value, None),
             Argument("title", "strict REST update", None),
@@ -2727,11 +2772,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       When("attach uploaded and existing Blob images during admin entity create is exercised")
       val response = _success(subsystem.executeOperationResponse(GRequest.of(
-        component = "admin",
+        component = BuiltinComponentIdentity.ADMIN.name,
         service = "entity",
         operation = "create",
         arguments = List(
-          Argument("component", "notice-board", None),
+          Argument("component", _notice_board_component_name, None),
           Argument("entity", "notice", None),
           Argument("title", "image create", None),
           Argument("author", "dana", None),
@@ -2749,7 +2794,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       stored.getString("imageAttachments.0.role") shouldBe None
       stored.getString("blobId.cover") shouldBe None
 
-      given ExecutionContext = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing")).logic.executionContext()
+      given ExecutionContext = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("Blob component is missing")).logic.executionContext()
       val repository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
       val rows = _success(repository.list(AssociationFilter(
         domain = AssociationDomain.BlobAttachment,
@@ -2796,7 +2841,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Entity record was applied")
       val created = collection.storage.storeRealm.values.find(_.title == "multipart image create").getOrElse(fail("created entity is missing"))
       created.author shouldBe "web"
-      given ExecutionContext = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing")).logic.executionContext()
+      given ExecutionContext = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("Blob component is missing")).logic.executionContext()
       val rows = _success(AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault).list(AssociationFilter(
         domain = AssociationDomain.BlobAttachment,
         sourceEntityId = Some(created.id.value),
@@ -2805,7 +2850,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       rows.map(_.role) shouldBe Vector("primary")
       val uploadedid = EntityId.parse(rows.head.targetEntityId).toOption.getOrElse(fail("uploaded Blob id is invalid"))
       _success(BlobRepository.entityStore().get(uploadedid)).filename shouldBe Some(filename)
-      dispatcher.paths should contain ("/admin/entity/create")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/create")
     }
 
     "compensate admin entity create when image attachment fails" in {
@@ -2823,11 +2868,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       When("compensate admin entity create when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
-        component = "admin",
+        component = BuiltinComponentIdentity.ADMIN.name,
         service = "entity",
         operation = "create",
         arguments = List(
-          Argument("component", "notice-board", None),
+          Argument("component", _notice_board_component_name, None),
           Argument("entity", "notice", None),
           Argument("title", "compensated image create", None),
           Argument("author", "erin", None),
@@ -2841,7 +2886,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Then("the observable contract for compensate admin entity create when image attachment fails holds")
       result shouldBe a[Consequence.Failure[_]]
       collection.storage.storeRealm.values.exists(_.title == "compensated image create") shouldBe false
-      given ExecutionContext = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing")).logic.executionContext()
+      given ExecutionContext = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("Blob component is missing")).logic.executionContext()
       _success(BlobRepository.entityStore().list()).flatMap(_.filename).filter(_ == s"${localid}.png") shouldBe Vector.empty
     }
 
@@ -2860,11 +2905,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       When("keep admin entity update when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
-        component = "admin",
+        component = BuiltinComponentIdentity.ADMIN.name,
         service = "entity",
         operation = "update",
         arguments = List(
-          Argument("component", "notice-board", None),
+          Argument("component", _notice_board_component_name, None),
           Argument("entity", "notice", None),
           Argument("id", recordid.value, None),
           Argument("version", _notice_entity_version(subsystem, recordid.value), None),
@@ -3116,7 +3161,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       created.author shouldBe "carol"
       created.id.value should not be "notice_1"
       created.id.collection shouldBe NoticeEntity.collectionid
-      dispatcher.paths should contain ("/admin/entity/create")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/create")
     }
 
     "pass derived alias admin entity create fields through to the dispatcher" in {
@@ -3139,7 +3184,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the observable contract for pass derived alias admin entity create fields through to the dispatcher holds")
       html should include ("Entity record was applied")
-      dispatcher.paths should contain ("/admin/entity/create")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/create")
       val submitted = dispatcher.forms.lastOption.getOrElse(fail("admin entity create form was not dispatched"))
       submitted.getString("subject") shouldBe Some("Phase 12")
       submitted.getString("body") shouldBe Some("Alias body")
@@ -3176,7 +3221,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("Entity record was applied")
       html should include ("Create submitted")
       html should not include ("Static Operation Result")
-      dispatcher.paths should contain ("/admin/entity/create")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/create")
     }
 
     }
@@ -3823,10 +3868,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("textus_knowledge_editor", Protocol.empty),
         TestComponentFactory.create("textus_user_notification", Protocol.empty)
       ))
-      subsystem.findComponent("textus_knowledge_editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.TextusKnowledgeEditor")).getOrElse(fail("editor component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0", component = Some("textus-knowledge-editor"), archivePath = Some(editorroot.toString))
       )
-      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.TextusUserNotification")).getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(notificationroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -3989,10 +4034,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("textus_user_notification", Protocol.empty),
         TestComponentFactory.create("editor", Protocol.empty)
       ))
-      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.TextusUserNotification")).getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(notificationroot.toString))
       )
-      subsystem.findComponent("editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.Editor")).getOrElse(fail("editor component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "editor", "0.1.0", component = Some("editor"), archivePath = Some(editorroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -4052,7 +4097,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.createDirectories(secondroot.resolve("src").resolve("main").resolve("web"))
       val singlesubsystem = _management_console_fixture_subsystem()
         .add(Vector(TestComponentFactory.create("single_shell", Protocol.empty)))
-      singlesubsystem.findComponent("single_shell").getOrElse(fail("single component missing")).withArtifactMetadata(
+      singlesubsystem.findComponent(ComponentId("org.goldenport.cncf.test.SingleShell")).getOrElse(fail("single component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "single-shell", "0.1.0", archivePath = Some(singleroot.toString))
       )
       val multisubsystem = _management_console_fixture_subsystem()
@@ -4060,10 +4105,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           TestComponentFactory.create("first_shell", Protocol.empty),
           TestComponentFactory.create("second_shell", Protocol.empty)
         ))
-      multisubsystem.findComponent("first_shell").getOrElse(fail("first component missing")).withArtifactMetadata(
+      multisubsystem.findComponent(ComponentId("org.goldenport.cncf.test.FirstShell")).getOrElse(fail("first component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "first-shell", "0.1.0", archivePath = Some(firstroot.toString))
       )
-      multisubsystem.findComponent("second_shell").getOrElse(fail("second component missing")).withArtifactMetadata(
+      multisubsystem.findComponent(ComponentId("org.goldenport.cncf.test.SecondShell")).getOrElse(fail("second component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "second-shell", "0.1.0", archivePath = Some(secondroot.toString))
       )
 
@@ -4099,7 +4144,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         maincomponent,
         origin = org.goldenport.cncf.component.ComponentOrigin.Main
       ).withArtifactMetadata(
-        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0-SNAPSHOT", component = Some("textus-knowledge-editor"), archivePath = Some(mainroot.toString))
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0-SNAPSHOT", component = Some("textus-knowledge-editor"), archivePath = Some(mainroot.toString), componentId = Some(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus_knowledge_editor")))
       )
       _initialize_component_with_id(
         "textus_knowledge_editor",
@@ -4109,9 +4154,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0-SNAPSHOT", component = Some("textus-knowledge-editor"), archivePath = Some(carroot.toString))
       )
-      val subsystem = _management_console_fixture_subsystem(
-        Configuration(Map(RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(mainroot.toString)))
-      ).add(Vector(maincomponent, carcomponent))
+      val subsystem = _management_console_fixture_subsystem().add(Vector(maincomponent, carcomponent))
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
       When("the component Web roots are resolved")
@@ -4183,10 +4226,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("blog_component", Protocol.empty),
         TestComponentFactory.create("textus_user_notification", Protocol.empty)
       ))
-      subsystem.findComponent("blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.BlogComponent")).getOrElse(fail("blog component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "blog-component", "0.1.0", component = Some("blog-component"), archivePath = Some(shellroot.toString))
       )
-      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.TextusUserNotification")).getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -4265,10 +4308,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         TestComponentFactory.create("blog_component", Protocol.empty),
         TestComponentFactory.create("textus_user_notification", Protocol.empty)
       ))
-      subsystem.findComponent("blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.BlogComponent")).getOrElse(fail("blog component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "blog-component", "0.1.0", component = Some("blog-component"), archivePath = Some(shellroot.toString))
       )
-      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.TextusUserNotification")).getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -4327,7 +4370,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
         ))
       ).add(Vector(TestComponentFactory.create("textus_user_notification", Protocol.empty)))
-      subsystem.findComponent("textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+      subsystem.findComponent(ComponentId("org.goldenport.cncf.test.TextusUserNotification")).getOrElse(fail("notification component missing")).withArtifactMetadata(
         org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childroot.toString))
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
@@ -5455,7 +5498,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         updatehtml should include ("Applied</th><td>true")
         _load_data_record(fixture.datastorespace, "audit", "audit_1").getString("action") shouldBe Some("updated")
         _load_data_record(fixture.datastorespace, "audit", "audit_1").getString("actor") shouldBe Some("bob")
-        dispatcher.paths should contain ("/admin/data/update")
+        dispatcher.paths should contain ("/org.goldenport.cncf.Admin/data/update")
 
         val createreq = _post_form_request(
           "/form/notice-board/admin/data/audit/create",
@@ -5470,7 +5513,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         createhtml should include ("Applied</th><td>true")
         _load_data_record(fixture.datastorespace, "audit", "audit_2").getString("action") shouldBe Some("created")
         _load_data_record(fixture.datastorespace, "audit", "audit_2").getString("actor") shouldBe Some("bob")
-        dispatcher.paths should contain ("/admin/data/create")
+        dispatcher.paths should contain ("/org.goldenport.cncf.Admin/data/create")
       }
       }
     }
@@ -5505,7 +5548,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
           Some("/web/notice-board/admin/data/audit/audit_3")
         _load_data_record(fixture.datastorespace, "audit", "audit_3").getString("action") shouldBe Some("created")
-        dispatcher.paths should contain ("/admin/data/create")
+        dispatcher.paths should contain ("/org.goldenport.cncf.Admin/data/create")
       }
       }
     }
@@ -5584,7 +5627,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         html should include ("Descriptor actor help.")
         html should include ("is-invalid")
         html should include ("audit_invalid")
-        dispatcher.paths should not contain ("/admin/data/create")
+        dispatcher.paths should not contain ("/org.goldenport.cncf.Admin/data/create")
       }
       }
     }
@@ -5872,13 +5915,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       When("the foreign canonical ID is submitted to direct Admin reads")
       val viewresponse = viewengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/view/read",
-        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> foreignid)
+        "/org.goldenport.cncf.Admin/view/read",
+        form = Record.data("component" -> _notice_board_component_name, "view" -> "notice-view", "id" -> foreignid)
       ))
       val aggregateresponse = aggregateengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/aggregate/read",
-        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> foreignid)
+        "/org.goldenport.cncf.Admin/aggregate/read",
+        form = Record.data("component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "id" -> foreignid)
       ))
 
       Then("both boundaries reject it before view or aggregate resolution")
@@ -5895,13 +5938,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       When("a canonical local ID is submitted to the direct Admin reads")
       val viewresponse = viewengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/view/read",
-        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> id)
+        "/org.goldenport.cncf.Admin/view/read",
+        form = Record.data("component" -> _notice_board_component_name, "view" -> "notice-view", "id" -> id)
       ))
       val aggregateresponse = aggregateengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/aggregate/read",
-        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> id)
+        "/org.goldenport.cncf.Admin/aggregate/read",
+        form = Record.data("component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "id" -> id)
       ))
 
       Then("neither surface infers a same-base collection from its surface name")
@@ -5918,13 +5961,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       When("a canonical local ID is submitted to the direct Admin reads")
       val viewresponse = viewengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/view/read",
-        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> id)
+        "/org.goldenport.cncf.Admin/view/read",
+        form = Record.data("component" -> _notice_board_component_name, "view" -> "notice-view", "id" -> id)
       ))
       val aggregateresponse = aggregateengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/aggregate/read",
-        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> id)
+        "/org.goldenport.cncf.Admin/aggregate/read",
+        form = Record.data("component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "id" -> id)
       ))
 
       Then("both boundaries expose the ambiguous server configuration rather than choosing a collection")
@@ -6109,16 +6152,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val entitycollection = _notice_fixture_component(entitysubsystem).entitySpace.entity[NoticeEntity]("notice")
       val entityid = entitycollection.storage.storeRealm.values.head.id.value
 
-      val entitylist = entityengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/list", form = Record.data("component" -> "notice-board", "entity" -> "notice")))
+      val entitylist = entityengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/org.goldenport.cncf.Admin/entity/list", form = Record.data("component" -> _notice_board_component_name, "entity" -> "notice")))
       When("execute admin read/list operations for entity data view and aggregate surfaces is exercised")
-      val entityread = entityengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/read", form = Record.data("component" -> "notice-board", "entity" -> "notice", "id" -> entityid)))
+      val entityread = entityengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/org.goldenport.cncf.Admin/entity/read", form = Record.data("component" -> _notice_board_component_name, "entity" -> "notice", "id" -> entityid)))
 
       Then("the observable contract for execute admin read/list operations for entity data view and aggregate surfaces holds")
       entitylist.code shouldBe 200
       entitylist.getString.getOrElse("") should include (entityid)
       entityread.code shouldBe 200
       entityread.getString.getOrElse("") should include ("title=board update")
-      val entitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice")
+      val entitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice")
       entitylistrecord.getString("kind") shouldBe Some("entity.list")
       entitylistrecord.getAny("ids").map(_.toString).getOrElse("") should include (entityid)
       entitylistrecord.getAny("items").map(_.toString).getOrElse("") should include (entityid)
@@ -6128,32 +6171,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       entitylistrecord.getBoolean("hasNext") shouldBe Some(false)
       entitylistrecord.getInt("total") shouldBe None
       entitylistrecord.getBoolean("totalAvailable") shouldBe Some(false)
-      val ignoredtotalentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "includeTotal" -> "true")
+      val ignoredtotalentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice", "includeTotal" -> "true")
       ignoredtotalentitylistrecord.getInt("total") shouldBe None
       ignoredtotalentitylistrecord.getBoolean("totalAvailable") shouldBe Some(false)
-      val totalentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      val totalentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       totalentitylistrecord.getInt("total") shouldBe Some(2)
       totalentitylistrecord.getBoolean("totalAvailable") shouldBe Some(true)
-      val requiredentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "includeTotal" -> "true", "totalCountPolicy" -> "required")
+      val requiredentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice", "includeTotal" -> "true", "totalCountPolicy" -> "required")
       requiredentitylistrecord.getInt("total") shouldBe Some(2)
-      val pagedentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "2", "pageSize" -> "5")
+      val pagedentitylistrecord = _admin_record_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice", "page" -> "2", "pageSize" -> "5")
       pagedentitylistrecord.getInt("page") shouldBe Some(2)
       pagedentitylistrecord.getInt("pageSize") shouldBe Some(5)
-      val firstentitypage = _admin_record_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "pageSize" -> "1")
+      val firstentitypage = _admin_record_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice", "pageSize" -> "1")
       val firstentitypageids = firstentitypage.getAny("ids").map(_.toString).getOrElse("")
       firstentitypageids should not be empty
       firstentitypage.getBoolean("hasNext") shouldBe Some(true)
-      val secondentitypage = _admin_record_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "2", "pageSize" -> "1")
+      val secondentitypage = _admin_record_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice", "page" -> "2", "pageSize" -> "1")
       val secondentitypageids = secondentitypage.getAny("ids").map(_.toString).getOrElse("")
       secondentitypageids should not be empty
       secondentitypageids should not be firstentitypageids
       secondentitypage.getBoolean("hasNext") shouldBe Some(false)
-      val entityreadrecord = _admin_record_response(entitysubsystem, "entity", "read", "component" -> "notice-board", "entity" -> "notice", "id" -> entityid)
+      val entityreadrecord = _admin_record_response(entitysubsystem, "entity", "read", "component" -> _notice_board_component_name, "entity" -> "notice", "id" -> entityid)
       entityreadrecord.getString("kind") shouldBe Some("entity.read")
       entityreadrecord.getString("label") shouldBe Some("board update")
       entityreadrecord.getAny("item").map(_.toString).getOrElse("") should include (entityid)
       entityreadrecord.getString("fields").getOrElse("") should include ("title=board update")
-      _admin_response(entitysubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "0") match {
+      _admin_response(entitysubsystem, "entity", "list", "component" -> _notice_board_component_name, "entity" -> "notice", "page" -> "0") match {
         case Consequence.Failure(_) => succeed
         case other => fail(s"invalid page should fail: ${other}")
       }
@@ -6161,48 +6204,48 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val datafixture = _data_fixture()
       _with_global_runtime(datafixture.runtime) {
         val dataengine = new HttpExecutionEngine(datafixture.subsystem)
-        val datalist = dataengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/data/list", form = Record.data("component" -> "notice-board", "data" -> "audit")))
-        val dataread = dataengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/data/read", form = Record.data("component" -> "notice-board", "data" -> "audit", "id" -> "audit_1")))
+        val datalist = dataengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/org.goldenport.cncf.Admin/data/list", form = Record.data("component" -> _notice_board_component_name, "data" -> "audit")))
+        val dataread = dataengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/org.goldenport.cncf.Admin/data/read", form = Record.data("component" -> _notice_board_component_name, "data" -> "audit", "id" -> "audit_1")))
 
         datalist.code shouldBe 200
         datalist.getString.getOrElse("") should include ("audit_1")
         dataread.code shouldBe 200
         dataread.getString.getOrElse("") should include ("actor=alice")
-        val datalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit")
+        val datalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit")
         datalistrecord.getString("kind") shouldBe Some("data.list")
         datalistrecord.getAny("ids").map(_.toString).getOrElse("") should include ("audit_1")
         datalistrecord.getAny("items").map(_.toString).getOrElse("") should include ("audit_1")
         datalistrecord.getAny("items").map(_.toString).getOrElse("") should include ("created")
         datalistrecord.getInt("total") shouldBe None
-        val totaldatalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+        val totaldatalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
         totaldatalistrecord.getInt("total") shouldBe Some(2)
         totaldatalistrecord.getBoolean("totalAvailable") shouldBe Some(true)
-        val requireddatalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "required")
+        val requireddatalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "required")
         requireddatalistrecord.getInt("total") shouldBe Some(2)
         val unsupporteddatafixture = _data_fixture(TotalCountCapability.Unsupported)
         _with_global_runtime(unsupporteddatafixture.runtime) {
-          val optionalunsupported = _admin_record_response(unsupporteddatafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+          val optionalunsupported = _admin_record_response(unsupporteddatafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
           optionalunsupported.getInt("total") shouldBe None
           optionalunsupported.getBoolean("totalAvailable") shouldBe Some(false)
           optionalunsupported.getString("totalUnavailableReason") shouldBe Some("unsupported")
           optionalunsupported.getAny("warnings").map(_.toString).getOrElse("") should include ("total count is not available for data.audit")
-          _admin_response(unsupporteddatafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
+          _admin_response(unsupporteddatafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
             case Consequence.Failure(_) => succeed
             case other => fail(s"required total on unsupported datastore should fail: ${other}")
           }
         }
-        val datareadrecord = _admin_record_response(datafixture.subsystem, "data", "read", "component" -> "notice-board", "data" -> "audit", "id" -> "audit_1")
+        val datareadrecord = _admin_record_response(datafixture.subsystem, "data", "read", "component" -> _notice_board_component_name, "data" -> "audit", "id" -> "audit_1")
         datareadrecord.getString("kind") shouldBe Some("data.read")
         datareadrecord.getString("label") shouldBe Some("audit_1")
         datareadrecord.getAny("item").map(_.toString).getOrElse("") should include ("audit_1")
         datareadrecord.getString("fields").getOrElse("") should include ("actor=alice")
-        val pageddatalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "page" -> "3", "pageSize" -> "7")
+        val pageddatalistrecord = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit", "page" -> "3", "pageSize" -> "7")
         pageddatalistrecord.getInt("page") shouldBe Some(3)
         pageddatalistrecord.getInt("pageSize") shouldBe Some(7)
-        val firstdatapage = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "pageSize" -> "1")
+        val firstdatapage = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit", "pageSize" -> "1")
         firstdatapage.getAny("ids").map(_.toString).getOrElse("") should include ("audit_1")
         firstdatapage.getBoolean("hasNext") shouldBe Some(true)
-        val seconddatapage = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "page" -> "2", "pageSize" -> "1")
+        val seconddatapage = _admin_record_response(datafixture.subsystem, "data", "list", "component" -> _notice_board_component_name, "data" -> "audit", "page" -> "2", "pageSize" -> "1")
         seconddatapage.getAny("ids").map(_.toString).getOrElse("") should include ("audit_existing")
         seconddatapage.getBoolean("hasNext") shouldBe Some(false)
       }
@@ -6210,17 +6253,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val viewsubsystem = _view_fixture_subsystem()
       val viewengine = new HttpExecutionEngine(viewsubsystem)
       val viewid = _notice_entity_id_from_shortid("notice_2").value
-      val viewread = viewengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/view/read", form = Record.data("component" -> "notice-board", "view" -> "notice-view")))
+      val viewread = viewengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/org.goldenport.cncf.Admin/view/read", form = Record.data("component" -> _notice_board_component_name, "view" -> "notice-view")))
       val invalidviewread = viewengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/view/read",
-        form = Record.data("component" -> "notice-board", "view" -> "notice-view", "id" -> "legacy-view-id")
+        "/org.goldenport.cncf.Admin/view/read",
+        form = Record.data("component" -> _notice_board_component_name, "view" -> "notice-view", "id" -> "legacy-view-id")
       ))
 
       viewread.code shouldBe 200
       invalidviewread.code shouldBe 400
       viewread.getString.getOrElse("") should include ("notice summary")
-      val viewreadrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view")
+      val viewreadrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view")
       viewreadrecord.getString("kind") shouldBe Some("view.read")
       viewreadrecord.getString("fields").getOrElse("") should include ("notice summary")
       viewreadrecord.getAny("values").map(_.toString).getOrElse("") should include ("notice summary")
@@ -6230,30 +6273,30 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       viewreadrecord.getInt("pageSize") shouldBe Some(20)
       viewreadrecord.getBoolean("hasNext") shouldBe Some(false)
       viewreadrecord.getInt("total") shouldBe None
-      val totalviewreadrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      val totalviewreadrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       totalviewreadrecord.getInt("total") shouldBe None
       totalviewreadrecord.getBoolean("totalAvailable") shouldBe Some(false)
       totalviewreadrecord.getString("totalUnavailableReason") shouldBe Some("unsupported")
       totalviewreadrecord.getAny("warnings").map(_.toString).getOrElse("") should include ("total count is not available for view.notice-view")
-      _admin_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
+      _admin_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
         case Consequence.Failure(_) => succeed
         case other => fail(s"required total on view should fail: ${other}")
       }
       val countedviewsubsystem = _view_fixture_subsystem(totalcountcapability = TotalCountCapability.Supported)
-      val countedviewreadrecord = _admin_record_response(countedviewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      val countedviewreadrecord = _admin_record_response(countedviewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       countedviewreadrecord.getInt("total") shouldBe Some(2)
       countedviewreadrecord.getBoolean("totalAvailable") shouldBe Some(true)
-      val pagedviewreadrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "4", "pageSize" -> "9")
+      val pagedviewreadrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "page" -> "4", "pageSize" -> "9")
       pagedviewreadrecord.getInt("page") shouldBe Some(4)
       pagedviewreadrecord.getInt("pageSize") shouldBe Some(9)
-      val firstviewpage = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "pageSize" -> "1")
+      val firstviewpage = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "pageSize" -> "1")
       firstviewpage.getString("fields") shouldBe Some("notice summary")
       firstviewpage.getBoolean("hasNext") shouldBe Some(true)
-      val secondviewpage = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "2", "pageSize" -> "1")
+      val secondviewpage = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "page" -> "2", "pageSize" -> "1")
       secondviewpage.getString("fields") shouldBe Some("notice next")
       secondviewpage.getBoolean("hasNext") shouldBe Some(false)
       val viewblobid = _register_external_blob(viewsubsystem, "view-image.png", "https://example.test/view-image.png")
-      val viewnoblobrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> viewid)
+      val viewnoblobrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "id" -> viewid)
       viewnoblobrecord.getAny("images") shouldBe Some(Vector.empty)
       viewnoblobrecord.getAny("representativeImage") shouldBe Some(None)
       val viewsourceentityid = viewnoblobrecord.getString("sourceEntityId").getOrElse(fail("view sourceEntityId is missing"))
@@ -6264,7 +6307,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("role", "primary", None),
         Property("sortOrder", "1", None)
       )))
-      val viewinstancerecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> viewid)
+      val viewinstancerecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "id" -> viewid)
       viewinstancerecord.getString("kind") shouldBe Some("view.read")
       viewinstancerecord.getString("id") shouldBe Some(viewid)
       viewinstancerecord.getString("label").getOrElse("") should include ("notice detail notice_2")
@@ -6313,17 +6356,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Property("role", "earlyImage", None),
         Property("sortOrder", "1", None)
       )))
-      val aggregateread = aggregateengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/aggregate/read", form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate")))
+      val aggregateread = aggregateengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/org.goldenport.cncf.Admin/aggregate/read", form = Record.data("component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate")))
       val invalidaggregateread = aggregateengine.execute(HttpRequest.fromPath(
         HttpRequest.POST,
-        "/admin/aggregate/read",
-        form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> "legacy-aggregate-id")
+        "/org.goldenport.cncf.Admin/aggregate/read",
+        form = Record.data("component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "id" -> "legacy-aggregate-id")
       ))
 
       aggregateread.code shouldBe 200
       invalidaggregateread.code shouldBe 400
       aggregateread.getString.getOrElse("") should include ("notice aggregate")
-      val aggregatereadrecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate")
+      val aggregatereadrecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate")
       aggregatereadrecord.getString("kind") shouldBe Some("aggregate.read")
       aggregatereadrecord.getString("fields").getOrElse("") should include ("notice aggregate")
       aggregatereadrecord.getAny("values").map(_.toString).getOrElse("") should include ("notice aggregate")
@@ -6332,29 +6375,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       aggregatereadrecord.getAny("items").map(_.toString).getOrElse("") should include (aggregateblobid)
       aggregatereadrecord.getAny("items").map(_.toString).getOrElse("") should include ("heroImage")
       aggregatereadrecord.getInt("total") shouldBe None
-      val totalaggregatereadrecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      val totalaggregatereadrecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       totalaggregatereadrecord.getInt("total") shouldBe None
       totalaggregatereadrecord.getBoolean("totalAvailable") shouldBe Some(false)
       totalaggregatereadrecord.getString("totalUnavailableReason") shouldBe Some("unsupported")
       totalaggregatereadrecord.getAny("warnings").map(_.toString).getOrElse("") should include ("total count is not available for aggregate.notice-aggregate")
-      _admin_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
+      _admin_response(aggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
         case Consequence.Failure(_) => succeed
         case other => fail(s"required total on aggregate should fail: ${other}")
       }
       val countedaggregatesubsystem = _aggregate_fixture_subsystem(totalcountcapability = TotalCountCapability.Supported)
-      val countedaggregatereadrecord = _admin_record_response(countedaggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      val countedaggregatereadrecord = _admin_record_response(countedaggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       countedaggregatereadrecord.getInt("total") shouldBe Some(2)
       countedaggregatereadrecord.getBoolean("totalAvailable") shouldBe Some(true)
-      val pagedaggregatereadrecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "5", "pageSize" -> "11")
+      val pagedaggregatereadrecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "page" -> "5", "pageSize" -> "11")
       pagedaggregatereadrecord.getInt("page") shouldBe Some(5)
       pagedaggregatereadrecord.getInt("pageSize") shouldBe Some(11)
-      val firstaggregatepage = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "pageSize" -> "1")
+      val firstaggregatepage = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "pageSize" -> "1")
       firstaggregatepage.getString("fields").getOrElse("") should include ("notice aggregate")
       firstaggregatepage.getBoolean("hasNext") shouldBe Some(true)
-      val secondaggregatepage = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "2", "pageSize" -> "1")
+      val secondaggregatepage = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "page" -> "2", "pageSize" -> "1")
       secondaggregatepage.getString("fields").getOrElse("") should include ("notice next")
       secondaggregatepage.getBoolean("hasNext") shouldBe Some(false)
-      val aggregateinstancerecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> aggregateid)
+      val aggregateinstancerecord = _admin_record_response(aggregatesubsystem, "aggregate", "read", "component" -> _notice_board_component_name, "aggregate" -> "notice-aggregate", "id" -> aggregateid)
       aggregateinstancerecord.getString("kind") shouldBe Some("aggregate.read")
       aggregateinstancerecord.getString("id") shouldBe Some(aggregateid)
       aggregateinstancerecord.getString("label") shouldBe Some("notice aggregate")
@@ -6416,8 +6459,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       updatehtml should include ("notice-board.notice-aggregate.approve-notice-aggregate")
       updatehtml should include ("result.status")
       RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total should be > before
-      dispatcher.paths should contain ("/notice-board/notice-aggregate/create-notice-aggregate")
-      dispatcher.paths should contain ("/notice-board/notice-aggregate/approve-notice-aggregate")
+      dispatcher.paths should contain ("/org.goldenport.cncf.test.NoticeBoard/notice-aggregate/create-notice-aggregate")
+      dispatcher.paths should contain ("/org.goldenport.cncf.test.NoticeBoard/notice-aggregate/approve-notice-aggregate")
     }
 
     "keep form control and security values out of operation arguments" in {
@@ -6580,7 +6623,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .unsafeRunSync()
 
       Then("the observable contract for await asynchronous command job result through the form job route holds")
-      dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
+      dispatcher.paths.lastOption shouldBe Some("/org.goldenport.cncf.JobControl/job/await_job_result")
       dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some("cncf-job-job-1")
       html should include ("created:notice_1")
       html should include ("result.id")
@@ -6613,7 +6656,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .unsafeRunSync()
 
       Then("the observable contract for preserve componentlet alias when awaiting asynchronous command job result through the form job route holds")
-      dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
+      dispatcher.paths.lastOption shouldBe Some("/org.goldenport.cncf.JobControl/job/await_job_result")
       dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some("cncf-job-job-1")
       html should include ("created:notice_1")
       html should include ("notice_1")
@@ -6670,7 +6713,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("created:notice_1")
       html should not include ("Submitted Values")
       html should not include ("<textus-result-view")
-      dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
+      dispatcher.paths.lastOption shouldBe Some("/org.goldenport.cncf.JobControl/job/await_job_result")
     }
 
     }
@@ -6739,6 +6782,60 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
     }
 
+    "canonicalize only the first WebPath component segment before recording and remote REST dispatch" in {
+      Given("a Web alias request with independent transport fields and a recording remote dispatcher")
+      val subsystem = _form_type_fixture_subsystem()
+      val driver = new RecordingRestDriver
+      val recorder = new RecordingWebOperationDispatcher(
+        WebOperationDispatcher.Rest("http://app.example/base", driver)
+      )
+      val server = HttpRuntimeBindingAdmissionFixture.server(
+        new HttpExecutionEngine(subsystem),
+        operationDispatcherOption = Some(recorder)
+      )
+      val context = HttpContext(
+        Some("https"),
+        Some("web.example"),
+        Some("https://web.example/notice-board/notice/post-secret-notice")
+      )
+      val request = HttpRequest.fromPath(
+        method = HttpRequest.POST,
+        path = "/notice-board/notice/post-secret-notice",
+        query = Record.data("page" -> "1"),
+        header = Record.data("X-Trace-Id" -> "trace-1"),
+        form = Record.data("title" -> "hello world"),
+        body = Some(Bag.text("body payload", StandardCharsets.UTF_8)),
+        context = context
+      )
+
+      When("the Web operation dispatcher crossing is invoked with the presentation path")
+      val response = server._dispatch_operation(
+        "notice-board",
+        "notice",
+        "post-secret-notice",
+        request
+      )
+      val canonical = recorder.requests.lastOption.getOrElse(fail("recorded request is missing"))
+
+      Then("only the first segment becomes the dotted canonical ComponentId and the remote dispatcher receives that path")
+      response.code shouldBe 200
+      canonical.path.asString shouldBe "/org.goldenport.cncf.test.NoticeBoard/notice/post-secret-notice"
+      canonical.method shouldBe request.method
+      canonical.query shouldBe request.query
+      canonical.form shouldBe request.form
+      canonical.header shouldBe request.header
+      canonical.body.map(_.asStringUnsafe()) shouldBe request.body.map(_.asStringUnsafe())
+      canonical.context shouldBe request.context
+      driver.calls should contain (
+        RecordingRestDriver.Call(
+          method = "POST",
+          path = "http://app.example/base/org.goldenport.cncf.test.NoticeBoard/notice/post-secret-notice?page=1",
+          body = Some("body payload"),
+          headers = Map("X-Trace-Id" -> "trace-1")
+        )
+      )
+    }
+
     "resolve a stable Web alias while retaining canonical Form API identity" in {
       Given("a stable admitted Web alias and a canonical component identity")
       val subsystem = _form_type_fixture_subsystem()
@@ -6796,7 +6893,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the observable contract for dispatch Form API POST to the canonical REST operation request holds")
       response.status.code shouldBe 200
-      dispatcher.paths should contain ("/org-goldenport-cncf-test-notice-board/notice/post-secret-notice")
+      dispatcher.paths should contain ("/org.goldenport.cncf.test.NoticeBoard/notice/post-secret-notice")
       dispatcher.forms.last.getString("body") shouldBe Some("hello")
       dispatcher.forms.last.getString("accessToken") shouldBe Some("abc")
       dispatcher.forms.last.getString("crud.origin.href") shouldBe None
@@ -8794,7 +8891,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the observable contract for deny anonymous admin entity create POST in production operation mode before dispatch holds")
       response.status.code shouldBe 403
-      dispatcher.paths should not contain ("/admin/entity/create")
+      dispatcher.paths should not contain ("/org.goldenport.cncf.Admin/entity/create")
     }
 
     "allow component operator admin entity create POST in production operation mode" in {
@@ -8837,7 +8934,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the observable contract for allow component operator admin entity create POST in production operation mode holds")
       response.status.code shouldBe 200
-      dispatcher.paths should contain ("/admin/entity/create")
+      dispatcher.paths should contain ("/org.goldenport.cncf.Admin/entity/create")
     }
 
     "serve admin entity form definition API from generated companion schema" in {
@@ -14139,7 +14236,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     subsystem: Subsystem,
     summary: AuthComponent.SessionSummary
   ): Unit =
-    subsystem.findComponent(AuthComponent.name).foreach { component =>
+    subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.AUTH).foreach { component =>
       component.withPort(Component.Port.of(new AuthComponent.AuthService {
         def login(
           request: AuthenticationRequest
@@ -14165,7 +14262,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     subsystem: Subsystem,
     summary: AuthComponent.SessionSummary
   ): Unit =
-    subsystem.findComponent(AuthComponent.name).foreach { component =>
+    subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.AUTH).foreach { component =>
       component.withPort(Component.Port.of(new AuthComponent.AuthService {
         def login(
           request: AuthenticationRequest
@@ -14384,7 +14481,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     args: (String, String)*
   ): Record = {
     val request = GRequest.of(
-      component = "tag",
+      component = BuiltinComponentIdentity.TAG.name,
       service = "tag",
       operation = operation,
       arguments = args.map { case (key, value) => Argument(key, value) }.toList
@@ -14411,7 +14508,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     args: (String, String)*
   ): Consequence[OperationResponse] = {
     val request = GRequest.of(
-      component = "admin",
+      component = BuiltinComponentIdentity.ADMIN.name,
       service = service,
       operation = operation,
       arguments = args.map { case (key, value) => Argument(key, value) }.toList
@@ -14696,7 +14793,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     configuration: Configuration = Configuration.empty
   ): Subsystem = {
     val subsystem = _aggregate_http_fixture_subsystem(configuration)
-    subsystem.findComponent("notice_board").foreach { component =>
+    subsystem.findComponent(ComponentId("org.goldenport.cncf.test.NoticeBoard")).foreach { component =>
       val componentlets = Vector(
         ComponentletDescriptor(
           name = "notice-admin",
@@ -14895,7 +14992,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       resolvedconfiguration
     ).add(Vector(component))
     given ExecutionContext =
-      subsystem.findComponent("admin")
+      subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
         .getOrElse(fail("admin component is missing"))
         .logic.executionContext()
     EntityRevisionSpecSupport.registerRevisionBinding(
@@ -15117,7 +15214,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private def _notice_fixture_component(
     subsystem: Subsystem
   ): Component =
-    subsystem.findComponent("notice_board").getOrElse(fail("notice fixture component is missing"))
+    subsystem.findComponent(ComponentId("org.goldenport.cncf.test.NoticeBoard")).getOrElse(fail("notice fixture component is missing"))
 
   private def _schema(names: String*): Schema =
     Schema(names.toVector.map { name =>
@@ -15284,7 +15381,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     properties: List[Property]
   ): GRequest =
     GRequest.of(
-      component = "blob",
+      component = BuiltinComponentIdentity.BLOB.name,
       service = "blob",
       operation = operation,
       arguments = arguments,
@@ -15318,7 +15415,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     filename: String,
     url: String
   ): String = {
-    val component = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing"))
+    val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("Blob component is missing"))
     given ExecutionContext = component.logic.executionContext()
     val id = EntityId(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId)
     val created = _success(BlobRepository.entityStore().create(
@@ -15532,6 +15629,7 @@ private final case class InspectingAggregateActionCall(
 private final class RecordingWebOperationDispatcher(
   delegate: WebOperationDispatcher
 ) extends WebOperationDispatcher {
+  private val _requests = ListBuffer.empty[HttpRequest]
   private val _paths = ListBuffer.empty[String]
   private val _forms = ListBuffer.empty[Record]
   private val _headers = ListBuffer.empty[Record]
@@ -15540,6 +15638,10 @@ private final class RecordingWebOperationDispatcher(
 
   def paths: Vector[String] = _paths.synchronized {
     _paths.toVector
+  }
+
+  def requests: Vector[HttpRequest] = _requests.synchronized {
+    _requests.toVector
   }
 
   def forms: Vector[Record] = _forms.synchronized {
@@ -15551,6 +15653,9 @@ private final class RecordingWebOperationDispatcher(
   }
 
   def dispatch(request: HttpRequest): HttpResponse = {
+    _requests.synchronized {
+      _requests += request
+    }
     _paths.synchronized {
       _paths += request.path.asString
     }

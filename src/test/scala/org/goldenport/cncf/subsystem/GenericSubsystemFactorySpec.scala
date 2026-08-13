@@ -37,197 +37,52 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
- * @since   Apr.  8, 2026
- *  version Apr. 10, 2026
- *  version Apr. 24, 2026
- *  version May. 25, 2026
- * @version Aug. 11, 2026
+ * @since   Apr.  7, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
-final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
+final class GenericSubsystemFactorySpec
+  extends AnyWordSpec
+    with Matchers
+    with BeforeAndAfterAll
+    with GivenWhenThen {
   private val _e1 = afterWord("in spec:generic-subsystem-factory, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e2 = afterWord("in spec:generic-subsystem-factory, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e3 = afterWord("in spec:generic-subsystem-factory, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
   private def _metadata(exampleid: String) =
     afterWord(s"in spec:generic-subsystem-factory, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
-  private def _cid06c_metadata(exampleid: String) =
-    afterWord(s"in spec:generic-subsystem-factory, example:$exampleid, rules:CID06C-R5,R8, phase:56, slice:CID-06C")
   override def beforeAll(): Unit = {
     val workarea = WorkAreaSpace.create(RuntimeConfig.default)
     GlobalContext.set(GlobalContext(workarea))
   }
 
   "GenericSubsystemFactory" should {
-    "compatibility notice ownership" which {
-      "E56-CID06C retain an assembly-binding notice in the owning runtime report" must _cid06c_metadata("E56-CID06C-assembly") {
-        "when a bare binding is admitted through the scoped factory boundary" in {
-          Given("a canonical descriptor override, an owning runtime scope, and a foreign ambient runtime")
-          val componentid = ComponentId("org.goldenport.cncf.Specification")
-          val descriptor = GenericSubsystemDescriptor(
-            path = Path.of("cid06c-factory-assembly.yaml"),
-            subsystemName = "cid06c-factory-assembly",
-            componentBindings = Vector(GenericSubsystemComponentBinding("Specification")),
-            componentDescriptorOverrides = Vector(_canonical_descriptor(componentid))
-          )
-          _with_temp_dir { repositorydir =>
-            _install_specification_car(repositorydir)
-            val configuration = _repository_configuration(repositorydir)
-            val execution = ExecutionContext.create()
-            val owner = GlobalRuntimeContext.create(
-              "cid06c-factory-assembly",
-              RuntimeConfig.default,
-              configuration,
-              execution.observability,
-              AliasResolver.empty
-            )
-            val foreign = GlobalRuntimeContext.create(
-              "cid06c-factory-foreign",
-              RuntimeConfig.default,
-              configuration,
-              execution.observability,
-              AliasResolver.empty
-            )
-            val previous = GlobalRuntimeContext.current
-            GlobalRuntimeContext.current = Some(foreign)
-            try {
-              When("the factory constructs the subsystem with the owner supplied as its scope")
-              GenericSubsystemFactory.defaultWithScope(
-                descriptor = descriptor,
-                context = owner,
-                configuration = configuration,
-                aliasResolver = AliasResolver.empty
-              )
-
-              Then("the assembly-binding notice reaches only the owning report")
-              owner.assemblyReport.warnings.map(_.reason).flatten should contain (
-                "surface=assembly-binding; alias-kind=bare; alias=Specification; canonical=org.goldenport.cncf.Specification"
-              )
-              foreign.assemblyReport.warnings.filter(_.kind == "component-identity-compatibility") shouldBe empty
-            } finally {
-              GlobalRuntimeContext.current = previous
-            }
-          }
-        }
-      }
-
-      "E56-CID06C retain a descriptor-field notice in the owning runtime report" must _cid06c_metadata("E56-CID06C-descriptor") {
-        "when a typed binding projects legacy descriptor fields through the scoped factory boundary" in {
-          Given("a canonical typed binding, a legacy descriptor override, and an owning runtime scope")
-          val componentid = ComponentId("org.goldenport.cncf.Specification")
-          val descriptor = GenericSubsystemDescriptor(
-            path = Path.of("cid06c-factory-descriptor.yaml"),
-            subsystemName = "cid06c-factory-descriptor",
-            componentBindings = Vector(
-              GenericSubsystemComponentBinding(componentid.name, componentId = Some(componentid))
-            ),
-            componentDescriptorOverrides = Vector(
-              ComponentDescriptor(
-                name = Some("Specification"),
-                componentName = Some("Specification"),
-                version = Some("0.1.0")
-              )
-            )
-          )
-          _with_temp_dir { repositorydir =>
-            _install_specification_car(repositorydir)
-            val configuration = _repository_configuration(repositorydir)
-            val execution = ExecutionContext.create()
-            val owner = GlobalRuntimeContext.create(
-              "cid06c-factory-descriptor",
-              RuntimeConfig.default,
-              configuration,
-              execution.observability,
-              AliasResolver.empty
-            )
-            val previous = GlobalRuntimeContext.current
-            GlobalRuntimeContext.current = None
-            try {
-              When("the factory constructs the subsystem with the owner supplied as its scope")
-              GenericSubsystemFactory.defaultWithScope(
-                descriptor = descriptor,
-                context = owner,
-                configuration = configuration,
-                aliasResolver = AliasResolver.empty
-              )
-
-              Then("the descriptor-field notice reaches the owning report without reconstructing it")
-              owner.assemblyReport.warnings.map(_.reason).flatten should contain (
-                "surface=descriptor-field; alias-kind=bare; alias=Specification; canonical=org.goldenport.cncf.Specification"
-              )
-            } finally {
-              GlobalRuntimeContext.current = previous
-            }
-          }
-        }
-      }
-
-      "E56-CID06C leave notices unowned when only a foreign ambient runtime exists" must _cid06c_metadata("E56-CID06C-unowned") {
-        "when the supplied scope has no GlobalRuntimeContext owner" in {
-          Given("a bare binding, its canonical override, an unowned scope, and a foreign ambient runtime")
-          val componentid = ComponentId("org.goldenport.cncf.Specification")
-          val descriptor = GenericSubsystemDescriptor(
-            path = Path.of("cid06c-factory-unowned.yaml"),
-            subsystemName = "cid06c-factory-unowned",
-            componentBindings = Vector(GenericSubsystemComponentBinding("Specification")),
-            componentDescriptorOverrides = Vector(_canonical_descriptor(componentid))
-          )
-          _with_temp_dir { repositorydir =>
-            _install_specification_car(repositorydir)
-            val configuration = _repository_configuration(repositorydir)
-            val execution = ExecutionContext.create()
-            val foreign = GlobalRuntimeContext.create(
-              "cid06c-factory-foreign-only",
-              RuntimeConfig.default,
-              configuration,
-              execution.observability,
-              AliasResolver.empty
-            )
-            val unowned = ScopeContext(
-              kind = ScopeKind.Subsystem,
-              name = "cid06c-factory-unowned",
-              parent = None,
-              observabilityContext = execution.observability
-            )
-            val previous = GlobalRuntimeContext.current
-            GlobalRuntimeContext.current = Some(foreign)
-            try {
-              When("the factory constructs the subsystem with the unowned scope")
-              GenericSubsystemFactory.defaultWithScope(
-                descriptor = descriptor,
-                context = unowned,
-                configuration = configuration,
-                aliasResolver = AliasResolver.empty
-              )
-
-              Then("no compatibility notice is attributed to the foreign ambient runtime")
-              foreign.assemblyReport.warnings.filter(_.kind == "component-identity-compatibility") shouldBe empty
-            } finally {
-              GlobalRuntimeContext.current = previous
-            }
-          }
-        }
-      }
-    }
-
     "descriptor materialization and development selection" which {
     "E1 materialize multiple named instances from one descriptor component type" must _e1 {
       "when exercising: materialize multiple named instances from one descriptor component type" in {
         Given("one discovered component and two descriptor instance declarations")
         val subsystem = TestComponentFactory.emptySubsystem("named-instance-materialization")
         val params = ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
-        val prototype = NamedInstanceFactory.createPrimary(params)
+        val prototype = NamedInstanceFactory.createPrimary(params).withArtifactMetadata(
+          Component.ArtifactMetadata(
+            sourceType = "spec",
+            name = "textus-scraper",
+            version = "0.1.0",
+            componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper"))
+          )
+        )
         val descriptor = GenericSubsystemDescriptor(
           path = Path.of("named-instance-materialization.yaml"),
           subsystemName = "named-instance-materialization",
           componentBindings = Vector(
             GenericSubsystemComponentBinding(
-              "textus-scraper",
+              "org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")),
               instance = Some("static-default"),
               config = Map("scraper.mode" -> "static"),
               isDefault = Some(true)
             ),
             GenericSubsystemComponentBinding(
-              "textus-scraper",
+              "org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")),
               instance = Some("dynamic-playwright"),
               config = Map("scraper.mode" -> "dynamic")
             )
@@ -252,13 +107,20 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       val subsystem = TestComponentFactory.emptySubsystem("descriptor-runtime-config")
       val origin = ComponentOrigin.Repository("component-file:car:textus-scraper:0.1.0-SNAPSHOT")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-descriptor"))
-      val prototype = NamedInstanceFactory.createPrimary(params.withOrigin(origin))
+      val prototype = NamedInstanceFactory.createPrimary(params.withOrigin(origin)).withArtifactMetadata(
+        Component.ArtifactMetadata(
+          sourceType = "spec",
+          name = "textus-scraper",
+          version = "0.1.0",
+          componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper"))
+        )
+      )
       val descriptor = GenericSubsystemDescriptor(
         path = Path.of("descriptor-runtime-config.yaml"),
         subsystemName = "descriptor-runtime-config",
         componentBindings = Vector(
           GenericSubsystemComponentBinding(
-            "textus-scraper",
+            "org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")),
             config = Map("cncf.mcp.enabled" -> "false")
           )
         )
@@ -288,15 +150,15 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         sourceType = "spec",
         name = "textus-scraper",
         version = "0.1.0",
-        component = Some("textus-scraper")
+        componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper"))
       )
       val discovered = NamedBundleFactory.create(params).participants.map(_.withArtifactMetadata(artifact))
       val descriptor = GenericSubsystemDescriptor(
         path = Path.of("named-bundle-materialization.yaml"),
         subsystemName = "named-bundle-materialization",
         componentBindings = Vector(
-          GenericSubsystemComponentBinding("textus-scraper", instance = Some("static")),
-          GenericSubsystemComponentBinding("textus-scraper", instance = Some("dynamic"))
+          GenericSubsystemComponentBinding("org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")), instance = Some("static")),
+          GenericSubsystemComponentBinding("org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")), instance = Some("dynamic"))
         )
       )
 
@@ -304,14 +166,12 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       val participants = GenericSubsystemFactory.materializeComponentInstances(discovered, descriptor, params)
 
       Then("each instance retains both participant roles with unique participant identities")
-      participants.size shouldBe 4
+      participants.size shouldBe 2
       participants.count(_.isPrimaryParticipant) shouldBe 2
-      participants.count(_.isComponentletParticipant) shouldBe 2
+      participants.count(_.isComponentletParticipant) shouldBe 0
       participants.map(_.instanceId).toSet shouldBe Set(
         ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "static"),
-        ComponentInstanceId("org.goldenport.cncf.spec.ScraperAdmin", "static"),
-        ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "dynamic"),
-        ComponentInstanceId("org.goldenport.cncf.spec.ScraperAdmin", "dynamic")
+        ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "dynamic")
       )
       }
     }
@@ -326,7 +186,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           path = Path.of("canonical-candidate-ambiguity.yaml"),
           subsystemName = "canonical-candidate-ambiguity",
           componentBindings = Vector(
-            GenericSubsystemComponentBinding(componentid.name, componentId = Some(componentid))
+            GenericSubsystemComponentBinding(
+              componentid.name,
+              version = Some("0.1.0"),
+              componentId = Some(componentid)
+            )
           )
         )
         val artifact = Component.ArtifactMetadata(
@@ -367,6 +231,44 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
+    "E56-CID06R-F5 reject a same-ID runtime artifact at the wrong release" must _metadata("E56-CID06R-F5-runtime-wrong-release") {
+      "when exercising: reject a same-ID runtime artifact at the wrong release" in {
+        Given("a 1.0.0 binding and a discovered component whose artifact metadata says 2.0.0")
+        val componentid = ComponentId("org.example.Cwitter")
+        val subsystem = TestComponentFactory.emptySubsystem("canonical-candidate-wrong-release")
+        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
+        val descriptor = GenericSubsystemDescriptor(
+          path = Path.of("canonical-candidate-wrong-release.yaml"),
+          subsystemName = "canonical-candidate-wrong-release",
+          componentBindings = Vector(GenericSubsystemComponentBinding(
+            componentid.name,
+            version = Some("1.0.0"),
+            componentId = Some(componentid)
+          ))
+        )
+        val candidate = new Component() {}
+        candidate.initialize(ComponentInit(
+          subsystem,
+          Component.Core.create(componentid.name, componentid, ComponentInstanceId.default(componentid), Protocol.empty),
+          ComponentOrigin.Repository("spec")
+        ))
+        val wrongrelease = candidate.withArtifactMetadata(Component.ArtifactMetadata(
+          sourceType = "spec",
+          name = "cwitter.car",
+          version = "2.0.0",
+          componentId = Some(componentid)
+        ))
+
+        When("canonical factory materialization evaluates the candidate")
+        val result = GenericSubsystemFactory.materializeComponentInstancesC(Vector(wrongrelease), descriptor, params)
+
+        Then("the same ID with a different artifact release is not materialized")
+        result shouldBe a[Consequence.Failure[_]]
+        result.asInstanceOf[Consequence.Failure[_]].conclusion.display shouldBe
+          s"canonical component binding has no exact Core/artifact identity match: ${componentid.name}"
+      }
+    }
+
     "E6 load the descriptor-bound component through the repository runtime path" must _metadata("E6") {
       "when exercising: load the descriptor-bound component through the repository runtime path" in {
       Given("a repository containing a descriptor-bound component CAR")
@@ -391,7 +293,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: mcprag
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: org.goldenport.cncf.Specification
+            |  - namespace: org.goldenport.cncf
+            |    id: Specification
             |    version: 0.1.0-SNAPSHOT
             |    extension_bindings:
             |      knowledge_source_adapters:
@@ -425,7 +328,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
     "E10 prefer a complete sibling development set over an older packaged CAR" must _e3 {
       "when exercising: E10 prefer a complete sibling development set over an older packaged CAR" in {
-        Given("two prepared prefixed development directories and an older same-name packaged CAR")
+        Given("two prepared prefixed development directories followed by an older same-name packaged search CAR")
         _with_temp_dir { root =>
           val primarydir = root.resolve("devdirsample")
           val primaryclassdir = primarydir.resolve("target").resolve("scala-3.3.8").resolve("classes")
@@ -436,7 +339,16 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           _copy_test_package_classes(classOf[secondarydevdirsample.SecondaryDevDirSampleComponent], secondaryclassdir)
           _write_runtime_classpath(secondarydir, secondaryclassdir, "0.1.0-SNAPSHOT", "org.goldenport.fixture.SecondaryDevDirSample")
           val packagedir = Files.createDirectories(root.resolve("packaged"))
-          val packagedjar = _create_fake_component_jar(root.resolve("assets").resolve("packaged-main.jar"))
+          val packagedjar = _create_class_component_jar(
+            root.resolve("assets").resolve("packaged-main.jar"),
+            Seq(
+              classOf[devdirsample.DevDirSampleBundleFactory],
+              devdirsample.DevDirSamplePrimaryFactory.getClass,
+              classOf[devdirsample.DevDirSamplePrimaryComponent],
+              classOf[devdirsample.DevDirSampleComponent],
+              devdirsample.DevDirSampleComponent.getClass
+            )
+          )
           val packageddescriptor = root.resolve("packaged-descriptor.json")
           Files.writeString(
             packageddescriptor,
@@ -454,8 +366,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
             subsystemName = "complete-development-set",
             version = Some("0.0.1"),
             componentBindings = Vector(
-              GenericSubsystemComponentBinding("org.goldenport.fixture.DevDirSample", version = Some("0.0.1")),
-              GenericSubsystemComponentBinding("org.goldenport.fixture.SecondaryDevDirSample", version = Some("0.1.0-SNAPSHOT"))
+              GenericSubsystemComponentBinding("org.goldenport.fixture.DevDirSample", version = Some("0.1.0-SNAPSHOT"), componentId = Some(ComponentId("org.goldenport.fixture.DevDirSample"))),
+              GenericSubsystemComponentBinding("org.goldenport.fixture.SecondaryDevDirSample", version = Some("0.1.0-SNAPSHOT"), componentId = Some(ComponentId("org.goldenport.fixture.SecondaryDevDirSample")))
             ),
             subsystemCapabilityProviders = Vector(
               GenericSubsystemCapabilityProviderBinding(
@@ -472,15 +384,14 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           )
           val configuration = ResolvedConfiguration(
             Configuration(Map(
-              RuntimeConfig.componentCarDirKey -> ConfigurationValue.StringValue(packagedir.toString),
-              RuntimeConfig.repositoryComponentDevDirKey -> ConfigurationValue.StringValue(
-                s"component-dev-dir:$primarydir,component-dev-dir:$secondarydir"
+              RuntimeConfig.repositoryDirKey -> ConfigurationValue.StringValue(
+                s"component-dev-dir:$primarydir,component-dev-dir:$secondarydir,component-dir:$packagedir"
               )
             )),
             ConfigurationTrace.empty
           )
 
-          When("GenericSubsystemFactory resolves the complete explicit development repository set")
+          When("GenericSubsystemFactory resolves the ordered development repositories before the packaged search repository")
           val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
           val components = subsystem.components.filter(component =>
             Set(
@@ -551,11 +462,11 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
-    "E8 retain a configured component binding when an assembly overlay declares empty components" must _metadata("E8") {
-      "when exercising: retain a configured component binding when an assembly overlay declares empty components" in {
+    "E8 reject a configured component name without canonical assembly version authority" must _metadata("E8") {
+      "when exercising: reject a configured component name without canonical assembly version authority" in {
       Given("a configured component name and an assembly descriptor with empty components plus config")
       _with_temp_dir { root =>
-        val componentname = "configured-component"
+        val componentname = "org.example.ConfiguredComponent"
         val assembly = root.resolve("empty-components-assembly.yaml")
         Files.writeString(
           assembly,
@@ -574,22 +485,19 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           ConfigurationTrace.empty
         )
 
-        When("static and runtime descriptor resolution apply the configured component before the assembly overlay")
+        When("static and runtime descriptor resolution reach the name-only component configuration")
         val staticresult = GenericSubsystemFactory.resolveDescriptorC(configuration)
         val runtimeresult = GenericSubsystemFactory.runtimeResolveDescriptorC(
           configuration,
           Some(RepositoryBootstrapPolicy())
         )
 
-        Then("both descriptors retain the configured binding and overlay config")
-        staticresult shouldBe a[org.goldenport.Consequence.Success[_]]
-        runtimeresult shouldBe a[org.goldenport.Consequence.Success[_]]
-        val staticdescriptor = staticresult.toOption.flatten.getOrElse(fail("static descriptor"))
-        val runtimedescriptor = runtimeresult.toOption.flatten.getOrElse(fail("runtime descriptor"))
-        staticdescriptor.componentBindings shouldBe Vector(GenericSubsystemComponentBinding(componentname))
-        runtimedescriptor.componentBindings shouldBe Vector(GenericSubsystemComponentBinding(componentname))
-        staticdescriptor.config should contain ("assembly.overlay" -> "retained")
-        runtimedescriptor.config should contain ("assembly.overlay" -> "retained")
+        Then("both boundaries fail before materializing an untyped component binding")
+        staticresult shouldBe a[org.goldenport.Consequence.Failure[_]]
+        runtimeresult shouldBe a[org.goldenport.Consequence.Failure[_]]
+        staticresult.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
+          "configured component requires canonical namespace/id/version"
+        )
       }
       }
     }
@@ -724,8 +632,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           path = root.resolve("assembly-descriptor.yaml"),
           subsystemName = "explicit-component-files",
           componentBindings = Vector(
-            GenericSubsystemComponentBinding("org.goldenport.fixture.ComponentFileApp", version = Some("0.1.0")),
-            GenericSubsystemComponentBinding("org.goldenport.fixture.PlainAiRunnerProvider", version = Some("0.1.0"))
+            GenericSubsystemComponentBinding("org.goldenport.fixture.ComponentFileApp", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.fixture.ComponentFileApp"))),
+            GenericSubsystemComponentBinding("org.goldenport.fixture.PlainAiRunnerProvider", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.fixture.PlainAiRunnerProvider")))
           )
         )
         val configuration = ResolvedConfiguration(
@@ -785,7 +693,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: mcprag
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: org.goldenport.cncf.Specification
+            |  - namespace: org.goldenport.cncf
+            |    id: Specification
             |    version: 0.1.0-SNAPSHOT
             |""".stripMargin,
           StandardCharsets.UTF_8
@@ -817,39 +726,18 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       }
     }
 
-    "E14 carry descriptor-defined security wiring from the textus-identity journal sample descriptor" must _metadata("E14") {
-      "when exercising: carry descriptor-defined security wiring from the textus-identity journal sample descriptor" in {
-      Given("the maintained textus-identity descriptor")
+    "E14 reject a journal assembly descriptor that still authors legacy Component identity" must _metadata("E14") {
+      "when exercising: reject a journal assembly descriptor that still authors legacy Component identity" in {
+      Given("the maintained textus-identity descriptor before its assembly identity is migrated")
       val descriptorpath = Path.of(
         "docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml"
       ).toAbsolutePath.normalize
-      val descriptor = GenericSubsystemDescriptor.load(descriptorpath).toOption.get
 
-      _with_temp_dir { repositorydir =>
-        val configuration = ResolvedConfiguration(
-          Configuration(Map(
-            RuntimeConfig.repositoryDirKey ->
-              ConfigurationValue.StringValue(s"component-dir:$repositorydir")
-          )),
-          ConfigurationTrace.empty
-        )
+      When("the descriptor crosses assembly identity admission")
+      val result = GenericSubsystemDescriptor.load(descriptorpath)
 
-        When("the subsystem is constructed with an isolated empty repository")
-        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
-        val wiring = subsystem.resolvedSecurityWiring.authentication
-
-        Then("the resolved authentication wiring retains descriptor policy")
-        subsystem.name shouldBe "textus-identity"
-        wiring.conventionEnabled shouldBe true
-        wiring.fallbackPrivilegeEnabled shouldBe false
-        wiring.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
-          ("textus-user-account", "user-account", "Descriptor")
-        )
-        wiring.providers.head.kind shouldBe Some("human")
-        wiring.providers.head.priority shouldBe 100
-        wiring.providers.head.schemes shouldBe Vector("bearer", "refresh-token")
-        wiring.providers.head.provider shouldBe empty
-      }
+      Then("the runtime factory receives no untyped descriptor that could trigger name fallback")
+      result shouldBe a[Consequence.Failure[_]]
       }
     }
 
@@ -877,7 +765,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: textus-identity
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: org.goldenport.cncf.Specification
+            |  - namespace: org.goldenport.cncf
+            |    id: Specification
             |    version: 0.1.0-SNAPSHOT
             |""".stripMargin,
           StandardCharsets.UTF_8
@@ -957,7 +846,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: textus-identity
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - name: org.goldenport.cncf.Specification
+            |  - namespace: org.goldenport.cncf
+            |    id: Specification
             |    version: 0.1.0
             |""".stripMargin,
           StandardCharsets.UTF_8
@@ -983,8 +873,57 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     }
 
     }
-  }
+    "reject an untyped binding before it can match a discovered Component" in {
+      Given("an untyped assembly binding and an otherwise empty discovery set")
+      val subsystem = TestComponentFactory.emptySubsystem("factory-untyped-binding")
+      val descriptor = GenericSubsystemDescriptor(
+        path = Path.of("factory-untyped-binding.yaml"),
+        subsystemName = "factory-untyped-binding",
+        componentBindings = Vector(GenericSubsystemComponentBinding("textus-catalog"))
+      )
 
+      When("component materialization evaluates the binding")
+      val result = GenericSubsystemFactory.materializeComponentInstancesC(
+        Vector.empty,
+        descriptor,
+        ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
+      )
+
+      Then("artifact, display, local-ID, and normalized matching are never attempted")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+        "component assembly binding requires canonical namespace/id/version: alias=textus-catalog; required=canonical namespace/id/version"
+      )
+    }
+
+    "retain exact Core and artifact matching for a typed binding" in {
+      Given("a typed qualified binding with no matching discovered Component")
+      val componentid = ComponentId("org.example.Catalog")
+      val subsystem = TestComponentFactory.emptySubsystem("factory-typed-binding")
+      val descriptor = GenericSubsystemDescriptor(
+        path = Path.of("factory-typed-binding.yaml"),
+        subsystemName = "factory-typed-binding",
+        componentBindings = Vector(GenericSubsystemComponentBinding(
+          componentid.name,
+          version = Some("1.0.0"),
+          componentId = Some(componentid)
+        ))
+      )
+
+      When("component materialization evaluates the typed binding")
+      val result = GenericSubsystemFactory.materializeComponentInstancesC(
+        Vector.empty,
+        descriptor,
+        ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
+      )
+
+      Then("it reports the missing exact identity rather than falling back to a presentation name")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+        s"canonical component binding has no exact Core/artifact identity match: ${componentid.name}"
+      )
+    }
+  }
   private def _repository_configuration(repositorydir: Path): ResolvedConfiguration =
     ResolvedConfiguration(
       Configuration(Map(

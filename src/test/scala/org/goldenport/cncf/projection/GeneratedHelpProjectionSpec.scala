@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 28, 2026
  *  version Apr.  6, 2026
  *  version May. 31, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedHelpProjectionSpec
@@ -142,7 +142,7 @@ final class GeneratedHelpProjectionSpec
       "when exercising: project builtin Tag component operation help" in {
         Given("the builtin Tag component is installed in a default subsystem")
         SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-          val component = subsystem.findComponent(TagComponent.name).getOrElse(fail("Tag component is missing"))
+          val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TAG).getOrElse(fail("Tag component is missing"))
 
           When("projecting component, service, and operation help")
           val componenthelp = HelpProjection.projectModel(component, Some("tag"))

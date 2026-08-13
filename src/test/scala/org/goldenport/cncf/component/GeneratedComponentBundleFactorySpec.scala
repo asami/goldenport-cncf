@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 22, 2026
  *  version May. 15, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedComponentBundleFactorySpec
@@ -99,8 +99,8 @@ final class GeneratedComponentBundleFactorySpec
       }
     }
 
-    "E3 keep named instances in component space and select the declared default by name" must _e3 {
-      "when exercising: keep named instances in component space and select the declared default by name" in {
+    "E3 keep named instances in component space and select the declared default by exact identity" must _e3 {
+      "when exercising: keep named instances in component space and select the declared default by exact identity" in {
       Given("two instances created from one component factory")
       val subsystem = TestComponentFactory.admittedEmptySubsystem("generated-bundle")
       val static = GeneratedBundleFactory.PrimaryFactory.createPrimary(
@@ -124,12 +124,13 @@ final class GeneratedComponentBundleFactorySpec
       When("both instances are added to component space")
       val space = ComponentSpace().add(Vector(dynamic, static))
 
-      Then("exact labels preserve both while name lookup resolves the declared default")
+      Then("exact labels preserve both while only the qualified identity resolves the declared default")
       space.components.size shouldBe 2
       space.findInstance(ComponentInstanceId(_domain_component_id, "static")) shouldBe Some(static)
       space.findInstance(ComponentInstanceId(_domain_component_id, "dynamic-playwright")) shouldBe Some(dynamic)
       space.findInstance(ComponentInstanceId(_domain_component_id, "dynamic_playwright")) shouldBe None
-      space.find(ComponentLocator.NameLocator("domain")) shouldBe Some(static)
+      space.find(ComponentLocator.NameLocator("domain")) shouldBe None
+      space.find(ComponentLocator.NameLocator(_domain_component_id.name)) shouldBe Some(static)
       }
     }
 

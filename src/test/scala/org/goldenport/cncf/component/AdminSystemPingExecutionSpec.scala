@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 11, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -44,7 +44,7 @@ final class AdminSystemPingExecutionSpec
         (aliasResolver, context) =>
           val versionedping = context.formatPing
           val subsystem = DefaultSubsystemFactory.default(Some("command"))
-          val admincomponent = subsystem.findComponent("admin")
+          val admincomponent = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
             .getOrElse(fail("admin component not found"))
           val resolver = subsystem.resolver
 
@@ -71,7 +71,7 @@ final class AdminSystemPingExecutionSpec
       _with_alias_context(RunMode.Command, _alias_config("status" -> "admin.system.status")) {
         (aliasResolver, context) =>
           val subsystem = DefaultSubsystemFactory.default(Some("command"))
-          val admincomponent = subsystem.findComponent("admin")
+          val admincomponent = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
             .getOrElse(fail("admin component not found"))
           val resolver = subsystem.resolver
 
@@ -100,7 +100,7 @@ final class AdminSystemPingExecutionSpec
       _with_alias_context(RunMode.Command, Configuration.empty) { (_, _) =>
         ObservabilityEngine.clearExecutionHistory()
         val subsystem = DefaultSubsystemFactory.default(Some("command"))
-        val admincomponent = subsystem.findComponent("admin")
+        val admincomponent = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
           .getOrElse(fail("admin component not found"))
         val resolver = subsystem.resolver
         val pingrequest = _build_request(resolver, "admin.system.ping")
@@ -171,7 +171,7 @@ final class AdminSystemPingExecutionSpec
         )
 
         val subsystem = DefaultSubsystemFactory.default(Some("command"))
-        val admincomponent = subsystem.findComponent("admin")
+        val admincomponent = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
           .getOrElse(fail("admin component not found"))
         val resolver = subsystem.resolver
         val calltreerequest = _build_request(resolver, "admin.execution.calltree")

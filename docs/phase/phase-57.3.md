@@ -1,6 +1,6 @@
 # Phase 57.3 - Runtime Compatibility Retirement
 
-status=planned
+status=in-progress
 split_from=[Phase 57](phase-57.md)
 depends_on=[Phase 57.2](phase-57.2.md)
 successor=[Phase 57.4](phase-57.4.md)

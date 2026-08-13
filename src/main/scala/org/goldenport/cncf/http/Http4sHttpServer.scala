@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Aug. 12, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -40,7 +40,8 @@ import org.goldenport.record.{Record, RecordFormat, RecordKeyNaming}
 import org.goldenport.record.io.RecordDecoder
 import org.goldenport.record.io.RecordExportEncoder
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
+import org.goldenport.http.{HttpContext, HttpPath, HttpRequest, HttpResponse, HttpStatus}
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{ComponentId, ComponentIdentityCompatibilityAdapter, ComponentIdentityCompatibilityObserver}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
@@ -70,7 +71,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 12, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -512,7 +513,7 @@ final class Http4sHttpServer(
             res <- _rest_mutation_request(req, raw) match {
               case Consequence.Success(core) =>
                 _to_http_execution_response(
-                  engine.executeWithExecutionResponse(core),
+                  engine.executeWithExecutionResponse(_canonicalize_presentation_component_request(core)),
                   Some(req),
                   None,
                   None,
@@ -1121,7 +1122,7 @@ final class Http4sHttpServer(
 
   private def _blob_content(req: HRequest[IO], id: String): IO[HResponse[IO]] = {
     val request = org.goldenport.protocol.Request.of(
-      component = "blob",
+      component = BuiltinComponentIdentity.BLOB.name,
       service = "blob",
       operation = "read_blob",
       properties = List(org.goldenport.protocol.Property("id", id, None)) ++
@@ -1304,12 +1305,12 @@ final class Http4sHttpServer(
     jobid: String
   ): IO[HResponse[IO]] = {
     val res = _dispatch_operation(
-      "job_control",
+      BuiltinComponentIdentity.JOB_CONTROL.name,
       "job",
       "get_job_status",
       HttpRequest.fromPath(
         method = HttpRequest.POST,
-        path = "/job_control/job/get_job_status",
+        path = s"/${BuiltinComponentIdentity.JOB_CONTROL.name}/job/get_job_status",
         query = Record.empty,
         header = _request_header_record(req),
         form = Record.data("id" -> jobid)
@@ -1326,12 +1327,12 @@ final class Http4sHttpServer(
     jobid: String
   ): IO[HResponse[IO]] = {
     val res = _dispatch_operation(
-      "job_control",
+      BuiltinComponentIdentity.JOB_CONTROL.name,
       "job",
       "await_job_result",
       HttpRequest.fromPath(
         method = HttpRequest.POST,
-        path = "/job_control/job/await_job_result",
+        path = s"/${BuiltinComponentIdentity.JOB_CONTROL.name}/job/await_job_result",
         query = Record.empty,
         header = _request_header_record(req),
         form = Record.data("id" -> jobid)
@@ -2826,7 +2827,11 @@ final class Http4sHttpServer(
     )
     DslChokepointRunner.run(context) {
       DslChokepointRunner.phase(context, DslChokepointPhase.Method) {
-        org.goldenport.Consequence.success(_operation_dispatcher.dispatchWithExecutionResponse(request))
+        org.goldenport.Consequence.success(
+          _operation_dispatcher.dispatchWithExecutionResponse(
+            _canonicalize_presentation_component_request(request)
+          )
+        )
       }
     } match {
       case org.goldenport.Consequence.Success(response) =>
@@ -3027,6 +3032,7 @@ final class Http4sHttpServer(
     data: String,
     record: Record
   ): AdminFormDispatchResult = {
+    val componentid = _presentation_component(app).map(_.componentId.name).getOrElse(app)
     val response = _dispatch_operation(
       "admin",
       "data",
@@ -3035,7 +3041,7 @@ final class Http4sHttpServer(
         method = HttpRequest.POST,
         path = s"/admin/data/${operation}",
         form = record
-          .upsertSingle("component", app)
+          .upsertSingle("component", componentid)
           .upsertSingle("data", data)
       )
     )
@@ -3048,6 +3054,7 @@ final class Http4sHttpServer(
     entity: String,
     record: Record
   ): AdminFormDispatchResult = {
+    val componentid = _presentation_component(app).map(_.componentId.name).getOrElse(app)
     val response = _dispatch_operation(
       "admin",
       "entity",
@@ -3056,7 +3063,7 @@ final class Http4sHttpServer(
         method = HttpRequest.POST,
         path = s"/admin/entity/${operation}",
         form = record
-          .upsertSingle("component", app)
+          .upsertSingle("component", componentid)
           .upsertSingle("entity", entity),
         header = Record.data(
           EntityMutationAdapterDefaults.profilePropertyName ->
@@ -3621,12 +3628,12 @@ final class Http4sHttpServer(
           case Consequence.Success(baseform) =>
             val dispatchform = baseform.upsertSingle("id", jobid)
             val result = _dispatch_operation_result(
-              "job_control",
+              BuiltinComponentIdentity.JOB_CONTROL.name,
               "job",
               "await_job_result",
               HttpRequest.fromPath(
                 method = HttpRequest.POST,
-                path = "/job_control/job/await_job_result",
+                path = s"/${BuiltinComponentIdentity.JOB_CONTROL.name}/job/await_job_result",
                 query = Record.empty,
                 header = _development_form_header_record(req, form = form),
                 form = dispatchform
@@ -3844,7 +3851,7 @@ final class Http4sHttpServer(
   private def _component(
     app: String
   ): Option[org.goldenport.cncf.component.Component] =
-    engine.runtimeSubsystem.findComponent(app)
+    _presentation_component(app)
 
   private[http] def _use_endpoint(endpoint: ServerEndpointPolicy.Endpoint): this.type = {
     _endpoint = endpoint
@@ -4178,6 +4185,25 @@ final class Http4sHttpServer(
     else {
       val priority = components.map(_component_origin_priority).max
       components.filter(component => _component_origin_priority(component) == priority)
+    }
+
+  private def _presentation_component(
+    selector: String
+  ): Option[org.goldenport.cncf.component.Component] = {
+    val candidates = _highest_priority_components(_select_components(selector))
+    candidates
+      .find(_.instanceMetadata.exists(_.isDefault))
+      .orElse(candidates.find(_.instanceId.instance == "default"))
+      .orElse(candidates.sortBy(_.instanceId.canonicalKey).headOption)
+  }
+
+  private def _canonicalize_presentation_component_request(
+    request: HttpRequest
+  ): HttpRequest =
+    request.path.segments.headOption.flatMap(_presentation_component) match {
+      case Some(component) =>
+        request.copy(path = HttpPath(component.componentId.name +: request.path.segments.tail))
+      case None => request
     }
 
   private def _component_origin_priority(
@@ -5321,7 +5347,7 @@ final class Http4sHttpServer(
   private def _component_exists(
     componentname: String
   ): Boolean =
-    engine.runtimeSubsystem.findComponent(componentname).isDefined
+    _presentation_component(componentname).isDefined
 
   // A browser route may carry shortid as its locator.  Convert it at the HTTP
   // boundary, before the Admin operation receives an EntityId input.
@@ -5330,8 +5356,7 @@ final class Http4sHttpServer(
     entity: String,
     routeid: String
   ): Option[String] =
-    val collectionoption = engine.runtimeSubsystem.
-      findComponent(app).
+    val collectionoption = _presentation_component(app).
       flatMap(_.entitySpace.entityOption[Any](entity))
     EntityId.parse(routeid) match {
       case Consequence.Success(id) =>
@@ -6203,8 +6228,7 @@ final class Http4sHttpServer(
   private def _dispatch_component_segment(
     app: String
   ): String =
-    engine.runtimeSubsystem
-      .findComponent(app)
+    _presentation_component(app)
       .map(_.name)
       .map(NamingConventions.toNormalizedSegment)
       .getOrElse(app)

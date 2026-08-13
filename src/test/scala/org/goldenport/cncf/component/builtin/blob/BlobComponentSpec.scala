@@ -34,7 +34,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
  *  version Apr. 29, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec
@@ -47,7 +47,7 @@ final class BlobComponentSpec
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
 
       When("looking up the Blob component")
-      val component = subsystem.findComponent("blob")
+      val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB)
 
       Then("the builtin Blob component is available")
       component.map(_.name) shouldBe Some("org.goldenport.cncf.Blob")
@@ -74,7 +74,7 @@ final class BlobComponentSpec
     "expose public request and response metadata for Blob operations" in {
       Given("the default command-mode subsystem")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-      val blob = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
+      val blob = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("missing Blob component"))
 
       When("reading the protocol metadata for user-facing Blob operations")
       val service = blob.protocol.services.services.find(_.name == "blob").getOrElse(fail("missing Blob service"))
@@ -140,7 +140,7 @@ final class BlobComponentSpec
     "publish Blob as a reusable SimpleEntity admin surface" in {
       Given("the default command-mode subsystem")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-      val blob = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
+      val blob = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("missing Blob component"))
 
       When("reading the Blob component entity metadata")
       val descriptor = blob.entityRuntimeDescriptor("blob").getOrElse(fail("missing Blob entity descriptor"))
@@ -1216,7 +1216,7 @@ final class BlobComponentSpec
     maxByteSize: Long = BlobStoreConfig.DefaultMaxByteSize
   ) = {
     val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-    val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
+    val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("missing Blob component"))
     component.withPort(org.goldenport.cncf.component.Component.Port.of(new BlobComponent.DefaultBlobService(store, maxByteSize)))
     subsystem
   }

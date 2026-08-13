@@ -34,7 +34,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Aug. 12, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -450,7 +450,7 @@ case class ComponentLogic(
     ctx: ExecutionContext
   ): Consequence[Option[JobDefinitionEntity]] =
     component.subsystem
-      .flatMap(_.findComponent(org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent.name))
+      .flatMap(_.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL))
       .flatMap(_.port.get[org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent.JobService]) match {
         case Some(service) =>
           given ExecutionContext = ctx

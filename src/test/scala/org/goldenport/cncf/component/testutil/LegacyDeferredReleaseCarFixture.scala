@@ -7,16 +7,22 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
-import org.goldenport.cncf.component.{CarRuntimeAdmission, ComponentDescriptor, ComponentIdentityDeferredReleaseEntry}
+import org.goldenport.cncf.component.{CarRuntimeAdmission, ComponentDescriptor}
 import org.simplemodeling.textus.corpus.{CorpusComponent, CorpusComponentFactory, CorpusScalarAction, CorpusScalarActionCall, CorpusScalarOperation}
 
 /*
+ * Exact former deferred-release CAR evidence used only to prove strict
+ * archive admission. It has no runtime migration or registry dependency.
+ *
  * @since   Aug.  8, 2026
- * @version Aug.  9, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object LegacyDeferredReleaseCarFixture {
   val LEGACY_ABI_MANIFEST_FORMAT = "cozy.car.abi-manifest.v1"
+  val legacyArtifact = "textus-corpus"
+  val legacyLocalId = "Corpus"
+  val legacyRelease = "0.1.0"
 
   val corpusClasses: Vector[Class[?]] = Vector(
     classOf[CorpusComponent],
@@ -26,24 +32,21 @@ object LegacyDeferredReleaseCarFixture {
     classOf[CorpusScalarActionCall]
   )
 
-  def legacyDescriptor(
-    entry: ComponentIdentityDeferredReleaseEntry
-  ): ComponentDescriptor =
+  def legacyDescriptor(): ComponentDescriptor =
     ComponentDescriptor(
-      name = Some(entry.legacyartifact),
-      version = Some(entry.release),
-      componentName = Some(entry.legacylocalid),
+      name = Some(legacyArtifact),
+      version = Some(legacyRelease),
+      componentName = Some(legacyLocalId),
       schemaVersion = Some(2)
     )
 
   def writeDirectory(
     root: Path,
-    entry: ComponentIdentityDeferredReleaseEntry,
     descriptorOverride: Option[ComponentDescriptor] = None,
     classes: Vector[Class[?]] = corpusClasses
   ): Path = {
     Files.createDirectories(root.resolve("component"))
-    val descriptor = descriptorOverride.getOrElse(legacyDescriptor(entry))
+    val descriptor = descriptorOverride.getOrElse(legacyDescriptor())
     Files.writeString(
       root.resolve("component-descriptor.json"),
       _descriptor_json(descriptor),
@@ -51,7 +54,7 @@ object LegacyDeferredReleaseCarFixture {
     )
     Files.writeString(
       root.resolve(CarRuntimeAdmission.ABI_MANIFEST_FILE),
-      _abi_manifest(entry, descriptor),
+      _abi_manifest(descriptor),
       StandardCharsets.UTF_8
     )
     _write_fixture_jar(root.resolve("component").resolve("textus-corpus.jar"), classes)
@@ -62,7 +65,7 @@ object LegacyDeferredReleaseCarFixture {
     val name = descriptor.name.getOrElse("")
     val version = descriptor.version.map(value => s"\"version\":\"$value\",").getOrElse("")
     val component = descriptor.componentName.getOrElse("")
-    s"""{"schemaVersion":2,"name":"$name",$version"component":{"name":"$component"},"componentStyle":{"apiVersion":"cncf.textus/v1","provider":"cncf","id":"full-fledged-with-standalone@1","version":1,"parameterSchema":{"type":"object","properties":{},"required":[],"additionalProperties":false},"parameters":{},"provides":{"bundles":["domain.full@1"],"capabilities":["user.fixed-context-compatible@1","user.multi-user@1"],"effective":["domain.aggregate@1","domain.command@1","domain.domain-event@1","domain.entity@1","domain.optimistic-concurrency@1","domain.persistence@1","domain.projection@1","domain.query@1","domain.transaction@1","user.fixed-context-compatible@1","user.multi-user@1"]},"requires":{"subsystemCapabilities":["datastore.optimistic-concurrency@1","datastore.persistent@1","datastore.transactional@1","user-context.current@1"]}}}"""
+    s"""{"schemaVersion":2,"name":"$name",$version"component":{"name":"$component"},"componentStyle":{"apiVersion":"cncf.textus/v1","provider":"cncf","id":"full-fledged-with-standalone@1","version":1,"parameterSchema":{"type":"object","properties":{},"required":[],"additionalProperties":false},"parameters":{},"provides":{"bundles":["domain.full@1"],"capabilities":["user.fixed-context-compatible@1","user.multi-user@1"],"effective":["domain.aggregate@1","domain.command@1","domain.domain-event@1","domain.optimistic-concurrency@1","domain.persistence@1","domain.projection@1","domain.query@1","domain.transaction@1","user.fixed-context-compatible@1","user.multi-user@1"]},"requires":{"subsystemCapabilities":["datastore.optimistic-concurrency@1","datastore.persistent@1","datastore.transactional@1","user-context.current@1"]}}}"""
   }
 
   def pack(
@@ -91,10 +94,7 @@ object LegacyDeferredReleaseCarFixture {
     target
   }
 
-  private def _write_fixture_jar(
-    target: Path,
-    classes: Vector[Class[?]]
-  ): Path = {
+  private def _write_fixture_jar(target: Path, classes: Vector[Class[?]]): Path = {
     Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zip =>
       val resources = classes.flatMap { cls =>
         val base = cls.getName.replace('.', '/')
@@ -117,9 +117,6 @@ object LegacyDeferredReleaseCarFixture {
     target
   }
 
-  private def _abi_manifest(
-    entry: ComponentIdentityDeferredReleaseEntry,
-    descriptor: ComponentDescriptor
-  ): String =
-    s"""{"format":"${LEGACY_ABI_MANIFEST_FORMAT}","car":{"name":"${descriptor.name.getOrElse(entry.legacyartifact)}","version":"${descriptor.version.getOrElse(entry.release)}"},"abi":{"version":1,"exports":{"components":[{"name":"${descriptor.componentName.getOrElse(entry.legacylocalid)}"}]},"dependencies":[]}}"""
+  private def _abi_manifest(descriptor: ComponentDescriptor): String =
+    s"""{"format":"${LEGACY_ABI_MANIFEST_FORMAT}","car":{"name":"${descriptor.name.getOrElse(legacyArtifact)}","version":"${descriptor.version.getOrElse(legacyRelease)}"},"abi":{"version":1,"exports":{"components":[{"name":"${descriptor.componentName.getOrElse(legacyLocalId)}"}]},"dependencies":[]}}"""
 }

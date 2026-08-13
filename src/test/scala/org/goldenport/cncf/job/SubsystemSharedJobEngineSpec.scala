@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 28, 2026
  *  version Apr. 22, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemSharedJobEngineSpec
@@ -24,8 +24,8 @@ final class SubsystemSharedJobEngineSpec
     "share one JobEngine across administrative components" in {
       Given("a subsystem with command support")
       SubsystemTestFixture.withAdmittedSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.findComponent("admin").get
-        val jobcontrol = subsystem.findComponent("job_control").get
+        val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).get
+        val jobcontrol = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL).get
         val submitctx = ExecutionContext.create()
         val controlctx = ExecutionContext.create(org.goldenport.cncf.context.SecurityContext.Privilege.ApplicationContentManager)
         val entered = new CountDownLatch(1)
@@ -55,8 +55,8 @@ final class SubsystemSharedJobEngineSpec
     "suspend a running Job through the subsystem operation" in {
       Given("a submitted Job whose task has entered and remains controlled by the specification")
       SubsystemTestFixture.withAdmittedSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.findComponent("admin").get
-        val jobcontrol = subsystem.findComponent("job_control").get
+        val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).get
+        val jobcontrol = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL).get
         val submitctx = ExecutionContext.test()
         val entered = new CountDownLatch(1)
         val release = new CountDownLatch(1)

@@ -1,11 +1,14 @@
 package org.goldenport.cncf.cli
 
 import java.time.Instant
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import java.security.MessageDigest
 import java.util.zip.{ZipEntry, ZipOutputStream}
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor, StandaloneUserProfile, StandaloneUserProfileResolver}
-import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.component.{ComponentDescriptor, ComponentId}
+import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemDescriptor, GenericSubsystemFactory, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem, SubsystemUserMode}
 import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
@@ -17,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
  *  version Jul. 31, 2026
- * @version Aug.  6, 2026
+ *  version Aug.  6, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -162,55 +166,40 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       packaged shouldBe empty
     }
 
-    "collect development claims from active and assembly search repositories" in {
-      Given("active and search development repositories with distinct component identities")
+    "collect exact canonical development claims from active and assembly search repositories" in {
+      Given("active and search prepared development targets with distinct canonical identities")
       val root = Files.createTempDirectory("cncf-development-claims")
       val activedir = root.resolve("active")
       val searchdir = root.resolve("search")
-      Files.createDirectories(activedir.resolve("src").resolve("main").resolve("car"))
-      Files.createDirectories(searchdir.resolve("src").resolve("main").resolve("car"))
-      Files.writeString(
-        activedir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.json"),
-        """{"name":"active","version":"0.2.0-SNAPSHOT","component":"active"}"""
-      )
-      Files.writeString(
-        searchdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.json"),
-        """{"name":"dependency","version":"0.2.0-SNAPSHOT","component":"dependency"}"""
-      )
-      _write_legacy_development_manifest(activedir)
-      _write_legacy_development_manifest(searchdir)
+      _write_prepared_development_evidence(activedir, "org.example.Active", "0.2.0-SNAPSHOT")
+      _write_prepared_development_evidence(searchdir, "org.example.Dependency", "0.2.0-SNAPSHOT")
       val active = ComponentRepository.ComponentDevDirRepository.Specification(activedir)
       val search = ComponentRepository.ComponentDevDirRepository.Specification(searchdir)
 
       When("the runtime prepares claims for its complete repository sequence")
       val claims = CncfRuntime.developmentComponentClaims(Vector(active), Vector(search))
 
-      Then("both development repositories claim their components before descriptor routing")
-      claims(active) shouldBe Set("active")
-      claims(search) shouldBe Set("dependency")
+      Then("both development repositories claim only their prepared canonical identities")
+      claims(active) shouldBe Set(ComponentId("org.example.Active") -> "0.2.0-SNAPSHOT")
+      claims(search) shouldBe Set(ComponentId("org.example.Dependency") -> "0.2.0-SNAPSHOT")
     }
 
-    "include development CAR assembly dependencies in API preflight" in {
-      Given("an active development CAR whose assembly declares the Scraper provider")
+    "preflight development assembly from prepared canonical target evidence" in {
+      Given("a prepared target and a conflicting source-tree assembly identity")
       val root = Files.createTempDirectory("cncf-development-assembly-preflight")
       val cardir = root.resolve("src").resolve("main").resolve("car")
       Files.createDirectories(cardir)
-      Files.writeString(
-        cardir.resolve("component-descriptor.json"),
-        """{"name":"ArtScene","version":"0.1.2-SNAPSHOT","component":"ArtScene"}"""
-      )
+      _write_prepared_development_evidence(root, "org.example.Prepared", "0.1.2-SNAPSHOT")
       Files.writeString(
         cardir.resolve("assembly-descriptor.yaml"),
         """subsystem: textus-art-scene
           |version: 0.1.1
           |components:
-          |  - name: textus-art-scene
-          |    version: 0.1.1
-          |  - name: textus-scraper
+          |  - namespace: org.other
+          |    id: Foreign
           |    version: 0.1.1
           |""".stripMargin
       )
-      _write_legacy_development_manifest(root)
       val dev = ComponentRepository.ComponentDevDirRepository.Specification(root)
 
       When("the API preflight descriptors and development claims are assembled")
@@ -219,33 +208,32 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       val devdescriptors =
         ComponentRepository.descriptorsForSpecification(dev, Vector.empty, descriptors, claims)
 
-      Then("the stale assembly version and textus-prefixed alias are still claimed by the development component")
-      descriptors.flatMap(_.componentName) shouldBe Vector("textus-art-scene", "textus-scraper")
-      descriptors.flatMap(_.version) shouldBe Vector("0.1.1", "0.1.1")
-      devdescriptors.flatMap(_.componentName) shouldBe Vector("textus-art-scene")
+      Then("only the prepared target identity is preflighted and claimed")
+      descriptors.flatMap(_.requireCanonicalIdentityC.toOption) shouldBe
+        Vector(ComponentId("org.example.Prepared") -> "0.1.2-SNAPSHOT")
+      devdescriptors.flatMap(_.requireCanonicalIdentityC.toOption) shouldBe
+        Vector(ComponentId("org.example.Prepared") -> "0.1.2-SNAPSHOT")
 
-      And("only the dependency remains unresolved for the search repository")
+      And("the conflicting source-tree assembly identity is not routed")
       val searchdescriptors =
         ComponentRepository.unresolvedDescriptorsForSearch(Vector(dev), descriptors, claims)
-      searchdescriptors.flatMap(_.componentName) shouldBe Vector("textus-scraper")
+      searchdescriptors shouldBe empty
     }
 
-    "claim textus-prefixed development identities symmetrically" in {
-      Given("a textus-prefixed development descriptor and an unprefixed stale assembly identity")
+    "not claim a same-ID descriptor at a different release" in {
+      Given("a prepared development target and same-ID descriptors at matching and stale releases")
       val reversedroot = Files.createTempDirectory("cncf-development-assembly-reversed-alias")
-      val reversedcardir = reversedroot.resolve("src").resolve("main").resolve("car")
-      Files.createDirectories(reversedcardir)
-      Files.writeString(
-        reversedcardir.resolve("component-descriptor.json"),
-        """{"name":"textus-art-scene","version":"0.1.2-SNAPSHOT","component":"textus-art-scene"}"""
-      )
+      _write_prepared_development_evidence(reversedroot, "org.example.Prepared", "0.1.2-SNAPSHOT")
       val reverseddev = ComponentRepository.ComponentDevDirRepository.Specification(reversedroot)
       val reversedclaims = ComponentRepository.developmentComponentClaims(Vector(reverseddev))
       val reverseddescriptors = Vector(
         ComponentDescriptor(
-          name = Some("ArtScene"),
-          version = Some("0.1.1"),
-          componentName = Some("ArtScene")
+          name = Some("org.example.Prepared"), version = Some("0.1.2-SNAPSHOT"),
+          componentName = Some("org.example.Prepared"), schemaVersion = Some(3), componentId = Some(ComponentId("org.example.Prepared"))
+        ),
+        ComponentDescriptor(
+          name = Some("org.example.Prepared"), version = Some("0.1.1"),
+          componentName = Some("org.example.Prepared"), schemaVersion = Some(3), componentId = Some(ComponentId("org.example.Prepared"))
         )
       )
 
@@ -253,8 +241,9 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       val claimed = ComponentRepository
         .descriptorsForSpecification(reverseddev, Vector.empty, reverseddescriptors, reversedclaims)
 
-      Then("the textus prefix direction does not change component identity")
-      claimed.flatMap(_.componentName) shouldBe Vector("ArtScene")
+      Then("only the matching canonical release is claimed")
+      claimed.flatMap(_.requireCanonicalIdentityC.toOption) shouldBe
+        Vector(ComponentId("org.example.Prepared") -> "0.1.2-SNAPSHOT")
     }
 
     }
@@ -373,9 +362,10 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "resolve explicit test descriptor config before command-line scalar overrides" in {
-      Given("a test descriptor with config and SPI overrides")
+      Given("a canonical base subsystem descriptor plus a test override with config and canonical SPI bindings")
       val cwd = Files.createTempDirectory("cncf-test-descriptor-config")
       val testdescriptor = cwd.resolve("test.yaml")
+      val subsystemdescriptor = cwd.resolve("subsystem.yaml")
       Files.writeString(
         testdescriptor,
         """kind: test-descriptor
@@ -386,10 +376,23 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
           |  spi:
           |    bindings:
           |      - socket:
-          |          component: target-component
+          |          component: org.example.TargetComponent
           |          contract: ai-runner
           |        provider:
-          |          component: target-test-provider
+          |          component: org.example.TargetTestProvider
+          |""".stripMargin
+      )
+      Files.writeString(
+        subsystemdescriptor,
+        """subsystem: config-target
+          |version: 0.1.0
+          |components:
+          |  - namespace: org.example
+          |    id: TargetComponent
+          |    version: 0.1.0
+          |  - namespace: org.example
+          |    id: TargetTestProvider
+          |    version: 0.1.0
           |""".stripMargin
       )
 
@@ -399,7 +402,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
         Array(
           "--discover=classes",
           "--textus.test.descriptor=test.yaml",
-          "--textus.component=target-component",
+          s"--textus.subsystem.file=${subsystemdescriptor.toAbsolutePath.normalize}",
           "--textus.web.descriptor=config/from-cli.yaml",
           "server"
         )
@@ -408,17 +411,19 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       val descriptor = GenericSubsystemFactory.resolveDescriptorC(bootstrap.configuration).toOption.get.get
       val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor).toOption.get
 
-      Then("the descriptor contributes assembly data and the command line retains scalar precedence")
+      Then("the descriptor contributes canonical assembly bindings and the command line retains scalar precedence")
       descriptorpath shouldBe testdescriptor.normalize
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WEB_DEMO_ASSIST_ENABLED_KEY) shouldBe Some("true")
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-cli.yaml")
-      bindings.head.provider.component shouldBe Some("target-test-provider")
+      bindings.head.socket.component shouldBe Some("org.example.TargetComponent")
+      bindings.head.provider.component shouldBe Some("org.example.TargetTestProvider")
     }
 
     "expand test descriptor datastore and home shortcuts into canonical runtime configuration" in {
-      Given("a test descriptor with home and local datastore shortcuts")
+      Given("a canonical base subsystem descriptor plus a test override with home and local datastore shortcuts")
       val cwd = Files.createTempDirectory("cncf-test-descriptor-datastore")
       val testdescriptor = cwd.resolve("test.yaml")
+      val subsystemdescriptor = cwd.resolve("subsystem.yaml")
       val applicationdb = cwd.resolve("target").resolve("cncf.d").resolve("stage3d").resolve("application.db")
       val runtimedb = cwd.resolve("target").resolve("cncf.d").resolve("stage3d").resolve("runtime.db")
       val testhome = cwd.resolve("target").resolve("cncf.d").resolve("stage3d-home")
@@ -447,13 +452,23 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
            |  spi:
            |    bindings:
            |      - socket:
-           |          component: art-scene
+           |          component: org.simplemodeling.textus.ArtScene
            |          contract: ai-runner
            |        provider:
-           |          component: art-scene
+           |          component: org.simplemodeling.textus.ArtScene
            |        selection:
            |          mode: test
            |""".stripMargin
+      )
+      Files.writeString(
+        subsystemdescriptor,
+        """subsystem: textus-art-scene
+          |version: 0.1.0
+          |components:
+          |  - namespace: org.simplemodeling.textus
+          |    id: ArtScene
+          |    version: 0.1.0
+          |""".stripMargin
       )
 
       When("the test descriptor is resolved")
@@ -462,14 +477,14 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
         Array(
           "--discover=classes",
           "--textus.test.descriptor=test.yaml",
-          "--textus.component=art-scene",
+          s"--textus.subsystem.file=${subsystemdescriptor.toAbsolutePath.normalize}",
           "server"
         )
       )
       val descriptor = GenericSubsystemFactory.resolveDescriptorC(bootstrap.configuration).toOption.get.get
       val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor).toOption.get
 
-      Then("the shortcuts expand into canonical runtime configuration and assembly bindings")
+      Then("the shortcuts expand into canonical runtime configuration and canonical assembly bindings")
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.TEST_HOME_PATH_KEY) shouldBe Some(testhome.toString)
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.TEST_HOME_INHERIT_LOCAL_DATA_KEY) shouldBe Some("false")
       RuntimeConfig.getString(bootstrap.configuration, "textus.local-data.root") shouldBe Some(testhome.resolve(".cncf").toString)
@@ -477,6 +492,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       RuntimeConfig.getString(bootstrap.configuration, "textus.datastore.path") shouldBe Some(runtimedb.toString)
       RuntimeConfig.getString(bootstrap.configuration, "textus.component.art-scene.datastores.application.kind") shouldBe Some("local")
       RuntimeConfig.getString(bootstrap.configuration, "textus.component.art-scene.datastores.application.path") shouldBe Some(applicationdb.toString)
+      bindings.head.socket.component shouldBe Some("org.simplemodeling.textus.ArtScene")
+      bindings.head.provider.component shouldBe Some("org.simplemodeling.textus.ArtScene")
       bindings.head.selection.mode shouldBe Some("test")
     }
 
@@ -688,33 +705,35 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
     }
 
-    "resolve a named component from the standard repository for server startup" in {
-      Given("a named component CAR in an explicit repository")
+    "resolve a qualified named component from the canonical repository coordinate for server startup" in {
+      Given("a schema-3 named component CAR at its canonical repository coordinate")
       val cwd = Files.createTempDirectory("textus-component-name-repo")
       val repository = cwd.resolve("repository")
-      val artifactdir = repository.resolve("org").resolve("simplemodeling").resolve("car").resolve("cwitter").resolve("0.0.1-SNAPSHOT")
+      val componentid = ComponentId("org.example.Cwitter")
+      val release = "0.0.1"
+      val coordinate = ComponentReleaseCoordinate.require(componentid.sharedIdentity, release)
+      val car = repository.resolve("car").resolve(coordinate.carRepositoryRelativePath())
+      val artifactdir = car.getParent
       Files.createDirectories(artifactdir)
-      val car = artifactdir.resolve("cwitter-0.0.1-SNAPSHOT.car")
       _write_zip(
         car,
         Map(
           "component-descriptor.json" ->
-            """{"component":{"name":"cwitter"},"version":"0.0.1-SNAPSHOT"}""",
+            _canonical_descriptor_json(componentid.name, release),
           "assembly-descriptor.yaml" ->
             """subsystem: cwitter
-              |version: 0.0.1-SNAPSHOT
+              |version: 0.0.1
               |components:
-              |  - name: cwitter
-              |    version: 0.0.1-SNAPSHOT
-              |  - name: textus-user-account
-              |    version: 0.1.0-SNAPSHOT
+              |  - namespace: org.example
+              |    id: Cwitter
+              |    version: 0.0.1
               |""".stripMargin
         )
       )
       When("the named component server invocation is resolved")
       val bootstrap = CncfRuntime.bootstrap(
         cwd,
-        Array("--repository-dir", repository.toString, "--textus.component=cwitter", "server")
+        Array("--repository-dir", repository.toString, s"--textus.component=${componentid.name}", s"--textus.component.version=$release", "server")
       )
       val specs = bootstrap.repositories.searchRepositories.toOption.get
 
@@ -722,6 +741,44 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
 
       Then("the repository CAR is appended as the component file")
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${car}")
+    }
+
+    "reject a bare named selector and avoid injecting a foreign same-looking local CAR" in {
+      Given("a local CAR whose filename resembles the requested qualified selector but whose descriptor is foreign")
+      val root = Files.createTempDirectory("textus-component-name-identity")
+      val requestedid = ComponentId("org.example.Cwitter")
+      val foreignid = ComponentId("org.other.Cwitter")
+      val release = "0.0.1"
+      val foreigncar = root.resolve(s"${requestedid.name}-$release.car")
+      _write_zip(foreigncar, Map(
+        "component-descriptor.json" -> _canonical_descriptor_json(foreignid.name, release)
+      ))
+      val specs = Vector(ComponentRepository.ComponentDirRepository.Specification(root))
+
+      When("a bare component selector is resolved")
+      val bare = the[ConsequenceException] thrownBy CncfRuntime.resolveComponentInvocation(
+        CncfRuntime.RuntimeInvocationParameters(
+          actualArgs = Array("--textus.component=cwitter", "server"),
+          subsystemName = None,
+          componentName = Some("cwitter")
+        ),
+        specs
+      )
+
+      And("the qualified selector is resolved against the foreign local CAR")
+      val resolved = CncfRuntime.resolveComponentInvocation(
+        CncfRuntime.RuntimeInvocationParameters(
+          actualArgs = Array(s"--textus.component=${requestedid.name}", s"--textus.component.version=$release", "server"),
+          subsystemName = None,
+          componentName = Some(requestedid.name),
+          componentVersion = Some(release)
+        ),
+        specs
+      )
+
+      Then("the shared qualified identity diagnostic rejects the bare form and no foreign CAR is selected")
+      bare.getMessage should include ("component")
+      resolved.actualArgs.toVector should not contain s"--${RuntimeConfig.componentFileKey}=${foreigncar}"
     }
 
     "not append a repository component file when component file is already explicit" in {
@@ -743,7 +800,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       When("the component invocation is resolved")
       val bootstrap = CncfRuntime.bootstrap(
         cwd,
-        Array("--repository-dir", repository.toString, s"--${RuntimeConfig.componentFileKey}=${explicitcar}", "--textus.component=cwitter", "server")
+        Array("--repository-dir", repository.toString, s"--${RuntimeConfig.componentFileKey}=${explicitcar}", "--textus.component=org.example.Cwitter", "server")
       )
       val specs = bootstrap.repositories.searchRepositories.toOption.get
 
@@ -785,10 +842,10 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "resolve a named subsystem SAR from the standard repository for server startup" in {
-      Given("a named subsystem SAR in an explicit repository")
+      Given("a named subsystem SAR with canonical component bindings in the standard repository layout")
       val cwd = Files.createTempDirectory("textus-subsystem-name-repo")
       val repository = cwd.resolve("repository")
-      val artifactdir = repository.resolve("org").resolve("simplemodeling").resolve("sar").resolve("cwitter").resolve("0.0.1-SNAPSHOT")
+      val artifactdir = repository.resolve("sar").resolve("cwitter").resolve("0.0.1-SNAPSHOT")
       Files.createDirectories(artifactdir)
       val sar = artifactdir.resolve("cwitter-0.0.1-SNAPSHOT.sar")
       _write_zip(
@@ -798,9 +855,11 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
             """subsystem: cwitter
               |version: 0.0.1-SNAPSHOT
               |components:
-              |  - name: cwitter
+              |  - namespace: org.example
+              |    id: Cwitter
               |    version: 0.0.1-SNAPSHOT
-              |  - name: textus-user-account
+              |  - namespace: org.simplemodeling.textus
+              |    id: UserAccount
               |    version: 0.1.0-SNAPSHOT
               |""".stripMargin
         )
@@ -814,7 +873,7 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
 
       val resolved = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, specs)
 
-      Then("the repository SAR is appended as the subsystem file")
+      Then("the canonical standard-layout SAR is appended as the subsystem file")
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.subsystemFileKey}=${sar}")
     }
 
@@ -1021,12 +1080,43 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     }
   }
 
-  private def _write_legacy_development_manifest(root: java.nio.file.Path): Unit = {
-    val manifest = root.resolve("target/cncf.d/car-runtime-manifest.json")
-    Files.createDirectories(manifest.getParent)
-    Files.writeString(
-      manifest,
-      """{"schemaVersion":"cncf.car-development-runtime-manifest.v1"}"""
-    )
+  private def _write_prepared_development_evidence(root: java.nio.file.Path, componentid: String, release: String): Unit = {
+    val target = root.resolve("target/cncf.d")
+    val classes = root.resolve("target/scala-3.3.8/classes")
+    val coordinate = ComponentReleaseCoordinate.require(ComponentId(componentid).sharedIdentity, release)
+    Files.createDirectories(target)
+    Files.createDirectories(classes)
+    Files.writeString(classes.resolve("prepared.class"), "prepared", StandardCharsets.UTF_8)
+    val descriptor = target.resolve("component-descriptor.json")
+    val abi = root.resolve("src/main/car/abi-manifest.json")
+    val classpath = target.resolve("runtime-classpath.txt")
+    Files.writeString(descriptor, _canonical_descriptor_json(componentid, release), StandardCharsets.UTF_8)
+    Files.createDirectories(abi.getParent)
+    Files.writeString(abi, s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"${componentid.split("\\.").dropRight(1).mkString(".")}","id":"${componentid.split("\\.").last}","version":"$release"},"abi":{"version":1,"exports":{"components":[{"namespace":"${componentid.split("\\.").dropRight(1).mkString(".")}","id":"${componentid.split("\\.").last}"}],"operations":[],"entities":[]},"dependencies":[]}}""", StandardCharsets.UTF_8)
+    Files.writeString(classpath, classes.toString, StandardCharsets.UTF_8)
+    val evidence = Vector(
+      "target/cncf.d/runtime-classpath.txt" -> classpath,
+      "target/cncf.d/component-descriptor.json" -> descriptor,
+      "src/main/car/abi-manifest.json" -> abi
+    ).map { case (identity, file) =>
+      val logical = if (identity.endsWith("runtime-classpath.txt")) s"project:${root.relativize(classes).toString}" else ""
+      (identity, _sha256(Files.readAllBytes(file)), logical)
+    }
+    val entries = evidence.map { case (path, digest, logical) =>
+      val prefix = if (logical.nonEmpty) s"\"logicalSha256\":\"${_sha256(logical.getBytes(StandardCharsets.UTF_8))}\", " else ""
+      s"{$prefix\"path\":\"$path\",\"sha256\":\"$digest\"}"
+    }.mkString("[", ",", "]")
+    val digest = _sha256(evidence.map { case (path, value, logical) => s"$path\t$value\t${if (logical.nonEmpty) _sha256(logical.getBytes(StandardCharsets.UTF_8)) else ""}" }.mkString("\n").getBytes(StandardCharsets.UTF_8))
+    Files.writeString(target.resolve("car-runtime-manifest.json"), s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"${coordinate.mavenArtifactId()}","version":"$release","component":"${componentid.split("\\.").last}"},"runtime":{"cncf":{"minimum":"${org.goldenport.cncf.CncfVersion.current}","excluded":[],"tested":["${org.goldenport.cncf.CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$digest"}}""", StandardCharsets.UTF_8)
+  }
+
+  private def _sha256(bytes: Array[Byte]): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
+
+  private def _canonical_descriptor_json(componentid: String, release: String): String = {
+    val segments = componentid.split("\\.").toVector
+    val namespace = segments.dropRight(1).mkString(".")
+    val localid = segments.last
+    s"""{"schemaVersion":3,"component":{"namespace":"$namespace","id":"$localid","version":"$release"}}"""
   }
 }

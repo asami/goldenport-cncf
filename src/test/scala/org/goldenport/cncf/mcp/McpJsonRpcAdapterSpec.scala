@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 19, 2026
  *  version May. 18, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -118,7 +118,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
     "handle tools/list request" in {
       Given("a subsystem with the admin system service declared MCP ready")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      subsystem.findComponent("admin").foreach(_.withMcpReadyServices(Set("system")))
+      subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).foreach(_.withMcpReadyServices(Set("system")))
       val adapter = new McpJsonRpcAdapter(subsystem)
       val raw = """{"jsonrpc":"2.0","id":"x1","method":"tools/list","params":{}}"""
 
@@ -140,7 +140,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
     "project integer and boolean parameter schemas" in {
       Given("a ready blob service with typed operation parameters")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      subsystem.findComponent("blob").foreach(_.withMcpReadyServices(Set("blob")))
+      subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).foreach(_.withMcpReadyServices(Set("blob")))
       val adapter = new McpJsonRpcAdapter(subsystem)
       val raw = """{"jsonrpc":"2.0","id":"x1b","method":"tools/list","params":{}}"""
 
@@ -171,7 +171,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
     "handle tools/call request through subsystem execution path" in {
       Given("a ready admin ping operation")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      subsystem.findComponent("admin").foreach(_.withMcpReadyServices(Set("system")))
+      subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).foreach(_.withMcpReadyServices(Set("system")))
       val adapter = new McpJsonRpcAdapter(subsystem)
       val raw =
         """{"jsonrpc":"2.0","id":"x2","method":"tools/call","params":{"name":"admin.system.ping","arguments":{}}}"""
@@ -188,7 +188,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
     "bind named MCP arguments as operation properties" in {
       Given("a ready blob operation with one required named property")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      subsystem.findComponent("blob").foreach(_.withMcpReadyServices(Set("blob")))
+      subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).foreach(_.withMcpReadyServices(Set("blob")))
       val adapter = new McpJsonRpcAdapter(subsystem)
       val raw =
         """{"jsonrpc":"2.0","id":"x2-property","method":"tools/call","params":{"name":"blob.blob.admin_get_blob","arguments":{"id":"missing-for-test"}}}"""
@@ -217,7 +217,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
     "require service-qualified operation readiness declarations" in {
       Given("an admin component with a bare operation readiness declaration")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val admin = subsystem.findComponent("admin").getOrElse(fail("admin component is missing"))
+      val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).getOrElse(fail("admin component is missing"))
       admin.withMcpReadyOperations(Set("ping"))
 
       When("readiness is evaluated before and after service qualification")
@@ -233,7 +233,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
     "apply component runtime configuration as a narrowing MCP policy" in {
       Given("a ready operation disabled by component runtime configuration")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val admin = subsystem.findComponent("admin").getOrElse(fail("admin component is missing"))
+      val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).getOrElse(fail("admin component is missing"))
       admin.withMcpReadyServices(Set("system"))
       admin.withApplicationConfig(Component.ApplicationConfig(config = Some(Configuration(Map(
         "cncf.mcp.disabled-operations" -> ConfigurationValue.StringValue("system.ping")

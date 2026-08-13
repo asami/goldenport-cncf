@@ -37,7 +37,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 12, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -73,7 +73,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val debug = subsystem.findComponent("debug").getOrElse(fail("missing debug component"))
+      val debug = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.DEBUG).getOrElse(fail("missing debug component"))
       debug.withArtifactMetadata(
         Component.ArtifactMetadata(
           sourceType = "spec",
@@ -97,8 +97,27 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
-      body should include("path: \"/org-goldenport-cncf-debug/http/echo\"")
+      body should include("path: \"/org.goldenport.cncf.Debug/http/echo\"")
       body should include("method: \"POST\"")
+    }
+
+    "dispatch short, normalized-qualified, and exact canonical REST component paths through the same runtime route" in {
+      Given("the default server subsystem")
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = _server(subsystem)
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      When("the three admitted Admin WebPath selectors and one unsupported selector are requested")
+      val short = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/rest/v1/admin/system/ping"))).unsafeRunSync()
+      val normalized = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/rest/v1/org-goldenport-cncf-admin/system/ping"))).unsafeRunSync()
+      val canonical = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/rest/v1/org.goldenport.cncf.Admin/system/ping"))).unsafeRunSync()
+      val unsupported = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/rest/v1/org-goldenport-cncf-missing/system/ping"))).unsafeRunSync()
+
+      Then("each admitted selector reaches the exact Admin route while the unsupported selector remains absent")
+      short.status.code shouldBe 200
+      normalized.status.code shouldBe 200
+      canonical.status.code shouldBe 200
+      unsupported.status.code shouldBe 404
     }
 
     "decode percent-encoded REST query parameters before operation dispatch" in {
@@ -419,7 +438,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
-      val debug = subsystem.findComponent("debug").getOrElse(fail("missing debug component"))
+      val debug = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.DEBUG).getOrElse(fail("missing debug component"))
       debug.withArtifactMetadata(
         Component.ArtifactMetadata(
           sourceType = "spec",
@@ -497,7 +516,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Then("the documented response contract holds")
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
-      body should include("path: \"/org-goldenport-cncf-debug/http/echo\"")
+      body should include("path: \"/org.goldenport.cncf.Debug/http/echo\"")
       body should include("method: \"POST\"")
     }
 
@@ -1178,7 +1197,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Given("the prerequisites for dispatch system knowledge admin routes")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("knowledge_component", Protocol.empty))
-      val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
+      val component = subsystem.findComponent(org.goldenport.cncf.component.ComponentId("org.goldenport.cncf.test.KnowledgeComponent")).getOrElse(fail("knowledge component missing"))
       component.knowledgeSpace.replace(KnowledgeWorkingSetSnapshot(
         nodes = Vector(KnowledgeNode(KnowledgeNodeId("node-1"), "concept", Some("Node One")))
       ))(using ExecutionContext.test()) match {
@@ -1214,7 +1233,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       Given("a subsystem containing confirmed Information")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
-      val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
+      val component = subsystem.findComponent(org.goldenport.cncf.component.ComponentId("org.goldenport.cncf.test.InformationComponent")).getOrElse(fail("information component missing"))
       given ExecutionContext = component.logic.executionContext()
       val batch = component.informationSpace.registerInformation(
         "paper",

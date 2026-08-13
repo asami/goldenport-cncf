@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 28, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthorizationPolicyProjectionSpec
@@ -136,7 +136,7 @@ final class AuthorizationPolicyProjectionSpec
       override def subsystem: Option[Subsystem] = Some(owner)
     }
     val assembled = subsystem.add(Vector(component))
-    assembled -> assembled.findComponent("blob").get
+    assembled -> assembled.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).get
   }
 
   private def _records(value: Any): Vector[Record] =

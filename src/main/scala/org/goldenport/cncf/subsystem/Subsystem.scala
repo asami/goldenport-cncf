@@ -71,7 +71,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug. 12, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -2142,7 +2142,7 @@ final class Subsystem(
         case "openapi" | "openapi.json" => "openapi"
         case other => other
       }
-      val locator = NameLocator("spec")
+      val locator = ComponentIdLocator(BuiltinComponentIdentity.SPECIFICATION)
       for {
         component <- _component_space.find(locator)
         service <- component.protocol.services.services.find(_.name == "export")

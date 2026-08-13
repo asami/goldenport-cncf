@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 21, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -246,7 +246,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
       "when a provider-neutral WebSearch SPI is installed" in {
         Given("the builtin tool component with one deterministic runtime-owned search provider")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-        val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
+        val tool = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get.asInstanceOf[ToolComponent]
         var observed: Option[WebSearchRequest] = None
         tool.withWebSearch(new WebSearch {
           def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] = {
@@ -278,20 +278,20 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
         val invalid = RuntimeBindingAdmissionFixture.default(Some("command"))
         val duplicate = RuntimeBindingAdmissionFixture.default(Some("command"))
         val blank = RuntimeBindingAdmissionFixture.default(Some("command"))
-        invalid.findComponent("tool").get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
+        invalid.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
           def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] =
             Consequence.success(WebSearchResponse(Vector(
               WebSearchItem("internal", "https://127.0.0.1/private")
             )))
         })
-        duplicate.findComponent("tool").get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
+        duplicate.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
           def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] =
             Consequence.success(WebSearchResponse(Vector(
               WebSearchItem("first", "https://example.org/result"),
               WebSearchItem("second", " https://example.org/result ")
             )))
         })
-        blank.findComponent("tool").get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
+        blank.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
           def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] =
             Consequence.success(WebSearchResponse(Vector(
               WebSearchItem("blank snippet", "https://example.org/blank", Some("   "))
@@ -325,7 +325,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
       "when request and provider values meet or cross their declared boundaries" in {
         Given("a provider that records admitted requests and returns two safe results")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-        val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
+        val tool = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get.asInstanceOf[ToolComponent]
         var observed: Vector[WebSearchRequest] = Vector.empty
         tool.withWebSearch(new WebSearch {
           def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] = {
@@ -468,7 +468,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
       "when a normal operation authorization rule denies Web search" in {
         Given("the builtin tool component with a provider and a descriptor-level deny rule")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-        val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
+        val tool = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get.asInstanceOf[ToolComponent]
         var providercalled = false
         tool.withWebSearch(new WebSearch {
           def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] = {
@@ -542,7 +542,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
       "when the tool component MCP catalog is projected" in {
         Given("the default builtin tool component without optional automation Components")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
-        val tool = subsystem.findComponent("tool").get
+        val tool = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get
 
         When("the existing MCP projection reads the component's admitted Operations")
         val identities = McpToolCatalog.toolsForComponent(tool).map(_.name)

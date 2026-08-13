@@ -21,7 +21,7 @@ import scala.util.{Failure, Try}
 
 /*
  * @since   Aug.  7, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityContractSpec
@@ -359,19 +359,18 @@ final class Phase56ComponentIdentityContractSpec
       "when subsystem admission resolves generated same-local identities" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R6,R7; Example: E4 org.alpha.UserAccount, org.beta.UserAccount, and UserAccount")
         val property = Prop.forAll(_distinct_namespaces) { namespaces =>
-          val qualifiedids = namespaces.map(_ + ".UserAccount")
-          SubsystemAssemblyAdmission.resolveC(_descriptor(qualifiedids), Vector.empty) match {
+          val componentids = namespaces.map(namespace => ComponentId(s"$namespace.UserAccount"))
+          val qualifiedids = componentids.map(_.name)
+          val bindings = componentids.map(_typed_binding)
+          SubsystemAssemblyAdmission.resolveC(_descriptor(bindings), Vector.empty) match {
             case Consequence.Success(resolved) =>
-              val resolvednames = resolved.componentBindings.map(_.componentName)
-              val identities = resolvednames.map { qualifiedid =>
-                val componentid = ComponentId(qualifiedid)
-                val instanceid = ComponentInstanceId.default(componentid)
-                (componentid.name, instanceid.name, instanceid.canonicalKey)
-              }
-              resolvednames == qualifiedids &&
-                identities.map(_._1) == qualifiedids &&
-                identities.map(_._2) == qualifiedids &&
-                identities.map(_._3).distinct.size == identities.size
+              val admittedbindings = resolved.componentBindings
+              val admittedids = admittedbindings.flatMap(_.componentId)
+              val admittedinstances = admittedbindings.flatMap(_.canonicalInstanceId)
+              admittedbindings.map(_.componentName) == qualifiedids &&
+                admittedids == componentids &&
+                admittedinstances.map(_.componentId) == componentids &&
+                admittedinstances.map(_.canonicalKey).distinct.size == admittedinstances.size
             case Consequence.Failure(_) =>
               false
           }
@@ -389,12 +388,13 @@ final class Phase56ComponentIdentityContractSpec
       "E4 reject an ambiguous bare UserAccount" must _e4 {
       "when subsystem admission resolves a bare alias among qualified candidates" in {
         Given("Spec: docs/notes/phase-56-cid01-component-identity-inventory-and-failing-first-contract.md; Rules: CID01-R6,R7; Example: E4 org.alpha.UserAccount, org.beta.UserAccount, and UserAccount")
-        val candidates = Vector(
-          "org.alpha.UserAccount",
-          "org.beta.UserAccount",
-          "UserAccount"
-        )
-        val descriptor = _descriptor(candidates)
+        val alpha = ComponentId("org.alpha.UserAccount")
+        val beta = ComponentId("org.beta.UserAccount")
+        val descriptor = _descriptor(Vector(
+          _typed_binding(alpha),
+          _typed_binding(beta),
+          GenericSubsystemComponentBinding("UserAccount")
+        ))
         When("SubsystemAssemblyAdmission.resolveC evaluates the bare alias")
         val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
         Then("ambiguous bare resolution reports both qualified candidates")
@@ -418,12 +418,15 @@ final class Phase56ComponentIdentityContractSpec
     second <- Gen.oneOf("org.alpha", "org.beta", "org.gamma", "org.delta").suchThat(_ != first)
   } yield Vector(first, second)
 
-  private def _descriptor(componentnames: Vector[String]): GenericSubsystemDescriptor =
+  private def _descriptor(bindings: Vector[GenericSubsystemComponentBinding]): GenericSubsystemDescriptor =
     GenericSubsystemDescriptor(
       Path.of("phase-56-cid01-e4"),
       "identity-runtime",
-      componentBindings = componentnames.map(x => GenericSubsystemComponentBinding(x))
+      componentBindings = bindings
     )
+
+  private def _typed_binding(componentid: ComponentId): GenericSubsystemComponentBinding =
+    GenericSubsystemComponentBinding(componentid.name, componentId = Some(componentid))
 
   private def _assert_consequence_failure(
     result: Consequence[ComponentInstanceId],

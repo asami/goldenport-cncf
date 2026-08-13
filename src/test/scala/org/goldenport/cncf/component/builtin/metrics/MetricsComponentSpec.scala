@@ -16,14 +16,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 11, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponentSpec extends AnyWordSpec with Matchers {
   "MetricsComponent" should {
     "expose entity access, runtime metrics, and metrics catalog queries" in {
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val metrics = subsystem.findComponent("metrics").getOrElse(fail("missing metrics component"))
+      val metrics = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.METRICS).getOrElse(fail("missing metrics component"))
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/metrics-spec", 200, 3L)
       RuntimeDashboardMetrics.recordDiagnosticPayloadExternalization("result", "stored", "local-file")
       subsystem.entityAccessMetrics.record(

@@ -30,7 +30,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowComponentSpec
@@ -139,7 +139,7 @@ final class WorkflowComponentSpec
       )
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
       val jobstatus = fixture.subsystem
-        .findComponent("job_control")
+        .findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL)
         .flatMap(_.port.get[JobControlComponent.JobService])
         .getOrElse(fail("job_control service missing"))
         .getJobStatus(instance.relatedJobIds.head)

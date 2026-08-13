@@ -1,18 +1,14 @@
 package org.goldenport.cncf.component
 
-import org.goldenport.cncf.naming.NamingConventions
-
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 15, 2026
  *  version Apr. 24, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentSpace(
 ) {
-  import ComponentSpace._
-
   private var _components: Vector[Component] = Vector.empty
   private var _by_instance_id: Map[String, Component] = Map.empty
   private var _by_component_id: Map[ComponentId, Vector[Component]] = Map.empty
@@ -28,14 +24,6 @@ final class ComponentSpace(
   private def _get_default_by_component_id(id: ComponentId) =
     _by_component_id.get(id).flatMap(_select_default)
 
-  private def _unique_legacy_match(name: String): Option[Component] =
-    _components.filter(_matches_component_name(_, name)) match {
-      case Vector() => None
-      case candidates if candidates.map(_.componentId).distinct.size == 1 =>
-        _select_default(candidates)
-      case _ => None
-    }
-
   def components = _components
 
   def get(id: ComponentInstanceId): Option[Component] =
@@ -50,7 +38,7 @@ final class ComponentSpace(
     locator match {
       case ComponentLocator.ComponentIdLocator(id) => _get_default_by_component_id(id)
       case ComponentLocator.NameLocator(name) =>
-        _unique_legacy_match(name)
+        ComponentId.parseC(name).toOption.flatMap(_get_default_by_component_id)
     }
 
   def add(ps: Seq[Component]): ComponentSpace = {
@@ -99,14 +87,4 @@ final class ComponentSpace(
         .mapValues(_.toVector)
         .toMap
   }
-}
-
-object ComponentSpace {
-  private def _matches_component_name(component: Component, name: String): Boolean =
-    NamingConventions.equivalentByNormalized(component.name, name) ||
-      NamingConventions.equivalentByNormalized(component.displayName, name) ||
-      component.artifactMetadata.toVector.exists { metadata =>
-        metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
-          NamingConventions.equivalentByNormalized(metadata.name, name)
-      }
 }

@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * subsystem introspection projections.
  *
  * @since   Jul. 16, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuleSetProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -73,7 +73,7 @@ final class RuleSetProjectionIntegrationSpec extends AnyWordSpec with Matchers w
 
       override def subsystem: Option[Subsystem] = Some(owner)
     }
-    subsystem.add(Vector(component)).findComponent("catalog").get
+    subsystem.add(Vector(component)).findComponent(ComponentId("org.goldenport.cncf.test.Catalog")).get
   }
 
   private def _rule_sets(record: Record): Vector[Record] =

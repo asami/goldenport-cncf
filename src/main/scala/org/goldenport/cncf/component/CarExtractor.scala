@@ -13,7 +13,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
  * @since   Feb.  3, 2026
  *  version Mar. 22, 2026
  *  version Apr.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
@@ -23,18 +23,8 @@ final case class CarExtracted(
   componentLibs: Vector[Path],
   componentApiJars: Vector[Path],
   collaboratorMain: Option[Path],
-  collaboratorLibs: Vector[Path],
-  rawDescriptor: Option[ComponentDescriptor] = None,
-  deferredRelease: Option[ComponentIdentityDeferredReleaseEntry] = None
+  collaboratorLibs: Vector[Path]
 ) {
-  def archiveDescriptor: ComponentDescriptor =
-    rawDescriptor.getOrElse(descriptor)
-
-  def requireEffectiveIdentityC: Consequence[(ComponentId, String)] =
-    deferredRelease
-      .map(entry => Consequence.success(entry.componentid -> entry.release))
-      .getOrElse(descriptor.requireCanonicalIdentityC)
-
   def componentClasspath: Vector[Path] = componentMain +: componentLibs
 
   def collaboratorClasspath: Option[Vector[Path]] =
@@ -63,10 +53,7 @@ object CarExtractor {
 
   def resolveDirectory(root: Path): Consequence[CarExtracted] =
     _resolve_structure(root, root).flatMap { extracted =>
-      if (extracted.deferredRelease.nonEmpty)
-        CarRuntimeAdmission.validate(extracted).map(_ => extracted)
-      else
-        Consequence.success(extracted)
+      CarRuntimeAdmission.validate(extracted).map(_ => extracted)
     }
 
   private def _unzip(
@@ -96,16 +83,7 @@ object CarExtractor {
     root: Path,
     car: Path
   ): Consequence[CarExtracted] = {
-    val admitteddescriptor = for {
-      raw <- ComponentDescriptorLoader.loadArchiveRaw(root)
-      registry <- ComponentIdentityDeferredReleaseRegistry.loadC()
-      admitted <- registry.admitDescriptorC(raw)
-    } yield admitted
-    admitteddescriptor match {
-      case Consequence.Failure(conclusion) =>
-        return Consequence.Failure(conclusion)
-      case _ =>
-    }
+    val descriptor = ComponentDescriptorLoader.loadArchive(root)
     val componentdir = root.resolve("component")
     val componentjars = _list_jars(componentdir)
     if (componentjars.isEmpty) {
@@ -125,17 +103,15 @@ object CarExtractor {
       } else {
         val collaboratormain = collaboratormainfiles.headOption
         val collaboratorlibs = _list_jars(collaboratordir.resolve("lib")).sortBy(_.getFileName.toString)
-        admitteddescriptor.flatMap { admitted =>
+        descriptor.flatMap { value =>
           _success_extracted(
             root,
-            descriptor = admitted.effective,
+            descriptor = value,
             componentMain = componentjars.head,
             componentLibs = componentlibs,
             componentApiJars = componentapijars,
             collaboratorMain = collaboratormain,
-            collaboratorLibs = collaboratorlibs,
-            rawDescriptor = admitted.raw,
-            deferredRelease = admitted.entry
+            collaboratorLibs = collaboratorlibs
           )
         }
       }
@@ -165,9 +141,7 @@ object CarExtractor {
     componentLibs: Vector[Path],
     componentApiJars: Vector[Path],
     collaboratorMain: Option[Path],
-    collaboratorLibs: Vector[Path],
-    rawDescriptor: ComponentDescriptor,
-    deferredRelease: Option[ComponentIdentityDeferredReleaseEntry]
+    collaboratorLibs: Vector[Path]
   ): Consequence[CarExtracted] = Consequence.success(
     CarExtracted(
       root = root,
@@ -176,9 +150,7 @@ object CarExtractor {
       componentLibs = componentLibs,
       componentApiJars = componentApiJars,
       collaboratorMain = collaboratorMain,
-      collaboratorLibs = collaboratorLibs,
-      rawDescriptor = Some(rawDescriptor),
-      deferredRelease = deferredRelease
+      collaboratorLibs = collaboratorLibs
     )
   )
 

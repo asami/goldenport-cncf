@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  9, 2026
  *  version Apr. 11, 2026
  *  version Jul. 30, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminDeploymentSecurityExecutionSpec
@@ -129,7 +129,7 @@ final class AdminDeploymentSecurityExecutionSpec
   }
 
   private def _admin_component(subsystem: org.goldenport.cncf.subsystem.Subsystem): Component =
-    subsystem.findComponent("admin")
+    subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
       .getOrElse(fail("admin component not found"))
 
   private def _execute(

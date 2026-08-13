@@ -21,7 +21,7 @@ import org.goldenport.record.RecordDecoder
  *  version Apr.  8, 2026
  *  version Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDescriptorLoader {
@@ -57,14 +57,7 @@ object ComponentDescriptorLoader {
       Consequence.resourceInvalid(s"component descriptor path is not a file or directory: ${path}")
 
   def loadArchive(path: Path): Consequence[ComponentDescriptor] =
-    _load_archive(path, validatecanonical = true)
-
-  /**
-   * Decodes packaged descriptor evidence before CID-06D admission
-   * classification. Public archive loading remains canonical and strict.
-   */
-  private[component] def loadArchiveRaw(path: Path): Consequence[ComponentDescriptor] =
-    _load_archive(path, validatecanonical = false)
+    _load_archive(path)
 
   /**
    * Reads only canonical identity evidence from a CAR archive without
@@ -75,23 +68,12 @@ object ComponentDescriptorLoader {
   ): Consequence[(ComponentId, Option[String])] =
     _load_archive_descriptor_record(path).flatMap(_archive_component_identity_c)
 
-  /** Repository metadata view after exact deferred-release classification. */
-  private[cncf] def loadArchiveEffective(path: Path): Consequence[ComponentDescriptor] =
-    for {
-      raw <- loadArchiveRaw(path)
-      registry <- ComponentIdentityDeferredReleaseRegistry.loadC()
-      admission <- registry.admitDescriptorC(raw)
-    } yield admission.effective
-
-  private def _load_archive(
-    path: Path,
-    validatecanonical: Boolean
-  ): Consequence[ComponentDescriptor] =
+  private def _load_archive(path: Path): Consequence[ComponentDescriptor] =
     try {
       if (!Files.exists(path))
         Consequence.resourceNotFound(s"component archive descriptor path does not exist: ${path}")
       else if (_is_archive_file(path))
-        _load_archive_file(path, validatecanonical)
+        _load_archive_file(path)
       else if (_is_non_component_archive_file(path))
         Consequence.resourceInvalid(s"component archive must be a CAR file: ${path}")
       else {
@@ -100,7 +82,7 @@ object ComponentDescriptorLoader {
           else Some(path)
         descriptorpath match {
           case Some(file) =>
-            _load_archive_descriptor_file(file, path, validatecanonical)
+            _load_archive_descriptor_file(file, path)
           case None =>
             Consequence.resourceNotFound(s"component descriptor not found under canonical CAR layout: ${path}")
         }
@@ -250,16 +232,13 @@ object ComponentDescriptorLoader {
     Files.isRegularFile(path) && (name.endsWith(".sar") || name.endsWith(".zip"))
   }
 
-  private def _load_archive_file(
-    path: Path,
-    validatecanonical: Boolean
-  ): Consequence[ComponentDescriptor] = {
+  private def _load_archive_file(path: Path): Consequence[ComponentDescriptor] = {
     val uri = URI.create(s"jar:${path.toUri}")
     Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
       val root = fs.getPath("/")
       _resolve_canonical_descriptor_files(root).headOption match {
         case Some(file) =>
-          _load_archive_descriptor_file(file, path, validatecanonical)
+          _load_archive_descriptor_file(file, path)
         case None =>
           Consequence.resourceNotFound(s"component descriptor not found in archive: ${path}")
       }
@@ -276,18 +255,14 @@ object ComponentDescriptorLoader {
 
   private def _load_archive_descriptor_file(
     descriptorpath: Path,
-    archivepath: Path,
-    validatecanonical: Boolean
+    archivepath: Path
   ): Consequence[ComponentDescriptor] = {
     val result = _load_file(descriptorpath).flatMap { descriptors =>
       descriptors.headOption
         .map(Consequence.success)
         .getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${archivepath}"))
     }.flatMap { descriptor =>
-      if (validatecanonical)
-        _validate_archive_descriptor_contract(descriptor).map(_ => descriptor)
-      else
-        Consequence.success(descriptor)
+      _validate_archive_descriptor_contract(descriptor).map(_ => descriptor)
     }
     _archive_admission_result_c(archivepath, result)
   }

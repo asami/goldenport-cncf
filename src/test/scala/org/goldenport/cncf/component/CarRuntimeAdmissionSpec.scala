@@ -23,7 +23,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 
 /*
  * @since   Jul. 28, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CarRuntimeAdmissionSpec
@@ -99,44 +99,76 @@ final class CarRuntimeAdmissionSpec
       }
     }
 
-    "admit exact deferred-release legacy ABI evidence" which {
-      "admits the registered release without a runtime manifest" in {
+    "reject legacy runtime evidence" which {
+      "rejects an exact former deferred-release CAR before caller use" in {
         _with_temp_dir { root =>
-          Given("the exact registered Corpus release packaged with legacy ABI v1 and no runtime manifest")
-          val registry = ComponentIdentityDeferredReleaseRegistry.default
-          val entry = registry.entries.find(_.legacylocalid == "Corpus").get
+          Given("the exact former deferred Corpus release packaged with schema 2, ABI v1, and no runtime manifest")
           val expanded = LegacyDeferredReleaseCarFixture.writeDirectory(
-            root.resolve("expanded"),
-            entry
+            root.resolve("expanded")
           )
           val archive = LegacyDeferredReleaseCarFixture.pack(
             expanded,
             root.resolve("textus-corpus-0.1.0.car")
           )
           val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+          var callerused = false
 
-          When("CNCF extracts and validates the exact deferred-release CAR")
-          val admitted = CarExtractor.withExtracted(archive, workarea) { extracted =>
-            extracted.requireEffectiveIdentityC
+          When("CNCF extracts the exact historical archive")
+          val rejected = CarExtractor.withExtracted(archive, workarea) { _ =>
+            callerused = true
+            Consequence.success(())
           }
 
-          Then("the registered canonical identity is admitted through the legacy ABI boundary")
-          admitted.toOption shouldBe Some(entry.componentid -> entry.release)
+          Then("schema-2 archive evidence is rejected before the caller can use component code")
+          rejected.toOption shouldBe empty
+          callerused shouldBe false
         }
       }
 
-      "emit canonical admission evidence from a qualified legacy componentName alias without using its display name as artifact identity" in {
+      "rejects a canonical descriptor carrying ABI document v1" in {
         _with_temp_dir { root =>
-          Given("a legacy descriptor with a human display name and a qualified componentName alias")
+          Given("a canonical descriptor and runtime manifest with an ABI document v1")
+          val content = root.resolve("content")
+          _prepare_root(content, abicomponent = "Sample")
+          Files.writeString(
+            content.resolve(CarRuntimeAdmission.ABI_MANIFEST_FILE),
+            s"""{
+               |  "format": "cozy.car.abi-manifest.v1",
+               |  "car": {"name": "${_artifactname}", "version": "${_release}"},
+               |  "abi": {"version": 1, "exports": {"components": [{"name": "Sample"}]}}
+               |}""".stripMargin,
+            StandardCharsets.UTF_8
+          )
+          _write_runtime_manifest(content, minimum = _compatible_minimum, excluded = Vector.empty)
+          val archive = _zip(content, root.resolve("abi-v1.car"))
+          val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+
+          When("CNCF evaluates the packaged ABI evidence")
+          val rejected = CarExtractor.withExtracted(archive, workarea) { _ =>
+            Consequence.success(())
+          }
+
+          Then("the ABI document format fails closed")
+          _failure_message(rejected) should include("CAR ABI manifest format mismatch")
+        }
+      }
+
+      "keeps canonical archive evidence independent of a display field" in {
+        _with_temp_dir { root =>
+          Given("a canonical descriptor with a human display field beside its canonical coordinate")
           val content = root.resolve("content")
           val descriptor = content.resolve("component-descriptor.json")
           Files.createDirectories(content.resolve("component"))
           Files.writeString(
             descriptor,
             s"""{
-               |  "name": "Fixture Display Name",
-               |  "componentName": "${_componentid.name}",
-               |  "version": "${_release}"
+               |  "schemaVersion": 3,
+               |  "displayName": "Fixture Display Name",
+               |  "component": {
+               |    "namespace": "${_componentid.namespace.value()}",
+               |    "id": "${_componentid.localId.value()}",
+               |    "version": "${_release}"
+               |  }
                |}""".stripMargin,
             StandardCharsets.UTF_8
           )
@@ -147,7 +179,7 @@ final class CarRuntimeAdmissionSpec
           )
           val archive = root.resolve("component-name-alias.car")
 
-          When("the fixture emits canonical runtime and ABI evidence from the qualified componentName alias")
+          When("the fixture emits canonical runtime and ABI evidence")
           CarArchiveFixture.write(
             archive,
             Vector(
@@ -178,7 +210,7 @@ final class CarRuntimeAdmissionSpec
             )
           }
 
-          Then("the archive carries canonical runtime and ABI coordinates independently of the display name")
+          Then("the archive carries canonical runtime and ABI coordinates independently of the display field")
           evidence._1 shouldBe _artifactname
           evidence._2 shouldBe _release
           evidence._3 shouldBe _componentid.name
@@ -186,6 +218,22 @@ final class CarRuntimeAdmissionSpec
           evidence._5 shouldBe _componentid.namespace.value()
           evidence._6 shouldBe _componentid.localId.value()
           evidence._7 shouldBe _release
+        }
+      }
+    }
+
+    "admit expanded canonical evidence" which {
+      "applies packaged runtime and ABI validation to an expanded CAR directory" in {
+        _with_temp_dir { root =>
+          Given("an expanded canonical CAR with complete runtime and ABI evidence")
+          _prepare_root(root, abicomponent = "Sample")
+          _write_runtime_manifest(root, minimum = _compatible_minimum, excluded = Vector.empty)
+
+          When("CNCF resolves the expanded CAR directory")
+          val admitted = CarExtractor.resolveDirectory(root)
+
+          Then("the expanded directory succeeds through the same runtime admission gate")
+          admitted.toOption.map(_.descriptor.componentId) shouldBe Some(Some(_componentid))
         }
       }
     }

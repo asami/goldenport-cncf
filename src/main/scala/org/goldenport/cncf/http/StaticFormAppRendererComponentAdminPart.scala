@@ -7,6 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
@@ -31,7 +32,8 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -1458,10 +1460,16 @@ trait StaticFormAppRendererComponentAdminPart {
     subsystem: Subsystem,
     path: String,
     form: Record
-  ): Option[OperationResponse] =
-    admin_protocol_request(path, form).flatMap { request =>
+  ): Option[OperationResponse] = {
+    val canonicalform = form.getString("component").flatMap { value =>
+      find_component(subsystem, value).map(component =>
+        form.upsertSingle("component", component.componentId.name)
+      )
+    }.getOrElse(form)
+    admin_protocol_request(path, canonicalform).flatMap { request =>
       subsystem.executeOperationResponse(request).toOption
     }
+  }
 
   protected def admin_protocol_request(
     path: String,
@@ -1471,7 +1479,7 @@ trait StaticFormAppRendererComponentAdminPart {
       case Vector(component, service, operation) =>
         Some(
           ProtocolRequest.of(
-            component = component,
+            component = if (component == "admin") BuiltinComponentIdentity.ADMIN.name else component,
             service = service,
             operation = operation,
             arguments = form.asMap.toVector.map { case (key, value) => Argument(key, value.toString) }.toList

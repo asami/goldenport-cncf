@@ -20,7 +20,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -629,9 +629,7 @@ object GenericSubsystemDescriptor {
       priority = overrides.priority.orElse(defaults.priority),
       isDefault = overrides.isDefault.orElse(defaults.isDefault),
       capabilities = if (overrides.capabilities.nonEmpty) overrides.capabilities else defaults.capabilities,
-      componentId = overrides.componentId.orElse(
-        defaults.componentId.filter(_.name == overrides.componentName)
-      )
+      componentId = overrides.componentId
     )
 
   private def _merge_security(
@@ -781,10 +779,9 @@ object GenericSubsystemDescriptor {
     descriptor: ComponentDescriptor,
     includeAssemblyDescriptor: Boolean = true
   ): Consequence[GenericSubsystemDescriptor] =
-    if (descriptor.isCanonicalIdentity)
+    descriptor.requireCanonicalIdentityC.flatMap { _ =>
       _from_canonical_component_descriptor(path, descriptor, includeAssemblyDescriptor)
-    else
-      _from_legacy_component_descriptor(path, descriptor, includeAssemblyDescriptor)
+    }
 
   private def _from_canonical_component_descriptor(
     path: Path,
@@ -840,94 +837,19 @@ object GenericSubsystemDescriptor {
     source: Option[Vector[GenericSubsystemComponentBinding]]
   ): Consequence[Vector[GenericSubsystemComponentBinding]] = {
     val bindings = source.filter(_.nonEmpty).getOrElse(Vector.empty)
-    bindings.find(_denotes_canonical_root_alias(_, componentid)) match {
-      case Some(alias) =>
+    bindings.collectFirst {
+      case binding if binding.componentId.isEmpty || binding.version.isEmpty => binding
+    } match {
+      case Some(binding) =>
         Consequence.resourceInvalid(
-          s"canonical component assembly binding must use exact qualified ComponentId: " +
-            s"${alias.componentName}; expected: ${componentid.name}"
+          s"canonical component assembly binding requires namespace/id/version: " +
+            s"legacy=${binding.componentName}; required=${componentid.name}"
         )
       case None =>
-        val typed = bindings.map { binding =>
-          if (binding.componentName == componentid.name)
-            binding.copy(componentId = Some(componentid))
-          else
-            binding
-        }
         val augmented =
-          if (typed.exists(_.componentId.contains(componentid))) typed
-          else primary +: typed
+          if (bindings.exists(_.componentId.contains(componentid))) bindings
+          else primary +: bindings
         _validate_component_bindings_c(augmented)
-    }
-  }
-
-  private def _denotes_canonical_root_alias(
-    binding: GenericSubsystemComponentBinding,
-    componentid: ComponentId
-  ): Boolean =
-    binding.componentId.isEmpty && binding.componentName != componentid.name &&
-      _canonical_root_aliases(componentid).exists { alias =>
-        NamingConventions.equivalentByNormalized(binding.componentName, alias) ||
-          binding.coordinate.flatMap(coordinateArtifact).exists(
-            NamingConventions.equivalentByNormalized(_, alias)
-          )
-      }
-
-  private def _canonical_root_aliases(componentid: ComponentId): Vector[String] = {
-    val localid = componentid.localId.value()
-    Vector(
-      componentid.name,
-      localid,
-      s"textus-$localid",
-      s"textus_$localid"
-    )
-  }
-
-  private def _from_legacy_component_descriptor(
-    path: Path,
-    descriptor: ComponentDescriptor,
-    includeassemblydescriptor: Boolean
-  ): Consequence[GenericSubsystemDescriptor] = {
-    val componentname =
-      descriptor.componentName.orElse(descriptor.name).getOrElse(path.getFileName.toString.stripSuffix(".car"))
-    val primary = GenericSubsystemComponentBinding(
-      componentName = componentname,
-      version = descriptor.version,
-      coordinate = None,
-      extensionBindings = descriptor.extensionBindings
-    )
-    val assemblyc =
-      if (includeassemblydescriptor)
-        _load_assembly_descriptor_consequence(path, "component-car")
-      else
-        Consequence.success(None)
-    assemblyc.flatMap { assembly =>
-      _decode_optional_assembly_shape(path, assembly).flatMap { shape =>
-        _implicit_subsystem_name_c(path, descriptor, shape).map { subsystemname =>
-          val bindings =
-            shape.map(_.componentBindings).filter(_.nonEmpty).map { xs =>
-              if (xs.exists(x => runtimeComponentName(x.componentName) == runtimeComponentName(componentname))) xs
-              else primary +: xs
-            }.getOrElse(Vector(primary))
-          GenericSubsystemDescriptor(
-            path = path,
-            subsystemName = subsystemname,
-            version = shape.flatMap(_.version).orElse(descriptor.version),
-            componentBindings = bindings,
-            extensions = descriptor.extensions ++ shape.map(_.extensions).getOrElse(Map.empty),
-            config = descriptor.config ++ shape.map(_.config).getOrElse(Map.empty),
-            wiring = shape.map(_.wiring).getOrElse(Record.empty),
-            assemblyDescriptor = assembly,
-            runtime = shape.flatMap(_.runtime),
-            security = shape.flatMap(_.security),
-            builtin = shape.flatMap(_.builtin),
-            operationAuthorization = shape.map(_.operationAuthorization).getOrElse(Map.empty),
-            ruleSets = shape.map(_.ruleSets).getOrElse(Vector.empty),
-            subsystemCapabilityProviders = shape.map(_.subsystemCapabilityProviders).getOrElse(Vector.empty),
-            componentDescriptorOverrides = Vector(descriptor),
-            implicitRootComponentName = Some(primary.runtimeComponentName)
-          )
-        }
-      }
     }
   }
 
@@ -1232,44 +1154,52 @@ object GenericSubsystemDescriptor {
   private[cncf] def _validate_component_bindings_c(
     bindings: Vector[GenericSubsystemComponentBinding]
   ): Consequence[Vector[GenericSubsystemComponentBinding]] = {
-    val duplicate = bindings
-      .groupBy(_component_binding_instance_key)
-      .collectFirst { case (id, xs) if xs.size > 1 => id }
-    val duplicatedefault = bindings
-      .filter(_.isDefault.contains(true))
-      .groupBy(_component_binding_default_key)
-      .collectFirst { case (componentid, xs) if xs.size > 1 => componentid }
-    duplicate match {
-      case Some(id) => Consequence.resourceInvalid(s"duplicate component instance id: ${id}")
-      case None => duplicatedefault match {
-        case Some(component) => Consequence.resourceInvalid(s"multiple default component instances: ${component}")
-        case None => Consequence.success(bindings)
+    bindings.collectFirst {
+      case binding if binding.componentId.isEmpty || binding.version.isEmpty => binding
+    } match {
+      case Some(binding) =>
+        Consequence.resourceInvalid(
+          s"component assembly binding requires canonical namespace/id/version: " +
+            s"alias=${binding.componentName}; required=canonical namespace/id/version"
+        )
+      case None =>
+        val duplicate = bindings
+          .groupBy(_component_binding_instance_key)
+          .collectFirst { case (id, xs) if xs.size > 1 => id }
+        val duplicatedefault = bindings
+          .filter(_.isDefault.contains(true))
+          .groupBy(_component_binding_default_key)
+          .collectFirst { case (componentid, xs) if xs.size > 1 => componentid }
+        duplicate match {
+          case Some(id) => Consequence.resourceInvalid(s"duplicate component instance id: ${id}")
+          case None => duplicatedefault match {
+            case Some(component) => Consequence.resourceInvalid(s"multiple default component instances: ${component}")
+            case None => Consequence.success(bindings)
+          }
+        }
       }
     }
-  }
 
   private def _component_binding_instance_key(
     binding: GenericSubsystemComponentBinding
   ): String =
     binding.componentId.map(id => ComponentInstanceId(id, binding.instanceName).canonicalKey).getOrElse(
-      s"legacy:${_comparison_key(runtimeComponentName(binding.componentName))}@${_comparison_key(binding.instanceName)}"
+      s"canonical-required:${binding.componentName}@${binding.instanceName}"
     )
 
   private def _component_binding_default_key(
     binding: GenericSubsystemComponentBinding
   ): String =
     binding.componentId.map(id => ComponentInstanceId.default(id).canonicalKey).getOrElse(
-      s"legacy:${_comparison_key(runtimeComponentName(binding.componentName))}@default"
+      s"canonical-required:${binding.componentName}@default"
     )
 
   private def _binding_from_record_c(
     rec: Record,
     defaultname: Option[String]
-  ): Consequence[GenericSubsystemComponentBinding] = {
-    val componentnamec = _component_binding_identity_c(rec, defaultname)
-    componentnamec.flatMap { componentname => componentname match {
-      case Some((name, componentid)) =>
-      val version = _string(rec, "version")
+  ): Consequence[GenericSubsystemComponentBinding] =
+    _component_binding_identity_c(rec, defaultname).flatMap { case (name, componentid, release) =>
+      val version = Some(release)
       val coordinate = _string(rec, "coordinate")
       val instance = _string(rec, "instance")
       val instancespecified = rec.getAny("instance").nonEmpty
@@ -1306,53 +1236,47 @@ object GenericSubsystemDescriptor {
             priority = _int(rec, "priority"),
             isDefault = _boolean(rec, "default", "isDefault"),
             capabilities = _string_vector(rec, List("capabilities", "capability")),
-            componentId = componentid
+            componentId = Some(componentid)
           ))
         }
       }
-      case None => Consequence.argumentMissing("component/componentName/name")
-    }}
-  }
+    }
 
   private def _component_binding_identity_c(
     rec: Record,
     defaultname: Option[String]
-  ): Consequence[Option[(String, Option[ComponentId])]] = {
-    val canonicalpresent = rec.getAny("namespace").nonEmpty || rec.getAny("id").nonEmpty
-    val canonicalc: Consequence[Option[(String, Option[ComponentId])]] =
-      if (canonicalpresent)
-        for {
-          namespace <- _required_component_binding_identity_field_c(rec, "namespace")
-          id <- _required_component_binding_identity_field_c(rec, "id")
-          componentid <- ComponentId.parseC(s"${namespace}.${id}")
-        } yield Some(s"${namespace}.${id}" -> Some(componentid))
-      else
-        Consequence.success(None)
-    val legacyc = _sequence(Vector("component", "componentName", "name").map { key =>
-      _component_binding_identity_field_c(rec, key).map(_.map(key -> _))
-    }).flatMap { values =>
-      val supplied = values.flatten
-      if (supplied.map(_._2).distinct.size > 1)
-        Consequence.resourceInvalid("component binding legacy identity fields must agree")
-      else
-        Consequence.success(supplied.headOption.map(_._2))
-    }
-    for {
-      canonical <- canonicalc
-      legacy <- legacyc
-      default <- _default_component_binding_identity_c(defaultname)
-      identity <- canonical match {
-        case Some((canonicalname, _)) =>
-          legacy match {
-            case Some(legacyname) if legacyname != canonicalname =>
-              Consequence.resourceInvalid(s"canonical and legacy component binding identities must agree: canonical=$canonicalname legacy=$legacyname")
-            case _ => Consequence.success(canonical)
-          }
-        case None =>
-          Consequence.success(legacy.orElse(default).map(_ -> None))
-      }
-    } yield identity
+  ): Consequence[(String, ComponentId, String)] = {
+    val legacyfields = Vector("component", "componentName", "name").filter(rec.getAny(_).nonEmpty)
+    if (legacyfields.nonEmpty)
+      Consequence.resourceInvalid(
+        s"component assembly binding rejects legacy identity fields: ${legacyfields.mkString(",")}"
+      )
+    else
+      for {
+        namespace <- _required_component_binding_identity_field_c(rec, "namespace")
+        id <- _required_component_binding_identity_field_c(rec, "id")
+        release <- _required_component_binding_identity_field_c(rec, "version")
+        componentid <- ComponentId.parseC(s"${namespace}.${id}")
+        _ <- _validate_component_binding_canonical_release_c(componentid, release)
+      } yield (componentid.name, componentid, release)
   }
+
+  private def _validate_component_binding_canonical_release_c(
+    componentid: ComponentId,
+    release: String
+  ): Consequence[Unit] =
+    ComponentDescriptor(
+      name = Some(componentid.name),
+      version = Some(release),
+      componentName = Some(componentid.name),
+      schemaVersion = Some(3),
+      componentId = Some(componentid)
+    ).requireCanonicalIdentityC match {
+      case Consequence.Success(_) =>
+        Consequence.success(())
+      case Consequence.Failure(conclusion) =>
+        Consequence.resourceInvalid(s"component binding version is invalid: ${conclusion.displayMessage}")
+    }
 
   private def _component_binding_identity_field_c(
     rec: Record,
@@ -1372,15 +1296,6 @@ object GenericSubsystemDescriptor {
     _component_binding_identity_field_c(rec, key).flatMap {
       case Some(value) => Consequence.success(value)
       case None => Consequence.argumentMissing(s"component binding ${key}")
-    }
-
-  private def _default_component_binding_identity_c(
-    defaultname: Option[String]
-  ): Consequence[Option[String]] =
-    defaultname match {
-      case Some(value) if value.nonEmpty && value != value.trim =>
-        Consequence.resourceInvalid("component binding identity must not include surrounding whitespace")
-      case value => Consequence.success(value)
     }
 
   private def _valid_instance_name(value: String): Boolean =

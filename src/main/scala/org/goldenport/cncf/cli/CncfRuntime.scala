@@ -24,7 +24,7 @@ import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentIdentityCompatibilityAdapter, ComponentInit, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptorLoader, ComponentId, ComponentIdentityCompatibilityAdapter, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.config.{ClientConfig, CncfAssemblyConfigurationProjection, CncfConfigurationArgumentBindingAdmission, CncfConfigurationArgumentBindingAssignment, CncfConfigurationArgumentBindingCodec, CncfConfigurationEnvironmentBindingAdmission, CncfConfigurationEnvironmentBindingAssignment, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, CncfRuntimeConfigurationProjection, RepositoryBootstrapPolicy, ResolvedStandaloneUserProfile, RuntimeConfig, RuntimeDefaults, RuntimeExecutionProfileConfiguration, RuntimeFileConfigLoader, RuntimeProcessExitPolicy, RuntimeTestDescriptor, StandaloneUserProfileBindingProjection, StandaloneUserProfileResolver, SubsystemInstanceId, SystemNodeShutdownConfiguration}
 import org.goldenport.cncf.config.ConfigurationAccess
@@ -67,7 +67,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -782,7 +783,7 @@ object CncfRuntime extends GlobalObservable {
       args
     } else {
       val archive = invocation.componentName match {
-        case Some(name) => _detect_component_archive(cwd, name)
+        case Some(name) => _detect_component_archive(cwd, _require_qualified_component_id(name), invocation.componentVersion)
         case None => _detect_latest_component_archive(cwd)
       }
       archive.map { path =>
@@ -793,13 +794,14 @@ object CncfRuntime extends GlobalObservable {
 
   private def _detect_component_archive(
     cwd: Path,
-    componentname: String
+    componentid: ComponentId,
+    version: Option[String]
   ): Option[Path] = {
     val roots = Vector(
       cwd.resolve("component").resolve("target"),
       cwd.resolve("target")
     ).map(_.normalize)
-    roots.iterator.flatMap(_latest_component_archive(_, componentname)).toSeq.headOption
+    roots.iterator.flatMap(_latest_component_archive(_, componentid, version)).toSeq.headOption
   }
 
   private def _detect_latest_component_archive(
@@ -814,13 +816,15 @@ object CncfRuntime extends GlobalObservable {
 
   private def _latest_component_archive(
     root: Path,
-    componentname: String
+    componentid: ComponentId,
+    version: Option[String]
   ): Option[Path] =
     _component_archives(root)
-      .filter { path =>
-        val name = path.getFileName.toString
-        name == s"${componentname}.car" || name.startsWith(s"${componentname}-")
-      }
+      .filter(path => ComponentDescriptorLoader.loadArchive(path).toOption.exists { descriptor =>
+        descriptor.requireCanonicalIdentityC.toOption.exists { case (id, release) =>
+          id == componentid && version.forall(_ == release)
+        }
+      })
       .headOption
 
   private def _latest_component_archive(
@@ -985,7 +989,9 @@ object CncfRuntime extends GlobalObservable {
       invocation
     } else {
       invocation.componentName
-        .flatMap { name =>
+        .map(_require_qualified_component_id)
+        .flatMap { componentid =>
+          val name = componentid.name
           _resolve_component_archive_entry(searchspecs, name, invocation.componentVersion)
             .map { path =>
               invocation.copy(actualArgs = _insert_framework_args(args, Array(s"--${RuntimeConfig.componentFileKey}=${path}")))
@@ -1009,6 +1015,9 @@ object CncfRuntime extends GlobalObservable {
         .getOrElse(invocation)
     }
   }
+
+  private def _require_qualified_component_id(componentname: String): ComponentId =
+    ComponentId.parseC(componentname).TAKE
 
   private[cncf] def componentExtraFunction(
     specs: Vector[ComponentRepository.Specification],
@@ -1740,7 +1749,7 @@ object CncfRuntime extends GlobalObservable {
   private[cncf] def developmentComponentClaims(
     activeSpecifications: Seq[ComponentRepository.Specification],
     searchSpecifications: Seq[ComponentRepository.Specification]
-  ): Map[ComponentRepository.Specification, Set[String]] =
+  ): Map[ComponentRepository.Specification, Set[(ComponentId, String)]] =
     ComponentRepository.developmentComponentClaims(activeSpecifications ++ searchSpecifications)
 
   private def _origin_for_spec(

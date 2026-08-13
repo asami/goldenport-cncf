@@ -2,13 +2,12 @@ package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.naming.NamingConventions
-
 /*
- * Bounded adapter from one legacy Component identity spelling to an already
- * admitted canonical ComponentId candidate set.
+ * Canonical Component identity admission and the retained Web-path
+ * presentation alias projection.
  *
  * @since   Aug.  8, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object ComponentIdentityCompatibilityAdapter {
@@ -97,10 +96,7 @@ private[cncf] object ComponentIdentityCompatibilityAdapter {
     notices: Vector[Notice]
   )
 
-  /**
-   * Runtime-only presentation aliases supplied by already admitted Components.
-   * The aliases are diagnostics and selector inputs, never identity authority.
-   */
+  /** Runtime presentation aliases supplied by already admitted Components. */
   final case class AliasCandidate(
     componentid: ComponentId,
     aliases: Vector[String]
@@ -135,25 +131,7 @@ private[cncf] object ComponentIdentityCompatibilityAdapter {
   ): Result = {
     val aliasvalue = Option(alias).getOrElse("")
     val canonicalcandidates = Option(candidates).toVector.flatten.filter(_ != null).distinct.sortBy(_.name)
-    ComponentId.parseC(aliasvalue) match {
-      case Consequence.Success(componentid) =>
-        if (canonicalcandidates.contains(componentid))
-          Canonical(componentid)
-        else
-          Rejected(Unsupported(surface, AliasKind.Qualified, aliasvalue))
-      case Consequence.Failure(_) if aliasvalue.contains('.') =>
-        Rejected(Unsupported(surface, AliasKind.Qualified, aliasvalue))
-      case Consequence.Failure(_) =>
-        val barematching = canonicalcandidates.filter(_.localId.value() == aliasvalue)
-        val artifactmatching = canonicalcandidates.filter(_artifact_aliases(_).contains(aliasvalue))
-        val matching = (barematching ++ artifactmatching).distinct.sortBy(_.name)
-        if (matching.size > 1)
-          Rejected(Ambiguous(surface, AliasKind.Bare, aliasvalue, matching))
-        else if (barematching.nonEmpty)
-          _legacy_result(aliasvalue, surface, AliasKind.Bare, barematching)
-        else
-          _legacy_result(aliasvalue, surface, AliasKind.Artifact, artifactmatching)
-    }
+    _resolve_canonical(aliasvalue, canonicalcandidates, surface)
   }
 
   def runtimeAliasCandidates(components: Seq[Component]): Vector[AliasCandidate] = {
@@ -173,9 +151,8 @@ private[cncf] object ComponentIdentityCompatibilityAdapter {
   }
 
   /**
-   * Resolves runtime selector spellings against a complete, admitted candidate
-   * set. Qualified selectors remain exact; bare local IDs remain exact before
-   * normalized presentation aliases are considered.
+   * Resolves exact canonical identities on every surface. WebPath alone also
+   * retains one unique admitted presentation alias for stable Web routes.
    */
   def resolveAliases(
     alias: String,
@@ -186,48 +163,13 @@ private[cncf] object ComponentIdentityCompatibilityAdapter {
     val aliasvalue = Option(alias).getOrElse("")
     val canonicalcandidates = _merge_alias_candidates(Option(candidates).getOrElse(Vector.empty))
     val componentids = canonicalcandidates.map(_.componentid).distinct.sortBy(_.name)
-    ComponentId.parseC(aliasvalue) match {
-      case Consequence.Success(componentid) =>
-        if (componentids.contains(componentid)) Canonical(componentid)
-        else Rejected(Unsupported(surface, AliasKind.Qualified, aliasvalue))
-      case Consequence.Failure(_) if aliasvalue.contains('.') =>
-        Rejected(Unsupported(surface, AliasKind.Qualified, aliasvalue))
-      case Consequence.Failure(_) =>
-        val localmatching = componentids.filter(_.localId.value() == aliasvalue)
-        val key = NamingConventions.toNormalizedSegment(aliasvalue)
-        val presentationmatching = canonicalcandidates.collect {
-          case candidate if candidate.aliases.exists(x => NamingConventions.toNormalizedSegment(x) == key) =>
-            candidate.componentid
-        }.distinct.sortBy(_.name)
-        val exactmatching = (localmatching ++ presentationmatching).distinct.sortBy(_.name)
-        if (exactmatching.size > 1)
-          Rejected(Ambiguous(surface, AliasKind.Bare, aliasvalue, exactmatching))
-        else if (localmatching.nonEmpty)
-          _legacy_result(aliasvalue, surface, AliasKind.Bare, localmatching)
-        else if (presentationmatching.nonEmpty)
-          _legacy_result(aliasvalue, surface, AliasKind.Presentation, presentationmatching)
-        else if (allowprefix && aliasvalue.nonEmpty) {
-          val comparisonkey = NamingConventions.toComparisonKey(aliasvalue)
-          val prefixlocalmatching = canonicalcandidates.collect {
-            case candidate if NamingConventions.toComparisonKey(candidate.componentid.localId.value()).startsWith(comparisonkey) =>
-              candidate.componentid
-          }.distinct.sortBy(_.name)
-          val prefixpresentationmatching = canonicalcandidates.collect {
-            case candidate if
-              NamingConventions.toComparisonKey(candidate.componentid.name).startsWith(comparisonkey) ||
-                candidate.aliases.exists(x => NamingConventions.toComparisonKey(x).startsWith(comparisonkey)) =>
-              candidate.componentid
-          }.distinct.sortBy(_.name)
-          val prefixmatching = (prefixlocalmatching ++ prefixpresentationmatching).distinct.sortBy(_.name)
-          if (prefixmatching.size > 1)
-            Rejected(Ambiguous(surface, AliasKind.Bare, aliasvalue, prefixmatching))
-          else if (prefixlocalmatching.nonEmpty)
-            _legacy_result(aliasvalue, surface, AliasKind.Bare, prefixlocalmatching)
-          else
-            _legacy_result(aliasvalue, surface, AliasKind.Presentation, prefixpresentationmatching)
-        } else
-          _legacy_result(aliasvalue, surface, AliasKind.Presentation, presentationmatching)
-        }
+    _resolve_canonical(aliasvalue, componentids, surface) match {
+      case canonical: Canonical => canonical
+      case _: Rejected if surface == Surface.WebPath && !aliasvalue.contains('.') =>
+        _resolve_web_path_alias(aliasvalue, canonicalcandidates)
+      case rejected: Rejected => rejected
+      case adapted: Adapted => adapted
+    }
   }
 
   def projectDescriptorC(
@@ -248,109 +190,65 @@ private[cncf] object ComponentIdentityCompatibilityAdapter {
           )
       }
     else
-      _project_legacy_descriptor_c(descriptor, expectedId)
+      Consequence.componentInvalid(
+        s"component.identity.compatibility.descriptor-schema.required: expected=3; actual=${descriptor.schemaVersion.map(_.toString).getOrElse("missing")}"
+      )
 
   def descriptorClaimsIdentity(
     descriptor: ComponentDescriptor,
     expectedId: ComponentId
   ): Boolean =
     Option(descriptor).exists { source =>
-      source.componentId.contains(expectedId) ||
-        _descriptor_fields(source).exists { case (_, alias) =>
-          resolve(alias, Vector(expectedId), Surface.DescriptorField) match {
-            case _: Canonical => true
-            case _: Adapted => true
-            case _: Rejected => false
-          }
-        }
+      source.schemaVersion.contains(3) &&
+        source.requireCanonicalIdentityC.toOption.exists(_._1 == expectedId)
     }
 
-  def descriptorAliases(componentId: ComponentId): Vector[String] =
-    if (componentId == null)
-      Vector.empty
-    else
-      (Vector(componentId.name, componentId.localId.value()) ++ _artifact_aliases(componentId)).distinct
-
-  private def _project_legacy_descriptor_c(
-    descriptor: ComponentDescriptor,
-    expectedid: ComponentId
-  ): Consequence[DescriptorProjection] =
-    descriptor.componentId match {
-      case Some(actualid) if actualid != expectedid =>
-        Consequence.componentInvalid(
-          s"component.identity.compatibility.descriptor-id.mismatch: expected=${expectedid.name}; actual=${actualid.name}"
-        )
-      case _ =>
-        val fields = _descriptor_fields(descriptor)
-        if (fields.isEmpty)
-          Consequence.componentInvalid(
-            s"component.identity.compatibility.descriptor-field.required: expected=${expectedid.name}"
-          )
-        else
-          fields.foldLeft(Consequence.success(Vector.empty[Notice])) { case (z, (field, alias)) =>
-            z.flatMap { notices =>
-              resolve(alias, Vector(expectedid), Surface.DescriptorField) match {
-                case result: Canonical =>
-                  result.toConsequence.map(admission => notices ++ admission.notice)
-                case result: Adapted =>
-                  result.toConsequence.map(admission => notices ++ admission.notice)
-                case Rejected(rejection) =>
-                  Consequence.componentInvalid(
-                    s"component.identity.compatibility.descriptor-field.rejected: field=$field; " +
-                      s"expected=${expectedid.name}; actual=$alias; reason=${rejection.diagnostic}"
-                  )
-              }
-            }
-          }.map { notices =>
-            DescriptorProjection(
-              descriptor.copy(
-                name = Some(expectedid.name),
-                componentName = Some(expectedid.name),
-                componentId = Some(expectedid)
-              ),
-              notices.distinct
-            )
-          }
-    }
-
-  private def _descriptor_fields(descriptor: ComponentDescriptor): Vector[(String, String)] =
-    Vector(
-      descriptor.name.map("name" -> _),
-      descriptor.componentName.map("componentName" -> _)
-    ).flatten.distinct
-
-  private def _legacy_result(
+  private def _resolve_canonical(
     alias: String,
-    surface: Surface,
-    aliaskind: AliasKind,
-    matching: Vector[ComponentId]
+    candidates: Vector[ComponentId],
+    surface: Surface
   ): Result =
-    matching match {
+    ComponentId.parseC(alias) match {
+      case Consequence.Success(componentid) if candidates.contains(componentid) =>
+        Canonical(componentid)
+      case Consequence.Success(_) =>
+        Rejected(Unsupported(surface, AliasKind.Qualified, alias))
+      case Consequence.Failure(_) =>
+        Rejected(Unsupported(surface, _noncanonical_alias_kind(alias), alias))
+    }
+
+  private def _resolve_web_path_alias(
+    alias: String,
+    candidates: Vector[AliasCandidate]
+  ): Result = {
+    val key = NamingConventions.toNormalizedSegment(alias)
+    val matches = candidates.collect {
+      case candidate
+          if NamingConventions.toNormalizedSegment(candidate.componentid.name) == key ||
+            candidate.aliases.exists(x => NamingConventions.toNormalizedSegment(x) == key) =>
+        candidate.componentid
+    }.distinct.sortBy(_.name)
+    matches match {
       case Vector(componentid) =>
         Adapted(
           componentid,
           Notice(
             kind = "component-identity-compatibility",
-            surface = surface,
-            aliaskind = aliaskind,
+            surface = Surface.WebPath,
+            aliaskind = AliasKind.Presentation,
             alias = alias,
             componentid = componentid
           )
         )
       case Vector() =>
-        Rejected(Unsupported(surface, aliaskind, alias))
+        Rejected(Unsupported(Surface.WebPath, _noncanonical_alias_kind(alias), alias))
       case xs =>
-        Rejected(Ambiguous(surface, aliaskind, alias, xs))
+        Rejected(Ambiguous(Surface.WebPath, AliasKind.Presentation, alias, xs))
     }
-
-  private def _artifact_aliases(componentid: ComponentId): Vector[String] = {
-    val localid = NamingConventions.toNormalizedSegment(componentid.localId.value())
-    val namespaceleaf = componentid.namespace.value().split("\\.").toVector.lastOption.getOrElse("")
-    Vector(
-      localid,
-      s"${NamingConventions.toNormalizedSegment(namespaceleaf)}-$localid"
-    ).filter(_.nonEmpty).distinct
   }
+
+  private def _noncanonical_alias_kind(alias: String): AliasKind =
+    if (Option(alias).exists(_.contains('.'))) AliasKind.Qualified else AliasKind.Bare
 
   private def _merge_alias_candidates(
     candidates: Vector[AliasCandidate]

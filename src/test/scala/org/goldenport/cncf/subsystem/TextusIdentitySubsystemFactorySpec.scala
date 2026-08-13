@@ -6,8 +6,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationValue
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.component.repository.ComponentRepository
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
@@ -17,32 +16,14 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 26, 2026
  *  version Apr. 24, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TextusIdentitySubsystemFactorySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "TextusIdentitySubsystemFactory" should {
-    "discover only the user account component" in {
-      Given("the default standard repository contains the UserAccount CAR")
-      val artifactRoot = ComponentRepository.defaultStandardRepositoryDir()
-        .resolve("org")
-        .resolve("simplemodeling")
-        .resolve("car")
-        .resolve("textus-user-account")
-      if (!Files.exists(artifactRoot))
-        cancel(s"default standard repository is missing textus-user-account under ${artifactRoot}")
-
-      When("the identity subsystem is created from its standard repositories")
-      val subsystem = TextusIdentitySubsystemFactory.default()
-      val names = subsystem.components.map(_.name).sorted
-
-      Then("only the descriptor-selected UserAccount component is installed")
-      names shouldBe Vector("UserAccount")
-    }
-
-    "honor the development override repository" in {
+    "admit the exact canonical development component identity" in {
       Given("a self-contained development repository containing one UserAccount component factory")
-      _with_development_repository { repository =>
+      _with_development_repository(classOf[TextusIdentityDevFixtureComponent]) { repository =>
         val configuration = ResolvedConfiguration(
           Configuration(Map(
             RuntimeConfig.repositoryDirKey ->
@@ -53,20 +34,45 @@ final class TextusIdentitySubsystemFactorySpec extends AnyWordSpec with Matchers
 
         When("the identity subsystem is created with the repository override")
         val subsystem = TextusIdentitySubsystemFactory.default(configuration = configuration)
-        val names = subsystem.components.map(_.name).sorted
+        val componentid = ComponentId("org.simplemodeling.textus.UserAccount")
+        val repositorycomponents = subsystem.components.filterNot(_.origin == ComponentOrigin.Builtin)
+        val exact = subsystem.findComponent(componentid)
 
-        Then("the descriptor-selected UserAccount component is installed with its qualified runtime identity")
-        names shouldBe Vector("org.goldenport.cncf.test.UserAccount")
+        Then("exactly one repository component retains the canonical runtime identity alongside expected built-ins")
+        repositorycomponents.map(_.componentId) shouldBe Vector(componentid)
+        exact.map(_.componentId) shouldBe Some(componentid)
+      }
+    }
+
+    "reject a legacy artifact label paired with a different Core identity" in {
+      Given("a self-contained repository whose legacy artifact label does not match the canonical Core identity")
+      _with_development_repository(classOf[TextusIdentityLegacyDevFixtureComponent]) { repository =>
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.repositoryDirKey ->
+              ConfigurationValue.StringValue(s"scala-cli:${repository}")
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("the identity subsystem is created from the mismatched repository")
+        val failure = intercept[IllegalStateException] {
+          TextusIdentitySubsystemFactory.default(configuration = configuration)
+        }
+
+        Then("canonical admission fails closed with the exact identity diagnostic")
+        failure.getMessage should include ("canonical component binding has no exact Core/artifact identity match")
+        failure.getMessage should include ("org.simplemodeling.textus.UserAccount")
       }
     }
   }
 
-  private def _with_development_repository[A](body: Path => A): A = {
+  private def _with_development_repository[A](fixture: Class[?])(body: Path => A): A = {
     val repository = Files.createTempDirectory("textus-identity-dev-repository")
     val classes = repository.resolve("classes")
     try {
-      _copy_class(classOf[TextusIdentityDevFixtureComponent], classes)
-      _copy_class(TextusIdentityDevFixtureComponent.getClass, classes)
+      _copy_class(fixture, classes)
+      _copy_class(Class.forName(s"${fixture.getName}$$"), classes)
       body(repository)
     } finally {
       _delete_recursively(repository)
@@ -109,11 +115,45 @@ object TextusIdentityDevFixtureComponent extends Component.Factory {
       Component.ArtifactMetadata(
         sourceType = "test",
         name = "textus-user-account",
-        version = "0.1.0",
-        component = Some("textus-user-account")
+        version = "0.6.0-SNAPSHOT",
+        component = Some("textus-user-account"),
+        componentId = Some(ComponentId("org.simplemodeling.textus.UserAccount"))
       )
     )
-    val componentid = ComponentId("org.goldenport.cncf.test.UserAccount")
+    val componentid = ComponentId("org.simplemodeling.textus.UserAccount")
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty,
+      this
+    )
+  }
+}
+
+final class TextusIdentityLegacyDevFixtureComponent extends Component
+
+object TextusIdentityLegacyDevFixtureComponent extends Component.Factory {
+  protected def create_Component(params: ComponentCreate): Component = {
+    val _ = params
+    new TextusIdentityLegacyDevFixtureComponent
+  }
+
+  protected def create_Core(
+    params: ComponentCreate,
+    component: Component
+  ): Component.Core = {
+    val _ = params
+    component.withArtifactMetadata(
+      Component.ArtifactMetadata(
+        sourceType = "test",
+        name = "textus-user-account",
+        version = "0.6.0-SNAPSHOT",
+        component = Some("textus-user-account"),
+        componentId = Some(ComponentId("org.goldenport.cncf.test.OtherUserAccount"))
+      )
+    )
+    val componentid = ComponentId("org.goldenport.cncf.test.OtherUserAccount")
     Component.Core.create(
       componentid.name,
       componentid,

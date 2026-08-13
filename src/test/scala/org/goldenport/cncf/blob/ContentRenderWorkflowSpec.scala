@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  4, 2026
- * @version May.  6, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentRenderWorkflowSpec extends AnyWordSpec with Matchers {
@@ -91,7 +91,7 @@ final class ContentRenderWorkflowSpec extends AnyWordSpec with Matchers {
     maxsize: Long = 1024 * 1024
   ): Component = {
     val subsystem = DefaultSubsystemFactory.default(Some("command"))
-    val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
+    val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("missing Blob component"))
     component.withPort(Component.Port.of(new _BlobService(store, maxsize)))
     component
   }

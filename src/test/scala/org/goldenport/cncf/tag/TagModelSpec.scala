@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for hierarchical Tag master and TagAttachment.
  *
  * @since   May.  5, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagModelSpec
@@ -221,7 +221,7 @@ final class TagModelSpec
     "publish master descriptor with tag-specific resident tree handled outside entity working set" in {
       Given("the default subsystem with its built-in Tag component")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-      val tag = subsystem.findComponent(TagComponent.name).getOrElse(fail("Tag component is missing"))
+      val tag = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TAG).getOrElse(fail("Tag component is missing"))
 
       When("the Tag runtime descriptor is inspected")
       val descriptor = tag.entityRuntimeDescriptor("tag").getOrElse(fail("Tag runtime descriptor is missing"))
@@ -450,7 +450,7 @@ final class TagModelSpec
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       val tagcomponent =
         subsystem
-          .findComponent(TagComponent.name)
+          .findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TAG)
           .getOrElse(fail("Tag component is missing"))
       val probe = _tag_request(
         "tag_create",

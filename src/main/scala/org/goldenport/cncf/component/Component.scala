@@ -61,7 +61,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -80,7 +80,6 @@ abstract class Component() extends Component.Core.Holder {
     StateMachinePlannerProvider.noop
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
-  private var _deferred_release_provenance: Option[ComponentIdentityDeferredReleaseEntry] = None
   private var _event_reception: Option[EventReception] = None
   private var _event_store: Option[EventStore] = None
   private var _port: Component.Port = Component.Port.empty
@@ -407,16 +406,6 @@ abstract class Component() extends Component.Core.Holder {
     metadata: Component.ArtifactMetadata
   ): Component = {
     _artifact_metadata = Some(metadata)
-    this
-  }
-
-  private[cncf] def deferredReleaseProvenance: Option[ComponentIdentityDeferredReleaseEntry] =
-    _deferred_release_provenance
-
-  private[cncf] def withDeferredReleaseProvenance(
-    entry: ComponentIdentityDeferredReleaseEntry
-  ): Component = {
-    _deferred_release_provenance = Option(entry)
     this
   }
 
@@ -2073,25 +2062,11 @@ final class ComponentId private (
 }
 
 object ComponentId {
-  def parseC(qualifiedId: String): Consequence[ComponentId] = {
-    val strict = _parse_strict_c(qualifiedId)
-    strict match {
-      case Consequence.Success(value) => Consequence.success(value)
-      case Consequence.Failure(_) =>
-        ComponentIdentityDeferredReleaseScope.resolveExact(qualifiedId)
-          .map(Consequence.success)
-          .getOrElse(strict)
-    }
-  }
+  def parseC(qualifiedId: String): Consequence[ComponentId] =
+    _parse_strict_c(qualifiedId)
 
-  def apply(qualifiedId: String): ComponentId = {
-    val parsed = SharedComponentId.parse(qualifiedId)
-    if (parsed.isSuccess())
-      _require(parsed)(_from_shared)
-    else
-      ComponentIdentityDeferredReleaseScope.resolveExact(qualifiedId)
-        .getOrElse(_require(parsed)(_from_shared))
-  }
+  def apply(qualifiedId: String): ComponentId =
+    _require(SharedComponentId.parse(qualifiedId))(_from_shared)
 
   private[component] def _from_shared_component_id(sharedidentity: SharedComponentId): ComponentId =
     _from_shared(sharedidentity)

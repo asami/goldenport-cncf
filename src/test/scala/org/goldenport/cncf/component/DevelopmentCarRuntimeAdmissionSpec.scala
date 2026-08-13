@@ -13,7 +13,13 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
+import org.goldenport.cncf.component.repository.ComponentRepository
 
+/*
+ * @since   Jul. 29, 2026
+ * @version Aug. 13, 2026
+ * @author  ASAMI, Tomoharu
+ */
 final class DevelopmentCarRuntimeAdmissionSpec
     extends AnyWordSpec
     with Matchers
@@ -212,33 +218,32 @@ final class DevelopmentCarRuntimeAdmissionSpec
       }
     }
 
-    "E10 reject an incomplete schema-v2 componentStyle snapshot" must _e10_metadata {
-      "reject a partial development descriptor before runtime activation" in {
+    "E10 reject a schema-v2 development descriptor" must _e10_metadata {
+      "reject legacy descriptor evidence before runtime activation" in {
         _with_temp_dir { root =>
           Given("Spec: docs/spec/generation-compatibility-contract.md; Rules: R3,R6; Example: E10; a prepared schema-v2 development descriptor")
           _prepare_schema2(root)
           Files.writeString(root.resolve("target/scala-3.3.8/classes/sample.class"), "compiled", StandardCharsets.UTF_8)
           _write_manifest(root, manifestname = "sample", manifestcomponent = "sample")
-          val descriptor = root.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)
 
-          When("the required parameters field is removed without regenerating evidence")
-          Files.writeString(descriptor, Files.readString(descriptor, StandardCharsets.UTF_8).replace("\"parameters\":{},", ""), StandardCharsets.UTF_8)
+          When("CNCF validates the explicitly selected development directory")
           val result = DevelopmentCarRuntimeAdmission.validate(root)
 
-          Then("admission rejects the incomplete snapshot with recovery guidance")
-          result.display should include("componentStyle must be a complete catalog-matching snapshot")
+          Then("admission rejects schema 2 with recovery guidance")
+          result.display should include("component development descriptor schemaVersion mismatch: expected=3 actual=2")
           result.display should include("sbt cozyPrepareRuntime")
         }
       }
     }
 
-    "E11 admit a digest-valid v1 development directory during migration" must _e11_metadata {
-      "preserve the reader-only v1 descriptor identity" in {
+    "E11 reject a digest-valid v1 development directory" must _e11_metadata {
+      "preserve structured recovery without a packaged fallback" in {
         _with_temp_dir { root =>
           Given("Spec: docs/spec/generation-compatibility-contract.md; Rules: R2,R3; Example: E11; a prepared v1 development directory")
           _prepare(root)
           Files.writeString(root.resolve("target/scala-3.3.8/classes/sample.class"), "compiled", StandardCharsets.UTF_8)
-          val legacy = root.resolve(DevelopmentCarRuntimeAdmission.LEGACY_COMPONENT_DESCRIPTOR_IDENTITY)
+          val legacyidentity = "src/main/car/component-descriptor.json"
+          val legacy = root.resolve(legacyidentity)
           Files.createDirectories(legacy.getParent)
           Files.writeString(legacy, """{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"}""", StandardCharsets.UTF_8)
           Files.writeString(
@@ -248,17 +253,20 @@ final class DevelopmentCarRuntimeAdmissionSpec
           )
           _write_manifest(
             root,
-            DevelopmentCarRuntimeAdmission.LEGACY_MANIFEST_SCHEMA,
-            DevelopmentCarRuntimeAdmission.LEGACY_COMPONENT_DESCRIPTOR_IDENTITY,
+            "cncf.car-development-runtime-manifest.v1",
+            legacyidentity,
             "sample",
             "sample"
           )
 
-          When("CNCF admits the explicitly selected development directory")
+          When("CNCF validates the explicitly selected development directory")
           val result = DevelopmentCarRuntimeAdmission.validate(root)
 
-          Then("the valid v1 migration contract remains readable")
-          result.isSuccess shouldBe true
+          Then("the v1 development manifest fails closed with recovery guidance")
+          result.isSuccess shouldBe false
+          result.display should include("development runtime manifest schemaVersion mismatch")
+          result.display should include("sbt cozyPrepareRuntime")
+          result.display should include("will not fall back to a packaged CAR")
         }
       }
     }
@@ -283,6 +291,79 @@ final class DevelopmentCarRuntimeAdmissionSpec
           Then("development admission rejects the manifest coordinate contradiction")
           result.display should include("development runtime manifest car.name mismatch")
         }
+      }
+    }
+
+    "E13 reject ABI document v1 evidence" in {
+      _with_prepared_manifest { root =>
+        Given("a canonical schema-3 development directory whose ABI document is changed to v1")
+        val abi = root.resolve(DevelopmentCarRuntimeAdmission.ABI_MANIFEST_IDENTITY)
+        Files.writeString(
+          abi,
+          """{"format":"cozy.car.abi-manifest.v1","car":{"name":"sample","version":"0.0.1-SNAPSHOT"},"abi":{"version":1,"exports":{"components":[{"name":"sample"}]}}}""",
+          StandardCharsets.UTF_8
+        )
+
+        When("CNCF validates the explicit development directory")
+        val result = DevelopmentCarRuntimeAdmission.validate(root)
+
+        Then("the ABI document v1 is rejected with the standard no-fallback recovery")
+        result.display should include("component development ABI manifest format mismatch")
+        result.display should include("sbt cozyPrepareRuntime")
+        result.display should include("will not fall back to a packaged CAR")
+      }
+    }
+
+    "E14 fail static descriptor resolution closed before legacy evidence is exposed" in {
+      _with_temp_dir { root =>
+        Given("a v1 development manifest and a source-tree descriptor")
+        _prepare(root)
+        Files.writeString(root.resolve("target/scala-3.3.8/classes/sample.class"), "compiled", StandardCharsets.UTF_8)
+        val legacyidentity = "src/main/car/component-descriptor.json"
+        val legacy = root.resolve(legacyidentity)
+        Files.createDirectories(legacy.getParent)
+        Files.writeString(legacy, """{"name":"sample","version":"0.0.1-SNAPSHOT","component":"sample"}""", StandardCharsets.UTF_8)
+        _write_manifest(root, "cncf.car-development-runtime-manifest.v1", legacyidentity, "sample", "sample")
+        val specification = ComponentRepository.ComponentDevDirRepository.Specification(root)
+
+        When("static component descriptor resolution is requested")
+        val rejected = the[RuntimeException] thrownBy specification.resolveStaticComponentDescriptor(_canonical_component_id.name)
+
+        Then("the recovery diagnostic is raised before any legacy descriptor can be exposed")
+        rejected.getMessage should include ("development runtime manifest schemaVersion mismatch")
+        rejected.getMessage should include ("sbt cozyPrepareRuntime")
+      }
+    }
+
+    "E15 reject schema-v2 static descriptor evidence" in {
+      _with_temp_dir { root =>
+        Given("a digest-valid schema-v2 development descriptor")
+        _prepare_schema2(root)
+        Files.writeString(root.resolve("target/scala-3.3.8/classes/sample.class"), "compiled", StandardCharsets.UTF_8)
+        _write_manifest(root)
+        val specification = ComponentRepository.ComponentDevDirRepository.Specification(root)
+
+        When("static descriptor resolution is requested for schema-v2 evidence")
+        val rejected = the[RuntimeException] thrownBy specification.resolveStaticComponentDescriptor(_canonical_component_id.name)
+
+        Then("the schema-v2 evidence remains unavailable with the recovery diagnostic")
+        rejected.getMessage should include ("component development descriptor schemaVersion mismatch")
+        rejected.getMessage should include ("sbt cozyPrepareRuntime")
+      }
+    }
+
+    "E16 resolve prepared canonical static descriptor evidence" in {
+      _with_prepared_manifest { root =>
+        Given("a canonical prepared development descriptor")
+        val specification = ComponentRepository.ComponentDevDirRepository.Specification(root)
+
+        When("static descriptor resolution is requested")
+        val resolved = specification.resolveStaticComponentDescriptor(_canonical_component_id.name)
+        val all = specification.resolveStaticComponentDescriptors
+
+        Then("the canonical target descriptor is exposed")
+        resolved.flatMap(_.componentId) shouldBe Some(_canonical_component_id)
+        all.flatMap(_.componentId) shouldBe Vector(_canonical_component_id)
       }
     }
   }

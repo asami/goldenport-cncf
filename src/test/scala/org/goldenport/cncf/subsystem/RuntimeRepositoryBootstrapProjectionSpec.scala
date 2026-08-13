@@ -27,7 +27,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 27, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -167,7 +167,8 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
             |      provides:
             |        - datastore.persistent@1
             |components:
-            |  - name: org.goldenport.cncf.test.DevelopmentAssembly
+            |  - namespace: org.goldenport.cncf.test
+            |    id: DevelopmentAssembly
             |    version: 1.0.0
             |""".stripMargin,
           StandardCharsets.UTF_8
@@ -177,7 +178,8 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
           assembly,
           """subsystem: development-assembly
             |components:
-            |  - name: org.goldenport.cncf.test.DevelopmentAssembly
+            |  - namespace: org.goldenport.cncf.test
+            |    id: DevelopmentAssembly
             |    version: 1.0.0
             |config:
             |  textus.subsystem.user-mode: standalone
@@ -280,6 +282,7 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
         Given("a packaged CAR default assembly and a SAR assembly that overrides one default field")
         val root = _fixture_root("gcf09f-packaged-defaults-")
         val componentname = "packaged-defaults"
+        val (namespace, localid) = _component_parts(componentname)
         val repository = Files.createDirectories(root.resolve("repository")).toAbsolutePath.normalize
         val unrequestedcar = repository.resolve(s"$componentname-1.0.0.car")
         _write_archive(
@@ -289,7 +292,8 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
             "assembly-descriptor.yaml" ->
               s"""subsystem: $componentname
                  |components:
-                 |  - name: ${_component_identity(componentname)}
+                 |  - namespace: $namespace
+                 |    id: $localid
                  |    version: 1.0.0
                  |config:
                  |  component.default: wrong-version
@@ -305,7 +309,8 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
             "assembly-descriptor.yaml" ->
               s"""subsystem: $componentname
                  |components:
-                 |  - name: ${_component_identity(componentname)}
+                 |  - namespace: $namespace
+                 |    id: $localid
                  |    version: 2.0.0
                  |config:
                  |  component.default: retained
@@ -320,7 +325,8 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
             "subsystem-descriptor.yaml" ->
               s"""subsystem: $componentname
                  |components:
-                 |  - name: ${_component_identity(componentname)}
+                 |  - namespace: $namespace
+                 |    id: $localid
                  |    version: 2.0.0
                  |""".stripMargin,
             "assembly-descriptor.yaml" ->
@@ -384,6 +390,7 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
         Given("a canonical expanded CAR directory and a SAR assembly override")
         val root = _fixture_root("gcf09f-expanded-defaults-")
         val componentname = "expanded-defaults"
+        val (namespace, localid) = _component_parts(componentname)
         val repository = Files.createDirectories(root.resolve("repository")).toAbsolutePath.normalize
         _write_archive(repository.resolve("unrelated-malformed.car"), "component-descriptor.json", "{ invalid")
         val cardir = Files.createDirectories(repository.resolve(s"$componentname-3.0.0"))
@@ -396,7 +403,8 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
           cardir.resolve("assembly-descriptor.yaml"),
           s"""subsystem: $componentname
              |components:
-             |  - name: ${_component_identity(componentname)}
+             |  - namespace: $namespace
+             |    id: $localid
              |    version: 3.0.0
              |config:
              |  directory.default: retained
@@ -412,7 +420,8 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
             "subsystem-descriptor.yaml" ->
               s"""subsystem: $componentname
                  |components:
-                 |  - name: ${_component_identity(componentname)}
+                 |  - namespace: $namespace
+                 |    id: $localid
                  |    version: 3.0.0
                  |""".stripMargin,
             "assembly-descriptor.yaml" ->
@@ -732,8 +741,10 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
     path
   }
 
-  private def _subsystem_descriptor(subsystemname: String): String =
-    s"subsystem: $subsystemname\ncomponents:\n  - name: ${_component_identity(subsystemname)}\n    version: 1.0.0\n"
+  private def _subsystem_descriptor(subsystemname: String): String = {
+    val (namespace, localid) = _component_parts(subsystemname)
+    s"subsystem: $subsystemname\ncomponents:\n  - namespace: $namespace\n    id: $localid\n    version: 1.0.0\n"
+  }
 
   private def _component_identity(componentname: String): String = {
     val normalized = componentname.trim

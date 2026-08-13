@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the reusable Blob payload helper.
  *
  * @since   Apr. 29, 2026
- * @version May.  3, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobPayloadSupportSpec
@@ -114,7 +114,7 @@ final class BlobPayloadSupportSpec
     maxsize: Long = 1024 * 1024
   ): Component = {
     val subsystem = DefaultSubsystemFactory.default(Some("command"))
-    val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
+    val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("missing Blob component"))
     component.withPort(Component.Port.of(new _BlobService(store, maxsize)))
     component
   }

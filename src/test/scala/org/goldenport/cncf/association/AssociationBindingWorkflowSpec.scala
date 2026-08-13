@@ -36,7 +36,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Executable specification for BI-04 operation-level Association binding.
  *
  * @since   Apr. 30, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AssociationBindingWorkflowSpec
@@ -319,7 +319,7 @@ final class AssociationBindingWorkflowSpec
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
-        subsystem.findComponent(component.name).getOrElse(fail("component missing"))
+        subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val target             = _article_id("target_2")
       val source             = _article_id("article_1").value
@@ -362,7 +362,7 @@ final class AssociationBindingWorkflowSpec
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
-        subsystem.findComponent(component.name).getOrElse(fail("component missing"))
+        subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val request = Request.of(
         component = component.name,
@@ -390,7 +390,7 @@ final class AssociationBindingWorkflowSpec
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
-        subsystem.findComponent(component.name).getOrElse(fail("component missing"))
+        subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val request = Request.of(
         component = component.name,
@@ -424,7 +424,7 @@ final class AssociationBindingWorkflowSpec
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
-        subsystem.findComponent(component.name).getOrElse(fail("component missing"))
+        subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val source = _article_id("article_image_1").value
       val request = Request.of(
@@ -470,7 +470,7 @@ final class AssociationBindingWorkflowSpec
       val component = _component(subsystem)
       subsystem.add(component)
       val runtimecomponent =
-        subsystem.findComponent(component.name).getOrElse(fail("component missing"))
+        subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
       val target = _article_id("target_image_failure_cleanup")
       val source = _article_id("article_association_image_failure").value
       _seed_entity(target)
@@ -513,7 +513,7 @@ final class AssociationBindingWorkflowSpec
     "attach, reuse, list, and detach non-image Associations" in {
       Given("existing source and target Entity records")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-      val admin     = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
+      val admin     = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).getOrElse(fail("admin component missing"))
       given ExecutionContext = admin.logic.executionContext()
       val source             = _article_id("admin_source_1")
       val target             = _article_id("admin_target_1")
@@ -584,7 +584,7 @@ final class AssociationBindingWorkflowSpec
     "reject missing source, missing target, and targetKind mismatch" in {
       Given("an admin Association attach request")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-      val admin     = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
+      val admin     = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).getOrElse(fail("admin component missing"))
       given ExecutionContext = admin.logic.executionContext()
       val source             = _article_id("admin_source_2")
       val target             = _article_id("admin_target_2")

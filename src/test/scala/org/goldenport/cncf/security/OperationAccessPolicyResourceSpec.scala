@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 28, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -263,7 +263,7 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
     policies: AuthorizationResourcePolicies = _policies
   ): ExecutionContext = {
     val subsystem = _subsystem(policies)
-    val component = subsystem.findComponent("blob").get
+    val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).get
     val base = ExecutionContext.create(SecurityContext.Privilege.User)
     val security = base.security.copy(
       principal = new Principal {

@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityObservabilitySpec
@@ -29,42 +29,54 @@ final class Phase56ComponentIdentityObservabilitySpec
 
   "Phase 56 Component identity observability" should {
     "retain typed admission notices" which {
-    "E1 retain assembly-binding notices until the runtime report observes them" must _e1 {
-      "when a bare assembly binding resolves to one admitted identity" in {
-        Given("one admitted canonical ComponentId and its compatibility notice")
+    "E1 reject an assembly-binding alias without creating a report notice" must _e1 {
+      "when a bare assembly alias is presented" in {
+        Given("one admitted canonical ComponentId and an empty AssemblyReport")
         val componentid = ComponentId("org.example.Catalog")
         val report = new AssemblyReport()
-        When("the typed assembly-binding notice is observed at the runtime boundary")
-        val notice = _adapted_notice("Catalog", Vector(_candidate(componentid)), ComponentIdentityCompatibilityAdapter.Surface.AssemblyBinding)
-        ComponentIdentityCompatibilityObserver.observe(report, notice)
-        Then("the report contains the canonical compatibility warning")
-        report.warnings.map(_.componentName) shouldBe Vector(componentid.name)
+
+        When("the retired assembly-binding surface receives Catalog")
+        val result = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          "Catalog",
+          Vector(_candidate(componentid)),
+          ComponentIdentityCompatibilityAdapter.Surface.AssemblyBinding
+        )
+
+        Then("the selector fails closed and the report remains empty")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
+        report.warnings shouldBe empty
       }
     }
 
-    "E2 retain descriptor-field notices until the factory boundary observes them" must _e2 {
-      "when descriptor projection supplies its typed notice" in {
-        Given("one descriptor-field adaptation notice")
+    "E2 reject descriptor-field alias input without creating a report notice" must _e2 {
+      "when a legacy descriptor-field selector is presented" in {
+        Given("one canonical candidate and an empty report")
         val componentid = ComponentId("org.example.Catalog")
         val report = new AssemblyReport()
-        When("the typed descriptor-field notice is observed")
-        val notice = _adapted_notice("Catalog", Vector(_candidate(componentid)), ComponentIdentityCompatibilityAdapter.Surface.DescriptorField)
-        ComponentIdentityCompatibilityObserver.observe(report, notice)
-        Then("its surface remains visible without reconstructing canonical state")
-        report.warnings.head.reason.getOrElse("") should include ("surface=descriptor-field")
+
+        When("the retired descriptor-field surface receives Catalog")
+        val result = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          "Catalog",
+          Vector(_candidate(componentid)),
+          ComponentIdentityCompatibilityAdapter.Surface.DescriptorField
+        )
+
+        Then("no descriptor-field compatibility warning can be observed")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
+        report.warnings shouldBe empty
       }
     }
     }
 
     "resolve runtime selector compatibility" which {
-    "E3 resolve one admitted presentation alias to its canonical runtime identity" must _e3 {
+    "E3 reject one presentation alias at the runtime selector" must _e3 {
       "when a display or artifact spelling has one canonical candidate" in {
         Given("one admitted alias candidate")
         val componentid = ComponentId("org.example.Catalog")
         When("the runtime selector resolves the artifact spelling")
         val result = ComponentIdentityCompatibilityAdapter.resolveAliases("catalog-ui", Vector(_candidate(componentid, "catalog-ui")), ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector)
-        Then("it resolves to the canonical identity with one typed notice")
-        result.toConsequence.map(_.componentid) shouldBe Consequence.success(componentid)
+        Then("the retired runtime selector has no accepted presentation alias")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
       }
     }
 
@@ -75,11 +87,11 @@ final class Phase56ComponentIdentityObservabilitySpec
         val report = new AssemblyReport()
         val candidates = Vector(_candidate(componentid, "catalog-ui"))
         When("the alias is resolved and observed twice, then canonical identity is resolved")
-        val aliasnotice = _adapted_notice("catalog-ui", candidates, ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector)
-        ComponentIdentityCompatibilityObserver.observe(report, Vector(aliasnotice, aliasnotice))
+        val rejected = ComponentIdentityCompatibilityAdapter.resolveAliases("catalog-ui", candidates, ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector)
         val canonical = ComponentIdentityCompatibilityAdapter.resolveAliases(componentid.name, candidates, ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector)
-        Then("only the one alias warning remains and canonical resolution has no notice")
-        report.warnings.size shouldBe 1
+        Then("the rejected alias adds no notice and canonical resolution remains silent")
+        rejected shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
+        report.warnings.size shouldBe 0
         canonical.toConsequence.map(_.notice) shouldBe Consequence.success(None)
       }
     }
@@ -104,8 +116,8 @@ final class Phase56ComponentIdentityObservabilitySpec
         When("Help evaluates selector acceptance without observation")
         val unique = ComponentIdentityCompatibilityAdapter.resolveAliases("catalog-ui", Vector(_candidate(alpha, "catalog-ui")), ComponentIdentityCompatibilityAdapter.Surface.HelpProjection)
         val ambiguous = ComponentIdentityCompatibilityAdapter.resolveAliases("catalog-ui", Vector(_candidate(alpha, "catalog-ui"), _candidate(beta, "catalog-ui")), ComponentIdentityCompatibilityAdapter.Surface.HelpProjection)
-        Then("only the unique alias adapts")
-        unique shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+        Then("Help accepts neither unique nor ambiguous presentation aliases")
+        unique shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
         ambiguous shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
       }
     }
@@ -141,11 +153,11 @@ final class Phase56ComponentIdentityObservabilitySpec
     "project compatibility warnings through assembly reports" which {
     "E9 expose compatibility warning fields through the existing AssemblyReport" must _e9 {
       "when an accepted runtime alias is observed" in {
-        Given("a runtime alias notice and existing assembly report")
+        Given("a retained Web-path alias notice and existing assembly report")
         val componentid = ComponentId("org.example.Catalog")
         val report = new AssemblyReport()
-        When("bounded concurrent observers insert the same warning repeatedly")
-        val notice = _adapted_notice("catalog-ui", Vector(_candidate(componentid, "catalog-ui")), ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector)
+        When("bounded concurrent observers insert the same Web-path warning repeatedly")
+        val notice = _adapted_notice("catalog-ui", Vector(_candidate(componentid, "catalog-ui")), ComponentIdentityCompatibilityAdapter.Surface.WebPath)
         val executor = Executors.newFixedThreadPool(8)
         (1 to 64).foreach { _ =>
           executor.submit(new Runnable {
@@ -161,7 +173,7 @@ final class Phase56ComponentIdentityObservabilitySpec
         report.warnings should have size 1
         report.warnings.head.kind shouldBe "component-identity-compatibility"
         report.warnings.head.componentName shouldBe componentid.name
-        report.warnings.head.reason.getOrElse("") should include ("surface=runtime-selector")
+        report.warnings.head.reason.getOrElse("") should include ("surface=web-path")
         report.warnings.head.reason.getOrElse("") should include ("alias-kind=presentation")
         report.warnings.head.reason.getOrElse("") should include ("alias=catalog-ui")
         report.warnings.head.message should include (s"canonical=${componentid.name}")

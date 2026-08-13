@@ -3,12 +3,11 @@ package org.goldenport.cncf.subsystem
 import java.nio.file.{Path, Paths}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentIdentityCompatibilityObserver, ComponentIdentityDeferredReleaseScope, ComponentInstanceMetadata, ComponentOrigin, DevelopmentCarRuntimeAdmission}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentInstanceMetadata, ComponentOrigin, DevelopmentCarRuntimeAdmission}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{ConfigurationAccess, RepositoryBootstrapPolicy, RuntimeConfig, RuntimeTestDescriptor}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
-import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.Consequence
@@ -19,7 +18,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -143,7 +142,7 @@ object GenericSubsystemFactory {
                       case None =>
                         Consequence.resourceInvalid(
                             s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
-                            s"${path.resolve(DevelopmentCarRuntimeAdmission.componentDescriptorIdentity(path))}. " +
+                            s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}. " +
                             s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
                             "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
                         )
@@ -253,7 +252,7 @@ object GenericSubsystemFactory {
             case None =>
               Consequence.resourceInvalid(
                 s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
-                  s"${path.resolve(DevelopmentCarRuntimeAdmission.componentDescriptorIdentity(path))}. " +
+                  s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}. " +
                   s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
                   "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
               )
@@ -276,7 +275,7 @@ object GenericSubsystemFactory {
             case None =>
               Consequence.resourceInvalid(
                 s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
-                  s"${path.resolve(DevelopmentCarRuntimeAdmission.componentDescriptorIdentity(path))}. " +
+                  s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}. " +
                   s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
                   "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
               )
@@ -318,14 +317,10 @@ object GenericSubsystemFactory {
   ): Consequence[Option[GenericSubsystemDescriptor]] =
     _configured_component_name(configuration) match {
       case Some(name) =>
-        _with_assembly_descriptor_override_c(
-          GenericSubsystemDescriptor(
-            path = Paths.get(".").toAbsolutePath.normalize,
-            subsystemName = name,
-            componentBindings = Vector(GenericSubsystemComponentBinding(name))
-          ),
-          configuration
-        ).map(Some(_))
+        Consequence.configurationInvalid(
+          s"configured component requires canonical namespace/id/version: alias=$name; " +
+            "required=canonical namespace/id/version"
+        )
       case None =>
         _assembly_descriptor_c(configuration)
     }
@@ -594,17 +589,13 @@ object GenericSubsystemFactory {
     aliasresolver: AliasResolver,
     repositoryspecs: Vector[ComponentRepository.Specification]
   ): Subsystem = {
-    val admission = _or_raise(
-      _admit_descriptor_detailed_c(
+    val admitteddescriptor = _or_raise(
+      _admit_descriptor_c(
         descriptor,
         configuration,
         repositoryspecs
       )
     )
-    val admitteddescriptor = admission.descriptor
-    _find_global_runtime_context(Some(context)).foreach { owner =>
-      ComponentIdentityCompatibilityObserver.observe(owner.assemblyReport, admission.notices)
-    }
     val admissionreport = _or_raise(SubsystemAssemblyAdmission.evaluateC(admitteddescriptor))
     val componentdescriptors = admitteddescriptor.toComponentDescriptors
     val runtimeconfig = RuntimeConfig.from(configuration)
@@ -891,33 +882,14 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration,
     repositoryspecs: Vector[ComponentRepository.Specification]
   ): Consequence[GenericSubsystemDescriptor] =
-    _admit_descriptor_detailed_c(descriptor, configuration, repositoryspecs)
-      .map(_.descriptor)
-
-  private def _admit_descriptor_detailed_c(
-    descriptor: GenericSubsystemDescriptor,
-    configuration: ResolvedConfiguration,
-    repositoryspecs: Vector[ComponentRepository.Specification]
-  ): Consequence[SubsystemAssemblyAdmission.DetailedAdmission] = {
     val specs =
       if (repositoryspecs.nonEmpty) repositoryspecs
       else _repository_specs_for_descriptor(configuration, descriptor)
     _with_primary_component_defaults_c(descriptor, specs).flatMap { effective =>
-      SubsystemAssemblyAdmission.resolveWithNoticesC(
+      SubsystemAssemblyAdmission.resolveC(
         effective,
         _admission_repository_specs(configuration, specs)
       )
-    }
-  }
-
-  @annotation.tailrec
-  private def _find_global_runtime_context(
-    scopecontext: Option[ScopeContext]
-  ): Option[GlobalRuntimeContext] =
-    scopecontext match {
-      case Some(owner: GlobalRuntimeContext) => Some(owner)
-      case Some(scope) => _find_global_runtime_context(scope.parent)
-      case None => None
     }
 
   private def _with_primary_component_defaults_c(
@@ -1032,29 +1004,14 @@ object GenericSubsystemFactory {
     component: Component,
     binding: GenericSubsystemComponentBinding
   ): Boolean = {
-    binding.componentId match {
-      case Some(id) =>
+    (binding.componentId, binding.componentVersion) match {
+      case (Some(id), Some(release)) =>
         component.core.componentId == id &&
-          component.artifactMetadata.flatMap(_.componentId).contains(id)
-      case None =>
-        val bindingpresentations = Vector(
-          binding.componentName,
-          _runtime_component_name(binding.componentName),
-          _legacy_runtime_component_name(binding.componentName)
-        ).distinct
-        val presentations = Vector(
-          component.name,
-          component.core.componentId.name,
-          component.core.componentId.localId.value()
-        ).distinct
-        presentations.exists(presentation =>
-          bindingpresentations.exists(NamingConventions.equivalentByNormalized(presentation, _))
-        ) ||
           component.artifactMetadata.exists(metadata =>
-            metadata.component.exists(componentname =>
-              bindingpresentations.exists(NamingConventions.equivalentByNormalized(componentname, _))
-            ) || bindingpresentations.exists(NamingConventions.equivalentByNormalized(metadata.name, _))
+            metadata.componentId.contains(id) && metadata.version == release
           )
+      case (None, _) => false
+      case _ => false
     }
   }
 
@@ -1070,33 +1027,32 @@ object GenericSubsystemFactory {
     descriptor: GenericSubsystemDescriptor,
     params: ComponentCreate
   ): Consequence[Vector[Component]] = {
-    val participants = descriptor.componentBindings.flatMap { binding =>
-      val candidates = discovered.filter(_matches_descriptor_component(_, binding)).toVector
-      val exact = candidates.filter { candidate =>
-        candidate.instanceMetadata.contains(_binding_instance_metadata(binding, candidate))
-      }
-      binding.componentId match {
-        case Some(componentid) =>
-          candidates match {
-            case Vector() =>
-              Vector(Consequence.componentInvalid(
-                s"canonical component binding has no exact Core/artifact identity match: ${componentid.name}"
-              ))
-            case Vector(candidate) =>
-              exact.headOption.map(x => Vector(Consequence.success(x))).getOrElse(
-                Vector(_create_component_participant_c(candidate, binding, params))
-              )
-            case _ =>
-              Vector(Consequence.componentInvalid(
-                s"canonical component binding has multiple exact Core/artifact identity matches: ${componentid.name}"
-              ))
-          }
-        case None =>
-          if (exact.nonEmpty)
-            exact.map(Consequence.success)
-          else
-            candidates.map(_create_component_participant_c(_, binding, params))
-      }
+    val participants = descriptor.componentBindings.flatMap {
+      case binding if binding.componentId.isEmpty || binding.componentVersion.isEmpty =>
+        Vector(Consequence.componentInvalid(
+          s"component assembly binding requires canonical namespace/id/version: " +
+            s"alias=${binding.componentName}; required=canonical namespace/id/version"
+        ))
+      case binding =>
+        val componentid = binding.componentId.get
+        val candidates = discovered.filter(_matches_descriptor_component(_, binding)).toVector
+        val exact = candidates.filter { candidate =>
+          candidate.instanceMetadata.contains(_binding_instance_metadata(binding, candidate))
+        }
+        candidates match {
+          case Vector() =>
+            Vector(Consequence.componentInvalid(
+              s"canonical component binding has no exact Core/artifact identity match: ${componentid.name}"
+            ))
+          case Vector(candidate) =>
+            exact.headOption.map(x => Vector(Consequence.success(x))).getOrElse(
+              Vector(_create_component_participant_c(candidate, binding, params))
+            )
+          case _ =>
+            Vector(Consequence.componentInvalid(
+              s"canonical component binding has multiple exact Core/artifact identity matches: ${componentid.name}"
+            ))
+        }
     }.toVector
     _sequence(participants)
   }
@@ -1112,18 +1068,11 @@ object GenericSubsystemFactory {
           .withOrigin(prototype.origin)
           .withComponentDescriptors(prototype.componentDescriptors)
           .withInstanceMetadata(_binding_instance_metadata(binding, prototype))
-        val create = () =>
+        val componentc =
           if (prototype.isComponentletParticipant) factory.createComponentletC(instanceparams)
           else factory.createPrimaryC(instanceparams)
-        val componentc = prototype.deferredReleaseProvenance match {
-          case Some(entry) =>
-            ComponentIdentityDeferredReleaseScope.withExpected(entry)(create())
-          case None =>
-            create()
-        }
         componentc.map { component =>
           prototype.artifactMetadata.foreach(component.withArtifactMetadata)
-          prototype.deferredReleaseProvenance.foreach(component.withDeferredReleaseProvenance)
           component.withCollaboratorClasspath(prototype.collaboratorClasspath)
         }
       case None =>
@@ -1138,12 +1087,9 @@ object GenericSubsystemFactory {
 
   private def _binding_instance_metadata(
     binding: GenericSubsystemComponentBinding,
-    prototype: Component
+    _prototype: Component
   ): ComponentInstanceMetadata =
-    binding.componentId match {
-      case Some(_) => binding.instanceMetadata
-      case None => binding.instanceMetadata.copy(componentId = Some(prototype.core.componentId))
-    }
+    binding.instanceMetadata
 
   private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =
     values.foldLeft(Consequence.success(Vector.empty[A])) { (acc, value) =>
@@ -1156,31 +1102,6 @@ object GenericSubsystemFactory {
       case Consequence.Failure(conclusion) =>
         throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
     }
-
-  private def _runtime_component_name(
-    descriptorcomponentname: String
-  ): String =
-    descriptorcomponentname.trim
-
-  private def _legacy_runtime_component_name(
-    descriptorcomponentname: String
-  ): String = {
-    val normalized = descriptorcomponentname.trim
-    val stripped =
-      if (normalized.startsWith("textus-")) normalized.stripPrefix("textus-")
-      else if (normalized.startsWith("textus_")) normalized.stripPrefix("textus_")
-      else normalized
-    if (stripped.exists(ch => ch == '-' || ch == '_')) {
-      stripped
-        .split("[-_]")
-        .toVector
-        .filter(_.nonEmpty)
-        .map(_.toLowerCase.capitalize)
-        .mkString
-    } else {
-      stripped
-    }
-  }
 
   private def _collapse_duplicate_components(
     components: Seq[Component]

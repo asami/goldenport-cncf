@@ -7,6 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
@@ -32,7 +33,8 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 25, 2026
- * @version Jul.  8, 2026
+ *  version Jul.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererBlobTagPart {
@@ -653,7 +655,7 @@ trait StaticFormAppRendererBlobTagPart {
     requestProperties: Vector[(String, String)]
   ): ProtocolRequest =
     ProtocolRequest.of(
-      component = "tag",
+      component = BuiltinComponentIdentity.TAG.name,
       service = "tag",
       operation = operation,
       arguments = args.map { case (key, value) => Argument(key, value) }.toList,
@@ -666,7 +668,7 @@ trait StaticFormAppRendererBlobTagPart {
     requestProperties: Vector[(String, String)]
   ): ProtocolRequest =
     ProtocolRequest.of(
-      component = "admin",
+      component = BuiltinComponentIdentity.ADMIN.name,
       service = "association",
       operation = operation,
       arguments = args.map { case (key, value) => Argument(key, value) }.toList,
@@ -679,7 +681,7 @@ trait StaticFormAppRendererBlobTagPart {
     requestProperties: Vector[(String, String)]
   ): ProtocolRequest =
     ProtocolRequest.of(
-      component = "blob",
+      component = BuiltinComponentIdentity.BLOB.name,
       service = "blob",
       operation = operation,
       properties = (requestProperties ++ args).map { case (key, value) => Property(key, value, None) }.toList
@@ -1374,7 +1376,7 @@ trait StaticFormAppRendererBlobTagPart {
     val tagspace = values.getOrElse("tagSpace", "")
     val summary = admin_operation_record(
       subsystem,
-      "/tag/tag/tag_list_entity_tags",
+      s"/${BuiltinComponentIdentity.TAG.name}/tag/tag_list_entity_tags",
       Record.dataAuto(
         "sourceEntityId" -> sourceid,
         "tagSpace" -> tagspace

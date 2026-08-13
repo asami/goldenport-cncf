@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 21, 2026
  *  version Apr. 22, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEngineTestFixture {
@@ -35,8 +35,8 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose event-triggered lineage and policy source on job inspection surfaces" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.findComponent("admin").get
-        val jobcontrol = subsystem.findComponent("job_control").get
+        val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).get
+        val jobcontrol = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL).get
         val service = jobcontrol.port.get[JobControlComponent.JobService].get
         val task = ImmediateTask(ActionId.generate())
         val jobid = admin.logic.submitJob(
@@ -90,8 +90,8 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose retry and recovery visibility on job inspection surfaces" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.findComponent("admin").get
-        val jobcontrol = subsystem.findComponent("job_control").get
+        val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).get
+        val jobcontrol = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL).get
         val service = jobcontrol.port.get[JobControlComponent.JobService].get
         val task = FailureTask(
           ActionId.generate(),
@@ -124,8 +124,8 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose scheduled start visibility on job inspection surfaces" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.findComponent("admin").get
-        val jobcontrol = subsystem.findComponent("job_control").get
+        val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).get
+        val jobcontrol = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL).get
         val service = jobcontrol.port.get[JobControlComponent.JobService].get
         val scheduledat = Instant.now().plusMillis(150L)
         val jobid = admin.logic.submitJob(
@@ -150,8 +150,8 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
 
     "expose Task Execution Tree and Task detail through job_control operations" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
-        val admin = subsystem.findComponent("admin").get
-        val jobcontrol = subsystem.findComponent("job_control").get
+        val admin = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN).get
+        val jobcontrol = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL).get
         val service = jobcontrol.port.get[JobControlComponent.JobService].get
         val jobid = admin.logic.submitJob(
           List(ImmediateTask(ActionId.generate())),

@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the provider-neutral internal Operation source.
  *
  * @since   Jul. 21, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationToolSourceSpec
@@ -104,7 +104,7 @@ final class OperationToolSourceSpec
     "reject a runtime Operation whose names cannot form one exact identity" in {
       Given("an assembled Operation and a component name containing the identity separator")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-invalid-identity"))
-      val component = subsystem.findComponent("tool").getOrElse(fail("tool component is unavailable"))
+      val component = subsystem.findComponent(BuiltinComponentIdentity.TOOL).getOrElse(fail("tool component is unavailable"))
       val service = component.protocol.services.services
         .find(_.name == "time").getOrElse(fail("time service is unavailable"))
       val operation = service.operations.operations.toVector

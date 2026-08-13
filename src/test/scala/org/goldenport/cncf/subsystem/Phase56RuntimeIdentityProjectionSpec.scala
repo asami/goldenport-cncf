@@ -2,7 +2,7 @@ package org.goldenport.cncf.subsystem
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentInstanceMetadata, ComponentLocator, ComponentOrigin, ComponentSpace}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentIdentityCompatibilityAdapter, ComponentIdentityCompatibilityObserver, ComponentInit, ComponentInstanceId, ComponentInstanceMetadata, ComponentLocator, ComponentOrigin, ComponentSpace}
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.config.{ComponentParameterDiagnostics, RuntimeConfig}
@@ -30,7 +30,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56RuntimeIdentityProjectionSpec
@@ -49,6 +49,7 @@ final class Phase56RuntimeIdentityProjectionSpec
   private val _e20 = afterWord("in spec:phase-56-runtime-identity-projection, example:E20, rules:CID05C-R10, phase:56, slice:CID-05C")
   private val _e21 = afterWord("in spec:phase-56-runtime-identity-projection, example:E21, rules:CID06C-R6,R7, phase:56, slice:CID-06C")
   private val _e22 = afterWord("in spec:phase-56-runtime-identity-projection, example:E22, rules:CID06C-R8,R9, phase:56, slice:CID-06C")
+  private val _e23 = afterWord("in spec:phase-56-runtime-identity-projection, example:E23, rules:CID06C-R8,R9, phase:56, slice:CID-06C")
   private val _e8 = afterWord("in spec:phase-56-runtime-identity-projection, example:E8, rules:CID05C-R8, phase:56, slice:CID-05C")
   private val _e9 = afterWord("in spec:phase-56-runtime-identity-projection, example:E9, rules:CID05C-R8, phase:56, slice:CID-05C")
   private def _metadata(exampleid: String) =
@@ -57,83 +58,120 @@ final class Phase56RuntimeIdentityProjectionSpec
     "use one canonical identity across runtime selectors and projections" which {
     "E12 select ComponentSpace by exact ComponentId and reject ambiguous displays" must _e12 {
       "when exercising: E12 select ComponentSpace by exact ComponentId and reject ambiguous displays" in {
-        Given("two qualified components with display identities that collide after compatibility normalization")
+        Given("two qualified components with distinct visible display identities")
         val alpha = _component("org.alpha.Shared", "Shared")
-        val beta = _component("org.beta.Shared", "shared")
+        val beta = _component("org.beta.Other", "Other")
         val space = new ComponentSpace().add(Vector(alpha, beta))
 
-        When("one component is selected by its exact ComponentId or by its display")
+        When("one component is selected by its exact ComponentId or a bare display locator")
         val exact = space.find(ComponentLocator.ComponentIdLocator(ComponentId("org.alpha.Shared")))
         val display = space.find(ComponentLocator.NameLocator("Shared"))
 
-        Then("exact identity succeeds and ambiguous display identity never chooses first")
+        Then("exact identity succeeds and a unique bare display identity is rejected")
         exact shouldBe Some(alpha)
         display shouldBe None
       }
     }
 
-    "E20 select the declared default within one qualified ComponentId for exact and display locators" must _e20 {
-      "when exercising: E20 select the declared default within one qualified ComponentId for exact and display locators" in {
+    "E23 resolve normalized qualified IDs only on the WebPath surface" must _e23 {
+      "when exercising: E23 resolve normalized qualified IDs only on the WebPath surface" in {
+        Given("one admitted canonical component and two constructible canonical IDs whose normalized paths collide")
+        val canonical = ComponentId("org.alpha.Shared")
+        val aliases = Vector(ComponentIdentityCompatibilityAdapter.AliasCandidate(canonical, Vector.empty))
+        val space = new ComponentSpace().add(_component(canonical.name, "Shared"))
+        val first = ComponentId("org.alpha.OAuth")
+        val second = ComponentId("org.alpha.OAUTH")
+        val collisionaliases = Vector(
+          ComponentIdentityCompatibilityAdapter.AliasCandidate(first, Vector.empty),
+          ComponentIdentityCompatibilityAdapter.AliasCandidate(second, Vector.empty)
+        )
+        val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(canonical.name)
+        val collision = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(first.name)
+
+        When("normalized qualified paths are resolved through WebPath and strict local lookup")
+        val web = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          normalized,
+          aliases,
+          ComponentIdentityCompatibilityAdapter.Surface.WebPath
+        )
+        val strict = space.find(ComponentLocator.NameLocator(normalized))
+        val ambiguous = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          collision,
+          collisionaliases,
+          ComponentIdentityCompatibilityAdapter.Surface.WebPath
+        )
+        val unsupported = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          "org-alpha-Missing",
+          aliases,
+          ComponentIdentityCompatibilityAdapter.Surface.WebPath
+        )
+
+        Then("WebPath admits the unique canonical projection, preserves ambiguity, rejects unsupported paths, and leaves strict lookup closed")
+        web shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+        web.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].componentid shouldBe canonical
+        strict shouldBe None
+        collision shouldBe org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(second.name)
+        ambiguous shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
+        ambiguous.asInstanceOf[ComponentIdentityCompatibilityAdapter.Rejected].rejection shouldBe a[ComponentIdentityCompatibilityAdapter.Ambiguous]
+        unsupported shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
+        unsupported.asInstanceOf[ComponentIdentityCompatibilityAdapter.Rejected].rejection shouldBe a[ComponentIdentityCompatibilityAdapter.Unsupported]
+      }
+    }
+
+    "E20 select the declared default within one qualified ComponentId for exact locators" must _e20 {
+      "when exercising: E20 select the declared default within one qualified ComponentId for exact locators" in {
         Given("two instances of one qualified component inserted in dynamic then static/default order")
         val dynamic = _component("org.alpha.Shared", "Shared", instance = "dynamic")
         val static = _component("org.alpha.Shared", "Shared", instance = "static", isdefault = true)
         val space = new ComponentSpace().add(Vector(dynamic, static))
 
-        When("the component is selected by its display alias and exact ComponentId")
-        val display = space.find(ComponentLocator.NameLocator("Shared"))
+        When("the component is selected by its qualified string and exact ComponentId")
+        val qualified = space.find(ComponentLocator.NameLocator("org.alpha.Shared"))
         val exact = space.find(ComponentLocator.ComponentIdLocator(ComponentId("org.alpha.Shared")))
 
-        Then("both locators select the declared static default rather than insertion-order dynamic")
-        display shouldBe Some(static)
+        Then("both exact locators select the declared static default rather than insertion-order dynamic")
+        qualified shouldBe Some(static)
         exact shouldBe Some(static)
       }
     }
 
-    "E13 resolve qualified identities exactly and display aliases only when unique" must _e13 {
-      "when exercising: E13 resolve qualified identities exactly and display aliases only when unique" in {
-        Given("two namespace-qualified components with one visible display alias")
+    "E13 resolve qualified identities exactly and reject display aliases" must _e13 {
+      "when exercising: E13 resolve qualified identities exactly and reject display aliases" in {
+        Given("two namespace-qualified components with visible display labels")
         val alpha = _component("org.alpha.Shared", "Shared", service = "notice", operation = "search")
         val beta = _component("org.beta.Shared", "Other", service = "notice", operation = "search")
         val resolver = OperationResolver.build(Vector(alpha, beta))
 
-        When("canonical and display selectors are resolved")
+        When("canonical and bare display selectors are resolved")
         val canonical = resolver.resolve("org.alpha.Shared.notice.search")
         val display = resolver.resolve("Shared.notice.search")
         val detailed = resolver.resolveWithNotices("Shared.notice.search")
 
-        Then("the exact selector resolves while the colliding bare local identity remains ambiguous")
+        Then("the exact selector resolves while the unique bare display is rejected without notices")
         canonical shouldBe ResolutionResult.Resolved(
           "org.alpha.Shared.notice.search",
           "org.alpha.Shared",
           "notice",
           "search"
         )
-        display shouldBe ResolutionResult.Ambiguous(
-          "Shared",
-          Vector(
-            "org.alpha.Shared.notice.search",
-            "org.beta.Shared.notice.search"
-          )
-        )
+        display shouldBe ResolutionResult.NotFound(OperationResolver.ResolutionStage.Component, "Shared")
         detailed.result shouldBe display
         detailed.notices shouldBe empty
 
-        When("the display alias becomes ambiguous")
-        val ambiguous = OperationResolver.build(Vector(alpha, _component(
+        When("the bare display collides across admitted components")
+        val ambiguousresolver = OperationResolver.build(Vector(alpha, _component(
           "org.beta.Shared",
           "Shared",
           service = "notice",
           operation = "search"
-        ))).resolve("Shared.notice.search")
+        )))
+        val ambiguous = ambiguousresolver.resolve("Shared.notice.search")
+        val ambiguousdetailed = ambiguousresolver.resolveWithNotices("Shared.notice.search")
 
-        Then("the candidates retain qualified identities")
-        ambiguous shouldBe ResolutionResult.Ambiguous(
-          "Shared",
-          Vector(
-            "org.alpha.Shared.notice.search",
-            "org.beta.Shared.notice.search"
-          )
-        )
+        Then("the colliding bare display is also rejected without alias adaptation")
+        ambiguous shouldBe ResolutionResult.NotFound(OperationResolver.ResolutionStage.Component, "Shared")
+        ambiguousdetailed.result shouldBe ambiguous
+        ambiguousdetailed.notices shouldBe empty
       }
     }
 
@@ -156,18 +194,18 @@ final class Phase56RuntimeIdentityProjectionSpec
         val alias = space.find(ComponentLocator.NameLocator("Shared"))
         val exact = space.find(ComponentLocator.ComponentIdLocator(ComponentId("org.alpha.Shared")))
 
-        Then("the full alias candidate set is ambiguous while exact identity remains authoritative")
+        Then("the presentation alias is rejected while exact identity remains authoritative")
         alias shouldBe None
         exact shouldBe Some(alpha)
       }
     }
 
-    "E14 find and route builtin Admin through exact and display-compatible selectors" must _e14 {
-      "when exercising: E14 find and route builtin Admin through exact and display-compatible selectors" in {
+    "E14 reject local Admin display lookup while routing canonical HTTP identity" must _e14 {
+      "when exercising: E14 reject local Admin display lookup while routing canonical HTTP identity" in {
         Given("the admitted default subsystem")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
 
-        When("Admin is located through its exact ID and its compatibility display")
+        When("Admin is located through its exact ID and its display alias while HTTP routes are resolved")
         val exact = subsystem.findComponent(BuiltinComponentIdentity.ADMIN)
         val display = subsystem.findComponent(AdminComponent.name)
         val canonicalresponse = subsystem.executeHttp(
@@ -180,12 +218,12 @@ final class Phase56RuntimeIdentityProjectionSpec
           HttpRequest.fromPath(HttpRequest.GET, "/admin.system.ping")
         )
 
-        Then("both lookups and canonical/legacy routes resolve the same runtime operation")
-        exact shouldBe display
+        Then("local display lookup is rejected while only the canonical HTTP route resolves")
         exact.map(_.componentId) shouldBe Some(BuiltinComponentIdentity.ADMIN)
+        display shouldBe None
         canonicalresponse.code shouldBe 200
-        legacyresponse.code shouldBe 200
-        dotresponse.code shouldBe 200
+        legacyresponse.code shouldBe 404
+        dotresponse.code shouldBe 404
       }
     }
 
@@ -341,7 +379,7 @@ final class Phase56RuntimeIdentityProjectionSpec
         val gamma = _component("org.gamma.Unique", "Unique", subsystem = subsystem)
         subsystem.add(Vector(alpha, beta, gamma))
 
-        When("Help and Meta are projected through unique, ambiguous, and unknown qualified selectors")
+        When("Help and Meta are projected through exact, noncanonical, ambiguous, and unknown selectors")
         val uniquehelp = HelpProjection.projectModel(alpha, Some("org.alpha.Shared.service.operation"))
         val uniquealiashelp = HelpProjection.projectModel(gamma, Some("Unique.service.operation"))
         val ambiguoushelp = HelpProjection.projectModel(alpha, Some("Shared.service.operation"))
@@ -349,15 +387,12 @@ final class Phase56RuntimeIdentityProjectionSpec
         val ambiguous = DescribeProjection.project(alpha, Some("Shared"))
         val unknown = SchemaProjection.project(gamma, Some("org.unknown.Unique"))
 
-        Then("Help keeps the exact selector and advertises a unique display alias only when it is accepted")
+        Then("Help keeps the exact selector and rejects every noncanonical alias")
         uniquehelp.`type` shouldBe "operation"
-        uniquealiashelp.`type` shouldBe "operation"
+        uniquealiashelp.`type` shouldBe "error"
         uniquehelp.selector.map(_.accepted) shouldBe Some(Vector("org.alpha.Shared.service.operation"))
-        uniquealiashelp.selector.map(_.accepted) shouldBe Some(Vector(
-          "org.gamma.Unique.service.operation",
-          "Unique.service.operation"
-        ))
-        uniquealiashelp.usage shouldBe Vector("command unique.service.operation")
+        uniquealiashelp.selector shouldBe None
+        uniquealiashelp.usage shouldBe empty
         ambiguoushelp.`type` shouldBe "error"
         ambiguoushelp.selector shouldBe None
         ambiguoushelp.usage shouldBe empty
@@ -412,7 +447,7 @@ final class Phase56RuntimeIdentityProjectionSpec
 
     "E22 expose deduplicated compatibility warnings through the Admin assembly report operation" must _e22 {
       "when exercising: expose deduplicated compatibility warnings through the Admin assembly report operation" in {
-        Given("a server subsystem owned by one runtime whose Admin operation is reached through one legacy display alias repeatedly")
+        Given("a server subsystem owned by one runtime with the admitted Web-path Admin presentation alias")
         val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
         val runtime = GlobalRuntimeContext.create(
           "phase56-admin-observability",
@@ -425,11 +460,19 @@ final class Phase56RuntimeIdentityProjectionSpec
         GlobalRuntimeContext.current = Some(runtime)
         try {
           val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"), configuration)
-          val legacy = HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
+          val candidates = ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(subsystem.components)
 
-          When("the accepted alias is resolved twice and the canonical assembly report is requested")
-          subsystem.executeHttp(legacy).code shouldBe 200
-          subsystem.executeHttp(legacy).code shouldBe 200
+          When("the accepted Web-path alias is resolved twice explicitly and the canonical assembly report is requested")
+          val adaptations = Vector.fill(2)(
+            ComponentIdentityCompatibilityAdapter.resolveAliases(
+              "admin",
+              candidates,
+              ComponentIdentityCompatibilityAdapter.Surface.WebPath
+            )
+          ).collect { case adaptation: ComponentIdentityCompatibilityAdapter.Adapted => adaptation }
+          adaptations.foreach(adaptation =>
+            ComponentIdentityCompatibilityObserver.observe(runtime.assemblyReport, adaptation.notice)
+          )
           val reportresult = subsystem.executeOperationResponse(Request.of(
             component = "org.goldenport.cncf.Admin",
             service = "assembly",
@@ -443,13 +486,14 @@ final class Phase56RuntimeIdentityProjectionSpec
             case xs: Seq[?] => xs.collect { case value: Record => value }.toVector
           }.getOrElse(Vector.empty)
 
-          Then("the report exposes one compatibility warning with stable fields despite repeated alias resolution")
+          Then("the report exposes one typed Web-path compatibility warning despite repeated alias resolution")
+          adaptations.map(_.componentid) shouldBe Vector.fill(2)(BuiltinComponentIdentity.ADMIN)
           warnings.getString("status") shouldBe Some("warning")
           warnings.getInt("warningCount") shouldBe Some(1)
           warningrecords should have size 1
           warningrecords.head.getString("kind") shouldBe Some("component-identity-compatibility")
           warningrecords.head.getString("component") shouldBe Some("org.goldenport.cncf.Admin")
-          warningrecords.head.getString("reason").getOrElse("") should include ("surface=runtime-selector")
+          warningrecords.head.getString("reason").getOrElse("") should include ("surface=web-path")
           warningrecords.head.getString("reason").getOrElse("") should include ("alias=admin")
           warningrecords.head.getString("message").getOrElse("") should include ("canonical=org.goldenport.cncf.Admin")
         } finally {

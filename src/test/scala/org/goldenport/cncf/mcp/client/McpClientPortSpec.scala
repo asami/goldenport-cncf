@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for runtime-owned MCP client Port wiring.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -141,7 +141,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
         val installed = registry.install(consumer)
         val remotecatalog = socket.service(serverset.id).flatMap(_.catalog)
         val consumerpublication = McpToolCatalog.toolsForComponent(consumer)
-        val internalpublication = subsystem.findComponent("tool")
+        val internalpublication = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL)
           .map(McpToolCatalog.toolsForComponent)
           .getOrElse(Vector.empty)
         (installed, remotecatalog, consumerpublication, internalpublication)

@@ -40,8 +40,9 @@ by a SAR. In that placement, the descriptor declares required components and
 wiring defaults, but it must not embed provider component artifacts. Provider
 component CARs are still resolved from the standard component repository or
 `repository.d`. A component CAR with this metadata can therefore be selected by
-name, for example `cncf --textus.component=<component-name> server`, without
-embedding provider component CARs.
+qualified Component identity, for example
+`cncf --textus.component=<namespace>.<id> server`, without embedding provider
+component CARs.
 
 For ordinary CAR projects, `packaging.kind: car` implies the CAR-root source
 directory `src/main/car`. Project metadata does not need to repeat
@@ -110,7 +111,11 @@ items.
 
 Merge rules are field-oriented, not whole-document replacement:
 
-- `components` merge by component name.
+- `components` merge by canonical Component identity and instance: exact
+  `namespace` plus `id`, with `instance` defaulting to `default`.
+  `version` is required on every declaration and supplies the selected release;
+  the same canonical Component instance across precedence layers is the merge
+  slot, so a later source can replace or override its release and settings.
 - `extensions` and `config` merge by key.
 - `security.authentication.providers` merge by provider name.
 - `security.message_delivery.providers` merge by provider name.
@@ -142,10 +147,10 @@ assembly:
   spi:
     bindings:
       - socket:
-          component: target-component
+          component: org.example.TargetComponent
           contract: ai-runner
         provider:
-          component: target-component
+          component: org.example.TargetComponent
         selection:
           mode: test
 ```
@@ -165,11 +170,11 @@ runtime:
     path: target/cncf.d/runtime.db
 
 components:
-  target-component:
+  org.example.TargetComponent:
     datastore:
       application:
         type: local
-        path: target/cncf.d/target-component/application.db
+        path: target/cncf.d/org.example.TargetComponent/application.db
 ```
 
 These blocks are not assembly data. They are normalized to runtime
@@ -214,7 +219,10 @@ kind: assembly-descriptor
 subsystem: <subsystem-name>
 version: <subsystem-version>
 components:
-  - name: <component-name>
+  - namespace: <component-namespace>
+    id: <component-id>
+    version: <component-version>
+    instance: default
     origin: <component-origin>
 ports: []
 wiring: []
@@ -232,7 +240,12 @@ diagnostics:
 ```
 
 `components` contains the selected application-level components that should be part of the reusable descriptor body.
-Builtin components are normally runtime-provided and are therefore placed under `runtime.builtin_components` instead of being mixed into `components`.
+Builtin components are normally runtime-provided and are therefore placed under `runtime.builtin_components` instead of being mixed into `components`. Builtin presentation/report entries are separate from runtime assembly identity declarations and do not define merge or admission keys.
+
+Runtime admission requires canonical Component identity fields (`namespace`,
+`id`, and `version`; `instance` defaults to `default`) and rejects missing or
+legacy identity fields. Presentation aliases are not assembly merge or
+admission keys.
 
 `wiring` is the resolved wiring binding list.
 It is the primary wiring representation in the assembly descriptor because this document represents the resolved operational plan.

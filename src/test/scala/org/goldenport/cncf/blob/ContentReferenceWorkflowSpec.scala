@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for SimpleEntity content reference handling.
  *
  * @since   May.  3, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentReferenceWorkflowSpec
@@ -872,7 +872,7 @@ final class ContentReferenceWorkflowSpec
     maxsize: Long = 1024 * 1024
   ): Component = {
     val subsystem = DefaultSubsystemFactory.default(Some("command"))
-    val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
+    val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("missing Blob component"))
     component.withPort(Component.Port.of(new _BlobService(store, maxsize)))
     component
   }

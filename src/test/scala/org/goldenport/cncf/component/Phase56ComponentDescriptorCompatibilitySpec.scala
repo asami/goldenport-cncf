@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentDescriptorCompatibilitySpec
@@ -80,41 +80,37 @@ final class Phase56ComponentDescriptorCompatibilitySpec
   }
 
   "Phase 56 Component descriptor compatibility" should {
-    "direct projection behavior (E1-E4)" which {
-      "E1 project every accepted legacy spelling through one expected ComponentId" must _e1 {
+    "strict descriptor projection behavior (E1-E4)" which {
+      "E1 reject every legacy spelling for one expected ComponentId" must _e1 {
       "when a legacy descriptor carries two compatible presentation spellings" in {
-        Given("Spec: docs/notes/phase-56-cid06b-component-descriptor-compatibility-plan.md; Rules: CID06-R2,R9,R10; Example: E1 expected-bound descriptor projection")
+        Given("schema-1, schema-2, and root-only descriptors for the expected ComponentId")
         val spellings = Vector(_component_id.name, "UserAccount", "user-account", "textus-user-account")
-        When("the central adapter projects each accepted descriptor spelling against its owning canonical identity")
+        When("the central adapter evaluates each non-schema-3 descriptor")
         val projections = spellings.map { alias =>
           val source = _legacy_descriptor(alias, alias)
-          val projection = ComponentIdentityCompatibilityAdapter.projectDescriptorC(source, _component_id).toOption.get
-          alias -> (source, projection)
+          val projection = ComponentIdentityCompatibilityAdapter.projectDescriptorC(source, _component_id)
+          alias -> projection
         }
-        Then("only in-memory identity fields change while every source metadata field is preserved")
-        projections.foreach { case (_, (source, projection)) =>
-          projection.descriptor.name shouldBe Some(_component_id.name)
-          projection.descriptor.componentName shouldBe Some(_component_id.name)
-          projection.descriptor.componentId shouldBe Some(_component_id)
-          projection.descriptor.copy(
-            name = source.name,
-            componentName = source.componentName,
-            componentId = source.componentId
-          ) shouldBe source
+        Then("none is rewritten or projected into canonical state")
+        projections.foreach { case (_, projection) =>
+          projection shouldBe a[Consequence.Failure[_]]
+          projection.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+            "component.identity.compatibility.descriptor-schema.required: expected=3"
+          )
         }
       }
     }
 
-      "E2 reject disagreement between legacy descriptor identity fields" must _e2 {
+      "E2 reject legacy descriptor identity fields without comparing fallback candidates" must _e2 {
       "when only one field denotes the expected canonical component" in {
         Given("Spec: docs/notes/phase-56-cid06b-component-descriptor-compatibility-plan.md; Rules: CID06-R4,R9; Example: E2 descriptor-field disagreement")
         val source = _legacy_descriptor("textus-user-account", "Other")
         When("the expected-bound adapter evaluates every legacy field")
         val result = ComponentIdentityCompatibilityAdapter.projectDescriptorC(source, _component_id)
-        Then("the disagreeing componentName is identified without namespace inference")
+        Then("the schema boundary rejects the legacy descriptor before fallback field comparison")
         _assert_failure(
           result,
-          "component.identity.compatibility.descriptor-field.rejected: field=componentName; expected=org.simplemodeling.textus.UserAccount; actual=Other"
+          "component.identity.compatibility.descriptor-schema.required: expected=3"
         )
       }
     }
@@ -146,45 +142,45 @@ final class Phase56ComponentDescriptorCompatibilitySpec
     }
 
     "assembly and static repository behavior (E5-E6,E8)" which {
-      "E5 project one legacy descriptor override at the actual assembly boundary" must _e5 {
+      "E5 reject one legacy descriptor override at the actual assembly boundary" must _e5 {
       "when a typed binding owns the expected canonical identity" in {
         Given("Spec: docs/notes/phase-56-cid06b-component-descriptor-compatibility-plan.md; Rules: CID06-R2,R9,R10; Example: E5 assembly override projection")
         val descriptor = _assembly_descriptor(Vector(_legacy_descriptor("textus-user-account", "UserAccount")))
         When("SubsystemAssemblyAdmission resolves the static override closure")
         val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
-        Then("the override enters assembly state with one typed canonical identity")
-        val projected = result.toOption.get.componentDescriptorOverrides.head
-        projected.componentId shouldBe Some(_component_id)
-        projected.name shouldBe Some(_component_id.name)
-        projected.componentName shouldBe Some(_component_id.name)
-        projected.schemaVersion shouldBe Some(2)
-        projected.componentStyleSnapshot shouldBe Some(_component_style_snapshot)
+        Then("the override cannot enter assembly state through descriptor projection")
+        result shouldBe a[Consequence.Failure[_]]
       }
     }
 
-      "E6 project one legacy configured-repository descriptor at the actual assembly boundary" must _e6 {
+      "E6 ignore one legacy configured-repository descriptor at the actual assembly boundary" must _e6 {
       "when static lookup starts from one exact typed ComponentId" in {
-        Given("Spec: docs/notes/phase-56-cid06b-component-descriptor-compatibility-plan.md; Rules: CID06-R2,R9; Example: E6 repository static projection")
+        Given("a packaged expanded CAR directory containing a schema-2 legacy descriptor")
         val root = _work_root.resolve("legacy-repository")
-        val descriptorpath = root.resolve("target/cncf.d/component-descriptor.json")
+        val descriptorpath = root.resolve("legacy.car.d/component-descriptor.json")
         Files.createDirectories(descriptorpath.getParent)
+        val componentdir = descriptorpath.getParent.resolve("component")
+        Files.createDirectories(componentdir)
+        Files.write(componentdir.resolve("main.jar"), Array.emptyByteArray)
         Files.writeString(
           descriptorpath,
-          """{"name":"textus-user-account","version":"0.1.0","component":{"name":"UserAccount"}}""",
+          """{"name":"org.simplemodeling.textus.UserAccount","version":"0.1.0","component":{"name":"org.simplemodeling.textus.UserAccount"}}""",
           StandardCharsets.UTF_8
         )
-        val repositories = Vector(ComponentRepository.ComponentDevDirRepository.Specification(root))
-        When("SubsystemAssemblyAdmission asks the configured repository for bounded descriptor aliases")
+        val repositories = Vector(ComponentRepository.ComponentDirRepository.Specification(root))
+        When("SubsystemAssemblyAdmission asks the packaged static repository for descriptor aliases")
         val result = SubsystemAssemblyAdmission.resolveC(_assembly_descriptor(Vector.empty), repositories)
-        Then("the discovered legacy descriptor is projected to the exact expected identity")
-        val projected = result.toOption.flatMap(_.componentDescriptorOverrides.headOption)
-        projected.flatMap(_.name) shouldBe Some(_component_id.name)
-        projected.flatMap(_.componentName) shouldBe Some(_component_id.name)
-        projected.flatMap(_.componentId) shouldBe Some(_component_id)
+        Then("the packaged static repository ignores the schema-2 descriptor without projecting it into canonical closure")
+        result shouldBe a[Consequence.Success[_]]
+        result.toOption shouldBe defined
+        val resolved = result.toOption.get
+        resolved.componentDescriptorOverrides shouldBe empty
+        resolved.componentBindings.head.componentId shouldBe Some(_component_id)
+        resolved.componentBindings.head.componentVersion shouldBe Some("0.1.0")
       }
     }
 
-      "E8 discover a canonical schema-3 dev descriptor from one bare assembly binding" must _e8 {
+      "E8 reject a bare assembly binding before canonical schema-3 discovery" must _e8 {
       "when static candidate discovery starts from one bare binding" in {
         Given("Spec: docs/notes/phase-56-cid06b-component-descriptor-compatibility-plan.md; Rules: CID06-R2,R9; Example: E8 repository static candidate discovery")
         val root = _work_root.resolve("canonical-candidate-repository")
@@ -203,24 +199,14 @@ final class Phase56ComponentDescriptorCompatibilitySpec
         )
         When("SubsystemAssemblyAdmission resolves the configured dev repository through static candidates")
         val result = SubsystemAssemblyAdmission.resolveC(assembly, repositories)
-        Then("the binding, instance, and discovered descriptor retain the canonical identity")
-        val resolved = result.toOption.get
-        val binding = resolved.componentBindings.head
-        binding.componentName shouldBe _component_id.name
-        binding.componentId shouldBe Some(_component_id)
-        binding.canonicalInstanceId shouldBe Some(ComponentInstanceId(_component_id, "primary"))
-        val discovered = resolved.componentDescriptorOverrides.headOption
-        discovered.flatMap(_.schemaVersion) shouldBe Some(3)
-        discovered.flatMap(_.name) shouldBe Some(_component_id.name)
-        discovered.flatMap(_.componentName) shouldBe Some(_component_id.name)
-        discovered.flatMap(_.componentId) shouldBe Some(_component_id)
-        discovered.flatMap(_.version) shouldBe Some("0.1.0")
+        Then("the untyped binding fails before candidate discovery")
+        result shouldBe a[Consequence.Failure[_]]
       }
     }
     }
 
     "decoder behavior (E7)" which {
-      "E7 keep unbound legacy decoding untyped" must _e7 {
+      "E7 reject legacy decoder output at canonical projection" must _e7 {
       "when no owning boundary supplies an expected ComponentId" in {
         Given("Spec: docs/notes/phase-56-cid06b-component-descriptor-compatibility-plan.md; Rules: CID06-R5,R9; Example: E7 no decoder inference")
         val record = Record.data(
@@ -230,10 +216,9 @@ final class Phase56ComponentDescriptorCompatibilitySpec
         )
         When("the ordinary legacy RecordDecoder reads the descriptor")
         val result = summon[RecordDecoder[ComponentDescriptor]].fromRecord(record)
-        Then("presentation fields survive but no namespace-qualified identity is invented")
-        result.toOption.flatMap(_.componentId) shouldBe None
-        result.toOption.flatMap(_.name) shouldBe Some("textus-user-account")
-        result.toOption.flatMap(_.componentName) shouldBe Some("UserAccount")
+        Then("ordinary decoding may preserve data, but canonical projection rejects it without inference")
+        val projection = result.flatMap(ComponentIdentityCompatibilityAdapter.projectDescriptorC(_, _component_id))
+        projection shouldBe a[Consequence.Failure[_]]
       }
       }
     }
@@ -244,7 +229,11 @@ final class Phase56ComponentDescriptorCompatibilitySpec
       path = Path.of("phase-56-cid06b"),
       subsystemName = "component-descriptor-compatibility",
       componentBindings = Vector(
-        GenericSubsystemComponentBinding(_component_id.name, componentId = Some(_component_id))
+        GenericSubsystemComponentBinding(
+          _component_id.name,
+          version = Some("0.1.0"),
+          componentId = Some(_component_id)
+        )
       ),
       componentDescriptorOverrides = overrides
     )

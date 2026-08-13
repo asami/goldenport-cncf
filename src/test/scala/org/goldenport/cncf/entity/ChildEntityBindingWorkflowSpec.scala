@@ -37,7 +37,7 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 30, 2026
  *  version May. 18, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ChildEntityBindingWorkflowSpec
@@ -305,7 +305,7 @@ final class ChildEntityBindingWorkflowSpec
     val subsystem = TestComponentFactory.admittedEmptySubsystem("child_entity_binding_spec")
     val component = _component(subsystem)
     subsystem.add(component)
-    val runtime = subsystem.findComponent(component.name).getOrElse(fail("component missing"))
+    val runtime = subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
     runtime -> runtime.logic.executionContext()
   }
 

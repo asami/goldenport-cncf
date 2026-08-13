@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
+import org.goldenport.cncf.component.ComponentIdentityCompatibilityAdapter
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
@@ -34,7 +35,8 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 20, 2026
  *  version Jun. 19, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -203,14 +205,18 @@ trait StaticFormAppRendererSystemAdminPart {
     subsystem: Subsystem,
     name: String
   ): Option[Component] =
-    subsystem.components.find(x =>
-      NamingConventions.equivalentByNormalized(x.name, name) ||
-        NamingConventions.equivalentByNormalized(x.displayName, name) ||
-        x.artifactMetadata.toVector.exists { metadata =>
-          metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
-            NamingConventions.equivalentByNormalized(metadata.name, name)
-        }
-    )
+    ComponentIdentityCompatibilityAdapter.resolveAliases(
+      name,
+      ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(subsystem.components),
+      ComponentIdentityCompatibilityAdapter.Surface.WebPath
+    ) match {
+      case result: ComponentIdentityCompatibilityAdapter.Canonical =>
+        subsystem.components.find(_.componentId == result.componentid)
+      case result: ComponentIdentityCompatibilityAdapter.Adapted =>
+        subsystem.components.find(_.componentId == result.componentid)
+      case _: ComponentIdentityCompatibilityAdapter.Rejected =>
+        None
+    }
 
   protected def operation_selector(
     componentName: String,

@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56NamespaceIsolatedRuntimeIntegrationSpec
@@ -107,7 +107,7 @@ final class Phase56NamespaceIsolatedRuntimeIntegrationSpec
               case values => fail(s"expected two registered component loaders but found ${values.size}")
             }
 
-            Then("descriptor admission promotes only the exact qualified declarations in order")
+            Then("descriptor admission preserves the canonical declarations in order")
             bindings.map(_.componentId) shouldBe Vector(Some(alphaid), Some(betaid))
 
             And("Core, default instance, artifact, repository origin, and display retain distinct roles")
@@ -187,9 +187,11 @@ final class Phase56NamespaceIsolatedRuntimeIntegrationSpec
       target,
       s"""subsystem: phase56-namespace-isolated-runtime
          |components:
-         |  - name: ${alphaid.name}
+         |  - namespace: ${alphaid.namespace.value()}
+         |    id: ${alphaid.localId.value()}
          |    version: 0.6.0
-         |  - name: ${betaid.name}
+         |  - namespace: ${betaid.namespace.value()}
+         |    id: ${betaid.localId.value()}
          |    version: 0.6.0
          |""".stripMargin,
       StandardCharsets.UTF_8

@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  7, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56RuntimeIdentityMigrationSpec
@@ -50,7 +50,6 @@ final class Phase56RuntimeIdentityMigrationSpec
   private val _e8 = afterWord(
     "in spec:phase-56-runtime-identity-migration, example:E8, rules:CID05D-R5, phase:56, slice:CID-05D"
   )
-
   "Phase 56 runtime identity migration" should {
     "E1 decode schema 3 as the exact qualified ComponentId and release" must _e1 {
       "when a descriptor supplies only its canonical component object" in {
@@ -181,7 +180,7 @@ final class Phase56RuntimeIdentityMigrationSpec
           val result = GenericSubsystemDescriptor.load(path)
 
           Then("the binding identity is rejected without trimming")
-          _assert_failure(result, "component binding name must be a nonempty string without surrounding whitespace")
+          _assert_failure(result, "component assembly binding rejects legacy identity fields: name")
         }
       }
 
@@ -305,24 +304,32 @@ final class Phase56RuntimeIdentityMigrationSpec
 
     "E8 select a typed assembly binding through its exact ComponentId" must _e8 {
       "when presentation and canonical component identities differ" in {
-        Given("a typed Shared binding, a legacy presentation repository, and a canonical alpha repository")
+        Given("a typed Shared binding, a legacy packaged CAR repository, and a canonical alpha packaged CAR repository")
         _with_scenario_directory("typed-binding-lookup") { directory =>
           val alphaid = ComponentId("org.alpha.textus.Shared")
           val legacyroot = directory.resolve("legacy")
           val alpharoot = directory.resolve("alpha")
-          Files.createDirectories(legacyroot.resolve("target/cncf.d"))
-          Files.createDirectories(alpharoot.resolve("target/cncf.d"))
+          val legacycardir = legacyroot.resolve("legacy.car.d")
+          val alphacardir = alpharoot.resolve("alpha.car.d")
+          Files.createDirectories(legacycardir)
+          Files.createDirectories(alphacardir)
+          val legacycomponentdir = legacycardir.resolve("component")
+          val alphacomponentdir = alphacardir.resolve("component")
+          Files.createDirectories(legacycomponentdir)
+          Files.createDirectories(alphacomponentdir)
+          Files.write(legacycomponentdir.resolve("main.jar"), Array.emptyByteArray)
+          Files.write(alphacomponentdir.resolve("main.jar"), Array.emptyByteArray)
           Files.writeString(
-            legacyroot.resolve("target/cncf.d/component-descriptor.json"),
+            legacycardir.resolve("component-descriptor.json"),
             """{"name":"Shared","version":"0.6.0"}""",
             StandardCharsets.UTF_8
           )
           Files.writeString(
-            alpharoot.resolve("target/cncf.d/component-descriptor.json"),
+            alphacardir.resolve("component-descriptor.json"),
             _canonical_json,
             StandardCharsets.UTF_8
           )
-          val binding = GenericSubsystemComponentBinding(componentName = "Shared", componentId = Some(alphaid))
+          val binding = GenericSubsystemComponentBinding(componentName = alphaid.name, version = Some("0.6.0"), componentId = Some(alphaid))
           val descriptor = GenericSubsystemDescriptor(
             path = directory.resolve("assembly-descriptor.yaml"),
             subsystemName = "typed-binding",
@@ -330,11 +337,11 @@ final class Phase56RuntimeIdentityMigrationSpec
             subsystemCapabilityProviders = Vector(GenericSubsystemCapabilityProviderBinding("provider", alphaid.name, Vector.empty))
           )
           val repositories = Vector(
-            ComponentRepository.ComponentDevDirRepository.Specification(legacyroot),
-            ComponentRepository.ComponentDevDirRepository.Specification(alpharoot)
+            ComponentRepository.ComponentDirRepository.Specification(legacyroot),
+            ComponentRepository.ComponentDirRepository.Specification(alpharoot)
           )
 
-          When("the actual assembly-admission boundary resolves descriptor closure")
+          When("the actual assembly-admission boundary resolves the ordered packaged static repositories")
           val result = SubsystemAssemblyAdmission.resolveC(descriptor, repositories)
 
           Then("the exact qualified lookup skips the presentation descriptor and admits canonical alpha")
@@ -412,11 +419,11 @@ final class Phase56RuntimeIdentityMigrationSpec
       }
 
       "when canonical and legacy declarations each repeat one instance identity" in {
-        Given("duplicate canonical bindings and normalized legacy compatibility bindings")
+        Given("duplicate canonical bindings and untyped legacy bindings")
         val alphaid = ComponentId("org.alpha.textus.Shared")
         val canonical = Vector(
-          GenericSubsystemComponentBinding(alphaid.name, instance = Some("default"), componentId = Some(alphaid)),
-          GenericSubsystemComponentBinding(alphaid.name, instance = Some("default"), componentId = Some(alphaid))
+          GenericSubsystemComponentBinding(alphaid.name, version = Some("0.6.0"), instance = Some("default"), componentId = Some(alphaid)),
+          GenericSubsystemComponentBinding(alphaid.name, version = Some("0.6.0"), instance = Some("default"), componentId = Some(alphaid))
         )
         val legacy = Vector(
           GenericSubsystemComponentBinding("textus-scraper", instance = Some("dynamic-playwright")),
@@ -427,9 +434,9 @@ final class Phase56RuntimeIdentityMigrationSpec
         val canonicalresult = GenericSubsystemDescriptor._validate_component_bindings_c(canonical)
         val legacyresult = GenericSubsystemDescriptor._validate_component_bindings_c(legacy)
 
-        Then("canonical keys remain qualified and legacy keys remain bounded compatibility keys")
+        Then("canonical keys remain qualified and untyped legacy bindings fail before compatibility matching")
         _assert_failure(canonicalresult, "duplicate component instance id: org.alpha.textus.Shared@default")
-        _assert_failure(legacyresult, "duplicate component instance id: legacy:textusscraper@dynamicplaywright")
+        _assert_failure(legacyresult, "component assembly binding requires canonical namespace/id/version: alias=textus-scraper; required=canonical namespace/id/version")
       }
     }
 
@@ -443,11 +450,14 @@ final class Phase56RuntimeIdentityMigrationSpec
         val descriptor = GenericSubsystemDescriptor(
           Path.of("phase56-e5.yaml"),
           "phase56-e5",
-          componentBindings = Vector(GenericSubsystemComponentBinding(alphaid.name, componentId = Some(alphaid)))
+          componentBindings = Vector(GenericSubsystemComponentBinding(alphaid.name, version = Some("0.6.0"), componentId = Some(alphaid)))
         )
         val alpha = _prototype(subsystem, alphaid, alphaid)
+          .withArtifactMetadata(_artifact_metadata(alphaid, "0.6.0"))
         val betacore = _prototype(subsystem, betaid, betaid)
+          .withArtifactMetadata(_artifact_metadata(betaid, "0.6.0"))
         val betaartifact = _prototype(subsystem, alphaid, betaid)
+          .withArtifactMetadata(_artifact_metadata(betaid, "0.6.0"))
 
         When("materializeComponentInstancesC evaluates each real prototype")
         val admitted = GenericSubsystemFactory.materializeComponentInstancesC(Vector(alpha), descriptor, params)

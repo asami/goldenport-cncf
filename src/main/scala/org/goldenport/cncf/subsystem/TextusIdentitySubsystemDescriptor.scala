@@ -2,21 +2,40 @@ package org.goldenport.cncf.subsystem
 
 import java.nio.file.{Path, Paths}
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.ComponentId
 
 /*
  * @since   Mar. 26, 2026
  *  version Apr. 23, 2026
- * @version Jul. 19, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TextusIdentitySubsystemDescriptor(
   path: Path,
   subsystemName: String,
-  componentName: String,
-  componentVersion: String
+  componentId: ComponentId,
+  release: String
 ) {
+  def componentName: String = componentId.name
+
+  def componentVersion: String = release
+
   def componentVersionOption: Option[String] =
-    Option(componentVersion).map(_.trim).filter(_.nonEmpty)
+    Option(release).map(_.trim).filter(_.nonEmpty)
+
+  def toGenericDescriptor: GenericSubsystemDescriptor =
+    GenericSubsystemDescriptor(
+      path = path,
+      subsystemName = subsystemName,
+      version = componentVersionOption,
+      componentBindings = Vector(
+        GenericSubsystemComponentBinding(
+          componentName = componentName,
+          version = componentVersionOption,
+          componentId = Some(componentId)
+        )
+      )
+    )
 }
 
 object TextusIdentitySubsystemDescriptor {
@@ -27,8 +46,8 @@ object TextusIdentitySubsystemDescriptor {
     TextusIdentitySubsystemDescriptor(
       path = path,
       subsystemName = "textus-identity",
-      componentName = "textus-user-account",
-      componentVersion = "0.1.0"
+      componentId = ComponentId("org.simplemodeling.textus.UserAccount"),
+      release = "0.6.0-SNAPSHOT"
     )
 
   def load(path: Path = DefaultPath): Consequence[TextusIdentitySubsystemDescriptor] =
@@ -37,14 +56,17 @@ object TextusIdentitySubsystemDescriptor {
         val component = descriptor.componentBindings.headOption.getOrElse(
           throw new IllegalArgumentException(s"missing component binding in $path")
         )
-        val componentVersion = component.componentVersion.getOrElse(
+        val componentid = component.componentId.getOrElse(
+          throw new IllegalArgumentException(s"missing canonical component id in $path")
+        )
+        val release = component.componentVersion.getOrElse(
           throw new IllegalArgumentException(s"missing component version in $path")
         )
         TextusIdentitySubsystemDescriptor(
           path = path,
           subsystemName = descriptor.subsystemName,
-          componentName = component.componentName,
-          componentVersion = componentVersion
+          componentId = componentid,
+          release = release
         )
       }
     }

@@ -29,7 +29,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Aug. 10, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -139,7 +139,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       val pagecontext = _page_context(html)
 
       Then("the canonical component context supplies the authenticated fixed-user first render")
-      subsystem.findComponent("art-scene").map(_.componentId.name) shouldBe Some("org.simplemodeling.textus.ArtScene")
+      subsystem.findComponent(org.goldenport.cncf.component.ComponentId("org.simplemodeling.textus.ArtScene")).map(_.componentId.name) shouldBe Some("org.simplemodeling.textus.ArtScene")
       response.status.code shouldBe 200
       html should include ("<main id=\"application\">")
       pagecontext.hcursor.downField("execution").get[String]("applicationMode").toOption shouldBe Some("standalone")
