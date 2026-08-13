@@ -866,7 +866,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           case Consequence.Failure(conclusion) =>
             conclusion.observation.taxonomy.category.name shouldBe "resource"
             conclusion.observation.taxonomy.symptom.name shouldBe "invalid"
-            conclusion.display should include("sbt cozyPrepareRuntime")
+            conclusion.display should include("development-side runtime evidence error")
           case Consequence.Success(_) =>
             fail("stale prepared descriptor must not fall back to source metadata")
         }
@@ -2861,7 +2861,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             conclusion.observation.taxonomy.category.name shouldBe "resource"
             conclusion.observation.taxonomy.symptom.name shouldBe "invalid"
             conclusion.display should include(classpath.toString)
-            conclusion.display should include("sbt cozyPrepareRuntime")
+            conclusion.display should include("development-side runtime evidence error")
           case Consequence.Success(_) =>
             fail("missing runtime evidence must not pass repository validation")
         }

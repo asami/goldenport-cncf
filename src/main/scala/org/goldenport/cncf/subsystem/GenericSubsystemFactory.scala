@@ -143,7 +143,7 @@ object GenericSubsystemFactory {
                         Consequence.resourceInvalid(
                           DevelopmentCarRuntimeAdmission.recoveryMessage(
                             path,
-                            s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                            s"prepared component descriptor cannot be decoded: " +
                               s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}"
                           )
                         )
@@ -254,7 +254,7 @@ object GenericSubsystemFactory {
               Consequence.resourceInvalid(
                 DevelopmentCarRuntimeAdmission.recoveryMessage(
                   path,
-                  s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                  s"prepared component descriptor cannot be decoded: " +
                     s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}"
                 )
               )
@@ -278,7 +278,7 @@ object GenericSubsystemFactory {
               Consequence.resourceInvalid(
                 DevelopmentCarRuntimeAdmission.recoveryMessage(
                   path,
-                  s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                  s"prepared component descriptor cannot be decoded: " +
                     s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}"
                 )
               )

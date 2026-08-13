@@ -880,7 +880,7 @@ object ComponentRepository extends GlobalObservable {
     def noClassDirectoryMessage(base: Path): String =
       DevelopmentCarRuntimeAdmission.recoveryMessage(
         base,
-        s"[component-dev-dir] runtime classpath contains no class directories: ${runtimeClasspathFile(base)}"
+        s"runtime classpath contains no class directories: ${runtimeClasspathFile(base)}"
       )
 
     def devComponentDescriptors(base: Path): Vector[ComponentDescriptor] =

@@ -72,7 +72,7 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
   def recoveryMessage(base: Path, detail: String): String =
     s"[component-dev-dir] development-side runtime evidence error at $base: $detail. " +
       "Expected development runtime evidence (including target/cncf.d/runtime-classpath.txt) must be present and current. " +
-      "Run 'sbt cozyPrepareRuntime' in $base, then restart the application server. " +
+      "Prepare it using the cncf launcher before restarting the application server. " +
       "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
 
   private def _coordinate(root: Path): Either[String, Coordinate] =

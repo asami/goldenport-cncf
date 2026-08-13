@@ -50,6 +50,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
     afterWord("in spec:generation-compatibility-contract, example:E12, rules:R3,R6, phase:53, slice:CS-03")
 
   "Development CAR runtime admission" should {
+    "admit stable prepared development evidence" which {
     "E1 admit stable prepared evidence after mutable class recompilation" must _e1_metadata {
     "admit stable prepared evidence" in {
       _with_temp_dir { root =>
@@ -70,7 +71,9 @@ final class DevelopmentCarRuntimeAdmissionSpec
       }
     }
     }
+    }
 
+    "reject incomplete, stale, and incompatible development evidence" which {
     "E2 reject incomplete development evidence before classloading" must _e2_metadata {
     "reject incomplete development evidence" in {
       _with_temp_dir { root =>
@@ -87,7 +90,10 @@ final class DevelopmentCarRuntimeAdmissionSpec
             conclusion.observation.taxonomy.category.name shouldBe "resource"
             conclusion.observation.taxonomy.symptom.name shouldBe "invalid"
             conclusion.display should include("target/cncf.d/car-runtime-manifest.json")
-            conclusion.display should include("sbt cozyPrepareRuntime")
+            conclusion.display should include("development-side runtime evidence error")
+            conclusion.display should include("target/cncf.d/runtime-classpath.txt")
+            conclusion.display should include("cncf launcher")
+            conclusion.display should not include("s" + "bt " + "cozyPrepareRuntime")
           case Consequence.Success(_) =>
             fail("missing development evidence must not be admitted")
         }
@@ -171,7 +177,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
           Then("development admission identifies the stale classpath entry")
           result.display should include(entry.toString)
-          result.display should include("sbt cozyPrepareRuntime")
+          result.display should include("development-side runtime evidence error")
         }
       }
     }
@@ -193,7 +199,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
               conclusion.observation.taxonomy.category.name shouldBe "resource"
               conclusion.observation.taxonomy.symptom.name shouldBe "invalid"
               conclusion.display should include("runtime-classpath.txt")
-              conclusion.display should include("sbt cozyPrepareRuntime")
+              conclusion.display should include("development-side runtime evidence error")
             case Consequence.Success(_) =>
               fail("malformed classpath evidence must not be admitted")
           }
@@ -213,7 +219,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
           Then("development admission rejects the stale contract with recovery")
           result.display should include("component development ABI id mismatch")
-          result.display should include("sbt cozyPrepareRuntime")
+          result.display should include("development-side runtime evidence error")
         }
       }
     }
@@ -231,7 +237,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
           Then("admission rejects schema 2 with recovery guidance")
           result.display should include("component development descriptor schemaVersion mismatch: expected=3 actual=2")
-          result.display should include("sbt cozyPrepareRuntime")
+          result.display should include("development-side runtime evidence error")
         }
       }
     }
@@ -265,7 +271,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
           Then("the v1 development manifest fails closed with recovery guidance")
           result.isSuccess shouldBe false
           result.display should include("development runtime manifest schemaVersion mismatch")
-          result.display should include("sbt cozyPrepareRuntime")
+          result.display should include("development-side runtime evidence error")
           result.display should include("will not fall back to a packaged CAR")
         }
       }
@@ -294,6 +300,9 @@ final class DevelopmentCarRuntimeAdmissionSpec
       }
     }
 
+    }
+
+    "fail static descriptor resolution before legacy evidence is exposed" which {
     "E13 reject ABI document v1 evidence" in {
       _with_prepared_manifest { root =>
         Given("a canonical schema-3 development directory whose ABI document is changed to v1")
@@ -309,7 +318,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
         Then("the ABI document v1 is rejected with the standard no-fallback recovery")
         result.display should include("component development ABI manifest format mismatch")
-        result.display should include("sbt cozyPrepareRuntime")
+        result.display should include("development-side runtime evidence error")
         result.display should include("will not fall back to a packaged CAR")
       }
     }
@@ -331,7 +340,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
         Then("the recovery diagnostic is raised before any legacy descriptor can be exposed")
         rejected.getMessage should include ("development runtime manifest schemaVersion mismatch")
-        rejected.getMessage should include ("sbt cozyPrepareRuntime")
+        rejected.getMessage should include ("development-side runtime evidence error")
       }
     }
 
@@ -348,10 +357,13 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
         Then("the schema-v2 evidence remains unavailable with the recovery diagnostic")
         rejected.getMessage should include ("component development descriptor schemaVersion mismatch")
-        rejected.getMessage should include ("sbt cozyPrepareRuntime")
+        rejected.getMessage should include ("development-side runtime evidence error")
       }
     }
 
+    }
+
+    "resolve canonical prepared static descriptors" which {
     "E16 resolve prepared canonical static descriptor evidence" in {
       _with_prepared_manifest { root =>
         Given("a canonical prepared development descriptor")
@@ -365,6 +377,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
         resolved.flatMap(_.componentId) shouldBe Some(_canonical_component_id)
         all.flatMap(_.componentId) shouldBe Vector(_canonical_component_id)
       }
+    }
     }
   }
 
