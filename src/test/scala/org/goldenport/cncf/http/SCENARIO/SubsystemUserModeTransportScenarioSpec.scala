@@ -32,7 +32,7 @@ import org.typelevel.ci.CIString
  * Component operation, which returns its received ExecutionContext principal.
  *
  * @since   Aug.  1, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -76,9 +76,9 @@ final class SubsystemUserModeTransportScenarioSpec extends AnyWordSpec with Matc
       case "command" =>
         val args =
           if (mode == SubsystemUserMode.MultiUser)
-            Array("probe.identity.whoami", "--access_token", "mode-token")
+            Array("org.goldenport.cncf.test.Probe.identity.whoami", "--access_token", "mode-token")
           else
-            Array("probe.identity.whoami")
+            Array("org.goldenport.cncf.test.Probe.identity.whoami")
         val response = new CncfRuntime().executeCommandResponse(fixture.subsystem, args).toOption.getOrElse(fail("command execution failed"))
         Observed(200, response.print)
       case "rest" =>

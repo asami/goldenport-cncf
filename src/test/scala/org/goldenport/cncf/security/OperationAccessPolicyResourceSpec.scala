@@ -2,6 +2,7 @@ package org.goldenport.cncf.security
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, PrincipalId, ScopeContext, ScopeKind, SecurityContext}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem}
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
@@ -296,7 +297,7 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
       GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("<memory>"),
         subsystemName = "blob-authz-test",
-        componentBindings = Vector(GenericSubsystemComponentBinding("blob")),
+        componentBindings = Vector(GenericSubsystemComponentBinding(BuiltinComponentIdentity.BLOB.name)),
         security = Some(GenericSubsystemSecurityBinding(
           authorization = Some(GenericSubsystemAuthorizationBinding(resources = policies))
         ))
@@ -306,9 +307,9 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
     val component = new Component() {
       override val core: Component.Core =
         Component.Core.create(
-          "org.goldenport.cncf.test.Blob",
-          ComponentId("org.goldenport.cncf.test.Blob"),
-          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.Blob")),
+          BuiltinComponentIdentity.BLOB.name,
+          BuiltinComponentIdentity.BLOB,
+          ComponentInstanceId.default(BuiltinComponentIdentity.BLOB),
           Protocol.empty
         )
       override def subsystem: Option[Subsystem] = Some(owner)

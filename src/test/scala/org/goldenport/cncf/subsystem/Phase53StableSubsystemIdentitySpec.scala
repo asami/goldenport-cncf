@@ -16,34 +16,55 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 30, 2026
- * @version Aug. 10, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Phase 53 stable Subsystem identity" should {
     "prefer descriptor-owned identities in strict implicit Subsystem projection" in {
-      Given("component descriptors with each accepted descriptor-owned identity source")
+      Given("canonical component descriptors with each accepted descriptor-owned identity source")
       val path = Path.of("target", "test-tmp", "phase-53", "path-derived.car")
+      val componentid = ComponentId("org.goldenport.fixture.ComponentName")
       val declared = ComponentDescriptor(
-        name = Some("display-like-name"),
-        componentName = Some("component-name"),
-        subsystemName = Some("declared-subsystem")
+        name = Some(componentid.name),
+        componentName = Some(componentid.name),
+        subsystemName = Some("declared-subsystem"),
+        version = Some("0.1.0"),
+        schemaVersion = Some(3),
+        componentId = Some(componentid)
       )
       val component = ComponentDescriptor(
-        name = Some("display-like-name"),
-        componentName = Some("component-name")
+        name = Some(componentid.name),
+        componentName = Some(componentid.name),
+        version = Some("0.1.0"),
+        schemaVersion = Some(3),
+        componentId = Some(componentid)
       )
-      val name = ComponentDescriptor(name = Some("display-like-name"))
+      val name = ComponentDescriptor(
+        name = Some(componentid.name),
+        version = Some("0.1.0"),
+        schemaVersion = Some(3),
+        componentId = Some(componentid)
+      )
+      val conflicting = ComponentDescriptor(
+        name = Some("display-like-name"),
+        componentName = Some("component-name"),
+        version = Some("0.1.0"),
+        schemaVersion = Some(3),
+        componentId = Some(componentid)
+      )
 
       When("the Component descriptor projection creates implicit Subsystem descriptors")
       val declaredresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, declared).toOption.get
       val componentresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, component).toOption.get
       val nameresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, name).toOption.get
+      val conflictingresult = GenericSubsystemDescriptor.fromComponentDescriptor(path, conflicting)
 
       Then("the descriptor controls the stable identity")
       declaredresult.subsystemName shouldBe "declared-subsystem"
-      componentresult.subsystemName shouldBe "component-name"
-      nameresult.subsystemName shouldBe "display-like-name"
+      componentresult.subsystemName shouldBe "ComponentName"
+      nameresult.subsystemName shouldBe "ComponentName"
+      conflictingresult shouldBe a[Consequence.Failure[_]]
     }
 
     "project a label-safe Subsystem identity from a canonical qualified Component ID" in {
@@ -118,10 +139,14 @@ final class Phase53StableSubsystemIdentitySpec extends AnyWordSpec with Matchers
 
     "retain one stable identity across equivalent development and packaged descriptor paths" in {
       Given("one descriptor copied into development and packaged locations")
+      val componentid = ComponentId("org.goldenport.fixture.ComponentName")
       val descriptor = ComponentDescriptor(
-        name = Some("display-name"),
-        componentName = Some("component-name"),
-        subsystemName = Some("stable-subsystem")
+        name = Some(componentid.name),
+        componentName = Some(componentid.name),
+        subsystemName = Some("stable-subsystem"),
+        version = Some("0.1.0"),
+        schemaVersion = Some(3),
+        componentId = Some(componentid)
       )
       val developmentpath = Path.of("target", "test-tmp", "development", "component-descriptor.json")
       val packagedpath = Path.of("target", "test-tmp", "packaged", "component.car")

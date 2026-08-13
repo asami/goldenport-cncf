@@ -12,18 +12,16 @@ import org.scalatest.GivenWhenThen
 
 /*
  * @since   Jan. 14, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class ScriptDslSpec extends AnyWordSpec with Matchers with ResponseMatchers with GivenWhenThen {
   "ScriptRuntime" should {
     "execute a minimal script DSL successfully" in {
-      Given("the canonical uppercase script invocation")
+      Given("the canonical slash-form script invocation")
       val args = Seq(
         s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
-        "SCRIPT",
-        "DEFAULT",
-        "RUN"
+        "org.goldenport.cncf.Script/DEFAULT/RUN"
       )
 
       When("the script runtime executes the invocation")
@@ -37,12 +35,10 @@ class ScriptDslSpec extends AnyWordSpec with Matchers with ResponseMatchers with
     }
 
     "execute a one argument script DSL" in {
-      Given("a canonical script invocation with one user argument")
+      Given("a canonical slash-form script invocation with one user argument")
       val args = Seq(
         s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
-        "SCRIPT",
-        "DEFAULT",
-        "RUN",
+        "org.goldenport.cncf.Script/DEFAULT/RUN",
         "world"
       )
       When("the script runtime executes the invocation")

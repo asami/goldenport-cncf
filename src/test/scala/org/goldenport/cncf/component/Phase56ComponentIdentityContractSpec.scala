@@ -397,14 +397,11 @@ final class Phase56ComponentIdentityContractSpec
         ))
         When("SubsystemAssemblyAdmission.resolveC evaluates the bare alias")
         val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
-        Then("ambiguous bare resolution reports both qualified candidates")
+        Then("bare identity is rejected before any compatibility adaptation")
         result match {
           case Consequence.Failure(conclusion) =>
             val diagnostic = conclusion.show
-            diagnostic should include ("component.identity.compatibility.ambiguous")
-            diagnostic should include ("alias-kind=bare")
-            diagnostic should include ("org.alpha.UserAccount")
-            diagnostic should include ("org.beta.UserAccount")
+            diagnostic should include ("component assembly binding requires canonical namespace/id/version")
           case Consequence.Success(_) =>
             fail("ambiguous bare UserAccount was admitted")
         }
@@ -426,7 +423,7 @@ final class Phase56ComponentIdentityContractSpec
     )
 
   private def _typed_binding(componentid: ComponentId): GenericSubsystemComponentBinding =
-    GenericSubsystemComponentBinding(componentid.name, componentId = Some(componentid))
+    GenericSubsystemComponentBinding(componentid.name, version = Some("1.0.0"), componentId = Some(componentid))
 
   private def _assert_consequence_failure(
     result: Consequence[ComponentInstanceId],

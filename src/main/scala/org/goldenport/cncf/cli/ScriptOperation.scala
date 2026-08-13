@@ -7,7 +7,8 @@ import org.goldenport.cncf.subsystem.Subsystem
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class ScriptOperation(val subsystem: Subsystem) extends CliOperation {
@@ -27,10 +28,16 @@ class ScriptOperation(val subsystem: Subsystem) extends CliOperation {
       case _ =>
         val in = args.toVector
         (in.lift(0), in.lift(1), in.lift(2)) match {
-          case (Some("SCRIPT"), Some("DEFAULT"), Some("RUN")) =>
+          case (Some(a), _, _)
+              if a.equalsIgnoreCase("org.goldenport.cncf.Script/DEFAULT/RUN") =>
+            parse_command_args(args)
+          case (Some(a), Some(b), Some(c))
+              if a.equalsIgnoreCase("script") &&
+                b.equalsIgnoreCase("default") &&
+                c.equalsIgnoreCase("run") =>
             parse_command_args(args)
           case _ =>
-            val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
+            val xs = Vector("org.goldenport.cncf.Script/DEFAULT/RUN") ++ in
             parse_command_args(xs.toArray)
         }
     }

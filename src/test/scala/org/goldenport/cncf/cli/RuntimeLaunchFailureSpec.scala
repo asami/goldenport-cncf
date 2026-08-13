@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  6, 2026
- * @version Aug.  6, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -108,7 +108,9 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
           assembly,
           """subsystem: phase12-fixed-user-launch
             |components:
-            |  - name: phase12-fixed-user-fixture
+            |  - namespace: org.goldenport.cncf.test
+            |    id: Phase12FixedUserFixture
+            |    version: 1.0.0
             |security:
             |  authentication:
             |    local_subject:
@@ -229,7 +231,9 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
           assembly,
           """subsystem: phase12-malformed-profile-launch
             |components:
-            |  - name: phase12-malformed-profile-fixture
+            |  - namespace: org.goldenport.cncf.test
+            |    id: Phase12MalformedProfileFixture
+            |    version: 1.0.0
             |security:
             |  authentication:
             |    local_subject:

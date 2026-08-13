@@ -12,7 +12,7 @@ import org.goldenport.datatype.I18nString
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version May. 31, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -67,7 +67,6 @@ object HelpProjection {
         val componentname = component.displayName
         val componentid = component.componentId.name
         val isuniquedisplayalias = _is_unique_display_alias(component)
-        val usagecomponent = if (isuniquedisplayalias) componentname else componentid
         val services = component.protocol.services.services.sortBy(_.name)
         val aggregates = aggregateMetas(component).map(_.name)
         val views = viewMetas(component).map(_.name)
@@ -107,7 +106,7 @@ object HelpProjection {
             "artifactVersion" -> artifactversion
           ) ++ (if (usecases.nonEmpty) Map("useCases" -> usecases) else Map.empty),
           relationshipDefinitions = relationships,
-          usage = services.headOption.map(s => Vector(s"command help $usagecomponent.${s.name}")).getOrElse(Vector.empty),
+          usage = services.headOption.map(s => Vector(s"command help $componentid.${s.name}")).getOrElse(Vector.empty),
           useCases = usecasemodels,
         )
       case Target.ServiceTarget(component, service) =>
@@ -129,12 +128,7 @@ object HelpProjection {
           children = operations.map(_.name),
           details = Map("operations" -> operations.map(_.name)) ++ (if (usecases.nonEmpty) Map("useCases" -> usecases) else Map.empty),
           usage = operations.headOption.map { op =>
-            val selector =
-              if (isuniquedisplayalias)
-                s"${_service_cli_selector(componentname, servicename)}.${NamingConventions.toNormalizedSegment(op.name)}"
-              else
-                s"$componentid.$servicename.${op.name}"
-            Vector(s"command help $selector")
+            Vector(s"command help $componentid.$servicename.${op.name}")
           }.getOrElse(Vector.empty),
           useCases = usecasemodels
         )
@@ -190,12 +184,7 @@ object HelpProjection {
           commandExecution = commandexecution,
           evaluation = evaluation,
           usage = Vector(
-            s"command ${
-              if (isuniquedisplayalias)
-                _operation_cli_selector(componentname, servicename, operationname)
-              else
-                s"$componentid.$servicename.$operationname"
-            }"
+            s"command $componentid.$servicename.$operationname"
           )
         )
       case Target.NotFound(target) =>
@@ -659,12 +648,6 @@ object HelpProjection {
       accepted = Vector(canonical) ++ (if (includedisplayalias) Vector(s"$componentname.$servicename.$operationname") else Vector.empty)
     )
   }
-
-  private def _service_cli_selector(componentname: String, servicename: String): String =
-    s"${NamingConventions.toNormalizedSegment(componentname)}.${NamingConventions.toNormalizedSegment(servicename)}"
-
-  private def _operation_cli_selector(componentname: String, servicename: String, operationname: String): String =
-    s"${NamingConventions.toNormalizedSegment(componentname)}.${NamingConventions.toNormalizedSegment(servicename)}.${NamingConventions.toNormalizedSegment(operationname)}"
 
   private def _render_capability(p: HelpCapabilityModel): Vector[String] = {
     val name = p.name

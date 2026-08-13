@@ -15,7 +15,7 @@ import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.goldenport.cncf.config.{CncfConfigurationTarget, RuntimeConfig}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.subsystem.fixture.Phase56NamespaceIsolatedRuntimeFixture
-import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
+import org.goldenport.cncf.subsystem.resolver.OperationResolver.{ResolutionResult, ResolutionStage}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
@@ -151,13 +151,12 @@ final class Phase56NamespaceIsolatedRuntimeIntegrationSpec
             runtime.findComponent("Shared") shouldBe None
             runtime.resolver.resolve(
               s"Shared.${Phase56NamespaceIsolatedRuntimeFixture.serviceName}.${Phase56NamespaceIsolatedRuntimeFixture.operationName}"
-            ) shouldBe ResolutionResult.Ambiguous(
-              "Shared",
-              Vector(
-                s"${alphaid.name}.${Phase56NamespaceIsolatedRuntimeFixture.serviceName}.${Phase56NamespaceIsolatedRuntimeFixture.operationName}",
-                s"${betaid.name}.${Phase56NamespaceIsolatedRuntimeFixture.serviceName}.${Phase56NamespaceIsolatedRuntimeFixture.operationName}"
-              )
-            )
+            ) match {
+              case ResolutionResult.NotFound(stage, selector) =>
+                stage shouldBe ResolutionStage.Component
+                selector shouldBe "Shared"
+              case other => fail(s"unexpected bare presentation resolution: $other")
+            }
 
             When("the owning subsystem is shut down repeatedly after routing")
             val firstshutdown = runtime.shutdownC()

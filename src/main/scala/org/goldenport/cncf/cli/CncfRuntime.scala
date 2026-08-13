@@ -67,7 +67,6 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- *  version Aug. 11, 2026
  * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -526,7 +525,7 @@ object CncfRuntime extends GlobalObservable {
                 c.equalsIgnoreCase("run") =>
             _to_request(subsystem, args, RunMode.Script)
           case _ =>
-            val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
+            val xs = Vector("org.goldenport.cncf.Script/DEFAULT/RUN") ++ in
             _to_request(subsystem, xs.toArray, RunMode.Script)
         }
     }
@@ -726,18 +725,18 @@ object CncfRuntime extends GlobalObservable {
   private def _repository_policy_invocation_arguments(
     policy: RepositoryBootstrapPolicy
   ): Array[String] = {
-    def arguments(key: String, values: Vector[String]): Vector[String] =
+    def _arguments_(key: String, values: Vector[String]): Vector[String] =
       values.map(value => s"--${key}=$value")
 
     (
-      arguments(RuntimeConfig.repositoryDirKey, policy.repositoryDirs) ++
-        arguments(RuntimeConfig.repositoryComponentDevDirKey, policy.repositoryComponentDevDirs) ++
-        arguments(RuntimeConfig.componentDirKey, policy.componentDirs) ++
-        arguments(RuntimeConfig.componentDevDirKey, policy.componentDevDirs) ++
-        arguments(RuntimeConfig.componentCarDirKey, policy.componentCarDirs) ++
-        arguments(RuntimeConfig.componentFileKey, policy.componentFiles) ++
-        arguments(RuntimeConfig.subsystemDevDirKey, policy.subsystemDevDirs) ++
-        arguments(RuntimeConfig.subsystemSarDirKey, policy.subsystemSarDirs)
+      _arguments_(RuntimeConfig.repositoryDirKey, policy.repositoryDirs) ++
+        _arguments_(RuntimeConfig.repositoryComponentDevDirKey, policy.repositoryComponentDevDirs) ++
+        _arguments_(RuntimeConfig.componentDirKey, policy.componentDirs) ++
+        _arguments_(RuntimeConfig.componentDevDirKey, policy.componentDevDirs) ++
+        _arguments_(RuntimeConfig.componentCarDirKey, policy.componentCarDirs) ++
+        _arguments_(RuntimeConfig.componentFileKey, policy.componentFiles) ++
+        _arguments_(RuntimeConfig.subsystemDevDirKey, policy.subsystemDevDirs) ++
+        _arguments_(RuntimeConfig.subsystemSarDirKey, policy.subsystemSarDirs)
     ).toArray
   }
 
@@ -2224,10 +2223,10 @@ object CncfRuntime extends GlobalObservable {
         |
         |Examples:
         |  cncf server
-        |  cncf client admin.system.ping
-        |  cncf command admin.system.ping
-        |  cncf command admin.deployment.securityMermaid
-        |  cncf command admin.deployment.securityMarkdown
+        |  cncf client org.goldenport.cncf.Admin.system.ping
+        |  cncf command org.goldenport.cncf.Admin.system.ping
+        |  cncf command org.goldenport.cncf.Admin.deployment.securityMermaid
+        |  cncf command org.goldenport.cncf.Admin.deployment.securityMarkdown
         |
         |Log backend behavior:
         |  command / client : no logs by default
@@ -2855,9 +2854,13 @@ object CncfRuntime extends GlobalObservable {
           Consequence.argumentInvalid("command path must be /component/service/operation")
       }
     } else {
-      s.split("\\.") match {
-        case Array(component, service, operation) =>
-          Consequence.success((component, service, operation))
+      s.split("\\.").toVector match {
+        case parts if parts.length >= 3 =>
+          Consequence.success((
+            parts.dropRight(2).mkString("."),
+            parts(parts.length - 2),
+            parts.last
+          ))
         case _ =>
           Consequence.argumentInvalid("command must be component.service.operation")
       }
@@ -5870,9 +5873,13 @@ class CncfRuntime() extends GlobalObservable {
           Consequence.argumentInvalid("command path must be /component/service/operation")
       }
     } else {
-      s.split("\\.") match {
-        case Array(component, service, operation) =>
-          Consequence.success((component, service, operation))
+      s.split("\\.").toVector match {
+        case parts if parts.length >= 3 =>
+          Consequence.success((
+            parts.dropRight(2).mkString("."),
+            parts(parts.length - 2),
+            parts.last
+          ))
         case _ =>
           Consequence.argumentInvalid("command must be component.service.operation")
       }
@@ -5926,7 +5933,7 @@ class CncfRuntime() extends GlobalObservable {
                 c.equalsIgnoreCase("run") =>
             _to_request(subsystem, args, RunMode.Script)
           case _ =>
-            val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
+            val xs = Vector("org.goldenport.cncf.Script/DEFAULT/RUN") ++ in
             _to_request(subsystem, xs.toArray, RunMode.Script)
         }
     }
@@ -5970,9 +5977,9 @@ class CncfRuntime() extends GlobalObservable {
         |Examples:
         |  cncf server
         |  cncf client http get
-        |  cncf command admin.system.ping
-        |  cncf command admin.deployment.securityMermaid
-        |  cncf command admin.deployment.securityMarkdown
+        |  cncf command org.goldenport.cncf.Admin.system.ping
+        |  cncf command org.goldenport.cncf.Admin.deployment.securityMermaid
+        |  cncf command org.goldenport.cncf.Admin.deployment.securityMarkdown
         |
         |Log backend behavior:
         |  command / client : no logs by default

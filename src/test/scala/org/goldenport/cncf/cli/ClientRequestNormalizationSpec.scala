@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 10, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -48,15 +48,15 @@ class ClientRequestNormalizationSpec
       val table = Table(
         ("args", "operation", "path", "body"),
         (
-          Array("http", "get", "/admin/system/ping"),
+          Array("http", "get", "/org.goldenport.cncf.Admin/system/ping"),
           "get",
-          "/admin/system/ping",
+          "/org/goldenport/cncf/Admin/system/ping",
           None
         ),
         (
-          Array("http", "post", "/admin/system/ping", "-d", "pong"),
+          Array("http", "post", "/org.goldenport.cncf.Admin/system/ping", "-d", "pong"),
           "post",
-          "/admin/system/ping",
+          "/org/goldenport/cncf/Admin/system/ping",
           Some("pong")
         )
       )
@@ -94,10 +94,10 @@ class ClientRequestNormalizationSpec
 
     "normalize operation client arguments into canonical REST http get" in {
       val subsystem = _subsystem_with_admin()
-      Given("client operation arguments without explicit http operation")
+      Given("client operation arguments with one path-safe canonical selector token")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
-        Array("admin", "system", "ping")
+        Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}/system/ping")
       )
 
       When("the arguments are normalized into a Request")
@@ -198,7 +198,7 @@ class ClientRequestNormalizationSpec
         When("the file reference is normalized into a client Request")
         val request = CncfRuntime.parseClientArgs(
           subsystem,
-          Array("http", "post", "/admin/system/ping", "-d", s"@${file}")
+          Array("http", "post", "/org.goldenport.cncf.Admin/system/ping", "-d", s"@${file}")
         )
 
         request should be_success
@@ -224,7 +224,7 @@ class ClientRequestNormalizationSpec
       Given("client http arguments with an explicit baseurl")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
-        Array("http", "get", "/admin/system/ping", "--baseurl", "http://example.test")
+        Array("http", "get", "/org.goldenport.cncf.Admin/system/ping", "--baseurl", "http://example.test")
       )
 
       When("the arguments are normalized into a Request")
@@ -246,7 +246,7 @@ class ClientRequestNormalizationSpec
       Given("client operation arguments with a body field")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
-        Array("admin.system.ping", "--body", "hello", "--http.body", "raw")
+        Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping", "--body", "hello", "--http.body", "raw")
       )
 
       When("the arguments are normalized into a Request")
@@ -270,7 +270,7 @@ class ClientRequestNormalizationSpec
       Given("client operation arguments with a data field")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
-        Array("admin.system.ping", "--data", "normal")
+        Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping", "--data", "normal")
       )
 
       When("the arguments are normalized into a Request")
@@ -295,7 +295,7 @@ class ClientRequestNormalizationSpec
       Files.writeString(root.resolve("index.html"), "<article>body</article>\n", StandardCharsets.UTF_8)
       val operation = _filebundle_operation("tree")
       val req = Request.of(
-        component = "blog",
+        component = "org.goldenport.cncf.test.Blog",
         service = "post",
         operation = "importPostTree",
         arguments = Nil,
@@ -328,7 +328,7 @@ class ClientRequestNormalizationSpec
       Files.writeString(file, "<article>single</article>\n", StandardCharsets.UTF_8)
       val operation = _filebundle_operation("tree")
       val req = Request.of(
-        component = "blog",
+        component = "org.goldenport.cncf.test.Blog",
         service = "post",
         operation = "importPostTree",
         arguments = Nil,
@@ -358,7 +358,7 @@ class ClientRequestNormalizationSpec
       Files.write(zip, bytes)
       val operation = _filebundle_operation("tree")
       val req = Request.of(
-        component = "blog",
+        component = "org.goldenport.cncf.test.Blog",
         service = "post",
         operation = "importPostTree",
         arguments = Nil,
@@ -399,7 +399,7 @@ class ClientRequestNormalizationSpec
 
       forAll(table) { path =>
         val req = Request.of(
-          component = "blog",
+          component = "org.goldenport.cncf.test.Blog",
           service = "post",
           operation = "importPostTree",
           arguments = Nil,
@@ -433,7 +433,7 @@ class ClientRequestNormalizationSpec
       Files.writeString(file, "<article>command</article>\n", StandardCharsets.UTF_8)
       val parsed = CncfRuntime.parseCommandArgs(
         subsystem,
-        Array("blog.post.importPostTree", "--tree", file.toString)
+        Array("org.goldenport.cncf.test.Blog.post.importPostTree", "--tree", file.toString)
       )
 
       When("the command request is prepared")
@@ -459,7 +459,7 @@ class ClientRequestNormalizationSpec
       Files.writeString(root.resolve("index.html"), "<article>body</article>\n", StandardCharsets.UTF_8)
       val operation = _filebundle_operation("tree")
       val req = Request.of(
-        component = "blog",
+        component = "org.goldenport.cncf.test.Blog",
         service = "post",
         operation = "importPostTree",
         arguments = Nil,
@@ -534,7 +534,7 @@ class ClientRequestNormalizationSpec
       subsystem.add(component)
       val body = MimeBody(ContentType.APPLICATION_ZIP, Bag.binary(_zip_bytes(Vector("index.html" -> "<article>body</article>\n"))))
       val request = Request.of(
-        component = "blog",
+        component = "org.goldenport.cncf.test.Blog",
         service = "post",
         operation = "importPostTree",
         arguments = Nil,

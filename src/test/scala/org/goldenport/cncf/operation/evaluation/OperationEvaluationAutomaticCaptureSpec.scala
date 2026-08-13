@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * chokepoint.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAutomaticCaptureSpec
@@ -418,7 +418,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       val fixture = _fixture()
       val action = EvaluationQueryAction(
         Request.of(
-          component = "evaluation",
+          component = "org.goldenport.cncf.test.Evaluation",
           service = "operation",
           operation = "success",
           arguments = List(Argument("sample", "value"))
@@ -472,7 +472,7 @@ final class OperationEvaluationAutomaticCaptureSpec
         )
       )
       val request = Request.of(
-        component = "evaluationtarget",
+        component = "org.goldenport.cncf.test.Evaluationtarget",
         service = "operation",
         operation = "success"
       )
@@ -654,7 +654,7 @@ final class OperationEvaluationAutomaticCaptureSpec
         primaryaction,
         fixture.component.actionEngine,
         Some(fixture.component),
-        compensationActionRef = Some("evaluation.operation.compensate"),
+        compensationActionRef = Some("org.goldenport.cncf.test.Evaluation.operation.compensate"),
         compensationTask = Some(compensation)
       )
       val failureaction = EvaluationQueryAction(_request("failure"), failure = true)
@@ -713,7 +713,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       val context = source.logic.executionContext()
       val compensationaction = EvaluationQueryAction(
         Request.of(
-          component = "evaluationtarget",
+          component = "org.goldenport.cncf.test.Evaluationtarget",
           service = "operation",
           operation = "compensate"
         ),
@@ -730,7 +730,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       )
       val primaryaction = EvaluationQueryAction(
         Request.of(
-          component = "evaluationsource",
+          component = "org.goldenport.cncf.test.Evaluationsource",
           service = "operation",
           operation = "success"
         ),
@@ -741,12 +741,12 @@ final class OperationEvaluationAutomaticCaptureSpec
         primaryaction,
         source.actionEngine,
         Some(source),
-        compensationActionRef = Some("evaluationtarget.operation.compensate"),
+        compensationActionRef = Some("org.goldenport.cncf.test.Evaluationtarget.operation.compensate"),
         compensationTask = Some(compensation)
       )
       val failureaction = EvaluationQueryAction(
         Request.of(
-          component = "evaluationsource",
+          component = "org.goldenport.cncf.test.Evaluationsource",
           service = "operation",
           operation = "failure"
         ),
@@ -1023,7 +1023,7 @@ final class OperationEvaluationAutomaticCaptureSpec
   }
 
   private def _request(operation: String): Request =
-    Request.of(component = "evaluation", service = "operation", operation = operation)
+    Request.of(component = "org.goldenport.cncf.test.Evaluation", service = "operation", operation = operation)
 
   private def _track(subsystem: Subsystem): Subsystem = {
     _subsystems += subsystem

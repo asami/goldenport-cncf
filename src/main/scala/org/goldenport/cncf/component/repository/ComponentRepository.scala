@@ -878,8 +878,10 @@ object ComponentRepository extends GlobalObservable {
     }
 
     def noClassDirectoryMessage(base: Path): String =
-      s"[component-dev-dir] runtime classpath contains no class directories: ${runtimeClasspathFile(base)}. " +
-        s"Run 'sbt cozyPrepareRuntime' in ${base}, then restart the application server."
+      DevelopmentCarRuntimeAdmission.recoveryMessage(
+        base,
+        s"[component-dev-dir] runtime classpath contains no class directories: ${runtimeClasspathFile(base)}"
+      )
 
     def devComponentDescriptors(base: Path): Vector[ComponentDescriptor] =
       validate(base) match {

@@ -5,6 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.config.{CncfConfigurationCandidateDecoder, CncfConfigurationDocumentBatch, CncfConfigurationDocumentLocation, CncfConfigurationResolutionContext, CncfConfigurationTarget, OperationMode, RuntimeConfig, SubsystemInstanceId}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.security.OperationAuthorizationRule
@@ -21,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -30,7 +31,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       Given("a production subsystem and an anonymous admin ping request")
       val subsystem = _subsystem(OperationMode.Production)
       val request = Request.of(
-        component = "admin",
+        component = BuiltinComponentIdentity.ADMIN.name,
         service = "system",
         operation = "ping"
       )
@@ -45,7 +46,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       Given("a production subsystem with fallback system-admin ingress fields")
       val subsystem = _subsystem(OperationMode.Production)
       val request = Request.of(
-        component = "admin",
+        component = BuiltinComponentIdentity.ADMIN.name,
         service = "system",
         operation = "ping",
         properties = List(
@@ -68,7 +69,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
       )
       val request = Request.of(
-        component = "admin",
+        component = BuiltinComponentIdentity.ADMIN.name,
         service = "system",
         operation = "ping",
         properties = List(
@@ -88,7 +89,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       Given("a develop subsystem that permits anonymous admin dispatch")
       val subsystem = _subsystem(OperationMode.Develop)
       val request = Request.of(
-        component = "admin",
+        component = BuiltinComponentIdentity.ADMIN.name,
         service = "system",
         operation = "ping"
       )
@@ -113,9 +114,9 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       val descriptor = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("<test>"),
         subsystemName = "subsystem-operation-authorization-descriptor",
-        componentBindings = Vector(GenericSubsystemComponentBinding("domain")),
+        componentBindings = Vector(GenericSubsystemComponentBinding("org.goldenport.cncf.test.Domain")),
         operationAuthorization = Map(
-          "domain.entity.createPerson" ->
+          "org.goldenport.cncf.test.Domain.entity.createPerson" ->
             org.goldenport.cncf.security.OperationAuthorizationRule(
               allowAnonymous = true,
               anonymousOperationModes = Vector(OperationMode.Develop, OperationMode.Test)
@@ -135,7 +136,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       val domain = TestComponentFactory.create("domain", protocol, subsystem = subsystem)
       subsystem.withDescriptor(descriptor).add(Vector(domain))
       val request = Request.of(
-        component = "domain",
+        component = "org.goldenport.cncf.test.Domain",
         service = "entity",
         operation = "createPerson"
       )
@@ -166,7 +167,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       )
       subsystem.add(Vector(domain))
       val request = Request.of(
-        component = "domain",
+        component = "org.goldenport.cncf.test.Domain",
         service = "entity",
         operation = "createPerson"
       )

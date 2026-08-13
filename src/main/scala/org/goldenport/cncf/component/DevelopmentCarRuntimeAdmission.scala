@@ -22,7 +22,6 @@ import org.goldenport.cncf.component.identity.{ComponentId => SharedComponentId,
  *
  * @since   Jul. 29, 2026
  *  version Jul. 31, 2026
- *  version Aug. 12, 2026
  * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -36,7 +35,7 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
 
   private final case class Coordinate(name: String, version: String, component: String)
   private final case class RuntimeRange(minimum: String, maximum: Option[String], excluded: Vector[String], tested: Vector[String])
-  private final case class Evidence(path: String, sha256: String, logicalSha256: Option[String])
+  private final case class Evidence(path: String, sha256: String, logicalsha256: Option[String])
 
   def validate(base: Path): Consequence[Unit] =
     try {
@@ -71,8 +70,9 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
   }
 
   def recoveryMessage(base: Path, detail: String): String =
-    s"[component-dev-dir] $detail. " +
-      s"Run 'sbt cozyPrepareRuntime' in $base, then restart the application server. " +
+    s"[component-dev-dir] development-side runtime evidence error at $base: $detail. " +
+      "Expected development runtime evidence (including target/cncf.d/runtime-classpath.txt) must be present and current. " +
+      "Run 'sbt cozyPrepareRuntime' in $base, then restart the application server. " +
       "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
 
   private def _coordinate(root: Path): Either[String, Coordinate] =
@@ -192,7 +192,7 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
           Left(s"development runtime evidence digest mismatch: ${entry.path}")
         else if (entry.path == RUNTIME_CLASSPATH_IDENTITY)
           _classpath_identity(root, file).flatMap { identity =>
-            if (entry.logicalSha256 == Some(identity)) Right(())
+            if (entry.logicalsha256 == Some(identity)) Right(())
             else Left(s"development runtime classpath logical identity mismatch: $file")
           }
         else
@@ -211,7 +211,7 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
 
   private def _evidence_digest(entries: Vector[Evidence]): String =
     _sha256(entries.map { entry =>
-      s"${entry.path}\t${entry.sha256}\t${entry.logicalSha256.getOrElse("")}"
+      s"${entry.path}\t${entry.sha256}\t${entry.logicalsha256.getOrElse("")}"
     }.mkString("\n").getBytes(StandardCharsets.UTF_8))
 
   private def _classpath_identity(root: Path, path: Path): Either[String, String] =

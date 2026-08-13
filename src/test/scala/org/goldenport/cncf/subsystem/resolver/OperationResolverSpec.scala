@@ -15,7 +15,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author ASAMI, Tomoharu
  */
 class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen with TableDrivenPropertyChecks {
@@ -79,20 +79,18 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       }
     }
 
-    "E6 resolve 2-dot selector using prefix matching when unique" must _metadata("E6") {
-      "when exercising: resolve 2-dot selector using prefix matching when unique" in {
-      Given("a resolver with one unique matching operation prefix")
+    "E6 reject noncanonical 2-dot prefix selector" must _metadata("E6") {
+      "when exercising: reject noncanonical 2-dot prefix selector" in {
+      Given("a resolver with one qualified operation whose prefix is not an exact identity")
       val resolver = OperationResolver.fromFqns(
         Seq("org.example.Admin.user.find", "org.example.Admin.user.list")
       )
       When("the qualified prefix selector is resolved")
       val result = resolver.resolve("org.us.fi")
-      Then("the unique matching operation is selected")
+      Then("the noncanonical prefix selector is rejected")
       result match {
-        case ResolutionResult.Resolved(fqn, _, _, _) =>
-          fqn shouldBe "org.example.Admin.user.find"
-        case other =>
-          fail(s"unexpected result: $other")
+        case ResolutionResult.NotFound(stage, _) => stage shouldBe ResolutionStage.Component
+        case other => fail(s"unexpected result: $other")
       }
       }
     }
@@ -309,13 +307,13 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       }
     }
 
-    "E4 resolve real componentlet as component selector when built from runtime components" must _e4 {
-      "when exercising: resolve real componentlet as component selector when built from runtime components" in {
+    "E4 resolve real componentlet by exact qualified component selector" must _e4 {
+      "when exercising: resolve real componentlet by exact qualified component selector" in {
         Given("a runtime component and a componentlet with a qualified component identity")
         val resolver = OperationResolver.build(Seq(_component_with_componentlet_metadata(), _componentlet_runtime_component()))
 
-        When("the display-compatible componentlet selector is resolved")
-        val result = resolver.resolve("public-notice.notice.search-notices")
+        When("the qualified componentlet selector is resolved")
+        val result = resolver.resolve("org.goldenport.fixture.PublicNotice.notice.search-notices")
 
         Then("the runtime component identity is returned in qualified form")
         result match {
@@ -348,13 +346,13 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       }
     }
 
-    "E20 resolve component artifact metadata name as a component alias" must _metadata("E20") {
-      "when exercising: resolve component artifact metadata name as a component alias" in {
-      Given("a runtime component with canonical identity and a legacy artifact alias")
+    "E20 resolve component artifact metadata by exact qualified identity" must _metadata("E20") {
+      "when exercising: resolve component artifact metadata by exact qualified identity" in {
+      Given("a runtime component with canonical identity and a legacy artifact metadata field")
       val resolver = OperationResolver.build(Seq(_component_with_artifact_metadata_alias()))
 
-      When("the artifact alias selector is resolved")
-      val result = resolver.resolve("textus-user-notification.notification.search-my-notifications")
+      When("the qualified component selector is resolved")
+      val result = resolver.resolve("org.goldenport.fixture.UserNotification.notification.searchMyNotifications")
 
       Then("the canonical qualified component identity is returned")
       result match {
@@ -392,14 +390,9 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       When("the colliding bare Component selector is resolved")
       val result = resolver.resolve("Catalog.notice.search")
 
-      Then("the resolver reports all qualified operations instead of routing to one presentation alias")
+      Then("the strict resolver rejects the bare presentation alias")
       result match {
-        case ResolutionResult.Ambiguous(_, candidates) =>
-          candidates.toSet shouldBe Set(
-            "org.example.Catalog.notice.search",
-            "org.other.Other.notice.search",
-            "org.third.Artifact.notice.search"
-          )
+        case ResolutionResult.NotFound(stage, _) => stage shouldBe ResolutionStage.Component
         case other =>
           fail(s"unexpected result: $other")
       }

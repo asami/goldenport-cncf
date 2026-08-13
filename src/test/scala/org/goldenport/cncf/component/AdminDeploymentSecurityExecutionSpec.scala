@@ -40,7 +40,10 @@ final class AdminDeploymentSecurityExecutionSpec
       val admin = _admin_component(subsystem)
 
       When("both Admin diagnostic endpoints execute against the admitted collection")
-      Vector("admin.config.show", "admin.variation.list").foreach { selector =>
+      Vector(
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.config.show",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.variation.list"
+      ).foreach { selector =>
         val text = _take(_execute(admin, _build_request(subsystem.resolver, selector))).asInstanceOf[OperationResponse.Scalar[String]].value
 
         Then("the visible value is retained and the confidential value is redacted")
@@ -51,11 +54,19 @@ final class AdminDeploymentSecurityExecutionSpec
       }
     }
     "execute admin.deployment.securityMermaid requests" in {
+      Given("a command subsystem with an Admin security Mermaid request")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val adminComponent = _admin_component(subsystem)
-      val request = _build_request(subsystem.resolver, "admin.deployment.securityMermaid")
+      val admincomponent = _admin_component(subsystem)
+      val request = _build_request(
+        subsystem.resolver,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.deployment.securityMermaid"
+      )
 
-      _execute(adminComponent, request) match {
+      When("the canonical Admin security Mermaid request executes")
+      val result = _execute(admincomponent, request)
+
+      Then("the security Mermaid response describes the deployment")
+      result match {
         case Consequence.Success(OperationResponse.Scalar(text: String)) =>
           text should include ("flowchart LR")
           text should include ("ExecutionContext(SecurityContext)")
@@ -67,11 +78,19 @@ final class AdminDeploymentSecurityExecutionSpec
     }
 
     "execute admin.deployment.securityMarkdown requests" in {
+      Given("a command subsystem with an Admin security Markdown request")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val adminComponent = _admin_component(subsystem)
-      val request = _build_request(subsystem.resolver, "admin.deployment.securityMarkdown")
+      val admincomponent = _admin_component(subsystem)
+      val request = _build_request(
+        subsystem.resolver,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.deployment.securityMarkdown"
+      )
 
-      _execute(adminComponent, request) match {
+      When("the canonical Admin security Markdown request executes")
+      val result = _execute(admincomponent, request)
+
+      Then("the security Markdown response describes the deployment")
+      result match {
         case Consequence.Success(OperationResponse.Scalar(text: String)) =>
           text should include ("# Security Deployment Specification")
           text should include ("## Diagram")
@@ -86,17 +105,26 @@ final class AdminDeploymentSecurityExecutionSpec
       Given("an Admin Subsystem with an admitted empty binding collection")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       subsystem.admitRuntimeConfigurationBindingsC(ConfigurationBindingCollection.empty[CncfConfigurationTarget]).isSuccess shouldBe true
-      val adminComponent = _admin_component(subsystem)
-      val listRequest = _build_request(subsystem.resolver, "admin.variation.list")
-      val showrequest = _build_request(subsystem.resolver, "admin.config.show")
-      val describeRequest = _build_request(subsystem.resolver, "admin.variation.describe").copy(
+      val admincomponent = _admin_component(subsystem)
+      val listrequest = _build_request(
+        subsystem.resolver,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.variation.list"
+      )
+      val showrequest = _build_request(
+        subsystem.resolver,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.config.show"
+      )
+      val describerequest = _build_request(
+        subsystem.resolver,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.variation.describe"
+      ).copy(
         arguments = List(Argument("key", RuntimeConfig.executionHistoryRecentLimitKey))
       )
 
       When("the Admin configuration and variation operations execute")
-      val listresponse = _execute(adminComponent, listRequest)
-      val showresponse = _execute(adminComponent, showrequest)
-      val describeresponse = _execute(adminComponent, describeRequest)
+      val listresponse = _execute(admincomponent, listrequest)
+      val showresponse = _execute(admincomponent, showrequest)
+      val describeresponse = _execute(admincomponent, describerequest)
 
       Then("the diagnostic boundary and declared variation points remain available")
       listresponse match {

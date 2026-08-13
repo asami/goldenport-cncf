@@ -6,6 +6,7 @@ import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.component.builtin.tag.TagComponent
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.{
   EntityRevisionRepresentation,
@@ -330,11 +331,11 @@ final class TagModelSpec
 
       When("generic tag_search_entities loads matching source Entities")
       val response = _record(_success(subsystem.executeOperationResponse(Request.of(
-        component = "tag",
+        component = BuiltinComponentIdentity.TAG.name,
         service = "tag",
         operation = "tag_search_entities",
         arguments = List(
-          Argument("component", "tag"),
+          Argument("component", BuiltinComponentIdentity.TAG.name),
           Argument("entity", "tag"),
           Argument("tagSpace", "tag-search-op"),
           Argument("tagRef", classifierpath)
@@ -430,11 +431,11 @@ final class TagModelSpec
 
       When("tag_search_entities resolves the source against the local tag collection")
       val result = subsystem.executeOperationResponse(Request.of(
-        component = "tag",
+        component = BuiltinComponentIdentity.TAG.name,
         service = "tag",
         operation = "tag_search_entities",
         arguments = List(
-          Argument("component", "tag"),
+          Argument("component", BuiltinComponentIdentity.TAG.name),
           Argument("entity", "tag"),
           Argument("tagSpace", "tag-search-foreign"),
           Argument("tagRef", classifierpath)
@@ -522,7 +523,7 @@ final class TagModelSpec
 
   private def _tag_request(operation: String, arguments: Argument*): Request =
     Request.of(
-      component = "tag",
+      component = BuiltinComponentIdentity.TAG.name,
       service = "tag",
       operation = operation,
       arguments = arguments.toList

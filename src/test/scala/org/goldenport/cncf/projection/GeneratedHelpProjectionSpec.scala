@@ -33,11 +33,11 @@ final class GeneratedHelpProjectionSpec
 
         When("projecting component, service, and operation help")
         val subsystemhelp = HelpProjection.projectModel(component, None)
-        val componenthelp = HelpProjection.projectModel(component, Some("domain"))
-        val servicehelp = HelpProjection.projectModel(component, Some("domain.address"))
-        val operationhelp = HelpProjection.projectModel(component, Some("domain.address.lookupAddress"))
-        val operationdescribe = DescribeProjection.project(component, Some("domain.address.lookupAddress"))
-        val operationschema = SchemaProjection.project(component, Some("domain.address.lookupAddress"))
+        val componenthelp = HelpProjection.projectModel(component, Some("org.goldenport.fixture.Domain"))
+        val servicehelp = HelpProjection.projectModel(component, Some("org.goldenport.fixture.Domain.address"))
+        val operationhelp = HelpProjection.projectModel(component, Some("org.goldenport.fixture.Domain.address.lookupAddress"))
+        val operationdescribe = DescribeProjection.project(component, Some("org.goldenport.fixture.Domain.address.lookupAddress"))
+        val operationschema = SchemaProjection.project(component, Some("org.goldenport.fixture.Domain.address.lookupAddress"))
 
         Then("the subsystem target resolves top-level requirement metadata")
         subsystemhelp.`type` shouldBe "subsystem"
@@ -60,7 +60,7 @@ final class GeneratedHelpProjectionSpec
         componenthelp.useCases.head.goal shouldBe Some("Expose reusable postal lookup behavior through the component boundary.")
         componenthelp.useCases.head.precondition shouldBe Some("The address service is configured in the component.")
         componenthelp.useCases.head.postcondition shouldBe Some("The component can answer postal lookup requests through its public service.")
-        componenthelp.usage shouldBe Vector("command help domain.address")
+        componenthelp.usage shouldBe Vector("command help org.goldenport.fixture.Domain.address")
 
         And("the service help uses the generated summary and description metadata")
         servicehelp.`type` shouldBe "service"
@@ -73,7 +73,7 @@ final class GeneratedHelpProjectionSpec
         servicehelp.useCases.head.goal shouldBe Some("Resolve a postal code into a normalized address representation.")
         servicehelp.useCases.head.precondition shouldBe Some("A resolvable postal code is provided.")
         servicehelp.useCases.head.postcondition shouldBe Some("A normalized address projection is returned.")
-        servicehelp.usage shouldBe Vector("command help domain.address.lookup-address")
+        servicehelp.usage shouldBe Vector("command help org.goldenport.fixture.Domain.address.lookupAddress")
 
         And("the operation help uses the generated summary and description metadata")
         operationhelp.`type` shouldBe "operation"
@@ -109,7 +109,7 @@ final class GeneratedHelpProjectionSpec
         evaluation.getRecord("experiment").flatMap(_.getBoolean("eligible")) shouldBe Some(true)
         operationdescribe.getRecord("evaluation").flatMap(_.getRecord("corpus")).flatMap(_.getString("capture")) shouldBe Some("candidate")
         operationschema.getRecord("evaluation").flatMap(_.getRecord("corpus")).flatMap(_.getString("capture")) shouldBe Some("candidate")
-        operationhelp.usage shouldBe Vector("command domain.address.lookup-address")
+        operationhelp.usage shouldBe Vector("command org.goldenport.fixture.Domain.address.lookupAddress")
 
         And("the CLI renderers can emit meta.help output from the same model")
         val yaml = CliHelpYamlRenderer.render(servicehelp)
@@ -145,10 +145,10 @@ final class GeneratedHelpProjectionSpec
           val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TAG).getOrElse(fail("Tag component is missing"))
 
           When("projecting component, service, and operation help")
-          val componenthelp = HelpProjection.projectModel(component, Some("tag"))
-          val servicehelp = HelpProjection.projectModel(component, Some("tag.tag"))
-          val createhelp = HelpProjection.projectModel(component, Some("tag.tag.tag_create"))
-          val searchhelp = HelpProjection.projectModel(component, Some("tag.tag.tag_search_entities"))
+          val componenthelp = HelpProjection.projectModel(component, Some("org.goldenport.cncf.Tag"))
+          val servicehelp = HelpProjection.projectModel(component, Some("org.goldenport.cncf.Tag.tag"))
+          val createhelp = HelpProjection.projectModel(component, Some("org.goldenport.cncf.Tag.tag.tag_create"))
+          val searchhelp = HelpProjection.projectModel(component, Some("org.goldenport.cncf.Tag.tag.tag_search_entities"))
 
           Then("the Tag operations are discoverable from service help")
           servicehelp.`type` shouldBe "service"

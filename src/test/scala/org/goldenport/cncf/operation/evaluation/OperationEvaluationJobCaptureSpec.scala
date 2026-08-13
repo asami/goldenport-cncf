@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Job worker correlation in automatic capture.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationJobCaptureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -51,7 +51,7 @@ final class OperationEvaluationJobCaptureSpec extends AnyWordSpec with Matchers 
       try {
         When("the operation returns a JobId and the worker result is awaited")
         val submitted = subsystem.executeOperationResponse(Request.of(
-          component = "evaluation_job",
+          component = "org.goldenport.cncf.test.EvaluationJob",
           service = "operation",
           operation = "jobAsync"
         ))

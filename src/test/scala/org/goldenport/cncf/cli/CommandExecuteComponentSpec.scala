@@ -11,8 +11,10 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.record.Record
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.component.{ComponentInit, ComponentOrigin}
-import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.protocol.Protocol
@@ -28,7 +30,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Jan. 18, 2026
  *  version May.  2, 2026
  *  version Jun. 29, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -53,12 +55,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for parse component.service.operation form")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping"))
+      val result = CncfRuntime.parseCommandArgs(subsystem, Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping"))
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
+          req.component.getOrElse(fail("missing component")).shouldBe(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
         case Consequence.Failure(c) =>
@@ -70,12 +72,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for parse selector followed by option-like arguments")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping", "--name", "taro"))
+      val result = CncfRuntime.parseCommandArgs(subsystem, Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping", "--name", "taro"))
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
+          req.component.getOrElse(fail("missing component")).shouldBe(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
           req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
@@ -88,12 +90,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for parse selector followed by option-like key=value arguments")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping", "--name=taro"))
+      val result = CncfRuntime.parseCommandArgs(subsystem, Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping", "--name=taro"))
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
+          req.component.getOrElse(fail("missing component")).shouldBe(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
           req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
@@ -108,7 +110,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the command selector is parsed")
       val result = CncfRuntime.parseCommandArgs(
         subsystem,
-        Array("validate-presentation", "--presentationDsl", "presentation:")
+        Array("org.goldenport.cncf.test.Sample.presentation.validatePresentation", "--presentationDsl", "presentation:")
       )
 
       Then("the parsed request has the expected command shape")
@@ -129,7 +131,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       When("the command selector is parsed")
       val result = CncfRuntime.parseCommandArgs(
         subsystem,
-        Array("admin.system.ping", "--query.limit", "2", "--query.offset", "1")
+        Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping", "--query.limit", "2", "--query.offset", "1")
       )
 
       Then("the parsed request has the expected command shape")
@@ -164,15 +166,21 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for resolve service meta selector with service argument forwarding")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.meta.operations"))
+      val result = CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array(
+          s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.meta.operations",
+          s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system"
+        )
+      )
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.Admin")
+          req.component.getOrElse(fail("missing component")).shouldBe(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
           req.service.getOrElse(fail("missing service")).shouldBe("meta")
           req.operation.shouldBe("operations")
-          req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing forwarded service argument")) shouldBe "admin.system"
+          req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing forwarded service argument")) shouldBe s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system"
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }
@@ -182,14 +190,14 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for redirect help alias to meta.help")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("help", "admin.system.ping"))
+      val result = CncfRuntime.parseCommandArgs(subsystem, Array("help", s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping"))
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
           req.service.getOrElse(fail("missing service")).shouldBe("meta")
           req.operation.shouldBe("help")
-          req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing help target argument")) shouldBe "admin.system.ping"
+          req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing help target argument")) shouldBe s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping"
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }
@@ -199,7 +207,10 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for strip runtime flags before selector resolution")
       val subsystem = _subsystem_with_domain()
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.help", "--no-exit", "--json"))
+      val result = CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array("org.goldenport.cncf.test.Domain.meta.help", "org.goldenport.cncf.test.Domain", "--no-exit", "--json")
+      )
 
       Then("the parsed request has the expected command shape")
       result match {
@@ -207,7 +218,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
           req.component.getOrElse(fail("missing component")).shouldBe("org.goldenport.cncf.test.Domain")
           req.service.getOrElse(fail("missing service")).shouldBe("meta")
           req.operation.shouldBe("help")
-          req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing component argument")) shouldBe "domain"
+          req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing component argument")) shouldBe "org.goldenport.cncf.test.Domain"
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }
@@ -217,12 +228,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for resolve component.service omission via PathResolution feature flag in command mode")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("--path-resolution", "admin.component"))
+      val result = CncfRuntime.parseCommandArgs(subsystem, Array("--path-resolution", s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.component"))
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component shouldBe Some("org.goldenport.cncf.Admin")
+          req.component shouldBe Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
           req.service shouldBe Some("component")
           req.operation shouldBe "list"
         case Consequence.Failure(c) =>
@@ -234,12 +245,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for derive output format from selector suffix when format property is absent")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("admin.meta.describe.json"))
+      val result = CncfRuntime.parseCommandArgs(subsystem, Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.meta.describe.json"))
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component shouldBe Some("org.goldenport.cncf.Admin")
+          req.component shouldBe Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
           req.service shouldBe Some("meta")
           req.operation shouldBe "describe"
         case Consequence.Failure(c) =>
@@ -251,16 +262,36 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for prefer explicit --format over selector suffix format")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the command selector is parsed")
-      val result = CncfRuntime.parseCommandArgs(subsystem, Array("admin.meta.describe.json", "--format", "yaml"))
+      val result = CncfRuntime.parseCommandArgs(subsystem, Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.meta.describe.json", "--format", "yaml"))
 
       Then("the parsed request has the expected command shape")
       result match {
         case Consequence.Success(req: Request) =>
-          req.component shouldBe Some("org.goldenport.cncf.Admin")
+          req.component shouldBe Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
           req.service shouldBe Some("meta")
           req.operation shouldBe "describe"
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
+      }
+    }
+  }
+
+  "CliOperation.parse_component_service_operation_string" should {
+    "parse a qualified component selector through the shared operation parser" in {
+      Given("a shared CLI operation parser")
+      val parser = new SharedComponentSelectorParser
+
+      When("a qualified component selector is parsed")
+      val result = parser.parseComponentServiceOperation("org.goldenport.cncf.Admin.system.ping")
+
+      Then("the component, service, and operation retain their canonical boundaries")
+      result match {
+        case Consequence.Success((component, service, operation)) =>
+          component shouldBe "org.goldenport.cncf.Admin"
+          service shouldBe "system"
+          operation shouldBe "ping"
+        case Consequence.Failure(conclusion) =>
+          fail(s"unexpected failure: $conclusion")
       }
     }
   }
@@ -287,7 +318,10 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
     "return component YAML for domain.meta.help" in {
       Given("the preconditions for return component YAML for domain.meta.help")
       val subsystem = _subsystem_with_domain()
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.help")).toOption.getOrElse(fail("parse failed"))
+      val req = CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array("org.goldenport.cncf.test.Domain.meta.help", "org.goldenport.cncf.test.Domain")
+      ).toOption.getOrElse(fail("parse failed"))
       When("the domain meta.help request is executed")
       val result = subsystem.execute(req)
 
@@ -325,7 +359,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
     "return JSON for meta.help when textus.format is specified" in {
       Given("the preconditions for return JSON for meta.help when textus.format is specified")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("admin.meta.help", "--textus.format", "json")).toOption.getOrElse(fail("parse failed"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array(s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.meta.help", "--textus.format", "json")).toOption.getOrElse(fail("parse failed"))
       req.properties.exists(p => p.name == "textus.format" && p.value == "json") shouldBe true
       When("the projection request is executed")
       val result = subsystem.execute(req)
@@ -342,7 +376,10 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
     "return component YAML for domain.meta.help with --no-exit" in {
       Given("the preconditions for return component YAML for domain.meta.help with --no-exit")
       val subsystem = _subsystem_with_domain()
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.help", "--no-exit")).toOption.getOrElse(fail("parse failed"))
+      val req = CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array("org.goldenport.cncf.test.Domain.meta.help", "org.goldenport.cncf.test.Domain", "--no-exit")
+      ).toOption.getOrElse(fail("parse failed"))
       When("the projection request is executed")
       val result = subsystem.execute(req)
 
@@ -413,10 +450,13 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       }
     }
 
-    "redirect help domain to component help" in {
-      Given("the preconditions for redirect help domain to component help")
+    "resolve component help target with its canonical selector" in {
+      Given("the preconditions for resolve component help target with its canonical selector")
       val subsystem = _subsystem_with_domain()
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("help", "domain")).toOption.getOrElse(fail("parse failed"))
+      val req = CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array("org.goldenport.cncf.test.Domain.meta.help", "org.goldenport.cncf.test.Domain")
+      ).toOption.getOrElse(fail("parse failed"))
       When("the projection request is executed")
       val result = subsystem.execute(req)
 
@@ -434,7 +474,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
     "render RecordResponse as YAML by default for command mode" in {
       Given("the preconditions for render RecordResponse as YAML by default for command mode")
       val subsystem = _subsystem_with_domain()
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe")).toOption.getOrElse(fail("parse failed"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("org.goldenport.cncf.test.Domain.meta.describe")).toOption.getOrElse(fail("parse failed"))
       When("the projection request is executed")
       val result = subsystem.execute(req)
 
@@ -450,7 +490,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
     "render an address-like RecordResponse for generated VO smoke" in {
       Given("the preconditions for render an address-like RecordResponse for generated VO smoke")
       val subsystem = _subsystem_with_domain()
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe")).toOption.getOrElse(fail("parse failed"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("org.goldenport.cncf.test.Domain.meta.describe")).toOption.getOrElse(fail("parse failed"))
       When("the projection request is executed")
       val result = subsystem.execute(req)
 
@@ -477,6 +517,11 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       code shouldBe 0
       out.contains("CNCF Command Line Interface") shouldBe true
       out.contains("cncf <command> [arguments]") shouldBe true
+      out.contains("cncf command org.goldenport.cncf.Admin.system.ping") shouldBe true
+      out.contains("cncf command meta.help") shouldBe true
+      out.contains("cncf client org.goldenport.cncf.Admin.system.ping") shouldBe true
+      out.contains("cncf command domain.entity.createPerson") shouldBe false
+      out.contains("cncf client domain.entity.createPerson") shouldBe false
     }
 
     "print top-level help for run --help" in {
@@ -516,6 +561,12 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       withClue(out) {
         out.contains("CNCF Command Help") shouldBe true
         out.contains("cncf command <selector> [args...]") shouldBe true
+        out.contains("cncf command org.goldenport.cncf.Admin.system.ping") shouldBe true
+        out.contains("cncf command org.goldenport.cncf.Admin.meta.help") shouldBe true
+        out.contains("cncf command org.goldenport.cncf.Admin.system.meta.operations") shouldBe true
+        out.contains("cncf command domain.entity.createPerson") shouldBe false
+        out.contains("cncf command domain.meta.help") shouldBe false
+        out.contains("cncf command domain.entity.meta.operations") shouldBe false
         out.contains("cncf command meta.mcp") shouldBe true
         out.contains("cncf command spec.export.mcp") shouldBe true
         out.contains("AI/MCP Navigation") shouldBe true
@@ -586,6 +637,11 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       code shouldBe 0
       out.contains("CNCF Client Command Help") shouldBe true
       out.contains("cncf client <args...>") shouldBe true
+      out.contains("cncf client org.goldenport.cncf.Admin.system.ping") shouldBe true
+      out.contains("cncf client org.goldenport.cncf.Admin.deployment.securityMermaid") shouldBe true
+      out.contains("cncf client org.goldenport.cncf.Admin.deployment.securityMarkdown") shouldBe true
+      out.contains("cncf client admin.system.ping") shouldBe false
+      out.contains("cncf client crud.entity.create-item") shouldBe false
     }
 
     "print client command help for run client --help" in {
@@ -633,12 +689,16 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       code shouldBe 0
     }
 
-    "rewrite run command help domain to domain.meta.help" in {
-      Given("the preconditions for rewrite run command help domain to domain.meta.help")
-      When("the domain help alias command is run")
+    "execute canonical domain.meta.help target" in {
+      Given("the preconditions for executing the canonical domain.meta.help target")
+      When("the canonical domain help command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.executeCommand(
-          Array(s"--textus.test.descriptor=${_controlled_test_descriptor_path}", "help", "domain"),
+          Array(
+            s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
+            "org.goldenport.cncf.test.Domain.meta.help",
+            "org.goldenport.cncf.test.Domain"
+          ),
           subsystem => {
             val domain = TestComponentFactory.create("domain", Protocol.empty)
             domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
@@ -652,8 +712,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       out.contains("name: domain") shouldBe true
     }
 
-    "rewrite run command help domain.entity to domain.entity.meta.help" in {
-      Given("the preconditions for rewrite run command help domain.entity to domain.entity.meta.help")
+    "execute canonical domain.entity meta.help target" in {
+      Given("the preconditions for executing the canonical domain.entity meta.help target")
       val op = spec.OperationDefinition(
         content = BaseContent.simple("createPerson"),
         request = spec.RequestDefinition(),
@@ -665,13 +725,13 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       )
       val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
 
-      When("the domain entity help alias command is run")
+      When("the canonical domain entity help command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime.executeCommand(
           Array(
             s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
-            "help",
-            "domain.entity"
+            "org.goldenport.cncf.test.Domain.meta.help",
+            "org.goldenport.cncf.test.Domain.entity"
           ),
           subsystem => {
             val domain = TestComponentFactory.create("domain", protocol)
@@ -693,7 +753,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
         CncfRuntime.executeCommand(
           Array(
             s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
-            "domain.meta.describe",
+            "org.goldenport.cncf.test.Domain.meta.describe",
             "--format",
             "yaml"
           ),
@@ -723,7 +783,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
         CncfRuntime.executeCommand(
           Array(
             s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
-            "domain.meta.describe",
+            "org.goldenport.cncf.test.Domain.meta.describe",
             "--format",
             "json"
           ),
@@ -753,7 +813,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
         CncfRuntime.executeCommand(
           Array(
             s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
-            "domain.meta.describe",
+            "org.goldenport.cncf.test.Domain.meta.describe",
             "--format",
             "text"
           ),
@@ -777,15 +837,15 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       out.trim.startsWith("{") shouldBe false
     }
 
-    "execute run-path with --path-resolution and dot selector" in {
-      Given("the preconditions for execute run-path with --path-resolution and dot selector")
+    "execute run-path with --path-resolution and qualified selector" in {
+      Given("the preconditions for execute run-path with --path-resolution and qualified selector")
       When("the path-resolution command is run")
       val (code, out) = _capture_stdout {
         CncfRuntime().run(Array(
           "command",
           s"--textus.test.descriptor=${_controlled_test_descriptor_path}",
           "--path-resolution",
-          "admin.component"
+          "org.goldenport.cncf.Admin.component"
         ))
       }
       Then("the path-resolution command succeeds")
@@ -799,9 +859,9 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for keep parse/run contract consistent for --path-resolution with slash selector")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
       When("the slash selector is parsed and run")
-      val parsed = CncfRuntime.parseCommandArgs(subsystem, Array("--path-resolution", "admin/component"))
+      val parsed = CncfRuntime.parseCommandArgs(subsystem, Array("--path-resolution", "org.goldenport.cncf.Admin/component"))
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "--path-resolution", "admin/component"))
+        CncfRuntime().run(Array("command", "--path-resolution", "org.goldenport.cncf.Admin/component"))
       }
       Then("the parse and run outcomes remain consistent")
       parsed match {
@@ -819,7 +879,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       Given("the preconditions for execute via Subsystem.executeHttp")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
       val normalized = CncfRuntime.normalizeServerEmulatorArgs(
-        Seq("admin", "system", "ping"),
+        Seq("org.goldenport.cncf.Admin", "system", "ping"),
         RuntimeConfig.default.serverEmulatorBaseUrl
       )
       val httpreq = normalized.flatMap(HttpRequest.fromCurlLike)
@@ -842,15 +902,15 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
       }
     }
 
-    "execute via dot-form input" in {
-      Given("the preconditions for execute via dot-form input")
+    "execute via slash-form input" in {
+      Given("the preconditions for execute via slash-form input")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
       val normalized = CncfRuntime.normalizeServerEmulatorArgs(
-        Seq("admin.system.ping"),
+        Seq("org.goldenport.cncf.Admin/system/ping"),
         RuntimeConfig.default.serverEmulatorBaseUrl
       )
       val httpreq = normalized.flatMap(HttpRequest.fromCurlLike)
-      When("the normalized dot-form request is executed by the subsystem")
+      When("the normalized slash-form request is executed by the subsystem")
       val result = httpreq.map(subsystem.executeHttp)
 
       Then("the ping response contains the runtime identity")
@@ -931,6 +991,29 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
     val subsystem = RuntimeBindingAdmissionFixture.default(Seq(sample), Some("command"))
     sample.initialize(ComponentInit(subsystem, sample.core, ComponentOrigin.Main))
     subsystem
+  }
+
+  private final class SharedComponentSelectorParser extends CliOperation {
+    override lazy val subsystem = {
+      val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      val runtime = GlobalRuntimeContext.create(
+        "shared-component-selector-parser",
+        RuntimeConfig.default,
+        configuration,
+        ExecutionContext.create().observability,
+        AliasResolver.empty
+      )
+      RuntimeBindingAdmissionFixture.defaultWithScope(
+        runtime,
+        mode = Some(RunMode.Command),
+        configuration = configuration,
+        aliasResolver = AliasResolver.empty
+      )
+    }
+    override val mode = RunMode.Command
+
+    def parseComponentServiceOperation(value: String): Consequence[(String, String, String)] =
+      parse_component_service_operation_string(value)
   }
 
   private def _capture_stdout(body: => Int): (Int, String) = {

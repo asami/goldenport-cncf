@@ -40,7 +40,10 @@ final class AdminSystemPingExecutionSpec
   "ComponentLogic" should {
     "execute resolver-normalized admin.system.ping requests" in {
       Given("the default command subsystem and a ping alias")
-      _with_alias_context(RunMode.Command, _alias_config("ping" -> "admin.system.ping")) {
+      _with_alias_context(
+        RunMode.Command,
+        _alias_config("ping" -> s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping")
+      ) {
         (aliasResolver, context) =>
           val versionedping = context.formatPing
           val subsystem = DefaultSubsystemFactory.default(Some("command"))
@@ -49,7 +52,10 @@ final class AdminSystemPingExecutionSpec
           val resolver = subsystem.resolver
 
           When("canonical and alias selectors are resolved and executed")
-          Seq("admin.system.ping", "ping").foreach { selector =>
+          Seq(
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping",
+            "ping"
+          ).foreach { selector =>
             val normalized =
               PathPreNormalizer.rewriteSelector(selector, RunMode.Command, aliasResolver)
             val request = _build_request(resolver, normalized)
@@ -68,7 +74,10 @@ final class AdminSystemPingExecutionSpec
 
     "execute resolver-normalized admin.system.status requests" in {
       Given("the default command subsystem and a status alias")
-      _with_alias_context(RunMode.Command, _alias_config("status" -> "admin.system.status")) {
+      _with_alias_context(
+        RunMode.Command,
+        _alias_config("status" -> s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.status")
+      ) {
         (aliasResolver, context) =>
           val subsystem = DefaultSubsystemFactory.default(Some("command"))
           val admincomponent = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
@@ -76,7 +85,10 @@ final class AdminSystemPingExecutionSpec
           val resolver = subsystem.resolver
 
           When("canonical and alias selectors are resolved and executed")
-          Seq("admin.system.status", "status").foreach { selector =>
+          Seq(
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.status",
+            "status"
+          ).foreach { selector =>
             val normalized =
               PathPreNormalizer.rewriteSelector(selector, RunMode.Command, aliasResolver)
             val request = _build_request(resolver, normalized)
@@ -103,9 +115,18 @@ final class AdminSystemPingExecutionSpec
         val admincomponent = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
           .getOrElse(fail("admin component not found"))
         val resolver = subsystem.resolver
-        val pingrequest = _build_request(resolver, "admin.system.ping")
-        val historyrequest = _build_request(resolver, "admin.execution.history")
-        val calltreerequest = _build_request(resolver, "admin.execution.calltree")
+        val pingrequest = _build_request(
+          resolver,
+          s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.system.ping"
+        )
+        val historyrequest = _build_request(
+          resolver,
+          s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.execution.history"
+        )
+        val calltreerequest = _build_request(
+          resolver,
+          s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.execution.calltree"
+        )
         val calltreecontext = ExecutionContext.withFrameworkCallTreeEnabled(admincomponent.logic.executionContext(), enabled = true)
 
         When("ping executes before history and calltree inspection")
@@ -174,16 +195,25 @@ final class AdminSystemPingExecutionSpec
         val admincomponent = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN)
           .getOrElse(fail("admin component not found"))
         val resolver = subsystem.resolver
-        val calltreerequest = _build_request(resolver, "admin.execution.calltree")
+        val calltreerequest = _build_request(
+          resolver,
+          s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.execution.calltree"
+        )
         val backgroundcalltreerequest =
           calltreerequest.copy(arguments = List(Argument("originSlot", "background-js", None)))
         val backgroundhistoryrequest =
-          _build_request(resolver, "admin.execution.history")
+          _build_request(
+            resolver,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.execution.history"
+          )
             .copy(arguments = List(Argument("originSlot", "background-js", None)))
         val executioncalltreerequest =
           calltreerequest.copy(arguments = List(Argument("executionId", "execution-page", None)))
         val executionhistoryrequest =
-          _build_request(resolver, "admin.execution.history")
+          _build_request(
+            resolver,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name}.execution.history"
+          )
             .copy(arguments = List(Argument("executionId", "execution-page", None)))
 
         When("inspection requests select each origin slot and execution id")

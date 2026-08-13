@@ -37,7 +37,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenT
       ).toOption.get
 
       val searchreq = Request(
-        component = Some("event"),
+        component = Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.EVENT.name),
         service = Some("event"),
         operation = "search_event",
         arguments = Nil,
@@ -57,7 +57,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenT
       }
 
       val loadreq = Request(
-        component = Some("event"),
+        component = Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.EVENT.name),
         service = Some("event_admin"),
         operation = "load_job_events",
         arguments = List(Argument("id", jobid.value)),
@@ -112,7 +112,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenT
       eventstore.append(Seq(record)) shouldBe a[Consequence.Success[_]]
 
       val loadreq = Request(
-        component = Some("event"),
+        component = Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.EVENT.name),
         service = Some("event"),
         operation = "load_event",
         arguments = List(Argument("id", record.id.value)),
@@ -164,7 +164,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers with GivenWhenT
       _await_job(admin.jobEngine, jobid)
 
       val loadreq = Request(
-        component = Some("event"),
+        component = Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.EVENT.name),
         service = Some("event_admin"),
         operation = "load_job_events",
         arguments = List(Argument("id", jobid.value)),

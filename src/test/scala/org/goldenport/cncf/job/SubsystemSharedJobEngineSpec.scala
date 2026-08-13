@@ -72,7 +72,7 @@ final class SubsystemSharedJobEngineSpec
 
         When("the job-control suspend operation is executed")
         val request = Request.of(
-          component = "job_control",
+          component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name,
           service = "job_admin",
           operation = "suspend_job",
           arguments = List(Argument("id", jobid.value)),

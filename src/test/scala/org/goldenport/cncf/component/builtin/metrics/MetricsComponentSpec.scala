@@ -11,6 +11,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -19,9 +20,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
-final class MetricsComponentSpec extends AnyWordSpec with Matchers {
+final class MetricsComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "MetricsComponent" should {
     "expose entity access, runtime metrics, and metrics catalog queries" in {
+      Given("a command subsystem with recorded entity and runtime metrics")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val metrics = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.METRICS).getOrElse(fail("missing metrics component"))
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/metrics-spec", 200, 3L)
@@ -40,11 +42,22 @@ final class MetricsComponentSpec extends AnyWordSpec with Matchers {
         durationmillis = Some(4L)
       )
 
-      val entityAccess = _execute(metrics, _request(subsystem.resolver, "metrics.metrics.load_entity_access_metrics"))
-      val runtime = _execute(metrics, _request(subsystem.resolver, "metrics.metrics.load_runtime_metrics"))
-      val catalog = _execute(metrics, _request(subsystem.resolver, "metrics.metrics.load_metrics_catalog"))
+      When("the canonical metrics queries execute")
+      val entityaccess = _execute(
+        metrics,
+        _request(subsystem.resolver, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.METRICS.name}.metrics.load_entity_access_metrics")
+      )
+      val runtime = _execute(
+        metrics,
+        _request(subsystem.resolver, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.METRICS.name}.metrics.load_runtime_metrics")
+      )
+      val catalog = _execute(
+        metrics,
+        _request(subsystem.resolver, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.METRICS.name}.metrics.load_metrics_catalog")
+      )
 
-      entityAccess.show should include ("entity.search")
+      Then("the metric responses expose entity, runtime, and catalog data")
+      entityaccess.show should include ("entity.search")
       runtime.show should include ("web.request")
       runtime.show should include ("diagnostic-payload.externalization")
       runtime.show should include ("otel.export")

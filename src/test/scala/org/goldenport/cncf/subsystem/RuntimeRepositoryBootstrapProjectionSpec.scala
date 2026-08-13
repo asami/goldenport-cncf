@@ -282,41 +282,56 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
         Given("a packaged CAR default assembly and a SAR assembly that overrides one default field")
         val root = _fixture_root("gcf09f-packaged-defaults-")
         val componentname = "packaged-defaults"
+        val componentid = ComponentId(_component_identity(componentname))
+        val coordinate100 = ComponentReleaseCoordinate.require(componentid.sharedIdentity, "1.0.0")
+        val coordinate200 = ComponentReleaseCoordinate.require(componentid.sharedIdentity, "2.0.0")
         val (namespace, localid) = _component_parts(componentname)
         val repository = Files.createDirectories(root.resolve("repository")).toAbsolutePath.normalize
-        val unrequestedcar = repository.resolve(s"$componentname-1.0.0.car")
+        val unrequestedcar = repository.resolve(coordinate100.carRepositoryRelativePath())
+        val abi100 = _component_abi_manifest(componentname, "1.0.0")
+        val descriptor100 = _component_descriptor(componentname, "1.0.0")
+        val assembly100 =
+          s"""subsystem: $componentname
+             |version: 1.0.0
+             |components:
+             |  - namespace: $namespace
+             |    id: $localid
+             |    version: 1.0.0
+             |config:
+             |  component.default: wrong-version
+             |  wrong.version: selected
+             |""".stripMargin
+        val files100 = Map(
+          "abi-manifest.json" -> abi100,
+          "component-descriptor.json" -> descriptor100,
+          "assembly-descriptor.yaml" -> assembly100
+        )
         _write_archive(
           unrequestedcar,
-          Map(
-            "component-descriptor.json" -> _component_descriptor(componentname, "1.0.0"),
-            "assembly-descriptor.yaml" ->
-              s"""subsystem: $componentname
-                 |components:
-                 |  - namespace: $namespace
-                 |    id: $localid
-                 |    version: 1.0.0
-                 |config:
-                 |  component.default: wrong-version
-                 |  wrong.version: selected
-                 |""".stripMargin
-          )
+          files100 + ("car-runtime-manifest.json" -> _runtime_car_manifest(componentname, "1.0.0", files100))
         )
-        val car = repository.resolve(s"$componentname-2.0.0.car")
+        val car = repository.resolve(coordinate200.carRepositoryRelativePath())
+        val abi200 = _component_abi_manifest(componentname, "2.0.0")
+        val descriptor200 = _component_descriptor(componentname, "2.0.0")
+        val assembly200 =
+          s"""subsystem: $componentname
+             |version: 2.0.0
+             |components:
+             |  - namespace: $namespace
+             |    id: $localid
+             |    version: 2.0.0
+             |config:
+             |  component.default: retained
+             |  shared.value: component
+             |""".stripMargin
+        val files200 = Map(
+          "abi-manifest.json" -> abi200,
+          "component-descriptor.json" -> descriptor200,
+          "assembly-descriptor.yaml" -> assembly200
+        )
         _write_archive(
           car,
-          Map(
-            "component-descriptor.json" -> _component_descriptor(componentname, "2.0.0"),
-            "assembly-descriptor.yaml" ->
-              s"""subsystem: $componentname
-                 |components:
-                 |  - namespace: $namespace
-                 |    id: $localid
-                 |    version: 2.0.0
-                 |config:
-                 |  component.default: retained
-                 |  shared.value: component
-                 |""".stripMargin
-          )
+          files200 + ("car-runtime-manifest.json" -> _runtime_car_manifest(componentname, "2.0.0", files200))
         )
         val sar = root.resolve(s"$componentname.sar")
         _write_archive(
@@ -324,6 +339,7 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
           Map(
             "subsystem-descriptor.yaml" ->
               s"""subsystem: $componentname
+                 |version: 2.0.0
                  |components:
                  |  - namespace: $namespace
                  |    id: $localid
@@ -331,6 +347,7 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
                  |""".stripMargin,
             "assembly-descriptor.yaml" ->
               s"""subsystem: $componentname
+                 |version: 2.0.0
                  |config:
                  |  shared.value: sar
                  |  sar.override: retained
@@ -338,7 +355,11 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
           )
         )
         val descriptor = GenericSubsystemDescriptor.load(sar).getOrElse(fail("SAR descriptor"))
-        val policy = RepositoryBootstrapPolicy(repositoryDirs = Vector(repository.toString), baseDirectory = root)
+        val policy = RepositoryBootstrapPolicy(
+          repositoryDirs = Vector(repository.toString),
+          baseDirectory = root,
+          defaultRepositoriesEnabled = false
+        )
         val specification = ComponentRepository.ComponentDirRepository.Specification(repository)
 
         When("the packaged repository resolves component-owned CAR defaults before factory admission")
@@ -780,6 +801,22 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
   private def _component_descriptor(componentname: String, release: String = "1.0.0"): String = {
     val (namespace, localid) = _component_parts(componentname)
     s"""{"schemaVersion":3,"component":{"namespace":"$namespace","id":"$localid","version":"$release"}}"""
+  }
+
+  private def _component_abi_manifest(componentname: String, release: String): String = {
+    val (namespace, localid) = _component_parts(componentname)
+    s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"$namespace","id":"$localid","version":"$release"},"abi":{"version":1,"exports":{"components":[{"namespace":"$namespace","id":"$localid"}],"operations":[],"entities":[]},"dependencies":[]}}"""
+  }
+
+  private def _runtime_car_manifest(
+    componentname: String,
+    release: String,
+    files: Map[String, String]
+  ): String = {
+    val entries = files.toVector.sortBy(_._1).map { case (path, contents) =>
+      s"""{"path":"$path","sha256":"${_sha256(contents.getBytes(StandardCharsets.UTF_8))}"}"""
+    }.mkString("[", ",", "]")
+    s"""{"schemaVersion":"cncf.car-runtime-manifest.v1","car":{"name":"${_artifact_name(componentname)}","version":"$release","component":"${_component_identity(componentname)}"},"runtime":{"cncf":{"minimum":"${org.goldenport.cncf.CncfVersion.current}","maximum":null,"excluded":[],"tested":["${org.goldenport.cncf.CncfVersion.current}"]}},"integrity":{"algorithm":"SHA-256","entries":$entries}}"""
   }
 
   private def _component_descriptor_without_release(componentname: String): String = {

@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for subsystem-owned, restricted RuleSet metadata.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuleSetSubsystemDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -24,7 +24,9 @@ final class RuleSetSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
         path,
         """subsystem: pricing
           |components:
-          |  - name: catalog
+          |  - namespace: org.goldenport.cncf.test
+          |    id: Catalog
+          |    version: 1.0.0
           |    rules:
           |      cache:
           |        ttl: 60
@@ -59,7 +61,9 @@ final class RuleSetSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
         path,
         """subsystem: pricing
           |components:
-          |  - name: catalog
+          |  - namespace: org.goldenport.cncf.test
+          |    id: Catalog
+          |    version: 1.0.0
           |ruleSets:
           |  - id: tax
           |    version: "1"

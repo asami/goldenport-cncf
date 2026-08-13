@@ -3,7 +3,7 @@ package org.goldenport.cncf.operationtool
 import java.util.Locale
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.{Component, ComponentId}
 import org.goldenport.datatype.I18nString
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
@@ -14,7 +14,7 @@ import org.goldenport.schema.{Multiplicity, XBoolean, XDouble, XFloat, XInt, XIn
  * Provider-neutral CNCF Operation tool values.
  *
  * @since   Jul. 21, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationToolSetId private (value: String) {
@@ -46,8 +46,9 @@ object OperationToolIdentity {
 
   def parseC(value: String): Consequence[OperationToolIdentity] =
     Option(value).map(_.trim).getOrElse("").split("\\.", -1).toVector match {
-      case Vector(component, service, operation) =>
-        createC(component, service, operation)
+      case parts if parts.length >= 3 =>
+        val component = parts.dropRight(2).mkString(".")
+        createC(component, parts(parts.length - 2), parts.last)
       case _ =>
         Consequence.argumentFormatError(
           "tool",
@@ -61,9 +62,9 @@ object OperationToolIdentity {
     service: String,
     operation: String
   ): Consequence[OperationToolIdentity] =
-    _segment_c("component", component).flatMap { c =>
+    ComponentId.parseC(component).flatMap { c =>
       _segment_c("service", service).flatMap { s =>
-        _segment_c("operation", operation).map(OperationToolIdentity(c, s, _))
+        _segment_c("operation", operation).map(OperationToolIdentity(c.name, s, _))
       }
     }
 
@@ -245,7 +246,7 @@ object OperationToolDefinitionBuilder {
     service: ServiceDefinition,
     operation: OperationDefinition
   ): Consequence[OperationToolDefinition] =
-    _definition_c(component.displayName, Some(component), service, operation)
+    _definition_c(component.componentId.name, Some(component), service, operation)
 
   def definitionC(
     componentname: String,

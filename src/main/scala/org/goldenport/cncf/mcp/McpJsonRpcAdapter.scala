@@ -11,7 +11,8 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 27, 2026
  *  version Apr. 15, 2026
  *  version May. 20, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -226,8 +227,11 @@ final class McpJsonRpcAdapter(
     name: String,
     arguments: JsonObject
   ): Either[String, Request] =
-    name.split("\\.") match {
-      case Array(component, service, operation) =>
+    name.split("\\.").toVector match {
+      case parts if parts.length >= 3 =>
+        val component = parts.dropRight(2).mkString(".")
+        val service = parts(parts.length - 2)
+        val operation = parts.last
         val args = arguments.toVector
           .sortBy(_._1)
           .map { case (k, v) =>
@@ -282,7 +286,8 @@ final class McpJsonRpcAdapter(
 
 /*
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class McpJsonRpcOutcome {

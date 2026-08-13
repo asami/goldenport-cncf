@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  9, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class OpenApiProjectionScenarioSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -47,7 +47,7 @@ class OpenApiProjectionScenarioSpec extends AnyWordSpec with Matchers with Given
       Given("a runtime subsystem and an OpenAPI export request")
       val subsystem = RuntimeBindingAdmissionFixture.default()
       val req = Request(
-        component = Some("spec"),
+        component = Some("org.goldenport.cncf.Specification"),
         service = Some("export"),
         operation = "openapi",
         arguments = Nil,

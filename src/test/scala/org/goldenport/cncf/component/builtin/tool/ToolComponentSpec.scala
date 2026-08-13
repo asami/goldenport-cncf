@@ -434,15 +434,16 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
       "when the default subsystem MCP catalog is projected" in {
         Given("the builtin tool component with MCP-ready resource, Web, time, and decimal services")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
+        val componentid = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL.name
 
         When("the existing MCP server catalog projects normal Operations")
         val tools = McpToolCatalog.toolsForSubsystem(subsystem)
-        val time = tools.find(_.name == "tool.time.now")
-        val decimal = tools.find(_.name == "tool.decimal.calculate")
-        val resource = tools.find(_.name == "tool.resource.read")
-        val webfetch = tools.find(_.name == "tool.web.fetch")
-        val webhead = tools.find(_.name == "tool.web.head")
-        val websearch = tools.find(_.name == "tool.web.search")
+        val time = tools.find(_.name == s"$componentid.time.now")
+        val decimal = tools.find(_.name == s"$componentid.decimal.calculate")
+        val resource = tools.find(_.name == s"$componentid.resource.read")
+        val webfetch = tools.find(_.name == s"$componentid.web.fetch")
+        val webhead = tools.find(_.name == s"$componentid.web.head")
+        val websearch = tools.find(_.name == s"$componentid.web.search")
 
         Then("all identities are present without a separate MCP implementation")
         time should not be empty
@@ -480,7 +481,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
           path = Path.of("<tool-framework-boundary>"),
           subsystemName = subsystem.name,
           operationAuthorization = Map(
-            "tool.web.search" -> OperationAuthorizationRule(deny = true)
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL.name}.web.search" -> OperationAuthorizationRule(deny = true)
           )
         ))
         given ExecutionContext = ExecutionContext.create()
@@ -531,7 +532,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
           case other =>
             fail(s"expected validation failure but got $other")
         }
-        calltree should include ("action:tool.time.now")
+        calltree should include (s"action:${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL.name}.time.now")
         calltree should include ("calltree_kind")
         RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total should be > beforeactions
         RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total should be > beforevalidation
@@ -543,18 +544,19 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
         Given("the default builtin tool component without optional automation Components")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
         val tool = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL).get
+        val componentid = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL.name
 
         When("the existing MCP projection reads the component's admitted Operations")
         val identities = McpToolCatalog.toolsForComponent(tool).map(_.name)
 
         Then("dynamic browser filesystem process script and mutation tools remain absent")
         identities shouldBe Vector(
-          "tool.decimal.calculate",
-          "tool.resource.read",
-          "tool.time.now",
-          "tool.web.fetch",
-          "tool.web.head",
-          "tool.web.search"
+          s"$componentid.decimal.calculate",
+          s"$componentid.resource.read",
+          s"$componentid.time.now",
+          s"$componentid.web.fetch",
+          s"$componentid.web.head",
+          s"$componentid.web.search"
         )
       }
     }
@@ -566,7 +568,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     properties: (String, Any)*
   ): Request =
     Request.of(
-      component = ToolComponent.name,
+      component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.TOOL.name,
       service = service,
       operation = operation,
       properties = properties.map { case (name, value) => Property(name, value, None) }.toList

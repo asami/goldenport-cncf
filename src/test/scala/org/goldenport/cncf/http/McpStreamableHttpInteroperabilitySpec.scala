@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Streamable HTTP client boundaries.
  *
  * @since   Jul. 21, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpStreamableHttpInteroperabilitySpec
@@ -76,7 +76,7 @@ final class McpStreamableHttpInteroperabilitySpec
 
       Then("the complete production lifecycle succeeds and negative messages remain bounded")
       val (catalog, invocation) = _success(result._1)
-      catalog.tools.map(_.identity.print) shouldBe Vector("loopback/admin.system.ping")
+      catalog.tools.map(_.identity.print) shouldBe Vector(s"loopback/${BuiltinComponentIdentity.ADMIN.name}.system.ping")
       val pingtext = invocation.content.collectFirst {
         case McpClientContent.Text(value, _) => value
       }.getOrElse(fail("admin.system.ping did not return text content"))
@@ -99,7 +99,7 @@ final class McpStreamableHttpInteroperabilitySpec
   )(using ExecutionContext): Consequence[(McpClientCatalog, McpClientResult)] = {
     val serversetid = _success(McpServerSetId.parseC("loopback-tools"))
     val serverid = _success(McpServerId.parseC("loopback"))
-    val toolname = _success(McpToolName.parseC("admin.system.ping"))
+    val toolname = _success(McpToolName.parseC(s"${BuiltinComponentIdentity.ADMIN.name}.system.ping"))
     val transportconfig = _success(McpStreamableHttpServerSetConfig.createC(
       serversetid,
       Vector(_success(McpStreamableHttpServerConfig.createC(serverid, endpoint)))

@@ -24,7 +24,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 23, 2026
  *  version May. 10, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -142,7 +142,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       When("the built-in auth.session operation receives the session header")
       val response = subsystem.executeOperationResponse(
         Request
-          .of(component = "auth", service = "auth", operation = "session")
+          .of(component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.AUTH.name, service = "auth", operation = "session")
           .copy(
             properties = List(
               Property("x-textus-session", "sess-1", None)
@@ -192,7 +192,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers with 
       When("the same session is resolved through the built-in auth operation")
       val current = subsystem.executeOperationResponse(
         Request
-          .of(component = "auth", service = "auth", operation = "session")
+          .of(component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.AUTH.name, service = "auth", operation = "session")
           .copy(properties = List(Property("x-textus-session", "sess-long", None)))
       )
       Then("the built-in operation publishes the same safe identity")

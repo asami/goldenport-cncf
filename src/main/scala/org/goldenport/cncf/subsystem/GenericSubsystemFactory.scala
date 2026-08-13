@@ -141,10 +141,11 @@ object GenericSubsystemFactory {
                           .map(Some(_))
                       case None =>
                         Consequence.resourceInvalid(
+                          DevelopmentCarRuntimeAdmission.recoveryMessage(
+                            path,
                             s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
-                            s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}. " +
-                            s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
-                            "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+                              s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}"
+                          )
                         )
                     }
                   }
@@ -251,10 +252,11 @@ object GenericSubsystemFactory {
                 .map(Some(_))
             case None =>
               Consequence.resourceInvalid(
-                s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
-                  s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}. " +
-                  s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
-                  "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+                DevelopmentCarRuntimeAdmission.recoveryMessage(
+                  path,
+                  s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                    s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}"
+                )
               )
           }
         }
@@ -274,10 +276,11 @@ object GenericSubsystemFactory {
                 .map(Some(_))
             case None =>
               Consequence.resourceInvalid(
-                s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
-                  s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}. " +
-                  s"Run 'sbt cozyPrepareRuntime' in $path, then restart the application server. " +
-                  "CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+                DevelopmentCarRuntimeAdmission.recoveryMessage(
+                  path,
+                  s"[component-dev-dir] prepared component descriptor cannot be decoded: " +
+                    s"${path.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)}"
+                )
               )
           }
         }

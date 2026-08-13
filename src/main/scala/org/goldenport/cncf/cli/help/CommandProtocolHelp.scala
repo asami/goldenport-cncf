@@ -4,7 +4,8 @@ package org.goldenport.cncf.cli.help
  * @since   Mar.  6, 2026
  *  version Mar. 19, 2026
  *  version Jun. 29, 2026
- * @version Jul.  1, 2026
+ *  version Jul.  1, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object CommandProtocolHelp {
@@ -23,9 +24,9 @@ object CommandProtocolHelp {
       |  meta.<operation>
       |
       |Examples
-      |  cncf command domain.entity.createPerson
-      |  cncf command domain.meta.help
-      |  cncf command domain.entity.meta.operations
+      |  cncf command org.goldenport.cncf.Admin.system.ping
+      |  cncf command org.goldenport.cncf.Admin.meta.help
+      |  cncf command org.goldenport.cncf.Admin.system.meta.operations
       |  cncf command meta.tree
       |  cncf command meta.mcp
       |  cncf command spec.export.mcp

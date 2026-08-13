@@ -40,6 +40,7 @@ import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.component.ComponentLogic
 import org.goldenport.cncf.component.DescriptorRecordLoader
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.datastore.{
@@ -110,7 +111,7 @@ import org.simplemodeling.model.datatype.{
  *  version May. 31, 2026
  *  version Jun. 18, 2026
  *  version Jul. 30, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1508,79 +1509,79 @@ object AdminComponent {
       "summary" -> "Use workflow surfaces for workflow definitions and instances; use event surfaces for queued dispatch contract and persisted event metadata; use job surfaces for final child-job lineage and async failure disposition.",
       "routes" -> Vector(
         Record.data(
-          "selector" -> "workflow.workflow.list_workflow_definitions",
+          "selector" -> s"${BuiltinComponentIdentity.WORKFLOW.name}.workflow.list_workflow_definitions",
           "surface" -> "workflow",
           "role" -> "authoritative-detail",
           "summary" -> "List workflow definitions and registrations."
         ),
         Record.data(
-          "selector" -> "workflow.workflow.describe_workflow_definition",
+          "selector" -> s"${BuiltinComponentIdentity.WORKFLOW.name}.workflow.describe_workflow_definition",
           "surface" -> "workflow",
           "role" -> "authoritative-detail",
           "summary" -> "Inspect one workflow definition with status rules."
         ),
         Record.data(
-          "selector" -> "workflow.workflow.list_workflow_instances",
+          "selector" -> s"${BuiltinComponentIdentity.WORKFLOW.name}.workflow.list_workflow_instances",
           "surface" -> "workflow",
           "role" -> "authoritative-detail",
           "summary" -> "List workflow instances and related job ids."
         ),
         Record.data(
-          "selector" -> "workflow.workflow.get_workflow_instance",
+          "selector" -> s"${BuiltinComponentIdentity.WORKFLOW.name}.workflow.get_workflow_instance",
           "surface" -> "workflow",
           "role" -> "authoritative-detail",
           "summary" -> "Inspect one workflow instance and job cross-links."
         ),
         Record.data(
-          "selector" -> "workflow.workflow.load_workflow_history",
+          "selector" -> s"${BuiltinComponentIdentity.WORKFLOW.name}.workflow.load_workflow_history",
           "surface" -> "workflow",
           "role" -> "authoritative-detail",
           "summary" -> "Inspect workflow history entries and selected actions."
         ),
         Record.data(
-          "selector" -> "event.event.search_event",
+          "selector" -> s"${BuiltinComponentIdentity.EVENT.name}.event.search_event",
           "surface" -> "event",
           "role" -> "authoritative-detail",
           "summary" -> "Search persisted event records with dispatch metadata."
         ),
         Record.data(
-          "selector" -> "event.event.load_event",
+          "selector" -> s"${BuiltinComponentIdentity.EVENT.name}.event.load_event",
           "surface" -> "event",
           "role" -> "authoritative-detail",
           "summary" -> "Inspect one persisted event record including policy source, dispatch status, and event history."
         ),
         Record.data(
-          "selector" -> "event.event_admin.load_job_events",
+          "selector" -> s"${BuiltinComponentIdentity.EVENT.name}.event_admin.load_job_events",
           "surface" -> "event_admin",
           "role" -> "cross-link",
           "summary" -> "Inspect event records associated with one job."
         ),
         Record.data(
-          "selector" -> "job_control.job.get_job_status",
+          "selector" -> s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_status",
           "surface" -> "job",
           "role" -> "authoritative-detail",
           "summary" -> "Inspect structured lineage and final async failure disposition for one job."
         ),
         Record.data(
-          "selector" -> "job_control.job.load_job_history",
+          "selector" -> s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.load_job_history",
           "surface" -> "job",
           "role" -> "authoritative-detail",
           "summary" -> "Inspect the retained timeline for one job."
         ),
         Record.data(
-          "selector" -> "job_control.job.get_job_result",
+          "selector" -> s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_result",
           "surface" -> "job",
           "role" -> "authoritative-detail",
           "summary" -> "Inspect final job result payload or failure."
         ),
         Record.data(
-          "selector" -> "job_control.job.await_job_result",
+          "selector" -> s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.await_job_result",
           "surface" -> "job",
           "role" -> "operator-await",
           "summary" -> "Await final job result through the authoritative job surface."
         ),
         Record.data(
-          "selector" -> "job_control.job_admin.load_job_events",
+          "selector" -> s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job_admin.load_job_events",
           "surface" -> "job_admin",
           "role" -> "cross-link",
           "summary" -> "Inspect event records associated with one job from the job-control side."
@@ -1627,15 +1628,15 @@ object AdminComponent {
         "target-component"
       ),
       "workflow-surface" -> Record.data(
-        "selector" -> "workflow.workflow.list_workflow_instances",
+        "selector" -> s"${BuiltinComponentIdentity.WORKFLOW.name}.workflow.list_workflow_instances",
         "summary" -> "Authoritative detail for workflow definitions, instances, progress, and related job ids."
       ),
       "event-surface" -> Record.data(
-        "selector" -> "event.event.load_event",
+        "selector" -> s"${BuiltinComponentIdentity.EVENT.name}.event.load_event",
         "summary" -> "Authoritative detail for queued dispatch contract and persisted event metadata, including dead-letter and poison outcomes."
       ),
       "job-surface" -> Record.data(
-        "selector" -> "job_control.job.get_job_status",
+        "selector" -> s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_status",
         "summary" -> "Authoritative detail for final child-job lineage, async failure disposition, and retry recovery state."
       )
     )
@@ -1753,7 +1754,7 @@ object AdminComponent {
     }.getOrElse(Record.empty)
 
   private def _load_wiring_from_text(path: java.nio.file.Path): Option[Record] = {
-    def parse(text: String): Option[Record] = {
+    def _parse_(text: String): Option[Record] = {
       val entries = text.linesIterator.flatMap { line =>
         val trimmed = line.trim
         if (trimmed.startsWith("wiring/") || trimmed.startsWith("wiring.")) {
@@ -1780,10 +1781,10 @@ object AdminComponent {
         ).iterator
           .map(fs.getPath("/").resolve(_))
           .find(Files.isRegularFile(_))
-          .flatMap(p => parse(Files.readString(p)))
+          .flatMap(p => _parse_(Files.readString(p)))
       }
     } else if (Files.isRegularFile(path)) {
-      parse(Files.readString(path))
+      _parse_(Files.readString(path))
     } else {
       None
     }
@@ -2789,7 +2790,7 @@ object AdminComponent {
       )
       idoption <- _optional_entity_id(args, "id")
       response <- idoption match {
-        case Some((idText, id)) =>
+        case Some((idtext, id)) =>
           _view_exact_entity_collection(component, viewname).flatMap { entitycollection =>
             _exact_entity_id(entitycollection, id).flatMap { canonicalid =>
               browser.find_with_context(canonicalid)(using core.executionContext).flatMap { value =>
@@ -2798,7 +2799,7 @@ object AdminComponent {
                   "view",
                   componentname,
                   viewname,
-                  idText,
+                  idtext,
                   value
                 )(using core.executionContext).map(OperationResponse.RecordResponse(_))
               }
@@ -2862,23 +2863,23 @@ object AdminComponent {
       )
       idoption <- _optional_entity_id(args, "id")
       response <- idoption match {
-        case Some((idText, id)) =>
+        case Some((idtext, id)) =>
           _aggregate_exact_entity_collection(component, aggregatename).flatMap { entitycollection =>
             _exact_entity_id(entitycollection, id).flatMap { canonicalid =>
               collection.resolve_with_context(canonicalid)(using core.executionContext).recoverWith {
                 case c if _is_not_implemented(c) =>
-                  _admin_aggregate_entity_read(component, aggregatename, idText)
+                  _admin_aggregate_entity_read(component, aggregatename, idtext)
                 case c =>
                   Consequence.Failure(c)
               }.flatMap { value =>
                 val displayvalue =
-                  _admin_aggregate_display_value(component, aggregatename, idText, value)
+                  _admin_aggregate_display_value(component, aggregatename, idtext, value)
                 _read_value_response_record_with_blobs(
                   core,
                   "aggregate",
                   componentname,
                   aggregatename,
-                  idText,
+                  idtext,
                   displayvalue
                 )(using core.executionContext).map(OperationResponse.RecordResponse(_))
               }
@@ -2993,8 +2994,8 @@ object AdminComponent {
     value: Any
   ): Any =
     _aggregate_entity_collection(component, aggregatename)
-      .flatMap { case (entityName, collection) =>
-        val fields = _entity_view_fields(component, entityName, "detail")
+      .flatMap { case (entityname, collection) =>
+        val fields = _entity_view_fields(component, entityname, "detail")
         _entity_record(collection, idtext, fields)
       }
       .getOrElse(value)
@@ -3245,8 +3246,8 @@ object AdminComponent {
     }
     val withid =
       data.getString("id").filter(_.nonEmpty) match {
-        case Some(idOrShortid) =>
-          _resolve_entity_id(collection, idOrShortid)
+        case Some(idorshortid) =>
+          _resolve_entity_id(collection, idorshortid)
             .map(id => data.upsertSingle("id", id.value))
         case None =>
           val cid = collection.descriptor.collectionId

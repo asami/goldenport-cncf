@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.CncfRuntime
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.FakeHttpDriver
@@ -25,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 19, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -46,7 +47,7 @@ final class AliasResolutionSpec
   }
 
   private def _canonical_alias_config: Configuration =
-    _alias_config("ping" -> "admin.system.ping")
+    _alias_config("ping" -> s"${BuiltinComponentIdentity.ADMIN.name}.system.ping")
 
   "Alias-enabled CLI parsing" should {
     "rewrite ping to admin.system.ping before CanonicalPath resolution" in {
@@ -66,7 +67,7 @@ final class AliasResolutionSpec
         Then("the canonical selector is resolved")
         parsed match {
         case Consequence.Success(request) =>
-            request.component.value shouldBe "org.goldenport.cncf.Admin"
+            request.component.value shouldBe BuiltinComponentIdentity.ADMIN.name
             request.service.value shouldBe "system"
           request.operation shouldBe "ping"
           case other =>
@@ -94,7 +95,7 @@ final class AliasResolutionSpec
         Then("the canonical selector is resolved")
         parsed match {
         case Consequence.Success(request) =>
-            request.component.value shouldBe "org.goldenport.cncf.Admin"
+            request.component.value shouldBe BuiltinComponentIdentity.ADMIN.name
             request.service.value shouldBe "system"
           request.operation shouldBe "ping"
           case other =>
@@ -133,7 +134,7 @@ final class AliasResolutionSpec
   "Alias loader validation" should {
     "prefer textus.path.aliases over legacy cncf.path.aliases" in {
       Given("canonical and legacy alias definitions for the same selector")
-      val textus = _alias_entries("ping" -> "admin.system.ping")
+      val textus = _alias_entries("ping" -> s"${BuiltinComponentIdentity.ADMIN.name}.system.ping")
       val cncf = _alias_entries("ping" -> "legacy.system.ping")
       val config = Configuration(
         Map(
@@ -146,14 +147,14 @@ final class AliasResolutionSpec
       val resolver = AliasLoader.load(config)
 
       Then("the canonical alias definition wins")
-      resolver.resolve("ping", RunMode.Command).value shouldBe "admin.system.ping"
+      resolver.resolve("ping", RunMode.Command).value shouldBe s"${BuiltinComponentIdentity.ADMIN.name}.system.ping"
     }
 
     "reject duplicate alias inputs" in {
       Given("duplicate canonical alias inputs")
       val config = _alias_config(
-        "ping" -> "admin.system.ping",
-        "ping" -> "admin.system.ping"
+        "ping" -> s"${BuiltinComponentIdentity.ADMIN.name}.system.ping",
+        "ping" -> s"${BuiltinComponentIdentity.ADMIN.name}.system.ping"
       )
       When("the alias table is loaded")
       val exception = intercept[IllegalArgumentException] {
@@ -180,7 +181,7 @@ final class AliasResolutionSpec
     "enforce identifier pattern restrictions" in {
       Given("an alias input outside the identifier pattern")
       val config = _alias_config(
-        "bad-alias" -> "admin.system.ping"
+        "bad-alias" -> s"${BuiltinComponentIdentity.ADMIN.name}.system.ping"
       )
       When("the alias table is loaded")
       val exception = intercept[IllegalArgumentException] {

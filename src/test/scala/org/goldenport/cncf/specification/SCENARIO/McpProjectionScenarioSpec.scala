@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class McpProjectionScenarioSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -20,7 +20,7 @@ class McpProjectionScenarioSpec extends AnyWordSpec with Matchers with GivenWhen
       Given("a runtime subsystem and an MCP export request")
       val subsystem = RuntimeBindingAdmissionFixture.default()
       val req = Request(
-        component = Some("spec"),
+        component = Some("org.goldenport.cncf.Specification"),
         service = Some("export"),
         operation = "mcp",
         arguments = Nil,

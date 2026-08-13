@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 21, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class DebugHttpEchoSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -23,7 +23,7 @@ class DebugHttpEchoSpec extends AnyWordSpec with Matchers with GivenWhenThen {
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
       val req = HttpRequest.fromPath(
         method = HttpRequest.GET,
-        path = "/debug/http/echo",
+        path = s"/${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.DEBUG.name}/http/echo",
         query = Record.create(Vector("x" -> "1"))
       )
 
@@ -36,7 +36,7 @@ class DebugHttpEchoSpec extends AnyWordSpec with Matchers with GivenWhenThen {
       body should include("cncf:")
       body should include("http:")
       body should include("method: \"GET\"")
-      body should include("path: \"/debug/http/echo\"")
+      body should include(s"path: \"/${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.DEBUG.name}/http/echo\"")
       body should include("x: \"1\"")
       body should include("present: false")
     }
@@ -48,7 +48,7 @@ class DebugHttpEchoSpec extends AnyWordSpec with Matchers with GivenWhenThen {
       val header = Record.create(Vector("Content-Type" -> "text/plain"))
       val req = HttpRequest.fromPath(
         method = HttpRequest.POST,
-        path = "/debug/http/echo",
+        path = s"/${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.DEBUG.name}/http/echo",
         header = header,
         body = Some(payload)
       )
@@ -60,7 +60,7 @@ class DebugHttpEchoSpec extends AnyWordSpec with Matchers with GivenWhenThen {
       res.code shouldBe 200
       val body = res.getString.getOrElse(fail("empty body"))
       body should include("method: \"POST\"")
-      body should include("path: \"/debug/http/echo\"")
+      body should include(s"path: \"/${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.DEBUG.name}/http/echo\"")
       body should include("contentType: \"text/plain\"")
       body should include("present: true")
       body should include("preview:")

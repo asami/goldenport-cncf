@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * must be admitted through the existing component, event, and job boundaries.
  *
  * @since   Jul. 16, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuleActionAdmissionSpec
@@ -75,7 +75,7 @@ final class RuleActionAdmissionSpec
         RuleActionPlan.Operation(
           RuleActionPlanId("operation"),
           RuleId("notify"),
-          "orders.order.approve",
+          "org.goldenport.cncf.test.Orders.order.approve",
           Record.data("orderId" -> "order-1")
         ),
         RuleActionPlan.Event(
@@ -87,7 +87,7 @@ final class RuleActionAdmissionSpec
         RuleActionPlan.Job(
           RuleActionPlanId("job"),
           RuleId("notify"),
-          "orders.order.approve",
+          "org.goldenport.cncf.test.Orders.order.approve",
           Record.data("orderId" -> "order-2")
         ),
         RuleActionPlan.Recommendation(

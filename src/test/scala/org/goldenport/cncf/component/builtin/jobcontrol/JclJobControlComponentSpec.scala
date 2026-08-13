@@ -29,7 +29,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -66,7 +66,7 @@ final class JclJobControlComponentSpec
       When("job_control.job.describe_job_definition is invoked")
       val response = _execute(
         fixture.subsystem,
-        "job_control.job.describe_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
         arguments = List(Argument("body", body))
       )
 
@@ -128,17 +128,17 @@ final class JclJobControlComponentSpec
       When("describe_job_definition is invoked with explicit JCL formats")
       val jsonresponse = _execute(
         fixture.subsystem,
-        "job_control.job.describe_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
         arguments = List(Argument("body", json), Argument("jclFormat", "json"))
       )
       val xmlresponse = _execute(
         fixture.subsystem,
-        "job_control.job.describe_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
         arguments = List(Argument("body", xml), Argument("jclFormat", "xml"))
       )
       val hoconresponse = _execute(
         fixture.subsystem,
-        "job_control.job.describe_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
         arguments = List(Argument("body", hocon), Argument("jclFormat", "hocon"))
       )
 
@@ -169,7 +169,7 @@ final class JclJobControlComponentSpec
       When("the definition is created with jclFormat=json and submitted by reference")
       val created = _execute(
         fixture.subsystem,
-        "job_control.job.create_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
         arguments = List(
           Argument("key", "stored-json"),
           Argument("status", "active"),
@@ -179,7 +179,7 @@ final class JclJobControlComponentSpec
       )
       val submitted = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
         arguments = List(Argument("body", "jobDefinitionRef: stored-json"))
       )
 
@@ -214,7 +214,7 @@ final class JclJobControlComponentSpec
       When("job_control.job.describe_job_definition is invoked")
       val response = _execute(
         fixture.subsystem,
-        "job_control.job.describe_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
         arguments = List(Argument("body", body))
       )
 
@@ -282,12 +282,12 @@ final class JclJobControlComponentSpec
           |""".stripMargin
 
       When("describe is invoked with unsupported payloads")
-      val r1 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", missingjobs)
-      val r2 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", bothtargetkinds)
-      val r3 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", branchshape)
-      val r4 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", workflowmissingregistration)
-      val r5 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", bothroots)
-      val r6 = _execute_result(fixture.subsystem, "job_control.job.describe_job_definition", invalidprofile)
+      val r1 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", missingjobs)
+      val r2 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", bothtargetkinds)
+      val r3 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", branchshape)
+      val r4 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", workflowmissingregistration)
+      val r5 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", bothroots)
+      val r6 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", invalidprofile)
 
       Then("the payloads fail deterministically")
       Vector(r1, r2, r3, r4, r5, r6).foreach {
@@ -322,7 +322,7 @@ final class JclJobControlComponentSpec
       When("the definition is created, searched, and submitted by ref")
       val created = _execute(
         fixture.subsystem,
-        "job_control.job.create_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
         arguments = List(
           Argument("key", "nightly-ok"),
           Argument("status", "active"),
@@ -331,12 +331,12 @@ final class JclJobControlComponentSpec
       )
       val searched = _execute(
         fixture.subsystem,
-        "job_control.job.search_job_definitions",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.search_job_definitions",
         arguments = Nil
       )
       val submitted = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
         arguments = List(Argument("body", "jobDefinitionRef: nightly-ok"))
       )
 
@@ -376,7 +376,7 @@ final class JclJobControlComponentSpec
           |""".stripMargin
       _execute(
         fixture.subsystem,
-        "job_control.job.create_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
         arguments = List(
           Argument("key", "op-bound-ok"),
           Argument("status", "active"),
@@ -419,7 +419,7 @@ final class JclJobControlComponentSpec
           |""".stripMargin
       _execute(
         fixture.subsystem,
-        "job_control.job.create_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
         arguments = List(
           Argument("key", "op-bound-compensation"),
           Argument("status", "active"),
@@ -476,13 +476,13 @@ final class JclJobControlComponentSpec
       When("the job is submitted and compared")
       val response = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
         arguments = List(Argument("body", body))
       )
       val jobid = _strings(_record(response), "submitted-job-ids").head
       val comparison = _execute(
         fixture.subsystem,
-        "job_control.job.compare_job_profile",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.compare_job_profile",
         arguments = List(Argument("id", jobid))
       )
 
@@ -513,18 +513,18 @@ final class JclJobControlComponentSpec
       When("the job is submitted, compared, and reconstructed")
       val response = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
         arguments = List(Argument("body", body))
       )
       val jobid = _strings(_record(response), "submitted-job-ids").head
       val comparison = _execute(
         fixture.subsystem,
-        "job_control.job.compare_job_profile",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.compare_job_profile",
         arguments = List(Argument("id", jobid))
       )
       val reconstructed = _execute(
         fixture.subsystem,
-        "job_control.job.reconstruct_job_profile",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.reconstruct_job_profile",
         arguments = List(Argument("id", jobid))
       )
 
@@ -580,12 +580,12 @@ final class JclJobControlComponentSpec
       When("submit_job_definition and submit_job_batch are invoked")
       val singleresponse = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
         arguments = List(Argument("body", single))
       )
       val batchresponse = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_batch",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_batch",
         arguments = List(Argument("body", batch))
       )
 
@@ -650,12 +650,12 @@ final class JclJobControlComponentSpec
       When("the workflow-target JCL is described and submitted")
       val described = _execute(
         fixture.subsystem,
-        "job_control.job.describe_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
         arguments = List(Argument("body", body))
       )
       val response = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
         arguments = List(Argument("body", body))
       )
 
@@ -680,7 +680,7 @@ final class JclJobControlComponentSpec
 
       val workflowinstance = _execute(
         fixture.subsystem,
-        "workflow.workflow.get_workflow_instance",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.get_workflow_instance",
         arguments = List(Argument("id", instance.id.value))
       )
       _record(workflowinstance).getAny("related-job-ids").collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty) should contain (submittedids.head)
@@ -750,7 +750,7 @@ final class JclJobControlComponentSpec
       When("the mixed batch is submitted")
       val response = _execute(
         fixture.subsystem,
-        "job_control.job.submit_job_batch",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_batch",
         arguments = List(Argument("body", mixed))
       )
 

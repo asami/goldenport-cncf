@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  6, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemAuthenticatedIngressAccessPolicySpec
@@ -113,7 +113,7 @@ final class SubsystemAuthenticatedIngressAccessPolicySpec
       GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("<memory>"),
         subsystemName = "authenticated-ingress-access-policy",
-        componentBindings = Vector(GenericSubsystemComponentBinding("domain")),
+        componentBindings = Vector(GenericSubsystemComponentBinding("org.goldenport.cncf.test.Domain")),
         security = Some(
           GenericSubsystemSecurityBinding(
             authentication = Some(
@@ -123,7 +123,7 @@ final class SubsystemAuthenticatedIngressAccessPolicySpec
                 providers = Vector(
                   GenericSubsystemAuthenticationProviderBinding(
                     name = _authentication_provider.name,
-                    component = "domain",
+                    component = "org.goldenport.cncf.test.Domain",
                     enabled = Some(true)
                   )
                 )
@@ -185,7 +185,7 @@ final class SubsystemAuthenticatedIngressAccessPolicySpec
     )
 
   private def _request(operation: String, properties: List[Property] = Nil): Request =
-    Request.of(component = "domain", service = "account", operation = operation).copy(
+    Request.of(component = "org.goldenport.cncf.test.Domain", service = "account", operation = operation).copy(
       properties = properties
     )
 

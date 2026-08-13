@@ -1158,7 +1158,7 @@ final class BlobComponentSpec
     properties: List[Property]
   ): Request =
     Request.of(
-      component = "blob",
+      component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB.name,
       service = "blob",
       operation = operation,
       arguments = arguments,

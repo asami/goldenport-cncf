@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 10, 2026
- * @version Aug.  4, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CompositeQueryEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -184,7 +184,7 @@ final class CompositeQueryEngineSpec extends AnyWordSpec with Matchers with Give
     )
 
   private def _request(operation: String): Request =
-    Request.of(component = "cq", service = "sample", operation = operation)
+    Request.of(component = "org.goldenport.cncf.test.Cq", service = "sample", operation = operation)
 
   private def _success[A](value: Consequence[A]): A =
     value match {

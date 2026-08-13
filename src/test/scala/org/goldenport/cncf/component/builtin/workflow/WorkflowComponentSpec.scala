@@ -65,10 +65,13 @@ final class WorkflowComponentSpec
       )
 
       When("workflow builtin operations are invoked")
-      val list = _execute(fixture.subsystem, "workflow.workflow.list_workflow_definitions")
+      val list = _execute(
+        fixture.subsystem,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.list_workflow_definitions"
+      )
       val describe = _execute(
         fixture.subsystem,
-        "workflow.workflow.describe_workflow_definition",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.describe_workflow_definition",
         arguments = List(Argument("id", "sales-order-approval"))
       )
 
@@ -126,15 +129,18 @@ final class WorkflowComponentSpec
       _await_job_completion(fixture.subsystem, instance.relatedJobIds.head)
 
       When("workflow instance and history surfaces are queried")
-      val listinstances = _execute(fixture.subsystem, "workflow.workflow.list_workflow_instances")
+      val listinstances = _execute(
+        fixture.subsystem,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.list_workflow_instances"
+      )
       val getinstance = _execute(
         fixture.subsystem,
-        "workflow.workflow.get_workflow_instance",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.get_workflow_instance",
         arguments = List(Argument("id", instance.id.value))
       )
       val loadhistory = _execute(
         fixture.subsystem,
-        "workflow.workflow.load_workflow_history",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.load_workflow_history",
         arguments = List(Argument("id", instance.id.value))
       )
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -156,9 +162,9 @@ final class WorkflowComponentSpec
       loaded.getRecord("job-surface").flatMap(_.getAny("selectors")).collect {
         case xs: Seq[?] => xs.map(_.toString)
       }.getOrElse(fail("job-surface selectors missing")) should contain allOf(
-        "job_control.job.get_job_status",
-        "job_control.job.load_job_history",
-        "job_control.job.get_job_result"
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_status",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.load_job_history",
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_result"
       )
       loaded.asMap.contains("job-status") shouldBe false
       loaded.asMap.contains("job-result") shouldBe false
@@ -288,7 +294,7 @@ final class WorkflowComponentSpec
   ): Component =
     subsystem.resolver.resolve(selector) match {
       case ResolutionResult.Resolved(_, component, _, _) =>
-        subsystem.components.find(_.name == component).getOrElse(fail(s"component not found: $component"))
+        subsystem.components.find(_.componentId.name == component).getOrElse(fail(s"component not found: $component"))
       case other =>
         fail(s"resolver failed for $selector: $other")
     }

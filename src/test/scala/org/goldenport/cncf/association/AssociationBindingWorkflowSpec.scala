@@ -71,7 +71,7 @@ final class AssociationBindingWorkflowSpec
             targetIdParameters = Vector("targetEntityId")
           )
           val request = Request.of(
-            component = "sample",
+            component = "org.goldenport.cncf.test.AssociationBindingAdapterSpec",
             service = "article",
             operation = "attach",
             properties = List(
@@ -133,7 +133,7 @@ final class AssociationBindingWorkflowSpec
         targetIdParameters = Vector("targetEntityId")
       )
       val request = Request.of(
-        component = "sample",
+        component = "org.goldenport.cncf.test.AssociationBindingAdapterSpec",
         service = "article",
         operation = "attach",
         properties = List(
@@ -167,7 +167,7 @@ final class AssociationBindingWorkflowSpec
         targetIdParameters = Vector("targetEntityId")
       )
       val firstrequest = Request.of(
-        component = "sample",
+        component = "org.goldenport.cncf.test.AssociationBindingAdapterSpec",
         service = "article",
         operation = "attach",
         properties = List(
@@ -196,7 +196,7 @@ final class AssociationBindingWorkflowSpec
       val binding =
         firstbinding.copy(targetIdParameters = Vector("targetEntityId", "rejectedTargetEntityId"))
       val request = Request.of(
-        component = "sample",
+        component = "org.goldenport.cncf.test.AssociationBindingAdapterSpec",
         service = "article",
         operation = "attach",
         properties = List(
@@ -253,7 +253,7 @@ final class AssociationBindingWorkflowSpec
         targetIdParameters = Vector("targetEntityId", "rejectedTargetEntityId")
       )
       val request = Request.of(
-        component = "sample",
+        component = "org.goldenport.cncf.test.AssociationBindingAdapterSpec",
         service = "article",
         operation = "attach",
         properties = List(
@@ -280,7 +280,7 @@ final class AssociationBindingWorkflowSpec
         sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
         targetIdParameters = Vector("targetEntityId")
       )
-      val request  = Request.of("sample", "article", "create")
+      val request  = Request.of("org.goldenport.cncf.test.AssociationBindingAdapterSpec", "article", "create")
       val expected = _article_id("created_1").value
       val response = OperationResponse.RecordResponse(Record.dataAuto("entity_id" -> expected))
 
@@ -301,7 +301,7 @@ final class AssociationBindingWorkflowSpec
         sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
         targetIdParameters = Vector("targetEntityId")
       )
-      val request  = Request.of("sample", "article", "create")
+      val request  = Request.of("org.goldenport.cncf.test.AssociationBindingAdapterSpec", "article", "create")
       val response = OperationResponse.RecordResponse(Record.dataAuto("title" -> "missing id"))
 
       When("resolving the source Entity id")
@@ -325,7 +325,7 @@ final class AssociationBindingWorkflowSpec
       val source             = _article_id("article_1").value
       _seed_entity(target)
       val request = Request.of(
-        component = component.name,
+        component = component.componentId.name,
         service = "article",
         operation = "createArticle",
         properties = List(Property("targetEntityId", target.value, None))
@@ -365,7 +365,7 @@ final class AssociationBindingWorkflowSpec
         subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val request = Request.of(
-        component = component.name,
+        component = component.componentId.name,
         service = "article",
         operation = "createArticleBlobOnly",
         properties = List(
@@ -393,7 +393,7 @@ final class AssociationBindingWorkflowSpec
         subsystem.findComponent(component.componentId).getOrElse(fail("component missing"))
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val request = Request.of(
-        component = component.name,
+        component = component.componentId.name,
         service = "article",
         operation = "createArticleUploadOnly",
         properties =
@@ -428,7 +428,7 @@ final class AssociationBindingWorkflowSpec
       given ExecutionContext = runtimecomponent.logic.executionContext()
       val source = _article_id("article_image_1").value
       val request = Request.of(
-        component = component.name,
+        component = component.componentId.name,
         service = "article",
         operation = "createArticleWithImage",
         properties = List(
@@ -482,7 +482,7 @@ final class AssociationBindingWorkflowSpec
         entropy = Some("missing_blob_for_association_cleanup")
       )
       val request = Request.of(
-        component = component.name,
+        component = component.componentId.name,
         service = "article",
         operation = "createArticleWithAssociationAndBadImage",
         properties = List(
@@ -520,7 +520,7 @@ final class AssociationBindingWorkflowSpec
       _seed_entity(source)
       _seed_entity(target)
       val attach = Request.of(
-        component = "admin",
+        component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name,
         service = "association",
         operation = "admin_attach_association",
         arguments = List(
@@ -541,7 +541,7 @@ final class AssociationBindingWorkflowSpec
       first.getBoolean("created") shouldBe Some(true)
       second.getBoolean("created") shouldBe Some(false)
       val listed = _record(_success(subsystem.executeOperationResponse(Request.of(
-        component = "admin",
+        component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name,
         service = "association",
         operation = "admin_list_associations",
         arguments = List(
@@ -556,7 +556,7 @@ final class AssociationBindingWorkflowSpec
 
       When("the Association is detached")
       val detached = _record(_success(subsystem.executeOperationResponse(Request.of(
-        component = "admin",
+        component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name,
         service = "association",
         operation = "admin_detach_association",
         arguments = List(
@@ -594,7 +594,7 @@ final class AssociationBindingWorkflowSpec
       _seed_entity(comment)
       def _attach_(sourceid: EntityId, targetid: EntityId, targetkind: String) =
         subsystem.executeOperationResponse(Request.of(
-          component = "admin",
+          component = org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name,
           service = "association",
           operation = "admin_attach_association",
           arguments = List(

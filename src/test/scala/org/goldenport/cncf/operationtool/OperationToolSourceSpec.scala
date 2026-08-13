@@ -30,13 +30,20 @@ final class OperationToolSourceSpec
   with Matchers
   with GivenWhenThen {
 
+  private val _tool_time = s"${BuiltinComponentIdentity.TOOL.name}.time.now"
+  private val _tool_decimal = s"${BuiltinComponentIdentity.TOOL.name}.decimal.calculate"
+
   "Internal Operation tool identity" should {
     "round-trip exact runtime identities without entering the remote MCP namespace" in {
+      val component = Gen.oneOf(
+        BuiltinComponentIdentity.TOOL.name,
+        BuiltinComponentIdentity.ADMIN.name
+      )
       val segment = Gen.oneOf("tool", "admin", "time_now", "decimal-calculate", "Query")
 
-      Given("arbitrary valid exact CNCF Operation identity segments")
-      val property = Prop.forAll(segment, segment, segment) { (component, service, operation) =>
-        val identity = _success(OperationToolIdentity.createC(component, service, operation))
+      Given("arbitrary qualified ComponentId values and valid service and operation segments")
+      val property = Prop.forAll(component, segment, segment) { (componentname, service, operation) =>
+        val identity = _success(OperationToolIdentity.createC(componentname, service, operation))
         val parsed = OperationToolIdentity.parseC(identity.print)
         parsed == Consequence.success(identity) && !identity.print.contains("/")
       }
@@ -66,8 +73,8 @@ final class OperationToolSourceSpec
       Given("two builtin Operations admitted in reverse lexical order")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-catalog"))
       val admission = _admission(Vector(
-        _identity("tool.time.now"),
-        _identity("tool.decimal.calculate")
+        _identity(_tool_time),
+        _identity(_tool_decimal)
       ))
 
       When("the internal catalog is constructed from the assembled runtime")
@@ -75,10 +82,10 @@ final class OperationToolSourceSpec
 
       Then("only exact admitted definitions are sorted and retain typed required fields")
       catalog.definitions.map(_.identity.print) shouldBe Vector(
-        "tool.decimal.calculate",
-        "tool.time.now"
+        _tool_decimal,
+        _tool_time
       )
-      val decimal = catalog.definition(_identity("tool.decimal.calculate")).getOrElse(
+      val decimal = catalog.definition(_identity(_tool_decimal)).getOrElse(
         fail("decimal tool definition is missing")
       )
       decimal.inputSchema.fields.map(x => x.name -> x.required) shouldBe Vector(
@@ -91,7 +98,7 @@ final class OperationToolSourceSpec
     "reject an admitted identity that is unavailable in the assembled subsystem" in {
       Given("an admission naming an Operation absent from the runtime")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-unavailable"))
-      val admission = _admission(Vector(_identity("missing.service.operation")))
+      val admission = _admission(Vector(_identity("org.goldenport.cncf.Missing.service.operation")))
 
       When("catalog construction resolves exact runtime routes")
       val result = OperationToolCatalogBuilder.createC(subsystem, admission)
@@ -102,7 +109,7 @@ final class OperationToolSourceSpec
     }
 
     "reject a runtime Operation whose names cannot form one exact identity" in {
-      Given("an assembled Operation and a component name containing the identity separator")
+      Given("an assembled Operation and an unqualified component name")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-invalid-identity"))
       val component = subsystem.findComponent(BuiltinComponentIdentity.TOOL).getOrElse(fail("tool component is unavailable"))
       val service = component.protocol.services.services
@@ -112,20 +119,20 @@ final class OperationToolSourceSpec
 
       When("the provider-neutral definition builder validates the runtime names")
       val result = OperationToolDefinitionBuilder.definitionC(
-        "invalid.component",
+        "tool",
         service,
         operation
       )
 
       Then("definition construction fails structurally rather than publishing an ambiguous name")
       result.isSuccess shouldBe false
-      result.display should include("bounded Operation identity segment")
+      result.display should include("component.identity.id.qualified")
     }
 
     "install one exact runtime-owned tool set into a consumer socket" in {
       Given("a consumer socket requiring one admitted internal tool set")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-socket"))
-      val admission = _admission(Vector(_identity("tool.time.now")))
+      val admission = _admission(Vector(_identity(_tool_time)))
       val registry = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
       val socket = _success(OperationToolSocket.createC(Vector(
         OperationToolRequirement(admission.toolSetId)
@@ -147,7 +154,7 @@ final class OperationToolSourceSpec
     "execute through the Subsystem with the caller ExecutionContext" in {
       Given("an admitted runtime-clock Operation and a deterministic caller clock")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-execution"))
-      val admission = _admission(Vector(_identity("tool.time.now")))
+      val admission = _admission(Vector(_identity(_tool_time)))
       val registry = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
       val service = _success(registry.resolve(admission.toolSetId))
       val expectedinstant = Instant.parse("2026-07-21T08:30:00Z")
@@ -160,7 +167,7 @@ final class OperationToolSourceSpec
 
       When("the admitted tool is invoked in-process")
       val result = service.withInvocation { invocation =>
-        invocation.invoke(OperationToolCall(_identity("tool.time.now"), Record.empty))
+        invocation.invoke(OperationToolCall(_identity(_tool_time), Record.empty))
       }
 
       Then("the normal Operation result observes the caller context")
@@ -177,17 +184,17 @@ final class OperationToolSourceSpec
     "reject unknown and malformed calls before business Operation execution" in {
       Given("one admitted Operation with required typed parameters")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-denial"))
-      val admission = _admission(Vector(_identity("tool.decimal.calculate")))
+      val admission = _admission(Vector(_identity(_tool_decimal)))
       val service = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
         .resolve(admission.toolSetId).toOption.getOrElse(fail("tool service is unavailable"))
       given ExecutionContext = ExecutionContext.create()
 
       When("an unadmitted identity and a missing-required-field call are submitted")
       val unknown = service.withInvocation(_.invoke(
-        OperationToolCall(_identity("tool.time.now"), Record.empty)
+        OperationToolCall(_identity(_tool_time), Record.empty)
       ))
       val malformed = service.withInvocation(_.invoke(
-        OperationToolCall(_identity("tool.decimal.calculate"), Record.empty)
+        OperationToolCall(_identity(_tool_decimal), Record.empty)
       ))
 
       Then("both calls fail at the internal admission or request boundary")
@@ -204,17 +211,17 @@ final class OperationToolSourceSpec
         path = Path.of("<operation-tool-authorization>"),
         subsystemName = subsystem.name,
         operationAuthorization = Map(
-          "tool.time.now" -> OperationAuthorizationRule(deny = true)
+          _tool_time -> OperationAuthorizationRule(deny = true)
         )
       ))
-      val admission = _admission(Vector(_identity("tool.time.now")))
+      val admission = _admission(Vector(_identity(_tool_time)))
       val service = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
         .resolve(admission.toolSetId).toOption.getOrElse(fail("tool service is unavailable"))
       given ExecutionContext = ExecutionContext.create()
 
       When("the admitted identity is invoked in-process")
       val result = service.withInvocation(_.invoke(
-        OperationToolCall(_identity("tool.time.now"), Record.empty)
+        OperationToolCall(_identity(_tool_time), Record.empty)
       ))
 
       Then("the canonical authorization failure is returned before ActionCall execution")
@@ -232,7 +239,7 @@ final class OperationToolSourceSpec
       val strictlimits = _success(OperationToolLimits.createC(1, 1024L, 65536L, 1))
       val admission = _success(OperationToolAdmission.createC(
         _tool_set_id,
-        Vector(_identity("tool.time.now")),
+        Vector(_identity(_tool_time)),
         strictlimits
       ))
       val service = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
@@ -241,8 +248,8 @@ final class OperationToolSourceSpec
 
       When("two calls are attempted in one invocation")
       val results = service.withInvocation { invocation =>
-        val first = invocation.invoke(OperationToolCall(_identity("tool.time.now"), Record.empty))
-        val second = invocation.invoke(OperationToolCall(_identity("tool.time.now"), Record.empty))
+        val first = invocation.invoke(OperationToolCall(_identity(_tool_time), Record.empty))
+        val second = invocation.invoke(OperationToolCall(_identity(_tool_time), Record.empty))
         Consequence.success(first -> second)
       }
 
@@ -258,7 +265,7 @@ final class OperationToolSourceSpec
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-byte-limits"))
       val inputset = _success(OperationToolSetId.parseC("input-limited"))
       val resultset = _success(OperationToolSetId.parseC("result-limited"))
-      val identity = _identity("tool.time.now")
+      val identity = _identity(_tool_time)
       val inputadmission = _success(OperationToolAdmission.createC(
         inputset,
         Vector(identity),

@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 11, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiInvokerSpec
@@ -42,7 +42,7 @@ final class SpiInvokerSpec
       When("the component API is resolved and its typed operation is called")
       val api = fixture.subsystem.componentApiResolver.resolve(
         BoundInvocationContract.contract,
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
       ).toOption.get
       val result = api.echo(Record.dataAuto("message" -> "bound"))
 
@@ -96,14 +96,14 @@ final class SpiInvokerSpec
         "tag" -> "second",
         "secret" -> secret
       ))
-      val socket = SpiSocketRef("consumer", "catalog", InvocationContract.name)
+      val socket = SpiSocketRef("org.goldenport.cncf.test.Consumer", "catalog", InvocationContract.name)
 
       When("the generic invoker resolves the exact provider and invokes the operation")
       val result = fixture.subsystem.spiInvoker.invoke(
         InvocationContract.contract,
         SpiOperationSelector("echo", Some("api")),
         request,
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary")),
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary")),
         Some(socket)
       )
 
@@ -136,7 +136,7 @@ final class SpiInvokerSpec
         InvocationContract.contract,
         SpiOperationSelector("echo", Some("api")),
         Record.dataAuto("secret" -> secret),
-        ComponentSelector(component = Some("test_provider"), instance = Some("missing"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("missing"))
       )
 
       Then("the failure is traced with bounded resolution metadata and no request values")
@@ -165,7 +165,7 @@ final class SpiInvokerSpec
         InvocationContract.contract,
         SpiOperationSelector("identity", Some("api")),
         Record.empty,
-        ComponentSelector(component = Some("test_provider"), purpose = Some("javascript-heavy-site"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), purpose = Some("javascript-heavy-site"))
       )
 
       Then("the operation runs on the selected component instance")
@@ -180,15 +180,15 @@ final class SpiInvokerSpec
       val (consumer, socket) = InvocationFixture.addConsumer(subsystem, "consumer", "catalog")
       val binding = SpiRuntimeBinding(
         SpiSocketSelector(
-          component = Some("consumer"),
+          component = Some("org.goldenport.cncf.test.Consumer"),
           contract = InvocationContract.name,
           name = Some("catalog")
         ),
-        SpiProviderSelector(component = Some("test_provider"), instance = Some("static"))
+        SpiProviderSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("static"))
       )
       InvocationFixture.installResolver(subsystem, Vector(static, dynamic, consumer), Vector(binding))
       given ExecutionContext = ExecutionContext.create()
-      val socketref = SpiSocketRef("consumer", socket.spiSocketName, InvocationContract.name)
+      val socketref = SpiSocketRef("org.goldenport.cncf.test.Consumer", socket.spiSocketName, InvocationContract.name)
 
       When("the socket route requests the unbound dynamic provider and the programmatic route requests the same provider")
       val socketresult = subsystem.spiInvoker.invoke(
@@ -217,7 +217,7 @@ final class SpiInvokerSpec
       given ExecutionContext = ExecutionContext.create()
       val binding = first.subsystem.componentApiResolver.resolveBinding(
         InvocationContract.contract,
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
       ).toOption.get
 
       When("the second subsystem invoker receives the foreign binding")
@@ -260,20 +260,20 @@ final class SpiInvokerSpec
       )
       val ambiguous = ambiguoussubsystem.componentApiResolver.resolveBinding(
         InvocationContract.contract,
-        ComponentSelector(component = Some("test_provider"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"))
       )
       val incompatible = unavailablefixture.subsystem.componentApiResolver.resolveBinding(
         InvocationContract.contract,
         ComponentSelector(),
-        Some(SpiSocketRef("consumer", "catalog", "other-contract"))
+        Some(SpiSocketRef("org.goldenport.cncf.test.Consumer", "catalog", "other-contract"))
       )
       val unhealthyresult = unhealthysubsystem.componentApiResolver.resolveBinding(
         InvocationContract.contract,
-        ComponentSelector(component = Some("test_provider"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"))
       )
       val rejected = rejectedfixture.subsystem.componentApiResolver.resolveBinding(
         InvocationContract.contract,
-        ComponentSelector(component = Some("test_provider"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"))
       )
 
       Then("each failure keeps a deterministic semantic reason")
@@ -296,7 +296,7 @@ final class SpiInvokerSpec
         InvocationContract.contract,
         SpiOperationSelector("echo", Some("api")),
         Record.dataAuto("message" -> "captured"),
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
       )
 
       Then("the business result and exactly one provider-scoped automatic attempt are retained")
@@ -324,7 +324,7 @@ final class SpiInvokerSpec
         "rule" -> nested
       ))
       val direct = Request.of(
-        component = "test_provider",
+        component = "org.goldenport.cncf.test.TestProvider",
         service = "api",
         operation = "echo",
         properties = record.fields.map(field => Property(field.key, field.value.single, None)).toList
@@ -336,7 +336,7 @@ final class SpiInvokerSpec
         InvocationContract.contract,
         SpiOperationSelector("echo", Some("api")),
         record,
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
       )
 
       Then("both routes preserve the same Record result")
@@ -350,7 +350,7 @@ final class SpiInvokerSpec
       given ExecutionContext = ExecutionContext.create()
       val binding = fixture.subsystem.componentApiResolver.resolveBinding(
         InvocationContract.contract,
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
       ).toOption.get
 
       When("each invalid path is invoked")
@@ -360,8 +360,8 @@ final class SpiInvokerSpec
       val ambiguous = fixture.subsystem.spiInvoker.invoke(binding, SpiOperationSelector("duplicate"), Record.empty)
       val mismatchedsocket = fixture.subsystem.componentApiResolver.resolveBinding(
         InvocationContract.contract,
-        ComponentSelector(component = Some("test_provider")),
-        Some(SpiSocketRef("consumer", "catalog", "other-contract"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider")),
+        Some(SpiSocketRef("org.goldenport.cncf.test.Consumer", "catalog", "other-contract"))
       )
 
       Then("each path fails deterministically without a fallback operation")
@@ -389,7 +389,7 @@ final class SpiInvokerSpec
         InvocationContract.contract,
         SpiOperationSelector("echo", Some("api")),
         Record.empty,
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
       )
 
       Then("the canonical authorization failure is returned")
@@ -407,7 +407,7 @@ final class SpiInvokerSpec
         InvocationContract.contract,
         SpiOperationSelector("command", Some("api")),
         Record.empty,
-        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+        ComponentSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
       )
 
       Then("the command result returns after job execution and UnitOfWork event commit")
@@ -556,18 +556,18 @@ private object InvocationFixture {
     val subsystem = TestComponentFactory.admittedEmptySubsystem(name)
     val provider = addProvider(subsystem, "primary", Vector("official-site"))
     val evaluationsink = DeterministicCorpusEvaluationSink
-      .createC("test_provider", "evaluation_capture")
+      .createC("org.goldenport.cncf.test.TestProvider", "evaluation_capture")
       .toOption
       .get
     provider.installSpi(evaluationsink)
     val (consumer, socket) = addConsumer(subsystem, "consumer", "catalog")
     val binding = SpiRuntimeBinding(
       SpiSocketSelector(
-        component = Some("consumer"),
+        component = Some("org.goldenport.cncf.test.Consumer"),
         contract = InvocationContract.name,
         name = Some("catalog")
       ),
-      SpiProviderSelector(component = Some("test_provider"), instance = Some("primary"))
+      SpiProviderSelector(component = Some("org.goldenport.cncf.test.TestProvider"), instance = Some("primary"))
     )
     installResolver(subsystem, Vector(provider, consumer), Vector(binding))
     Fixture(
@@ -588,7 +588,7 @@ private object InvocationFixture {
     val protocol = _protocol(provider)
     val componentid = ComponentId("org.goldenport.cncf.test.TestProvider")
     val metadata = ComponentInstanceMetadata(
-      "test_provider",
+      "org.goldenport.cncf.test.TestProvider",
       instance,
       purposes = purposes,
       componentId = Some(componentid)
@@ -617,7 +617,7 @@ private object InvocationFixture {
     val socket = new InvocationSocket(socketname)
     val consumer = new InvocationConsumerComponent(socket)
     val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
-    val metadata = ComponentInstanceMetadata(name, "default", componentId = Some(componentid))
+    val metadata = ComponentInstanceMetadata(componentid.name, "default", componentId = Some(componentid))
     val core = Component.Core.create(
       name = componentid.name,
       componentid = componentid,
@@ -642,7 +642,7 @@ private object InvocationFixture {
     val socket = new BoundInvocationSocket(socketname)
     val consumer = new BoundInvocationConsumerComponent(socket)
     val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
-    val metadata = ComponentInstanceMetadata(name, "default", componentId = Some(componentid))
+    val metadata = ComponentInstanceMetadata(componentid.name, "default", componentId = Some(componentid))
     val core = Component.Core.create(
       name = componentid.name,
       componentid = componentid,

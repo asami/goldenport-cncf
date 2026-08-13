@@ -41,7 +41,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for declared operation-evaluation admission.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAdmissionSpec
@@ -675,7 +675,7 @@ final class OperationEvaluationAdmissionSpec
 
   private def _http_request: HttpRequest =
     HttpRequest(
-      HttpPath.parse("/form-api/evaluation_admission/operation/evaluate"),
+      HttpPath.parse("/form-api/org.goldenport.cncf.test.EvaluationAdmission/operation/evaluate"),
       HttpRequest.POST,
       Record.empty,
       Record.empty,
@@ -690,7 +690,7 @@ final class OperationEvaluationAdmissionSpec
 
   private def _request: Request =
     Request.of(
-      component = "evaluation_admission",
+      component = "org.goldenport.cncf.test.EvaluationAdmission",
       service = "operation",
       operation = "evaluate"
     )

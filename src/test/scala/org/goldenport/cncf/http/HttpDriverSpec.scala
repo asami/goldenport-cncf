@@ -20,7 +20,7 @@ import scala.util.Try
 /*
  * @since   Apr. 25, 2026
  *  version Jul. 21, 2026
- * @version Aug. 12, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpDriverSpec
@@ -218,7 +218,7 @@ final class HttpDriverSpec
       )
 
       When("the query is executed without trace-job admission")
-      val response = driver.get("/debug/http/echo")
+        val response = driver.get("/org.goldenport.cncf.Debug/http/echo")
 
       Then("the direct execution headers are explicit and no Job header is inferred")
       response.code shouldBe 200
@@ -235,7 +235,7 @@ final class HttpDriverSpec
       )
 
       When("the direct query is executed without trace-job admission")
-      val response = driver.get("/debug/http/echo?x-textus-job-id=stale-job")
+        val response = driver.get("/org.goldenport.cncf.Debug/http/echo?x-textus-job-id=stale-job")
 
       Then("the authoritative Direct metadata removes every stale Job header")
       response.code shouldBe 200
@@ -326,7 +326,7 @@ final class HttpDriverSpec
       )
 
       When("the request asks to run through a debug trace job")
-      val response = driver.get("/debug/http/echo?textus.debug.trace-job=true")
+      val response = driver.get("/org.goldenport.cncf.Debug/http/echo?textus.debug.trace-job=true")
 
       Then("the response exposes the retained job id as an HTTP header")
       response.code shouldBe 200
@@ -344,7 +344,7 @@ final class HttpDriverSpec
 
       When("the request asks to run through a debug trace job")
       val response = driver.get(
-        "/debug/http/echo?textus.debug.trace-job=true&x-textus-job-id=stale-job&x-textus-execution-mode=stale&x-textus-execution-result=stale"
+        "/org.goldenport.cncf.Debug/http/echo?textus.debug.trace-job=true&x-textus-job-id=stale-job&x-textus-execution-mode=stale&x-textus-execution-result=stale"
       )
 
       Then("the metadata job id is the observable job header")

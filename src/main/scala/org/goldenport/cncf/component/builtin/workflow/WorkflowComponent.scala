@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, ProcedureActionCall}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.workflow.{WorkflowDefinition, WorkflowDefinitionId, WorkflowEngine, WorkflowHistoryEntry, WorkflowInstance, WorkflowInstanceId, WorkflowRegistration}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -16,7 +17,7 @@ import org.goldenport.value.BaseContent
 
 /*
  * @since   Apr. 22, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowComponent() extends Component {
@@ -303,9 +304,9 @@ object WorkflowComponent {
       "updated-at" -> instance.updatedAt.toString,
       "job-surface" -> Record.data(
         "selectors" -> Vector(
-          "job_control.job.get_job_status",
-          "job_control.job.load_job_history",
-          "job_control.job.get_job_result"
+          s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_status",
+          s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.load_job_history",
+          s"${BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_result"
         ),
         "summary" -> "Execution detail belongs to job_control surfaces."
       )

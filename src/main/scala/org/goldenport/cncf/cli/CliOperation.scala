@@ -20,7 +20,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version Feb.  1, 2026
  *  version Mar. 27, 2026
  *  version Apr. 11, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CliOperation extends GlobalObservable {
@@ -41,14 +42,14 @@ abstract class CliOperation extends GlobalObservable {
   final protected def parse_command_args(
     args: Array[String]
   ): Consequence[Request] =
-    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
+    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeoptions, clean) =>
       _selector_and_arguments(clean).flatMap { case (selector, tail) =>
       val normalized = _normalize_meta_selector(selector, tail.toVector)
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
-      subsystem.resolver.resolve(canonicalSelector) match {
+      val canonicalselector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
+      subsystem.resolver.resolve(canonicalselector) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
           val arguments = _build_request_arguments(normalized._2)
-          val properties = _runtime_properties(runtimeOptions)
+          val properties = _runtime_properties(runtimeoptions)
           Consequence.success(
             Request.of(
               component = component,
@@ -80,8 +81,8 @@ abstract class CliOperation extends GlobalObservable {
         (selector, tail)
       case Vector("meta", operation) =>
         _default_meta_component_name() match {
-          case Some(componentName) =>
-            (s"$componentName.meta.$operation", tail)
+          case Some(componentname) =>
+            (s"$componentname.meta.$operation", tail)
           case None =>
             (selector, tail)
         }
@@ -102,9 +103,9 @@ abstract class CliOperation extends GlobalObservable {
 
   private def _extract_runtime_options(
     args: Seq[String]
-  ): (_RuntimeOptions, Seq[String]) = {
+  ): (RuntimeOptions, Seq[String]) = {
     val clean = Vector.newBuilder[String]
-    var options = _RuntimeOptions()
+    var options = RuntimeOptions()
     args.foreach { token =>
       token match {
         case "--json" =>
@@ -116,7 +117,7 @@ abstract class CliOperation extends GlobalObservable {
         case s if s.startsWith("--debug=") =>
           options = options.copy(debug = true)
         case "--no-exit" =>
-          options = options.copy(noExit = true)
+          options = options.copy(noexit = true)
         case _ =>
           clean += token
       }
@@ -124,18 +125,18 @@ abstract class CliOperation extends GlobalObservable {
     (options, clean.result())
   }
 
-  private def _runtime_properties(options: _RuntimeOptions): List[Property] = {
+  private def _runtime_properties(options: RuntimeOptions): List[Property] = {
     val b = List.newBuilder[Property]
     if (options.json) b += Property("textus.format", "json", None)
     if (options.debug) b += Property("cncf.debug", "true", None)
-    if (options.noExit) b += Property("cncf.no-exit", "true", None)
+    if (options.noexit) b += Property("cncf.no-exit", "true", None)
     b.result()
   }
 
-  private case class _RuntimeOptions(
+  private case class RuntimeOptions(
     json: Boolean = false,
     debug: Boolean = false,
-    noExit: Boolean = false
+    noexit: Boolean = false
   )
 
   private def _selector_and_arguments(
@@ -214,9 +215,13 @@ abstract class CliOperation extends GlobalObservable {
           Consequence.argumentInvalid("command path must be /component/service/operation")
       }
     } else {
-      s.split("\\.") match {
-        case Array(component, service, operation) =>
-          Consequence.success((component, service, operation))
+      s.split("\\.").toVector match {
+        case parts if parts.length >= 3 =>
+          Consequence.success((
+            parts.dropRight(2).mkString("."),
+            parts(parts.length - 2),
+            parts.last
+          ))
         case _ =>
           Consequence.argumentInvalid("command must be component.service.operation")
       }

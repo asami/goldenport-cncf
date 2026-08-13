@@ -13,7 +13,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * registry populated from an existing dependency.
  *
  * @since   Jul.  2, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object SpiResolver {
@@ -574,11 +574,7 @@ object SpiResolver {
     _validate_canonical_component_identities(components).flatMap { _ =>
       expected match {
         case Some(value) =>
-          ComponentIdentityCompatibilityAdapter.resolveAliases(
-            value.trim,
-            ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(components),
-            ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
-          ).toConsequence.map(_ => ())
+          _resolve_logical_component_selector(value, components).toConsequence.map(_ => ())
         case None =>
           Consequence.success(())
       }
@@ -606,19 +602,25 @@ object SpiResolver {
     components: Vector[Component]
   ): Boolean =
     expected.forall { value =>
-      ComponentIdentityCompatibilityAdapter.resolveAliases(
-        value.trim,
-        ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(components),
-        ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
-      ) match {
+      _resolve_logical_component_selector(value, components) match {
         case resolved: ComponentIdentityCompatibilityAdapter.Canonical =>
-          component.componentId == resolved.componentid
+          _logical_instance_id(component).exists(_.componentId == resolved.componentid)
         case resolved: ComponentIdentityCompatibilityAdapter.Adapted =>
-          component.componentId == resolved.componentid
+          _logical_instance_id(component).exists(_.componentId == resolved.componentid)
         case _: ComponentIdentityCompatibilityAdapter.Rejected =>
           false
       }
     }
+
+  private def _resolve_logical_component_selector(
+    value: String,
+    components: Vector[Component]
+  ): ComponentIdentityCompatibilityAdapter.Result =
+    ComponentIdentityCompatibilityAdapter.resolve(
+      value.trim,
+      components.flatMap(_logical_instance_id).map(_.componentId).distinct,
+      ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+    )
 
   private def _matches_instance(
     expected: Option[String],
@@ -627,14 +629,14 @@ object SpiResolver {
     expected.forall(value => _logical_instance_id(component).exists(_.instance == value.trim))
 
   private def _logical_instance_id(component: Component): Option[ComponentInstanceId] =
-    component.coreOption.map { core =>
+    component.instanceMetadata.flatMap { metadata =>
+      metadata.componentId.map(ComponentInstanceId(_, metadata.instance))
+    }.orElse(component.coreOption.map { core =>
       ComponentInstanceId(
         core.componentId,
         component.instanceMetadata.map(_.instance).getOrElse(core.instanceId.instance)
       )
-    }.orElse(component.instanceMetadata.flatMap(metadata =>
-      metadata.componentId.map(ComponentInstanceId(_, metadata.instance))
-    ))
+    })
 
   private def _selection(
     socket: SpiSelection,

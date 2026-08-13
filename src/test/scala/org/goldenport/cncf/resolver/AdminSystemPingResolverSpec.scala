@@ -3,6 +3,7 @@ package org.goldenport.cncf.resolver
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
@@ -17,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 20, 2026
  *  version Feb.  1, 2026
  *  version Jul. 30, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -27,7 +28,7 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers with G
     "E1 resolve both canonical and alias selectors to builtin admin.system.ping" must _e1 {
       "when exercising: resolve both canonical and alias selectors to builtin admin.system.ping" in {
         Given("the command runtime and one alias for the canonical Admin ping selector")
-        val configuration = _alias_config("ping" -> "admin.system.ping")
+        val configuration = _alias_config("ping" -> s"${BuiltinComponentIdentity.ADMIN.name}.system.ping")
         val mode = RunMode.Command
 
         When("the resolver rewrites and resolves canonical and alias selectors")
@@ -35,7 +36,7 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers with G
           val subsystem = DefaultSubsystemFactory.default(Some("command"))
           val resolver = subsystem.resolver
 
-          Seq("admin.system.ping", "ping").foreach { selector =>
+          Seq(s"${BuiltinComponentIdentity.ADMIN.name}.system.ping", "ping").foreach { selector =>
             val normalized =
               PathPreNormalizer.rewriteSelector(selector, mode, aliasresolver)
             Then("each selector resolves to the canonical builtin Admin operation")

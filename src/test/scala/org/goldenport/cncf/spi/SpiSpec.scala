@@ -19,13 +19,16 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jul.  2, 2026
  *  version Jul. 29, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
+  private def _component_id(name: String): String =
+    TestComponentFactory.componentId(name).name
+
   "SpiResolver" should {
     "publish paired socket forms for CNCF-owned standard SPI contracts" in {
       Given("the AI, geographic, and toolchain standard SPI contracts")
@@ -85,8 +88,8 @@ final class SpiSpec
       given ExecutionContext = ExecutionContext.create()
       val consumer = ConsumerComponent()
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("provider"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("provider")))
       )
 
       When("SPI resolution validates the selector candidates")
@@ -290,11 +293,11 @@ final class SpiSpec
       )
       val binding = SpiRuntimeBinding(
         socket = SpiSocketSelector(
-          component = Some("art-scene"),
+          component = Some(_component_id("art-scene")),
           contract = "ai-runner",
           instance = Some("main")
         ),
-        provider = SpiProviderSelector(component = Some("testprovider")),
+        provider = SpiProviderSelector(component = Some(_component_id("testprovider"))),
         selection = SpiSelection()
       )
 
@@ -315,19 +318,19 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("static"),
-        Some(ComponentInstanceMetadata("textus-scraper", "static-default", isDefault = true))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "static-default", isDefault = true))
       )
       val dynamic = _initialized_component(
         subsystem,
         "textus-scraper",
         ProviderComponent("dynamic"),
-        Some(ComponentInstanceMetadata("textus-scraper", "dynamic-playwright"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "dynamic-playwright"))
       )
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        socket = SpiSocketSelector(Some("consumer"), "ai-runner"),
+        socket = SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
         provider = SpiProviderSelector(
-          component = Some("textus-scraper"),
+          component = Some(_component_id("textus-scraper")),
           instance = Some("dynamic-playwright")
         )
       )
@@ -348,12 +351,12 @@ final class SpiSpec
         subsystem,
         "textus-scraper-ai",
         ProviderComponent("componentlet"),
-        ComponentInstanceMetadata("textus-scraper", "static-default", isDefault = true)
+        ComponentInstanceMetadata(_component_id("textus-scraper"), "static-default", isDefault = true)
       )
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("textus-scraper"), instance = Some("static-default"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")), instance = Some("static-default"))
       )
 
       When("SPI resolution applies the owning component instance selector")
@@ -372,33 +375,33 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("static"),
-        Some(ComponentInstanceMetadata("textus-scraper", "static-default", isDefault = true))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "static-default", isDefault = true))
       )
       val dynamic = _initialized_component(
         subsystem,
         "textus-scraper",
         ProviderComponent("dynamic"),
-        Some(ComponentInstanceMetadata("textus-scraper", "dynamic-playwright"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "dynamic-playwright"))
       )
       val consumer = _initialized_component(subsystem, "art-scene", ConsumerComponent())
       val descriptor = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("art-scene.sar"),
         subsystemName = "art-scene",
         componentBindings = Vector(
-          GenericSubsystemComponentBinding("art-scene"),
-          GenericSubsystemComponentBinding("textus-scraper", instance = Some("static-default")),
-          GenericSubsystemComponentBinding("textus-scraper", instance = Some("dynamic-playwright"))
+          GenericSubsystemComponentBinding(_component_id("art-scene")),
+          GenericSubsystemComponentBinding(_component_id("textus-scraper"), instance = Some("static-default")),
+          GenericSubsystemComponentBinding(_component_id("textus-scraper"), instance = Some("dynamic-playwright"))
         ),
         assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
           Record.data(
             "spi" -> Record.data(
               "bindings" -> Vector(Record.data(
                 "socket" -> Record.data(
-                  "component" -> "art-scene",
+                  "component" -> _component_id("art-scene"),
                   "contract" -> "ai-runner"
                 ),
                 "provider" -> Record.data(
-                  "component" -> "textus-scraper",
+                  "component" -> _component_id("textus-scraper"),
                   "instance" -> "dynamic-playwright"
                 )
               ))
@@ -425,18 +428,18 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("static"),
-        Some(ComponentInstanceMetadata("textus-scraper", "static-default", isDefault = true))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "static-default", isDefault = true))
       )
       val other = _initialized_component(
         subsystem,
         "textus-scraper",
         ProviderComponent("dynamic"),
-        Some(ComponentInstanceMetadata("textus-scraper", "dynamic-playwright"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "dynamic-playwright"))
       )
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("textus-scraper"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")))
       )
 
       When("SPI resolution applies the component-only provider selector")
@@ -455,18 +458,18 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("default"),
-        Some(ComponentInstanceMetadata("textus-scraper", "default"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "default"))
       )
       val other = _initialized_component(
         subsystem,
         "textus-scraper",
         ProviderComponent("dynamic"),
-        Some(ComponentInstanceMetadata("textus-scraper", "dynamic-playwright"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "dynamic-playwright"))
       )
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("textus-scraper"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")))
       )
 
       When("SPI resolution applies the component-only provider selector")
@@ -485,12 +488,12 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("static"),
-        Some(ComponentInstanceMetadata("textus-scraper", "static-default"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "static-default"))
       )
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("textus-scraper"), instance = Some("dynamic-playwright"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")), instance = Some("dynamic-playwright"))
       )
 
       When("SPI resolution applies the missing exact selector")
@@ -509,12 +512,12 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         GeoResolverProviderComponent(),
-        Some(ComponentInstanceMetadata("textus-scraper", "static-default"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "static-default"))
       )
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("textus-scraper"), instance = Some("static-default"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")), instance = Some("static-default"))
       )
 
       When("SPI resolution checks the exact instance against the socket contract")
@@ -533,18 +536,18 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("first"),
-        Some(ComponentInstanceMetadata("textus-scraper", "first"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "first"))
       )
       val second = _initialized_component(
         subsystem,
         "textus-scraper",
         ProviderComponent("second"),
-        Some(ComponentInstanceMetadata("textus-scraper", "second"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "second"))
       )
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("textus-scraper"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")))
       )
 
       When("SPI resolution cannot derive a default instance")
@@ -578,8 +581,8 @@ final class SpiSpec
       consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "alpha:hello"
     }
 
-    "reject an ambiguous bare provider alias across admitted canonical components" in {
-      Given("two admitted canonical providers with the same presentation alias")
+    "reject a bare provider selector across admitted canonical components" in {
+      Given("two admitted canonical providers and one bare provider selector")
       given ExecutionContext = ExecutionContext.create()
       val subsystem = TestComponentFactory.emptySubsystem("spi-ambiguous-alias")
       val alpha = _initialized_component_with_id(
@@ -602,9 +605,9 @@ final class SpiSpec
       When("the shared bare alias is used as an SPI provider selector")
       val result = SpiResolver.resolve(Vector(alpha, beta, consumer), Vector(binding))
 
-      Then("SPI resolution fails closed instead of selecting either provider")
+      Then("strict SPI resolution rejects the noncanonical selector")
       result shouldBe a[Consequence.Failure[_]]
-      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.ambiguous")
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.unsupported")
     }
 
     "retain the canonical component ID in fallback SPI member metadata" in {
@@ -639,12 +642,12 @@ final class SpiSpec
       )
       val bindings = Vector(
         SpiRuntimeBinding(
-          SpiSocketSelector(Some("consumer"), "ai-runner", name = Some("static-scraper")),
-          SpiProviderSelector(component = Some("static-provider"))
+          SpiSocketSelector(Some(_component_id("consumer")), "ai-runner", name = Some("static-scraper")),
+          SpiProviderSelector(component = Some(_component_id("static-provider")))
         ),
         SpiRuntimeBinding(
-          SpiSocketSelector(Some("consumer"), "ai-runner", name = Some("dynamic-scraper")),
-          SpiProviderSelector(component = Some("dynamic-provider"))
+          SpiSocketSelector(Some(_component_id("consumer")), "ai-runner", name = Some("dynamic-scraper")),
+          SpiProviderSelector(component = Some(_component_id("dynamic-provider")))
         )
       )
 
@@ -671,8 +674,8 @@ final class SpiSpec
         ))
       )
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner"),
-        SpiProviderSelector(component = Some("provider"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        SpiProviderSelector(component = Some(_component_id("provider")))
       )
 
       When("SPI resolution validates the unnamed socket selector")
@@ -697,12 +700,12 @@ final class SpiSpec
       )
       val binding = SpiRuntimeBinding(
         SpiSocketSelector(
-          component = Some("art-scene"),
+          component = Some(_component_id("art-scene")),
           contract = "ai-runner",
           instance = Some("main"),
           name = Some("assistant")
         ),
-        SpiProviderSelector(component = Some("provider"))
+        SpiProviderSelector(component = Some(_component_id("provider")))
       )
 
       When("SPI resolution applies the owning component instance and socket name")
@@ -720,8 +723,8 @@ final class SpiSpec
       val provider = _initialized_component(subsystem, "testprovider", ProviderComponent("test"))
       val consumer = _initialized_component(subsystem, "consumer", ConsumerComponent())
       val binding = SpiRuntimeBinding(
-        socket = SpiSocketSelector(Some("consumer"), "ai-runner"),
-        provider = SpiProviderSelector(component = Some("testprovider"), service = Some("ai-runner-test")),
+        socket = SpiSocketSelector(Some(_component_id("consumer")), "ai-runner"),
+        provider = SpiProviderSelector(component = Some(_component_id("testprovider")), service = Some("ai-runner-test")),
         selection = SpiSelection()
       )
 
@@ -754,7 +757,7 @@ final class SpiSpec
       val resolution = SpiResolver.resolveAssembly(Vector(provider)).toOption.get
       val result = resolution.componentApiResolver.resolve(
         SpiContract("ai-runner", classOf[AiRunner]),
-        ComponentSelector(component = Some("textus-scraper"), purpose = Some("official-site"))
+        ComponentSelector(component = Some(_component_id("textus-scraper")), purpose = Some("official-site"))
       )
 
       Then("the admitted provider is materialized lazily through the typed resolver")
@@ -800,8 +803,8 @@ final class SpiSpec
       )
       val bindings = Vector("static-default", "dynamic-playwright").map { instance =>
         SpiRuntimeBinding(
-          SpiSocketSelector(Some("art-scene"), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.OneOrMore),
-          SpiProviderSelector(component = Some("textus-scraper"), instance = Some(instance))
+          SpiSocketSelector(Some(_component_id("art-scene")), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.OneOrMore),
+          SpiProviderSelector(component = Some(_component_id("textus-scraper")), instance = Some(instance))
         )
       }
 
@@ -818,7 +821,7 @@ final class SpiSpec
         .flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "static:hello"
       subsystem.componentApiResolver.resolve(
         SpiContract("ai-runner", classOf[AiRunner]),
-        ComponentSelector(component = Some("textus-scraper"), instance = Some("dynamic-playwright"))
+        ComponentSelector(component = Some(_component_id("textus-scraper")), instance = Some("dynamic-playwright"))
       ).flatMap(_.generate(AiGenerateRequest("runtime"))).toOption.get.text shouldBe "dynamic:runtime"
     }
 
@@ -830,13 +833,13 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("first"),
-        Some(ComponentInstanceMetadata("textus-scraper", "first"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "first"))
       )
       val second = _initialized_component(
         subsystem,
         "textus-scraper",
         ProviderComponent("second"),
-        Some(ComponentInstanceMetadata("textus-scraper", "second"))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "second"))
       )
       val socket = RunnerSocketSet("scrapers")
       val consumer = _initialized_component(
@@ -845,8 +848,8 @@ final class SpiSpec
         new Component() {}.withPort(Component.Port.input(socket))
       )
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.Many),
-        SpiProviderSelector(component = Some("textus-scraper"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.Many),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")))
       )
 
       When("SPI resolution expands the component selector")
@@ -866,13 +869,13 @@ final class SpiSpec
         subsystem,
         "textus-scraper",
         ProviderComponent("healthy"),
-        Some(ComponentInstanceMetadata("textus-scraper", "default", priority = 10, isDefault = true))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "default", priority = 10, isDefault = true))
       )
       val unhealthy = _initialized_component(
         subsystem,
         "textus-scraper",
         UnavailableProviderComponent(),
-        Some(ComponentInstanceMetadata("textus-scraper", "unhealthy", priority = 100))
+        Some(ComponentInstanceMetadata(_component_id("textus-scraper"), "unhealthy", priority = 100))
       )
       unhealthy.registerHealthContributor(new Component.HealthContributor {
         def name: String = "provider"
@@ -881,8 +884,8 @@ final class SpiSpec
       val socket = RunnerSocketSet("scrapers", required = true)
       val consumer = _initialized_component(subsystem, "consumer", new Component() {}.withPort(Component.Port.input(socket)))
       val binding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("consumer"), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.OneOrMore),
-        SpiProviderSelector(component = Some("textus-scraper"))
+        SpiSocketSelector(Some(_component_id("consumer")), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.OneOrMore),
+        SpiProviderSelector(component = Some(_component_id("textus-scraper")))
       )
 
       When("the socket set resolves its default member")
@@ -905,15 +908,15 @@ final class SpiSpec
       val optionalsetconsumer = _initialized_component(subsystem, "optional-set-consumer", new Component() {}.withPort(Component.Port.input(optionalset)))
       val requiredconsumer = _initialized_component(subsystem, "required-consumer", new Component() {}.withPort(Component.Port.input(required)))
       val optionalbinding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("optional-consumer"), "ai-runner", cardinality = SpiCardinality.Optional),
+        SpiSocketSelector(Some(_component_id("optional-consumer")), "ai-runner", cardinality = SpiCardinality.Optional),
         SpiProviderSelector(component = Some("missing-provider"))
       )
       val optionalsetbinding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("optional-set-consumer"), "ai-runner", name = Some("optional-set"), cardinality = SpiCardinality.Many),
+        SpiSocketSelector(Some(_component_id("optional-set-consumer")), "ai-runner", name = Some("optional-set"), cardinality = SpiCardinality.Many),
         SpiProviderSelector(component = Some("missing-provider"))
       )
       val requiredbinding = SpiRuntimeBinding(
-        SpiSocketSelector(Some("required-consumer"), "ai-runner", name = Some("required"), cardinality = SpiCardinality.OneOrMore),
+        SpiSocketSelector(Some(_component_id("required-consumer")), "ai-runner", name = Some("required"), cardinality = SpiCardinality.OneOrMore),
         SpiProviderSelector(component = Some("missing-provider"))
       )
 
@@ -939,15 +942,15 @@ final class SpiSpec
       Given("two resolved members and a policy that rejects the default member")
       val defaultmember = ResolvedSpiMember[AiRunner](
         AiRunnerImplementation("default"),
-        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "default"), priority = 100, isDefault = true)
+        SpiMemberMetadata("ai-runner", _component_id("textus-scraper"), ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "default"), priority = 100, isDefault = true)
       )
       val allowedmember = ResolvedSpiMember[AiRunner](
         AiRunnerImplementation("allowed"),
-        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "allowed"), priority = 10)
+        SpiMemberMetadata("ai-runner", _component_id("textus-scraper"), ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "allowed"), priority = 10)
       )
       val othercontract = ResolvedSpiMember[AiRunner](
         AiRunnerImplementation("other-contract"),
-        SpiMemberMetadata("other-runner", "textus-scraper", ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "other"), priority = 1000)
+        SpiMemberMetadata("other-runner", _component_id("textus-scraper"), ComponentInstanceId(org.goldenport.cncf.testutil.TestComponentFactory.componentId("textus-scraper"), "other"), priority = 1000)
       )
       val policy = new ComponentSelectionPolicy {
         def accept(member: SpiMemberMetadata, selector: ComponentSelector): Consequence[Boolean] =
@@ -961,15 +964,15 @@ final class SpiSpec
       given ExecutionContext = ExecutionContext.create()
 
       When("the public component API resolver applies an abstract selector")
-      val result = resolver.resolve(SpiContract("ai-runner", classOf[AiRunner]), ComponentSelector(component = Some("textus-scraper")))
+      val result = resolver.resolve(SpiContract("ai-runner", classOf[AiRunner]), ComponentSelector(component = Some(_component_id("textus-scraper"))))
 
       Then("contract and policy rejection happen before deterministic ranking")
       result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "allowed:hello"
-      socket.resolve(ComponentSelector(component = Some("textus-scraper")))
+      socket.resolve(ComponentSelector(component = Some(_component_id("textus-scraper"))))
         .flatMap(_.generate(AiGenerateRequest("socket"))).toOption.get.text shouldBe "allowed:socket"
       subsystem.componentApiResolver.resolve(
         SpiContract("ai-runner", classOf[AiRunner]),
-        ComponentSelector(component = Some("textus-scraper"))
+        ComponentSelector(component = Some(_component_id("textus-scraper")))
       ).flatMap(_.generate(AiGenerateRequest("subsystem"))).toOption.get.text shouldBe "allowed:subsystem"
     }
 
@@ -993,7 +996,7 @@ final class SpiSpec
       result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "alpha:hello"
     }
 
-    "adapt a unique legacy Component API presentation alias to its canonical component ID" in {
+    "reject a unique legacy Component API presentation alias" in {
       Given("one resolved component API with a non-authoritative legacy presentation alias")
       given ExecutionContext = ExecutionContext.create()
       val componentid = ComponentId("org.example.Catalog")
@@ -1007,11 +1010,12 @@ final class SpiSpec
         ComponentSelector(component = Some("legacy catalog"))
       )
 
-      Then("the admitted canonical provider remains the selected identity authority")
-      result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "catalog:hello"
+      Then("the strict SPI selector rejects the noncanonical alias")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.unsupported")
     }
 
-    "reject an ambiguous shared Component API presentation alias" in {
+    "reject a shared Component API presentation alias as unsupported" in {
       Given("two resolved component APIs sharing one legacy presentation alias")
       given ExecutionContext = ExecutionContext.create()
       val resolver = ComponentApiResolver(Vector(
@@ -1025,9 +1029,9 @@ final class SpiSpec
         ComponentSelector(component = Some("shared catalog"))
       )
 
-      Then("selection fails closed rather than choosing either canonical provider")
+      Then("strict selection rejects the noncanonical alias")
       result shouldBe a[Consequence.Failure[_]]
-      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.ambiguous")
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.unsupported")
     }
     }
 
@@ -1089,7 +1093,7 @@ final class SpiSpec
     metadata: Option[ComponentInstanceMetadata] = None
   ): A = {
     val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
-    val canonicalmetadata = metadata.map(_.copy(componentId = Some(componentid)))
+    val canonicalmetadata = metadata.map(_.copy(componentName = componentid.name, componentId = Some(componentid)))
     val core = Component.Core.create(
       name = componentid.name,
       componentid = componentid,
@@ -1126,7 +1130,7 @@ final class SpiSpec
     component: A,
     metadata: Option[ComponentInstanceMetadata] = None
   ): A = {
-    val canonicalmetadata = metadata.map(_.copy(componentId = Some(componentid)))
+    val canonicalmetadata = metadata.map(_.copy(componentName = componentid.name, componentId = Some(componentid)))
     val core = Component.Core.create(
       name = componentid.name,
       componentid = componentid,
@@ -1149,7 +1153,8 @@ final class SpiSpec
     metadata: ComponentInstanceMetadata
   ): A = {
     val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(participantname)
-    val canonicalmetadata = metadata.copy(componentId = Some(componentid))
+    val logicalowner = org.goldenport.cncf.testutil.TestComponentFactory.componentId(metadata.componentName)
+    val canonicalmetadata = metadata.copy(componentName = logicalowner.name, componentId = Some(logicalowner))
     val core = Component.Core.create(
       name = componentid.name,
       componentid = componentid,
