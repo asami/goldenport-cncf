@@ -50,9 +50,10 @@ machine-facing form metadata, and REST execution.
 ```
 
 `/web` pages are human-facing HTML pages. `/form` routes accept browser-native
-HTML FORM submissions and resolve to HTML result pages. `/form-api` routes are
-for JSON-oriented clients and form preparation. `/rest/v1` is the canonical
-JSON execution surface.
+HTML FORM submissions and resolve to HTML result pages. `/form-api` routes
+adapt Operation and model input metadata to Web forms and provide optional Web
+input admission validation. `/rest/v1` is the canonical JSON Operation
+execution surface for browser and non-browser clients.
 
 Compatibility and root policy:
 
@@ -61,6 +62,16 @@ Compatibility and root policy:
 - the current latest stable REST namespace is `/rest/v1`
 - `/api/...` is intentionally deferred and not part of the current public
   contract
+
+`/web` is the default instance Web application entry. A descriptor with one
+application selects that application without `entry: true`; with multiple
+applications, exactly one application must declare `entry: true`. With no
+application, `/web` leads to the Dashboard at `/web/system/dashboard`. A SAR
+route of kind `default` targeting the selected application may publish its own
+public application URL; otherwise the published URL is `{baseUrl}/web`. The
+component-scoped `/web/{component}/{webApp}` route remains the canonical
+resource-ownership route and is not used as the launcher or Control Center
+Open App URL.
 
 REST versioning is major-only at the path level:
 
@@ -161,6 +172,11 @@ The API boundary is operation-centric:
 - REST API executes domain operations and returns canonical execution envelopes.
 - Form API prepares schema, default values, validation metadata, and admission
   checks for Web/form clients. It must not execute business logic.
+- Plain `/form` submission provides the no-JavaScript HTML/PRG adapter to the
+  same Operation execution authority.
+- The retained `POST /form-api/{component}/{service}/{operation}` execution
+  route is compatibility-only. New browser clients use Form API for definition
+  or admission validation and REST for JSON Operation execution.
 - Auth, session, UnitOfWork, and authorization stay on the existing CNCF
   runtime paths. A SPA or gateway must not bypass operation authorization.
 - Admin and system APIs remain separate protected surfaces and keep the
@@ -213,11 +229,12 @@ rendering path, not a loopback call to `/rest/v1`. REST is an external boundary:
 use it for automation, external clients, and deliberately isolated browser
 enhancements, not as an internal page-assembly protocol.
 
-`/form-api` remains useful for input assistance, validation, optional refresh,
-async status checks, editor helpers, and other progressive enhancement. It is
-not the primary mechanism for rendering ordinary Static Form page bodies. When
-a page needs several display support values, add or use a page context query
-instead of adding multiple page-load Form API calls.
+`/form-api` remains useful for dynamic input definition, schema-derived input
+assistance, admission validation, and form/editor metadata. A refresh, async
+status lookup, query, or command that executes application behavior uses REST
+v1. Neither route family is the primary mechanism for rendering ordinary
+Static Form page bodies. When a page needs several display support values, add
+or use a page context query instead of adding multiple page-load API calls.
 
 Existing route families remain stable: `/web/...`, `/form/...`, `/form-api/...`,
 and `/rest/v1/...`. A SPA catch-all route must not be applied to `/web` as a
@@ -418,9 +435,12 @@ do not change ownership.
 Route entries are subsystem-level routing declarations. `path` is the visible
 URL prefix. `target.component` and `target.app` identify the canonical owner.
 `kind: alias` is a named subsystem-level shortcut to a component Web app.
-`kind: default` selects the Web app served at `/web` and its descendants. The
-default route is optional; if absent, `/web` remains reserved for built-in Web
-layer paths and explicit subsystem Web apps.
+`kind: default` selects its valid explicit public path and canonical owner.
+When no explicit default exists, a sole Web app is served at `/web`; multiple
+Web apps require exactly one `entry: true`; and with no Web app, `/web`
+redirects to `/web/system/dashboard`. Component-scoped long routes remain the
+canonical internal ownership routes, while `/web/system/...` remains reserved
+for system surfaces.
 
 The Management Console exposes the completed Web Descriptor at
 `/web/system/admin/descriptor`. This page is the operator-facing reference for
@@ -850,6 +870,15 @@ required fields, datatype shape, candidate values, multiplicity, and
 unknown-field warnings. Domain invariants, state-dependent rules, instance
 authorization, optimistic locking, and datastore-backed checks remain
 Operation-side responsibilities.
+
+Browser clients execute an admitted query or command through `/rest/v1`, not by
+turning Form API into a second canonical execution API. CNCF may retain the
+legacy direct `POST /form-api/{component}/{service}/{operation}` route for
+compatibility, but it delegates to the same Operation authority, returns the
+canonical public execution/error semantics, and is not used by new component
+JavaScript. A CNCF browser facade may expose form-definition, form-validation,
+and operation-execution methods while keeping these route responsibilities
+distinct.
 
 The stable JSON response contract is defined in
 `docs/design/web-form-api-schema.md`.

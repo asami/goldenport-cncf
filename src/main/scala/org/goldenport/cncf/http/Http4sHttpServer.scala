@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -46,7 +46,7 @@ import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{ComponentId, ComponentIdentityCompatibilityAdapter, ComponentIdentityCompatibilityObserver}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig, RuntimeOperationSecurityPolicy}
-import org.goldenport.cncf.subsystem.SubsystemCurrentUserEvidence
+import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, SubsystemCurrentUserEvidence}
 import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, BlobStoreFactory, BlobStorageRef}
 import org.goldenport.cncf.entity.{
   EntityMutationAdapterDefaults,
@@ -71,7 +71,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -136,7 +136,7 @@ final class Http4sHttpServer(
         val actualhost = server.address.getHostString
         val actualport = server.address.getPort
         // Block forever to keep server mode alive.
-        IO(Http4sHttpServer._publish_bound_base_url(actualhost, actualport)) *>
+        IO(Http4sHttpServer._publish_bound_urls(actualhost, actualport, engine.webDescriptor, engine.runtimeSubsystem.descriptor, _web_application_component_owner)) *>
           IO.println(s"HTTP server started at $actualhost:$actualport.") *>
           IO.never
       }
@@ -422,11 +422,7 @@ final class Http4sHttpServer(
       case req @ GET -> Root / "web" =>
         _web_route_alias(req, Vector("web")).flatMap {
           case Some(response) => IO.pure(response)
-          case None =>
-            if (_show_runtime_landing)
-              _runtime_landing()
-            else
-              IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web app route not found"))
+          case None => _web_application_entry(req)
         }
       case GET -> Root / "web" / "" =>
         IO.pure(_temporary_redirect("/web"))
@@ -1669,6 +1665,30 @@ final class Http4sHttpServer(
       case _ =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web app asset not found"))
     }
+
+  private def _web_application_entry(
+    req: org.http4s.Request[IO]
+  ): IO[HResponse[IO]] =
+    WebApplicationEntryPolicy.resolve(
+      engine.webDescriptor,
+      engine.runtimeSubsystem.descriptor,
+      _web_application_component_owner
+    ) match {
+      case WebApplicationEntryPolicy.Selected(app, component, _) =>
+        _component_web_app(component, app.normalizedName, Vector.empty, Some(req))
+      case WebApplicationEntryPolicy.NoApplication =>
+        IO.pure(_temporary_redirect(_redirect_target_with_query(req, "/web/system/dashboard")))
+      case WebApplicationEntryPolicy.Error(message) =>
+        _web_error_response(None, HStatus.InternalServerError, message, req.uri.path.renderString)
+    }
+
+  private def _web_application_component_owner: Option[String] =
+    engine.runtimeSubsystem.components
+      .map(_.componentId.localId.value())
+      .map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+      .find(component => engine.webDescriptor.apps.exists(app =>
+        _web_app_static_html_content(Some(component), app.normalizedName, Vector.empty).nonEmpty
+      ))
 
   private[http] def _component_web_app(
     componentname: String,
@@ -7655,6 +7675,9 @@ object Http4sHttpServer {
   val PORT_PROPERTY_KEY = "textus.server.port"
   val LEGACY_PORT_PROPERTY_KEY = "cncf.server.port"
   val BOUND_BASE_URL_PROPERTY_KEY = "textus.server.bound-base-url"
+  val BOUND_APPLICATION_PATH_PROPERTY_KEY = "textus.server.bound-application-path"
+  val BOUND_APPLICATION_URL_PROPERTY_KEY = "textus.server.bound-application-url"
+  val BOUND_SNAPSHOT_PROPERTY_KEY = "textus.server.bound-snapshot"
   val DEMO_ASSIST_MANIFEST_QUERY_KEY = "textus.demo.manifest"
 
   private[http] def _with_execution_metadata_headers(
@@ -7712,17 +7735,48 @@ object Http4sHttpServer {
     ))
 
   private[http] def _publish_bound_base_url(host: String, port: Int): Unit = {
+    sys.props.update(BOUND_BASE_URL_PROPERTY_KEY, _bound_base_url(host, port))
+  }
+
+  private def _bound_base_url(host: String, port: Int): String = {
     val clienthost = host match {
       case "0.0.0.0" => "127.0.0.1"
       case "::" | "0:0:0:0:0:0:0:0" => "[::1]"
       case value if value.contains(":") => s"[$value]"
       case value => value
     }
-    sys.props.update(BOUND_BASE_URL_PROPERTY_KEY, s"http://$clienthost:$port")
+    s"http://$clienthost:$port"
+  }
+
+  private[http] def _publish_bound_urls(
+    host: String,
+    port: Int,
+    webdescriptor: WebDescriptor,
+    subsystemdescriptor: Option[GenericSubsystemDescriptor],
+    fallbackcomponentname: Option[String] = None
+  ): Unit = {
+    _clear_bound_base_url()
+    val baseurl = _bound_base_url(host, port)
+    val applicationpath = WebApplicationEntryPolicy.resolve(webdescriptor, subsystemdescriptor, fallbackcomponentname) match {
+      case WebApplicationEntryPolicy.Selected(_, _, publishedpath) =>
+        sys.props.update(BOUND_APPLICATION_PATH_PROPERTY_KEY, publishedpath)
+        // Retain the loopback-compatible absolute value for older launchers;
+        // new launchers compose the public authority from the path snapshot.
+        sys.props.update(BOUND_APPLICATION_URL_PROPERTY_KEY, s"${baseurl.stripSuffix("/")}$publishedpath")
+        Some(publishedpath)
+      case _ => None
+    }
+    // Legacy keys remain available for compatibility. Atomic snapshot readiness
+    // is published last so readers cannot combine independent generations.
+    sys.props.update(BOUND_BASE_URL_PROPERTY_KEY, baseurl)
+    sys.props.update(BOUND_SNAPSHOT_PROPERTY_KEY, _bound_snapshot(baseurl, applicationpath))
   }
 
   private[http] def _clear_bound_base_url(): Unit =
-    sys.props.remove(BOUND_BASE_URL_PROPERTY_KEY)
+    Vector(BOUND_SNAPSHOT_PROPERTY_KEY, BOUND_BASE_URL_PROPERTY_KEY, BOUND_APPLICATION_PATH_PROPERTY_KEY, BOUND_APPLICATION_URL_PROPERTY_KEY).foreach(sys.props.remove)
+
+  private def _bound_snapshot(baseurl: String, applicationpath: Option[String]): String =
+    s"v1\n$baseurl\n${applicationpath.getOrElse("")}"
 
   private[http] def fallbackHttpDiagnosticRecord(
     status: Int

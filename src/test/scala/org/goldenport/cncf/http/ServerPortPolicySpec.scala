@@ -1,7 +1,7 @@
 package org.goldenport.cncf.http
 
 import java.nio.file.{Files, Paths}
-import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
+import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 19, 2026
- * @version Aug. 10, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -149,6 +149,71 @@ final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhe
       } finally {
         Http4sHttpServer._clear_bound_base_url()
       }
+    }
+
+    "publish a unique Web application endpoint and clear it when no application exists" in {
+      Given("a runtime with one Web application and an admitted root component")
+      val descriptor = WebDescriptor(apps = Vector(WebDescriptor.App("Customer Portal")))
+      val subsystemdescriptor = GenericSubsystemDescriptor(
+        Paths.get("example.sar"),
+        "example",
+        componentBindings = Vector(GenericSubsystemComponentBinding("Customer Portal")),
+        implicitRootComponentName = Some("Customer Portal")
+      )
+      Http4sHttpServer._clear_bound_base_url()
+      try {
+        When("the HTTP server publishes its bound URLs")
+        Http4sHttpServer._publish_bound_urls("127.0.0.1", 38002, descriptor, Some(subsystemdescriptor))
+
+        Then("the launcher handshake exposes the default public application route")
+        sys.props.get(Http4sHttpServer.BOUND_APPLICATION_PATH_PROPERTY_KEY) shouldBe Some("/web")
+        sys.props.get(Http4sHttpServer.BOUND_APPLICATION_URL_PROPERTY_KEY) shouldBe
+          Some("http://127.0.0.1:38002/web")
+        sys.props.get(Http4sHttpServer.BOUND_SNAPSHOT_PROPERTY_KEY) shouldBe
+          Some("v1\nhttp://127.0.0.1:38002\n/web")
+
+        When("the runtime has no declared Web application")
+        Http4sHttpServer._publish_bound_urls("127.0.0.1", 38002, WebDescriptor.empty, Some(subsystemdescriptor))
+
+        Then("the base endpoint remains available but the application endpoint is absent")
+        sys.props.get(Http4sHttpServer.BOUND_BASE_URL_PROPERTY_KEY) shouldBe Some("http://127.0.0.1:38002")
+        sys.props.get(Http4sHttpServer.BOUND_APPLICATION_PATH_PROPERTY_KEY) shouldBe None
+        sys.props.get(Http4sHttpServer.BOUND_APPLICATION_URL_PROPERTY_KEY) shouldBe None
+        sys.props.get(Http4sHttpServer.BOUND_SNAPSHOT_PROPERTY_KEY) shouldBe
+          Some("v1\nhttp://127.0.0.1:38002\n")
+
+        When("the HTTP server shuts down")
+        Http4sHttpServer._clear_bound_base_url()
+
+        Then("both published endpoints are removed")
+        sys.props.get(Http4sHttpServer.BOUND_BASE_URL_PROPERTY_KEY) shouldBe None
+        sys.props.get(Http4sHttpServer.BOUND_APPLICATION_PATH_PROPERTY_KEY) shouldBe None
+        sys.props.get(Http4sHttpServer.BOUND_APPLICATION_URL_PROPERTY_KEY) shouldBe None
+        sys.props.get(Http4sHttpServer.BOUND_SNAPSHOT_PROPERTY_KEY) shouldBe None
+      } finally {
+        Http4sHttpServer._clear_bound_base_url()
+      }
+    }
+
+    "publish the same fallback-owned application snapshot when no subsystem descriptor is available" in {
+      Given("a sole Web application, no subsystem descriptor, and the runtime asset owner fallback")
+      val descriptor = WebDescriptor(apps = Vector(WebDescriptor.App("Customer Portal")))
+      Http4sHttpServer._clear_bound_base_url()
+
+      When("the HTTP server publishes its bound URLs after resolving that fallback")
+      Http4sHttpServer._publish_bound_urls("127.0.0.1", 38003, descriptor, None, Some("Customer Portal"))
+
+      Then("the ready snapshot publishes the public /web path and compatibility URL")
+      sys.props.get(Http4sHttpServer.BOUND_APPLICATION_PATH_PROPERTY_KEY) shouldBe Some("/web")
+      sys.props.get(Http4sHttpServer.BOUND_APPLICATION_URL_PROPERTY_KEY) shouldBe Some("http://127.0.0.1:38003/web")
+      sys.props.get(Http4sHttpServer.BOUND_SNAPSHOT_PROPERTY_KEY) shouldBe Some("v1\nhttp://127.0.0.1:38003\n/web")
+
+      And("cleanup removes the complete readiness snapshot")
+      Http4sHttpServer._clear_bound_base_url()
+      sys.props.get(Http4sHttpServer.BOUND_BASE_URL_PROPERTY_KEY) shouldBe None
+      sys.props.get(Http4sHttpServer.BOUND_APPLICATION_PATH_PROPERTY_KEY) shouldBe None
+      sys.props.get(Http4sHttpServer.BOUND_APPLICATION_URL_PROPERTY_KEY) shouldBe None
+      sys.props.get(Http4sHttpServer.BOUND_SNAPSHOT_PROPERTY_KEY) shouldBe None
     }
 
     "publish reachable loopback hosts for IPv4 and IPv6 wildcard bindings" in {

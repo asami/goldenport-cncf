@@ -75,7 +75,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -3385,16 +3385,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val app = server.routes(null).orNotFound
 
       // When
+      When("keep component Web app routes separate from component form indexes is exercised")
       val canonical = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/textus-art-scene"))).unsafeRunSync()
       val toplevel = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/textus-art-scene"))).unsafeRunSync()
       val componentroot = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
-      When("keep component Web app routes separate from component form indexes is exercised")
+      val defaultentry = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val defaulthead = app.run(Request[IO](Method.HEAD, Uri.unsafeFromString("/web"))).unsafeRunSync()
       val formindex = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/form/art-scene"))).unsafeRunSync()
 
       // Then
       Then("the observable contract for keep component Web app routes separate from component form indexes holds")
       canonical.status.code shouldBe 200
       canonical.as[String].unsafeRunSync() should include ("ArtScene")
+      defaultentry.status.code shouldBe 200
+      defaultentry.as[String].unsafeRunSync() should include ("ArtScene")
+      defaulthead.status.code shouldBe 200
       toplevel.status.code shouldBe 404
       toplevel.as[String].unsafeRunSync() should not include ("Forms")
       componentroot.status.code shouldBe 404
@@ -4662,8 +4667,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       default.as[String].unsafeRunSync() should include ("Aliased Notice Board")
     }
 
-    "redirect / to /web and render onboarding help on /web in non-production when no default web route is configured" in {
-      Given("the prerequisites for redirect / to /web and render onboarding help on /web in non-production when no default web route is configured")
+    "redirect / to the Dashboard when no Web application is configured" in {
+      Given("the prerequisites for redirect / to the Dashboard when no Web application is configured")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("develop")
@@ -4671,26 +4676,26 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
+      When("the no-application development routes are requested")
       val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val webhead = server.routes(null).orNotFound.run(Request[IO](Method.HEAD, Uri.unsafeFromString("/web"))).unsafeRunSync()
       val webslash = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/"))).unsafeRunSync()
-      When("redirect / to /web and render onboarding help on /web in non-production when no default web route is configured is exercised")
-      val webhtml = web.as[String].unsafeRunSync()
+      val webtarget = web.headers.get[org.http4s.headers.Location].map(_.uri.renderString)
 
-      Then("the observable contract for redirect / to /web and render onboarding help on /web in non-production when no default web route is configured holds")
+      Then("the observable contract for redirect / to the Dashboard when no Web application is configured holds")
       root.status.code shouldBe 307
       root.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
       webslash.status.code shouldBe 307
       webslash.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
-      web.status.code shouldBe 200
-      webhtml should include ("CNCF Runtime Help")
-      webhtml should include ("/man/system")
-      webhtml should include ("/web/notice-board")
-      webhtml should not include ("/form/notice-board")
+      web.status.code shouldBe 307
+      webtarget shouldBe Some("/web/system/dashboard")
+      webhead.status.code shouldBe 307
+      webhead.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web/system/dashboard")
     }
 
-    "render runtime landing app links from WebDescriptor routes without implicit component aliases" in {
-      Given("the prerequisites for render runtime landing app links from WebDescriptor routes without implicit component aliases")
+    "serve a selected application at /web while retaining its explicit SAR default route" in {
+      Given("a selected static Web application with an explicit SAR default route")
       val root = Files.createTempDirectory("cncf-runtime-landing-routes-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -4700,34 +4705,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |      kind: static-form
           |  routes:
           |    - path: /web/board
+          |      kind: default
           |      target:
           |        component: notice-board
           |        app: board
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
+      Files.createDirectories(root.resolve("board"))
+      Files.writeString(root.resolve("board").resolve("index.html"), "<h1>Default Notice Board</h1>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("develop"),
           RuntimeConfig.webDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
+
+      When("the public and explicit routes are requested")
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
-
-      val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
-      val componentalias = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
-      When("render runtime landing app links from WebDescriptor routes without implicit component aliases is exercised")
+      val app = server.routes(null).orNotFound
+      val web = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val explicitroute = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
+      val explicithead = app.run(Request[IO](Method.HEAD, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
+      val componentalias = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
       val webhtml = web.as[String].unsafeRunSync()
+      val explicithtml = explicitroute.as[String].unsafeRunSync()
 
-      Then("the observable contract for render runtime landing app links from WebDescriptor routes without implicit component aliases holds")
+      Then("the selected application is served at both public routes without an implicit component alias")
       web.status.code shouldBe 200
-      webhtml should include ("""href="/web/board"""")
-      webhtml should not include ("""href="/web/notice-board"""")
+      webhtml should include ("Default Notice Board")
+      explicitroute.status.code shouldBe 200
+      explicithead.status.code shouldBe 200
+      explicithtml should include ("Default Notice Board")
       componentalias.status.code shouldBe 404
     }
 
-    "redirect / to /web and keep /web strict in production when no default web route is configured" in {
-      Given("the prerequisites for redirect / to /web and keep /web strict in production when no default web route is configured")
+    "redirect /web to the Dashboard in production when no Web application is configured" in {
+      Given("the prerequisites for redirect /web to the Dashboard in production when no Web application is configured")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
@@ -4735,14 +4749,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
+      When("the no-application production routes are requested")
       val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
-      When("redirect / to /web and keep /web strict in production when no default web route is configured is exercised")
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
 
-      Then("the observable contract for redirect / to /web and keep /web strict in production when no default web route is configured holds")
+      Then("the observable contract for redirect /web to the Dashboard in production when no Web application is configured holds")
       root.status.code shouldBe 307
       root.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
-      web.status.code shouldBe 404
+      web.status.code shouldBe 307
+      web.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web/system/dashboard")
     }
 
     "redirect /rest to the latest stable REST namespace" in {
@@ -4809,9 +4824,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       response.status.code shouldBe 404
     }
 
-    "not infer public routes for a single component Web app" in {
+    "serve a sole Web app at /web without inferring legacy aliases" in {
       // Given
-      Given("the prerequisites for not infer public routes for a single component Web app")
+      Given("a sole component Web app with no descriptor routes")
       val root = Files.createTempDirectory("cncf-web-implicit-alias-root-")
       Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
       Files.createDirectories(root.resolve("notice-board").resolve("assets"))
@@ -4829,24 +4844,26 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         configuration = configuration
       ).add(Vector(component))
       val engine = new HttpExecutionEngine(subsystem)
-      When("not infer public routes for a single component Web app is exercised")
-      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       // When
-      Then("the observable contract for not infer public routes for a single component Web app holds")
-      engine.webDescriptor.routes shouldBe Vector.empty
+      When("the default, legacy alias, asset alias, and canonical routes are requested")
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
       val alias = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
       val default = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
       val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board/assets/app.css"))).unsafeRunSync()
       val canonical = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board/notice-board"))).unsafeRunSync()
+      val defaulthtml = default.as[String].unsafeRunSync()
+      val canonicalhtml = canonical.as[String].unsafeRunSync()
 
       // Then
+      Then("the sole app uses /web while legacy aliases remain unavailable and the canonical route remains available")
+      engine.webDescriptor.routes shouldBe Vector.empty
       alias.status.code shouldBe 404
       default.status.code shouldBe 200
-      default.as[String].unsafeRunSync() should not include ("Implicit Notice Board")
+      defaulthtml should include ("Implicit Notice Board")
       asset.status.code shouldBe 404
       canonical.status.code shouldBe 200
-      canonical.as[String].unsafeRunSync() should include ("Implicit Notice Board")
+      canonicalhtml should include ("Implicit Notice Board")
     }
 
     "load Static Form Web App descriptor, templates, and assets from a CAR archive Web root" in {
