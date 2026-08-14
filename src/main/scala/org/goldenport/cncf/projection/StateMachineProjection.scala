@@ -14,7 +14,7 @@ import org.goldenport.cncf.statemachine.{
 /*
  * @since   Mar. 20, 2026
  *  version Mar. 25, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object StateMachineProjection {
@@ -64,11 +64,19 @@ object StateMachineProjection {
   private def _definition_record(
     p: org.goldenport.cncf.statemachine.CmlStateMachineDefinition
   ): Record =
-    Record.data(
+    Record.create(Vector(
       "name" -> p.name,
       "states" -> p.states.distinct.sorted,
       "events" -> p.events.distinct.sorted
-    )
+    ) ++ p.historyFieldName.toVector.map("historyField" -> _) ++
+      (if (p.historyComposites.isEmpty) Vector.empty else Vector(
+        "historyComposites" -> p.historyComposites.map { composite =>
+          Record.create(Vector(
+            "name" -> composite.name,
+            "directLeaves" -> composite.directLeaves
+          ) ++ composite.fallbackLeaf.toVector.map("fallbackLeaf" -> _))
+        }
+      )))
 
   private def _rules(component: Component): Vector[CollectionTransitionRule[Any]] =
     component match {
@@ -108,7 +116,16 @@ object StateMachineProjection {
       rule.fromState.map("fromState" -> _),
       rule.fromStateValue.map("fromStateValue" -> _),
       rule.toState.map("toState" -> _),
-      rule.toStateValue.map("toStateValue" -> _)
+      rule.toStateValue.map("toStateValue" -> _),
+      rule.historyCompositeName.map("historyComposite" -> _),
+      rule.historyFieldName.map("historyField" -> _),
+      Option.when(rule.historyDirectLeaves.nonEmpty)("historyDirectLeaves" -> rule.historyDirectLeaves),
+      rule.historyFallbackLeaf.map("historyFallbackLeaf" -> _),
+      Option.when(rule.expectedHistoryRecordWrites.nonEmpty)(
+        "expectedHistoryRecordWrites" -> rule.expectedHistoryRecordWrites.map { write =>
+          Record.data("composite" -> write.compositeName, "leaf" -> write.leafName)
+        }
+      )
     ).flatten
     Record.create(base ++ topology)
   }

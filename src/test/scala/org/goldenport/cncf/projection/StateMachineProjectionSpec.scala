@@ -7,24 +7,30 @@ import org.goldenport.cncf.component._
 import org.goldenport.cncf.statemachine._
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
  *  version Mar. 25, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineProjectionSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
 
   "StateMachineProjection" should {
     "project deterministic transitions and guard shape for component target" in {
+      Given("a component with structural and history transition metadata")
       val component = _component_with_rules()
+
+      When("the component state-machine projection is requested")
       val rec = StateMachineProjection.project(component, Some(component.name))
       val map = rec.asMap
 
+      Then("the projection includes deterministic transition and history metadata")
       map.get("type") shouldBe Some("statemachine")
       map.get("targetType") shouldBe Some("component")
       map.get("name") shouldBe Some(component.name)
@@ -46,13 +52,20 @@ final class StateMachineProjectionSpec
       second.get("fromState") shouldBe Some("Draft")
       second.get("toState") shouldBe Some("Published")
       _record(second("guard")).asMap.get("kind") shouldBe Some("expression")
+      second.get("historyComposite") shouldBe Some("Review")
+      second.get("historyField") shouldBe Some("lifecycleHistory")
+      second.get("historyFallbackLeaf") shouldBe Some("Pending")
     }
 
     "project state machine definitions into states/events" in {
+      Given("a component definition with a named persistent history field")
       val component = _component_with_definitions()
+
+      When("the state-machine definition projection is requested")
       val rec = StateMachineProjection.project(component, Some(component.name))
       val map = rec.asMap
 
+      Then("the definition surface retains named history metadata")
       map.get("states") shouldBe Some(Vector("Draft", "Published"))
       map.get("events") shouldBe Some(Vector("publish"))
 
@@ -61,6 +74,8 @@ final class StateMachineProjectionSpec
       definitions.head.asMap.get("name") shouldBe Some("lifecycle")
       definitions.head.asMap.get("states") shouldBe Some(Vector("Draft", "Published"))
       definitions.head.asMap.get("events") shouldBe Some(Vector("publish"))
+      definitions.head.asMap.get("historyField") shouldBe Some("lifecycleHistory")
+      _records(definitions.head.asMap("historyComposites")).head.asMap.get("fallbackLeaf") shouldBe Some("Pending")
     }
   }
 
@@ -81,7 +96,12 @@ final class StateMachineProjectionSpec
             fromState = Some("Draft"),
             fromStateValue = Some(1),
             toState = Some("Published"),
-            toStateValue = Some(2)
+            toStateValue = Some(2),
+            historyCompositeName = Some("Review"),
+            historyFieldName = Some("lifecycleHistory"),
+            historyDirectLeaves = Vector("Pending", "Approved"),
+            historyFallbackLeaf = Some("Pending"),
+            expectedHistoryRecordWrites = Vector(HistoryRecordWrite("Review", "Published"))
           ),
           CollectionTransitionRule[Any](
             collectionName = "person",
@@ -129,7 +149,9 @@ final class StateMachineProjectionSpec
           CmlStateMachineDefinition(
             name = "lifecycle",
             states = Vector("Draft", "Published"),
-            events = Vector("publish")
+            events = Vector("publish"),
+            historyFieldName = Some("lifecycleHistory"),
+            historyComposites = Vector(CmlHistoryCompositeDefinition("Review", Vector("Pending", "Approved"), Some("Pending")))
           )
         )
     }

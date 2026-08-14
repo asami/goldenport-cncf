@@ -7,7 +7,7 @@ package org.goldenport.cncf.statemachine
  * optionally provide transition rules directly through this interface.
  *
  * @since   Mar. 19, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TransitionTrigger {
@@ -27,11 +27,22 @@ final case class CollectionTransitionRule[S](
   fromState: Option[String] = None,
   fromStateValue: Option[Int] = None,
   toState: Option[String] = None,
-  toStateValue: Option[Int] = None
+  toStateValue: Option[Int] = None,
+  historyCompositeName: Option[String] = None,
+  historyFieldName: Option[String] = None,
+  historyDirectLeaves: Vector[String] = Vector.empty,
+  historyFallbackLeaf: Option[String] = None,
+  expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
 ) {
   def isStructural: Boolean =
-    stateFieldName.isDefined && fromState.isDefined && toState.isDefined
+    stateFieldName.isDefined && fromState.isDefined &&
+      (toState.isDefined || historyCompositeName.isDefined)
 }
+
+final case class HistoryRecordWrite(
+  compositeName: String,
+  leafName: String
+)
 
 trait CollectionTransitionRuleProvider {
   def stateMachineTransitionRules: Vector[CollectionTransitionRule[Any]] =

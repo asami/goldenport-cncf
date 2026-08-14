@@ -6,7 +6,7 @@ import org.goldenport.Consequence
  * Builder helpers for generated/component-defined transition rules.
  *
  * @since   Mar. 19, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object StateMachineRuleBuilder {
@@ -54,7 +54,12 @@ object StateMachineRuleBuilder {
     fromState: Option[String] = None,
     fromStateValue: Option[Int] = None,
     toState: Option[String] = None,
-    toStateValue: Option[Int] = None
+    toStateValue: Option[Int] = None,
+    historyCompositeName: Option[String] = None,
+    historyFieldName: Option[String] = None,
+    historyDirectLeaves: Vector[String] = Vector.empty,
+    historyFallbackLeaf: Option[String] = None,
+    expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
   ): CollectionTransitionRule[Any] =
     CollectionTransitionRule[Any](
       collectionName = collectionName,
@@ -69,7 +74,12 @@ object StateMachineRuleBuilder {
       fromState = fromState,
       fromStateValue = fromStateValue,
       toState = toState,
-      toStateValue = toStateValue
+      toStateValue = toStateValue,
+      historyCompositeName = historyCompositeName,
+      historyFieldName = historyFieldName,
+      historyDirectLeaves = historyDirectLeaves,
+      historyFallbackLeaf = historyFallbackLeaf,
+      expectedHistoryRecordWrites = expectedHistoryRecordWrites
     )
 
   def saveRule[S](
@@ -84,7 +94,12 @@ object StateMachineRuleBuilder {
     fromState: Option[String] = None,
     fromStateValue: Option[Int] = None,
     toState: Option[String] = None,
-    toStateValue: Option[Int] = None
+    toStateValue: Option[Int] = None,
+    historyCompositeName: Option[String] = None,
+    historyFieldName: Option[String] = None,
+    historyDirectLeaves: Vector[String] = Vector.empty,
+    historyFallbackLeaf: Option[String] = None,
+    expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
   ): CollectionTransitionRule[Any] =
     CollectionTransitionRule[Any](
       collectionName = collectionName,
@@ -99,6 +114,11 @@ object StateMachineRuleBuilder {
       fromState = fromState,
       fromStateValue = fromStateValue,
       toState = toState,
-      toStateValue = toStateValue
+      toStateValue = toStateValue,
+      historyCompositeName = historyCompositeName,
+      historyFieldName = historyFieldName,
+      historyDirectLeaves = historyDirectLeaves,
+      historyFallbackLeaf = historyFallbackLeaf,
+      expectedHistoryRecordWrites = expectedHistoryRecordWrites
     )
 }

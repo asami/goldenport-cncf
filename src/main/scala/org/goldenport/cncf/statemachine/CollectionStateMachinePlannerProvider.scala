@@ -10,7 +10,7 @@ import org.goldenport.record.Record
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Jul. 16, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionRule[S](
@@ -24,10 +24,16 @@ final case class TransitionRule[S](
   fromState: Option[String] = None,
   fromStateValue: Option[Int] = None,
   toState: Option[String] = None,
-  toStateValue: Option[Int] = None
+  toStateValue: Option[Int] = None,
+  historyCompositeName: Option[String] = None,
+  historyFieldName: Option[String] = None,
+  historyDirectLeaves: Vector[String] = Vector.empty,
+  historyFallbackLeaf: Option[String] = None,
+  expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
 ) {
   def isStructural: Boolean =
-    stateFieldName.isDefined && fromState.isDefined && toState.isDefined
+    stateFieldName.isDefined && fromState.isDefined &&
+      (toState.isDefined || historyCompositeName.isDefined)
 }
 
 final class CollectionStateMachinePlanner[S](
@@ -76,8 +82,7 @@ final class CollectionStateMachinePlanner[S](
             val candidates = structuralrules.zipWithIndex.collect {
               case (rule, i)
                   if rule.stateFieldName.contains(fieldname) &&
-                    _matches_state(currentvalue, rule.fromState, rule.fromStateValue) &&
-                    _matches_state(proposedvalue, rule.toState, rule.toStateValue) =>
+                    _matches_state(currentvalue, rule.fromState, rule.fromStateValue) =>
                 TransitionCandidate(rule, priority = rule.priority, declarationOrder = rule.declarationOrder + i)
             }.toVector
             if (candidates.isEmpty)
@@ -85,8 +90,13 @@ final class CollectionStateMachinePlanner[S](
             else
               TransitionSelector
                 .select(candidates) { rule =>
-                  val semanticevent = event.copy(name = rule.eventName)
-                  rule.guard.fold(Consequence.success(true))(_.eval(state, semanticevent))
+                  _matches_transition_target(rule, current, proposed, proposedvalue).flatMap {
+                    case true =>
+                      val semanticevent = event.copy(name = rule.eventName)
+                      rule.guard.fold(Consequence.success(true))(_.eval(state, semanticevent))
+                    case false =>
+                      Consequence.success(false)
+                  }
                 }
                 .flatMap {
                   case Some(rule) => Consequence.success(Some(rule.plan))
@@ -99,6 +109,102 @@ final class CollectionStateMachinePlanner[S](
         }
       case _ =>
         Consequence.stateConflict("Structural state-machine validation requires current and proposed records")
+    }
+
+  private def _matches_transition_target(
+    rule: TransitionRule[S],
+    current: Record,
+    proposed: Record,
+    proposedstate: Option[Any]
+  ): Consequence[Boolean] =
+    rule.historyCompositeName match {
+      case Some(composite) =>
+        _history_transition_target(rule, current, composite).flatMap { expected =>
+          if (_matches_state(proposedstate, Some(expected), None))
+            _validate_history_record_writes(
+              proposed,
+              rule.historyFieldName,
+              Vector(HistoryRecordWrite(composite, expected))
+            ).map(_ => true)
+          else
+            Consequence.success(false)
+        }
+      case None =>
+        if (_matches_state(proposedstate, rule.toState, rule.toStateValue))
+          _validate_history_record_writes(
+            proposed,
+            rule.historyFieldName,
+            rule.expectedHistoryRecordWrites
+          ).map(_ => true)
+        else
+          Consequence.success(false)
+    }
+
+  private def _history_transition_target(
+    rule: TransitionRule[S],
+    current: Record,
+    composite: String
+  ): Consequence[String] =
+    (rule.historyFieldName, rule.historyFallbackLeaf) match {
+      case (Some(fieldname), Some(fallback)) if rule.historyDirectLeaves.nonEmpty =>
+        _history_record(current, fieldname, required = false).flatMap { history =>
+          history.getAny(composite) match {
+            case None => Consequence.success(fallback)
+            case Some(value: String) if value.trim.isEmpty => Consequence.success(fallback)
+            case Some(value: String) =>
+              rule.historyDirectLeaves.find(_.equalsIgnoreCase(value.trim)).map(Consequence.success).getOrElse {
+                Consequence.stateConflict(
+                  s"History record '$fieldname' has unrecognized leaf '${value.trim}' for composite '$composite'"
+                )
+              }
+            case Some(_) =>
+              Consequence.stateConflict(
+                s"History record '$fieldname' has a non-string leaf for composite '$composite'"
+              )
+          }
+        }
+      case _ =>
+        Consequence.stateConflict(s"History transition for '$composite' has incomplete metadata")
+    }
+
+  private def _validate_history_record_writes(
+    proposed: Record,
+    fieldname: Option[String],
+    writes: Vector[HistoryRecordWrite]
+  ): Consequence[Unit] =
+    if (writes.isEmpty)
+      Consequence.unit
+    else
+      fieldname match {
+        case Some(name) =>
+          _history_record(proposed, name, required = true).flatMap { history =>
+            writes.foldLeft(Consequence.unit) { (z, write) =>
+              z.flatMap { _ =>
+                history.getAny(write.compositeName) match {
+                  case Some(value: String) if value.trim.equalsIgnoreCase(write.leafName) =>
+                    Consequence.unit
+                  case _ =>
+                    Consequence.stateConflict(
+                      s"Proposed history record '$name' must contain ${write.compositeName} -> ${write.leafName}"
+                    )
+                }
+              }
+            }
+          }
+        case None =>
+          Consequence.stateConflict("State-machine transition requires a history record field")
+      }
+
+  private def _history_record(
+    record: Record,
+    fieldname: String,
+    required: Boolean
+  ): Consequence[Record] =
+    record.getAny(fieldname) match {
+      case Some(history: Record) => Consequence.success(history)
+      case None if !required => Consequence.success(Record.empty)
+      case None => Consequence.stateConflict(s"State-machine transition requires history record '$fieldname'")
+      case Some(_) => Consequence.stateConflict(s"State-machine history field '$fieldname' must be a record")
     }
 
   private def _state_conflict(

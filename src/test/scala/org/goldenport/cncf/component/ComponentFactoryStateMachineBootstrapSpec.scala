@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStateMachineBootstrapSpec
@@ -50,6 +50,12 @@ final class ComponentFactoryStateMachineBootstrapSpec
       Then("bootstrap installs and executes the transition validation hook")
       transitionresult shouldBe Consequence.unit
       trace.toVector shouldBe Vector("exit", "transition", "entry")
+      component match {
+        case provider: CollectionTransitionRuleProvider =>
+          provider.stateMachineTransitionRules.head.historyFieldName shouldBe Some("lifecycleHistory")
+        case _ =>
+          fail("component should expose the transition rule provider contract")
+      }
     }
   }
 
@@ -70,7 +76,9 @@ final class ComponentFactoryStateMachineBootstrapSpec
               exitActions = Vector(_record_action("exit", trace)),
               transitionAction = Some(_record_action("transition", trace)),
               entryActions = Vector(_record_action("entry", trace))
-            )
+            ),
+            historyFieldName = Some("lifecycleHistory"),
+            expectedHistoryRecordWrites = Vector(org.goldenport.cncf.statemachine.HistoryRecordWrite("Review", "Draft"))
           )
         )
     }

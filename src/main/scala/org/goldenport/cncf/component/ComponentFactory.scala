@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -621,7 +621,12 @@ final class ComponentFactory(
       fromState = p.fromState,
       fromStateValue = p.fromStateValue,
       toState = p.toState,
-      toStateValue = p.toStateValue
+      toStateValue = p.toStateValue,
+      historyCompositeName = p.historyCompositeName,
+      historyFieldName = p.historyFieldName,
+      historyDirectLeaves = p.historyDirectLeaves,
+      historyFallbackLeaf = p.historyFallbackLeaf,
+      expectedHistoryRecordWrites = p.expectedHistoryRecordWrites
     )
 
   private def _bootstrap_entities_with_plan(
