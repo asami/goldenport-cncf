@@ -16,7 +16,7 @@ import org.goldenport.cncf.config.{RepositoryBootstrapPolicy, RuntimeConfig}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, SubsystemCapabilityId}
+import org.goldenport.cncf.component.{AssemblyApiClassIdentity, CollaboratorComponent, Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInit, ComponentInstanceId, ComponentLocalFirstClassLoader, ComponentOrigin, SubsystemCapabilityId}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.component.repository.fixture.spi.{
   ArtSceneComponent,
@@ -25,12 +25,14 @@ import org.goldenport.cncf.component.repository.fixture.spi.{
   PlainAiRunner,
   PlainAiRunnerProviderComponent
 }
+
 import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.testutil.RuntimeInvisibleJarFixture
 import org.goldenport.cncf.workarea.WorkAreaSpace
-import org.goldenport.protocol.Protocol
+import org.goldenport.protocol.{Protocol, Request, Response}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.GivenWhenThen
@@ -39,7 +41,6 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- *  version Aug. 13, 2026
  * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -50,7 +51,6 @@ final class GenericSubsystemFactorySpec
     with GivenWhenThen {
   private val _e1 = afterWord("in spec:generic-subsystem-factory, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e2 = afterWord("in spec:generic-subsystem-factory, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
-  private val _e3 = afterWord("in spec:generic-subsystem-factory, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
   private def _metadata(exampleid: String) =
     afterWord(s"in spec:generic-subsystem-factory, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
   override def beforeAll(): Unit = {
@@ -143,38 +143,64 @@ final class GenericSubsystemFactorySpec
       }
     }
 
-    "E5 materialize every bundle participant for each named component instance" must _metadata("E5") {
-      "when exercising: materialize every bundle participant for each named component instance" in {
-      Given("one discovered bundle with a primary and componentlet plus two instance declarations")
-      val subsystem = TestComponentFactory.emptySubsystem("named-bundle-materialization")
-      val params = ComponentCreate(subsystem, ComponentOrigin.Repository("spec"))
-      val artifact = Component.ArtifactMetadata(
-        sourceType = "spec",
-        name = "textus-scraper",
-        version = "0.1.0",
-        componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper"))
-      )
-      val discovered = NamedBundleFactory.create(params).participants.map(_.withArtifactMetadata(artifact))
-      val descriptor = GenericSubsystemDescriptor(
-        path = Path.of("named-bundle-materialization.yaml"),
-        subsystemName = "named-bundle-materialization",
-        componentBindings = Vector(
-          GenericSubsystemComponentBinding("org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")), instance = Some("static")),
-          GenericSubsystemComponentBinding("org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")), instance = Some("dynamic"))
+    "E5 materialize every bundle participant for each named repository binding" must _metadata("E5") {
+      "when exercising: materialize every bundle participant for each named repository binding" in {
+      Given("one component-dir CAR bundle with a primary, componentlet, and two named bindings")
+      _with_temp_dir { root =>
+        val componentjar = _create_class_component_jar(
+          root.resolve("assets").resolve("scraper-bundle.jar"),
+          Seq(
+            classOf[RepositoryBundleFactory],
+            classOf[RepositoryBundlePrimaryFactory],
+            classOf[RepositoryBundleAdminFactory],
+            classOf[RepositoryBundlePrimaryComponent],
+            classOf[RepositoryBundleAdminComponent]
+          )
         )
-      )
+        val componentdescriptor = root.resolve("scraper-bundle-descriptor.json")
+        Files.writeString(
+          componentdescriptor,
+          _canonical_descriptor_json("org.goldenport.cncf.spec.Scraper", "0.1.0"),
+          StandardCharsets.UTF_8
+        )
+        _create_car(
+          root.resolve("scraper-bundle.car"),
+          Seq(
+            "component/main.jar" -> componentjar,
+            "component-descriptor.json" -> componentdescriptor
+          )
+        )
+        val descriptor = GenericSubsystemDescriptor(
+          path = root.resolve("named-bundle-materialization.yaml"),
+          subsystemName = "named-bundle-materialization",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding("org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")), instance = Some("static")),
+            GenericSubsystemComponentBinding("org.goldenport.cncf.spec.Scraper", version = Some("0.1.0"), componentId = Some(ComponentId("org.goldenport.cncf.spec.Scraper")), instance = Some("dynamic"))
+          )
+        )
 
-      When("the descriptor bindings are materialized from the discovered bundle")
-      val participants = GenericSubsystemFactory.materializeComponentInstances(discovered, descriptor, params)
+        When("the subsystem factory discovers each binding through the component-dir repository path")
+        val subsystem = GenericSubsystemFactory.default(
+          descriptor,
+          configuration = _repository_configuration(root)
+        )
 
-      Then("each instance retains both participant roles with unique participant identities")
-      participants.size shouldBe 2
-      participants.count(_.isPrimaryParticipant) shouldBe 2
-      participants.count(_.isComponentletParticipant) shouldBe 0
-      participants.map(_.instanceId).toSet shouldBe Set(
-        ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "static"),
-        ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "dynamic")
-      )
+        Then("each named binding retains independently materialized primary and componentlet participants")
+        val participants = subsystem.components.filter(component =>
+          component.artifactMetadata.flatMap(_.componentId).contains(ComponentId("org.goldenport.cncf.spec.Scraper"))
+        )
+        participants.size shouldBe 4
+        participants.count(_.isPrimaryParticipant) shouldBe 2
+        participants.count(_.isComponentletParticipant) shouldBe 2
+        participants.filter(_.isPrimaryParticipant).map(_.instanceId).toSet shouldBe Set(
+          ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "static"),
+          ComponentInstanceId("org.goldenport.cncf.spec.Scraper", "dynamic")
+        )
+        participants.filter(_.isComponentletParticipant).map(_.instanceId).toSet shouldBe Set(
+          ComponentInstanceId("org.goldenport.cncf.spec.ScraperAdmin", "static"),
+          ComponentInstanceId("org.goldenport.cncf.spec.ScraperAdmin", "dynamic")
+        )
+      }
       }
     }
 
@@ -328,7 +354,7 @@ final class GenericSubsystemFactorySpec
       }
     }
 
-    "E10 prefer a complete sibling development set over an older packaged CAR" must _e3 {
+    "E10 prefer a complete sibling development set over an older packaged CAR" must _metadata("E10") {
       "when exercising: E10 prefer a complete sibling development set over an older packaged CAR" in {
         Given("two prepared prefixed development directories followed by an older same-name packaged search CAR")
         _with_temp_dir { root =>
@@ -750,7 +776,13 @@ final class GenericSubsystemFactorySpec
       _with_temp_dir { root =>
         val appjar = _create_class_component_jar(
           root.resolve("assets").resolve("sar-component-file-app.jar"),
-          Seq(classOf[ArtSceneComponentFactory], classOf[ArtSceneComponent])
+          Seq(
+            classOf[SarBundleFactory],
+            classOf[SarBundlePrimaryFactory],
+            classOf[SarBundleAdminFactory],
+            classOf[SarBundleComponent],
+            classOf[SarBundleAdminComponent]
+          )
         )
         val providerjar = _create_class_component_jar(
           root.resolve("assets").resolve("sar-plain-ai-runner-provider.jar"),
@@ -828,17 +860,317 @@ final class GenericSubsystemFactorySpec
           Some(policy)
         )
 
-        Then("both requested canonical components are materialized once with SAR CAR provenance")
+        Then("both requested primaries and their selected CAR componentlet retain SAR CAR provenance")
         result shouldBe a[Consequence.Success[_]]
         val subsystem = result.toOption.getOrElse(fail("runtime subsystem"))
         val expectedids = Set(
           ComponentId("org.goldenport.fixture.ComponentFileApp"),
           ComponentId("org.goldenport.fixture.PlainAiRunnerProvider")
         )
-        val selected = subsystem.components.filter(component => expectedids.contains(component.core.componentId))
-        selected.map(_.core.componentId).toSet shouldBe expectedids
-        selected.size shouldBe 2
+        val selected = subsystem.components.filter(component =>
+          component.artifactMetadata.flatMap(_.componentId).exists(expectedids.contains)
+        )
+        selected.filter(_.isPrimaryParticipant).map(_.core.componentId).toSet shouldBe expectedids
+        selected.count(_.isPrimaryParticipant) shouldBe 2
+        selected.count(_.isComponentletParticipant) shouldBe 1
+        selected.filter(_.isComponentletParticipant).map(_.core.componentId) shouldBe Vector(
+          ComponentId("org.goldenport.fixture.ComponentFileAppAdmin")
+        )
+        selected.size shouldBe 3
         selected.flatMap(_.artifactMetadata.map(_.sourceType)).toSet shouldBe Set("sar+car")
+      }
+      }
+    }
+
+    "E21 retain collaborator wiring while materializing a named repository component" must _metadata("E21") {
+      "when exercising: retain collaborator wiring while materializing a named repository component" in {
+      Given("a component-dir CAR with a collaborator recipe and one named binding")
+      _with_temp_dir { root =>
+        val componentjar = _create_class_component_jar(
+          root.resolve("assets").resolve("collaborator-component.jar"),
+          Seq(
+            classOf[RepositoryCollaboratorComponentFactory],
+            classOf[RepositoryCollaboratorComponent]
+          )
+        )
+        val collaboratorjar = RuntimeInvisibleJarFixture.compileJavaJar(
+          root.resolve("assets").resolve("collaborator-provider.jar"),
+          Map(
+            "fixture.collaborator.InvisibleCollaborator" ->
+              """package fixture.collaborator;
+                |public final class InvisibleCollaborator implements org.goldenport.cncf.collaborator.api.Collaborator {
+                |  public org.goldenport.cncf.collaborator.api.Consequence invoke(org.goldenport.cncf.collaborator.api.ActionCall call) {
+                |    return new org.goldenport.cncf.collaborator.api.SuccessConsequence(InvisibleCollaboratorHelper.value(call.operationName()));
+                |  }
+                |}
+                |final class InvisibleCollaboratorHelper {
+                |  static String value(String operation) { return "fixture:" + operation; }
+                |}""".stripMargin
+          )
+        )
+        val componentdescriptor = root.resolve("collaborator-component-descriptor.json")
+        Files.writeString(
+          componentdescriptor,
+          _canonical_descriptor_json("org.goldenport.cncf.spec.CollaboratorProbe", "0.1.0"),
+          StandardCharsets.UTF_8
+        )
+        _create_car(
+          root.resolve("collaborator-component.car"),
+          Seq(
+            "component/main.jar" -> componentjar,
+            "component/collaborator/main.jar" -> collaboratorjar,
+            "component-descriptor.json" -> componentdescriptor
+          )
+        )
+        val descriptor = GenericSubsystemDescriptor(
+          path = root.resolve("collaborator-component.yaml"),
+          subsystemName = "collaborator-component",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding(
+              "org.goldenport.cncf.spec.CollaboratorProbe",
+              version = Some("0.1.0"),
+              componentId = Some(ComponentId("org.goldenport.cncf.spec.CollaboratorProbe")),
+              instance = Some("named")
+            )
+          )
+        )
+
+        When("the subsystem factory materializes the named CAR component through repository discovery")
+        val subsystem = GenericSubsystemFactory.default(
+          descriptor,
+          configuration = _repository_configuration(root)
+        )
+        val component = subsystem.components.collectFirst {
+          case candidate: CollaboratorComponent
+              if candidate.instanceId == ComponentInstanceId("org.goldenport.cncf.spec.CollaboratorProbe", "named") =>
+            candidate
+        }.getOrElse(fail("named collaborator component"))
+        val response = component.collaborator.execute(
+          ExecutionContext.create(),
+          Request(
+            component = Some("org.goldenport.cncf.spec.CollaboratorProbe"),
+            service = None,
+            operation = "ping",
+            arguments = Nil,
+            switches = Nil,
+            properties = Nil
+          )
+        )
+
+        Then("the named participant retains its collaborator recipe and invokes the runtime-invisible collaborator after construction")
+        component.instanceId shouldBe ComponentInstanceId("org.goldenport.cncf.spec.CollaboratorProbe", "named")
+        component.collaboratorClasspath.exists(_.nonEmpty) shouldBe true
+        response shouldBe Consequence.success(Response.Scalar("fixture:ping"))
+        subsystem.shutdownC() shouldBe a[Consequence.Success[_]]
+      }
+      }
+    }
+
+    "E22 share one runtime-invisible assembly API loader across binding cohorts" must _metadata("E22") {
+      "when exercising: share one runtime-invisible assembly API loader across binding cohorts" in {
+      Given("consumer-first provider and consumer CARs with a generated API jar outside the runtime parent")
+      _with_temp_dir { root =>
+        val consumerrepository = Files.createDirectories(root.resolve("consumer-repository"))
+        val providerrepository = Files.createDirectories(root.resolve("provider-repository"))
+        val apiclass = "fixture.partition.api.SharedApi"
+        val apijar = RuntimeInvisibleJarFixture.compileJavaJar(
+          root.resolve("assets").resolve("provider-api.jar"),
+          Map(apiclass -> """package fixture.partition.api; public final class SharedApi { public static String value() { return "shared"; } }""")
+        )
+        val providerjar = _create_class_component_jar(
+          root.resolve("assets").resolve("provider-component.jar"),
+          Seq(classOf[AssemblyApiProviderFactory], classOf[AssemblyApiProviderComponent])
+        )
+        val consumerjar = _create_class_component_jar(
+          root.resolve("assets").resolve("consumer-component.jar"),
+          Seq(classOf[AssemblyApiConsumerFactory], classOf[AssemblyApiConsumerComponent])
+        )
+        val providerdescriptor = root.resolve("provider-descriptor.json")
+        val consumerdescriptor = root.resolve("consumer-descriptor.json")
+        val providerapi = root.resolve("provider-api-descriptor.json")
+        val consumerapi = root.resolve("consumer-api-descriptor.json")
+        Files.writeString(providerdescriptor, _canonical_descriptor_json("fixture.partition.Provider", "0.1.0"), StandardCharsets.UTF_8)
+        Files.writeString(consumerdescriptor, _canonical_descriptor_json("fixture.partition.Consumer", "0.1.0"), StandardCharsets.UTF_8)
+        Files.writeString(
+          providerapi,
+          s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"fixture.partition.Provider","version":"0.1.0"},"provided":[{"apiClass":"$apiclass","packages":["fixture.partition.api"],"abiHash":"sha256:shared","artifactPath":"spi/provider-api.jar"}],"required":[]}""",
+          StandardCharsets.UTF_8
+        )
+        Files.writeString(
+          consumerapi,
+          s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"fixture.partition.Consumer","version":"0.1.0"},"provided":[],"required":[{"apiClass":"$apiclass","required":true}]}""",
+          StandardCharsets.UTF_8
+        )
+        _create_car(providerrepository.resolve("provider.car"), Seq(
+          "component/main.jar" -> providerjar,
+          "component-descriptor.json" -> providerdescriptor,
+          "component-api-descriptor.json" -> providerapi,
+          "spi/provider-api.jar" -> apijar
+        ))
+        _create_car(consumerrepository.resolve("consumer.car"), Seq(
+          "component/main.jar" -> consumerjar,
+          "component-descriptor.json" -> consumerdescriptor,
+          "component-api-descriptor.json" -> consumerapi
+        ))
+        System.clearProperty("phase74.provider.discoveries")
+        System.clearProperty("phase74.consumer.discoveries")
+        val descriptor = GenericSubsystemDescriptor(
+          path = root.resolve("assembly-api-partitions.yaml"),
+          subsystemName = "assembly-api-partitions",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding("fixture.partition.Consumer", version = Some("0.1.0"), componentId = Some(ComponentId("fixture.partition.Consumer"))),
+            GenericSubsystemComponentBinding("fixture.partition.Provider", version = Some("0.1.0"), componentId = Some(ComponentId("fixture.partition.Provider")))
+          )
+        )
+
+        When("consumer-first descriptor cohorts discover the real CAR repository assembly")
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.repositoryDirKey -> ConfigurationValue.StringValue(
+              s"component-dir:$consumerrepository,component-dir:$providerrepository"
+            )
+          )),
+          ConfigurationTrace.empty
+        )
+        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
+        val apiclasses = subsystem.componentClassLoaderSnapshot.map(_.loadClass(apiclass)).distinct
+
+        Then("the isolated cohorts each discover once and resolve one generated API Class from the shared assembly loader")
+        subsystem.components.count(_.artifactMetadata.flatMap(_.componentId).contains(ComponentId("fixture.partition.Consumer"))) shouldBe 1
+        subsystem.components.count(_.artifactMetadata.flatMap(_.componentId).contains(ComponentId("fixture.partition.Provider"))) shouldBe 1
+        System.getProperty("phase74.consumer.discoveries") shouldBe "1"
+        System.getProperty("phase74.provider.discoveries") shouldBe "1"
+        apiclasses.size shouldBe 1
+        apiclasses.head.getClassLoader shouldBe a[AssemblyApiClassIdentity]
+        subsystem.shutdownC() shouldBe a[Consequence.Success[_]]
+      }
+      }
+    }
+
+    "E23 propagate one runtime-invisible assembly API loader through subsystem-dev-dir" must _metadata("E23") {
+      "when exercising: propagate one runtime-invisible assembly API loader through subsystem-dev-dir" in {
+      Given("a prepared subsystem development provider and consumer-first CAR repository sharing a generated API outside the runtime parent")
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("component")
+        val providerclassdir = componentdir.resolve("target").resolve("classes")
+        RuntimeInvisibleJarFixture.compileJavaDirectory(
+          providerclassdir,
+          Map(
+            "fixture.subsystemdev.provider.ProviderComponent" ->
+              """package fixture.subsystemdev.provider;
+                |public final class ProviderComponent extends org.goldenport.cncf.component.Component {}
+                |""".stripMargin,
+            "fixture.subsystemdev.provider.ProviderFactory" ->
+              """package fixture.subsystemdev.provider;
+                |public final class ProviderFactory extends org.goldenport.cncf.component.Component.Factory implements org.goldenport.cncf.component.Component.PrimaryComponentFactory {
+                |  @Override public org.goldenport.cncf.component.Component create_Component(org.goldenport.cncf.component.ComponentCreate params) {
+                |    return new ProviderComponent();
+                |  }
+                |  @Override public org.goldenport.cncf.component.Component.Core create_Core(org.goldenport.cncf.component.ComponentCreate params, org.goldenport.cncf.component.Component component) {
+                |    return org.goldenport.cncf.subsystem.RuntimeInvisibleComponentCoreFixture$.MODULE$.createCore(this, "fixture.partition.Provider");
+                |  }
+                |}
+                |""".stripMargin
+          )
+        )
+        _write_runtime_classpath(componentdir, providerclassdir, "0.1.0", "fixture.partition.Provider")
+        val apiclass = "fixture.subsystemdev.api.SharedApi"
+        RuntimeInvisibleJarFixture.compileJavaJar(
+          componentdir.resolve("target").resolve("cozy").resolve("spi").resolve("provider-api.jar"),
+          Map(apiclass -> """package fixture.subsystemdev.api; public final class SharedApi { public static String value() { return "shared"; } }""")
+        )
+        val providerapi = componentdir.resolve("target").resolve("cozy").resolve("component-api-descriptor.json")
+        Files.createDirectories(providerapi.getParent)
+        Files.writeString(
+          providerapi,
+          s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"fixture.partition.Provider","version":"0.1.0"},"provided":[{"apiClass":"$apiclass","packages":["fixture.subsystemdev.api"],"abiHash":"sha256:subsystem-dev","artifactPath":"spi/provider-api.jar"}],"required":[]}""",
+          StandardCharsets.UTF_8
+        )
+        val consumerrepository = Files.createDirectories(root.resolve("consumer-repository"))
+        val consumerjar = RuntimeInvisibleJarFixture.compileJavaJar(
+          root.resolve("assets").resolve("consumer-component.jar"),
+          Map(
+            "fixture.subsystemdev.consumer.ConsumerComponent" ->
+              """package fixture.subsystemdev.consumer;
+                |public final class ConsumerComponent extends org.goldenport.cncf.component.Component {}
+                |""".stripMargin,
+            "fixture.subsystemdev.consumer.ConsumerFactory" ->
+              """package fixture.subsystemdev.consumer;
+                |public final class ConsumerFactory extends org.goldenport.cncf.component.Component.Factory implements org.goldenport.cncf.component.Component.PrimaryComponentFactory {
+                |  @Override public org.goldenport.cncf.component.Component create_Component(org.goldenport.cncf.component.ComponentCreate params) {
+                |    return new ConsumerComponent();
+                |  }
+                |  @Override public org.goldenport.cncf.component.Component.Core create_Core(org.goldenport.cncf.component.ComponentCreate params, org.goldenport.cncf.component.Component component) {
+                |    return org.goldenport.cncf.subsystem.RuntimeInvisibleComponentCoreFixture$.MODULE$.createCore(this, "fixture.partition.Consumer");
+                |  }
+                |}
+                |""".stripMargin
+          )
+        )
+        val consumerdescriptor = root.resolve("consumer-descriptor.json")
+        val consumerapi = root.resolve("consumer-api-descriptor.json")
+        Files.writeString(consumerdescriptor, _canonical_descriptor_json("fixture.partition.Consumer", "0.1.0"), StandardCharsets.UTF_8)
+        Files.writeString(
+          consumerapi,
+          s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"fixture.partition.Consumer","version":"0.1.0"},"provided":[],"required":[{"apiClass":"$apiclass","required":true}]}""",
+          StandardCharsets.UTF_8
+        )
+        _create_car(consumerrepository.resolve("consumer.car"), Seq(
+          "component/main.jar" -> consumerjar,
+          "component-descriptor.json" -> consumerdescriptor,
+          "component-api-descriptor.json" -> consumerapi
+        ))
+        val descriptor = GenericSubsystemDescriptor(
+          path = root.resolve("subsystem-dev-api.yaml"),
+          subsystemName = "subsystem-dev-api",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding("fixture.partition.Consumer", version = Some("0.1.0"), componentId = Some(ComponentId("fixture.partition.Consumer"))),
+            GenericSubsystemComponentBinding("fixture.partition.Provider", version = Some("0.1.0"), componentId = Some(ComponentId("fixture.partition.Provider")))
+          )
+        )
+
+        When("consumer-first bindings discover the prepared subsystem development provider assembly")
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.repositoryDirKey -> ConfigurationValue.StringValue(s"component-dir:$consumerrepository,subsystem-dev-dir:$root")
+          )),
+          ConfigurationTrace.empty
+        )
+        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
+        val consumercomponent = subsystem.components.find(_.core.componentId == ComponentId("fixture.partition.Consumer"))
+          .getOrElse(fail("materialized consumer component is missing"))
+        val providercomponent = subsystem.components.find(_.core.componentId == ComponentId("fixture.partition.Provider"))
+          .getOrElse(fail("materialized provider component is missing"))
+        val consumerloader = consumercomponent.getClass.getClassLoader match {
+          case loader: ComponentLocalFirstClassLoader => loader
+          case loader => fail(s"consumer component loader is not component-local: $loader")
+        }
+        val providerloader = providercomponent.getClass.getClassLoader match {
+          case loader: ComponentLocalFirstClassLoader => loader
+          case loader => fail(s"provider component loader is not component-local: $loader")
+        }
+        val consumerapiclass = consumerloader.loadClass(apiclass)
+        val providerapiclass = providerloader.loadClass(apiclass)
+        val loaders = subsystem.componentClassLoaderSnapshot
+
+        Then("both actual component loaders resolve one assembly-owned generated API Class and remain subsystem-owned")
+        subsystem.components.count(_.artifactMetadata.flatMap(_.componentId).contains(ComponentId("fixture.partition.Consumer"))) shouldBe 1
+        subsystem.components.count(_.artifactMetadata.flatMap(_.componentId).contains(ComponentId("fixture.partition.Provider"))) shouldBe 1
+        consumerapiclass should be theSameInstanceAs providerapiclass
+        consumerapiclass.getClassLoader shouldBe a[AssemblyApiClassIdentity]
+        loaders.exists(_ eq consumerloader) shouldBe true
+        loaders.exists(_ eq providerloader) shouldBe true
+        consumerloader.closeInvocationCount shouldBe 0
+        providerloader.closeInvocationCount shouldBe 0
+
+        When("the owning subsystem shuts down")
+        val shutdownresult = subsystem.shutdownC()
+
+        Then("both component loaders close exactly once and leave no retained loader snapshot")
+        shutdownresult shouldBe a[Consequence.Success[_]]
+        consumerloader.closeInvocationCount shouldBe 1
+        providerloader.closeInvocationCount shouldBe 1
+        subsystem.componentClassLoaderSnapshot shouldBe Vector.empty
       }
       }
     }
@@ -1050,7 +1382,9 @@ final class GenericSubsystemFactorySpec
     }
 
     }
-    "reject an untyped binding before it can match a discovered Component" in {
+    "canonical binding validation" which {
+    "E19 reject an untyped binding before it can match a discovered Component" must _metadata("E19") {
+      "when exercising: reject an untyped binding before it can match a discovered Component" in {
       Given("an untyped assembly binding and an otherwise empty discovery set")
       val subsystem = TestComponentFactory.emptySubsystem("factory-untyped-binding")
       val descriptor = GenericSubsystemDescriptor(
@@ -1071,9 +1405,11 @@ final class GenericSubsystemFactorySpec
       result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
         "component assembly binding requires canonical namespace/id/version: alias=textus-catalog; required=canonical namespace/id/version"
       )
+      }
     }
 
-    "retain exact Core and artifact matching for a typed binding" in {
+    "E20 retain exact Core and artifact matching for a typed binding" must _metadata("E20") {
+      "when exercising: retain exact Core and artifact matching for a typed binding" in {
       Given("a typed qualified binding with no matching discovered Component")
       val componentid = ComponentId("org.example.Catalog")
       val subsystem = TestComponentFactory.emptySubsystem("factory-typed-binding")
@@ -1099,6 +1435,8 @@ final class GenericSubsystemFactorySpec
       result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
         s"canonical component binding has no exact Core/artifact identity match: ${componentid.name}"
       )
+      }
+    }
     }
   }
   private def _repository_configuration(repositorydir: Path): ResolvedConfiguration =
@@ -1153,46 +1491,6 @@ final class GenericSubsystemFactorySpec
         Protocol.empty,
         this
       )
-  }
-
-  private object NamedBundleFactory extends Component.BundleFactory {
-    object Primary extends Component.PrimaryComponentFactory {
-      protected def create_Component(params: ComponentCreate): Component =
-        new Component() {}
-
-      protected def create_Core(
-        params: ComponentCreate,
-        comp: Component
-      ): Component.Core =
-        Component.Core.create(
-          "org.goldenport.cncf.spec.Scraper",
-          ComponentId("org.goldenport.cncf.spec.Scraper"),
-          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.spec.Scraper")),
-          Protocol.empty,
-          this
-        )
-    }
-
-    object Admin extends Component.ComponentletFactory {
-      protected def create_Component(params: ComponentCreate): Component =
-        new Component() {}
-
-      protected def create_Core(
-        params: ComponentCreate,
-        comp: Component
-      ): Component.Core =
-        Component.Core.create(
-          "org.goldenport.cncf.spec.ScraperAdmin",
-          ComponentId("org.goldenport.cncf.spec.ScraperAdmin"),
-          ComponentInstanceId.default(ComponentId("org.goldenport.cncf.spec.ScraperAdmin")),
-          Protocol.empty,
-          this
-        )
-    }
-
-    def primaryFactory: Component.PrimaryComponentFactory = Primary
-
-    override def componentletFactories: Vector[Component.ComponentletFactory] = Vector(Admin)
   }
 
   private def _create_car(
@@ -1359,5 +1657,179 @@ final class GenericSubsystemFactorySpec
       Path.of("target", "generic-subsystem-factory-spec", "work").toAbsolutePath.normalize
     )
     Files.createTempFile(workdir, prefix, suffix)
+  }
+}
+
+object RuntimeInvisibleComponentCoreFixture {
+  def createCore(factory: Component.Factory, componentId: String): Component.Core = {
+    val componentid = ComponentId(componentId)
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty,
+      factory
+    )
+  }
+}
+
+final class SarBundleComponent extends Component {
+  override def displayName: String = "sar-component-file-app"
+}
+
+final class SarBundleAdminComponent extends Component {
+  override def displayName: String = "sar-component-file-app-admin"
+}
+
+final class SarBundlePrimaryFactory extends Component.PrimaryComponentFactory {
+  protected def create_Component(params: ComponentCreate): Component =
+    new SarBundleComponent
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core = {
+    val componentid = ComponentId("org.goldenport.fixture.ComponentFileApp")
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty,
+      this
+    )
+  }
+}
+
+final class SarBundleAdminFactory extends Component.ComponentletFactory {
+  protected def create_Component(params: ComponentCreate): Component =
+    new SarBundleAdminComponent
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core = {
+    val componentid = ComponentId("org.goldenport.fixture.ComponentFileAppAdmin")
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty,
+      this
+    )
+  }
+}
+
+final class SarBundleFactory extends Component.BundleFactory {
+  def primaryFactory: Component.PrimaryComponentFactory =
+    new SarBundlePrimaryFactory
+
+  override def componentletFactories: Vector[Component.ComponentletFactory] =
+    Vector(new SarBundleAdminFactory)
+}
+
+final class RepositoryBundlePrimaryComponent extends Component
+
+final class RepositoryBundleAdminComponent extends Component
+
+final class RepositoryBundlePrimaryFactory extends Component.PrimaryComponentFactory {
+  protected def create_Component(params: ComponentCreate): Component =
+    new RepositoryBundlePrimaryComponent
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core = {
+    val componentid = ComponentId("org.goldenport.cncf.spec.Scraper")
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty,
+      this
+    )
+  }
+}
+
+final class RepositoryBundleAdminFactory extends Component.ComponentletFactory {
+  protected def create_Component(params: ComponentCreate): Component =
+    new RepositoryBundleAdminComponent
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core = {
+    val componentid = ComponentId("org.goldenport.cncf.spec.ScraperAdmin")
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty,
+      this
+    )
+  }
+}
+
+final class RepositoryBundleFactory extends Component.BundleFactory {
+  def primaryFactory: Component.PrimaryComponentFactory =
+    new RepositoryBundlePrimaryFactory
+
+  override def componentletFactories: Vector[Component.ComponentletFactory] =
+    Vector(new RepositoryBundleAdminFactory)
+}
+
+final class RepositoryCollaboratorComponent extends CollaboratorComponent
+
+final class RepositoryCollaboratorComponentFactory extends Component.PrimaryComponentFactory {
+  protected def create_Component(params: ComponentCreate): Component =
+    new RepositoryCollaboratorComponent
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core = {
+    val componentid = ComponentId("org.goldenport.cncf.spec.CollaboratorProbe")
+    Component.Core.create(
+      componentid.name,
+      componentid,
+      ComponentInstanceId.default(componentid),
+      Protocol.empty,
+      this
+    )
+  }
+}
+
+final class AssemblyApiProviderComponent extends Component
+
+final class AssemblyApiProviderFactory extends Component.PrimaryComponentFactory {
+  protected def create_Component(params: ComponentCreate): Component = {
+    if (params.instanceMetadata.isEmpty)
+      System.setProperty("phase74.provider.discoveries", Option(System.getProperty("phase74.provider.discoveries")).map(_.toInt + 1).getOrElse(1).toString)
+    new AssemblyApiProviderComponent
+  }
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core = {
+    val componentid = ComponentId("fixture.partition.Provider")
+    Component.Core.create(componentid.name, componentid, ComponentInstanceId.default(componentid), Protocol.empty, this)
+  }
+}
+
+final class AssemblyApiConsumerComponent extends Component
+
+final class AssemblyApiConsumerFactory extends Component.PrimaryComponentFactory {
+  protected def create_Component(params: ComponentCreate): Component = {
+    if (params.instanceMetadata.isEmpty)
+      System.setProperty("phase74.consumer.discoveries", Option(System.getProperty("phase74.consumer.discoveries")).map(_.toInt + 1).getOrElse(1).toString)
+    new AssemblyApiConsumerComponent
+  }
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core = {
+    val componentid = ComponentId("fixture.partition.Consumer")
+    Component.Core.create(componentid.name, componentid, ComponentInstanceId.default(componentid), Protocol.empty, this)
   }
 }

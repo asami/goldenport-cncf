@@ -3,7 +3,7 @@ package org.goldenport.cncf.subsystem
 import java.nio.file.{Path, Paths}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentIdentityCompatibilityObserver, ComponentInstanceMetadata, ComponentOrigin, DevelopmentCarRuntimeAdmission}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentIdentityCompatibilityObserver, ComponentOrigin, DevelopmentCarRuntimeAdmission}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{ConfigurationAccess, RepositoryBootstrapPolicy, RuntimeConfig, RuntimeTestDescriptor}
@@ -639,31 +639,14 @@ object GenericSubsystemFactory {
         componentdescriptors
       )
       val developmentclaims = ComponentRepository.developmentComponentClaims(repositoryspecs)
-      val repositories =
-        repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
-        val activedescriptors =
-          ComponentRepository.descriptorsForSpecification(
-            spec,
-            repositoryspecs.take(index),
-            componentdescriptors,
-            developmentclaims
-          )
-        admitteddescriptor.componentBindings.zip(componentdescriptors).collect {
-          case (binding, componentdescriptor) if activedescriptors.contains(componentdescriptor) =>
-            spec.build(
-              params
-                .withComponentDescriptors(Vector(componentdescriptor))
-                .withInstanceMetadata(binding.instanceMetadata)
-            )
-        }
-        }.toVector
       val components0 = _or_raise(
-        ComponentRepository.discoverAssemblyC(repositories).flatMap { discovered =>
-        val selected = discovered.filter(component =>
-          admitteddescriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding))
+        GenericSubsystemComponentDiscovery.discoverC(
+          repositoryspecs,
+          componentdescriptors,
+          developmentclaims,
+          admitteddescriptor.componentBindings,
+          params
         )
-        materializeComponentInstancesC(selected, admitteddescriptor, params)
-        }
       )
       val builtins = _builtin_components(subsystem, admitteddescriptor)
       given ExecutionContext = ExecutionContext.create()
@@ -1026,20 +1009,11 @@ object GenericSubsystemFactory {
   ): Boolean =
     component.artifactMetadata.flatMap(_.subsystem).contains(subsystemname)
 
-  private def _matches_descriptor_component(
+  private[cncf] def matchesArtifactOwner(
     component: Component,
     binding: GenericSubsystemComponentBinding
-  ): Boolean = {
-    (binding.componentId, binding.componentVersion) match {
-      case (Some(id), Some(release)) =>
-        component.core.componentId == id &&
-          component.artifactMetadata.exists(metadata =>
-            metadata.componentId.contains(id) && metadata.version == release
-          )
-      case (None, _) => false
-      case _ => false
-    }
-  }
+  ): Boolean =
+    GenericSubsystemComponentDiscovery.matchesArtifactOwner(component, binding)
 
   private[cncf] def materializeComponentInstances(
     discovered: Seq[Component],
@@ -1052,70 +1026,15 @@ object GenericSubsystemFactory {
     discovered: Seq[Component],
     descriptor: GenericSubsystemDescriptor,
     params: ComponentCreate
-  ): Consequence[Vector[Component]] = {
-    val participants = descriptor.componentBindings.flatMap {
-      case binding if binding.componentId.isEmpty || binding.componentVersion.isEmpty =>
-        Vector(Consequence.componentInvalid(
-          s"component assembly binding requires canonical namespace/id/version: " +
-            s"alias=${binding.componentName}; required=canonical namespace/id/version"
-        ))
-      case binding =>
-        val componentid = binding.componentId.get
-        val candidates = discovered.filter(_matches_descriptor_component(_, binding)).toVector
-        val exact = candidates.filter { candidate =>
-          candidate.instanceMetadata.contains(_binding_instance_metadata(binding, candidate))
-        }
-        candidates match {
-          case Vector() =>
-            Vector(Consequence.componentInvalid(
-              s"canonical component binding has no exact Core/artifact identity match: ${componentid.name}"
-            ))
-          case Vector(candidate) =>
-            exact.headOption.map(x => Vector(Consequence.success(x))).getOrElse(
-              Vector(_create_component_participant_c(candidate, binding, params))
-            )
-          case _ =>
-            Vector(Consequence.componentInvalid(
-              s"canonical component binding has multiple exact Core/artifact identity matches: ${componentid.name}"
-            ))
-        }
-    }.toVector
-    _sequence(participants)
-  }
+  ): Consequence[Vector[Component]] =
+    GenericSubsystemComponentDiscovery.materializeComponentInstancesC(discovered, descriptor, params)
 
-  private def _create_component_participant_c(
-    prototype: Component,
+  private[cncf] def materializeComponentBindingC(
+    discovered: Seq[Component],
     binding: GenericSubsystemComponentBinding,
     params: ComponentCreate
-  ): Consequence[Component] =
-    prototype.factoryOption match {
-      case Some(factory) =>
-        val instanceparams = params
-          .withOrigin(prototype.origin)
-          .withComponentDescriptors(prototype.componentDescriptors)
-          .withInstanceMetadata(_binding_instance_metadata(binding, prototype))
-        val componentc =
-          if (prototype.isComponentletParticipant) factory.createComponentletC(instanceparams)
-          else factory.createPrimaryC(instanceparams)
-        componentc.map { component =>
-          prototype.artifactMetadata.foreach(component.withArtifactMetadata)
-          component.withCollaboratorClasspath(prototype.collaboratorClasspath)
-        }
-      case None =>
-        if (binding.hasInstanceDeclaration) {
-          Consequence.componentInvalid(
-            s"component factory is required for named instance: ${binding.componentName}/${binding.instanceName}"
-          )
-        } else {
-          Consequence.success(prototype)
-        }
-    }
-
-  private def _binding_instance_metadata(
-    binding: GenericSubsystemComponentBinding,
-    _prototype: Component
-  ): ComponentInstanceMetadata =
-    binding.instanceMetadata
+  ): Consequence[Vector[Component]] =
+    GenericSubsystemComponentDiscovery.materializeComponentBindingC(discovered, binding, params)
 
   private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =
     values.foldLeft(Consequence.success(Vector.empty[A])) { (acc, value) =>

@@ -71,54 +71,37 @@ object ComponentRepository extends GlobalObservable {
     repositories: Vector[ComponentRepository],
     runtimeParent: ClassLoader = getClass.getClassLoader
   ): Vector[Component] =
-    _required(discoverAssemblyC(repositories, runtimeParent))
+    ComponentRepositoryAssemblyDiscovery.required(discoverAssemblyC(repositories, runtimeParent))
 
   def discoverAssemblyC(
     repositories: Vector[ComponentRepository],
     runtimeParent: ClassLoader = getClass.getClassLoader
   ): Consequence[Vector[Component]] =
-    _discover_assembly_c(repositories, repositories, runtimeParent)
+    discoverAssemblyPartitionsC(repositories, Vector(repositories), runtimeParent).map(_.headOption.getOrElse(Vector.empty))
 
   def discoverAssembly(
     assemblyRepositories: Vector[ComponentRepository],
     discoveryRepositories: Vector[ComponentRepository]
   ): Vector[Component] =
-    _required(discoverAssemblyC(assemblyRepositories, discoveryRepositories))
+    ComponentRepositoryAssemblyDiscovery.required(discoverAssemblyC(assemblyRepositories, discoveryRepositories))
 
   def discoverAssemblyC(
     assemblyRepositories: Vector[ComponentRepository],
     discoveryRepositories: Vector[ComponentRepository]
   ): Consequence[Vector[Component]] =
-    _discover_assembly_c(assemblyRepositories, discoveryRepositories, getClass.getClassLoader)
+    discoverAssemblyPartitionsC(assemblyRepositories, Vector(discoveryRepositories))
+      .map(_.headOption.getOrElse(Vector.empty))
 
-  private def _discover_assembly_c(
-    assemblyrepositories: Vector[ComponentRepository],
-    discoveryrepositories: Vector[ComponentRepository],
-    runtimeparent: ClassLoader
-  ): Consequence[Vector[Component]] =
-    try {
-      val metadatac = assemblyrepositories.foldLeft(Consequence.success(AssemblyApiMetadata())) { (z, repository) =>
-        for {
-          acc <- z
-          metadata <- repository.prepareAssemblyApi()
-        } yield acc ++ metadata
-      }
-      metadatac.flatMap { metadata =>
-        AssemblyApiClassLoader.create(runtimeparent, metadata).map { loader =>
-          assemblyrepositories.foreach(_.installAssemblyApiClassLoader(loader))
-          discoveryrepositories.flatMap(_.discover())
-        }
-      }
-    } catch {
-      case e: ComponentRepositoryDiscoveryFailure => Consequence.Failure(e.conclusion)
-      case NonFatal(e) => Consequence.componentInvalid(e)
-    }
-
-  private def _required[A](result: Consequence[A]): A =
-    result match {
-      case Consequence.Success(value) => value
-      case Consequence.Failure(conclusion) => Consequence.Failure[A](conclusion).RAISE
-    }
+  private[cncf] def discoverAssemblyPartitionsC(
+    assemblyRepositories: Vector[ComponentRepository],
+    discoveryPartitions: Vector[Vector[ComponentRepository]],
+    runtimeParent: ClassLoader = getClass.getClassLoader
+  ): Consequence[Vector[Vector[Component]]] =
+    ComponentRepositoryAssemblyDiscovery.discoverC(
+      assemblyRepositories,
+      discoveryPartitions,
+      runtimeParent
+    )
 
   sealed abstract class Specification {
     def build(params: ComponentCreate): ComponentRepository
@@ -620,35 +603,31 @@ object ComponentRepository extends GlobalObservable {
             classpath,
             effectiveparams.assemblyApiClassLoader.getOrElse(getClass.getClassLoader)
           )
-          val classnames = _discover_class_names(classdirs, packagePrefixes)
-          val factorycomponents = _instantiate_factory_components(
-            loader = loader,
-            classnames = classnames,
-            params = effectiveparams,
-            origin = origin,
-            log = log,
-            artifactname = baseDir.getFileName.toString,
-            repositorytype = "component-dev-dir"
-          )
-          val discovered =
-            if (factorycomponents.nonEmpty)
-              Consequence.success(factorycomponents.toVector)
-            else
-              _discover_components(
-                loader,
-                effectiveparams,
-                classdirs,
-                packagePrefixes,
-                origin,
-                log,
-                tolerant = true
-              )
-          discovered match {
-            case Consequence.Success(components) =>
-              components.map(component => component.withArtifactMetadata(_dev_artifact_metadata(baseDir, component)))
-            case Consequence.Failure(conclusion) =>
-              log.warn(s"[component-dev-dir] discovery failed cause=${conclusion.show}")
-              Vector.empty
+          ComponentRepositoryLoaderOwnership.discoverDevelopment(loader, params, log, baseDir) {
+            val classnames = _discover_class_names(classdirs, packagePrefixes)
+            val factorycomponents = _instantiate_factory_components(
+              loader = loader,
+              classnames = classnames,
+              params = effectiveparams,
+              origin = origin,
+              log = log,
+              artifactname = baseDir.getFileName.toString,
+              repositorytype = "component-dev-dir"
+            )
+            val discovered =
+              if (factorycomponents.nonEmpty)
+                Consequence.success(factorycomponents.toVector)
+              else
+                _discover_components(
+                  loader,
+                  effectiveparams,
+                  classdirs,
+                  packagePrefixes,
+                  origin,
+                  log,
+                  tolerant = true
+            )
+            discovered.map(_.map(component => component.withArtifactMetadata(_dev_artifact_metadata(baseDir, component))))
           }
         }
       }
@@ -904,6 +883,8 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
+    override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] = ComponentRepositoryAssemblyDiscovery.prepareMetadataC(_component_specs(baseDir).map(_.build(params)))
+
     def discover(): Seq[Component] = {
       val requested = _requested_component_names(params)
       val specs = _component_specs(baseDir)
@@ -912,7 +893,7 @@ object ComponentRepository extends GlobalObservable {
         log.warn(s"[subsystem-dev-dir] component development source not found under ${baseDir}")
         Vector.empty
       } else {
-        val discovered = specs.flatMap(_.build(params).discover()).distinctBy(_.name)
+        val discovered = specs.flatMap(_.build(with_assembly_api_class_loader(params)).discover()).distinctBy(_.name)
         if (requested.isEmpty)
           discovered
         else
@@ -922,7 +903,7 @@ object ComponentRepository extends GlobalObservable {
 
     private def _requested_component_names(params: ComponentCreate): Set[String] =
       params.componentDescriptors.map { descriptor =>
-        _required(descriptor.requireCanonicalIdentityC)._1.name
+        ComponentRepositoryAssemblyDiscovery.required(descriptor.requireCanonicalIdentityC)._1.name
       }
         .toSet
 
@@ -1401,9 +1382,9 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     descriptor: ComponentDescriptor
   ): Vector[ComponentDescriptor] = {
-    val (packagedid, _) = _required(descriptor.requireCanonicalIdentityC)
+    val (packagedid, _) = ComponentRepositoryAssemblyDiscovery.required(descriptor.requireCanonicalIdentityC)
     val matched = params.componentDescriptors.filter { requested =>
-      val (requestedid, _) = _required(requested.requireCanonicalIdentityC)
+      val (requestedid, _) = ComponentRepositoryAssemblyDiscovery.required(requested.requireCanonicalIdentityC)
       packagedid == requestedid
     }
     if (matched.nonEmpty)
@@ -1546,7 +1527,7 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate
   ): Vector[(String, Option[String])] =
     params.componentDescriptors.map { descriptor =>
-      val (componentid, release) = _required(descriptor.requireCanonicalIdentityC)
+      val (componentid, release) = ComponentRepositoryAssemblyDiscovery.required(descriptor.requireCanonicalIdentityC)
       componentid.name -> Some(release)
     }.distinct
 
@@ -2337,15 +2318,29 @@ object ComponentRepository extends GlobalObservable {
       } else {
       extracted.collaboratorClasspath match {
         case Some(paths) if paths.nonEmpty =>
-          Using.resource(CollaboratorClassLoader(paths)) { collaboratorloader =>
+          val collaboratorloader = CollaboratorClassLoader(paths)
+          var retaincollaboratorloader = false
+          try {
             CollaboratorFactory.create(collaboratorloader, paths) match {
               case Consequence.Success(collaborator) =>
-                collaboratorcomponents.foreach(_.setCollaborator(collaborator))
+                collaboratorcomponents.foreach { component =>
+                  component.withCollaboratorClasspath(Some(paths))
+                  component.setCollaborator(collaborator)
+                }
+                params.subsystem.registerComponentClassLoader(collaboratorloader)
+                retaincollaboratorloader = true
                 Consequence.success(components)
               case Consequence.Failure(conclusion) =>
                 log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator init failed cause=${conclusion.show}")
                 Consequence.Failure(conclusion)
             }
+          } finally {
+            if (!retaincollaboratorloader)
+              try collaboratorloader.close()
+              catch {
+                case NonFatal(e) =>
+                  log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator loader cleanup failed cause=${e.getMessage}")
+              }
           }
         case _ =>
           log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator classpath missing")
@@ -2448,7 +2443,7 @@ object ComponentRepository extends GlobalObservable {
             )
           }
         )
-      } yield SarComponentSelection.select((fromcars ++ fromcardirs).distinctBy(_.name), params.componentDescriptors)
+      } yield SarComponentSelection.select(fromcars ++ fromcardirs, params.componentDescriptors)
     }
   }
 
@@ -2709,7 +2704,7 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
-  private final class ComponentRepositoryDiscoveryFailure(
+  private[repository] final class ComponentRepositoryDiscoveryFailure(
     val conclusion: Conclusion
   ) extends RuntimeException(conclusion.display)
 

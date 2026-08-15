@@ -8,7 +8,7 @@ import org.goldenport.cncf.config.ComponentInitializationParameters
 /*
  * @since   Feb.  1, 2026
  *  version Feb.  5, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CollaboratorComponent() extends Component()
@@ -24,6 +24,13 @@ abstract class CollaboratorComponent() extends Component()
   // TODO: promote to a stable wiring API once Collaborator is driven by CNCF core.
   def setCollaborator(collaborator: Collaborator): Unit = {
     _collaborator_core = Some(CollaboratorComponent.Core(collaborator))
+  }
+
+  private[cncf] def inheritCollaboratorWiringFrom(
+    prototype: CollaboratorComponent
+  ): CollaboratorComponent = {
+    _collaborator_core = prototype._collaborator_core
+    this
   }
 
   inline def collaborator: Collaborator = collaboratorSlot.fold(
