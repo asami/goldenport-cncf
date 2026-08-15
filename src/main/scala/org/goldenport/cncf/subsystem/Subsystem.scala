@@ -51,7 +51,7 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.config.{CncfConfigurationBindingDiagnosticCodec, CncfConfigurationParameterCatalog, CncfConfigurationTarget, ConfigurationAccess, ResolvedStandaloneUserProfile, RuntimeExecutionProfileConfiguration, RuntimeOperationSecurityPolicy, RuntimeTestDescriptor}
 import org.goldenport.cncf.importer.{StartupImport, StartupImportConfiguration}
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
-import org.goldenport.cncf.protocol.OperationResponseFormatter
+import org.goldenport.cncf.protocol.{HttpFailureTransportMetadata, OperationResponseFormatter}
 import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationDefinition, CmlOperationImageBinding, ImageBindingOperationDefinition}
@@ -71,7 +71,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -2456,7 +2456,7 @@ final class Subsystem(
     HttpResponse.internalServerError()
 
   private def _failure_response(c: org.goldenport.Conclusion): HttpResponse =
-    HttpResponse.text(_http_status(c), c.displayMessage)
+    HttpFailureTransportMetadata.attach(HttpResponse.text(_http_status(c), c.displayMessage), c)
 
   private def _http_status(c: org.goldenport.Conclusion): HttpStatus =
     HttpStatus.fromInt(c.status.webCode.code).getOrElse(HttpStatus.InternalServerError)

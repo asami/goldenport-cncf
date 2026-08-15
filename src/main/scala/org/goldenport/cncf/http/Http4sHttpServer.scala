@@ -58,6 +58,7 @@ import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPaylo
 import org.goldenport.cncf.mcp.{McpJsonRpcAdapter, McpJsonRpcOutcome}
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver, SessionId}
+import org.goldenport.cncf.protocol.HttpFailureTransportMetadata
 import org.goldenport.protocol.spec.OperationDefinition
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
@@ -71,7 +72,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 14, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -7510,9 +7511,8 @@ final class Http4sHttpServer(
           .withContentType(`Content-Type`(mime, charset))
       )
     } else if (res.code >= 400 && !_prefers_plain_text(req)) {
-      val error = StructuredHttpError.fromMessage(
-        if (body.trim.nonEmpty) body else s"HTTP ${res.code}",
-        status.code,
+      val error = StructuredHttpError.fromFallbackHttpResponse(
+        res,
         req.map(_.uri.path.renderString).getOrElse(""),
         req.map(_.method.name).getOrElse(""),
         _operation_mode,
@@ -7605,7 +7605,7 @@ final class Http4sHttpServer(
     response: HResponse[IO],
     res: HttpResponse
   ): HResponse[IO] =
-    res.header.fields.foldLeft(response) { (z, field) =>
+    res.header.fields.filterNot(field => HttpFailureTransportMetadata.isInternalHeader(field.key)).foldLeft(response) { (z, field) =>
       z.putHeaders(Header.Raw(CIString(field.key), field.value.single.toString))
     }
 

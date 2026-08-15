@@ -1,14 +1,17 @@
 package org.goldenport.cncf.http
 
 import org.goldenport.Conclusion
+import org.goldenport.http.HttpResponse
 import org.goldenport.cncf.config.OperationMode
+import org.goldenport.cncf.protocol.HttpFailureTransportMetadata
 import org.goldenport.error.DetailCode
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 
 /*
  * @since   Apr. 24, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class StructuredHttpError(
@@ -127,6 +130,33 @@ object StructuredHttpError {
       service = service,
       operation = operation
     )
+
+  private[http] def fromFallbackHttpResponse(
+    response: HttpResponse,
+    path: String,
+    method: String,
+    operationmode: OperationMode,
+    component: Option[String] = None,
+    service: Option[String] = None,
+    operation: Option[String] = None
+  ): StructuredHttpError = {
+    val metadata = HttpFailureTransportMetadata.fromHttpResponse(response)
+    fromMessage(
+      response.getString.filter(_.trim.nonEmpty).getOrElse(s"HTTP ${response.code}"),
+      response.code,
+      path,
+      method,
+      operationmode,
+      component,
+      service,
+      operation
+    ).copy(
+      detailCode = metadata.detailCode,
+      appCode = metadata.appCode,
+      appStatus = metadata.appStatus
+    )
+  }
+
   def statusText(status: Int): String =
     status match {
       case 200 => "OK"
