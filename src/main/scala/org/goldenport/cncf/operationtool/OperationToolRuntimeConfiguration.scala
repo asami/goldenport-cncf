@@ -4,6 +4,7 @@ import java.nio.file.Path
 import scala.util.Try
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordSourceLoader
 
@@ -11,7 +12,7 @@ import org.goldenport.record.io.RecordSourceLoader
  * Runtime-owned activation policy for in-process Operation tool sets.
  *
  * @since   Jul. 21, 2026
- * @version Jul. 21, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class OperationToolRuntimeConfiguration private (
@@ -58,12 +59,24 @@ private[cncf] object OperationToolRuntimeConfiguration {
         case (z, name) =>
           for {
             values <- z
-            identity <- OperationToolIdentity.parseC(name)
+            identity <- _policy_identity_c(name)
           } yield values :+ identity
       }
       limits <- _limits_c(record.getRecord("limits"))
       admission <- OperationToolAdmission.createC(id, identities, limits)
     } yield admission
+
+  private def _policy_identity_c(value: String): Consequence[OperationToolIdentity] = {
+    val text = Option(value).map(_.trim).getOrElse("")
+    text.split("\\.", -1).toVector match {
+      case Vector("tool", service, operation) =>
+        OperationToolIdentity.createC(BuiltinComponentIdentity.TOOL.name, service, operation)
+      case Vector("admin", service, operation) =>
+        OperationToolIdentity.createC(BuiltinComponentIdentity.ADMIN.name, service, operation)
+      case _ =>
+        OperationToolIdentity.parseC(text)
+    }
+  }
 
   private def _limits_c(record: Option[Record]): Consequence[OperationToolLimits] = {
     val value = record.getOrElse(Record.empty)

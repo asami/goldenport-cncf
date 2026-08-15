@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56DeferredReleaseCompatibilitySpec
@@ -179,7 +179,7 @@ final class Phase56DeferredReleaseCompatibilitySpec
       }
     }
 
-    "retain ordinary schema-3 archive admission while rejecting a bare assembly selector" in {
+    "retain ordinary schema-3 archive admission while adapting a bare assembly selector" in {
       _with_temp_dir { root =>
         Given("a schema-3 canonical archive descriptor and its unqualified local spelling")
         Files.writeString(
@@ -196,10 +196,12 @@ final class Phase56DeferredReleaseCompatibilitySpec
           ComponentIdentityCompatibilityAdapter.Surface.AssemblyBinding
         )
 
-        Then("schema-3 identity remains valid and the bare selector has no adaptation path")
+        Then("schema-3 identity remains valid and the bare selector adapts to the canonical identity")
         admitted.toOption.flatMap(_.componentId) shouldBe Some(canonical)
-        bare shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
-        bare.toConsequence.toOption shouldBe empty
+        bare shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+        bare.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].componentid shouldBe canonical
+        bare.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].notice.aliaskind shouldBe
+          ComponentIdentityCompatibilityAdapter.AliasKind.Bare
       }
     }
 
@@ -218,7 +220,10 @@ final class Phase56DeferredReleaseCompatibilitySpec
   }
 
   private def _with_temp_dir[A](body: Path => A): A = {
-    val root = Files.createTempDirectory("phase56-deferred-release-")
+    val workdir = Files.createDirectories(
+      Path.of("target", "cncf-test", "work", "phase56-deferred-release").toAbsolutePath.normalize
+    )
+    val root = Files.createTempDirectory(workdir, "case-")
     try body(root)
     finally _delete_recursively(root)
   }

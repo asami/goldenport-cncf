@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jul.  2, 2026
  *  version Jul. 29, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
@@ -581,7 +581,7 @@ final class SpiSpec
       consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "alpha:hello"
     }
 
-    "reject a bare provider selector across admitted canonical components" in {
+    "reject an ambiguous bare provider selector across admitted canonical components" in {
       Given("two admitted canonical providers and one bare provider selector")
       given ExecutionContext = ExecutionContext.create()
       val subsystem = TestComponentFactory.emptySubsystem("spi-ambiguous-alias")
@@ -599,15 +599,17 @@ final class SpiSpec
       val consumer = _initialized_component_with_id(subsystem, consumerid, ConsumerComponent())
       val binding = SpiRuntimeBinding(
         SpiSocketSelector(Some(consumerid.name), "ai-runner"),
-        SpiProviderSelector(component = Some("catalog"))
+        SpiProviderSelector(component = Some("Catalog"))
       )
 
       When("the shared bare alias is used as an SPI provider selector")
       val result = SpiResolver.resolve(Vector(alpha, beta, consumer), Vector(binding))
 
-      Then("strict SPI resolution rejects the noncanonical selector")
+      Then("SPI resolution rejects the shared bare alias with sorted canonical candidates")
       result shouldBe a[Consequence.Failure[_]]
-      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.unsupported")
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+        "component.identity.compatibility.ambiguous: surface=runtime-selector; alias-kind=bare; alias=Catalog; candidates=org.alpha.Catalog,org.beta.Catalog"
+      )
     }
 
     "retain the canonical component ID in fallback SPI member metadata" in {
@@ -996,7 +998,7 @@ final class SpiSpec
       result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "alpha:hello"
     }
 
-    "reject a unique legacy Component API presentation alias" in {
+    "adapt a unique legacy Component API presentation alias" in {
       Given("one resolved component API with a non-authoritative legacy presentation alias")
       given ExecutionContext = ExecutionContext.create()
       val componentid = ComponentId("org.example.Catalog")
@@ -1010,12 +1012,11 @@ final class SpiSpec
         ComponentSelector(component = Some("legacy catalog"))
       )
 
-      Then("the strict SPI selector rejects the noncanonical alias")
-      result shouldBe a[Consequence.Failure[_]]
-      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.unsupported")
+      Then("the unique presentation alias selects the canonical provider and preserves behavior")
+      result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "catalog:hello"
     }
 
-    "reject a shared Component API presentation alias as unsupported" in {
+    "reject an ambiguous shared Component API presentation alias" in {
       Given("two resolved component APIs sharing one legacy presentation alias")
       given ExecutionContext = ExecutionContext.create()
       val resolver = ComponentApiResolver(Vector(
@@ -1029,9 +1030,11 @@ final class SpiSpec
         ComponentSelector(component = Some("shared catalog"))
       )
 
-      Then("strict selection rejects the noncanonical alias")
+      Then("selection rejects the shared presentation alias with sorted canonical candidates")
       result shouldBe a[Consequence.Failure[_]]
-      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component.identity.compatibility.unsupported")
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+        "component.identity.compatibility.ambiguous: surface=runtime-selector; alias-kind=presentation; alias=shared catalog; candidates=org.alpha.Catalog,org.beta.Search"
+      )
     }
     }
 

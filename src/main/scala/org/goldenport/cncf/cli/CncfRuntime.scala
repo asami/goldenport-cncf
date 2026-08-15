@@ -24,7 +24,7 @@ import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptorLoader, ComponentId, ComponentIdentityCompatibilityAdapter, ComponentInit, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptorLoader, ComponentId, ComponentIdentityCompatibilityAdapter, ComponentIdentityCompatibilityObserver, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.config.{ClientConfig, CncfAssemblyConfigurationProjection, CncfConfigurationArgumentBindingAdmission, CncfConfigurationArgumentBindingAssignment, CncfConfigurationArgumentBindingCodec, CncfConfigurationEnvironmentBindingAdmission, CncfConfigurationEnvironmentBindingAssignment, CncfConfigurationParameterCatalog, CncfConfigurationResolutionContext, CncfConfigurationTarget, CncfRuntimeConfigurationProjection, RepositoryBootstrapPolicy, ResolvedStandaloneUserProfile, RuntimeConfig, RuntimeDefaults, RuntimeExecutionProfileConfiguration, RuntimeFileConfigLoader, RuntimeProcessExitPolicy, RuntimeTestDescriptor, StandaloneUserProfileBindingProjection, StandaloneUserProfileResolver, SubsystemInstanceId, SystemNodeShutdownConfiguration}
 import org.goldenport.cncf.config.ConfigurationAccess
@@ -67,7 +67,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -2659,8 +2659,12 @@ object CncfRuntime extends GlobalObservable {
   private def _resolve_selector_with_operation_resolver(
     subsystem: Subsystem,
     selector: String
-  ): Consequence[(String, String, String)] =
-    subsystem.resolver.resolve(selector) match {
+  ): Consequence[(String, String, String)] = {
+    val resolved = subsystem.resolver.resolveWithNotices(selector)
+    subsystem.globalRuntimeContextOption.foreach(
+      context => ComponentIdentityCompatibilityObserver.observe(context.assemblyReport, resolved.notices)
+    )
+    resolved.result match {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         Consequence.success((component, service, operation))
       case ResolutionResult.NotFound(stage, input) =>
@@ -2677,6 +2681,7 @@ object CncfRuntime extends GlobalObservable {
       case ResolutionResult.Invalid(reason) =>
         Consequence.argumentInvalid(s"invalid selector: $reason")
     }
+  }
 
   private def _extract_selector_format(
     selector: String
@@ -5639,8 +5644,12 @@ class CncfRuntime() extends GlobalObservable {
   private def _resolve_selector_with_operation_resolver(
     subsystem: Subsystem,
     selector: String
-  ): Consequence[(String, String, String)] =
-    subsystem.resolver.resolve(selector) match {
+  ): Consequence[(String, String, String)] = {
+    val resolved = subsystem.resolver.resolveWithNotices(selector)
+    subsystem.globalRuntimeContextOption.foreach(
+      context => ComponentIdentityCompatibilityObserver.observe(context.assemblyReport, resolved.notices)
+    )
+    resolved.result match {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         Consequence.success((component, service, operation))
       case ResolutionResult.NotFound(stage, input) =>
@@ -5650,6 +5659,7 @@ class CncfRuntime() extends GlobalObservable {
       case ResolutionResult.Invalid(reason) =>
         Consequence.argumentInvalid(s"invalid selector: $reason")
     }
+  }
 
   private def _extract_selector_format(
     selector: String

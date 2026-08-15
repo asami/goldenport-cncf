@@ -40,7 +40,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  7, 2026
  *  version Aug. 13, 2026
- * @version Aug. 14, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec
@@ -740,6 +740,105 @@ final class GenericSubsystemFactorySpec
           "org.goldenport.fixture.ComponentFileApp",
           "org.goldenport.fixture.PlainAiRunnerProvider"
         )
+      }
+      }
+    }
+
+    "E12a select requested canonical components once from a shared SAR" must _metadata("E12a") {
+      "when exercising: select requested canonical components once from a shared SAR" in {
+      Given("one SAR containing two canonical CARs and a descriptor binding both components")
+      _with_temp_dir { root =>
+        val appjar = _create_class_component_jar(
+          root.resolve("assets").resolve("sar-component-file-app.jar"),
+          Seq(classOf[ArtSceneComponentFactory], classOf[ArtSceneComponent])
+        )
+        val providerjar = _create_class_component_jar(
+          root.resolve("assets").resolve("sar-plain-ai-runner-provider.jar"),
+          Seq(
+            classOf[PlainAiRunnerComponentFactory],
+            classOf[PlainAiRunnerProviderComponent],
+            classOf[PlainAiRunner]
+          )
+        )
+        val appdescriptor = root.resolve("sar-component-file-app-descriptor.json")
+        val providerdescriptor = root.resolve("sar-plain-ai-runner-provider-descriptor.json")
+        Files.writeString(
+          appdescriptor,
+          _canonical_descriptor_json("org.goldenport.fixture.ComponentFileApp", "0.1.0")
+        )
+        Files.writeString(
+          providerdescriptor,
+          _canonical_descriptor_json("org.goldenport.fixture.PlainAiRunnerProvider", "0.1.0")
+        )
+        val appcar = root.resolve("sar-component-file-app.car")
+        val providercar = root.resolve("sar-plain-ai-runner-provider.car")
+        _create_car(
+          appcar,
+          Seq(
+            "component/main.jar" -> appjar,
+            "component-descriptor.json" -> appdescriptor
+          )
+        )
+        _create_car(
+          providercar,
+          Seq(
+            "component/main.jar" -> providerjar,
+            "component-descriptor.json" -> providerdescriptor
+          )
+        )
+        val subsystemdescriptor = root.resolve("sar-subsystem-descriptor.yaml")
+        Files.writeString(
+          subsystemdescriptor,
+          """subsystem: sar-component-selection
+            |version: 0.1.0
+            |components:
+            |  - namespace: org.goldenport.fixture
+            |    id: ComponentFileApp
+            |    version: 0.1.0
+            |  - namespace: org.goldenport.fixture
+            |    id: PlainAiRunnerProvider
+            |    version: 0.1.0
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val componentdir = Files.createDirectories(root.resolve("component.d"))
+        val sar = componentdir.resolve("sar-component-selection.sar")
+        _create_car(
+          sar,
+          Seq(
+            "component/component-file-app.car" -> appcar,
+            "component/plain-ai-runner-provider.car" -> providercar,
+            "subsystem-descriptor.yaml" -> subsystemdescriptor
+          )
+        )
+        val policy = RepositoryBootstrapPolicy(
+          componentDirs = Vector(componentdir.toString),
+          baseDirectory = root,
+          defaultRepositoriesEnabled = false
+        )
+        val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+
+        When("runtime name resolution discovers the shared SAR once for each canonical binding")
+        val result = GenericSubsystemFactory.runtimeDefaultWithScopeC(
+          "sar-component-selection",
+          ScopeContext(ScopeKind.Runtime, "runtime", None, ExecutionContext.create().observability),
+          None,
+          configuration,
+          AliasResolver.empty,
+          Some(policy)
+        )
+
+        Then("both requested canonical components are materialized once with SAR CAR provenance")
+        result shouldBe a[Consequence.Success[_]]
+        val subsystem = result.toOption.getOrElse(fail("runtime subsystem"))
+        val expectedids = Set(
+          ComponentId("org.goldenport.fixture.ComponentFileApp"),
+          ComponentId("org.goldenport.fixture.PlainAiRunnerProvider")
+        )
+        val selected = subsystem.components.filter(component => expectedids.contains(component.core.componentId))
+        selected.map(_.core.componentId).toSet shouldBe expectedids
+        selected.size shouldBe 2
+        selected.flatMap(_.artifactMetadata.map(_.sourceType)).toSet shouldBe Set("sar+car")
       }
       }
     }

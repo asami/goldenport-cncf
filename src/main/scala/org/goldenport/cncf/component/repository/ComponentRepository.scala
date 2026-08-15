@@ -32,7 +32,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -2448,7 +2448,7 @@ object ComponentRepository extends GlobalObservable {
             )
           }
         )
-      } yield (fromcars ++ fromcardirs).distinctBy(_.name)
+      } yield SarComponentSelection.select((fromcars ++ fromcardirs).distinctBy(_.name), params.componentDescriptors)
     }
   }
 

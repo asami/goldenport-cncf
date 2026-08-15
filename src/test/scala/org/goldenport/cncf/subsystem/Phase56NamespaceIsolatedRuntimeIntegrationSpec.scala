@@ -15,7 +15,7 @@ import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.goldenport.cncf.config.{CncfConfigurationTarget, RuntimeConfig}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.subsystem.fixture.Phase56NamespaceIsolatedRuntimeFixture
-import org.goldenport.cncf.subsystem.resolver.OperationResolver.{ResolutionResult, ResolutionStage}
+import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56NamespaceIsolatedRuntimeIntegrationSpec
@@ -147,16 +147,17 @@ final class Phase56NamespaceIsolatedRuntimeIntegrationSpec
             alpharesponse.getOrElse(fail(alpharesponse.display)) shouldBe OperationResponse.Scalar("alpha")
             betaresponse.getOrElse(fail(betaresponse.display)) shouldBe OperationResponse.Scalar("beta")
 
-            And("bare presentation is not selected by ComponentSpace or resolver")
+            And("bare presentation is not selected by ComponentSpace while resolver reports ambiguity")
             runtime.findComponent("Shared") shouldBe None
             runtime.resolver.resolve(
               s"Shared.${Phase56NamespaceIsolatedRuntimeFixture.serviceName}.${Phase56NamespaceIsolatedRuntimeFixture.operationName}"
-            ) match {
-              case ResolutionResult.NotFound(stage, selector) =>
-                stage shouldBe ResolutionStage.Component
-                selector shouldBe "Shared"
-              case other => fail(s"unexpected bare presentation resolution: $other")
-            }
+            ) shouldBe ResolutionResult.Ambiguous(
+              "Shared",
+              Vector(
+                s"${alphaid.name}.${Phase56NamespaceIsolatedRuntimeFixture.serviceName}.${Phase56NamespaceIsolatedRuntimeFixture.operationName}",
+                s"${betaid.name}.${Phase56NamespaceIsolatedRuntimeFixture.serviceName}.${Phase56NamespaceIsolatedRuntimeFixture.operationName}"
+              )
+            )
 
             When("the owning subsystem is shut down repeatedly after routing")
             val firstshutdown = runtime.shutdownC()

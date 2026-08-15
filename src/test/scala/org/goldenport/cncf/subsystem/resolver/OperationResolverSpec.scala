@@ -15,7 +15,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author ASAMI, Tomoharu
  */
 class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen with TableDrivenPropertyChecks {
@@ -367,7 +367,7 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       }
     }
 
-    "E24 reject a local-ID and presentation-alias collision across runtime Components" must _e24 {
+    "E24 prefer an exact local-ID candidate over presentation aliases" must _e24 {
       "when one Component local ID equals another Component display alias" in {
       Given("two runtime Components whose local and display identities claim the same selector")
       val localcomponent = _runtime_component(
@@ -390,11 +390,15 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
       When("the colliding bare Component selector is resolved")
       val result = resolver.resolve("Catalog.notice.search")
 
-      Then("the strict resolver rejects the bare presentation alias")
+      Then("the exact local-ID candidate wins over the colliding presentation aliases")
       result match {
-        case ResolutionResult.NotFound(stage, _) => stage shouldBe ResolutionStage.Component
+        case ResolutionResult.Resolved(fqn, component, service, operation) =>
+          fqn shouldBe "org.example.Catalog.notice.search"
+          component shouldBe "org.example.Catalog"
+          service shouldBe "notice"
+          operation shouldBe "search"
         case other =>
-          fail(s"unexpected result: $other")
+          fail(s"unexpected local-ID precedence result: $other")
       }
       }
     }

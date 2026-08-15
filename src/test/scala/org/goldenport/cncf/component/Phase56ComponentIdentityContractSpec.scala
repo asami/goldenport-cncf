@@ -21,7 +21,7 @@ import scala.util.{Failure, Try}
 
 /*
  * @since   Aug.  7, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityContractSpec
@@ -397,11 +397,13 @@ final class Phase56ComponentIdentityContractSpec
         ))
         When("SubsystemAssemblyAdmission.resolveC evaluates the bare alias")
         val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
-        Then("bare identity is rejected before any compatibility adaptation")
+        Then("bare identity is rejected as an ambiguous compatibility alias with sorted candidates")
         result match {
           case Consequence.Failure(conclusion) =>
             val diagnostic = conclusion.show
-            diagnostic should include ("component assembly binding requires canonical namespace/id/version")
+            diagnostic should include (
+              "component.identity.compatibility.ambiguous: surface=assembly-binding; alias-kind=bare; alias=UserAccount; candidates=org.alpha.UserAccount,org.beta.UserAccount"
+            )
           case Consequence.Success(_) =>
             fail("ambiguous bare UserAccount was admitted")
         }

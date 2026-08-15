@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityCompatibilitySpec
@@ -70,7 +70,7 @@ final class Phase56ComponentIdentityCompatibilitySpec
       }
     }
 
-      "E2 reject one bare alias without canonical adaptation" must _e2 {
+      "E2 adapt one unique bare alias to its canonical candidate" must _e2 {
       "when exactly one candidate has the requested local ID" in {
         Given("Spec: docs/notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md; Rules: CID06-R1,R3; Example: E2 unique bare selection")
         val alpha = ComponentId("org.alpha.UserAccount")
@@ -80,9 +80,51 @@ final class Phase56ComponentIdentityCompatibilitySpec
           Vector(alpha),
           ComponentIdentityCompatibilityAdapter.Surface.AssemblyBinding
         )
-        Then("the bare selector fails closed and produces no compatibility notice")
-        result shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
-        result.toConsequence.toOption shouldBe empty
+        Then("the unique bare selector resolves canonically with a typed compatibility notice")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].componentid shouldBe alpha
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].notice.surface shouldBe
+          ComponentIdentityCompatibilityAdapter.Surface.AssemblyBinding
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].notice.aliaskind shouldBe
+          ComponentIdentityCompatibilityAdapter.AliasKind.Bare
+      }
+    }
+
+      "adapt a lowercase local selector to the canonical Sanpomap identity" must _e2 {
+      "when the admitted canonical local ID uses UpperCamelCase" in {
+        Given("Spec: docs/notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md; Rules: CID06-R1,R3; Example: lowercase Sanpomap selector")
+        val sanpomap = ComponentId("org.simplemodeling.textus.Sanpomap")
+        When("the compatibility adapter resolves lowercase sanpomap")
+        val result = ComponentIdentityCompatibilityAdapter.resolve(
+          "sanpomap",
+          Vector(sanpomap),
+          ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+        )
+        Then("the selector adapts uniquely and retains the raw alias in a bare notice")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+        val adapted = result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted]
+        adapted.componentid shouldBe sanpomap
+        adapted.notice.aliaskind shouldBe ComponentIdentityCompatibilityAdapter.AliasKind.Bare
+        adapted.notice.alias shouldBe "sanpomap"
+      }
+    }
+
+      "adapt a lowercase runtime selector to the canonical Sanpomap identity" must _e2 {
+      "when runtime aliases contain one admitted UpperCamelCase local ID" in {
+        Given("Spec: docs/notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md; Rules: CID06-R1,R3; Example: runtime lowercase Sanpomap selector")
+        val sanpomap = ComponentId("org.simplemodeling.textus.Sanpomap")
+        When("the runtime compatibility adapter resolves lowercase sanpomap")
+        val result = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          "sanpomap",
+          Vector(ComponentIdentityCompatibilityAdapter.AliasCandidate(sanpomap, Vector.empty)),
+          ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+        )
+        Then("the selector adapts uniquely with a bare compatibility notice")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+        val adapted = result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted]
+        adapted.componentid shouldBe sanpomap
+        adapted.notice.aliaskind shouldBe ComponentIdentityCompatibilityAdapter.AliasKind.Bare
+        adapted.notice.alias shouldBe "sanpomap"
       }
     }
 
@@ -97,8 +139,33 @@ final class Phase56ComponentIdentityCompatibilitySpec
           Vector(beta, alpha),
           ComponentIdentityCompatibilityAdapter.Surface.AssemblyBinding
         )
-        Then("all bare aliases fail before ambiguity-based adaptation")
+        Then("the shared bare alias remains rejected as ambiguous")
         result shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Rejected].rejection shouldBe
+          a[ComponentIdentityCompatibilityAdapter.Ambiguous]
+      }
+    }
+
+      "reject normalized local-ID collisions as ambiguous" must _e3 {
+      "when distinct namespaces admit the same canonical Sanpomap local ID" in {
+        Given("Spec: docs/notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md; Rules: CID06-R2,R4; Example: normalized local-ID collision")
+        val alpha = ComponentId("org.alpha.Sanpomap")
+        val beta = ComponentId("org.beta.Sanpomap")
+        When("the runtime compatibility adapter resolves lowercase sanpomap")
+        val result = ComponentIdentityCompatibilityAdapter.resolveAliases(
+          "sanpomap",
+          Vector(
+            ComponentIdentityCompatibilityAdapter.AliasCandidate(beta, Vector.empty),
+            ComponentIdentityCompatibilityAdapter.AliasCandidate(alpha, Vector.empty)
+          ),
+          ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+        )
+        Then("the normalized local-ID collision remains rejected with sorted canonical candidates")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
+        val rejection = result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Rejected].rejection
+        rejection shouldBe a[ComponentIdentityCompatibilityAdapter.Ambiguous]
+        rejection.asInstanceOf[ComponentIdentityCompatibilityAdapter.Ambiguous].candidates.map(_.name) shouldBe
+          Vector(alpha.name, beta.name)
       }
     }
 
@@ -126,19 +193,21 @@ final class Phase56ComponentIdentityCompatibilitySpec
     }
 
     "assembly admission behavior (E5-E8)" which {
-      "E5 reject one bare assembly binding before descriptor discovery" must _e5 {
+      "E5 adapt one bare assembly binding through a canonical override" must _e5 {
       "when the actual assembly-admission boundary has one canonical candidate" in {
         Given("Spec: docs/notes/phase-56-cid06-component-identity-compatibility-adapter-plan.md; Rules: CID06-R2,R3; Example: E5 unique bare assembly admission")
         val alpha = ComponentId("org.alpha.UserAccount")
         val descriptor = _assembly_descriptor(
-          Vector(GenericSubsystemComponentBinding("UserAccount", instance = Some("primary"))),
+          Vector(GenericSubsystemComponentBinding("UserAccount", version = Some("0.1.0"), instance = Some("primary"))),
           Vector(_canonical_descriptor(alpha))
         )
         When("SubsystemAssemblyAdmission resolves the bare binding against canonical override authority")
-        val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
-        Then("the binding fails before any descriptor override can supply identity")
-        result shouldBe a[Consequence.Failure[_]]
-        result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component assembly binding requires canonical namespace/id/version")
+        val result = SubsystemAssemblyAdmission.resolveWithNoticesC(descriptor, Vector.empty)
+        Then("the binding becomes canonical and retains one bare-alias compatibility notice")
+        result.toOption.map(_.descriptor.componentBindings.head.componentName) shouldBe Some(alpha.name)
+        result.toOption.map(_.descriptor.componentBindings.head.componentId) shouldBe Some(Some(alpha))
+        result.toOption.map(_.notices.map(_.aliaskind)) shouldBe
+          Some(Vector(ComponentIdentityCompatibilityAdapter.AliasKind.Bare))
       }
     }
 
@@ -183,16 +252,18 @@ final class Phase56ComponentIdentityCompatibilitySpec
         )
         When("SubsystemAssemblyAdmission resolves the ambiguous bare binding")
         val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
-        Then("the untyped binding fails before candidate ambiguity could be considered")
+        Then("the shared bare binding remains rejected with sorted canonical candidates")
         result shouldBe a[Consequence.Failure[_]]
-        result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("component assembly binding requires canonical namespace/id/version")
+        result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include (
+          "component.identity.compatibility.ambiguous: surface=assembly-binding; alias-kind=bare; alias=UserAccount; candidates=org.alpha.UserAccount,org.beta.UserAccount"
+        )
       }
       }
     }
 
     "runtime componentlet compatibility behavior (E9)" which {
-      "E9 reject an owning component alias outside Web-path presentation" must _e9 {
-      "when an admitted componentlet reports its owning component name in instance metadata" in {
+      "E9 adapt one unique owning component presentation alias" must _e9 {
+      "when an admitted componentlet reports its owning component presentation name in instance metadata" in {
         Given("Spec: docs/spec/component-identity.md; Rules: 1,8,9; Example: E9 componentlet owning alias")
         val participantid = ComponentId("org.example.TextusScraperAi")
         val metadata = ComponentInstanceMetadata("textus-scraper", "static-default").copy(
@@ -211,15 +282,22 @@ final class Phase56ComponentIdentityCompatibilitySpec
           participantRole = Component.ParticipantRole.Componentlet,
           instanceMetadata = Some(metadata)
         ))
-        When("the runtime compatibility adapter resolves the owning component alias")
+        When("the runtime compatibility adapter resolves the unique owning component presentation alias")
         val result = ComponentIdentityCompatibilityAdapter.resolveAliases(
           "textus-scraper",
           ComponentIdentityCompatibilityAdapter.runtimeAliasCandidates(Vector(component)),
           ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
         )
-        Then("the runtime selector retains only exact qualified ComponentId authority")
-        result shouldBe a[ComponentIdentityCompatibilityAdapter.Rejected]
-        result.toConsequence.toOption shouldBe empty
+        Then("the runtime selector adapts to the canonical participant identity without changing metadata presentation")
+        result shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].componentid shouldBe participantid
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].notice.surface shouldBe
+          ComponentIdentityCompatibilityAdapter.Surface.RuntimeSelector
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].notice.aliaskind shouldBe
+          ComponentIdentityCompatibilityAdapter.AliasKind.Presentation
+        result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted].notice.alias shouldBe "textus-scraper"
+        component.componentId shouldBe participantid
+        component.instanceMetadata.map(_.componentName) shouldBe Some("textus-scraper")
       }
       }
     }

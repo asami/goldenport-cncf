@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 31, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -24,7 +24,7 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
 
   "SubsystemAssemblyAdmission" should {
     "canonical static repository candidates" which {
-      "E56-CID06R-C reject a bare binding from one packed CAR file" must _cid06c_metadata("E56-CID06R-C-file-bare") {
+      "E56-CID06C adapt a unique bare binding from one packed CAR file" must _cid06c_metadata("E56-CID06C-file-bare") {
         "when the repository specification points at a canonical schema-3 CAR" in {
           Given("one packed CAR whose descriptor is available without component activation")
           _with_work_dir { root =>
@@ -36,16 +36,15 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
             val descriptor = _assembly_descriptor("Catalog")
 
             When("assembly admission discovers the bare binding's canonical static CAR candidate")
-            val result = SubsystemAssemblyAdmission.resolveC(
+            val result = SubsystemAssemblyAdmission.resolveWithNoticesC(
               descriptor,
               Vector(ComponentRepository.ComponentFileRepository.Specification(carpath))
             )
 
-            Then("the bare alias fails closed before static candidate adaptation")
-            result shouldBe a[org.goldenport.Consequence.Failure[_]]
-            result.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
-              "component assembly binding requires canonical namespace/id/version: alias=Catalog; required=canonical namespace/id/version"
-            )
+            Then("the binding is canonicalized and one compatibility notice is retained")
+            result.toOption.map(_.descriptor.componentBindings.head.componentName) shouldBe Some(componentid)
+            result.toOption.map(_.descriptor.componentBindings.head.componentId.map(_.name)) shouldBe Some(Some(componentid))
+            result.toOption.map(_.notices.map(_.alias)) shouldBe Some(Vector("Catalog"))
           }
         }
       }
@@ -74,17 +73,17 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
             )
             val repository = ComponentRepository.ComponentDirRepository.Specification(root)
 
-            ComponentRepositoryStaticIdentityCandidates
-              .resolve(repository, componentid)
-              .map(_.name) shouldBe Vector(componentid)
-
             When("assembly admission resolves the exact qualified binding through static CAR-directory metadata")
+            val candidates = ComponentRepositoryStaticIdentityCandidates
+              .resolve(repository, componentid)
+              .map(_.name)
             val result = SubsystemAssemblyAdmission.resolveC(
               descriptor,
               Vector(repository)
             )
 
             Then("the canonical schema-3 descriptor closes the exact typed binding unchanged")
+            candidates shouldBe Vector(componentid)
             val admitted = result.toOption.get
             admitted.componentBindings.head.componentName shouldBe componentid
             admitted.componentBindings.head.componentId.map(_.name) shouldBe Some(componentid)
@@ -93,7 +92,7 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
         }
       }
 
-      "E56-CID06R-F5 reject a same-ID static descriptor at the wrong release" must _cid06c_metadata("E56-CID06R-F5-static-wrong-release") {
+      "E56-CID06C reject a same-ID static descriptor at the wrong release" must _cid06c_metadata("E56-CID06C-static-wrong-release") {
         "when descriptor closure receives an explicit canonical descriptor with a different release" in {
           Given("a canonical binding at 1.0.0 and an explicit same-ID descriptor at 2.0.0")
           val componentid = ComponentId("org.simplemodeling.textus.Catalog")
@@ -120,15 +119,15 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
           When("assembly admission closes the explicit static descriptor")
           val result = SubsystemAssemblyAdmission.resolveC(descriptor, Vector.empty)
 
-          Then("the wrong release fails closed instead of satisfying the binding")
+          Then("the wrong release fails closed instead of satisfying the canonical binding")
           result shouldBe a[org.goldenport.Consequence.Failure[_]]
           result.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
-            s"component descriptor closure is missing binding '${componentid.name}'"
+            s"component descriptor closure canonical binding mismatch: expected=${componentid.name}:1.0.0"
           )
         }
       }
 
-      "E56-CID06R-C reject an untyped exact qualified binding from one expanded CAR directory" must _cid06c_metadata("E56-CID06R-C-directory-untyped-exact") {
+      "E56-CID06C promote an untyped exact qualified binding from one expanded CAR directory" must _cid06c_metadata("E56-CID06C-directory-untyped-exact") {
         "when the repository specification identifies the exact canonical ComponentId" in {
           Given("one expanded CAR directory and an assembly binding without canonical identity fields")
           _with_work_dir { root =>
@@ -144,20 +143,20 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
             val repository = ComponentRepository.ComponentDirRepository.Specification(root)
 
             When("assembly admission resolves the untyped exact qualified binding through static CAR-directory metadata")
-            val result = SubsystemAssemblyAdmission.resolveC(
+            val result = SubsystemAssemblyAdmission.resolveWithNoticesC(
               _assembly_descriptor(componentid),
               Vector(repository)
             )
 
-            Then("it rejects the legacy declaration before static candidate adaptation")
-            result shouldBe a[org.goldenport.Consequence.Failure[_]]
-            result.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display shouldBe
-              "component assembly binding requires canonical namespace/id/version: alias=org.simplemodeling.textus.Catalog; required=canonical namespace/id/version"
+            Then("the qualified spelling is promoted without a compatibility notice")
+            result.toOption.map(_.descriptor.componentBindings.head.componentName) shouldBe Some(componentid)
+            result.toOption.map(_.descriptor.componentBindings.head.componentId.map(_.name)) shouldBe Some(Some(componentid))
+            result.toOption.map(_.notices) shouldBe Some(Vector.empty)
           }
         }
       }
 
-      "E56-CID06R-C reject an artifact alias from one expanded CAR directory" must _cid06c_metadata("E56-CID06R-C-directory-artifact") {
+      "E56-CID06C adapt an artifact alias from one expanded CAR directory" must _cid06c_metadata("E56-CID06C-directory-artifact") {
         "when static repository metadata identifies one canonical ComponentId" in {
           Given("one expanded CAR directory with a canonical descriptor and an artifact-style assembly alias")
           _with_work_dir { root =>
@@ -173,21 +172,19 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
             val repository = ComponentRepository.ComponentDirRepository.Specification(root)
 
             When("assembly admission discovers the artifact alias through static metadata")
-            val result = SubsystemAssemblyAdmission.resolveC(
+            val result = SubsystemAssemblyAdmission.resolveWithNoticesC(
               _assembly_descriptor("textus-catalog"),
               Vector(repository)
             )
 
-            Then("the artifact spelling fails closed before static candidate adaptation")
-            result shouldBe a[org.goldenport.Consequence.Failure[_]]
-            result.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
-              "component assembly binding requires canonical namespace/id/version: alias=textus-catalog; required=canonical namespace/id/version"
-            )
+            Then("the artifact spelling is canonicalized with one artifact compatibility notice")
+            result.toOption.map(_.descriptor.componentBindings.head.componentName) shouldBe Some(componentid)
+            result.toOption.map(_.notices.map(_.aliaskind.code)) shouldBe Some(Vector("artifact"))
           }
         }
       }
 
-      "E56-CID06R-C reject an ambiguous bare binding before descriptor closure" must _cid06c_metadata("E56-CID06R-C-ambiguous-bare") {
+      "E56-CID06C reject an ambiguous bare binding before descriptor closure" must _cid06c_metadata("E56-CID06C-ambiguous-bare") {
         "when two static repositories expose distinct canonical namespaces for one local alias" in {
           Given("two packed CARs with the same local ID in different namespaces")
           _with_work_dir { root =>
@@ -211,12 +208,52 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
               )
             )
 
-            Then("it reports canonical fields as required rather than selecting a namespace")
+            Then("it reports sorted canonical candidates rather than selecting a namespace")
             result shouldBe a[org.goldenport.Consequence.Failure[_]]
             result.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
-              "component assembly binding requires canonical namespace/id/version: alias=Catalog; required=canonical namespace/id/version"
+              "component.identity.compatibility.ambiguous: surface=assembly-binding; alias-kind=bare; alias=Catalog; candidates=org.alpha.textus.Catalog,org.beta.textus.Catalog"
             )
           }
+        }
+      }
+
+      "E56-CID06C reject unknown bindings and conflicting legacy descriptor fields" must _cid06c_metadata("E56-CID06C-unknown-and-conflict") {
+        "when no admitted candidate exists or a descriptor claims the expected ID with a conflicting field" in {
+          Given("one unknown binding and one legacy descriptor conflict")
+          val componentid = ComponentId("org.simplemodeling.textus.Catalog")
+          val unknown = _assembly_descriptor("Missing")
+          val conflict = GenericSubsystemDescriptor(
+            path = Path.of("legacy-descriptor-conflict.yaml"),
+            subsystemName = "legacy-descriptor-conflict",
+            componentBindings = Vector(GenericSubsystemComponentBinding(
+              componentid.name,
+              version = Some("1.0.0"),
+              componentId = Some(componentid)
+            )),
+            subsystemCapabilityProviders = Vector(
+              GenericSubsystemCapabilityProviderBinding("provider", componentid.name, Vector.empty)
+            ),
+            componentDescriptorOverrides = Vector(ComponentDescriptor(
+              name = Some("Other"),
+              componentName = Some("Other"),
+              version = Some("1.0.0"),
+              componentId = Some(componentid)
+            ))
+          )
+
+          When("assembly admission reaches final canonical validation and descriptor projection")
+          val unknownresult = SubsystemAssemblyAdmission.resolveC(unknown, Vector.empty)
+          val conflictresult = SubsystemAssemblyAdmission.resolveC(conflict, Vector.empty)
+
+          Then("both unadmitted input and conflicting descriptor fields fail closed")
+          unknownresult shouldBe a[org.goldenport.Consequence.Failure[_]]
+          unknownresult.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
+            "component assembly binding requires canonical namespace/id/version: alias=Missing"
+          )
+          conflictresult shouldBe a[org.goldenport.Consequence.Failure[_]]
+          conflictresult.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
+            "component.identity.compatibility.descriptor-field.rejected: field=name"
+          )
         }
       }
     }
@@ -396,11 +433,14 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
       )
     )
 
-  private def _assembly_descriptor(componentname: String): GenericSubsystemDescriptor =
+  private def _assembly_descriptor(
+    componentname: String,
+    release: String = "0.1.0"
+  ): GenericSubsystemDescriptor =
     GenericSubsystemDescriptor(
       path = Path.of("cid06c-static-candidate-assembly.yaml"),
       subsystemName = "cid06c-static-candidate-assembly",
-      componentBindings = Vector(GenericSubsystemComponentBinding(componentname))
+      componentBindings = Vector(GenericSubsystemComponentBinding(componentname, version = Some(release)))
     )
 
   private def _canonical_descriptor_json(

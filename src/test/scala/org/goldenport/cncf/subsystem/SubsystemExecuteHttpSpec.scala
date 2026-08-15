@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  9, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -27,16 +27,17 @@ class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with GivenWhenT
 
   "Subsystem.executeHttp" should {
 
-    "E1 reject display-compatible slash route /admin/system/ping" must _e1 {
-      "when exercising: reject display-compatible slash route /admin/system/ping" in {
+    "E1 admit the unique display-compatible slash route /admin/system/ping" must _e1 {
+      "when exercising: admit the unique display-compatible slash route /admin/system/ping" in {
         Given("a server subsystem and a noncanonical display-compatible ping route")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
         val req = HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
         When("the subsystem executes the HTTP route")
         val res = subsystem.executeHttp(req)
 
-        Then("the strict runtime boundary rejects the noncanonical route")
-        res.code shouldBe 404
+        Then("the runtime boundary admits the unique alias and returns the ping response")
+        res.code shouldBe 200
+        res.getString.getOrElse("") should include ("runtime: goldenport-cncf")
       }
     }
 
@@ -54,16 +55,17 @@ class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with GivenWhenT
       }
     }
 
-    "E3 reject compatibility dot route /admin.system.ping" must _e3 {
-      "when exercising: reject compatibility dot route /admin.system.ping" in {
+    "E3 admit the unique compatibility dot route /admin.system.ping" must _e3 {
+      "when exercising: admit the unique compatibility dot route /admin.system.ping" in {
         Given("a server subsystem and a noncanonical dotted ping route")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
         val req = HttpRequest.fromPath(HttpRequest.GET, "/admin.system.ping")
         When("the subsystem executes the HTTP route")
         val res = subsystem.executeHttp(req)
 
-        Then("the strict runtime boundary rejects the noncanonical route")
-        res.code shouldBe 404
+        Then("the runtime boundary admits the unique alias and returns the ping response")
+        res.code shouldBe 200
+        res.getString.getOrElse("") should include ("runtime: goldenport-cncf")
       }
     }
 
@@ -80,8 +82,8 @@ class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with GivenWhenT
       }
     }
 
-    "E5 route direct Request selectors through exact identity and reject display aliases" must _e5 {
-      "when exercising: route direct Request selectors through exact identity and reject display aliases" in {
+    "E5 route direct Request selectors through exact identity and admitted display aliases" must _e5 {
+      "when exercising: route direct Request selectors through exact identity and admitted display aliases" in {
         Given("a server subsystem with the builtin Admin operation")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("server"))
         val exact = Request.of(
@@ -99,9 +101,10 @@ class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with GivenWhenT
         val exactresult = subsystem.executeOperationResponse(exact)
         val compatibilityresult = subsystem.executeOperationResponse(compatibility)
 
-        Then("the canonical selector succeeds while the bare display alias fails closed")
+        Then("both canonical and unique bare selectors succeed with the ping response")
         exactresult.isSuccess shouldBe true
-        compatibilityresult.isSuccess shouldBe false
+        compatibilityresult.isSuccess shouldBe true
+        exactresult.toOption.get shouldBe compatibilityresult.toOption.get
       }
     }
 

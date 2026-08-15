@@ -22,6 +22,7 @@ import org.goldenport.protocol.spec as spec
 import org.goldenport.value.BaseContent
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -30,10 +31,29 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Jan. 18, 2026
  *  version May.  2, 2026
  *  version Jun. 29, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
-class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+class CommandExecuteComponentSpec
+  extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen
+    with BeforeAndAfterAll {
+  private val _e22 = afterWord(
+    "in spec:phase-56-runtime-identity-projection, example:E22, rules:CID06C-R8,R9, phase:56, slice:CID-06C"
+  )
+  private val _controlled_test_descriptor_work_dir =
+    Path.of("target", "cncf-test", "work", "command-execute-component").toAbsolutePath.normalize
+
+  override protected def afterAll(): Unit = {
+    try {
+      val path = _controlled_test_descriptor_work_dir.resolve("controlled-test-descriptor.yaml")
+      Files.deleteIfExists(path)
+      Files.deleteIfExists(_controlled_test_descriptor_work_dir)
+    } finally {
+      super.afterAll()
+    }
+  }
 
   "CncfRuntime.parseCommandArgs" should {
     "reject component service operation token form" in {
@@ -292,6 +312,108 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
           operation shouldBe "ping"
         case Consequence.Failure(conclusion) =>
           fail(s"unexpected failure: $conclusion")
+      }
+    }
+
+    "E22 expose deduplicated compatibility warnings through the runtime-selector assembly report" must _e22 {
+      "when the accepted non-Web presentation selector is parsed twice in command mode" in {
+        Given("a command subsystem owned by one runtime with the admitted Admin presentation selector")
+        val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+        val runtime = GlobalRuntimeContext.create(
+          "phase56-admin-observability",
+          RuntimeConfig.default,
+          configuration,
+          ExecutionContext.create().observability,
+          AliasResolver.empty
+        )
+        val previous = GlobalRuntimeContext.current
+        try {
+          GlobalRuntimeContext.current = Some(runtime)
+          val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"), configuration)
+
+          When("the presentation selector is parsed twice at the command boundary")
+          val first = CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping"))
+          val second = CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping"))
+          val warnings = runtime.assemblyReport.warnings
+
+          Then("both requests use the canonical Admin identity and one runtime warning is retained")
+          first.toOption.flatMap(_.component) shouldBe Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
+          first.toOption.flatMap(_.service) shouldBe Some("system")
+          first.toOption.map(_.operation) shouldBe Some("ping")
+          second.toOption.flatMap(_.component) shouldBe Some(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name)
+          second.toOption.flatMap(_.service) shouldBe Some("system")
+          second.toOption.map(_.operation) shouldBe Some("ping")
+          warnings should have size 1
+          warnings.head.kind shouldBe "component-identity-compatibility"
+          warnings.head.componentName shouldBe org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.ADMIN.name
+          warnings.head.reason.getOrElse("") should include ("surface=runtime-selector")
+          warnings.head.reason.getOrElse("") should include ("alias=admin")
+        } finally {
+          GlobalRuntimeContext.current = previous
+        }
+      }
+    }
+
+    "execute one unique presentation component selector and reject an ambiguous selector" in {
+      Given("a command runtime with one Sanpomap presentation alias and two colliding artifact aliases")
+      val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      val runtime = GlobalRuntimeContext.create(
+        "command-component-identity-compatibility",
+        RuntimeConfig.default,
+        configuration,
+        ExecutionContext.create().observability,
+        AliasResolver.empty
+      )
+      val previous = GlobalRuntimeContext.current
+      try {
+        GlobalRuntimeContext.current = Some(runtime)
+        val sanpomap = TestComponentFactory.create("sanpomap", Protocol.empty)
+        val subsystem = RuntimeBindingAdmissionFixture.default(Seq(sanpomap), Some("command"))
+        sanpomap.initialize(ComponentInit(subsystem, sanpomap.core, ComponentOrigin.Main))
+        val alpha = TestComponentFactory.create("alpha", Protocol.empty).withArtifactMetadata(
+          org.goldenport.cncf.component.Component.ArtifactMetadata(
+            sourceType = "test",
+            name = "sanpomap",
+            version = "0.1.0"
+          )
+        )
+        val beta = TestComponentFactory.create("beta", Protocol.empty).withArtifactMetadata(
+          org.goldenport.cncf.component.Component.ArtifactMetadata(
+            sourceType = "test",
+            name = "sanpomap",
+            version = "0.1.0"
+          )
+        )
+        val ambiguoussubsystem = RuntimeBindingAdmissionFixture.default(Seq(alpha, beta), Some("command"))
+        alpha.initialize(ComponentInit(ambiguoussubsystem, alpha.core, ComponentOrigin.Main))
+        beta.initialize(ComponentInit(ambiguoussubsystem, beta.core, ComponentOrigin.Main))
+
+        When("command mode resolves the presentation selector without path resolution and executes it")
+        val legacyrequest = CncfRuntime.parseCommandArgs(subsystem, Array("sanpomap.meta.help", sanpomap.componentId.name))
+        val execution = legacyrequest.flatMap(subsystem.execute)
+        val ambiguousresult = CncfRuntime.parseCommandArgs(
+          ambiguoussubsystem,
+          Array("sanpomap.meta.help")
+        )
+        val warnings = runtime.assemblyReport.warnings
+
+        val runtimewarnings = warnings.filter(_.reason.exists(_.contains("surface=runtime-selector")))
+        val helpwarnings = warnings.filter(_.reason.exists(_.contains("surface=help-projection")))
+
+        Then("the unique selector becomes canonical, executes, records each surface warning, and the collision fails")
+        legacyrequest.toOption.flatMap(_.component) shouldBe Some(sanpomap.componentId.name)
+        execution.isSuccess shouldBe true
+        runtimewarnings should have size 1
+        runtimewarnings.head.kind shouldBe "component-identity-compatibility"
+        runtimewarnings.head.componentName shouldBe sanpomap.componentId.name
+        runtimewarnings.head.reason.getOrElse("") should include ("alias=sanpomap")
+        helpwarnings should have size 1
+        helpwarnings.head.kind shouldBe "component-identity-compatibility"
+        helpwarnings.head.reason.getOrElse("") should include ("surface=help-projection")
+        ambiguousresult.isFaillure shouldBe true
+        ambiguousresult.display should include ("ambiguous selector 'sanpomap'")
+      } finally {
+        GlobalRuntimeContext.current = previous
       }
     }
   }
@@ -931,7 +1053,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers with GivenWh
   }
 
   private lazy val _controlled_test_descriptor_path: Path = {
-    val path = Files.createTempFile("cncf-command-execute-component-", ".yaml")
+    val path = _controlled_test_descriptor_work_dir.resolve("controlled-test-descriptor.yaml")
+    Files.createDirectories(_controlled_test_descriptor_work_dir)
     Files.writeString(
       path,
       """kind: test-descriptor

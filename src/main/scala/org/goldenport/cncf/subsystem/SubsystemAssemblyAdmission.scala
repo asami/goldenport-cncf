@@ -2,7 +2,7 @@ package org.goldenport.cncf.subsystem
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{ComponentDescriptor, ComponentId, ComponentIdentityCompatibilityAdapter, SubsystemCapabilityId}
-import org.goldenport.cncf.component.repository.ComponentRepository
+import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositoryStaticIdentityCandidates}
 
 /*
  * Descriptor-only admission for component-style subsystem requirements.
@@ -13,10 +13,15 @@ import org.goldenport.cncf.component.repository.ComponentRepository
  * is not a source of subsystem capability authority.
  *
  * @since   Jul. 31, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object SubsystemAssemblyAdmission {
+  private[cncf] final case class DetailedAdmission(
+    descriptor: GenericSubsystemDescriptor,
+    notices: Vector[ComponentIdentityCompatibilityAdapter.Notice]
+  )
+
   final case class Assignment(
     component: String,
     requirement: SubsystemCapabilityId,
@@ -32,26 +37,36 @@ object SubsystemAssemblyAdmission {
    * Completes the static descriptor closure before admitting style
    * requirements. Explicit descriptor overrides are authoritative for their
    * component; otherwise the first configured repository that exposes a
-   * static descriptor supplies the binding. Bindings are already canonical
-   * namespace/id/version declarations before static descriptor discovery.
-   * No repository is built here.
+   * static descriptor supplies the binding. Typed bindings, canonical
+   * overrides, and active repository static descriptors form the complete
+   * admitted compatibility candidate set. No repository is built here.
    */
   def resolveC(
     descriptor: GenericSubsystemDescriptor,
     repositories: Vector[ComponentRepository.Specification]
   ): Consequence[GenericSubsystemDescriptor] =
-    _admit_component_bindings_c(descriptor).flatMap { admitted =>
-      _discover_static_descriptors_c(admitted, repositories).flatMap { discovered =>
+    resolveWithNoticesC(descriptor, repositories).map(_.descriptor)
+
+  private[cncf] def resolveWithNoticesC(
+    descriptor: GenericSubsystemDescriptor,
+    repositories: Vector[ComponentRepository.Specification]
+  ): Consequence[DetailedAdmission] =
+    _promote_component_bindings_c(descriptor, repositories).flatMap { admitted =>
+      _discover_static_descriptors_c(admitted.descriptor, repositories).flatMap { discovered =>
         val discovereddescriptor =
-          if (discovered.isEmpty) admitted
-          else admitted.copy(componentDescriptorOverrides = discovered.map(_.descriptor).distinct)
+          if (discovered.isEmpty) admitted.descriptor
+          else admitted.descriptor.copy(componentDescriptorOverrides = discovered.map(_.descriptor).distinct)
+        val discoverednotices = admitted.notices ++ discovered.flatMap(_.notices)
         if (_requires_descriptor_closure(discovereddescriptor))
           _resolve_descriptors_c(discovereddescriptor, repositories).flatMap { descriptors =>
-            val resolved = admitted.copy(componentDescriptorOverrides = descriptors.map(_.descriptor).distinct)
-            verifyC(resolved).map(_ => resolved)
+            val resolved = discovereddescriptor.copy(componentDescriptorOverrides = descriptors.map(_.descriptor).distinct)
+            verifyC(resolved).map(_ => DetailedAdmission(
+              resolved,
+              (discoverednotices ++ descriptors.flatMap(_.notices)).distinct
+            ))
           }
         else
-          verifyC(discovereddescriptor).map(_ => discovereddescriptor)
+          verifyC(discovereddescriptor).map(_ => DetailedAdmission(discovereddescriptor, discoverednotices.distinct))
       }
     }
 
@@ -80,21 +95,84 @@ object SubsystemAssemblyAdmission {
     descriptor.subsystemCapabilityProviders.nonEmpty ||
       descriptor.componentDescriptorOverrides.exists(_.componentStyleSnapshot.nonEmpty)
 
-  private def _admit_component_bindings_c(
-    descriptor: GenericSubsystemDescriptor
-  ): Consequence[GenericSubsystemDescriptor] =
-    descriptor.componentBindings.collectFirst {
-      case binding if binding.componentId.isEmpty => binding
-    } match {
-      case Some(binding) =>
-        Consequence.componentInvalid(
-          s"component assembly binding requires canonical namespace/id/version: " +
-            s"alias=${binding.componentName}; required=canonical namespace/id/version"
-        )
-      case None =>
-        GenericSubsystemDescriptor._validate_component_bindings_c(descriptor.componentBindings)
-          .map(validated => descriptor.copy(componentBindings = validated))
+  private def _promote_component_bindings_c(
+    descriptor: GenericSubsystemDescriptor,
+    repositories: Vector[ComponentRepository.Specification]
+  ): Consequence[DetailedAdmission] = {
+    val parsedbindings = descriptor.componentBindings.map { binding =>
+      binding.componentId match {
+        case Some(_) => Consequence.success(binding)
+        case None =>
+          ComponentId.parseC(binding.componentName)
+            .map(id => _canonical_binding(binding, id))
+            .recover { _ => binding }
+      }
     }
+    _sequence(parsedbindings).flatMap { parsed =>
+      val parseddescriptor = descriptor.copy(componentBindings = parsed)
+      val candidates = _compatibility_candidates(parseddescriptor, repositories)
+      _sequence(parsed.map(_adapt_legacy_binding_c(_, candidates))).flatMap { adapted =>
+        val bindings = adapted.map(_._1)
+        val notices = adapted.flatMap(_._2).distinct
+        GenericSubsystemDescriptor._validate_component_bindings_c(bindings)
+          .map(validated => DetailedAdmission(descriptor.copy(componentBindings = validated), notices))
+      }
+    }
+  }
+
+  private def _compatibility_candidates(
+    descriptor: GenericSubsystemDescriptor,
+    repositories: Vector[ComponentRepository.Specification]
+  ): Vector[ComponentId] = {
+    val bindingids = descriptor.componentBindings.flatMap(_.componentId)
+    val overrideids = descriptor.componentDescriptorOverrides.flatMap(
+      _.requireCanonicalIdentityC.toOption.map(_._1)
+    )
+    val repositoryids = descriptor.componentBindings
+      .filter(_.componentId.isEmpty)
+      .flatMap { binding =>
+        repositories.flatMap(ComponentRepositoryStaticIdentityCandidates.resolve(_, binding.componentName))
+      }
+    (bindingids ++ overrideids ++ repositoryids).distinct.sortBy(_.name)
+  }
+
+  private def _adapt_legacy_binding_c(
+    binding: GenericSubsystemComponentBinding,
+    candidates: Vector[ComponentId]
+  ): Consequence[(GenericSubsystemComponentBinding, Vector[ComponentIdentityCompatibilityAdapter.Notice])] =
+    binding.componentId match {
+      case Some(_) => Consequence.success(binding -> Vector.empty)
+      case None =>
+        ComponentIdentityCompatibilityAdapter.resolve(
+          binding.componentName,
+          candidates,
+          ComponentIdentityCompatibilityAdapter.Surface.AssemblyBinding
+        ) match {
+          case result: ComponentIdentityCompatibilityAdapter.Canonical =>
+            result.toConsequence.map(admission =>
+              _canonical_binding(binding, admission.componentid) -> admission.notice.toVector
+            )
+          case result: ComponentIdentityCompatibilityAdapter.Adapted =>
+            result.toConsequence.map(admission =>
+              _canonical_binding(binding, admission.componentid) -> admission.notice.toVector
+            )
+          case ComponentIdentityCompatibilityAdapter.Rejected(_: ComponentIdentityCompatibilityAdapter.Unsupported) =>
+            Consequence.success(binding -> Vector.empty)
+          case result: ComponentIdentityCompatibilityAdapter.Rejected =>
+            result.toConsequence.map(admission =>
+              _canonical_binding(binding, admission.componentid) -> admission.notice.toVector
+            )
+        }
+    }
+
+  private def _canonical_binding(
+    binding: GenericSubsystemComponentBinding,
+    componentid: ComponentId
+  ): GenericSubsystemComponentBinding =
+    binding.copy(
+      componentName = componentid.name,
+      componentId = Some(componentid)
+    )
 
   private def _resolve_descriptors_c(
     descriptor: GenericSubsystemDescriptor,
@@ -143,7 +221,9 @@ object SubsystemAssemblyAdmission {
   }
 
   private def _descriptor_lookup_names(binding: GenericSubsystemComponentBinding): Vector[String] =
-    binding.componentId.map(id => Vector(id.name)).getOrElse(Vector.empty)
+    binding.componentId
+      .map(ComponentIdentityCompatibilityAdapter.descriptorAliases)
+      .getOrElse(Vector(binding.componentName))
 
   private def _resolve_descriptor_c(
     descriptor: GenericSubsystemDescriptor,
@@ -163,10 +243,9 @@ object SubsystemAssemblyAdmission {
     descriptor: ComponentDescriptor,
     binding: GenericSubsystemComponentBinding
   ): Boolean =
-    (for {
-      componentid <- binding.componentId
-      release <- binding.componentVersion
-    } yield descriptor.requireCanonicalIdentityC.toOption.contains(componentid -> release)).getOrElse(false)
+          binding.componentId.exists { componentid =>
+            ComponentIdentityCompatibilityAdapter.descriptorClaimsIdentity(descriptor, componentid)
+          }
 
   private def _project_descriptor_c(
     binding: GenericSubsystemComponentBinding,
@@ -174,14 +253,19 @@ object SubsystemAssemblyAdmission {
   ): Consequence[ComponentIdentityCompatibilityAdapter.DescriptorProjection] =
     (binding.componentId, binding.componentVersion) match {
       case (Some(componentid), Some(release)) =>
-        descriptor.requireCanonicalIdentityC.flatMap { identity =>
-          if (identity == componentid -> release)
-            ComponentIdentityCompatibilityAdapter.projectDescriptorC(descriptor, componentid)
-          else
-            Consequence.componentInvalid(
-              s"component descriptor closure canonical binding mismatch: expected=${componentid.name}:$release, " +
-                s"actual=${identity._1.name}:${identity._2}"
-            )
+        ComponentIdentityCompatibilityAdapter.projectDescriptorC(descriptor, componentid).flatMap { projection =>
+          projection.descriptor.version match {
+            case Some(actual) if actual == release => Consequence.success(projection)
+            case Some(actual) =>
+              Consequence.componentInvalid(
+                s"component descriptor closure canonical binding mismatch: expected=${componentid.name}:$release, " +
+                  s"actual=${componentid.name}:$actual"
+              )
+            case None =>
+              Consequence.componentInvalid(
+                s"component descriptor closure canonical binding requires version: expected=${componentid.name}:$release"
+              )
+          }
         }
       case (None, _) =>
         Consequence.componentInvalid(
@@ -237,5 +321,12 @@ object SubsystemAssemblyAdmission {
         )
     }
   }
+
+  private def _sequence[A](
+    values: Vector[Consequence[A]]
+  ): Consequence[Vector[A]] =
+    values.foldLeft(Consequence.success(Vector.empty[A])) { (z, value) =>
+      z.flatMap(xs => value.map(xs :+ _))
+    }
 
 }
