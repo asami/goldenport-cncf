@@ -1,10 +1,14 @@
 package org.goldenport.cncf.testutil
 
+import java.io.File
+import java.net.URLClassLoader
 import java.nio.file.{Files, Path}
+import java.nio.file.Paths
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Using
+import scala.util.Try
 
 /*
  * Compiles fixture-only Java classes into a jar that is deliberately absent
@@ -53,7 +57,7 @@ object RuntimeInvisibleJarFixture {
       }
       val compiler = Option(javax.tools.ToolProvider.getSystemJavaCompiler)
         .getOrElse(throw new IllegalStateException("JDK JavaCompiler is required for runtime-invisible fixture"))
-      val arguments = Vector("-classpath", System.getProperty("java.class.path"), "-d", target.toString) ++ sourcefiles.map(_.toString)
+      val arguments = Vector("-classpath", _compiler_classpath(), "-d", target.toString) ++ sourcefiles.map(_.toString)
       if (compiler.run(null, null, null, arguments*) != 0)
         throw new IllegalStateException(s"runtime-invisible fixture compilation failed: ${target.getFileName}")
       target
@@ -64,4 +68,31 @@ object RuntimeInvisibleJarFixture {
         }
     }
   }
+
+  private def _compiler_classpath(): String = {
+    val propertyentries =
+      Option(System.getProperty("java.class.path"))
+        .toVector
+        .flatMap(_.split(java.util.regex.Pattern.quote(File.pathSeparator)).toVector)
+        .filter(_.nonEmpty)
+    var loader = Option(getClass.getClassLoader)
+    var loaderentries = Vector.empty[String]
+    while (loader.nonEmpty) {
+      loader.foreach {
+        case urlclassloader: URLClassLoader =>
+          loaderentries ++= urlclassloader.getURLs.toVector.flatMap { url =>
+            Option(url).flatMap(_file_url_path)
+          }
+        case _ =>
+      }
+      loader = loader.flatMap(value => Option(value.getParent))
+    }
+    (propertyentries ++ loaderentries).distinct.mkString(File.pathSeparator)
+  }
+
+  private def _file_url_path(url: java.net.URL): Option[String] =
+    if (url.getProtocol.equalsIgnoreCase("file"))
+      Try(Paths.get(url.toURI).toString).toOption
+    else
+      None
 }
