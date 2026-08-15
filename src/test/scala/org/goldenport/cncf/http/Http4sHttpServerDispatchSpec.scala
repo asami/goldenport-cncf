@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import java.time.Instant
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -15,12 +16,15 @@ import org.goldenport.cncf.information.*
 import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.mcp.McpProtocolRevision
+import org.goldenport.cncf.protocol.HttpFailureTransportMetadata
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem, SubsystemUserMode}
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.Consequence
+import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.conclusion.{Disposition, Interpretation}
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
+import org.goldenport.observation.{Cause, Descriptor, Observation, Phenomenon, Taxonomy}
 import org.goldenport.protocol.Protocol
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
@@ -37,7 +41,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -144,7 +148,6 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "decode a JSON object body into REST operation arguments" in {
-      Given("the prerequisites for decode a JSON object body into REST operation arguments")
       Given("a generated REST operation accepting the debug echo body field")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = _server(subsystem)
@@ -156,12 +159,10 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
         .withContentType(`Content-Type`.parse("application/json").toOption.get)
 
       When("the JSON client posts its generated operation envelope")
-      When("the documented HTTP dispatch is exercised")
       val response = app.run(request).unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
       Then("the operation receives the named field without requiring form encoding")
-      Then("the documented response contract holds")
       response.status.code shouldBe 200
       body should include ("name: \"body\"")
       body should include ("value: \"JSON Review submission\"")
@@ -912,6 +913,80 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       body should not include "KnowledgeSpace"
     }
 
+    "render only trusted application status on a failing Static Form operation-result page" in {
+      Given("a Static Form operation-result path whose dispatcher returns an admitted failure application status")
+      val root = Files.createTempDirectory("http4s-http-server-operation-result-app-status-spec")
+      Files.createDirectories(root.resolve("debug-app"))
+      Files.writeString(
+        root.resolve("web.yaml"),
+        """expose:
+          |  debug.http.echo: public
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("debug-app").resolve("index.html"),
+        """<textus:operation-result component="debug" service="http" operation="echo">
+          |  <textus-error-panel source="error"></textus-error-panel>
+          |  <textus-result-view source="result.body"></textus-result-view>
+          |</textus:operation-result>""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.webDescriptorKey ->
+              ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      var appstatus: Option[String] = Some(_web_app_status)
+      val dispatcher = new WebOperationDispatcher {
+        val targetName: String = "trusted-app-status-spec"
+
+        def dispatch(request: org.goldenport.http.HttpRequest): HttpResponse = {
+          val _ = request
+          HttpFailureTransportMetadata.attach(
+            HttpResponse.text(HttpStatus.BadRequest, _web_failure_message),
+            _web_failure_conclusion(appstatus)
+          )
+        }
+      }
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = _server(subsystem, Some(dispatcher))
+      val request = Some(HRequest[IO](
+        method = Method.GET,
+        uri = Uri.unsafeFromString("/web/debug-app?error.appStatus=forged-status")
+      ))
+
+      When("the actual Static Form Web operation-result dispatch renders failures with and without application status")
+      val withstatus = server._component_web_app("debug", "debug-app", Vector.empty, request).unsafeRunSync()
+      val withstatusbody = withstatus.as[String].unsafeRunSync()
+      appstatus = None
+      val withoutstatus = server._component_web_app("debug", "debug-app", Vector.empty, request).unsafeRunSync()
+      val withoutstatusbody = withoutstatus.as[String].unsafeRunSync()
+
+      Then("the operation-result pages retain HTTP 200 and legacy failure text while exposing only the trusted status property")
+      withstatus.status.code shouldBe 200
+      withstatusbody should include ("error.appStatus")
+      withstatusbody should include (_web_app_status_escaped)
+      withstatusbody should not include _web_app_status
+      withstatusbody should not include "forged-status"
+      withstatusbody should include (_web_failure_message)
+      withstatusbody should not include HttpFailureTransportMetadata.DETAIL_CODE_HEADER
+      withstatusbody should not include HttpFailureTransportMetadata.APP_CODE_HEADER
+      withstatusbody should not include HttpFailureTransportMetadata.APP_STATUS_HEADER
+      withoutstatus.status.code shouldBe 200
+      withoutstatusbody should include (_web_failure_message)
+      withoutstatusbody should not include "error.appStatus"
+      withoutstatusbody should not include _web_app_status
+      withoutstatusbody should not include "forged-status"
+    }
+
     "dispatch static Web app page aliases below the app root" in {
       Given("the prerequisites for dispatch static Web app page aliases below the app root")
       val root = Files.createTempDirectory("http4s-http-server-web-page-alias-spec")
@@ -1307,7 +1382,6 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "preserve MCP Streamable HTTP request and notification lifecycle outcomes" in {
-      Given("the prerequisites for preserve MCP Streamable HTTP request and notification lifecycle outcomes")
       Given("an MCP HTTP route and the shared preferred protocol revision")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = _server(subsystem)
@@ -1409,8 +1483,34 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
   private def _with_stale_execution_headers(response: HResponse[IO]): HResponse[IO] =
     _stale_execution_headers.foldLeft(response)(_.putHeaders(_))
 
-  private def _server(subsystem: Subsystem): Http4sHttpServer =
-    HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
+  private def _server(
+    subsystem: Subsystem,
+    operationdispatcheroption: Option[WebOperationDispatcher] = None
+  ): Http4sHttpServer =
+    HttpRuntimeBindingAdmissionFixture.server(
+      new HttpExecutionEngine(subsystem),
+      operationdispatcheroption
+    )
+
+  private def _web_failure_conclusion(appstatus: Option[String]): Conclusion =
+    Conclusion(
+      status = Conclusion.Status(appCode = Some(7404L), appStatus = appstatus),
+      observation = Observation(
+        phenomenon = Phenomenon.Failure,
+        taxonomy = Taxonomy(Taxonomy.Category.Argument, Taxonomy.Symptom.Invalid),
+        cause = Cause.create(Vector(
+          Descriptor.Facet.Message(_web_failure_message),
+          Descriptor.Facet.Reason("private-reason-must-not-be-projected")
+        )),
+        timestamp = Instant.EPOCH
+      ),
+      interpretation = Interpretation.domainFailure,
+      disposition = Disposition.fix
+    )
+
+  private val _web_app_status = "project-identity-required<script>alert(1)</script>"
+  private val _web_app_status_escaped = "project-identity-required&lt;script&gt;alert(1)&lt;/script&gt;"
+  private val _web_failure_message = "Project identity is required."
 
   private def _take[A](result: Consequence[A]): A =
     result.getOrElse(fail(result.display))

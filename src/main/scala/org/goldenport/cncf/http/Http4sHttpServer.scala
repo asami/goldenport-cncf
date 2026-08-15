@@ -3722,9 +3722,19 @@ final class Http4sHttpServer(
         values + ("textus.debug.executionPanel" -> "true")
       else
         values
-    val uservalues = debugvalues.filterNot { case (key, _) => key.startsWith("pageContext.") }
+    val uservalues = _without_reserved_form_result_values(debugvalues).filterNot { case (key, _) =>
+      key.startsWith("pageContext.")
+    }
+    val untrustedpagecontextvalues = _without_reserved_form_result_values(pagecontextvalues)
+    val failurevalues =
+      if (result.response.code >= 400)
+        HttpFailureTransportMetadata.fromHttpResponse(result.response).appStatus.map(
+          "error.appStatus" -> _
+        ).toMap
+      else
+        Map.empty[String, String]
     val pagevalues =
-      uservalues ++ StaticFormAppRenderer.defaultPageViewContextValues ++ pagecontextvalues
+      uservalues ++ StaticFormAppRenderer.defaultPageViewContextValues ++ untrustedpagecontextvalues ++ failurevalues
     val uxprofile = engine.webDescriptor.operationProfile(Some(app), app, service, operation)
     StaticFormAppRenderer.FormResultProperties(
       StaticFormAppRenderer.FormPageProperties(app, service, operation, pagevalues),
@@ -3740,6 +3750,11 @@ final class Http4sHttpServer(
       uxprofile
     )
   }
+
+  private def _without_reserved_form_result_values(values: Map[String, String]): Map[String, String] =
+    values.filterNot { case (key, _) =>
+      key == "error.appStatus" || key == "query.error.appStatus"
+    }
 
   private def _form_result_field_confidentiality(
     app: String,

@@ -67,6 +67,15 @@ owns only the MCP JSON projection and MCP publication filtering.
 It does not create a separate authorization, transaction, diagnostics, or
 error model. Remote MCP client catalogs are never republished by this server.
 
+An Operation failure remains a JSON-RPC result rather than a protocol error:
+`isError` and its one legacy `Conclusion.show` text block retain their existing
+shape. The adapter additionally projects only an explicitly present
+`Conclusion.status.appStatus` to
+`structuredContent.error.appStatus`; an explicitly empty value is preserved and
+an absent value produces no `structuredContent`. Reason facets, message
+interpretation, application/detail codes, raw conclusions, and diagnostics are
+not transport inputs for this projection.
+
 ## WebSocket Status
 
 The existing WebSocket `/mcp` route is a compatibility transport over the same

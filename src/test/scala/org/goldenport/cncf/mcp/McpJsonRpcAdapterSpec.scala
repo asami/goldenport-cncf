@@ -1,9 +1,14 @@
 package org.goldenport.cncf.mcp
 
+import java.time.Instant
+
 import io.circe.Json
+import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
+import org.goldenport.conclusion.{Disposition, Interpretation}
+import org.goldenport.observation.{Cause, Descriptor, Observation, Phenomenon, Taxonomy}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -11,11 +16,12 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 19, 2026
  *  version May. 18, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "McpJsonRpcAdapter" should {
+    "protocol lifecycle" which {
     "negotiate every shared supported initialize revision exactly" in {
       Given("an MCP adapter and each shared supported protocol revision")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -114,7 +120,9 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       missing.noSpaces should not include "2025-11-25"
       unsupported.noSpaces should not include "2026-03-19"
     }
+    }
 
+    "catalog and publication" which {
     "handle tools/list request" in {
       Given("a subsystem with the admin system service declared MCP ready")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -167,7 +175,9 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
         .get[String]("type")
       limit shouldBe Right("integer")
     }
+    }
 
+    "invocation and policy" which {
     "handle tools/call request through subsystem execution path" in {
       Given("a ready admin ping operation")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -257,7 +267,9 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       names should not contain "org.goldenport.cncf.Admin.system.ping"
       called.hcursor.downField("error").get[Int]("code") shouldBe Right(-32602)
     }
+    }
 
+    "protocol failures" which {
     "return method not found for unknown method" in {
       Given("an MCP request with an unknown JSON-RPC method")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -281,10 +293,67 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the adapter returns invalid params")
       json.hcursor.downField("error").get[Int]("code") shouldBe Right(-32602)
     }
+    }
+
+    "tool-failure projection" which {
+    "project only an explicitly present application status into a legacy-compatible tool failure" in {
+      Given("tool failures with nonempty, empty, and absent explicit application status")
+      val nonempty = _tool_failure_result(Some(_app_status))
+      val empty = _tool_failure_result(Some(""))
+      val absent = _tool_failure_result(None)
+
+      When("the MCP failure projection is formed")
+      val projected = Vector(nonempty, empty, absent)
+
+      Then("each result preserves one legacy text block while exposing only the allowed status projection")
+      projected.foreach { case (result, conclusion) =>
+        result.hcursor.get[Boolean]("isError") shouldBe Right(true)
+        result.hcursor.downField("content").focus.flatMap(_.asArray) shouldBe Some(Vector(
+          Json.obj(
+            "type" -> Json.fromString("text"),
+            "text" -> Json.fromString(conclusion.show)
+          )
+        ))
+        result.noSpaces should not include _reason
+        result.noSpaces should not include "appCode"
+        result.noSpaces should not include "detailCode"
+      }
+      nonempty._1.hcursor.downField("structuredContent").downField("error").get[String]("appStatus") shouldBe Right(_app_status)
+      empty._1.hcursor.downField("structuredContent").downField("error").get[String]("appStatus") shouldBe Right("")
+      absent._1.hcursor.downField("structuredContent").succeeded shouldBe false
+      nonempty._1.hcursor.downField("structuredContent").focus shouldBe Some(Json.obj(
+        "error" -> Json.obj("appStatus" -> Json.fromString(_app_status))
+      ))
+      empty._1.hcursor.downField("structuredContent").focus shouldBe Some(Json.obj(
+        "error" -> Json.obj("appStatus" -> Json.fromString(""))
+      ))
+    }
+    }
   }
 
   private val _protocol_header = Some(McpProtocolRevision.PREFERRED.print)
 
   private def _response_json(outcome: McpJsonRpcOutcome): Json =
     outcome.responseBody.getOrElse(fail("MCP outcome has no JSON response body"))
+
+  private def _tool_failure_result(
+    appstatus: Option[String]
+  ): (Json, Conclusion) = {
+    val conclusion = Conclusion(
+      status = Conclusion.Status(appCode = Some(7404L), appStatus = appstatus),
+      observation = Observation(
+        phenomenon = Phenomenon.Failure,
+        taxonomy = Taxonomy(Taxonomy.Category.Argument, Taxonomy.Symptom.Invalid),
+        cause = Cause.create(Vector(Descriptor.Facet.Message(_message), Descriptor.Facet.Reason(_reason))),
+        timestamp = Instant.EPOCH
+      ),
+      interpretation = Interpretation.domainFailure,
+      disposition = Disposition.fix
+    )
+    McpToolFailureProjection.result(conclusion) -> conclusion
+  }
+
+  private val _app_status = "project-identity-required"
+  private val _message = "Project identity is required."
+  private val _reason = "private-reason-must-not-be-projected"
 }

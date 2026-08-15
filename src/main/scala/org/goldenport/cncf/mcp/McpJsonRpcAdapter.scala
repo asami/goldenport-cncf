@@ -12,7 +12,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Apr. 15, 2026
  *  version May. 20, 2026
  *  version Jul. 21, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -209,15 +209,7 @@ final class McpJsonRpcAdapter(
               case Consequence.Failure(conclusion) =>
                 _result(
                   id,
-                  Json.obj(
-                    "isError" -> Json.True,
-                    "content" -> Json.arr(
-                      Json.obj(
-                        "type" -> Json.fromString("text"),
-                        "text" -> Json.fromString(conclusion.show)
-                      )
-                    )
-                  )
+                  McpToolFailureProjection.result(conclusion)
                 )
             }
         }
@@ -282,6 +274,31 @@ final class McpJsonRpcAdapter(
         "message" -> Json.fromString(message)
       )
     )
+}
+
+private[mcp] object McpToolFailureProjection {
+  def result(conclusion: org.goldenport.Conclusion): Json = {
+    val legacy = Json.obj(
+      "isError" -> Json.True,
+      "content" -> Json.arr(
+        Json.obj(
+          "type" -> Json.fromString("text"),
+          "text" -> Json.fromString(conclusion.show)
+        )
+      )
+    )
+    conclusion.status.appStatus match {
+      case Some(appstatus) =>
+        legacy.deepMerge(Json.obj(
+          "structuredContent" -> Json.obj(
+            "error" -> Json.obj(
+              "appStatus" -> Json.fromString(appstatus)
+            )
+          )
+        ))
+      case None => legacy
+    }
+  }
 }
 
 /*

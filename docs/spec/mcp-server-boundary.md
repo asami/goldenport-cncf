@@ -61,6 +61,16 @@ path and preserve ActionCall, UnitOfWork, authorization, transaction,
 `Consequence` / `Conclusion`, diagnostics, timeout, cancellation, and resource
 cleanup semantics.
 
+When an admitted Operation returns `Consequence.Failure`, `result.isError` MUST
+remain `true` and `result.content` MUST remain exactly one legacy text block
+whose `text` is the existing `Conclusion.show` value. If and only if
+`Conclusion.status.appStatus` is present, including an explicitly empty string,
+the response MUST additionally contain exactly
+`result.structuredContent = { "error": { "appStatus": value } }`. When it is
+absent, `structuredContent` MUST be absent. The projection MUST NOT expose a
+Reason facet, message-derived code, detail code, application code, raw
+Conclusion, diagnostics, or another failure payload.
+
 ## Protocol Failure Contract
 
 Invalid request, method-not-found, invalid-params, and internal failures MUST
