@@ -4238,12 +4238,8 @@ class CncfRuntime() extends GlobalObservable {
         configurationargumentbindings,
         configurationenvironmentbindings
       )
-      assemblycandidates <- CncfAssemblyConfigurationProjection.candidates(
-        assemblyconfiguration.values,
-        assemblyconfiguration.sourceidentity,
-        identity
-      )
-      candidates <- ConfigurationBindingCandidates.from(runtimecandidates.bindings ++ assemblycandidates.bindings)
+      assemblyconfigurationcandidates <- CncfDiscoveredAssemblyConfigurationProjection.candidates(assemblyconfiguration.values, assemblyconfiguration.sourceidentity, descriptor, identity)
+      candidates <- ConfigurationBindingCandidates.from(runtimecandidates.bindings ++ assemblyconfigurationcandidates.bindings)
       context <- CncfConfigurationResolutionContext.forSubsystem(identity)
       bindings <- ConfigurationBindingResolver.resolve(candidates, context.generic)
       preflight <- _admit_runtime_configuration_preflight_for_launch(

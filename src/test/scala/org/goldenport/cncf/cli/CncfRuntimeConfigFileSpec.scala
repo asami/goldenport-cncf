@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.security.MessageDigest
 import java.util.zip.{ZipEntry, ZipOutputStream}
+import scala.jdk.CollectionConverters.*
 import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor, StandaloneUserProfile, StandaloneUserProfileResolver}
 import org.goldenport.cncf.component.{ComponentDescriptor, ComponentId}
@@ -20,16 +21,14 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
  *  version Jul. 31, 2026
- *  version Aug.  6, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "CncfRuntime" should {
     "assembly and development repository resolution" which {
-    "apply assembly descriptor config while preserving test and command-line precedence" in {
+    "apply assembly descriptor config while preserving test and command-line precedence" in _with_workspace("cncf-assembly-runtime-config") { cwd =>
       Given("an assembly descriptor with runtime config and a test descriptor override")
-      val cwd = Files.createTempDirectory("cncf-assembly-runtime-config")
       val assemblydescriptor = cwd.resolve("assembly.yaml")
       val testdescriptor = cwd.resolve("test.yaml")
       Files.writeString(
@@ -85,9 +84,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.sourceType) shouldBe Some("assembly-descriptor")
     }
 
-    "retain assembly Web execution config across the launcher subsystem handoff" in {
+    "retain assembly Web execution config across the launcher subsystem handoff" in _with_workspace("cncf-assembly-web-execution-config") { cwd =>
       Given("an assembly default consumed after launcher repository resolution")
-      val cwd = Files.createTempDirectory("cncf-assembly-web-execution-config")
       val assemblydescriptor = cwd.resolve("assembly.yaml")
       val testdescriptor = cwd.resolve("test.yaml")
       Files.writeString(
@@ -166,9 +164,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       packaged shouldBe empty
     }
 
-    "collect exact canonical development claims from active and assembly search repositories" in {
+    "collect exact canonical development claims from active and assembly search repositories" in _with_workspace("cncf-development-claims") { root =>
       Given("active and search prepared development targets with distinct canonical identities")
-      val root = Files.createTempDirectory("cncf-development-claims")
       val activedir = root.resolve("active")
       val searchdir = root.resolve("search")
       _write_prepared_development_evidence(activedir, "org.example.Active", "0.2.0-SNAPSHOT")
@@ -184,9 +181,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       claims(search) shouldBe Set(ComponentId("org.example.Dependency") -> "0.2.0-SNAPSHOT")
     }
 
-    "preflight development assembly from prepared canonical target evidence" in {
+    "preflight development assembly from prepared canonical target evidence" in _with_workspace("cncf-development-assembly-preflight") { root =>
       Given("a prepared target and a conflicting source-tree assembly identity")
-      val root = Files.createTempDirectory("cncf-development-assembly-preflight")
       val cardir = root.resolve("src").resolve("main").resolve("car")
       Files.createDirectories(cardir)
       _write_prepared_development_evidence(root, "org.example.Prepared", "0.1.2-SNAPSHOT")
@@ -220,9 +216,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       searchdescriptors shouldBe empty
     }
 
-    "not claim a same-ID descriptor at a different release" in {
+    "not claim a same-ID descriptor at a different release" in _with_workspace("cncf-development-assembly-reversed-alias") { reversedroot =>
       Given("a prepared development target and same-ID descriptors at matching and stale releases")
-      val reversedroot = Files.createTempDirectory("cncf-development-assembly-reversed-alias")
       _write_prepared_development_evidence(reversedroot, "org.example.Prepared", "0.1.2-SNAPSHOT")
       val reverseddev = ComponentRepository.ComponentDevDirRepository.Specification(reversedroot)
       val reversedclaims = ComponentRepository.developmentComponentClaims(Vector(reverseddev))
@@ -249,9 +244,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "configuration source precedence" which {
-    "resolve an explicit YAML config file passed as a Textus CLI framework option" in {
+    "resolve an explicit YAML config file passed as a Textus CLI framework option" in _with_workspace("textus-runtime-config") { cwd =>
       Given("an explicit YAML configuration file")
-      val cwd = Files.createTempDirectory("textus-runtime-config")
       val config = cwd.resolve("runtime.yaml")
       Files.writeString(
         config,
@@ -272,9 +266,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       bootstrap.invocation.actualArgs.toVector should contain (s"--textus.config.file=${config}")
     }
 
-    "resolve a virtual clock start passed as a Textus CLI framework option" in {
+    "resolve a virtual clock start passed as a Textus CLI framework option" in _with_workspace("textus-runtime-virtual-clock") { cwd =>
       Given("a virtual start date-time with an explicit offset")
-      val cwd = Files.createTempDirectory("textus-runtime-virtual-clock")
 
       When("the runtime is bootstrapped with the clock setting")
       val bootstrap = CncfRuntime.bootstrap(
@@ -292,9 +285,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
         Some(Instant.parse("2026-07-28T09:00:00Z"))
     }
 
-    "resolve a legacy explicit YAML config file passed as a CNCF CLI framework option" in {
+    "resolve a legacy explicit YAML config file passed as a CNCF CLI framework option" in _with_workspace("cncf-runtime-config") { cwd =>
       Given("an explicit YAML configuration file")
-      val cwd = Files.createTempDirectory("cncf-runtime-config")
       val config = cwd.resolve("runtime.yaml")
       Files.writeString(
         config,
@@ -315,9 +307,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       bootstrap.invocation.actualArgs.toVector should contain (s"--cncf.config.file=${config}")
     }
 
-    "resolve a standard .textus config.yaml file before command-line domain execution" in {
+    "resolve a standard .textus config.yaml file before command-line domain execution" in _with_workspace("textus-standard-yaml") { cwd =>
       Given("a standard .textus config.yaml file")
-      val cwd = Files.createTempDirectory("textus-standard-yaml")
       val configdir = cwd.resolve(".textus")
       Files.createDirectories(configdir)
       Files.writeString(
@@ -338,9 +329,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
     }
 
-    "resolve a legacy standard .cncf config.yaml file as compatibility input" in {
+    "resolve a legacy standard .cncf config.yaml file as compatibility input" in _with_workspace("cncf-standard-yaml") { cwd =>
       Given("a legacy .cncf config.yaml file")
-      val cwd = Files.createTempDirectory("cncf-standard-yaml")
       val configdir = cwd.resolve(".cncf")
       Files.createDirectories(configdir)
       Files.writeString(
@@ -361,9 +351,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
     }
 
-    "resolve explicit test descriptor config before command-line scalar overrides" in {
+    "resolve explicit test descriptor config before command-line scalar overrides" in _with_workspace("cncf-test-descriptor-config") { cwd =>
       Given("a canonical base subsystem descriptor plus a test override with config and canonical SPI bindings")
-      val cwd = Files.createTempDirectory("cncf-test-descriptor-config")
       val testdescriptor = cwd.resolve("test.yaml")
       val subsystemdescriptor = cwd.resolve("subsystem.yaml")
       Files.writeString(
@@ -419,9 +408,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       bindings.head.provider.component shouldBe Some("org.example.TargetTestProvider")
     }
 
-    "expand test descriptor datastore and home shortcuts into canonical runtime configuration" in {
+    "expand test descriptor datastore and home shortcuts into canonical runtime configuration" in _with_workspace("cncf-test-descriptor-datastore") { cwd =>
       Given("a canonical base subsystem descriptor plus a test override with home and local datastore shortcuts")
-      val cwd = Files.createTempDirectory("cncf-test-descriptor-datastore")
       val testdescriptor = cwd.resolve("test.yaml")
       val subsystemdescriptor = cwd.resolve("subsystem.yaml")
       val applicationdb = cwd.resolve("target").resolve("cncf.d").resolve("stage3d").resolve("application.db")
@@ -497,9 +485,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       bindings.head.selection.mode shouldBe Some("test")
     }
 
-    "normalize cncf test command options without changing JVM user.home" in {
+    "normalize cncf test command options without changing JVM user.home" in _with_workspace("cncf-test-home-command") { cwd =>
       Given("a test descriptor and an explicit isolated test home")
-      val cwd = Files.createTempDirectory("cncf-test-home-command")
       val testdescriptor = cwd.resolve("test.yaml")
       val testhome = cwd.resolve("target").resolve("cncf.d").resolve("stage3d-home")
       val originalhome = System.getProperty("user.home")
@@ -536,9 +523,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       System.getProperty("user.home") shouldBe originalhome
     }
 
-    "reject a test-config option without a value" in {
+    "reject a test-config option without a value" in _with_workspace("cncf-test-config-missing-value") { cwd =>
       Given("a test command whose test-config option has no value")
-      val cwd = Files.createTempDirectory("cncf-test-config-missing-value")
 
       When("the command is bootstrapped")
       val thrown = intercept[IllegalArgumentException] {
@@ -549,9 +535,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       thrown.getMessage shouldBe "--test-config requires a value"
     }
 
-    "reject a test home option without a value" in {
+    "reject a test home option without a value" in _with_workspace("cncf-test-home-missing-value") { cwd =>
       Given("a test command whose home option has no value")
-      val cwd = Files.createTempDirectory("cncf-test-home-missing-value")
 
       When("the command is bootstrapped")
       val thrown = intercept[IllegalArgumentException] {
@@ -562,9 +547,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       thrown.getMessage shouldBe "--home requires a value"
     }
 
-    "create temporary cncf test homes under target without changing JVM user.home" in {
+    "create temporary cncf test homes under target without changing JVM user.home" in _with_workspace("cncf-temporary-test-home-command") { cwd =>
       Given("a test command requesting a temporary home")
-      val cwd = Files.createTempDirectory("cncf-temporary-test-home-command")
       val originalhome = System.getProperty("user.home")
 
       When("the runtime bootstraps the test command")
@@ -587,9 +571,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       System.getProperty("user.home") shouldBe originalhome
     }
 
-    "apply the legacy .cncf compatibility override after baseline .textus configuration" in {
+    "apply the legacy .cncf compatibility override after baseline .textus configuration" in _with_workspace("textus-over-cncf") { cwd =>
       Given("both baseline .textus and compatibility-override .cncf configuration files")
-      val cwd = Files.createTempDirectory("textus-over-cncf")
       val legacydir = cwd.resolve(".cncf")
       val configdir = cwd.resolve(".textus")
       Files.createDirectories(legacydir)
@@ -619,9 +602,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-cncf.yaml")
     }
 
-    "prefer standard config.yaml over config.conf in the same .textus scope" in {
+    "prefer standard config.yaml over config.conf in the same .textus scope" in _with_workspace("textus-standard-yaml-precedence") { cwd =>
       Given("config.conf and config.yaml in the same .textus scope")
-      val cwd = Files.createTempDirectory("textus-standard-yaml-precedence")
       val configdir = cwd.resolve(".textus")
       Files.createDirectories(configdir)
       Files.writeString(configdir.resolve("config.conf"), "textus.web.descriptor = config/from-conf.yaml\n")
@@ -643,9 +625,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.webDescriptorKey) shouldBe Some("config/from-yaml.yaml")
     }
 
-    "resolve standard configuration files in conf props properties json yaml xml order" in {
+    "resolve standard configuration files in conf props properties json yaml xml order" in _with_workspace("textus-standard-order") { cwd =>
       Given("all supported standard configuration files in one .textus scope")
-      val cwd = Files.createTempDirectory("textus-standard-order")
       val configdir = cwd.resolve(".textus")
       Files.createDirectories(configdir)
       Files.writeString(configdir.resolve("config.conf"), "textus.web.descriptor = config/from-conf.yaml\n")
@@ -684,9 +665,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "component and subsystem startup resolution" which {
-    "detect a component CAR from a component project directory for plain server startup" in {
+    "detect a component CAR from a component project directory for plain server startup" in _with_workspace("textus-component-only-server") { cwd =>
       Given("a component project with one generated CAR")
-      val cwd = Files.createTempDirectory("textus-component-only-server")
       val target = cwd.resolve("component").resolve("target")
       Files.createDirectories(target)
       val car = target.resolve("notice-board-0.1.0.car")
@@ -705,9 +685,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
     }
 
-    "resolve a qualified named component from the canonical repository coordinate for server startup" in {
+    "resolve a qualified named component from the canonical repository coordinate for server startup" in _with_workspace("textus-component-name-repo") { cwd =>
       Given("a schema-3 named component CAR at its canonical repository coordinate")
-      val cwd = Files.createTempDirectory("textus-component-name-repo")
       val repository = cwd.resolve("repository")
       val componentid = ComponentId("org.example.Cwitter")
       val release = "0.0.1"
@@ -743,9 +722,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${car}")
     }
 
-    "reject a bare named selector and avoid injecting a foreign same-looking local CAR" in {
+    "reject a bare named selector and avoid injecting a foreign same-looking local CAR" in _with_workspace("textus-component-name-identity") { root =>
       Given("a local CAR whose filename resembles the requested qualified selector but whose descriptor is foreign")
-      val root = Files.createTempDirectory("textus-component-name-identity")
       val requestedid = ComponentId("org.example.Cwitter")
       val foreignid = ComponentId("org.other.Cwitter")
       val release = "0.0.1"
@@ -781,9 +759,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       resolved.actualArgs.toVector should not contain s"--${RuntimeConfig.componentFileKey}=${foreigncar}"
     }
 
-    "not append a repository component file when component file is already explicit" in {
+    "not append a repository component file when component file is already explicit" in _with_workspace("textus-component-file-explicit") { cwd =>
       Given("a repository component and an explicit component file")
-      val cwd = Files.createTempDirectory("textus-component-file-explicit")
       val repository = cwd.resolve("repository")
       val artifactdir = repository.resolve("org").resolve("simplemodeling").resolve("car").resolve("cwitter").resolve("0.0.1-SNAPSHOT")
       Files.createDirectories(artifactdir)
@@ -811,9 +788,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${explicitcar}")
     }
 
-    "retain admitted repository selections across resolved invocation re-bootstrap" in {
+    "retain admitted repository selections across resolved invocation re-bootstrap" in _with_workspace("cncf-repository-invocation-rebootstrap") { cwd =>
       Given("one admitted path for every repository selection kind")
-      val cwd = Files.createTempDirectory("cncf-repository-invocation-rebootstrap")
       val values = Vector(
         RuntimeConfig.repositoryDirKey -> cwd.resolve("repository").toString,
         RuntimeConfig.repositoryComponentDevDirKey -> cwd.resolve("repository-component-dev").toString,
@@ -841,9 +817,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       second.repositoryBootstrapPolicy.subsystemSarDirs shouldBe Vector(values(7)._2)
     }
 
-    "resolve a named subsystem SAR from the standard repository for server startup" in {
+    "resolve a named subsystem SAR from the standard repository for server startup" in _with_workspace("textus-subsystem-name-repo") { cwd =>
       Given("a named subsystem SAR with canonical component bindings in the standard repository layout")
-      val cwd = Files.createTempDirectory("textus-subsystem-name-repo")
       val repository = cwd.resolve("repository")
       val artifactdir = repository.resolve("sar").resolve("cwitter").resolve("0.0.1-SNAPSHOT")
       Files.createDirectories(artifactdir)
@@ -877,9 +852,88 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.subsystemFileKey}=${sar}")
     }
 
-    "retain snapshot user-mode and HOME fixed-user candidates in the final runtime collection" in {
+    "admit descriptor-only SAR configuration after repository selection and preserve runtime alias overrides" in _with_workspace("textus-subsystem-config-sar") { cwd =>
+      Given("a real SAR archive selected from a component directory by subsystem name and an empty runtime test descriptor")
+      val componentdir = cwd.resolve("component")
+      Files.createDirectories(componentdir)
+      val testdescriptor = cwd.resolve("test.yaml")
+      Files.writeString(testdescriptor, "kind: test-descriptor\n")
+      val sar = componentdir.resolve("sar-config-target-0.1.0-SNAPSHOT.sar")
+      _write_zip(
+        sar,
+        Map(
+          "subsystem-descriptor.yaml" ->
+            """subsystem: sar-config-target
+              |version: 0.1.0-SNAPSHOT
+              |components: []
+              |security:
+              |  authentication:
+              |    local_subject:
+              |      id: sar-config-local
+              |    providers:
+              |      - name: runtime-provider
+              |        component: runtime-provider
+              |config:
+              |  textus.subsystem.user-mode: standalone
+              |  textus.web.execution.display-override.enabled: false
+              |""".stripMargin
+        )
+      )
+      val args = Array(
+        "--no-default-components",
+        s"--${RuntimeConfig.componentDirKey}=${componentdir}",
+        s"--${RuntimeConfig.subsystemNameKey}=sar-config-target",
+        s"--${RuntimeConfig.TEST_DESCRIPTOR_KEY}=${testdescriptor}",
+        "--cncf.web.execution.display-override.enabled=true",
+        "command"
+      )
+
+      When("the real repository selection resolves the SAR and reboots the runtime from that invocation")
+      val first = CncfRuntime.bootstrap(cwd, args)
+      val active = first.repositories.activeRepositories.toOption.get
+      val search = first.repositories.searchRepositories.toOption.get
+      val resolved = CncfRuntime.resolveSubsystemInvocation(first.invocation, search, active)
+
+      Then("subsystem selection and component directory remain canonical discovery inputs")
+      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.subsystemNameKey}=sar-config-target")
+      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentDirKey}=${componentdir}")
+
+      val runtime = new CncfRuntime()
+      When("the selected SAR runtime initializes for embedding")
+      val initialized = runtime.initializeForEmbedding(
+        cwd = cwd,
+        args = resolved.actualArgs,
+        modeHint = Some(RunMode.Command)
+      )
+      initialized match {
+        case Consequence.Success(subsystem) =>
+          try {
+            Then("the descriptor-only standalone mode is admitted through runtime preflight and final binding")
+            subsystem.subsystemUserModeC.toOption.map(_.mode) shouldBe Some(SubsystemUserMode.Standalone)
+            And("an explicit runtime Web alias overrides the canonical SAR assembly default")
+            RuntimeConfig.getString(
+              subsystem.configuration,
+              "textus.web.execution.display-override.enabled"
+            ) shouldBe Some("true")
+            val webpolicy = subsystem.webExecutionResolutionPolicyC
+              .getOrElse(fail("typed Web policy is required"))
+              .getOrElse(fail("typed Web policy must resolve"))
+            webpolicy.displayOverrideEnabled shouldBe true
+          } finally {
+            try {
+              Subsystem.shutdownOwned(subsystem)
+            } finally {
+              runtime.closeEmbedding()
+            }
+          }
+        case Consequence.Failure(conclusion) =>
+          runtime.closeEmbedding()
+          fail(s"selected SAR runtime initialization failed: ${conclusion.show}")
+      }
+    }
+
+    "retain snapshot user-mode and HOME fixed-user candidates in the final runtime collection" in _with_workspace("gcf07g-runtime-collection") { cwd =>
       Given("a retained standalone runtime source, a conflicting legacy view, and a HOME fixed-user profile")
-      val cwd = Files.createTempDirectory("gcf07g-runtime-collection")
       Files.createDirectories(cwd.resolve(".textus"))
       Files.writeString(cwd.resolve(".textus/config.conf"), "textus.subsystem.user-mode = standalone\n")
       val subsystem = _fixed_runtime_collection_subsystem()
@@ -912,9 +966,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       subsystem.resolvedStandaloneUserProfile.flatMap(_.displayName) shouldBe Some("Runtime Fixed User")
     }
 
-    "project already-loaded assembly Web defaults into the final runtime collection" in {
+    "project already-loaded assembly Web defaults into the final runtime collection" in _with_workspace("gcf07h-assembly-web-defaults") { cwd =>
       Given("a standalone snapshot, a fixed-user profile, and assembly-only Web defaults")
-      val cwd = Files.createTempDirectory("gcf07h-assembly-web-defaults")
       val assembly = cwd.resolve("assembly.yaml")
       Files.createDirectories(cwd.resolve(".textus"))
       Files.writeString(cwd.resolve(".textus/config.conf"), "textus.subsystem.user-mode = standalone\n")
@@ -962,9 +1015,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       policy.publicCapabilities shouldBe Vector("browse", "report")
     }
 
-    "select the execution profile from an assembly-only user-mode binding" in {
+    "select the execution profile from an assembly-only user-mode binding" in _with_workspace("gcf09b-assembly-user-mode") { cwd =>
       Given("an assembly descriptor that supplies the only standalone user-mode value")
-      val cwd = Files.createTempDirectory("gcf09b-assembly-user-mode")
       val assembly = cwd.resolve("assembly.yaml")
       Files.writeString(
         assembly,
@@ -1006,9 +1058,8 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       subsystem.resolvedStandaloneUserProfile.map(_.id) shouldBe Some("gcf09b-user")
     }
 
-    "default a missing standalone HOME profile from the assembly local subject" in {
+    "default a missing standalone HOME profile from the assembly local subject" in _with_workspace("standalone-default-user-profile") { cwd =>
       Given("an assembly-only standalone mode, a local subject, and no admitted HOME profile")
-      val cwd = Files.createTempDirectory("standalone-default-user-profile")
       val assembly = cwd.resolve("assembly.yaml")
       Files.writeString(
         assembly,
@@ -1047,6 +1098,27 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     }
     }
   }
+
+  private def _with_workspace[T](prefix: String)(f: java.nio.file.Path => T): T = {
+    val target = Paths.get("target").toAbsolutePath.normalize
+    Files.createDirectories(target)
+    val workspace = Files.createTempDirectory(target, s"$prefix-")
+    try {
+      f(workspace)
+    } finally {
+      _delete_recursively(workspace)
+    }
+  }
+
+  private def _delete_recursively(root: java.nio.file.Path): Unit =
+    if (root != null && Files.exists(root)) {
+      val stream = Files.walk(root)
+      try {
+        stream.iterator().asScala.toVector.reverse.foreach(path => Files.deleteIfExists(path))
+      } finally {
+        stream.close()
+      }
+    }
 
   private def _fixed_runtime_collection_subsystem(): Subsystem =
     Subsystem(
