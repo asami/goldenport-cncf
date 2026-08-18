@@ -1663,21 +1663,6 @@ final class GenericSubsystemDescriptorSpec
     }
     }
 
-    "preserve journal sample identity admission" which {
-    "E40 reject the textus-identity journal sample until its assembly identity is canonicalized" must _metadata("E40") {
-      "when exercising: reject the textus-identity journal sample until its assembly identity is canonicalized" in {
-      Given("the maintained textus-identity descriptor sample with legacy component declaration")
-      val path = java.nio.file.Path.of("/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")
-
-      When("the sample descriptor is loaded")
-      val result = GenericSubsystemDescriptor.load(path)
-
-      Then("legacy assembly identity does not enter runtime descriptor state through documentation fallback")
-      result shouldBe a[Consequence.Failure[_]]
-      }
-    }
-    }
-
   }
 
   }

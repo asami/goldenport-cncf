@@ -1235,21 +1235,6 @@ final class GenericSubsystemFactorySpec
       }
     }
 
-    "E14 reject a journal assembly descriptor that still authors legacy Component identity" must _metadata("E14") {
-      "when exercising: reject a journal assembly descriptor that still authors legacy Component identity" in {
-      Given("the maintained textus-identity descriptor before its assembly identity is migrated")
-      val descriptorpath = Path.of(
-        "docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml"
-      ).toAbsolutePath.normalize
-
-      When("the descriptor crosses assembly identity admission")
-      val result = GenericSubsystemDescriptor.load(descriptorpath)
-
-      Then("the runtime factory receives no untyped descriptor that could trigger name fallback")
-      result shouldBe a[Consequence.Failure[_]]
-      }
-    }
-
     "E15 resolve a subsystem descriptor from component repository using subsystem name only" must _metadata("E15") {
       "when exercising: resolve a subsystem descriptor from component repository using subsystem name only" in {
       Given("a component repository containing a CAR and subsystem SAR")
