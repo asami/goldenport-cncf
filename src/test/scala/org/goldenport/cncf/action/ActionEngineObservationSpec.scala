@@ -10,6 +10,7 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.goldenport.test.matchers.ConsequenceMatchers
@@ -17,12 +18,22 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 /*
  * @since   Jan.  6, 2026
  *  version Feb. 27, 2026
- * @version Mar. 12, 2026
+ *  version Mar. 12, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
-class ActionEngineObservationSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
+class ActionEngineObservationSpec
+  extends AnyWordSpec
+  with Matchers
+  with ConsequenceMatchers
+  with GivenWhenThen {
+  private def _metadata(example: String) =
+    afterWord(s"in spec:action-execution-semantics, example:$example, rules:R8,R11")
+
   "ActionEngine observation hooks" should {
-    "not invoke observe_enter/leave on authorization failure" in {
+    "not invoke observe_enter/leave on authorization failure" must _metadata("E7") {
+      "when isolated authorization rejects a query action call" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R8, R11; Example: E7; an action engine that denies authorization and a query action call")
       val recorder = new InMemoryCommitRecorder
       val dataStore = DataStore.noop(recorder)
       val eventEngine = EventEngine.noop(dataStore, recorder)
@@ -40,15 +51,20 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core, engine)
       }
+      When("the authorized execution path is invoked")
       val result = engine.executeAuthorized("test-action", ctx) {
         action.createCall(ActionCall.Core(action, ctx, None, None))
       }
 
+      Then("authorization failure returns without observation hooks")
       result should be_failure
       engine.events shouldBe Vector.empty
     }
+      }
 
-    "invoke observe_enter/leave around execute on success" in {
+    "invoke observe_enter/leave around execute on success" must _metadata("E7") {
+      "when isolated authorization allows a query action call" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R8, R11; Example: E7; an action engine that allows authorization and a query action call")
       val recorder = new InMemoryCommitRecorder
       val dataStore = DataStore.noop(recorder)
       val eventEngine = EventEngine.noop(dataStore, recorder)
@@ -66,10 +82,12 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
           new TestActionCall(core, engine)
       }
 
+      When("the authorized execution path is invoked")
       val result = engine.executeAuthorized("test-action", ctx) {
         action.createCall(ActionCall.Core(action, ctx, None, None))
       }
 
+      Then("observation hooks surround successful execution")
       result should be_success
       engine.events shouldBe Vector(
         "observe_enter",
@@ -77,6 +95,7 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
         "observe_leave"
       )
     }
+      }
   }
 
   private final class TestActionCall(

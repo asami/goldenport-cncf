@@ -23,17 +23,20 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 11, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
+  private def _metadata(example: String, rules: String) =
+    afterWord(s"in spec:action-execution-semantics, example:$example, rules:$rules")
 
   "ComponentLogic operationDefinitions semantics" should {
-    "execute generic action synchronously when CML operation kind is QUERY" in {
-      Given("a component operation defined as QUERY in operationDefinitions")
+    "execute generic action synchronously when CML operation kind is QUERY" must _metadata("E3", "R2,R4,R11") {
+      "when a generic QUERY action executes directly" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a component operation defined as QUERY in operationDefinitions")
       val component = _component()
 
       val req = Request.of(
@@ -53,10 +56,12 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "execute query operation and return record payload for generated VO smoke" in {
-      Given("a component operation defined as QUERY that returns an address-like record")
+    "execute query operation and return record payload for generated VO smoke" must _metadata("E3", "R2,R4,R11") {
+      "when a QUERY operation returns an address-like record" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a component operation defined as QUERY that returns an address-like record")
       val component = _component()
 
       val req = Request.of(
@@ -78,10 +83,12 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "keep normal query jobs ephemeral but retain debug query jobs as persistent" in {
-      Given("a component operation defined as QUERY")
+    "keep normal query jobs ephemeral but retain debug query jobs as persistent" must _metadata("E3", "R2,R4,R11") {
+      "when a QUERY executes normally or with explicit trace-job" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a component operation defined as QUERY")
       val component = _component()
       val req = Request.of(
         component = component.name,
@@ -107,9 +114,11 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       jobs.exists(_.debug.executionNotes.contains("debug trace query")) shouldBe true
       jobs.head.persistence shouldBe org.goldenport.cncf.job.JobPersistencePolicy.Persistent
     }
+      }
 
-    "retain job-specific calltree for debug query when calltree is enabled" in {
-      Given("a debug trace-job query execution context with calltree save enabled")
+    "retain job-specific calltree for debug query when calltree is enabled" must _metadata("E3", "R2,R4,R11") {
+      "when an explicit trace-job QUERY executes with calltree enabled" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a debug trace-job query execution context with calltree save enabled")
       val component = _component()
       val req = Request.of(
         component = component.name,
@@ -142,9 +151,11 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       job.debug.calltreeSerializedBytes.exists(_ > 0) shouldBe true
       job.debug.calltreeDropReason shouldBe None
     }
+      }
 
-    "include UoW spans in inline calltree when debug calltree is enabled" in {
-      Given("a functional query action that executes a UoW operation")
+    "include UoW spans in inline calltree when debug calltree is enabled" must _metadata("E3", "R2,R4,R11") {
+      "when a QUERY action executes a UoW with inline calltree enabled" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a functional query action that executes a UoW operation")
       val component = _component()
       val req = Request.of(
         component = component.name,
@@ -163,9 +174,11 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       calltree should include ("action:org.goldenport.cncf.test.OperationDefinitionSemanticsSpec.entity.fetchWithUow")
       calltree should include ("uow:http:get")
     }
+      }
 
-    "save job-specific calltree for failed persistent debug query" in {
-      Given("a debug trace-job query execution context without explicit save-calltree")
+    "save job-specific calltree for failed persistent debug query" must _metadata("E3", "R2,R4,R11") {
+      "when a trace-job QUERY fails without explicit save-calltree" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a debug trace-job query execution context without explicit save-calltree")
       val component = _component()
       val req = Request.of(
         component = component.name,
@@ -197,9 +210,11 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       calltree should not include ("debug trace query failure")
       calltree should include ("kind=action")
     }
+      }
 
-    "validate request values while building a generated VO before action execution" in {
-      Given("a query operation that builds an address-like value object from request properties")
+    "validate request values while building a generated VO before action execution" must _metadata("E3", "R2,R4,R11") {
+      "when a QUERY builds a validated address-like value object" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a query operation that builds an address-like value object from request properties")
       val component = _component()
 
       val req = Request.of(
@@ -226,10 +241,12 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "execute generic action synchronously when CML operation kind is COMMAND without async metadata" in {
-      Given("a component operation defined as COMMAND in operationDefinitions")
+    "execute generic action synchronously when CML operation kind is COMMAND without async metadata" must _metadata("E4", "R2,R5,R6") {
+      "when a generic COMMAND action executes without async metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R5, R6; Example: E4; a component operation defined as COMMAND in operationDefinitions")
       val component = _component()
 
       val req = Request.of(
@@ -249,10 +266,12 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "execute generic command as async job when legacy execution metadata is async" in {
-      Given("a component operation defined as COMMAND with execution=async")
+    "execute generic command as async job when legacy execution metadata is async" must _metadata("E4", "R2,R5,R6") {
+      "when a generic COMMAND uses legacy async execution metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R5, R6; Example: E4; a component operation defined as COMMAND with execution=async")
       val component = _component()
 
       val req = Request.of(
@@ -272,10 +291,12 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "prefer typed command execution policy over legacy execution metadata" in {
-      Given("a command operation with execution=async but typed sync direct policy")
+    "prefer typed command execution policy over legacy execution metadata" must _metadata("E4", "R2,R5,R6") {
+      "when a COMMAND has typed sync policy and legacy async metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R5, R6; Example: E4; a command operation with execution=async but typed sync direct policy")
       val component = _component()
 
       val req = Request.of(
@@ -295,10 +316,12 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "ignore invalid typed command execution policy instead of overriding legacy execution metadata" in {
-      Given("a command operation with execution=async and an invalid typed policy string")
+    "ignore invalid typed command execution policy instead of overriding legacy execution metadata" must _metadata("E4", "R2,R5,R6") {
+      "when a COMMAND has invalid typed policy and valid legacy async metadata" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R5, R6; Example: E4; a command operation with execution=async and an invalid typed policy string")
       val component = _component()
 
       val req = Request.of(
@@ -319,10 +342,12 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+      }
     }
 
-    "validate request values while building a generated VO before command execution" in {
-      Given("a command operation that builds an address-like value object from request properties")
+    "validate request values while building a generated VO before command execution" must _metadata("E4", "R2,R5,R6") {
+      "when a COMMAND builds a validated address-like value object" in {
+      Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R5, R6; Example: E4; a command operation that builds an address-like value object from request properties")
       val component = _component()
 
       val req = Request.of(
@@ -347,6 +372,7 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
           record.getString("postalCode") shouldBe Some("160-0022")
         case other =>
           fail(s"unexpected result: $other")
+      }
       }
     }
   }

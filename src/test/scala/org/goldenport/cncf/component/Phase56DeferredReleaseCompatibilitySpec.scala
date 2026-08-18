@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56DeferredReleaseCompatibilitySpec
@@ -87,7 +87,7 @@ final class Phase56DeferredReleaseCompatibilitySpec
       val proceed = new CountDownLatch(1)
       val left = new AtomicReference[Vector[Option[ComponentId]]]()
       val right = new AtomicReference[Vector[Option[ComponentId]]]()
-      def worker(target: AtomicReference[Vector[Option[ComponentId]]]): Thread =
+      def _worker_(target: AtomicReference[Vector[Option[ComponentId]]]): Thread =
         new Thread(() => {
           ready.countDown()
           proceed.await()
@@ -96,8 +96,8 @@ final class Phase56DeferredReleaseCompatibilitySpec
             ComponentId.parseC("Corpus").toOption
           ))
         })
-      val leftthread = worker(left)
-      val rightthread = worker(right)
+      val leftthread = _worker_(left)
+      val rightthread = _worker_(right)
 
       When("both workers and the nested caller evaluate ComponentId")
       leftthread.start()
