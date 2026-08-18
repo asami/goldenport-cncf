@@ -1,6 +1,6 @@
 # Hygiene Resolution Task Handoff
 
-Status: READY
+Status: RESOLVED
 Created: 2026-08-19
 Source Repository: /Users/asami/src/dev2025/cloud-native-component-framework
 Target Repository: /Users/asami/src/dev2025/cloud-native-component-framework
@@ -9,8 +9,8 @@ Suggested Invocation: $cncf-goal-task /Users/asami/src/dev2025/cloud-native-comp
 ## Purpose
 
 Resolve `HYG-P57.3-002` by making the identified public Scala API labels
-camelCase while preserving source compatibility through explicit, deprecated
-aliases for the currently accepted labels.
+camelCase. The user explicitly authorized a non-compatible source migration,
+so no deprecated aliases are retained.
 
 ## Source Evidence
 
@@ -37,21 +37,16 @@ aliases for the currently accepted labels.
   `extraComponents`, `protocolVersionHeader`, `maximumCalls`,
   `maximumInputBytes`, `maximumResultBytes`, `maximumConcurrency`,
   `toolSetId`, and `componentName`.
-- Retain the current public lower-case labels as explicit deprecated source
-  aliases where named-argument callers rely on them.
 - Make the public Alias compatibility constant names canonical camelCase:
   `configKey`, `compatibilityConfigKey`, and `defaultForbiddenShortcuts`.
-  Preserve the current PascalCase names as explicit deprecated aliases.
 - Update in-repository named-argument callers to canonical labels.
 
 ### Compatibility constraints
 
 - Do not change runtime behavior, configuration keys, wire/protocol headers,
   CML/JSON shape, or default values.
-- Do not remove any accepted public compatibility surface in this task.
-- Use the repository's established `@deprecatedName` compatibility pattern for
-  parameter labels where applicable; retain explicitly named deprecated
-  constants for source compatibility.
+- The user authorized removal of the retired source labels and constants.
+- Do not add `@deprecatedName`, deprecated aliases, or compatibility overloads.
 
 ### Executable evidence targets
 
@@ -65,22 +60,28 @@ aliases for the currently accepted labels.
 1. Run focused tests covering MCP adapter invocation, OperationTool runtime
    configuration, and Alias resolution.
 2. Review every changed public declaration and in-repository named-argument
-   caller for canonical label use and retained deprecated compatibility.
+   caller for canonical label use and absence of deprecated compatibility.
 3. Run the full validation selected by `cncf-goal-task` before accepting the
    resolved task.
 
 ## Completion Contract
 
 Complete only when the four production targets and all affected callers use
-the canonical labels, the former public labels remain explicitly deprecated
-source-compatible aliases, the executable evidence passes, and the task
-journal records validation and acceptance evidence. Do not broaden into
-unrelated naming cleanup.
+the canonical labels, no retired source-compatible aliases are retained, the
+executable evidence passes, and the task journal records validation and
+acceptance evidence. Do not broaden into unrelated naming cleanup.
 
 ## Resolution status
 
-Status: IMPLEMENTED; validation and commit evidence remain pending parent closure.
+Status: RESOLVED.
 
 The user explicitly authorized this non-compatible source-API migration. The
 deprecated compatibility aliases and `@deprecatedName` annotations described
 above were intentionally omitted.
+
+Validation Evidence: focused CNCF suites 51/51, post-review-fix suites 22/22,
+and final CNCF suite 3,262/3,262 (443 suites), all with zero failures.
+Review Evidence: one full review and a clean focused re-review closed the
+private-parameter naming blocker.
+Acceptance Commit: `50a34cdbfc95384788eb3140a07734b99a6b9e21`
+(`refactor: canonicalize public naming APIs`).
