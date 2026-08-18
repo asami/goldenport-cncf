@@ -1,6 +1,6 @@
 # Phase 57.5 - Test Suite Hygiene and Series Release Gate
 
-status=planned
+status=done
 split_from=[Phase 57](phase-57.md)
 depends_on=[Phase 57.4](phase-57.4.md)
 successor=[Phase 58](phase-58.md)
@@ -50,3 +50,16 @@ Phase Plan Gate: PROCEED
 - Reintroducing compatibility to keep deleted legacy-success tests green.
 - Treating `Phase56EcosystemNormativeClosureSpec` as unfinished work; it was
   removed during Phase 56 CID-08.
+
+## Completion Record
+
+- AES-07 removed only closure-oriented tests: Step commit
+  `4e7d53d4f77d9ac2af6de3421d8cbb4e94bff94e`.
+- The mandatory independent Phase review sealed `PASS` for
+  `80b9075e3cdfd58c38923157753fdcf815e25fba..4e7d53d4f77d9ac2af6de3421d8cbb4e94bff94e`;
+  it admitted no Current Phase Blocker and retained `HYG-P57.5-01` as a
+  nonblocking follow-up.
+- The reserved full series validation ran once as
+  `sbt --batch test`: invocation `13432-20260818T191133Z`, 443 suites and
+  3,262 succeeded, with SBT and wrapper exits `0` and the shared lock released.
+- Phase 58 remains the successor and is not changed by this closure.

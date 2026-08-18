@@ -6,7 +6,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 30, 2026
- * @version Aug.  1, 2026
+ * @version Aug. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryModeBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {

@@ -41,7 +41,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec
