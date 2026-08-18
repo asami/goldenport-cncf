@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 20, 2026
  *  version Feb.  1, 2026
  *  version Jul. 30, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -98,6 +98,6 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers with G
         )
       )
     }
-    Configuration(Map(AliasLoader.ConfigKey -> ConfigurationValue.ListValue(entries.toList)))
+    Configuration(Map(AliasLoader.configKey -> ConfigurationValue.ListValue(entries.toList)))
   }
 }

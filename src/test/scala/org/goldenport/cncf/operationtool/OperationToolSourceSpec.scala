@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the provider-neutral internal Operation source.
  *
  * @since   Jul. 21, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationToolSourceSpec
@@ -119,9 +119,9 @@ final class OperationToolSourceSpec
 
       When("the provider-neutral definition builder validates the runtime names")
       val result = OperationToolDefinitionBuilder.definitionC(
-        "tool",
-        service,
-        operation
+        componentName = "tool",
+        service = service,
+        operation = operation
       )
 
       Then("definition construction fails structurally rather than publishing an ambiguous name")
@@ -236,11 +236,16 @@ final class OperationToolSourceSpec
     "enforce invocation input and call-count limits before dispatch" in {
       Given("an admitted Operation with a one-call invocation budget")
       val subsystem = RuntimeBindingAdmissionFixture.default(Some("operation-tool-limits"))
-      val strictlimits = _success(OperationToolLimits.createC(1, 1024L, 65536L, 1))
+      val strictlimits = _success(OperationToolLimits.createC(
+        maximumCalls = 1,
+        maximumInputBytes = 1024L,
+        maximumResultBytes = 65536L,
+        maximumConcurrency = 1
+      ))
       val admission = _success(OperationToolAdmission.createC(
-        _tool_set_id,
-        Vector(_identity(_tool_time)),
-        strictlimits
+        toolSetId = _tool_set_id,
+        identities = Vector(_identity(_tool_time)),
+        limits = strictlimits
       ))
       val service = _success(OperationToolRuntimeRegistry.createC(subsystem, Vector(admission)))
         .resolve(admission.toolSetId).toOption.getOrElse(fail("tool service is unavailable"))
@@ -267,14 +272,24 @@ final class OperationToolSourceSpec
       val resultset = _success(OperationToolSetId.parseC("result-limited"))
       val identity = _identity(_tool_time)
       val inputadmission = _success(OperationToolAdmission.createC(
-        inputset,
-        Vector(identity),
-        _success(OperationToolLimits.createC(1, 1L, 65536L, 1))
+        toolSetId = inputset,
+        identities = Vector(identity),
+        limits = _success(OperationToolLimits.createC(
+          maximumCalls = 1,
+          maximumInputBytes = 1L,
+          maximumResultBytes = 65536L,
+          maximumConcurrency = 1
+        ))
       ))
       val resultadmission = _success(OperationToolAdmission.createC(
-        resultset,
-        Vector(identity),
-        _success(OperationToolLimits.createC(1, 1024L, 1L, 1))
+        toolSetId = resultset,
+        identities = Vector(identity),
+        limits = _success(OperationToolLimits.createC(
+          maximumCalls = 1,
+          maximumInputBytes = 1024L,
+          maximumResultBytes = 1L,
+          maximumConcurrency = 1
+        ))
       ))
       val registry = _success(OperationToolRuntimeRegistry.createC(
         subsystem,
@@ -301,8 +316,17 @@ final class OperationToolSourceSpec
   private def _admission(
     identities: Vector[OperationToolIdentity]
   ): OperationToolAdmission = {
-    val limits = _success(OperationToolLimits.createC(4, 65536L, 65536L, 1))
-    _success(OperationToolAdmission.createC(_tool_set_id, identities, limits))
+    val limits = _success(OperationToolLimits.createC(
+      maximumCalls = 4,
+      maximumInputBytes = 65536L,
+      maximumResultBytes = 65536L,
+      maximumConcurrency = 1
+    ))
+    _success(OperationToolAdmission.createC(
+      toolSetId = _tool_set_id,
+      identities = identities,
+      limits = limits
+    ))
   }
 
   private def _tool_set_id: OperationToolSetId =

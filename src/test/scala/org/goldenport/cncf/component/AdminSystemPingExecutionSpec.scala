@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 11, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -404,6 +404,6 @@ final class AdminSystemPingExecutionSpec
         )
       )
     }
-    Configuration(Map(AliasLoader.ConfigKey -> ConfigurationValue.ListValue(entries.toList)))
+    Configuration(Map(AliasLoader.configKey -> ConfigurationValue.ListValue(entries.toList)))
   }
 }

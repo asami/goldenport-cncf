@@ -14,7 +14,7 @@ import org.goldenport.schema.{Multiplicity, XBoolean, XDouble, XFloat, XInt, XIn
  * Provider-neutral CNCF Operation tool values.
  *
  * @since   Jul. 21, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationToolSetId private (value: String) {
@@ -190,26 +190,26 @@ final case class OperationToolLimits private (
 
 object OperationToolLimits {
   def createC(
-    maximumcalls: Int,
-    maximuminputbytes: Long,
-    maximumresultbytes: Long,
-    maximumconcurrency: Int
+    maximumCalls: Int,
+    maximumInputBytes: Long,
+    maximumResultBytes: Long,
+    maximumConcurrency: Int
   ): Consequence[OperationToolLimits] = {
     val values = Vector(
-      "maximumCalls" -> maximumcalls.toLong,
-      "maximumInputBytes" -> maximuminputbytes,
-      "maximumResultBytes" -> maximumresultbytes,
-      "maximumConcurrency" -> maximumconcurrency.toLong
+      "maximumCalls" -> maximumCalls.toLong,
+      "maximumInputBytes" -> maximumInputBytes,
+      "maximumResultBytes" -> maximumResultBytes,
+      "maximumConcurrency" -> maximumConcurrency.toLong
     )
     values.find(_._2 <= 0L) match {
       case Some((name, actual)) =>
         Consequence.argumentLimitExceeded(name, 1L, actual, "operation-tool.limits")
       case None =>
         Consequence.success(OperationToolLimits(
-          maximumcalls,
-          maximuminputbytes,
-          maximumresultbytes,
-          maximumconcurrency
+          maximumCalls,
+          maximumInputBytes,
+          maximumResultBytes,
+          maximumConcurrency
         ))
     }
   }
@@ -223,7 +223,7 @@ final case class OperationToolAdmission private (
 
 object OperationToolAdmission {
   def createC(
-    toolsetid: OperationToolSetId,
+    toolSetId: OperationToolSetId,
     identities: Vector[OperationToolIdentity],
     limits: OperationToolLimits
   ): Consequence[OperationToolAdmission] = {
@@ -236,7 +236,7 @@ object OperationToolAdmission {
         "duplicate"
       )
     else
-      Consequence.success(OperationToolAdmission(toolsetid, ordered, limits))
+      Consequence.success(OperationToolAdmission(toolSetId, ordered, limits))
   }
 }
 
@@ -249,11 +249,11 @@ object OperationToolDefinitionBuilder {
     _definition_c(component.componentId.name, Some(component), service, operation)
 
   def definitionC(
-    componentname: String,
+    componentName: String,
     service: ServiceDefinition,
     operation: OperationDefinition
   ): Consequence[OperationToolDefinition] =
-    _definition_c(componentname, None, service, operation)
+    _definition_c(componentName, None, service, operation)
 
   private def _definition_c(
     componentname: String,

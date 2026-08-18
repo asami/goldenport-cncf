@@ -12,7 +12,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Apr. 15, 2026
  *  version May. 20, 2026
  *  version Jul. 21, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -22,28 +22,28 @@ final class McpJsonRpcAdapter(
 
   def handle(
     input: String,
-    protocolversionheader: Option[String]
+    protocolVersionHeader: Option[String]
   ): McpJsonRpcOutcome =
-    _handle(input, protocolversionheader, enforceprotocolversion = true)
+    _handle(input, protocolVersionHeader, enforceprotocolversion = true)
 
   def handleWebSocketCompatibility(input: String): McpJsonRpcOutcome =
     _handle(input, None, enforceprotocolversion = false)
 
   private def _handle(
     input: String,
-    protocolversionheader: Option[String],
+    versionheader: Option[String],
     enforceprotocolversion: Boolean
   ): McpJsonRpcOutcome =
     parse(input) match {
       case Left(_) =>
         ProtocolFailure(Some(_error(Json.Null, -32600, "invalid request")))
       case Right(json) =>
-        _handle_json(json, protocolversionheader, enforceprotocolversion)
+        _handle_json(json, versionheader, enforceprotocolversion)
     }
 
   private def _handle_json(
     json: Json,
-    protocolversionheader: Option[String],
+    versionheader: Option[String],
     enforceprotocolversion: Boolean
   ): McpJsonRpcOutcome =
     json.asObject match {
@@ -55,9 +55,9 @@ final class McpJsonRpcAdapter(
         if (!jsonrpcok || methodopt.isEmpty) {
           ProtocolFailure(Some(_error(id, -32600, "invalid request")))
         } else if (isrequest) {
-          _handle_request(id, methodopt.get, obj("params"), protocolversionheader, enforceprotocolversion)
+          _handle_request(id, methodopt.get, obj("params"), versionheader, enforceprotocolversion)
         } else {
-          _handle_notification(methodopt.get, protocolversionheader, enforceprotocolversion)
+          _handle_notification(methodopt.get, versionheader, enforceprotocolversion)
         }
       case None =>
         ProtocolFailure(Some(_error(Json.Null, -32600, "invalid request")))
@@ -67,7 +67,7 @@ final class McpJsonRpcAdapter(
     id: Json,
     method: String,
     params: Option[Json],
-    protocolversionheader: Option[String],
+    versionheader: Option[String],
     enforceprotocolversion: Boolean
   ): McpJsonRpcOutcome =
     method match {
@@ -76,7 +76,7 @@ final class McpJsonRpcAdapter(
       case "notifications/initialized" =>
         ProtocolFailure(Some(_error(id, -32600, "invalid request: initialized must be a notification")))
       case _ =>
-        _validate_protocol_version(protocolversionheader, enforceprotocolversion) match {
+        _validate_protocol_version(versionheader, enforceprotocolversion) match {
           case Some(message) => ProtocolFailure(Some(_error(id, -32600, message)))
           case None => method match {
             case "tools/list" => _response(_tools_list(id))
@@ -88,25 +88,25 @@ final class McpJsonRpcAdapter(
 
   private def _handle_notification(
     method: String,
-    protocolversionheader: Option[String],
+    versionheader: Option[String],
     enforceprotocolversion: Boolean
   ): McpJsonRpcOutcome =
     if (method != "notifications/initialized")
       ProtocolFailure(None)
     else
-      _validate_protocol_version(protocolversionheader, enforceprotocolversion) match {
+      _validate_protocol_version(versionheader, enforceprotocolversion) match {
         case Some(_) => ProtocolFailure(None)
         case None => AcceptedNotification
       }
 
   private def _validate_protocol_version(
-    protocolversionheader: Option[String],
+    versionheader: Option[String],
     enforceprotocolversion: Boolean
   ): Option[String] =
     if (!enforceprotocolversion)
       None
     else
-      protocolversionheader match {
+      versionheader match {
         case None => Some("invalid request: MCP-Protocol-Version is required")
         case Some(value) => McpProtocolRevision.parseC(value) match {
           case Consequence.Success(_) => None

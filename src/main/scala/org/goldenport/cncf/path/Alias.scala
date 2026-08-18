@@ -13,7 +13,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationValue}
 /*
  * @since   Jan. 19, 2026
  *  version Apr. 15, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class Alias(
@@ -35,10 +35,10 @@ object Purpose {
 }
 
 object AliasLoader {
-  val ConfigKey: String = "textus.path.aliases"
-  val CompatibilityConfigKey: String = "cncf.path.aliases"
+  val configKey: String = "textus.path.aliases"
+  val compatibilityConfigKey: String = "cncf.path.aliases"
 
-  def load(configuration: Configuration, forbiddenShortcuts: Set[String] = AliasValidator.DefaultForbiddenShortcuts): AliasResolver = {
+  def load(configuration: Configuration, forbiddenShortcuts: Set[String] = AliasValidator.defaultForbiddenShortcuts): AliasResolver = {
     val definitions = _alias_definitions(configuration)
     if (definitions.isEmpty) AliasResolver.empty
     else {
@@ -61,14 +61,14 @@ object AliasLoader {
       case Some(ConfigurationValue.ObjectValue(map)) =>
         Vector(map)
       case Some(other) =>
-        throw new IllegalArgumentException(s"$ConfigKey must be an object or list, found ${other.getClass.getSimpleName}")
+        throw new IllegalArgumentException(s"$configKey must be an object or list, found ${other.getClass.getSimpleName}")
       case None =>
         Vector.empty
     }
   }
 
   private def _configured_aliases(configuration: Configuration): Option[ConfigurationValue] =
-    configuration.values.get(ConfigKey).orElse(configuration.values.get(CompatibilityConfigKey))
+    configuration.values.get(configKey).orElse(configuration.values.get(compatibilityConfigKey))
 
   private def _alias_from(definition: Map[String, ConfigurationValue], index: Int): Alias = {
     val label = s"alias entry #${index + 1}"
@@ -156,7 +156,7 @@ object AliasLoader {
 }
 
 object AliasValidator {
-  val DefaultForbiddenShortcuts: Set[String] = Set.empty
+  val defaultForbiddenShortcuts: Set[String] = Set.empty
 
   def validate(aliases: Seq[Alias], forbiddenShortcuts: Set[String]): Unit = {
     if (aliases.isEmpty) return

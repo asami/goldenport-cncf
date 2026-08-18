@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 19, 2026
  *  version May. 18, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -71,7 +71,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
         """{"jsonrpc":"2.0","id":"list","method":"tools/list","params":{}}"""
 
       When("both messages carry the negotiated protocol revision")
-      val notificationoutcome = adapter.handle(notification, _protocol_header)
+      val notificationoutcome = adapter.handle(notification, protocolVersionHeader = _protocol_header)
       val requestoutcome = adapter.handle(request, _protocol_header)
 
       Then("the notification has no response body while the request has a typed JSON response")

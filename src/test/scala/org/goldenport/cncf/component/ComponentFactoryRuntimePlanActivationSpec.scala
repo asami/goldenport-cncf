@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 24, 2026
  *  version May.  3, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -193,7 +193,7 @@ final class ComponentFactoryRuntimePlanActivationSpec
 
       When("the runtime builds a command subsystem and adds the extra components")
       val subsystem = CncfRuntime.buildSubsystem(
-        extracomponents = extras,
+        extraComponents = extras,
         mode = Some(RunMode.Command),
         args = Array(
           s"--textus.test.descriptor=${_controlled_test_descriptor_path}",

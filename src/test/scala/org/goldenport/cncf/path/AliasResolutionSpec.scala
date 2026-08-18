@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 19, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -138,8 +138,8 @@ final class AliasResolutionSpec
       val cncf = _alias_entries("ping" -> "legacy.system.ping")
       val config = Configuration(
         Map(
-          AliasLoader.ConfigKey -> ConfigurationValue.ListValue(textus.toList),
-          AliasLoader.CompatibilityConfigKey -> ConfigurationValue.ListValue(cncf.toList)
+          AliasLoader.configKey -> ConfigurationValue.ListValue(textus.toList),
+          AliasLoader.compatibilityConfigKey -> ConfigurationValue.ListValue(cncf.toList)
         )
       )
 
@@ -227,7 +227,7 @@ final class AliasResolutionSpec
   }
 
   private def _alias_config(defs: (String, String)*): Configuration = {
-    Configuration(Map(AliasLoader.ConfigKey -> ConfigurationValue.ListValue(_alias_entries(defs: _*).toList)))
+    Configuration(Map(AliasLoader.configKey -> ConfigurationValue.ListValue(_alias_entries(defs: _*).toList)))
   }
 
   private def _alias_entries(defs: (String, String)*): Vector[ConfigurationValue] = {
