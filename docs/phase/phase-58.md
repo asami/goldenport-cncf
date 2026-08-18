@@ -34,6 +34,20 @@ consumed by resolver policy and diagnostics. Phase 58 must not reopen Phase 55
 scope or encode SubComponent selection as an unrelated configuration
 authority.
 
+## Journal Deferred-Work Merge
+
+Phase 58 absorbs the development/packaged parity portion of the Phase 53
+CS-02C journal deferral only where it concerns parent/Subcomponent Component
+description, CAR packaging, resolver provenance, and admitted runtime
+resolution. A descriptor-v2 snapshot and declared style/capability metadata
+must not create a second authoritative Component identity, activate a child,
+or grant a capability.
+
+Generic capability-definition validation, arbitrary Metadata Factory
+ComponentStyle contribution, and global catalog policy remain owned by Strategy
+9.50. This Phase does not reopen Phase 53 by treating those future extension
+contracts as a packaging prerequisite.
+
 Phase 57.1 and Phase 57.2 supply explicit Action execution semantics.
 SubComponent composition must not create a second execution-intent or
 job-submission policy. CAR admission and description do not imply external
@@ -99,6 +113,10 @@ platform deployment.
   Subcomponent CAR discovery separately from child activation.
 - Define development-directory, expanded artifact, local repository, cache,
   remote repository, and offline-bundle resolution.
+- Prove development and packaged parity for the admitted parent/Subcomponent
+  descriptor, declared style/capability metadata, registry, and provenance
+  surfaces; reject a mismatch rather than inventing a generic capability
+  registry.
 - Preserve physical origin, repository, path, digest, authorization, license,
   disclosure, and resolution-step provenance.
 - Define deterministic duplicate, conflict, stale, corrupt, missing,
@@ -205,6 +223,7 @@ platform deployment.
 
 - `docs/notes/component-subcomponent-architecture-implementation.md`
 - `docs/notes/component-resource-subcomponent-implementation.md`
+- `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md`
 - `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`
 - `docs/journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md`
 - `docs/design/component-dependency-loading.md`

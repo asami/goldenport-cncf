@@ -1788,6 +1788,26 @@ planned Phase may consume a candidate's existing boundary without closing or
 silently absorbing that candidate; each related item below states the retained
 ownership.
 
+### Journal Deferred/Future Work Triage
+
+This ledger classifies deferred or future work recorded in journals without
+rewriting those historical records. A row either assigns the work to an
+existing planned Phase, records its continuing 9.x owner, creates a bounded
+new Phase, or explicitly identifies a non-CNCF owner. A historical deferral
+whose receiving Phase is closed is not re-opened by this ledger.
+
+| Journal source | Recorded work | Current disposition |
+| --- | --- | --- |
+| `2026/01/phase-3.1-fact-reconstruction.md` | Docker/external execution, Antora integration, CML-to-Component generation, AI Agent Hub, and performance work excluded from the early Fat JAR baseline. | Retained as the broader Phase 3 execution-model programme. No new Phase is selected because the journal does not freeze a consumer, runtime boundary, or acceptance driver; it must not be smuggled into CAR packaging, MCP migration, or Phase 71. |
+| `2026/01/phase-3.1-fatjar-component.md` | Retry semantics, failure aggregation, cross-operation compensation, and distributed failure handling. | [Phase 69](../phase/phase-69.md) may consume only Job-local retry and non-distributed failure aggregation. Retained result history and recovery remain independent Phase 69 / 9.14 commitments. Generic event/reception and outcome lanes remain [9.2](#92-event-mechanism-follow-ups); compensation remains [9.10](#910-compensation-recovery-events); distributed failure ownership remains [9.13](#913-distributed-component-runtime) and [9.15](#915-saga-management). |
+| `2026/04/view-projection-design-note.md` | Custom, inherited, dynamic, and GraphQL-style view projections. | Retained by [9.16](#916-persistent-materialized-view-store); no Phase is selected because the journal supplies no consumer or persistence/rebuild contract. |
+| `2026/05/knowledge-space-operational-semantic-structure-note.md` and Phase 27 knowledge journals | Incremental/streaming KnowledgeSpace updates, provider lifecycle, graph/projection expansion, and live external authority lookup. | Retained by [9.5](#95-knowledge-structure-follow-ups). Provider-specific live lookup remains application-owned by `textus-knowledge-editor`; it does not create a CNCF provider dependency or a new CNCF Phase. |
+| `2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Descriptor snapshot, declared style/capability metadata, and development/packaged parity. | Merged into [Phase 58](../phase/phase-58.md) only for parent/Subcomponent CAR description, packaging, and resolution parity. Generic capability-definition validation and Metadata Factory contribution remain [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution). |
+| `2026/07/2026-07-30-cml-application-mode-capability-consideration.md` | Metadata Factory contribution of additional ComponentStyles. | Retained by the explicit future item under [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution); no Phase is selected until a non-CNCF provider supplies concrete acceptance evidence. |
+| `2026/07/2026-07-24-simpleentity-revision-occ-consideration.md` and `2026/07/2026-07-24-phase-49-entity-conflict-conditional-transition-consideration.md` | Force overwrite, merge, repair, and conflict-resolution Web/API work. | Assigned to new [Phase 71](../phase/phase-71.md), which remains held until a first operator-facing conflict driver is admitted. [9.40](#940-entity-conflict-resolution-and-repair) remains the long-lived ownership record. |
+| `2026/05/sd-01-smartdox-core-parser-note.md` | SmartDox multilingual rendering. | SmartDox-owned; recorded here as an external dependency only. It is not a CNCF Phase or a CNCF runtime workaround. |
+| `2026/08/2026-08-06-current-work-closeout-before-phase-56.md` and Phase 53 ConfigurationBinding deferrals | Namespace-qualified Component identity and typed configuration binding. | Historical only: received by closed Phases 56 and 55 respectively. No active work is created. |
+
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
 
@@ -3083,9 +3103,10 @@ cross-repository item. This item is not the active phase.
     `docs/phase/phase-24-checklist.md` define the downstream consumer stages.
 
 ### 9.40 Entity Conflict Resolution and Repair
-Future Entity/operator-UX development item. This item is defined now so the
-scope deferred from the Phase 49 version-conflict baseline remains visible
-after 9.12 and 9.39 move to completed history.
+Planned as Phase 71, held until a first operator-facing conflict driver
+supplies concrete resolution vocabulary. This item keeps the scope deferred
+from the Phase 49 version-conflict baseline visible after 9.12 and 9.39 move
+to completed history.
 
 - Dependency:
   - Phase 49 provides the atomic conditional-transition primitive;
@@ -3123,6 +3144,11 @@ after 9.12 and 9.39 move to completed history.
     exposing any mutation route; and
   - use one operator-facing application as the first driver rather than
     inventing a generic merge UI without evidence.
+- Planning references:
+  - `docs/phase/phase-71.md`;
+  - `docs/phase/phase-71-checklist.md`;
+  - `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md`; and
+  - `docs/journal/2026/07/2026-07-24-phase-49-entity-conflict-conditional-transition-consideration.md`.
 
 ### 9.42 Component Resource, Documentation, and Admin Delivery Sequence
 

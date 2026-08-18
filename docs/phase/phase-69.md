@@ -28,6 +28,20 @@ Before implementation starts, `JM69-01` must reconcile any Phase 63--68 work
 that has closed or become active, especially StateMachine/Workflow execution,
 DbC evaluation on Job paths, test invocation, and MCP task/result surfaces.
 
+## Journal Deferred-Work Merge
+
+Phase 69 may consume the Job-local retry and non-distributed failure-aggregation
+portion of the Phase 3.1 Fat JAR Component deferral. That journal reference
+does not assign retained result history or process-restart recovery; those are
+independent Phase 69 and Strategy 9.14 commitments. The admitted retry and
+aggregation evidence is bounded by versioned Job definitions, Task records,
+persistence, authorization, and explicit replay policy.
+
+This does not absorb generic event reception/outcome lanes (Strategy 9.2),
+cross-operation compensation (9.10), distributed delivery/fencing (9.13), or
+Saga coordination (9.15). Those items retain separate ownership even when a
+Job supplies evidence consumed by them.
+
 ## Problem Statement
 
 The current implementation uses `JobPersistencePolicy.Persistent`, but the
