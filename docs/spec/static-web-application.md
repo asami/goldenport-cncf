@@ -153,6 +153,14 @@ Generated entity CRUD, automatic REST, and Form API remain valid for
 administration, automation, diagnostics, and explicit integration. They are
 not the required normal Web mutation model when an aggregate command exists.
 
+For progressive JavaScript, Form API supplies dynamic Web input definition and
+optional admission validation. REST v1 is the canonical JSON query/command
+Operation execution surface. A client MUST NOT move domain behavior into Form
+API or treat optional Form API validation as authoritative Operation
+validation. The retained direct Form API execution POST is compatibility-only;
+new Static Web enhancements use REST for execution. Normal `/form` submission
+continues to provide the JavaScript-free HTML/PRG path.
+
 ## SWA-5: Progressive Enhancement
 
 JavaScript MAY enhance a bounded page region after the server-rendered page is
@@ -170,6 +178,11 @@ NOT add a request merely to retrieve data that was available when the page was
 rendered. A subsequent request is permitted only when freshness, command
 progress, or browser-only capability makes it necessary, and it MUST be scoped
 to that small region.
+
+A bounded enhancement that executes a query or command MUST use the canonical
+REST Operation contract. It MAY use Form API separately when dynamic Web input
+definition or optional admission validation is needed, but it MUST NOT require
+a Form API preflight for every REST action.
 
 Application-wide client routing and client REST hydration are separate SPA
 architecture choices, not Static Web Application behavior.

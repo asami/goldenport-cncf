@@ -2274,7 +2274,9 @@ Alignment with Phase 64:
   with this candidate and Saga Management.
 
 ### 9.14 Job Management Follow-ups
-Future Job Management development item.
+Planned as the comprehensive Phase 69 Job Management completion program after
+the Phase 22 baseline. Phase 69 is a separately selectable planning branch and
+is not the active Phase.
 
 Phase 22 closed the baseline Job Management scope. Completed behavior is
 recorded in section 8.12 and the closed Phase 22 documents:
@@ -2282,7 +2284,7 @@ recorded in section 8.12 and the closed Phase 22 documents:
 - Dashboard: `docs/phase/phase-22.md`
 - Checklist: `docs/phase/phase-22-checklist.md`
 
-Future follow-ups:
+Phase 69 scope:
 
 - Implement executable JCL runtime for procedural `flow` and Event-driven
   `events` / `onEvent` sections. Phase 22 stores and documents those sections
@@ -2302,6 +2304,25 @@ Future follow-ups:
   completion state, read/unread job indicators, and application-specific
   operator workflows. These should build on the Phase 22 Job/Event/notification
   boundaries rather than adding notification logic back into JobEngine.
+- Reconcile Phase 6's durable query/result contract with Phase 22's lightweight
+  Job Entity projection and implement full process-restart recovery for
+  Persistent Job identity, lifecycle, Task records, results, retained payload
+  references, definition snapshots, and required diagnostic history.
+- Replace bounded non-paginated enumeration as the completeness path with
+  stable authorized cursor pagination for Jobs, Tasks, timelines, and retained
+  history while preserving `listJobs(limit)` only as a compatibility facade.
+- Complete Job-specific persistence security, integrity, migration, retention,
+  deletion, observability, health, and operational maintenance boundaries.
+- Close through real new-process acceptance and representative downstream
+  evidence, including CBD Support recovery without ComponentFactory-local or
+  component-private shadow Job state.
+
+Phase 69 planning references:
+
+- `docs/phase/phase-69.md`
+- `docs/phase/phase-69-checklist.md`
+- `docs/design/job-management.md`
+- `docs/journal/2026/03/job-task-execution-persistence-design.md`
 
 Alignment with Phase 64:
 
@@ -2309,7 +2330,8 @@ Alignment with Phase 64:
   linkage contracts for a Workflow-selected Operation.
 - It may add only the correlation/idempotency evidence required for that path;
   executable JCL flow/events, JobDefinition rollout, durable Task Execution
-  Tree/history, CompositeQuery v2, and general Job UX remain in this candidate.
+  Tree/history, CompositeQuery v2, and general Job UX remain owned by the
+  planned Phase 69 program.
 
 ### 9.15 Saga Management
 Future distributed-collaboration development item.
@@ -2532,7 +2554,7 @@ Planned as the Web discovery/presentation subset of Phase 60.
   - broken-link/missing-template diagnostics;
   - admin index rendering that remains operation-centric and
     descriptor-backed; and
-  - navigation to Phase 58 Resource SubComponent state and Phase 59
+  - navigation to Phase 58 Subcomponent Component state and Phase 59
     documentation/model resources without independently scanning artifacts.
 - First implementation direction:
   - add discovery/projection diagnostics for declared admin pages;
@@ -2975,7 +2997,10 @@ Completed in Phase 40.
 
 
 ### 9.38 CAR Skill Bundle Distribution and AI-assisted UX
-Future CNCF development item. This item is defined but is not the active phase.
+Its CNCF-owned contract slice is planned as Phase 66 after Phase 65. Phase 66
+owns the contract and shared fixtures; downstream CAR projection and
+installation remain in Cozy Phase 24, whose closure completes the
+cross-repository item. This item is not the active phase.
 
 - Goal:
   - allow a CAR to distribute Codex Skills that explain and assist how to use,
@@ -3027,9 +3052,12 @@ Future CNCF development item. This item is defined but is not the active phase.
     specification;
   - implement the manifest codec and deterministic validator in CNCF;
   - add source/archive equivalence executable specifications;
-  - add Cozy CAR projection; and
-  - integrate development and released-CAR installation paths in CNCF Launcher
-    and Textus Launcher respectively.
+  - publish normative valid/invalid fixtures and the accepted contract identity
+    as the Phase 66 handoff to Cozy Phase 24 `SK24-01`;
+  - let Cozy Phase 24 `SK24-02` add CAR projection only after that handoff; and
+  - leave development and released-CAR installation paths to Cozy Phase 24
+    `SK24-03` and `SK24-04` through CNCF Launcher and Textus Launcher
+    respectively.
 - Acceptance:
   - one logical bundle has the same identity, manifest, Skill set, and digests
     in a component source directory and its packaged CAR;
@@ -3047,8 +3075,12 @@ Future CNCF development item. This item is defined but is not the active phase.
   - remote Skill marketplaces independent of CAR distribution;
   - runtime MCP invocation through the bundle manifest; and
   - application-specific Skill authoring UI.
-- Planning reference:
-  - `docs/journal/2026/07/2026-07-21-codex-skill-bundle-contract.md`.
+- Planning references:
+  - `docs/phase/phase-66.md`;
+  - `docs/phase/phase-66-checklist.md`;
+  - `docs/journal/2026/07/2026-07-21-codex-skill-bundle-contract.md`;
+  - Cozy repository `docs/phase/phase-24.md` and
+    `docs/phase/phase-24-checklist.md` define the downstream consumer stages.
 
 ### 9.40 Entity Conflict Resolution and Repair
 Future Entity/operator-UX development item. This item is defined now so the
@@ -3202,18 +3234,26 @@ Planning references:
 - `docs/notes/phase-56-cid05-cncf-runtime-identity-migration-plan.md`; and
 - `docs/journal/2026/08/2026-08-08-phase-57-action-execution-semantics-and-renumbering.md`.
 
-#### Phase 58 - Component Resource SubComponent Foundation
+#### Phase 58 - Component and SubComponent Composition Foundation
 
 Planned after Phase 57.5 closes. Resource identity and repository composition
 consume the namespace-qualified Component identity and derived release
 coordinates without defining another naming authority.
 
-- Owns Resource SubComponent identity, primary/release composition, packaging
-  contract, atomic repository visibility, cache/retrieval, offline bundles,
-  integrity, access, resolution precedence, lifecycle, operation-mode
-  resource policy, physical provenance, and common consumer APIs.
-- Introduces the initial non-executable `Documentation` and `SourceCode`
-  resource roles.
+- Starts by recording a non-normative Component/SubComponent architecture
+  proposal in `docs/notes`, then promotes verified architecture and behavior to
+  `docs/design` and `docs/spec` only at Phase 58 closure.
+- Owns parent Component and SubComponent identity, primary/release composition,
+  parent registry, packaging contract, atomic repository visibility,
+  cache/retrieval, offline bundles, integrity, access, resolution precedence,
+  lifecycle, operation-mode composition policy, physical provenance, and
+  common consumer APIs.
+- Makes every declared Subcomponent, including `Documentation` and `SourceCode`,
+  an independently identifiable Component with its own CAR and
+  parent/role/implementation membership. Its information payload does not by
+  itself grant a capability, authority, or implicit parent runtime dependency.
+- Keeps CAR admission and description distinct from executable-child activation
+  and external-platform deployment.
 - Keeps publication completeness separate from primary-only runtime
   activation.
 - Supplies one resolver to Help, AI, CBD Support, BoK, and later Admin; those
@@ -3221,6 +3261,7 @@ coordinates without defining another naming authority.
 - Planning references:
   - `docs/phase/phase-58.md`;
   - `docs/phase/phase-58-checklist.md`;
+  - `docs/notes/component-subcomponent-architecture-implementation.md`;
   - `docs/notes/component-resource-subcomponent-implementation.md`; and
   - `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`.
 
@@ -3247,9 +3288,9 @@ Planned after Phase 58 closes.
   - release source is embedded or carried by a required SourceCode
     SubComponent; restricted access is explicit and omission is not a complete
     Component release profile;
-  - Documentation and SourceCode SubComponents are repository resource
-    artifacts, not runtime Components, Componentlets, or Subsystem
-    participants;
+  - Documentation and SourceCode Subcomponents are independently describable
+    Component CARs; their payloads are not implicit parent runtime
+    dependencies, Componentlets, or separately activated Subsystem members;
   - `OperationMode.Develop` automatically resolves and mounts exact
     Documentation plus the development target's admitted source while
     Component domain code remains mode-independent;
@@ -3378,7 +3419,7 @@ Planned after Phase 59 closes.
   - identity distinguishes Component class, release, instance, Subsystem, and
     implicit Component Subsystem;
   - visibility covers effective configuration/provenance, primary and
-    Resource SubComponent composition, Service, Operation, SPI, capability,
+    Subcomponent Component composition, Service, Operation, SPI, capability,
     dependency, Entity/Powertype/StateMachine/Value/Datatype models and
     diagrams, datastore/schema/collection, lifecycle, health, ClassLoader,
     manuals, Scaladoc, source availability, and troubleshooting; and
@@ -3826,6 +3867,17 @@ Planned for Phase 62.1 after Phase 62 closes. ArtScene Phase 13 is the driver.
   - CNCF owns same-origin request security, Form API Web input adaptation, REST
     v1 Operation execution, structured response/error decoding, and stable
     browser-client contracts;
+  - CAR-only execution creates an implicit SAR whose default application Web
+    surface comes from the root/Primary CAR; dependency CAR Web apps remain
+    component-owned support routes and enter visible application composition
+    only through explicit SAR opt-in;
+  - dependency participation distinguishes non-navigable `support` from
+    `visible` composition, so UserAccount can serve authentication flows without
+    appearing as application UI while UserNotification is visible only when
+    selected;
+  - `apps[].entry: true` is deprecated but retained as bounded compatibility
+    input until the replacement contract and migration evidence are complete;
+    dependency-local entry flags never override the implicit-SAR root;
   - new ArtScene query/command flows execute through REST v1; Form API is used
     only for dynamic definition or optional Web input admission validation;
   - direct Form API execution POST remains compatibility-only;
@@ -3840,6 +3892,8 @@ Planned for Phase 62.1 after Phase 62 closes. ArtScene Phase 13 is the driver.
   - ArtScene Timeline/List/review/follow consumer trial;
   - bounded generic request, cancellation, response/error, and asset extensions
     admitted by executable evidence;
+  - implicit-SAR root Web selection plus explicit dependency `support`/`visible`
+    participation, with development and packaged multi-CAR acceptance;
   - CNCF fixture plus ArtScene development/packaged producer-consumer
     acceptance; and
   - real browser fallback, race, security rejection, recovery, navigation, and
@@ -4527,3 +4581,166 @@ Planned for Phase 65 after Phase 64 closes.
   - `docs/journal/2026/08/2026-08-12-cml-executable-design-by-contract-consideration.md`;
     and
   - `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md`.
+
+### 9.57 CNCF Testability and Explicit Test Invocation
+Planned for Phase 67 after Phase 57.5 closes. This is a separately selectable
+planning branch and does not renumber or change the Phase 58--66 dependency
+chain.
+
+- Historical basis:
+  - CNCF already has explicit test descriptors, test-home controls, logical
+    datastore replacement, deterministic execution profiles, descriptor-backed
+    SPI selection, Component/resource test doubles, and CallTree/diagnostic
+    test evidence; and
+  - ordinary isolated CLI testing still requires a caller-created descriptor
+    file merely to express explicit controlled test intent, even when no
+    structured overlay is needed.
+- Goal:
+  - provide one explicit parameterized public `cncf test` path for ordinary
+    isolated test execution;
+  - normalize admitted parameters into existing runtime configuration and
+    `RuntimeTestDescriptor` semantics rather than creating a parallel model;
+    and
+  - make Component/SPI doubles and test observability explicit, deterministic,
+    isolated, safely inspectable framework facilities.
+- Selected direction:
+  - `kind: test-descriptor` remains a descriptor-document marker, not a CLI
+    parameter;
+  - stable parameters cover only common, flat, safely typed controls; Phase 67
+    freezes exact grammar, defaults, precedence, conflicts, and limits before
+    implementation;
+  - `--textus.test.descriptor=<path>` remains the explicit advanced mechanism
+    for structured assembly, SPI/provider, and nested overlays;
+  - Component/SPI doubles require explicit declaration, selected installation,
+    deterministic recording, reset/cleanup, isolation, production exclusion,
+    and bounded CallTree/diagnostic evidence; and
+  - no parameter or ambient file may silently enable test mode, controlled
+    execution, test-owned state, fixture wiring, remote resolution, or
+    credential inheritance for an ordinary production command.
+- Initial scope:
+  - CLI grammar/Help, typed argument admission, configuration/descriptor
+    projection, precedence, duplicate/conflict rejection, and safe provenance;
+  - test home, logical runtime/component datastores, deterministic controls,
+    bounded assumptions, cleanup, and redaction;
+  - Component/resource/SPI test doubles, provider selection, lifecycle,
+    recording, reset, isolation, and production exclusion;
+  - explicit Component source/CAR/development-directory cases, descriptor-only
+    topology, bounded fixture seams, and test CallTree/diagnostic/metric
+    evidence; and
+  - framework executable specifications plus CAR, development-directory, SPI,
+    stub, and representative downstream acceptance.
+- Deferred scope:
+  - removal of descriptor-file support; arbitrary YAML/assembly flattening;
+    automatic test discovery; ambient fixtures; implicit remote, credential,
+    repository, provider, or Component activation; application-owned mocks;
+    and changes to production authorization or CAR publication.
+- Planning references:
+  - `docs/phase/phase-67.md`;
+  - `docs/phase/phase-67-checklist.md`;
+  - `docs/spec/test-policy.md`;
+  - `docs/design/execution-determinism.md`; and
+  - `docs/notes/cncf-developer-guide.md`.
+
+### 9.58 Legacy and Modern MCP Protocol Coexistence
+Planned for Phase 68 after Phase 67 closes. Phase 45 and Phase 46 remain its
+technical foundations.
+
+- Historical basis:
+  - Phase 45 established the provider-neutral runtime-owned MCP client Port,
+    typed catalog/result model, transport admission, limits, credentials,
+    lifecycle, and safe observability;
+  - Phase 46 established the shared legacy revision model, Streamable HTTP
+    server/client interoperability, internal Operation-tool separation, and
+    downstream Textus AI/Sanpomap acceptance; and
+  - the stable MCP `2026-07-28` contract changes lifecycle, discovery,
+    request metadata, HTTP/header behavior, result disposition, cache, and
+    security in ways that cannot be represented as only another legacy
+    initialize revision.
+- Goal:
+  - preserve the working legacy MCP contract as the default during migration;
+  - add a modern MCP path beside it through one runtime-owned dual-era model;
+  - keep protocol selection, compatibility, fallback, credentials, endpoints,
+    headers, and wire records outside Component and application APIs; and
+  - provide deterministic interoperability, security, cache, structured
+    failure, and observability evidence for both eras.
+- Selected direction:
+  - retain `2025-11-25` as the preferred legacy revision with existing
+    `2025-06-18` and `2025-03-26` compatibility;
+  - use `2026-07-28` as the modern planning baseline and freeze the exact
+    official target at Phase 68 start instead of following a moving alias;
+  - keep legacy and modern lifecycle/state separate while sharing the admitted
+    catalog, authorization, ActionCall/UnitOfWork, failure, and observability
+    authorities;
+  - reject ambiguous mixed-era evidence and permit fallback only through
+    explicit runtime policy before possibly side-effecting dispatch; and
+  - require a separate explicit decision after full acceptance before modern
+    may become the default.
+- Initial scope:
+  - official/current implementation inventory and compatibility matrix;
+  - closed protocol-era/revision vocabulary and selection/fallback contract;
+  - dual-era MCP server and Streamable HTTP client paths;
+  - modern discovery, request metadata, HTTP/status/header, result/schema,
+    cache, Origin/authorization-context, and redacted observability behavior;
+  - legacy regression plus real modern/legacy interoperability fixtures; and
+  - probe, Textus AI, Sanpomap, Bok, CBD Support, SIE, documentation, review,
+    validation, version, and release closure.
+- Deferred scope:
+  - removal of legacy support or an automatic default switch;
+  - application-selected protocol or infrastructure;
+  - Roots, Sampling, Tasks, Subscriptions, unrestricted server-initiated
+    behavior, and every optional MCP capability; and
+  - stdio, arbitrary subprocess/filesystem/HTTP, legacy SSE, and unrelated
+    internal Operation-tool or provider-function redesign.
+- Planning references:
+  - `docs/phase/phase-68.md`;
+  - `docs/phase/phase-68-checklist.md`;
+  - `docs/design/mcp-server-boundary.md`;
+  - `docs/design/mcp-client-boundary.md`;
+  - `docs/spec/mcp-client-boundary.md`;
+    and
+  - `docs/journal/2026/08/2026-08-15-mcp-dual-era-protocol-support-direction.md`.
+
+### 9.59 Post-Assembly Component Activation
+Planned for Phase 70 as a separately selectable supplier branch after Phase 55.
+
+- Historical basis:
+  - `Component.initialize` currently occurs during per-component bootstrap,
+    before the complete admitted component set has been injected and all
+    runtime services have been bound;
+  - managed applications sometimes require bounded startup work through
+    another component's public API before server readiness; and
+  - Textus BoK configured KnowledgeSource bootstrap is the first concrete
+    consumer and must not publish through SIE during unsafe construction order
+    or require a post-readiness administrative HTTP call.
+- Goal:
+  - add one typed opt-in component activation lifecycle after full Subsystem
+    assembly/runtime binding and before managed server readiness;
+  - make success, failure, timeout, ordering, cleanup, and diagnostics explicit
+    and deterministic; and
+  - preserve existing non-opt-in components and direct command/client behavior.
+- Selected direction:
+  - activation uses normal component/API selection and ExecutionContext-aware
+    boundaries, never implementation lookup or arbitrary configured Operation
+    names;
+  - required activation completes exactly once before readiness, while failure
+    or timeout prevents readiness and enters ordinary cleanup;
+  - managed server activation is distinct from command/client execution, and
+    controlled tests require explicit admission; and
+  - application-specific KnowledgeSource, SIE, profile, or Glossary semantics
+    remain in Textus BoK.
+- Initial scope:
+  - activation capability/context and exact lifecycle insertion point;
+  - deterministic order, once-only identity, timeout/cancellation, readiness,
+    failure, cleanup, and redacted diagnostics;
+  - server, non-opt-in, command/client, emulator/test behavior; and
+  - Textus BoK Phase 8 consumer acceptance plus focused/full framework closure.
+- Deferred scope:
+  - arbitrary startup Operation configuration, Workflow/Job orchestration,
+    file watching, hot reload, restart/deployment control, distributed
+    activation, and component-specific business logic.
+- Planning references:
+  - `docs/phase/phase-70.md`;
+  - `docs/phase/phase-70-checklist.md`;
+  - `src/main/scala/org/goldenport/cncf/component/Component.scala`;
+  - `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala`; and
+  - `textus-bok:docs/phase/phase-8.md`.

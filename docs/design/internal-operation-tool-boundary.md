@@ -48,6 +48,16 @@ No CNCF adapter implicitly converts either identity into the other. A consumer
 may place both definitions in one consumer-owned catalog only while retaining
 their source domain and complete identity.
 
+### Operator-Policy Builtin Selector Boundary
+
+The operator-owned policy accepts two fixed input-only builtin selectors:
+`tool.<service>.<operation>` and `admin.<service>.<operation>`. They map
+directly and exactly to the canonical CNCF Tool and Admin component identities.
+The mapping ends at policy decoding: admitted values and catalog entries retain
+canonical `OperationToolIdentity` values. Other local prefixes are not a
+compatibility surface, and the fixed selectors never identify or adapt a
+remote MCP `server/tool` value.
+
 ## Provider-Neutral Model
 
 The internal tool model consists of:

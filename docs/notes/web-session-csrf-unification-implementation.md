@@ -2,7 +2,7 @@
 
 status = proposed, non-normative
 date = 2026-07-26
-target_phase = 60
+target_phase = 62
 
 ## Goal
 
@@ -69,14 +69,17 @@ them.
 CNCF should provide a standard Web helper instead of requiring each component
 to parse cookies or construct security headers.
 
-Conceptual API:
+Conceptual API (exact names remain provisional):
 
 ```javascript
-await TextusWeb.fetch(url, {
-  method: "POST",
-  body: values
-});
+await TextusWeb.form.definition(selector);
+await TextusWeb.form.validate(selector, values);
+await TextusWeb.operation.execute(selector, values, { signal });
 ```
+
+The facade may share a low-level `TextusWeb.fetch` implementation, but its
+public methods preserve the architecture boundary: Form API supplies dynamic
+Web input definition/validation and REST v1 executes queries and commands.
 
 For an unsafe same-origin request the helper:
 
@@ -108,7 +111,10 @@ preserving the current form field contract.
 
 - Form submissions continue to send `csrf`.
 - JavaScript `/form-api` calls use `X-CSRF-Token`.
-- Validation and execution POST routes are both protected.
+- Validation and retained compatibility execution POST routes are both
+  protected.
+- New browser code does not use direct Form API POST as its canonical Operation
+  execution route.
 - Authorization runs as part of the normal operation ingress and is not
   replaced by CSRF verification.
 - CSRF rejection occurs before operation execution and side effects.
@@ -124,6 +130,8 @@ Web-facing REST endpoints using the Web session apply the same guard.
   `Authorization` header when session credentials are also present.
 - The selected ingress profile, authenticated subject, and credential source
   must be deterministic and observable.
+- REST v1 is the canonical JSON Operation execution surface for new browser
+  query and command flows.
 
 External REST keeps its separate authentication, scope, replay, quota, and
 gateway policies. Phase 62 does not implement a complete external API gateway.
@@ -152,10 +160,11 @@ secrets.
    route-specific code.
 2. Fix ingress authentication/profile classification.
 3. Extract the common Web-session CSRF guard and token transport parser.
-4. Migrate `/form-api` validation and execution routes.
+4. Migrate `/form-api` validation and retained compatibility execution routes.
 5. Apply the guard to Web-facing REST unsafe methods.
 6. Add the CNCF JavaScript helper and page token projection.
-7. Migrate a representative component JavaScript flow, initially ArtScene.
+7. Provide a CNCF-owned representative component JavaScript flow that does not
+   depend on a downstream checkout or application phase.
 8. Add diagnostics, audit, and security regression evidence.
 9. Promote verified parameter and behavior contracts to `docs/spec` and
    `docs/design`.
@@ -174,8 +183,11 @@ secrets.
 - Ambiguous cookie plus external credentials fails according to the selected
   deterministic policy.
 - The standard JavaScript helper attaches the token and never leaks it.
-- A representative ArtScene filter/update flow succeeds through the real HTTP
-  boundary.
+- The standard facade keeps Form API definition/validation distinct from REST
+  Operation execution.
+- A CNCF-owned representative filter/update flow succeeds through the real HTTP
+  boundary. ArtScene becomes the first full application driver after Phase 62
+  closes and is tracked by Phase 62.1.
 
 ## Deferred Scope
 
@@ -185,6 +197,8 @@ secrets.
 - Token storage for third-party SPA runtimes.
 - Replacing XSS/CSP, authorization, idempotency, or rate-limit controls with
   CSRF.
+- ArtScene-specific page lifecycle and post-baseline reusable client
+  extensions, which belong to ArtScene Phase 13 and CNCF Phase 62.1.
 
 ## Related Documents
 
@@ -194,3 +208,6 @@ secrets.
 - `docs/design/web-form-api-schema.md`
 - `docs/notes/cncf-hosted-spa-boundary-note.md`
 - `docs/phase/phase-62.md`
+- `docs/phase/phase-62.1.md`
+- `docs/notes/artscene-driven-progressive-static-web-client-integration-provisional-specification.md`
+- `docs/journal/2026/08/2026-08-12-form-api-rest-web-boundary.md`

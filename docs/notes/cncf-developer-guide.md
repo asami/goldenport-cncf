@@ -775,9 +775,11 @@ work for every user. Compose the full initial page View on the server and send
 it in the document. REST is for external clients, automation, and carefully
 bounded browser enhancements, not for initial application-page assembly.
 
-Normal Web writes use aggregate-command forms and Post/Redirect/Get. REST and
-Form API remain public integration surfaces and may support bounded progressive
-enhancements, but they are not the bootstrap path for an ordinary page.
+Normal Web writes use aggregate-command forms and Post/Redirect/Get. Bounded
+progressive query/command execution uses REST v1. Form API supplies dynamic Web
+input definition and optional admission validation; it is not a second
+canonical execution API or an obligatory preflight. Neither REST nor Form API
+is the bootstrap path for an ordinary page.
 
 Use an asynchronous browser request only for a narrow exceptional region:
 genuinely live state such as a notification badge, progress for a long-running

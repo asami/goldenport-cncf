@@ -3,6 +3,7 @@
 date = 2026-07-26
 status = decision record
 target_phase = 55
+current_target_phase = 62
 
 ## Context
 
@@ -151,3 +152,18 @@ Session CSRF Unification to Phase 61. Current planning follows:
 All earlier phase assignments in this journal remain chronological history.
 The authoritative mapping is
 `docs/journal/2026/08/2026-08-06-phase-56-component-identity-planning-and-renumbering.md`.
+
+## 2026-08-12 Current Phase and API Responsibility Boundary
+
+Further planning places Web Session CSRF Unification in Phase 62:
+
+- `docs/phase/phase-62.md`
+- `docs/phase/phase-62-checklist.md`
+
+Phase 62 protects Form API and Web-session REST with one CSRF mechanism. The
+subsequent API-boundary decision keeps Form API responsible for Web input
+definition and optional admission validation, REST v1 responsible for canonical
+JSON Operation execution, and `/form` responsible for HTML/PRG execution. The
+direct Form API execution POST remains compatibility-only. The reasoning is
+recorded in
+`docs/journal/2026/08/2026-08-12-form-api-rest-web-boundary.md`.

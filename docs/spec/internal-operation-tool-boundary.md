@@ -12,6 +12,18 @@ An internal tool identity MUST be the exact
 tool identity MUST remain `server/tool`. CNCF MUST NOT implicitly convert,
 alias, or merge these identity domains.
 
+### Operator-Policy Builtin Selectors
+
+At the operator-policy input boundary only, the fixed selectors
+`tool.<service>.<operation>` and `admin.<service>.<operation>` MAY be used for
+framework builtins. `tool.*` maps exactly to
+`org.goldenport.cncf.Tool.<service>.<operation>` and `admin.*` maps exactly to
+`org.goldenport.cncf.Admin.<service>.<operation>`. The policy admission,
+activated catalog, and invocation identity retain only the resulting canonical
+`OperationToolIdentity` values. No arbitrary local component prefix is
+accepted, and these selectors neither denote nor convert a remote MCP
+`server/tool` identity.
+
 CNCF MUST own internal Operation admission and execution. A consumer MAY
 compose admitted internal definitions with separately admitted remote MCP
 definitions, but that composition and any provider-function mapping MUST remain

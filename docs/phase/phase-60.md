@@ -17,7 +17,7 @@ authorized, manageable.
 Phase 60 consumes:
 
 - Phase 55 effective configuration values and provenance;
-- Phase 58 resolved Resource SubComponent inventory, state, integrity, and
+- Phase 58 resolved Subcomponent Component inventory, state, integrity, and
   provenance; and
 - Phase 59 Component knowledge and model manifests.
 
@@ -29,8 +29,8 @@ documentation artifacts independently.
 
 Phase 60 begins after Phase 59 closes.
 
-Phase 58 supplies the physical Resource SubComponent resolver and Phase 59
-supplies the documentation/model knowledge contract. Phase 60 is their
+Phase 58 supplies the physical Subcomponent CAR and payload resolver and Phase
+59 supplies the documentation/model knowledge contract. Phase 60 is their
 operator-facing consumer and does not reopen either foundation.
 
 ## Selected Direction
@@ -49,8 +49,9 @@ operator-facing consumer and does not reopen either foundation.
 - Admin exposes Service, Operation, SPI, capability, dependency, datastore,
   schema, collection, lifecycle, health, and ClassLoader information where
   the runtime owns authoritative evidence.
-- Documentation and SourceCode SubComponents are shown as resources of the
-  logical Component release, not as executable Components.
+- Documentation and SourceCode Subcomponent CARs are shown with their own
+  Component identities, payload-resource state, and parent relationship; Admin
+  visibility does not activate them.
 - Management actions require explicit Operation authorization, audit, and
   lifecycle safety. Resource discovery never grants management authority.
 - Missing, remote, restricted, unavailable, incompatible, stale, and corrupt
@@ -61,7 +62,7 @@ operator-facing consumer and does not reopen either foundation.
 - Define a versioned Component Admin view model and discovery contract.
 - Present Component class, release, instance, Subsystem, and implicit
   Component Subsystem identity without conflation.
-- Present primary CAR plus Documentation and SourceCode SubComponent
+- Present primary CAR plus Documentation and SourceCode Subcomponent CAR
   composition, availability, integrity, access state, and provenance through
   the Phase 58 resolver.
 - Present Phase 59 manuals, Help, Scaladoc, source availability, model
@@ -81,7 +82,7 @@ operator-facing consumer and does not reopen either foundation.
 
 ## Non-Goals
 
-- Reimplementing Resource SubComponent resolution or repository access.
+- Reimplementing Subcomponent CAR/payload resolution or repository access.
 - Reimplementing Help, manuals, AI retrieval, CBD Support, or BoK.
 - Generating documentation, source archives, model metadata, or diagrams.
 - Treating Admin as an alternate configuration authority.
@@ -132,7 +133,7 @@ operator-facing consumer and does not reopen either foundation.
 ## Planning References
 
 - [Phase 55 - Configuration Binding and Provenance](phase-55.md)
-- [Phase 58 - Component Resource SubComponent Foundation](phase-58.md)
+- [Phase 58 - Component and SubComponent Composition Foundation](phase-58.md)
 - [Phase 59 - Component Documentation and AI Knowledge Integration](phase-59.md)
 - [Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
 - [Planning Journal](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)

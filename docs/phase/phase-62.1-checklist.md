@@ -64,6 +64,19 @@ Stage Status:
 - [ ] Extend only the necessary Form API adaptation, REST execution, request
   encoding, response decoding, structured error, cancellation, or asset
   packaging contracts.
+- [ ] Preserve component ownership while resolving the root/Primary CAR as the
+  default Web application of an implicit SAR.
+- [ ] Define explicit SAR dependency-Web participation with separate `support`
+  and `visible` modes; dependency apps are support-only unless selected.
+- [ ] Keep UserAccount authentication routes usable without automatically
+  adding them to application navigation, and require an explicit visible opt-in
+  for UserNotification or another dependency application UI.
+- [ ] Accept `apps[].entry: true` only as a deprecated compatibility input,
+  prevent dependency-local entry flags from overriding the implicit-SAR root,
+  and record the migration/removal condition.
+- [ ] Add failing-first coverage for root CAR plus multiple dependency Web apps,
+  explicit support/visible selection, conflicting or unknown selections, and
+  unchanged canonical component routes, authorization, templates, and assets.
 - [ ] Preserve caller-owned `AbortSignal` and request-generation coordination.
 - [ ] Keep token and diagnostic values out of exceptions, URLs, history, logs,
   metrics, CallTree, and ordinary UI messages.
@@ -89,6 +102,9 @@ Stage Status:
   workflow.
 - [ ] Verify ArtScene development-directory consumption.
 - [ ] Verify ArtScene packaged-CAR asset resolution and execution.
+- [ ] Verify CAR-only implicit-SAR execution and explicit-SAR execution produce
+  the same root-entry and dependency-participation result in development and
+  packaged consumption.
 - [ ] Record exact producer/consumer versions and artifact identities.
 
 Evidence:

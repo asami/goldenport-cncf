@@ -19,6 +19,11 @@ Stage Status:
 
 - [ ] Inventory CML StateMachine grammar/AST for state, event, transition,
   source/target, priority, guard, action/effect, entry, and exit declarations.
+- [ ] Inventory implicit/explicit initial and final-state behavior, one-level
+  composite states, named shallow history, history-field writes, and any
+  flattening or identity loss across projections.
+- [ ] Inventory event payload and runtime `TransitionEvent` context shapes used
+  by expression and named guards, including missing/type-mismatch behavior.
 - [ ] Inventory SimpleModeler transition generation, generated action bodies,
   named/expression guards, priority/declaration order, metadata, and ABI.
 - [ ] Inventory core `StateMachine`, `TransitionDecider`, `Guard`, and `Effect`
@@ -34,6 +39,9 @@ Stage Status:
   minimal shared implementation interface Phase 63 actually selects.
 - [ ] Inventory staged/published transition events and CallTree behavior on
   commit, action failure, persistence failure, cancellation, and rollback.
+- [ ] Freeze the actual generated-provider bootstrap path from ComponentFactory
+  to the save/update/command UnitOfWork hooks, and identify tests that replace
+  it with manually injected providers.
 - [ ] Freeze the boundary between local transition effects and post-commit
   external work.
 - [ ] Reconcile strategy candidates 9.2, 9.4, 9.7, 9.10, and 9.53 so Phase 63
@@ -64,6 +72,11 @@ Stage Status:
   with bounded depth, size, path, numeric, string, and collection behavior.
 - [ ] Define named guard identity and explicit `GuardBindingResolver` behavior.
 - [ ] Define stable machine, transition, state, event, guard, and action ids.
+- [ ] Define machine version, explicit initial state, terminal/final states,
+  one-level composite-state structure, and named shallow-history semantics in
+  the canonical closed model.
+- [ ] Define the bounded typed trigger-context schema available to predicates,
+  including missing, unknown, and incompatible field behavior.
 - [ ] Define `TransitionPlan`, candidate state, admitted local effect plan, and
   success/failure result vocabulary.
 - [ ] Prohibit ambient service, provider, datastore, filesystem, process,
@@ -84,6 +97,12 @@ Stage Status:
   with stable identity and deterministic diagnostics.
 
 - [ ] Normalize machine/state/event/transition identity and source position.
+- [ ] Normalize explicit initial/final declarations and define versioned legacy
+  admission when a declaration is absent or previously inferred by order.
+- [ ] Preserve the existing one-level composite-state and named
+  shallow-history structure without flattening away parent/leaf identity.
+- [ ] Normalize event payload/trigger context into the typed schema consumed by
+  `PredicateProgram` and named bindings.
 - [ ] Normalize explicit priority and declaration order without constant
   defaulting that discards source intent.
 - [ ] Normalize expression guards to `PredicateProgram`.
@@ -108,6 +127,8 @@ Stage Status:
   definitions and stable metadata without required no-op/raw-string behavior.
 
 - [ ] Generate canonical transition definitions with stable ids and ordering.
+- [ ] Generate canonical machine version, initial/final states,
+  composite/history structure, typed trigger-context metadata, and state path.
 - [ ] Generate typed predicate programs and named guard/action references.
 - [ ] Generate executable local transition actions or explicit resolver
   bindings instead of placeholder no-op behavior.
@@ -138,6 +159,8 @@ Stage Status:
 - [ ] Execute exit, transition, and entry local effects in the frozen order.
 - [ ] Place candidate state, admitted local effects, persistence, and outcome
   staging in one UnitOfWork.
+- [ ] Keep named shallow-history record validation and writes in the same
+  candidate-state/UnitOfWork contract without synthesizing hidden fields.
 - [ ] Ensure action, persistence, cancellation, and interruption failures roll
   back state and successful-event staging.
 - [ ] Cover create, update/save, patch, command, direct/unversioned, retry, and
@@ -158,6 +181,8 @@ Stage Status:
   transition produces the canonical downstream envelope.
 
 - [ ] Define explicit Operation/event-to-machine trigger binding.
+- [ ] Bind each trigger to one versioned typed context schema used consistently
+  by transition selection, predicates, diagnostics, and replay.
 - [ ] Reject name-based or status-field inference where no binding exists.
 - [ ] Define `CommittedTransition` fields for component, entity type/id,
   machine, transition, source/target, trigger/event, operation, commit,
@@ -213,12 +238,20 @@ Stage Status:
 
 - [ ] Add a generated `SalesOrder` entity with `SalesStatus` StateMachine and
   representative positive/negative transitions.
+- [ ] Prove explicit initial/final behavior and representative one-level
+  composite/named shallow-history behavior through generation and runtime.
 - [ ] Prove priority, declaration-order, named/expression guards, actions,
   create/update/patch/command routes, atomic rollback, and success envelopes.
 - [ ] Prove guard non-match, guard failure, action failure, persistence failure,
   interruption, retry/replay, and diagnostic non-leakage.
 - [ ] Run affected focused suites and full suites serially under project rules.
 - [ ] Validate downstream generated sample/CAR behavior where admitted.
+- [ ] Prove the exact CML -> Cozy -> SimpleModeler -> generated
+  `CollectionTransitionRuleProvider` -> ComponentFactory automatic bootstrap ->
+  UnitOfWork -> persisted state -> post-commit `CommittedTransition` path.
+- [ ] Reject a manually constructed transition provider as evidence for the
+  preceding end-to-end acceptance, while retaining such fixtures for focused
+  CNCF adapter specifications.
 - [ ] Re-review naming, ABI, lifecycle, observability, and compatibility debt.
 - [ ] Reconcile final implementation evidence with every linked development
   candidate and update candidate status without implicit absorption.

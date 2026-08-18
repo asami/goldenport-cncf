@@ -19,9 +19,11 @@ The contract is intentionally schema-oriented:
 - The resolved result is `WebSchemaResolver.ResolvedWebSchema`.
 - HTML rendering and JSON Form API responses consume the same resolved schema.
 
-The Form API definition endpoints do not execute business logic. Execution
-remains an Operation dispatch through the Web Operation Dispatcher or the normal
-REST operation path.
+The Form API definition and validation endpoints do not execute business logic.
+Canonical JSON execution remains an Operation dispatch through `/rest/v1`.
+Browser-native HTML execution remains `/form` plus Post/Redirect/Get. The
+retained direct Form API execution POST is a compatibility adapter, not a second
+canonical Operation API.
 
 ## Definition Routes
 
@@ -142,7 +144,7 @@ Operation definitions use:
 {
   "mode": "operation",
   "method": "POST",
-  "submitPath": "/form-api/notice-board/notice/post-notice",
+  "submitPath": "/rest/v1/notice-board/notice/post-notice",
   "htmlPath": "/form/notice-board/notice/post-notice",
   "actions": [
     {
@@ -151,9 +153,9 @@ Operation definitions use:
       "path": "/form/notice-board/notice/post-notice"
     },
     {
-      "name": "api-submit",
+      "name": "execute",
       "method": "POST",
-      "path": "/form-api/notice-board/notice/post-notice"
+      "path": "/rest/v1/notice-board/notice/post-notice"
     },
     {
       "name": "validate",
@@ -163,6 +165,10 @@ Operation definitions use:
   ]
 }
 ```
+
+Operation definitions advertise REST v1 as their JSON execution action. They
+do not advertise the retained direct Form API execution compatibility route to
+new clients.
 
 Admin entity and data definitions expose list/new/create/detail/edit/update
 actions. Paths that need a runtime id use `{id}` as the path template variable.
@@ -391,7 +397,7 @@ The first implementation step should extend `org.goldenport.schema.Schema` and
 descriptors, Form API JSON, and Static Form App HTML. Adding CNCF-only parallel
 fields is a fallback only for descriptor-local override metadata.
 
-## Validation And Execution
+## Validation And Execution Boundary
 
 Definition routes are read-only. Validation routes validate submitted input
 against the same resolved schema without invoking business logic:
@@ -477,14 +483,31 @@ surface back through the normal Operation response/error contract.
 Later validation stages may add richer datatype normalization and metadata-based
 cross-field checks while preserving the same top-level shape.
 
-Operation execution remains separate. The current compatibility route:
+Operation execution remains separate and canonical under `/rest/v1`. The
+current compatibility route:
 
 ```text
 POST /form-api/{component}/{service}/{operation}
 ```
 
 submits form data and returns the Operation response directly. It is not the
-definition endpoint and should not be used as the validation contract.
+definition endpoint, must not be used as the validation contract, and is not
+the target for new browser integration. It remains available for existing
+clients while delegating to the same Operation authorization, validation,
+UnitOfWork, response-envelope, and structured-error authority as REST.
+
+The intended client responsibilities are:
+
+```text
+Form API definition   -> Web schema and presentation/input metadata
+Form API validate     -> optional Web input admission without Operation dispatch
+REST v1               -> canonical JSON query/command Operation execution
+/form                 -> browser-native HTML execution and PRG
+```
+
+Using both Form API and REST does not require two calls for every action. A
+client calls Form API only when it needs dynamic definition or pre-validation;
+server-side Operation validation remains authoritative when REST executes.
 
 Management Console create/update HTML submissions use `/form/{component}/admin`
 routes and dispatch admin Operations through `WebOperationDispatcher`.

@@ -51,6 +51,19 @@ does not gate the independent Phase 63 StateMachine, Phase 64 Workflow, or Phase
   ArtScene domain names and preserves server-rendered and no-JavaScript paths.
 - A reusable JavaScript component runtime, registry, props schema, and lifecycle
   remain strategy item 9.21 until separately selected.
+- An implicit SAR created for CAR-only execution selects the root/Primary CAR's
+  Web application as its default application surface. Dependency CAR Web
+  applications remain component-owned support routes and do not enter the
+  application navigation or default-entry candidates unless the SAR explicitly
+  opts them in.
+- SAR Web participation distinguishes `support` routes from `visible`
+  application composition. Authentication flows may use UserAccount support
+  routes without making UserAccount a visible application; UserNotification or
+  another dependency becomes visible only through an explicit SAR opt-in.
+- `apps[].entry: true` remains accepted as a deprecated compatibility input
+  during migration. Phase 62.1 defines and proves the replacement before any
+  removal, and a dependency CAR's legacy entry flag never overrides the
+  root/Primary CAR selected by an implicit SAR.
 
 ## Work Stack
 
@@ -58,7 +71,7 @@ does not gate the independent Phase 63 StateMachine, Phase 64 Workflow, or Phase
 | --- | --- | --- | --- |
 | PSI-01 | Baseline handoff and gap taxonomy | The exact Phase 62 artifact/API and defect, reusable-extension, app-local, and future-candidate classifications are fixed. | planned |
 | PSI-02 | ArtScene consumer trial | ArtScene Timeline, List, review, and follow paths exercise the Phase 62 client contract and produce reproducible gaps. | planned |
-| PSI-03 | Bounded reusable extensions | Only admitted generic form-adaptation, REST execution, request, cancellation, decoding, error, or packaging capabilities are implemented without DOM or domain ownership. | planned |
+| PSI-03 | Bounded reusable extensions and implicit-SAR Web participation | Only admitted generic form-adaptation, REST execution, request, cancellation, decoding, error, packaging, or root/dependency Web participation capabilities are implemented without DOM or domain ownership. | planned |
 | PSI-04 | Producer/consumer compatibility | CNCF fixtures and ArtScene use the same published contract with stable asset, source, and ABI compatibility. | planned |
 | PSI-05 | Real browser and failure acceptance | Real HTTP/browser evidence covers fallback, authorization, CSRF, races, failures, retry, non-leakage, and bounded requests. | planned |
 | PSI-06 | Promotion and closure | Verified contracts are promoted and remaining optional candidates receive named owners without reopening Phase 62. | planned |
@@ -79,6 +92,15 @@ does not gate the independent Phase 63 StateMachine, Phase 64 Workflow, or Phase
   subscription, locale, authorization, or workspace policy.
 - Development and packaged consumption use the same admitted CNCF asset and
   public contract.
+- CAR-only execution publishes the root/Primary CAR Web application as the
+  implicit SAR default even when dependency CARs package their own Web apps.
+- Dependency Web apps are support-only by default; SAR opt-in deterministically
+  promotes selected component apps to visible composition without changing
+  component ownership, authorization, canonical routes, or assets.
+- UserAccount authentication support can remain non-navigable, while
+  UserNotification and similar application UI appears only when explicitly
+  selected. Deprecated `entry: true` remains bounded compatibility input and
+  is not the new participation contract.
 - Mandatory admitted gaps pass CNCF and ArtScene producer/consumer evidence;
   optional candidates are relocated explicitly.
 
@@ -88,6 +110,11 @@ does not gate the independent Phase 63 StateMachine, Phase 64 Workflow, or Phase
 - Implementing ArtScene presentation or domain transitions in CNCF.
 - Creating a client-side router, state store, SPA runtime, or implicit hydration.
 - Implementing the full strategy item 9.21 Island Architecture Runtime.
+- Automatically exposing every dependency CAR Web app in application
+  navigation, or allowing a dependency-local entry flag to select the implicit
+  SAR default.
+- Removing `apps[].entry: true` before the replacement participation contract
+  and migration evidence are complete.
 - Blocking the independent StateMachine, Workflow, or executable DbC phases.
 
 ## Planning References

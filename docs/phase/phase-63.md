@@ -33,6 +33,9 @@ CallTree observability.
   planning, local effect execution, persistence, publication, and diagnostics.
 - CML expression guards normalize to a closed, typed, versioned, pure
   `PredicateProgram`; named guards remain explicit resolver bindings.
+- The canonical machine definition preserves explicit initial/final-state
+  semantics, the existing one-level composite-state/named shallow-history
+  contract, and the typed trigger context seen by predicates.
 - A transition produces a candidate state and a local effect plan before any
   state is committed.
 - State mutation, admitted local effects, persistence, and the durable
@@ -47,6 +50,10 @@ CallTree observability.
   bounded diagnostic outcome remains retrievable after rollback.
 - Create, update/save, patch, command, and compatibility execution paths must
   not silently bypass declared StateMachine enforcement.
+- End-to-end acceptance must cross CML parsing, SimpleModeler generation,
+  generated provider publication, ComponentFactory automatic bootstrap, and
+  the real UnitOfWork boundary. A manually injected transition provider is not
+  sufficient evidence for this path.
 
 ## Work Stack
 
@@ -54,8 +61,8 @@ CallTree observability.
 | --- | --- | --- | --- |
 | SMR-01 | Inventory and semantic freeze | Existing CML, generated, core, CNCF, Aggregate, UnitOfWork, and observability behavior plus bypasses are fixed by failing-first evidence. | planned |
 | SMR-02 | Canonical transition and predicate contract | Core selection, typed guard IR, named binding, effect boundary, result vocabulary, and ordering are fixed without duplicate engines. | planned |
-| SMR-03 | CML normalization | Transition identity, source/target, event, priority, guard, and action declarations normalize deterministically. | planned |
-| SMR-04 | Generation and ABI propagation | SimpleModeler emits stable typed transition definitions, predicates, bindings, and metadata without required raw-string execution. | planned |
+| SMR-03 | CML normalization | Machine identity/version, initial/final state, existing composite/history structure, typed trigger context, transition identity, source/target, event, priority, guard, and action declarations normalize deterministically. | planned |
+| SMR-04 | Generation and ABI propagation | SimpleModeler emits stable typed machine/transition definitions, predicates, bindings, hierarchy/history, and metadata without required raw-string execution. | planned |
 | SMR-05 | Atomic CNCF execution | CNCF plans and commits candidate state, admitted local effects, persistence, and outcomes exactly once through UnitOfWork. | planned |
 | SMR-06 | Trigger and committed-transition contract | Operation/event triggers are explicit and a successful commit produces one stable downstream envelope. | planned |
 | SMR-07 | Observability and compatibility | Structured failures, redaction, legacy admission, projections, rollback diagnostics, and bypass prevention are fixed. | planned |
@@ -67,8 +74,13 @@ CallTree observability.
   SimpleModeler to CNCF.
 - Priority and declaration order are honored; guard false continues selection
   and guard failure stops it.
+- Explicit initial/final-state semantics and the existing one-level
+  composite-state/named shallow-history contract survive parsing, generation,
+  ABI/projection, and execution without flattening away required meaning.
 - Named guards resolve explicitly; required expression guards do not silently
   fall back to raw MVEL.
+- Predicate field access is checked against one bounded typed trigger context;
+  missing or incompatible trigger data is a structured failure.
 - Exactly one admitted transition is planned from current state and trigger.
 - Transition actions are executable only inside the admitted local UnitOfWork
   boundary; external effects begin after commit.
@@ -83,6 +95,9 @@ CallTree observability.
   event, guard/action phase, trace, and safe cause identity after rollback.
 - Representative generated `SalesOrder`/`SalesStatus` behavior crosses the
   real CNCF execution boundary and is fixed by Executable Specifications.
+- The representative acceptance starts from CML source and uses the generated
+  provider plus ComponentFactory automatic bootstrap; it does not replace that
+  path with a hand-written provider fixture.
 
 ## Non-Goals
 
@@ -90,6 +105,8 @@ CallTree observability.
 - Executable preconditions, postconditions, or Aggregate invariants owned by
   Phase 65.
 - Timer, schedule, parallel, human-task, compensation, or connector semantics.
+- Deep history, orthogonal regions, arbitrary-depth composite states,
+  choice/junction/fork/join expansion, or a general UML statechart language.
 - External network, process, database, or service I/O inside a transition
   action.
 - Replacing core StateMachine primitives or introducing a second transition

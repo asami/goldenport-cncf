@@ -8,7 +8,7 @@ checklist=[Phase 59 Checklist](phase-59-checklist.md)
 implementation_note=[Component Documentation Knowledge Package Implementation Proposal](../notes/component-documentation-knowledge-package-implementation.md)
 composition_journal=[Component SubComponent and Development Composition Decision](../journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md)
 phase_split_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
-foundation=[Phase 58 Resource SubComponent Foundation](phase-58.md)
+foundation=[Phase 58 Component and SubComponent Composition Foundation](phase-58.md)
 admin_consumer=[Phase 60 Component Admin and Documentation Visibility](phase-60.md)
 
 ## Purpose
@@ -39,10 +39,10 @@ discovery. The exact Component Help manifest remains authoritative.
 
 Phase 59 begins after Phase 58 closes.
 
-Phase 58 is authoritative for Resource SubComponent identity, composition,
+Phase 58 is authoritative for Subcomponent Component identity, composition,
 publication completeness, repository/cache access, resolution precedence,
-integrity, operation-mode resource policy, lifecycle, and physical provenance.
-Phase 59 consumes that foundation and must not implement a second resolver.
+integrity, operation-mode policy, lifecycle, and physical provenance. Phase 59
+consumes that foundation and must not implement a second resolver.
 
 Phase 59 does not reopen Phase 50 Entity revision/OCC behavior. It may document
 those contracts through the new Component knowledge mechanism after their
@@ -57,9 +57,9 @@ canonical design/specification is stable.
 - Small runtime-required metadata and the composition manifest remain in the
   primary CAR; large documentation and source may be packaged as
   Documentation and SourceCode SubComponents.
-- Documentation and SourceCode SubComponents are repository artifacts, not
-  runtime Component participants, Componentlets, or separately installed
-  Subsystem capabilities.
+- Documentation and SourceCode Subcomponents are independently describable
+  Component CARs. Their payload resources are not implicit parent runtime
+  dependencies, Componentlets, or separately installed Subsystem capabilities.
 - Publication completeness, primary-only activation, and exact resource states
   follow the Phase 58 contract.
 - `OperationMode.Develop` receives the verified Documentation resource space
@@ -231,8 +231,8 @@ canonical design/specification is stable.
 - Human-facing `latest` aliases must not become MCP/RAG evidence identities.
 - Fine-grained SubComponent fragmentation beyond Documentation and SourceCode
   is not part of the initial contract.
-- Phase 59 does not reinterpret SubComponents as executable CAR dependencies
-  or runtime Component participants.
+- Phase 59 does not make a Subcomponent CAR an implicit parent runtime
+  dependency or activation request.
 - Phase 59 does not implement Component Admin runtime views or management
   actions; those belong to Phase 60.
 - Help, CBD Support, BoK, and later Admin must not independently scan

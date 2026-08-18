@@ -323,10 +323,12 @@ ordinary list/search rendering or for header badges. Search/list pages should
 prefer `/form/...` HTML submissions and result templates. Page chrome and
 lookup values needed for initial rendering should come from the Application
 tier page context and appear in templates as `${pageContext.*}` properties.
-`/form-api` remains appropriate for optional refresh, field assistance,
-validation, editor helpers, async status polling, and other progressive
-enhancement that does not own the main page render.
-- operation execution still uses the REST operation path.
+`/form-api` remains appropriate for dynamic field definition, schema-derived
+field assistance, admission validation, and form/editor metadata. Optional
+refresh, async status polling, queries, and commands execute through REST v1 and
+must not own the main page render.
+- operation execution uses the REST operation path; direct Form API execution
+  POST remains compatibility-only.
 
 The stable JSON response contract for the definition endpoints is maintained in
 `docs/design/web-form-api-schema.md`.

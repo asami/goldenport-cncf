@@ -386,6 +386,30 @@ The intended migration path is:
 6. Keep existing Operation factory override APIs as compatibility variation
    points.
 
+## Phase 63-65 Alignment
+
+The StateMachine/Workflow/DbC sequence selects only part of this provisional
+implementation strategy:
+
+- Phase 63 owns the `pattern:state-machine` / `pattern:state-transition`
+  vertical slice, including explicit transition binding, canonical transition
+  planning, candidate-state/local-effect UnitOfWork behavior, generated ABI,
+  and structured outcomes.
+- Phase 63 does not make `scala-inline`, arbitrary external Scala, or the other
+  listed built-in patterns part of StateMachine execution.
+- The general `ImplementationDefinition`/factory override architecture and
+  later Operation/ActionCall reuse remain provisional development candidates
+  unless Phase 63 inventory proves a minimal shared interface is required.
+- Phase 64 consumes committed transition outcomes and invokes the next normal
+  Operation; it does not add another Aggregate implementation kind.
+- Phase 65 applies executable contracts around the admitted Aggregate/
+  Operation implementation boundary; DbC never evaluates inline Scala or
+  implementation source as a contract expression.
+
+The Phase 63 checklist is authoritative for the selected StateMachine slice.
+This note remains non-normative for all unselected implementation kinds and
+patterns.
+
 ## Open Items
 
 - Define the exact CML grammar for `IMPLEMENTATION`.

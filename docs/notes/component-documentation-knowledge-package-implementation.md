@@ -35,13 +35,12 @@ consist of a primary execution CAR plus exact Documentation and SourceCode
 SubComponents. The Component Repository guarantees that every required
 SubComponent remains retrievable for the exact release.
 
-Resource SubComponent identity, composition, publication completeness,
+Subcomponent Component identity, composition, publication completeness,
 repository/cache access, resolution precedence, integrity, physical
-provenance, lifecycle, and operation-mode resource policy are Phase 58
-contracts. Phase 59 consumes
-`docs/notes/component-resource-subcomponent-implementation.md` and must not
-build a second physical-resource resolver. Phase 60 Admin is a later consumer
-of the same Phase 58 resource view and the Phase 59 knowledge/model manifests.
+provenance, lifecycle, and operation-mode policy are Phase 58 contracts. Phase
+59 consumes the Phase 58 composition proposal/design/specification and must
+not build a second CAR or payload resolver. Phase 60 Admin is a later consumer
+of the same Phase 58 view and the Phase 59 knowledge/model manifests.
 
 Shared CNCF, CML, Cozy, and SmartDox framework/toolchain documentation follows
 a separate distribution rule. SimpleModeling.org is its basic public
@@ -54,8 +53,9 @@ publication generation is packaged as a framework Documentation Component.
    contract.
 2. The primary execution CAR and its declared Documentation and SourceCode
    SubComponents form one exact-version Component release.
-3. SubComponents are repository-managed resource artifacts, not executable
-   Components, Componentlets, or Subsystem participants.
+3. Documentation and SourceCode Subcomponents are repository-managed Component
+   CARs. Their payloads are not implicit parent runtime dependencies,
+   Componentlets, or separately activated Subsystem members.
 4. A root composition manifest plus subordinate knowledge/model manifests
    deterministically index every physical resource without duplicating
    identity authority.
@@ -318,10 +318,11 @@ for evidence that is required to explain or regenerate the released behavior.
 
 ## Component SubComponents
 
-Phase 58 defines Documentation and SourceCode SubComponents as versioned
-physical resource artifacts with a declared parent relationship to one exact
-logical Component release. They use Component Repository identity, integrity,
-cache, and retrieval services but are not runtime Components.
+Phase 58 defines Documentation and SourceCode Subcomponents as versioned
+Component CARs with a declared parent relationship to one exact logical
+Component release. Their payloads use Component Repository identity,
+integrity, cache, and retrieval services; a parent does not implicitly
+activate the child merely to access its payload.
 
 The inherited Phase 58 contract fixes:
 

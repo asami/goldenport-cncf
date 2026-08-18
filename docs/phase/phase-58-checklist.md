@@ -1,24 +1,29 @@
-# Phase 58 Checklist - Component Resource SubComponent Foundation
+# Phase 58 Checklist - Component and SubComponent Composition Foundation
 
 status=planned
-phase=[Phase 58 - Component Resource SubComponent Foundation](phase-58.md)
-implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
+phase=[Phase 58 - Component and SubComponent Composition Foundation](phase-58.md)
+implementation_note=[Component and SubComponent Architecture Implementation Proposal](../notes/component-subcomponent-architecture-implementation.md)
+resource_implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
 planning_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
 
 This checklist is the authoritative Phase 58 state ledger after Phase 58
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
 Phase 57.5 closes the complete Phase 57 series.
 
-## RSC-01: Inventory and Executable Contract Freeze
+## RSC-01: Architecture Proposal, Inventory, and Executable Contract Freeze
 
 Stage Status:
 - Current status: PLANNED
 - Owner: CNCF, Cozy/sbt-cozy, Component Repository, Help, Admin, and sample
   maintainers
 - Entry rule: Phase 57.5 is closed.
-- Completion rule: Existing behavior, conflicts, ownership, and exact
-  failing-first acceptance identities are recorded.
+- Completion rule: The non-normative architecture proposal, existing behavior,
+  conflicts, ownership, and exact failing-first acceptance identities are
+  recorded.
 
+- [ ] Create the Phase 58 Component/SubComponent architecture proposal in
+      `docs/notes` and record its required later promotion to `docs/design`
+      and `docs/spec`.
 - [ ] Inventory CAR/SAR layouts, runtime manifests, descriptors, integrity
   entries, dependency metadata, expanded artifacts, and development evidence.
 - [ ] Inventory Component Repository index, local publication, remote
@@ -26,8 +31,13 @@ Stage Status:
 - [ ] Inventory development-directory and packaged resolver precedence.
 - [ ] Inventory current Help and Admin physical-resource walking or assumptions.
 - [ ] Inventory source/archive equivalence and managed-source collection paths.
-- [ ] Fix Resource SubComponent as non-executable and non-participating.
-- [ ] Fix initial `Documentation` and `SourceCode` roles.
+- [ ] Fix the distinction between parent Components, independently identifiable
+      Subcomponent Components, their non-authoritative information payloads,
+      and Subsystems.
+- [ ] Fix initial `Documentation` and `SourceCode` Subcomponent Component
+      roles and their payload boundaries.
+- [ ] Freeze initial executable-child role examples and the separation of role
+      from implementation technology.
 - [ ] Fix logical release identity separately from physical artifact identity.
 - [ ] Fix publication completeness separately from runtime activation.
 - [ ] Register failing-first specifications for every Phase 58 acceptance
@@ -42,18 +52,21 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF Component and repository contract maintainers
 - Entry rule: RSC-01 is DONE.
-- Completion rule: One deterministic composition model and codec represent
-  exact release membership without duplicating Component identity.
+- Completion rule: One deterministic parent/child composition model and codec
+  represent exact release membership without duplicating Component identity.
 
 - [ ] Define root composition manifest schema and version.
-- [ ] Define primary and Resource SubComponent artifact roles.
-- [ ] Define parent Component coordinate, exact logical release, artifact
-  coordinate, role, version, digest, signature, requiredness, and repository.
+- [ ] Define primary and Subcomponent CAR classes, including Documentation,
+      Source, and external-platform roles, and their exact payload boundaries.
+- [ ] Define parent Component coordinate, every child Component identity,
+      exact logical release, artifact coordinate, role,
+      implementation technology, version, digest, signature, requiredness,
+      and repository.
 - [ ] Define access, disclosure, license, media/profile, and provenance fields.
 - [ ] Define canonical logical resource identity separately from physical path.
 - [ ] Define forward-compatible unknown-field behavior.
-- [ ] Reject duplicate roles, coordinates, logical resources, and inconsistent
-  parent membership.
+- [ ] Reject duplicate roles/coordinates, cycles, logical-resource conflicts,
+      inconsistent parent membership, and incompatible child Components.
 - [ ] Reject unsafe paths and malformed digests/signatures.
 - [ ] Add codec round-trip, property, hostile-input, and compatibility tests.
 
@@ -66,10 +79,13 @@ Stage Status:
 - Current status: PLANNED
 - Owner: Cozy/sbt-cozy and Component Repository maintainers
 - Entry rule: RSC-02 is DONE.
-- Completion rule: Fixture Resource SubComponents package deterministically and
-  incomplete logical releases never become repository-visible.
+- Completion rule: Fixture Subcomponent CARs and their payloads package
+  deterministically and incomplete declared release profiles never become
+  repository-visible.
 
-- [ ] Define deterministic archive layout for Resource SubComponents.
+- [ ] Define deterministic archive layout for Subcomponent CARs and their
+      payload artifacts without making the payload itself a capability or
+      implicit parent dependency.
 - [ ] Generate primary composition metadata and subordinate artifact metadata.
 - [ ] Bind exact digests/signatures after deterministic packaging.
 - [ ] Validate parent, role, coordinate, version, and integrity before upload.
@@ -79,24 +95,29 @@ Stage Status:
 - [ ] Define optional versus required relationship behavior without making
   initial Documentation/SourceCode completeness ambiguous.
 - [ ] Preserve local publication and remote publication parity.
-- [ ] Build deterministic Documentation and SourceCode fixture artifacts.
+- [ ] Build deterministic Documentation/SourceCode and representative
+      executable-child fixture artifacts.
 - [ ] Add source/archive and repeated-build equivalence tests.
 
 Evidence:
 - Pending.
 
-## RSC-04: Resolver and Provenance
+## RSC-04: Resolution, Activation Boundary, and Provenance
 
 Stage Status:
 - Current status: PLANNED
 - Owner: CNCF Component Repository and runtime loading maintainers
 - Entry rule: RSC-03 is DONE.
-- Completion rule: Every resource form resolves through one API with exact
-  logical identity and physical provenance.
+- Completion rule: Every resource and child form resolves through one API with
+  exact logical identity and physical provenance, while discovery, activation,
+  and external deployment remain separate.
 
 - [ ] Resolve embedded primary resources.
 - [ ] Resolve explicit development-directory resources.
-- [ ] Resolve expanded Resource SubComponents.
+- [ ] Resolve expanded Documentation and Source Subcomponent CARs and their
+      payloads.
+- [ ] Resolve every Subcomponent registry entry and independent CAR identity
+      without implicitly activating a child.
 - [ ] Resolve local repository and managed-cache artifacts.
 - [ ] Resolve explicitly admitted remote repository artifacts.
 - [ ] Resolve offline complete-release bundles.
@@ -106,6 +127,8 @@ Stage Status:
 - [ ] Report local, remote, cached, restricted, unavailable, missing, stale,
   incompatible, and corrupt states separately.
 - [ ] Expose one `ResolvedComponentResources` API or accepted equivalent.
+- [ ] Define single-Component and multi-Component Subsystem composition and
+      diagnostics without treating membership as activation authority.
 
 Evidence:
 - Pending.
@@ -116,8 +139,9 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF launcher, runtime, and development resolver maintainers
 - Entry rule: RSC-04 is DONE.
-- Completion rule: Operation mode selects one runtime-owned resource policy
-  without entering Component domain code.
+- Completion rule: Operation mode selects one runtime-owned composition policy
+  without entering Component domain code or deploying platform-specific child
+  artifacts.
 
 - [ ] Implement Develop precedence across explicit directory,
   development-local, expanded, local, cache, and remote sources.
@@ -126,6 +150,8 @@ Stage Status:
 - [ ] Keep Test deterministic with no implicit remote access.
 - [ ] Require explicit Demo policy for remote Documentation retrieval.
 - [ ] Keep Production primary-only capable.
+- [ ] Require explicit child activation and platform-native deployment handoff
+      for Subcomponents that carry external-platform artifacts.
 - [ ] Prevent automatic Production source resolution, mounting, or fetch.
 - [ ] Keep `OperationMode` out of Component implementation APIs.
 - [ ] Verify development and packaged parity.
@@ -139,8 +165,8 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF security, repository, and source-policy maintainers
 - Entry rule: RSC-05 is DONE.
-- Completion rule: Resource access is authorized, integrity-checked, and
-  non-leaking in every resolution form.
+- Completion rule: Resource and child access is authorized, integrity-checked,
+  and non-leaking in every resolution form.
 
 - [ ] Enforce role and resource access policy before content exposure.
 - [ ] Represent restricted source without disclosing or indexing it.
@@ -150,6 +176,8 @@ Stage Status:
 - [ ] Keep source content, credentials, host paths, and repository secrets out
   of diagnostics, metrics, and CallTree.
 - [ ] Verify authorization cannot be granted by a manifest alone.
+- [ ] Verify a parent registry cannot grant Operation authority, MCP access, or
+      executable-child activation.
 - [ ] Add hostile archive, corrupt cache, unauthorized source, and disclosure
   regression tests.
 
@@ -162,8 +190,8 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF runtime, repository, cache, and observability maintainers
 - Entry rule: RSC-06 is DONE.
-- Completion rule: Resource lifecycle and concurrent resolution are bounded,
-  idempotent, observable, and safe.
+- Completion rule: Resource and child lifecycle and concurrent resolution are
+  bounded, idempotent, observable, and safe.
 
 - [ ] Define cache reuse, refresh, invalidation, and stale detection.
 - [ ] Define load, release, unload, and shutdown ownership.
@@ -184,15 +212,18 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF resolver, Help, and Component Admin maintainers
 - Entry rule: RSC-07 is DONE.
-- Completion rule: Help and Admin fixtures consume the same resolved resources
-  and provenance without physical-artifact scans.
+- Completion rule: Help and Admin fixtures consume the same resolved resources,
+  child identities, and provenance without physical-artifact scans.
 
 - [ ] Define read-only resource inventory and content-access APIs.
 - [ ] Define safe availability, role, identity, version, digest, source, and
   provenance projections.
 - [ ] Prove a Help fixture resolves Documentation through the common API.
 - [ ] Prove an Admin fixture displays Documentation/SourceCode state through
-  the same API.
+      the same API.
+- [ ] Prove Help and Admin distinguish parent, Documentation/Source,
+      external-platform, and other Subcomponent Component identities plus
+      Subsystem identities.
 - [ ] Prove Help and Admin report identical physical availability and integrity.
 - [ ] Prevent Help/Admin from walking CAR, SubComponent, cache, repository, or
   development directories independently.
@@ -212,7 +243,11 @@ Stage Status:
   focused and full validation.
 
 - [ ] Verify embedded-only small Component.
-- [ ] Verify primary plus Documentation and SourceCode fixture artifacts.
+- [ ] Verify parent plus Documentation and Source Subcomponent CAR fixtures.
+- [ ] Verify parent plus independently describable external-platform
+      Subcomponent CAR fixtures.
+- [ ] Verify explicit external-platform deployment handoff with no CNCF
+      deployment fallback.
 - [ ] Verify restricted-source release.
 - [ ] Verify development-directory override and provenance.
 - [ ] Verify local, cached, remote, and offline resolution.
@@ -237,9 +272,9 @@ Stage Status:
   current planning record contradicts it.
 
 - [ ] Promote verified architecture to
-  `docs/design/component-resource-subcomponent.md`.
+      `docs/design/component-subcomponent-architecture.md`.
 - [ ] Promote normative behavior to
-  `docs/spec/component-resource-subcomponent.md`.
+      `docs/spec/component-subcomponent-architecture.md`.
 - [ ] Mark the implementation note historical and point it to final
   design/specification.
 - [ ] Update Phase 59 Documentation/AI and Phase 60 Admin entry contracts.

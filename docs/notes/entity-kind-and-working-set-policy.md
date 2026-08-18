@@ -48,6 +48,15 @@ The workflow state field and active-state policy should be configured by the
 application; completed or inactive workflow records should fall back to the
 store.
 
+Terminology alignment (2026-08-12): `entityKind = workflow` means a stateful
+business Entity classification. It is not synonymous with CNCF
+WorkflowEngine's `WorkflowInstance`. A `SalesOrder` may retain this entity kind
+because `SalesStatus` is governed by a StateMachine while a separately defined
+`SalesOrderWorkflow` owns an independent WorkflowInstance. If WorkflowInstance
+is persisted as an Entity, its entity kind, state field, active values, and
+Working Set policy require an explicit separate decision; they are not
+inherited from `SalesOrder` or from the shared word `workflow`.
+
 `task` is an execution unit without a domain state machine.
 
 Examples:
