@@ -14,7 +14,7 @@ import org.goldenport.record.Record
  * @since   Apr. 29, 2026
  *  version May. 11, 2026
  *  version Jul. 22, 2026
- * @version Jul. 24, 2026
+ * @version Aug. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConclusionDiagnostics {
@@ -188,6 +188,9 @@ object ConclusionDiagnostics {
           case Some(Cause.Kind.Exhaustion) => "exhaustion"
           case Some(Cause.Kind.Timeout) => "timeout"
           case Some(Cause.Kind.Corruption) => "corruption"
+          case Some(Cause.Kind.NotRunning) => "not_running"
+          case Some(Cause.Kind.ConnectionRefused) => "connection_refused"
+          case Some(Cause.Kind.Unreachable) => "unreachable"
           case Some(Cause.Kind.Unknown) => "unknown"
           case None => _taxonomy_key(conclusion)
         }

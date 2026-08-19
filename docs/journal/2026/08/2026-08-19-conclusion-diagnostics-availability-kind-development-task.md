@@ -1,6 +1,6 @@
 # Conclusion Diagnostics Availability-Kind Development Task
 
-Status: CANDIDATE
+Status: RESOLVED
 Created: 2026-08-19
 Source Repository: /Users/asami/src/dev2025/cloud-native-component-framework
 Target Repository: /Users/asami/src/dev2025/cloud-native-component-framework
@@ -83,3 +83,13 @@ Disposition: STRATEGY_ITEM
 Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
 Target Phase: -
 Triaged On: 2026-08-19
+
+## Resolution Evidence
+
+- Focused validation: SBT invocation `36203-20260819T085108Z` — 28 succeeded
+  across 2 suites with 0 failures and no warnings.
+- Full task review: `CLEAN`; no Current Task Blockers, Task Hygiene, or
+  Development Candidates.
+- Final validation: SBT invocation `37876-20260819T085428Z` — 3,262 succeeded
+  across 444 suites with 0 failures and no warnings.
+- Acceptance Commit: reported externally after commit execution.
