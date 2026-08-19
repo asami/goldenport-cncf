@@ -1546,7 +1546,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): ExecUowM[A] =
     exec_from_calltree(
       "uow:aggregate:update",
-      _aggregate_calltree_attributes("update", entityName) + (
+      _aggregate_calltree_attributes("update", entityName) ++ Map(
         "command"   -> commandName,
         "entity_id" -> targetId.print
       )
@@ -1579,7 +1579,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): ExecUowM[A] =
     exec_from_calltree(
       "uow:aggregate:update-observed",
-      _aggregate_calltree_attributes("update-observed", entityName) + (
+      _aggregate_calltree_attributes("update-observed", entityName) ++ Map(
         "command"   -> commandName,
         "entity_id" -> targetId.print
       )
@@ -1680,7 +1680,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): ExecUowM[A] =
     exec_from_calltree(
       "uow:aggregate:command",
-      _aggregate_calltree_attributes("command", aggregateName) + (
+      _aggregate_calltree_attributes("command", aggregateName) ++ Map(
         "command"   -> commandName,
         "entity_id" -> targetId.print
       )
@@ -1714,7 +1714,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): ExecUowM[A] =
     exec_from_calltree(
       "uow:aggregate:command-observed",
-      _aggregate_calltree_attributes("command-observed", aggregateName) + (
+      _aggregate_calltree_attributes("command-observed", aggregateName) ++ Map(
         "command"   -> commandName,
         "entity_id" -> targetId.print
       )

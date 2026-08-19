@@ -223,7 +223,7 @@ trait StaticFormAppRendererCorePart {
       .split("[-_]")
       .toVector
       .filter(_.nonEmpty)
-      .map(x => x.head.toUpper + x.tail)
+      .map(x => s"${x.head.toUpper}${x.tail}")
       .mkString(" ")
 
   protected def json(value: String): String =

@@ -1,6 +1,6 @@
 package org.goldenport.cncf.servicecontainer
 
-import java.net.{HttpURLConnection, InetSocketAddress, Socket, URL}
+import java.net.{HttpURLConnection, InetSocketAddress, Socket, URI}
 import java.io.{ByteArrayOutputStream, InputStream}
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
@@ -412,7 +412,7 @@ object DockerServiceContainerGateway {
     timeoutmillis: Long
   ): Boolean =
     Try {
-      val connection = new URL(s"http://127.0.0.1:$hostport$path").openConnection()
+      val connection = URI.create(s"http://127.0.0.1:$hostport$path").toURL.openConnection()
         .asInstanceOf[HttpURLConnection]
       val timeout = Math.max(1L, Math.min(timeoutmillis, Int.MaxValue.toLong)).toInt
       connection.setConnectTimeout(timeout)

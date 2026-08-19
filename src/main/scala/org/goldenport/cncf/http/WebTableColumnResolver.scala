@@ -75,7 +75,7 @@ object WebTableColumnResolver {
   ): String = {
     val spaced = name.replaceAll("([a-z0-9])([A-Z])", "$1 $2").replace('_', ' ').replace('-', ' ')
     spaced.split("\\s+").toVector.filter(_.nonEmpty).map { token =>
-      token.head.toUpper + token.drop(1)
+      s"${token.head.toUpper}${token.drop(1)}"
     }.mkString(" ")
   }
 }

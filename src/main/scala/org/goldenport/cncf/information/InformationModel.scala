@@ -132,7 +132,7 @@ object InformationIdentityBinding {
     def readC(v: Any): Consequence[InformationIdentityBinding] = v match {
       case m: InformationIdentityBinding => Consequence.success(m)
       case m: Record => createC(m)
-      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+      case _ => Consequence.valueInvalid(v, org.goldenport.schema.XString)
     }
   }
 

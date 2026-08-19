@@ -19,7 +19,7 @@ object KnowledgeNodeId {
     def readC(v: Any): Consequence[KnowledgeNodeId] = v match {
       case m: KnowledgeNodeId => Consequence.success(m)
       case s: String => Consequence.success(KnowledgeNodeId(s))
-      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+      case _ => Consequence.valueInvalid(v, org.goldenport.schema.XString)
     }
 }
 
@@ -36,7 +36,7 @@ object KnowledgeFrameId {
     def readC(v: Any): Consequence[KnowledgeFrameId] = v match {
       case m: KnowledgeFrameId => Consequence.success(m)
       case s: String => Consequence.success(KnowledgeFrameId(s))
-      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+      case _ => Consequence.valueInvalid(v, org.goldenport.schema.XString)
     }
 }
 
@@ -61,7 +61,7 @@ object RdfNodeName {
     def readC(v: Any): Consequence[RdfNodeName] = v match {
       case m: RdfNodeName => Consequence.success(m)
       case s: String => Consequence.success(RdfNodeName(s))
-      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+      case _ => Consequence.valueInvalid(v, org.goldenport.schema.XString)
     }
 }
 
@@ -192,7 +192,7 @@ object ExternalKnowledgeIdentifier {
     def readC(v: Any): Consequence[ExternalKnowledgeIdentifier] = v match {
       case m: ExternalKnowledgeIdentifier => Consequence.success(m)
       case m: Record => createC(m)
-      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+      case _ => Consequence.valueInvalid(v, org.goldenport.schema.XString)
     }
 
   def entity(
@@ -447,7 +447,7 @@ object KnowledgeEntityBinding {
     def readC(v: Any): Consequence[KnowledgeEntityBinding] = v match {
       case m: KnowledgeEntityBinding => Consequence.success(m)
       case m: Record => createC(m)
-      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+      case _ => Consequence.valueInvalid(v, org.goldenport.schema.XString)
     }
 
   private def _record_get_as_c[A](

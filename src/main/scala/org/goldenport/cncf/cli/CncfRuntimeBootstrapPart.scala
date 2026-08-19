@@ -1169,7 +1169,7 @@ private[cli] trait CncfRuntimeBootstrapPart {
                 GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
               }
               observe_trace(
-                s"[subsytem] runWithExtraComponents dispatching mode args=${_trace_safe_args(launch.domainargs.drop(1)).mkString(" ")}"
+                s"[subsytem] runWithExtraComponents dispatching mode args=${_trace_safe_args(launch.domainargs.drop(1).toIndexedSeq).mkString(" ")}"
               )
               requestmode match {
                 case Some(RunMode.Server) =>
@@ -1252,7 +1252,7 @@ private[cli] trait CncfRuntimeBootstrapPart {
                 }
               case Some(RunMode.Client) =>
                 observe_trace(
-                  s"[client:trace] run dispatching to client mode args=${_trace_safe_args(launch.domainargs.drop(1)).mkString(" ")}"
+                  s"[client:trace] run dispatching to client mode args=${_trace_safe_args(launch.domainargs.drop(1).toIndexedSeq).mkString(" ")}"
                 )
                 val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = args)
                 try

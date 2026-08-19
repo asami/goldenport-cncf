@@ -2357,7 +2357,6 @@ final class Subsystem(
     req: HttpRequest
   ): Option[Record] =
     _http_query_record_from_string(req.context.originalUri)
-      .orElse(req.url.flatMap(url => Option(url.getQuery).map(HttpRequest.parseQuery)))
 
   private def _http_query_record_from_string(
     value: Option[String]
