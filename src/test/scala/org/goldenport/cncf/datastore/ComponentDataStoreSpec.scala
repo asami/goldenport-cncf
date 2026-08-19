@@ -201,9 +201,15 @@ class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThe
       val space = new DataStoreSpace().useDataStore(SqlDataStore.sqlite(existing.toString))
       given ExecutionContext = ExecutionContext.create()
 
-      space.useApplicationDataStore(ComponentDataStore.Environment(_params()), "art-scene", "application")
+      When("the component selects the canonical datastore for the existing space")
+      ComponentDataStore.resolveForDataStoreSpace(
+        ComponentDataStore.Environment(_params()),
+        _artscene_request
+      ) match {
+        case Some(datastore) => space.useDataStore(datastore)
+        case None => ()
+      }
 
-      When("the component writes through the space after application datastore selection")
       val selected = space.dataStore(DataStore.CollectionId("component_selection")).toOption.get
       _write_marker(selected)
 
