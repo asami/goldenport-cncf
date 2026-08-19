@@ -264,7 +264,7 @@ private[client] abstract class McpStreamableHttpExchange extends AutoCloseable {
 }
 
 private[client] final class McpStreamableHttpBodyReader extends AutoCloseable {
-  private val _executor = Executors.newVirtualThreadPerTaskExecutor()
+  private val _executor = Executors.newCachedThreadPool()
 
   def readC(
     input: java.io.InputStream,

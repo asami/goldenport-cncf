@@ -6,10 +6,12 @@ import java.util.Base64
 import org.goldenport.cncf.phase51.build.{CncfGenerationBuildContract, CncfGenerationInputs}
 
 val scala3Version = "3.3.8"
-val cozyGeneratorVersion = "0.3.4-SNAPSHOT"
+val cozyGeneratorVersion = "0.3.1"
 
-Compile / javacOptions ++= Seq("--release", "8")
-Test / javacOptions := Seq("--release", "14")
+Compile / scalacOptions += "-release:17"
+Test / scalacOptions += "-release:17"
+Compile / javacOptions ++= Seq("--release", "17")
+Test / javacOptions := Seq("--release", "17")
 
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
@@ -399,7 +401,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.5.2-SNAPSHOT",
+    version := "0.5.2",
 
     scalaVersion := scala3Version,
 
@@ -442,9 +444,9 @@ lazy val root = project
       // Route Apache POI's Log4j API through the CNCF SLF4J backend.
       "org.apache.logging.log4j" % "log4j-to-slf4j" % "2.21.1",
 
-      "org.goldenport" %% "goldenport-core" % "0.4.3-SNAPSHOT",
-      "org.simplemodeling" %% "simplemodeling-model" % "0.2.1-SNAPSHOT",
-      "org.goldenport" % "cncf-collaborator-api" % "0.2.0-SNAPSHOT",
+      "org.goldenport" %% "goldenport-core" % "0.4.2",
+      "org.simplemodeling" %% "simplemodeling-model" % "0.2.1",
+      "org.goldenport" % "cncf-collaborator-api" % "0.2.0",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test,

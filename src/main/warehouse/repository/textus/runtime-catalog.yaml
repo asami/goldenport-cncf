@@ -1,7 +1,7 @@
 schemaVersion: 1
-generatedAt: 2026-07-26T23:21:02.641018Z
-recommended: 0.5.1
-latestStable: 0.5.1
+generatedAt: 2026-08-19T22:57:06.037032Z
+recommended: 0.5.2
+latestStable: 0.5.2
 latestSnapshot: 0.4.10-SNAPSHOT
 mavenRepositories:
   - https://www.simplemodeling.org/repository/maven
@@ -32,6 +32,7 @@ baseProvided:
   - com.vladsch.flexmark:flexmark-ext-gfm-strikethrough
   - com.vladsch.flexmark:flexmark-ext-gfm-tasklist
   - org.slf4j:slf4j-simple
+  - org.apache.logging.log4j:log4j-to-slf4j
   - org.goldenport:goldenport-core_3
   - org.simplemodeling:simplemodeling-model_3
   - org.goldenport:cncf-collaborator-api
@@ -111,4 +112,11 @@ versions:
     scalaBinaryVersion: "3"
     module: org.goldenport:goldenport-cncf_3:0.5.1
     publishedAt: 2026-07-26T23:21:02.641018Z
+    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml
+  - version: 0.5.2
+    channel: stable
+    status: active
+    scalaBinaryVersion: "3"
+    module: org.goldenport:goldenport-cncf_3:0.5.2
+    publishedAt: 2026-08-19T22:57:06.037032Z
     metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml

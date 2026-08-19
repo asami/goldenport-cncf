@@ -628,7 +628,7 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
     )
 
   private def _fixture_root(prefix: String): Path = {
-    val root = Files.createTempDirectory(Path.of("target"), prefix)
+    val root = Files.createTempDirectory(Path.of("target").toAbsolutePath.normalize, prefix)
     _fixture_roots += root
     root
   }
