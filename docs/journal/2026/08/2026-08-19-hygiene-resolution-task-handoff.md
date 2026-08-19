@@ -14,10 +14,10 @@ archive-admission behavior.
 
 ## Included Hygiene
 
-| ID | Source | Evidence | Target | Risk | Required outcome |
-| --- | --- | --- | --- | --- | --- |
-| HYG-P57.1-001 | `docs/journal/2026/08/2026-08-12-phase-57.1-hygiene-follow-up.md` | Two pre-existing specs lack consistent `afterWord` metadata; the observation spec predates the current Given/When/Then presentation convention. | `src/test/scala/org/goldenport/cncf/component/ComponentLogicOperationDefinitionSemanticsSpec.scala`; `src/test/scala/org/goldenport/cncf/action/ActionEngineObservationSpec.scala` | Low; presentation/traceability only. | Normalize whole-file presentation while preserving all existing behavior. |
-| HYG-P57.5-01 | `docs/journal/2026/08/2026-08-19-phase-57.5-hygiene-follow-up.md` | `Phase56DeferredReleaseCompatibilitySpec.scala:90` has a method-local `worker` that violates the `_snake_case_` convention. | `src/test/scala/org/goldenport/cncf/component/Phase56DeferredReleaseCompatibilitySpec.scala` | Low; local naming only. | Rename the local helper and its same-file callers without changing archive-admission coverage. |
+| ID | Status | Source | Evidence | Target | Risk | Required outcome |
+| --- | --- | --- | --- | --- | --- | --- |
+| HYG-P57.1-001 | RESOLVED | `docs/journal/2026/08/2026-08-12-phase-57.1-hygiene-follow-up.md` | Two pre-existing specs lack consistent `afterWord` metadata; the observation spec predates the current Given/When/Then presentation convention. | `src/test/scala/org/goldenport/cncf/component/ComponentLogicOperationDefinitionSemanticsSpec.scala`; `src/test/scala/org/goldenport/cncf/action/ActionEngineObservationSpec.scala` | Low; presentation/traceability only. | Normalize whole-file presentation while preserving all existing behavior. |
+| HYG-P57.5-01 | RESOLVED | `docs/journal/2026/08/2026-08-19-phase-57.5-hygiene-follow-up.md` | `Phase56DeferredReleaseCompatibilitySpec.scala:90` has a method-local `worker` that violates the `_snake_case_` convention. | `src/test/scala/org/goldenport/cncf/component/Phase56DeferredReleaseCompatibilitySpec.scala` | Low; local naming only. | Rename the local helper and its same-file callers without changing archive-admission coverage. |
 
 ## Frozen Boundary
 

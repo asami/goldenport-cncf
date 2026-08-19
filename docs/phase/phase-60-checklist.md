@@ -4,6 +4,7 @@ status=planned
 phase=[Phase 60 - Component Admin and Documentation Visibility](phase-60.md)
 implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
 planning_journal=[Component Admin and Documentation Visibility Planning (historical Phase 58)](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
+candidate_journal=[Phase 52 direct-Admin canonical-ID boundary](../journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md)
 
 This checklist is the authoritative Phase 60 state ledger after Phase 60
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
@@ -86,7 +87,11 @@ Stage Status:
 
 - [ ] Show lifecycle, health, runtime, dependency, and ClassLoader state.
 - [ ] Show datastore, schema, collection, Entity ID, and collection ID
-  evidence through their authoritative runtime contracts.
+      evidence through their authoritative runtime contracts.
+- [ ] For every admitted Admin Entity-ID input, require its declared backing
+      `EntityCollection` and exact collection equality before resolution.
+- [ ] Prove scalar locator, foreign canonical ID, entropy fallback, missing
+      owner, and ambiguous owner are rejected deterministically.
 - [ ] Distinguish configured, resolved, active, degraded, and failed state.
 - [ ] Keep instance state isolated across versions and Subsystems.
 - [ ] Add standalone and multi-user `ExecutionContext` acceptance.

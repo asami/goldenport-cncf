@@ -1796,6 +1796,24 @@ existing planned Phase, records its continuing 9.x owner, creates a bounded
 new Phase, or explicitly identifies a non-CNCF owner. A historical deferral
 whose receiving Phase is closed is not re-opened by this ledger.
 
+### Candidate Triage Ledger
+
+This is the canonical source-to-owner ledger for journal candidates triaged on
+2026-08-19. `ADOPTED` schedules a planned Phase; it does not implement or
+start that Phase. `RESOLVED` records an external owner, closed receiving Phase,
+or reconciliation-only source rather than claiming a new implementation.
+
+| ID | Source | Development item | Disposition | Target | Status |
+| --- | --- | --- | --- | --- | --- |
+| DEV-001 | `docs/journal/2026/04/view-projection-design-note.md` | Custom, inherited, dynamic, and GraphQL-style projections. | STRATEGY_ITEM | [9.16](#916-persistent-materialized-view-store) | CANDIDATE |
+| DEV-002 | `docs/journal/2026/05/phase-27-ke-09-publish-materialize-feedback.md` | SIE-backed RDF/vector provider replacement and richer external-source behavior. | STRATEGY_ITEM | [9.5](#95-knowledge-structure-follow-ups), external owner `textus-knowledge-editor` | RESOLVED |
+| DEV-003 | `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md` | Authorized force/merge/repair operations and conflict Web/API. | NEW_PHASE | [Phase 71](../phase/phase-71.md) | ADOPTED |
+| DEV-004 | `docs/journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md` | Admin entity-ID resolution with declared exact EntityCollection equality. | MERGED_EXISTING_PHASE | [Phase 60](../phase/phase-60.md) | ADOPTED |
+| DEV-005 | `docs/journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md` | Typed configuration binding, provenance, codecs, and fixed-user intake deferred from Phase 53. | STRATEGY_ITEM | [9.51](#951-typed-configuration-binding-and-provenance-resolution), Phase 55 closure evidence | RESOLVED |
+| DEV-006 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Parent/Subcomponent descriptor description and development/packaged parity. | MERGED_EXISTING_PHASE | [Phase 58](../phase/phase-58.md) | ADOPTED |
+| DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
+| DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
+
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
 | `2026/01/phase-3.1-fact-reconstruction.md` | Docker/external execution, Antora integration, CML-to-Component generation, AI Agent Hub, and performance work excluded from the early Fat JAR baseline. | Retained as the broader Phase 3 execution-model programme. No new Phase is selected because the journal does not freeze a consumer, runtime boundary, or acceptance driver; it must not be smuggled into CAR packaging, MCP migration, or Phase 71. |
@@ -4113,7 +4131,9 @@ scope.
   - `docs/phase/phase-54-checklist.md`.
 
 ### 9.50 CML ComponentStyle, ExecutionContext, and Capability Resolution
-Planned for Phase 53 after Phase 52 closes.
+Phase 53 established the built-in ComponentStyle, ExecutionContext, and
+capability baseline. Generic capability-definition validation and Metadata
+Factory contribution remain future candidates with no Phase assigned.
 
 - Driver:
   - ArtScene supports standalone personal-local and multi-user shared-external

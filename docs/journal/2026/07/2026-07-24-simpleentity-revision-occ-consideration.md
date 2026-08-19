@@ -420,6 +420,13 @@ Force overwrite, merge workflows, repair operations, and conflict-resolution
 Web UI remain separate future development work. They are not removed by the
 Phase 50 simplification.
 
+Candidate Triage: COMPLETED
+Canonical ID: DEV-003
+Disposition: NEW_PHASE
+Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
+Target Phase: docs/phase/phase-71.md
+Triaged On: 2026-08-19
+
 ## References
 
 - `docs/phase/phase-49.md`

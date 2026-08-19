@@ -202,6 +202,13 @@ The phase close checklists must revisit these rows. A candidate moves to
 completed history only if a Phase explicitly owns and verifies its full scope;
 otherwise its retained scope stays in section 9.
 
+Candidate Triage: COMPLETED
+Canonical ID: DEV-008
+Disposition: STRATEGY_ITEM
+Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
+Target Phase: -
+Triaged On: 2026-08-19
+
 ## Open Decisions Carried Forward
 
 - Exact CML typed predicate, local action, and Workflow binding syntax.

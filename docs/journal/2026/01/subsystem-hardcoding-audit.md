@@ -1,5 +1,12 @@
 # Subsystem Hygiene Audit — Demo / Built-in Special-Casing
 
+Status: CLOSED (historical audit; not an actionable Hygiene record)
+
+This inventory predates the current resolver and subsystem implementation. It
+is retained as discovery evidence only. Any new concern it helps identify must
+be classified as a behavior or architecture candidate before it can become
+work; this audit itself creates no Hygiene task.
+
 This document enumerates all known hard-coded or special-cased logic
 related to initial demos (helloworld), builtin admin/specification/client
 components, and ping/system paths.

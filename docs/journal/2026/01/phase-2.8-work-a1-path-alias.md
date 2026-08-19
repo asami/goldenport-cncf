@@ -4,7 +4,12 @@
 Date: 2026-01  
 Phase: 2.8  
 Work Item: A1  
-Status: in progress (journal)
+Status: CLOSED (historical design and implementation record)
+
+This is a historical Phase 2.8 design record, not an open maintenance item.
+The CanonicalPath and resolver work was subsequently specified and implemented;
+any newly discovered routing behavior belongs in ordinary development planning,
+not in Hygiene triage.
 
 ---
 

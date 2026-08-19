@@ -1,6 +1,6 @@
 # Phase 52 Checklist - Exact Entity ID Serialization and Collection Identity
 
-status=in_progress
+status=closed
 phase=[Phase 52 - Exact Entity ID Serialization and Collection Identity](phase-52.md)
 
 This checklist is the authoritative Phase 52 state ledger after Phase 52
@@ -124,7 +124,7 @@ Evidence:
 ## EID-05: Identity Consumers and Built-Ins
 
 Stage Status:
-- Current status: DONE (Admin detail/edit canonical-route revalidation passed)
+- Current status: DONE
 - Owner: CNCF Component, Association, security, and observability maintainers
 - Entry rule: EID-04 is DONE.
 - Completion rule: Every core identity-sensitive consumer uses exact parsed
@@ -145,6 +145,7 @@ Stage Status:
 
 Evidence:
 - [EID-05 identity consumers and built-ins](../notes/phase-52-eid05-identity-consumers-and-built-ins.md) (implementation, review/review-fix/re-review, `Test / compile`, and 14-suite 158/158 focused validation accepted).
+- Admin detail/edit canonical-route revalidation passed.
 
 ## EID-06: Core Validation and Canonical Closure
 

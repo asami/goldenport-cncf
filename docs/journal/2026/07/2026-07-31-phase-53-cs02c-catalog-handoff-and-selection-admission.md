@@ -31,3 +31,17 @@ This slice does not emit a Component descriptor-v2 snapshot, add style or
 capability declarations to `project.yaml`, implement generic capability
 definition validation, or establish development/packaged parity. Those remain
 CS-02 or later Phase 53 work.
+
+Candidate Triage: COMPLETED
+Canonical ID: DEV-006
+Disposition: MERGED_EXISTING_PHASE
+Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
+Target Phase: docs/phase/phase-58.md
+Triaged On: 2026-08-19
+
+Candidate Triage: COMPLETED
+Canonical ID: DEV-007
+Disposition: STRATEGY_ITEM
+Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
+Target Phase: -
+Triaged On: 2026-08-19

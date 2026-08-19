@@ -62,3 +62,10 @@ features.
 Future provider work can replace the local knowledge-engine provider with
 SIE-backed RDF/vector publication and richer external source behavior while
 preserving the editor response contract established here.
+
+Candidate Triage: COMPLETED
+Canonical ID: DEV-002
+Disposition: STRATEGY_ITEM
+Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
+Target Phase: -
+Triaged On: 2026-08-19

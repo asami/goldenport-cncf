@@ -8,13 +8,13 @@ Suggested Invocation: $cncf-goal-task /Users/asami/src/dev2025/cloud-native-comp
 
 ## Purpose
 
-Resolve `HYG-P57.3-002` by making the identified public Scala API labels
-camelCase. The user explicitly authorized a non-compatible source migration,
-so no deprecated aliases are retained.
+Make the identified public Scala API labels camelCase. The user explicitly
+authorized a non-compatible source migration, so no deprecated aliases are
+retained.
 
 ## Source Evidence
 
-- Hygiene ID: `HYG-P57.3-002`
+- Hygiene ID: `HYG-P57.3-002` — RESOLVED
 - Source journal:
   `docs/journal/2026/08/2026-08-13-phase-57.3-hygiene-follow-up.md`
 - Discovery: 2026-08-13 AES-06R corrective re-review.

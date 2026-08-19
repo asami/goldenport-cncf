@@ -62,3 +62,10 @@ proposal to accept a scalar locator, to rebind a foreign canonical ID, or to
 use entropy as a fallback reopens this decision and requires explicit
 replacement evidence; it is not a compatibility-preserving implementation
 detail.
+
+Candidate Triage: COMPLETED
+Canonical ID: DEV-004
+Disposition: MERGED_EXISTING_PHASE
+Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
+Target Phase: docs/phase/phase-60.md
+Triaged On: 2026-08-19

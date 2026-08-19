@@ -1,6 +1,6 @@
 # Phase 52 - Exact Entity ID Serialization and Collection Identity
 
-status=in_progress
+status=closed
 planned_at=2026-07-29
 depends_on=[Phase 51](phase-51.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)

@@ -1,6 +1,6 @@
 # Hygiene Resolution Task Handoff
 
-Status: SUPERSEDED
+Status: CLOSED (SUPERSEDED)
 Created: 2026-08-19
 Source Repository: /Users/asami/src/dev2025/cloud-native-component-framework
 Target Repository: /Users/asami/src/dev2025/cozy

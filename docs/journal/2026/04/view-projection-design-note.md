@@ -353,6 +353,13 @@ entity.view.detail.Item
 - dynamic projection (field selection)
 - GraphQL-style selection
 
+Candidate Triage: COMPLETED
+Canonical ID: DEV-001
+Disposition: STRATEGY_ITEM
+Strategy Record: docs/strategy/cncf-development-strategy.md#9-development-item-status
+Target Phase: -
+Triaged On: 2026-08-19
+
 ---
 
 ## Summary

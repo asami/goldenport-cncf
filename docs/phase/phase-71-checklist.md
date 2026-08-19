@@ -2,6 +2,7 @@
 
 status=planned
 phase=[Phase 71 - Entity Conflict Resolution and Repair](phase-71.md)
+candidate_journal=[SimpleEntity revision OCC consideration](../journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md)
 
 This checklist is the authoritative Phase 71 state ledger while the Phase Plan
 Gate is `HOLD`. It records the blocked entry state and becomes the resume point

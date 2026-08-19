@@ -5,6 +5,7 @@ phase=[Phase 58 - Component and SubComponent Composition Foundation](phase-58.md
 implementation_note=[Component and SubComponent Architecture Implementation Proposal](../notes/component-subcomponent-architecture-implementation.md)
 resource_implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
 planning_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
+candidate_journal=[Phase 53 CS-02C catalog handoff and selection admission](../journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md)
 
 This checklist is the authoritative Phase 58 state ledger after Phase 58
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before

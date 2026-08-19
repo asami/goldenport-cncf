@@ -9,7 +9,7 @@ does not change Phase 53 contracts or completion criteria.
 
 ## HYG-P53-001 — ArtScene CML nominal string wrappers
 
-- Status: DEFERRED
+- Status: CLOSED (deferred to Development Candidate triage)
 - Discovery: Phase 53 CAR lint, 2026-07-31
 - Repository/path: `textus-art-scene`, `src/main/cozy/textus-art-scene.cml`,
   nominal-wrapper warnings around lines 1839–2133
@@ -18,10 +18,12 @@ does not change Phase 53 contracts or completion criteria.
 - Risk: warning noise weakens datatype-contract review.
 - Boundary: deferred to the already-recorded ArtScene future-phase nominal-string
   and model-redesign boundary; it remains outside the CS-02 catalog handoff.
+- Hygiene triage disposition: excluded. This requires an ArtScene application
+  model and future-phase decision, rather than behavior-preserving maintenance.
 
 ## HYG-P53-002 — Phase 52 closure status metadata
 
-- Status: BLOCKED
+- Status: RESOLVED
 - Discovery: Phase 53 CS-02B focused re-review, 2026-07-31
 - Repository/path: `cloud-native-component-framework`,
   `docs/phase/phase-52.md` and `docs/phase/phase-52-checklist.md`
@@ -29,8 +31,10 @@ does not change Phase 53 contracts or completion criteria.
   closing narratives say `CLOSED`; the checklist also embeds prose in a
   `Current status` field.
 - Risk: future phase selection can reopen or misclassify a closed Phase 52.
-- Boundary: phase-status normalization requires Phase authority. This hygiene
-  task cannot edit phase files.
+- Resolution evidence: on 2026-08-19, Phase authority normalized the Phase 52
+  and checklist front-matter status to `closed`, retained every EID stage as
+  `DONE`, and moved the EID-05 revalidation prose from `Current status` into
+  its Evidence block. `git diff --check` passed for the documentation update.
 
 ## HYG-P53-003 — CAR fixture component-name coordinate alias
 

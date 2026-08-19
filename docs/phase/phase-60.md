@@ -33,6 +33,15 @@ Phase 58 supplies the physical Subcomponent CAR and payload resolver and Phase
 59 supplies the documentation/model knowledge contract. Phase 60 is their
 operator-facing consumer and does not reopen either foundation.
 
+## Journal Candidate Merge
+
+Phase 60 absorbs `DEV-004` from the Phase 52 direct-Admin canonical-ID journal.
+Any Phase 60 Admin surface that accepts an Entity `id` must declare its backing
+`EntityCollection` and require exact collection equality before resolution. It
+must reject a scalar locator, foreign canonical-ID rebinding, entropy fallback,
+missing owner, and ambiguous owner rather than treating any of them as a
+compatibility shortcut.
+
 ## Selected Direction
 
 - Help remains the human and AI knowledge entry point.
@@ -71,6 +80,8 @@ operator-facing consumer and does not reopen either foundation.
 - Present Service, Operation, SPI, capability, dependency, runtime, health,
   lifecycle, ClassLoader, datastore, schema, collection, and Entity
   collection information.
+- For any Admin Entity-ID input, require the declared backing `EntityCollection`
+  and exact collection equality before resolving the ID.
 - Define basic read-only inspection separately from authorized management
   actions.
 - Define HTTP, Web, CLI, and machine-readable Admin projections from one view
@@ -121,6 +132,8 @@ operator-facing consumer and does not reopen either foundation.
   diagrams, and state diagrams are navigable from the Component.
 - Service, Operation, SPI, capability, dependency, runtime, datastore,
   schema, collection, health, and lifecycle views use authoritative evidence.
+- An Admin Entity-ID surface rejects a scalar locator, foreign canonical ID,
+  entropy fallback, missing owner, and ambiguous owner deterministically.
 - Read-only visibility grants no Operation or resource access authority.
 - Management actions require explicit authorization and produce attributable
   audit evidence.
@@ -137,6 +150,7 @@ operator-facing consumer and does not reopen either foundation.
 - [Phase 59 - Component Documentation and AI Knowledge Integration](phase-59.md)
 - [Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
 - [Planning Journal](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
+- [Phase 52 direct-Admin canonical-ID boundary](../journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md)
 
 ## Current Status
 

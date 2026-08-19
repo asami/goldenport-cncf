@@ -14,12 +14,12 @@ full-suite gate on the accepted tree.
 
 ## Included Hygiene
 
-| ID | Source | Evidence | Work Package | Required outcome |
-| --- | --- | --- | --- | --- |
-| HYG-P56-002 | `docs/journal/2026/08/2026-08-07-phase-56-hygiene-follow-up.md` | The direct runtime-catalog `URLConnection` read has no bounded runtime-integration evidence. | HP-001 | Add controlled local runtime evidence while preserving archive-packager behavior. |
-| HYG-P56-004 | `docs/journal/2026/08/2026-08-07-phase-56-hygiene-follow-up.md` | SAR publication uses a system temporary `.sar` path. | HP-002 | Contain only temporary SAR staging under Cozy's repository artifact boundary. |
-| HYG-P57.4-002 | `docs/journal/2026/08/2026-08-14-phase-57.4-hygiene-follow-up.md` | CAR-lint test work is created outside `target/`. | HP-003 | Keep assertions and lint behavior while placing test work under `target/`. |
-| HYG-P57.4-003 | `docs/journal/2026/08/2026-08-14-phase-57.4-hygiene-follow-up.md` | A retained temporary `user.home` aliases `/private/var`, and an article-media latch assertion is unreliable. | HP-004 | Isolate/clean the fixture and stabilize the assertion without changing publication behavior. |
+| ID | Status | Source | Evidence | Work Package | Required outcome |
+| --- | --- | --- | --- | --- | --- |
+| HYG-P56-002 | RESOLVED | `docs/journal/2026/08/2026-08-07-phase-56-hygiene-follow-up.md` | The direct runtime-catalog `URLConnection` read has no bounded runtime-integration evidence. | HP-001 | Add controlled local runtime evidence while preserving archive-packager behavior. |
+| HYG-P56-004 | RESOLVED | `docs/journal/2026/08/2026-08-07-phase-56-hygiene-follow-up.md` | SAR publication uses a system temporary `.sar` path. | HP-002 | Contain only temporary SAR staging under Cozy's repository artifact boundary. |
+| HYG-P57.4-002 | RESOLVED | `docs/journal/2026/08/2026-08-14-phase-57.4-hygiene-follow-up.md` | CAR-lint test work is created outside `target/`. | HP-003 | Keep assertions and lint behavior while placing test work under `target/`. |
+| HYG-P57.4-003 | RESOLVED | `docs/journal/2026/08/2026-08-14-phase-57.4-hygiene-follow-up.md` | A retained temporary `user.home` aliases `/private/var`, and an article-media latch assertion is unreliable. | HP-004 | Isolate/clean the fixture and stabilize the assertion without changing publication behavior. |
 
 ## Frozen Boundary
 
