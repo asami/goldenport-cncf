@@ -150,7 +150,7 @@ class ActionEngine(
           try {
             // Observation hooks apply only to executed actions.
             observe_enter(call)
-            try {
+            {
               def _execute_and_finalize_(): Consequence[OperationResponse] = {
                 val executed = call.execute()
                 val evaluationattemptid =

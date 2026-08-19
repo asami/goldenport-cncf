@@ -1,6 +1,6 @@
 # Hygiene Resolution Batch Handoff
 
-Status: BLOCKED
+Status: COMPLETE
 Created: 2026-08-19
 Source Repository: /Users/asami/src/dev2025/cloud-native-component-framework
 Target Repositories: /Users/asami/src/dev2025/cloud-native-component-framework
@@ -55,28 +55,32 @@ Handed Off On: 2026-08-19
 - Hygiene IDs: HYG-H57-COMPILER-WARNING-004
 - Repository: `/Users/asami/src/dev2025/cloud-native-component-framework`
 - Targets:
-  - `src/main/scala/org/goldenport/cncf/config/CncfConfigurationBindingStringCodec.scala:35`
-  - `src/main/scala/org/goldenport/cncf/config/CncfConfigurationEnvironmentBindingCodec.scala:83`
-  - `src/main/scala/org/goldenport/cncf/observability/ConclusionDiagnostics.scala:178`
   - `src/main/scala/org/goldenport/cncf/entity/aggregate/AggregateSpace.scala:131-133`
   - `src/main/scala/org/goldenport/cncf/entity/view/ViewSpace.scala:213-215,255-257`
-- Allowed repair: none while blocked.
+- Allowed repair: replace only the erased generic type-test patterns with the
+  `Consequence.Success(value)` / `Consequence.Failure(conclusion)` extractors.
+  Preserve the `case other` path, CallTree attributes, exception handling, and
+  returned value exactly.
 - Prohibited expansion: replace an unreachable fallback with a new error policy,
   hide an unchecked test using casts, or add fallback rendering for unreviewed
   `Conclusion` cause kinds.
-- Focused validation: after admission, nearest codec/diagnostics/aggregate/view
-  executable specifications and a detailed production compilation.
+- Focused validation: `AggregateSpaceResolveSpec`, `ViewSpaceSpec`, and a
+  detailed production compilation; `git diff --check`.
 - Dependencies: blocker below.
 
 ## Blocker
 
-HP-002 cannot be admitted as Hygiene until the following facts are recorded:
+HP-002 is admitted on the following recorded facts:
 
-1. `case null` in both codecs preserves the current null-input contract;
-2. each `ConclusionDiagnostics` missing cause kind has an existing intended
-   rendering, rather than requiring a new diagnostic contract; and
-3. the erased-generic `Consequence` patterns have a type-safe replacement with
-   unchanged success/failure dispatch.
+1. Retain `case null` in both
+   codecs as a null-input safeguard. The codec paths are excluded from this
+   Hygiene batch and must not be changed.
+2. `ConclusionDiagnostics` availability-kind rendering is an observable
+   diagnostic contract and is separately owned by the separate availability
+   diagnostic development task; it is excluded from this Hygiene batch.
+3. `Consequence.Success(value)` and `Consequence.Failure(conclusion)` inspect
+   only the sealed runtime variants, so they replace erased `Success[A]` /
+   `Failure[A]` type tests without changing success/failure dispatch.
 
 If any fact needs a new observable diagnostic, error, or generic-dispatch
 contract, remove that target from this batch and route it to an ordinary task or
@@ -84,16 +88,23 @@ Development Candidate.
 
 ## Final Focused Review
 
-- Not runnable until HP-002 is admitted and exact behavior-preserving edits are
-  frozen.
+- Review the five production targets, the aggregate/view executable
+  specifications, and this handoff only.
 - Required checks after admission: warning removal, unchanged control flow,
   unchanged null/failure/diagnostic behavior, package-focused evidence, and
   scope containment.
 - Failure policy: stop without commit; no automatic review-fix/re-review loop.
+- Result: CLEAN on 2026-08-19. The reviewed diff removes only the redundant
+  `try`, indentation defects, and erased generic type tests; it preserves the
+  existing return, CallTree, exception, and fallback paths.
 
 ## Final Full-Validation Gate
 
 1. `/Users/asami/src/dev2025/cloud-native-component-framework`: `sbt --batch test`
+
+Validation Evidence: focused SBT invocation `12069-20260819T073108Z`
+(56 succeeded, 5 suites, 0 failed); final full SBT invocation
+`12541-20260819T073205Z` (3,261 succeeded, 443 suites, 0 failed).
 
 ## Completion Contract
 
@@ -101,6 +112,13 @@ Development Candidate.
   HP-002 remains blocked.
 - After all packages are admitted, commit only after the focused review and one
   final full validation gate pass on the reviewed tree.
+- The post-validation mechanical closure may update only this handoff and
+  `docs/journal/2026/08/2026-08-19-deprecation-warning-hygiene-follow-up.md`
+  with status, date, validation evidence, and acceptance-commit placeholders.
+
+Hygiene Status: RESOLVED
+Validated On: 2026-08-19
+Acceptance Commit: reported externally after commit execution
 
 ## Non-goals
 

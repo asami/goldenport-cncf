@@ -128,13 +128,13 @@ final class AggregateSpace {
       try {
         val result = body
         result match {
-          case success: Consequence.Success[A] =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
-          case failure: Consequence.Failure[A] =>
+          case Consequence.Success(value) =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(value))
+          case Consequence.Failure(conclusion) =>
             calltree.leave(Map(
               "outcome" -> "failure",
-              "status" -> failure.conclusion.status.webCode.code.toString,
-              "error" -> failure.conclusion.display
+              "status" -> conclusion.status.webCode.code.toString,
+              "error" -> conclusion.display
             ))
           case other =>
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))

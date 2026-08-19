@@ -1047,84 +1047,84 @@ final class InMemoryJobEngine(
         tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
         Consequence.Failure(conclusion)
       }.map { _ =>
-      val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
-    _cancellation_scopes.put(jobid, new JobCancellationScope)
-    val now = _now()
-    val initialdebug = JobDebugInfo(
-      requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
-      parameters =
-        (if (option.parameters.nonEmpty) option.parameters else _request_parameters(tasks)) ++
-          option.jobDefinitionSnapshot.map(_.toParameters).getOrElse(Map.empty),
-      executionNotes = option.executionNotes,
-        declaredProfile =
-          option.declaredProfile.orElse(option.jobDefinitionSnapshot.flatMap(_.profile)),
-      jobDefinitionSnapshot = option.jobDefinitionSnapshot
-    )
-    val record = JobRecord(
-      id = jobid,
-      tasks = tasks,
-      submittedContext = ctx,
-      status = JobStatus.Submitted,
-      result = None,
-      persistence = option.persistence,
-      runMode = option.runMode,
-      priority = option.priority,
-      scheduledStartAt = option.scheduledStartAt.filter(_.isAfter(now)),
-      createdAt = now,
-      updatedAt = now,
-      taskReadModels = Vector.empty,
-      timeline = Vector(
-        JobTimelineEvent(
-          sequence = 1L,
-          occurredAt = now,
-          kind = "job.submitted",
-          taskId = None,
-          parentTaskId = None,
-          note = None
+        val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
+        _cancellation_scopes.put(jobid, new JobCancellationScope)
+        val now = _now()
+        val initialdebug = JobDebugInfo(
+          requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
+          parameters =
+            (if (option.parameters.nonEmpty) option.parameters else _request_parameters(tasks)) ++
+              option.jobDefinitionSnapshot.map(_.toParameters).getOrElse(Map.empty),
+          executionNotes = option.executionNotes,
+          declaredProfile =
+            option.declaredProfile.orElse(option.jobDefinitionSnapshot.flatMap(_.profile)),
+          jobDefinitionSnapshot = option.jobDefinitionSnapshot
         )
-      ),
-      debug = initialdebug,
-      input = option.input
-    )
-    _put_record(record)
-    _append_event(
-      jobid = jobid,
-      name = "job.submitted",
-      payload = Map(
-        "job-id" -> jobid.value,
-        "status" -> JobStatus.Submitted.toString,
-        "request-summary" -> initialdebug.requestSummary.getOrElse("")
-      )
-    )
-    option.runMode match {
-      case JobRunMode.Async =>
-        option.scheduledStartAt.filter(_.isAfter(now)) match {
-          case Some(scheduledat) =>
-              _append_timeline(
-                jobid,
-                "job.delayed.scheduled",
-                None,
-                None,
-                Some(scheduledat.toString)
-              )
-            _append_event(
-              jobid = jobid,
-              name = "job.delayed.scheduled",
-              payload = Map(
-                "job-id" -> jobid.value,
-                "status" -> JobStatus.Submitted.toString,
-                "scheduled-start-at" -> scheduledat.toString
-              )
+        val record = JobRecord(
+          id = jobid,
+          tasks = tasks,
+          submittedContext = ctx,
+          status = JobStatus.Submitted,
+          result = None,
+          persistence = option.persistence,
+          runMode = option.runMode,
+          priority = option.priority,
+          scheduledStartAt = option.scheduledStartAt.filter(_.isAfter(now)),
+          createdAt = now,
+          updatedAt = now,
+          taskReadModels = Vector.empty,
+          timeline = Vector(
+            JobTimelineEvent(
+              sequence = 1L,
+              occurredAt = now,
+              kind = "job.submitted",
+              taskId = None,
+              parentTaskId = None,
+              note = None
             )
-            _schedule_delayed_start(jobid, scheduledat)
-          case None =>
-            _append_timeline(jobid, "job.async.queued", None, None, None)
-            _enqueue_work(SchedulerWorkItem.JobRun(_next_sequence(), option.priority, jobid))
+          ),
+          debug = initialdebug,
+          input = option.input
+        )
+        _put_record(record)
+        _append_event(
+          jobid = jobid,
+          name = "job.submitted",
+          payload = Map(
+            "job-id" -> jobid.value,
+            "status" -> JobStatus.Submitted.toString,
+            "request-summary" -> initialdebug.requestSummary.getOrElse("")
+          )
+        )
+        option.runMode match {
+          case JobRunMode.Async =>
+            option.scheduledStartAt.filter(_.isAfter(now)) match {
+              case Some(scheduledat) =>
+                _append_timeline(
+                  jobid,
+                  "job.delayed.scheduled",
+                  None,
+                  None,
+                  Some(scheduledat.toString)
+                )
+                _append_event(
+                  jobid = jobid,
+                  name = "job.delayed.scheduled",
+                  payload = Map(
+                    "job-id" -> jobid.value,
+                    "status" -> JobStatus.Submitted.toString,
+                    "scheduled-start-at" -> scheduledat.toString
+                  )
+                )
+                _schedule_delayed_start(jobid, scheduledat)
+              case None =>
+                _append_timeline(jobid, "job.async.queued", None, None, None)
+                _enqueue_work(SchedulerWorkItem.JobRun(_next_sequence(), option.priority, jobid))
+            }
+          case JobRunMode.Sync =>
+            _run_job_sync(jobid, tasks, ctx)
         }
-      case JobRunMode.Sync =>
-        _run_job_sync(jobid, tasks, ctx)
-    }
-      jobid
+        jobid
       }
     }
 

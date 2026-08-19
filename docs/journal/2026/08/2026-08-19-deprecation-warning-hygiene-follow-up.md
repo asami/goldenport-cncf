@@ -22,7 +22,7 @@ Repository: /Users/asami/src/dev2025/cloud-native-component-framework
 | HYG-H57-DEPRECATION-001 | RESOLVED | Production deprecated named-argument labels | Invocations `13467-20260819T030205Z`, `23484-20260819T033031Z` | Mechanical canonical-label migration; Batch 1 complete |
 | HYG-H57-DEPRECATION-002 | RESOLVED | 14 mechanically equivalent production deprecated API callers | Compile `66002-20260819T052726Z`; full test `67311-20260819T053029Z` | Batch 2 complete; `URL` and `HttpRequest.url` remain excluded |
 | HYG-H57-DEPRECATION-003 | RESOLVED | Test-source deprecated named callers and string syntax | Test compile `82331-20260819T061040Z`; full test `97482-20260819T065407Z` | Named callers and value-equivalent string syntax migrated; Batch 3 complete |
-| HYG-H57-COMPILER-WARNING-004 | BLOCKED | Non-deprecation compiler warnings | Invocation `15277-20260819T020915Z` | Await safety-case classification; Compiler-warning batch |
+| HYG-H57-COMPILER-WARNING-004 | RESOLVED | Non-deprecation compiler warnings | Focused `12069-20260819T073108Z`; full `12541-20260819T073205Z` | Compiler-warning batch complete; availability diagnostic contract retained as DEV-009 |
 
 ## HYG-H57-DEPRECATION-001 — Production named-argument callers
 
@@ -159,3 +159,9 @@ Hygiene Triage: HANDED_OFF
 Hygiene ID: HYG-H57-COMPILER-WARNING-004
 Handoff Journal: cloud-native-component-framework:docs/journal/2026/08/2026-08-19-compiler-warning-hygiene-batch-handoff.md
 Handed Off On: 2026-08-19
+
+Hygiene Status: RESOLVED
+Resolution Batch: cloud-native-component-framework:docs/journal/2026/08/2026-08-19-compiler-warning-hygiene-batch-handoff.md
+Validated On: 2026-08-19
+Validation Evidence: focused test `12069-20260819T073108Z` (56 succeeded, 0 failed); full test `12541-20260819T073205Z` (3,261 succeeded, 0 failed)
+Acceptance Commit: reported externally after commit execution

@@ -185,16 +185,16 @@ object ComponentDescriptor {
         componentstylec = _component_style_snapshot(rec, schemaversion)
         componentstyle <- componentstylec
       } yield {
-          val componentname = canonicalidentity.map(_.id.name).orElse(
-            _string(componentrec, "component", "componentName").orElse(_string(componentrec, "name"))
-          )
-          val release = canonicalidentity.map(_.release).orElse(_string(rec, "version").orElse(_string(componentrec, "version")))
-          val extensions =
-            if (schemaversion.contains(3)) _component_extensions(rec)
-            else _component_extensions(componentrec) ++ _component_extensions(rec)
-          val config =
-            if (schemaversion.contains(3)) _string_map_value(rec, List("config"))
-            else _string_map_value(componentrec, List("config")) ++ _string_map_value(rec, List("config"))
+        val componentname = canonicalidentity.map(_.id.name).orElse(
+          _string(componentrec, "component", "componentName").orElse(_string(componentrec, "name"))
+        )
+        val release = canonicalidentity.map(_.release).orElse(_string(rec, "version").orElse(_string(componentrec, "version")))
+        val extensions =
+          if (schemaversion.contains(3)) _component_extensions(rec)
+          else _component_extensions(componentrec) ++ _component_extensions(rec)
+        val config =
+          if (schemaversion.contains(3)) _string_map_value(rec, List("config"))
+          else _string_map_value(componentrec, List("config")) ++ _string_map_value(rec, List("config"))
         ComponentDescriptor(
           name = _string(rec, "name").orElse(_string(componentrec, "name")).orElse(componentname),
           version = release,

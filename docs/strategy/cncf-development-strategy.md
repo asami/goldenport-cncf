@@ -1813,6 +1813,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-006 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Parent/Subcomponent descriptor description and development/packaged parity. | MERGED_EXISTING_PHASE | [Phase 58](../phase/phase-58.md) | ADOPTED |
 | DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
 | DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
+| DEV-009 | `docs/journal/2026/08/2026-08-19-conclusion-diagnostics-availability-kind-development-task.md` | Explicit availability-kind diagnostic keys for not-running, connection-refused, and unreachable conclusions. | STRATEGY_ITEM | [9.4](#94-metrics-and-observability) | CANDIDATE |
 
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
@@ -1908,6 +1909,10 @@ is future hardening and operationalization.
 - Richer Grafana dashboards and sample 13 / 13a article-ready documentation,
   including where to inspect CNCF Web UI, Jaeger, Prometheus, and Grafana.
 - Broader observability validation in the heavy-test/release validation path.
+- `DEV-009` defines the exact diagnostic-key contract for availability cause
+  kinds. It remains a bounded task candidate until a consumer selects it; it
+  must not be folded into compiler-warning Hygiene or silently mapped to
+  `unknown`.
 
 Alignment with Phases 63-65:
 
