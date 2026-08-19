@@ -60,14 +60,14 @@ six `failValueInvalid` calls use the existing identical-body
 `Consequence.valueInvalid`; four `MapOps.+` calls have disjoint literal keys;
 two compiler-inserted copying Array conversions become explicit
 `.toIndexedSeq`; and two `Char.+` calls become interpolation with the same
-character and suffix. These 14 locations are now admitted by the READY Batch 2
+character and suffix. These 14 locations were completed by the resolved Batch 2
 handoff.
 
 The two remaining diagnostics are not admitted as Hygiene: `new URL(...)` in
 Docker readiness can alter parsing/exception behavior, and `HttpRequest.url`
 is a deprecated public compatibility field whose absence may alter query
-fallback for externally constructed requests. They are separately scheduled as
-Development Candidates below.
+fallback for externally constructed requests. They remain outside Hygiene and
+are recorded below as implemented non-Hygiene work.
 
 Hygiene Triage: HANDED_OFF
 Hygiene ID: HYG-H57-DEPRECATION-002
@@ -80,7 +80,7 @@ Validated On: 2026-08-19
 Validation Evidence: detailed compile `66002-20260819T052726Z`; focused review `CLEAN`; full test `67311-20260819T053029Z` (3,262 succeeded, 0 failed)
 Acceptance Commit: reported externally after commit execution
 
-## Development Candidates — HYG-H57-DEPRECATION-002 exclusions
+## Non-Hygiene Implementation Records — HYG-H57-DEPRECATION-002 exclusions
 
 ### DEV-H57-DEPRECATION-URL-001 — Docker readiness URL construction contract
 
@@ -94,12 +94,12 @@ accepted by implementation-dependent `URL` parsing. Implement this as an
 ordinary behavior task with focused valid-URI and invalid-URI readiness
 specifications; it remains outside the non-behavioral Hygiene batch.
 
-Candidate Triage: COMPLETED
-Canonical ID: DEV-H57-DEPRECATION-URL-001
-Disposition: STRATEGY_ITEM
-Strategy Record: docs/strategy/cncf-development-strategy.md#960-http-url-compatibility-migration
-Target Phase: -
-Triaged On: 2026-08-19
+Record ID: DEV-H57-DEPRECATION-URL-001
+Hygiene Disposition: EXCLUDED
+Implementation State: PRESENT in checkpoint `7e3439116edd1d1f26b38f10d710a9da42b1b691`
+Further Development: none recorded by HYG-002
+Strategy Record: -
+Recorded On: 2026-08-19
 
 ### DEV-H57-DEPRECATION-HTTPREQUEST-001 — HttpRequest URL-field compatibility
 
@@ -109,12 +109,12 @@ fallback changes the observable query resolution of directly constructed
 requests and needs a goldenport-core ownership/ABI decision plus an executable
 request-construction compatibility specification.
 
-Candidate Triage: COMPLETED
-Canonical ID: DEV-H57-DEPRECATION-HTTPREQUEST-001
-Disposition: STRATEGY_ITEM
-Strategy Record: docs/strategy/cncf-development-strategy.md#960-http-url-compatibility-migration
-Target Phase: -
-Triaged On: 2026-08-19
+Record ID: DEV-H57-DEPRECATION-HTTPREQUEST-001
+Hygiene Disposition: EXCLUDED
+Implementation State: PRESENT in checkpoint `7e3439116edd1d1f26b38f10d710a9da42b1b691`
+Further Development: none recorded by HYG-002
+Strategy Record: -
+Recorded On: 2026-08-19
 
 ## HYG-H57-DEPRECATION-003 — Test-source deprecated APIs
 
