@@ -1,8 +1,12 @@
 # Deprecation Warning Follow-up
 
-Status: OPEN
+Status: RESOLVED
 Created: 2026-08-19
 Repository: /Users/asami/src/dev2025/cloud-native-component-framework
+
+All tracked Hygiene items in this follow-up are resolved. The retained URL and
+`HttpRequest.url` records below are completed non-Hygiene implementation
+records, not open warning-cleanup work.
 
 ## Discovery Evidence
 

@@ -2,7 +2,7 @@
 
 Date: 2026-07-31
 
-Status: open
+Status: RESOLVED
 
 This non-normative ledger preserves phase-external maintenance findings. It
 does not change Phase 53 contracts or completion criteria.
