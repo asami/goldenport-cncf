@@ -124,25 +124,25 @@ class ActionCallDataStoreRouteSpec
       core = RuntimeContext.core(
         name = "datastore-route-runtime-context",
         parent = None,
-        observabilityContext = observability,
-        httpDriverOption = Some(driver)
+        observabilitycontext = observability,
+        httpdriveroption = Some(driver)
       ),
-      unitOfWorkSupplier = () => _unit_of_work.getOrElse {
+      unitofworksupplier = () => _unit_of_work.getOrElse {
         throw new IllegalStateException("UnitOfWork has not been bound")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in datastore route spec")
       },
-      commitAction = uow => {
+      commitaction = uow => {
         val _ = uow.commit()
         ()
       },
-      abortAction = abortUow => {
+      abortaction = abortUow => {
         val _ = abortUow.rollback()
         ()
       },
-      disposeAction = _ => (),
+      disposeaction = _ => (),
       token = "datastore-route-runtime-context"
     )
 

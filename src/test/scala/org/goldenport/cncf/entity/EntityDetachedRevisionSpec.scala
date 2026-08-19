@@ -795,15 +795,15 @@ final class EntityDetachedRevisionSpec
         entitystore = Some(EntityStoreContext(entitystorespace)),
         entityspace = Some(EntitySpaceContext(entityspace))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] =
           new UnitOfWorkInterpreter(new UnitOfWork(context))
             .interpret(operation)
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "entity-detached-revision"
     )
     val _ = context

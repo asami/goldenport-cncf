@@ -108,9 +108,9 @@ final class ProcessExecutionDriverSpec extends AnyWordSpec with Matchers with Gi
       kind = ScopeKind.Runtime,
       name = name,
       parent = parent,
-      observabilityContext = ExecutionContext.create().observability,
-      processExecutionDriverOption = driver,
-      processExecutionAdmissionOption = admission
+      observabilitycontext = ExecutionContext.create().observability,
+      processexecutiondriveroption = driver,
+      processexecutionadmissionoption = admission
     )
 
   private def _execution(capability: ProcessCapabilityId): ResolvedProcessExecution = {

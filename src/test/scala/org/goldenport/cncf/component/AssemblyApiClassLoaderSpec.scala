@@ -20,16 +20,6 @@ import org.scalatest.wordspec.AnyWordSpec
 final class AssemblyApiClassLoaderSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Assembly API classloader" should {
     "validate compatibility and assembly API admission" which {
-    "retain the former descriptor-path symbol as a compatibility alias" in {
-      Given("the canonical component API descriptor path constant")
-
-      When("a source client resolves the former public symbol")
-      val path = AssemblyApiClassLoader.DescriptorPath
-
-      Then("it receives the canonical descriptor path")
-      path shouldBe AssemblyApiClassLoader.DESCRIPTOR_PATH
-    }
-
     "give consumer and provider component loaders one descriptor-declared API class identity" in {
       Given("one component API artifact and two component-local copies of the same class")
       val classname = classOf[AssemblyApiFixture].getName

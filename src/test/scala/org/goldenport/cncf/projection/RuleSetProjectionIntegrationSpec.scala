@@ -53,7 +53,7 @@ final class RuleSetProjectionIntegrationSpec extends AnyWordSpec with Matchers w
         kind = ScopeKind.Subsystem,
         name = "rule-projection",
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       )),
       configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     ).withDescriptor(GenericSubsystemDescriptor(

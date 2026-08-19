@@ -94,6 +94,6 @@ object SubsystemTestFixture {
       kind = ScopeKind.Subsystem,
       name = name,
       parent = None,
-      observabilityContext = ExecutionContext.create().observability
+      observabilitycontext = ExecutionContext.create().observability
     )
 }

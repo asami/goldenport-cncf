@@ -113,11 +113,11 @@ final class OperationAuthorizationSpec extends AnyWordSpec with Matchers {
         )
     val runtime = new RuntimeContext(
       core = base.runtime.core,
-      unitOfWorkSupplier = () => base.unitOfWork,
-      unitOfWorkInterpreterFn = base.runtime.unitOfWorkInterpreter,
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      unitofworksupplier = () => base.unitOfWork,
+      unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "operation-authorization-spec",
       operationMode = operationMode
     )

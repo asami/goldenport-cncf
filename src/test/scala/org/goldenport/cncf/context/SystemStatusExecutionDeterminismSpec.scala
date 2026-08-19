@@ -112,13 +112,13 @@ final class SystemStatusExecutionDeterminismSpec
       core = RuntimeContext.core(
         name = "system-status-determinism-spec",
         parent = Some(global),
-        observabilityContext = base.observability
+        observabilitycontext = base.observability
       ),
-      unitOfWorkSupplier = () => base.unitOfWork,
-      unitOfWorkInterpreterFn = base.runtime.unitOfWorkInterpreter,
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      unitofworksupplier = () => base.unitOfWork,
+      unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "system-status-determinism-spec"
     )
     ExecutionContext.create(runtime)

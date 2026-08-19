@@ -368,8 +368,8 @@ final class OperationResponseFormatterSpec
       kind = ScopeKind.Runtime,
       name = "gcf-09o-formatter-spec",
       parent = None,
-      observabilityContext = ExecutionContext.create().observability,
-      httpDriverOption = Some(config.httpDriver)
+      observabilitycontext = ExecutionContext.create().observability,
+      httpdriveroption = Some(config.httpDriver)
     ).core
     val global = new GlobalRuntimeContext(
       core = core,

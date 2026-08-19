@@ -21,7 +21,7 @@ Repository: /Users/asami/src/dev2025/cloud-native-component-framework
 | --- | --- | --- | --- | --- |
 | HYG-H57-DEPRECATION-001 | RESOLVED | Production deprecated named-argument labels | Invocations `13467-20260819T030205Z`, `23484-20260819T033031Z` | Mechanical canonical-label migration; Batch 1 complete |
 | HYG-H57-DEPRECATION-002 | RESOLVED | 14 mechanically equivalent production deprecated API callers | Compile `66002-20260819T052726Z`; full test `67311-20260819T053029Z` | Batch 2 complete; `URL` and `HttpRequest.url` remain excluded |
-| HYG-H57-DEPRECATION-003 | BLOCKED | Test-source deprecation warnings | Invocation `16358-20260819T021219Z` | Await exact test-source location inventory; Batch 3 |
+| HYG-H57-DEPRECATION-003 | RESOLVED | Test-source deprecated named callers and string syntax | Test compile `82331-20260819T061040Z`; full test `97482-20260819T065407Z` | Named callers and value-equivalent string syntax migrated; Batch 3 complete |
 | HYG-H57-COMPILER-WARNING-004 | BLOCKED | Non-deprecation compiler warnings | Invocation `15277-20260819T020915Z` | Await safety-case classification; Compiler-warning batch |
 
 ## HYG-H57-DEPRECATION-001 — Production named-argument callers
@@ -118,18 +118,29 @@ Recorded On: 2026-08-19
 
 ## HYG-H57-DEPRECATION-003 — Test-source deprecated APIs
 
-The full suite reports 419 deprecation warnings while compiling test sources.
-The existing invocation provides the aggregate count but not the per-file
-diagnostics needed to freeze a source-file list.
+Detail-enabled test compilation `45753-20260819T042645Z` now records the
+test-source diagnostic locations and compiler-announced replacements. The
+admitted Batch 3 boundary is limited to mechanical named-argument and
+value-equivalent string-syntax call-site migrations. The handoff freezes its
+exact target inventory.
 
-Required prerequisite: run a detail-enabled test compilation that records every
-test-source warning location and replacement, then partition only mechanical
-test call-site updates from any expectation or fixture semantic changes.
+The deprecated `useApplicationDataStore` test caller is already resolved by
+accepted ordinary-task commit `2a90e025405d42dda1f35a1950ee312172642259` and
+is excluded. The fixture failures at `EventBusSpec.scala:229` and
+`InMemoryJobEngineSpec.scala:476`, and retirement of compatibility scenarios
+for `DescriptorPath`, `aggregate_name`, and `install_binding`, are
+user-directed ordinary test work. They remain outside HYG-H57-DEPRECATION-003.
 
 Hygiene Triage: HANDED_OFF
 Hygiene ID: HYG-H57-DEPRECATION-003
 Handoff Journal: cloud-native-component-framework:docs/journal/2026/08/2026-08-19-deprecation-test-source-hygiene-batch-handoff.md
 Handed Off On: 2026-08-19
+
+Hygiene Status: RESOLVED
+Resolution Batch: cloud-native-component-framework:docs/journal/2026/08/2026-08-19-deprecation-test-source-hygiene-batch-handoff.md
+Validated On: 2026-08-19
+Validation Evidence: test-source deprecation compile `82331-20260819T061040Z`; focused regression `92129-20260819T064308Z` (57 succeeded, 0 failed); full test `97482-20260819T065407Z` (3,261 succeeded, 0 failed)
+Acceptance Commit: reported externally after commit execution
 
 ## HYG-H57-COMPILER-WARNING-004 — Non-deprecation compiler warnings
 

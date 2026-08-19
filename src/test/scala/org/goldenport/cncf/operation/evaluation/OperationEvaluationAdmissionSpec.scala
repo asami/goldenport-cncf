@@ -574,8 +574,8 @@ final class OperationEvaluationAdmissionSpec
       kind = ScopeKind.Subsystem,
       name = "evaluation-admission",
       parent = None,
-      observabilityContext = ExecutionContext.create().observability,
-      operationEvaluationResolverOption = Some(resolver)
+      observabilitycontext = ExecutionContext.create().observability,
+      operationevaluationresolveroption = Some(resolver)
     )
     val subsystem = new Subsystem(
       name = "evaluation-admission",

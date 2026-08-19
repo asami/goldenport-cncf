@@ -595,8 +595,8 @@ private object InvocationFixture {
     )
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = metadata.instanceId,
+      componentId = componentid,
+      instanceId = metadata.instanceId,
       protocol = protocol
     )
     provider.initialize(ComponentInit(
@@ -620,8 +620,8 @@ private object InvocationFixture {
     val metadata = ComponentInstanceMetadata(componentid.name, "default", componentId = Some(componentid))
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = metadata.instanceId,
+      componentId = componentid,
+      instanceId = metadata.instanceId,
       protocol = Protocol.empty
     )
     consumer.initialize(ComponentInit(
@@ -645,8 +645,8 @@ private object InvocationFixture {
     val metadata = ComponentInstanceMetadata(componentid.name, "default", componentId = Some(componentid))
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = metadata.instanceId,
+      componentId = componentid,
+      instanceId = metadata.instanceId,
       protocol = Protocol.empty
     )
     consumer.initialize(ComponentInit(

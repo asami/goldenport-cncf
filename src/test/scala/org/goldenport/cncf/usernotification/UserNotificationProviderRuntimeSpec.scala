@@ -262,8 +262,8 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
     val id = ComponentId("org.goldenport.cncf.test.TextusUserNotification")
     val core = Component.Core.create(
       name = id.name,
-      componentid = id,
-      instanceid = ComponentInstanceId.default(id),
+      componentId = id,
+      instanceId = ComponentInstanceId.default(id),
       protocol = Protocol.empty,
       jobEngine = subsystem.jobEngine
     )

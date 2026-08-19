@@ -150,7 +150,7 @@ object TestComponentFactory {
 
   private def _component_local_id(name: String): String = {
     val tokens = name.split("[^A-Za-z0-9]+").toVector.filter(_.nonEmpty)
-    val localid = tokens.map(token => token.head.toUpper + token.tail).mkString
+    val localid = tokens.map(token => s"${token.head.toUpper}${token.tail}").mkString
     if (localid.nonEmpty) localid else "Component"
   }
 }

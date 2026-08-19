@@ -1434,8 +1434,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       kind = ScopeKind.Runtime,
       name = "gcf-09o-ingress-spec",
       parent = None,
-      observabilityContext = ExecutionContext.create().observability,
-      httpDriverOption = Some(config.httpDriver)
+      observabilitycontext = ExecutionContext.create().observability,
+      httpdriveroption = Some(config.httpDriver)
     ).core
     val global = new GlobalRuntimeContext(
       core = core,
@@ -1467,7 +1467,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
           kind = ScopeKind.Subsystem,
           name = "security-test",
           parent = None,
-          observabilityContext = ExecutionContext.create().observability
+          observabilitycontext = ExecutionContext.create().observability
         )
       ),
       configuration = org.goldenport.configuration.ResolvedConfiguration(

@@ -269,16 +269,16 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
       core = RuntimeContext.core(
         name = "component-configuration-access-spec",
         parent = Some(global),
-        observabilityContext = base.observability
+        observabilitycontext = base.observability
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           Consequence.serviceUnavailable("not used by component configuration ActionCall spec")
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "component-configuration-access-spec",
       operationMode = runtimeconfig.operationMode
     )

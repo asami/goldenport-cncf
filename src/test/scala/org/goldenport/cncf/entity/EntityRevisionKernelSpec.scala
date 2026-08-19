@@ -550,8 +550,8 @@ final class EntityRevisionKernelSpec
         entitystore = Some(EntityStoreContext(entitystorespace)),
         entityspace = Some(EntitySpaceContext(entityspace))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] = {
           val _ = operation
           throw new UnsupportedOperationException(
@@ -559,9 +559,9 @@ final class EntityRevisionKernelSpec
           )
         }
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "entity-concurrency-runtime-context"
     )
     val _ = context
@@ -622,7 +622,7 @@ final class EntityRevisionKernelSpec
       kind = ScopeKind.Runtime,
       name = "entity-concurrency-root",
       parent = None,
-      observabilityContext = observability
+      observabilitycontext = observability
     )
     val componentscope = Component.Context(
       name = "entity-concurrency-component",
@@ -641,15 +641,15 @@ final class EntityRevisionKernelSpec
         datastore = Some(DataStoreContext(datastorespace)),
         entitystore = Some(EntityStoreContext(entitystorespace))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] =
           new UnitOfWorkInterpreter(new UnitOfWork(context))
             .interpret(operation)
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "entity-concurrency-component-runtime-context"
     )
     val _ = context

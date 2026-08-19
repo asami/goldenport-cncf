@@ -286,7 +286,7 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
           kind = ScopeKind.Subsystem,
           name = "blob-authz-test",
           parent = None,
-          observabilityContext = ExecutionContext.create().observability
+          observabilitycontext = ExecutionContext.create().observability
         )
       ),
       configuration = org.goldenport.configuration.ResolvedConfiguration(

@@ -343,8 +343,8 @@ final class RuleEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen 
       subsystem = subsystem,
       core = Component.Core.create(
         name = componentid.name,
-        componentid = componentid,
-        instanceid = ComponentInstanceId.default(componentid),
+        componentId = componentid,
+        instanceId = ComponentInstanceId.default(componentid),
         protocol = Protocol.empty
       ),
       origin = ComponentOrigin.Builtin

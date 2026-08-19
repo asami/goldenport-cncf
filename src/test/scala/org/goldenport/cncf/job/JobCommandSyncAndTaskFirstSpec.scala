@@ -90,8 +90,8 @@ final class JobCommandSyncAndTaskFirstSpec
     val id = ComponentId("org.goldenport.cncf.test.JobCommandSyncTaskFirstSpec")
     val core = Component.Core.create(
       name = id.name,
-      componentid = id,
-      instanceid = ComponentInstanceId.default(id),
+      componentId = id,
+      instanceId = ComponentInstanceId.default(id),
       protocol = Protocol.empty,
       jobEngine = subsystem.jobEngine
     )

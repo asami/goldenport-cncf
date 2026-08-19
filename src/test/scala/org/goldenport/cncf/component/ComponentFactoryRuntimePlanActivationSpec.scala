@@ -257,8 +257,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
     }
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.RuntimePlanActivationSpec",
-      componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanActivationSpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.RuntimePlanActivationSpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.RuntimePlanActivationSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.RuntimePlanActivationSpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(
@@ -289,8 +289,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
     val componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanCanonicalNameSpec")
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
     )
     val params = ComponentInit(
@@ -324,8 +324,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
     val componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanAmbiguousNameSpec")
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
     )
     val params = ComponentInit(
@@ -365,8 +365,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
       ): Component.Core =
         Component.Core.create(
           name = "org.goldenport.cncf.test.RuntimePlanActivationDirectAdd",
-          componentid = ComponentId("org.goldenport.cncf.test.RuntimePlanActivationDirectAdd"),
-          instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.RuntimePlanActivationDirectAdd")),
+          componentId = ComponentId("org.goldenport.cncf.test.RuntimePlanActivationDirectAdd"),
+          instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.RuntimePlanActivationDirectAdd")),
           protocol = Protocol.empty,
           factory = this
         )
@@ -380,8 +380,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
     val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(name)
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
     )
     val params = ComponentInit(

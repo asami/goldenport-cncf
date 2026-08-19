@@ -330,16 +330,16 @@ final class ActionCallComponentDataStoreIdentitySpec
       core = RuntimeContext.core(
         name = "art-scene-managed-throw-runtime",
         parent = None,
-        observabilityContext = base.observability
+        observabilitycontext = base.observability
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in ActionCallComponentDataStoreIdentitySpec")
       },
-      commitAction = _ => (),
-      abortAction = _ => abortleasecount = Some(subsystem.systemNode.activeLeaseCount),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => abortleasecount = Some(subsystem.systemNode.activeLeaseCount),
+      disposeaction = _ => (),
       token = "art-scene-managed-throw-runtime"
     )
     (context, () => abortleasecount)
@@ -518,8 +518,8 @@ final class ActionCallComponentDataStoreIdentitySpec
 
     override val core: Component.Core = Component.Core.create(
       name = _component_id.name,
-      componentid = _component_id,
-      instanceid = ComponentInstanceId.default(_component_id),
+      componentId = _component_id,
+      instanceId = ComponentInstanceId.default(_component_id),
       protocol = Protocol.empty
     )
 

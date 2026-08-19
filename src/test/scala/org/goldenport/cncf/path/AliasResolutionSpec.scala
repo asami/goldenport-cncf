@@ -207,8 +207,8 @@ final class AliasResolutionSpec
       kind = ScopeKind.Runtime,
       name = "alias-test",
       parent = None,
-      observabilityContext = execution.observability,
-      httpDriverOption = Some(httpdriver)
+      observabilitycontext = execution.observability,
+      httpdriveroption = Some(httpdriver)
     ).core
     val context = new GlobalRuntimeContext(
       core = core,

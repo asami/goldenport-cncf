@@ -85,8 +85,8 @@ final class ComponentFactoryStateMachineBootstrapSpec
 
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.StateMachineBootstrapSpec",
-      componentid = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(

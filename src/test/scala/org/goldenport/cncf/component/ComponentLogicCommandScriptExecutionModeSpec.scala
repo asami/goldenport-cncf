@@ -658,8 +658,8 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       kind = ScopeKind.Runtime,
       name = "component-logic-command-script-mode-spec",
       parent = None,
-      observabilityContext = execution.observability,
-      httpDriverOption = Some(httpDriver)
+      observabilitycontext = execution.observability,
+      httpdriveroption = Some(httpDriver)
     ).core
     val context = new GlobalRuntimeContext(
       core = core,

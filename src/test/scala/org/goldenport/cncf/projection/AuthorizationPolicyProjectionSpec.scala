@@ -110,7 +110,7 @@ final class AuthorizationPolicyProjectionSpec
           kind = ScopeKind.Subsystem,
           name = "blob-authz-projection",
           parent = None,
-          observabilityContext = ExecutionContext.create().observability
+          observabilitycontext = ExecutionContext.create().observability
         )
       ),
       configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)

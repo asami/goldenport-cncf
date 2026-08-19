@@ -1571,22 +1571,22 @@ final class EntityStoreQueryRouteSpec
         datastore = Some(DataStoreContext(datastorespace)),
         entitystore = Some(EntityStoreContext(entitystorespace))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] = {
           val _ = fa
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in this spec")
         }
       },
-      commitAction = uow => {
+      commitaction = uow => {
         val _ = uow.commit()
         ()
       },
-      abortAction = uow => {
+      abortaction = uow => {
         val _ = uow.rollback()
         ()
       },
-      disposeAction = _ => (),
+      disposeaction = _ => (),
       token = "entity-store-query-route-runtime-context"
     )
     context match {

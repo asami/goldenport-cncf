@@ -151,8 +151,8 @@ final class ComponentFactoryWorkingSetPolicySpec
     }.withComponentDescriptors(descriptors)
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.PolicySpec",
-      componentid = ComponentId("org.goldenport.cncf.test.PolicySpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.PolicySpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.PolicySpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.PolicySpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(

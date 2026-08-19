@@ -376,8 +376,8 @@ final class AdminSystemPingExecutionSpec
       kind = ScopeKind.Runtime,
       name = "ping-execution-spec",
       parent = None,
-      observabilityContext = execution.observability,
-      httpDriverOption = Some(httpdriver)
+      observabilitycontext = execution.observability,
+      httpdriveroption = Some(httpdriver)
     ).core
     val context = new GlobalRuntimeContext(
       core = core,

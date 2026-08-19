@@ -528,8 +528,8 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
     )
     val core = org.goldenport.cncf.component.Component.Core.create(
       name = "org.goldenport.fixture.NoticeBoard",
-      componentid = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.NoticeBoard"),
-      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
+      componentId = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.NoticeBoard"),
+      instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(
         org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.NoticeBoard")
       ),
       protocol = protocol
@@ -562,8 +562,8 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
     )
     val core = org.goldenport.cncf.component.Component.Core.create(
       name = "org.goldenport.fixture.PublicNotice",
-      componentid = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.PublicNotice"),
-      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
+      componentId = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.PublicNotice"),
+      instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(
         org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.PublicNotice")
       ),
       protocol = protocol
@@ -596,8 +596,8 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
     )
     val core = org.goldenport.cncf.component.Component.Core.create(
       name = "org.goldenport.fixture.UserNotification",
-      componentid = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.UserNotification"),
-      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
+      componentId = org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.UserNotification"),
+      instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(
         org.goldenport.cncf.component.ComponentId("org.goldenport.fixture.UserNotification")
       ),
       protocol = protocol
@@ -641,8 +641,8 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
     val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(canonicalname)
     val core = org.goldenport.cncf.component.Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(componentid),
       protocol = protocol
     )
     artifactname.foreach { name =>

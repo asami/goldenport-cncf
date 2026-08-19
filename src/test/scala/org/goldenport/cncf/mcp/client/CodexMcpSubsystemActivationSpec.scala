@@ -43,7 +43,7 @@ final class CodexMcpSubsystemActivationSpec
         kind = ScopeKind.Subsystem,
         name = "mcp_runtime_factory",
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       )
 
       When("the generic subsystem factory completes component assembly")

@@ -675,11 +675,11 @@ final class ActionCallConditionalTransitionDslSpec
         datastore = Some(DataStoreContext(datastorespace)),
         entitystore = Some(EntityStoreContext(entitystorespace))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = capture.interpreter(context),
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = capture.interpreter(context),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "action-call-conditional-transition-runtime"
     )
     val action = new CommandAction {

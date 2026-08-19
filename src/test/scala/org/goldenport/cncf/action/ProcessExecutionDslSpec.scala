@@ -213,9 +213,9 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       kind = ScopeKind.Runtime,
       name = "process-execution-dsl-test",
       parent = None,
-      observabilityContext = base.observability,
-      processExecutionDriverOption = driver,
-      processExecutionAdmissionOption = admission
+      observabilitycontext = base.observability,
+      processexecutiondriveroption = driver,
+      processexecutionadmissionoption = admission
     )
     base.withScope(scope)
   }

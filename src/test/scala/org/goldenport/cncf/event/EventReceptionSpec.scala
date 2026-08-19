@@ -577,7 +577,7 @@ final class EventReceptionSpec
         kind = ScopeKind.Subsystem,
         name = "sample",
         parent = None,
-        observabilityContext = base.observability
+        observabilitycontext = base.observability
       )
       val componentscope = subsystemscope.createChildScope(ScopeKind.Component, "publisher")
       val jobctx = JobContext(
@@ -2494,22 +2494,22 @@ final class EventReceptionSpec
         core = org.goldenport.cncf.context.RuntimeContext.core(
           name = "event-reception-spec-runtime",
           parent = None,
-          observabilityContext = base.observability,
-          httpDriverOption = Some(driver)
+          observabilitycontext = base.observability,
+          httpdriveroption = Some(driver)
         ),
-        unitOfWorkSupplier = () => _uow.getOrElse {
+        unitofworksupplier = () => _uow.getOrElse {
           throw new IllegalStateException("UnitOfWork has not been bound")
         },
-        unitOfWorkInterpreterFn = consequenceinterpreter,
-        commitAction = uow => {
+        unitofworkinterpreterfn = consequenceinterpreter,
+        commitaction = uow => {
           val _ = uow.commit()
           ()
         },
-        abortAction = uow => {
+        abortaction = uow => {
           val _ = uow.rollback()
           ()
         },
-        disposeAction = _ => (),
+        disposeaction = _ => (),
         token = "event-reception-spec-runtime"
       )
       lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(base, runtime)

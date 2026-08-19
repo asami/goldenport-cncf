@@ -127,8 +127,8 @@ final class StateMachineProjectionSpec
 
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.ProjectionStateMachineSpec",
-      componentid = ComponentId("org.goldenport.cncf.test.ProjectionStateMachineSpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProjectionStateMachineSpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.ProjectionStateMachineSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProjectionStateMachineSpec")),
       protocol = Protocol.empty
     )
     val subsystem = TestComponentFactory.emptySubsystem("projection_state_machine_spec")
@@ -158,8 +158,8 @@ final class StateMachineProjectionSpec
 
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec",
-      componentid = ComponentId("org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ProjectionStateMachineDefinitionSpec")),
       protocol = Protocol.empty
     )
     val subsystem = TestComponentFactory.emptySubsystem("projection_state_machine_definition_spec")

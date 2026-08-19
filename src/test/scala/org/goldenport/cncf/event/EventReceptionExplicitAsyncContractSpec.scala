@@ -210,7 +210,7 @@ final class EventReceptionExplicitAsyncContractSpec
       kind = scopekind,
       name = "explicit-async-contract",
       parent = None,
-      observabilityContext = base.observability
+      observabilitycontext = base.observability
     )
     base.withScope(scope)
   }

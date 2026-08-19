@@ -31,14 +31,14 @@ class RuntimeContextSpec extends AnyWordSpec with Matchers {
         ExecutionContext.withRuntimeContext(base, originalRuntime)
       lazy val originalRuntime: RuntimeContext = new RuntimeContext(
         core = base.runtime.core,
-        unitOfWorkSupplier = () => new UnitOfWork(originalContext),
-        unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        unitofworksupplier = () => new UnitOfWork(originalContext),
+        unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
           def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
             Consequence.serviceUnavailable("not used")
         },
-        commitAction = _ => committed = true,
-        abortAction = _ => aborted = true,
-        disposeAction = _ => (),
+        commitaction = _ => committed = true,
+        abortaction = _ => aborted = true,
+        disposeaction = _ => (),
         token = "original"
       )
       lazy val reboundContext: ExecutionContext =

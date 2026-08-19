@@ -130,17 +130,17 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
       core = RuntimeContext.core(
         name = "unit-of-work-http-spec",
         parent = None,
-        observabilityContext = base.observability,
-        httpDriverOption = Some(driver)
+        observabilitycontext = base.observability,
+        httpdriveroption = Some(driver)
       ),
-      unitOfWorkSupplier = () => throw new UnsupportedOperationException("unitOfWork is not used in this spec runtime"),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => throw new UnsupportedOperationException("unitOfWork is not used in this spec runtime"),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in this spec runtime")
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "unit-of-work-http-spec-runtime"
     )
     ExecutionContext.withRuntimeContext(base, runtime)

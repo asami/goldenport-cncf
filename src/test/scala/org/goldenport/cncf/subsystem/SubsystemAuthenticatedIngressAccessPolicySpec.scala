@@ -99,7 +99,7 @@ final class SubsystemAuthenticatedIngressAccessPolicySpec
           kind = ScopeKind.Subsystem,
           name = "authenticated-ingress-access-policy",
           parent = None,
-          observabilityContext = ExecutionContext.create().observability
+          observabilitycontext = ExecutionContext.create().observability
         )
       ),
       configuration = ResolvedConfiguration(
@@ -164,8 +164,8 @@ final class SubsystemAuthenticatedIngressAccessPolicySpec
     val componentid = ComponentId("org.goldenport.cncf.test.Domain")
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = protocol
     )
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Main))

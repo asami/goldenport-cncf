@@ -575,14 +575,14 @@ final class StartupEntityImportSpec
         datastore = Some(DataStoreContext(datastorespace)),
         entitystore = Some(EntityStoreContext(entitystorespace))
       ),
-      unitOfWorkSupplier = () => new org.goldenport.cncf.unitofwork.UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (org.goldenport.cncf.unitofwork.UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new org.goldenport.cncf.unitofwork.UnitOfWork(context),
+      unitofworkinterpreterfn = new (org.goldenport.cncf.unitofwork.UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: org.goldenport.cncf.unitofwork.UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("startup entity import test does not use unit of work")
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "startup_entity_import_test"
     )
     context

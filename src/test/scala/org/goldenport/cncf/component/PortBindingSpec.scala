@@ -187,7 +187,7 @@ final class PortBindingSpec
       result.toOption.get.port.get[GenerateService].map(_.generate("hello")) shouldBe Some("generated:local-gemma")
     }
 
-    "install a named binding result through the deprecated forwarding API" in {
+    "install a named binding result through the canonical API" in {
       Given("a component with a named binding and an empty service registry")
       given ExecutionContext = ExecutionContext.create()
       val component = new Component() {}
@@ -199,8 +199,8 @@ final class PortBindingSpec
       )
       component.withBinding("generate", _binding())
 
-      When("the named binding is installed through the compatible forwarding API")
-      val result = component.install_binding[Requirement, GenerateService](
+      When("the named binding is installed through the canonical API")
+      val result = component.installBinding[Requirement, GenerateService](
         name = "generate",
         req = requirement
       )

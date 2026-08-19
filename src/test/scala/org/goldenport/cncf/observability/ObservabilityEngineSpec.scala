@@ -43,7 +43,7 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       kind = ScopeKind.Action,
       name = "ping",
       parent = None,
-      observabilityContext = ObservabilityContext(
+      observabilitycontext = ObservabilityContext(
         traceId = _trace_id(),
         spanId = None,
         correlationId = None

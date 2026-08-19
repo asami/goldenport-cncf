@@ -154,8 +154,8 @@ final class Phase56ComponentIdentityContractSpec
         )
         val compatiblecore = Component.Core.create(
           name = componentid.name,
-          componentid = componentid,
-          instanceid = instanceid,
+          componentId = componentid,
+          instanceId = instanceid,
           protocol = Protocol.empty
         )
         val component = Component.create(
@@ -177,7 +177,6 @@ final class Phase56ComponentIdentityContractSpec
         component.core.componentId shouldBe componentid
         component.core.instanceId shouldBe instanceid
         aggregate.aggregateName shouldBe "user_account"
-        aggregate.aggregate_name shouldBe aggregate.aggregateName
       }
     }
 

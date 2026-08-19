@@ -229,8 +229,8 @@ final class AggregateViewProjectionAlignmentSpec
     val componentid = ComponentId("org.goldenport.cncf.ProjectionAlignmentSpec")
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = protocol
     )
     val subsystem = TestComponentFactory.emptySubsystem("projection_alignment_spec")

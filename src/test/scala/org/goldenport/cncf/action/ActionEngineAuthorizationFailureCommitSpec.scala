@@ -162,19 +162,19 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
       core = RuntimeContext.core(
         name = "test-runtime-context",
         parent = None,
-        observabilityContext = _observability,
-        httpDriverOption = Some(_driver)
+        observabilitycontext = _observability,
+        httpdriveroption = Some(_driver)
       ),
-      unitOfWorkSupplier = () => _unit_of_work.getOrElse {
+      unitofworksupplier = () => _unit_of_work.getOrElse {
         throw new IllegalStateException("UnitOfWork has not been bound")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in NOOP spec")
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "test-runtime-context"
     )
 

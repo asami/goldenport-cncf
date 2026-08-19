@@ -70,8 +70,8 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers with G
       kind = ScopeKind.Runtime,
       name = "ping-resolver-spec",
       parent = None,
-      observabilityContext = execution.observability,
-      httpDriverOption = Some(httpdriver)
+      observabilitycontext = execution.observability,
+      httpdriveroption = Some(httpdriver)
     ).core
     val context = new GlobalRuntimeContext(
       core = core,

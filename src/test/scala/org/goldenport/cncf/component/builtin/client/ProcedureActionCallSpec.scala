@@ -180,27 +180,27 @@ class ProcedureActionCallSpec
       core = RuntimeContext.core(
         name = "procedure-action-call-spec-runtime",
         parent = None,
-        observabilityContext = _observability,
-        httpDriverOption = Some(_driver)
+        observabilitycontext = _observability,
+        httpdriveroption = Some(_driver)
       ),
-      unitOfWorkSupplier = () => {
+      unitofworksupplier = () => {
         unitOfWorkAccessCount += 1
         throw new UnsupportedOperationException("UnitOfWork must not be accessed")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] = {
           val _ = fa
           unitOfWorkAccessCount += 1
           throw new UnsupportedOperationException("UnitOfWorkInterpreter must not be used")
         }
       },
-      commitAction = _ => {
+      commitaction = _ => {
         commitCount += 1
       },
-      abortAction = _ => {
+      abortaction = _ => {
         abortCount += 1
       },
-      disposeAction = _ => {
+      disposeaction = _ => {
         disposeCount += 1
       },
       token = "procedure-action-call-spec-runtime-context"

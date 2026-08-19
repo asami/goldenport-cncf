@@ -219,8 +219,8 @@ final class EntityConcurrencyPolicySpec
     val componentid = org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentname)
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
     )
     component.initialize(

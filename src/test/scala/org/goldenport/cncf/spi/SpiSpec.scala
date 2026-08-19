@@ -1099,8 +1099,8 @@ final class SpiSpec
     val canonicalmetadata = metadata.map(_.copy(componentName = componentid.name, componentId = Some(componentid)))
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = canonicalmetadata.map(_.instanceId).getOrElse(ComponentInstanceId.default(componentid)),
+      componentId = componentid,
+      instanceId = canonicalmetadata.map(_.instanceId).getOrElse(ComponentInstanceId.default(componentid)),
       protocol = Protocol.empty
     )
     val init = ComponentInit(
@@ -1136,8 +1136,8 @@ final class SpiSpec
     val canonicalmetadata = metadata.map(_.copy(componentName = componentid.name, componentId = Some(componentid)))
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = canonicalmetadata.map(_.instanceId).getOrElse(ComponentInstanceId.default(componentid)),
+      componentId = componentid,
+      instanceId = canonicalmetadata.map(_.instanceId).getOrElse(ComponentInstanceId.default(componentid)),
       protocol = Protocol.empty
     )
     component.initialize(ComponentInit(
@@ -1160,8 +1160,8 @@ final class SpiSpec
     val canonicalmetadata = metadata.copy(componentName = logicalowner.name, componentId = Some(logicalowner))
     val core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId(componentid.name, metadata.instance),
+      componentId = componentid,
+      instanceId = ComponentInstanceId(componentid.name, metadata.instance),
       protocol = Protocol.empty
     )
     component.initialize(
@@ -1189,8 +1189,8 @@ final class SpiSpec
   ) extends Component with SpiProviderComponent {
     private val _canonical_core = Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty
     )
 

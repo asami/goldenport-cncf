@@ -198,8 +198,8 @@ final class ProcessExecutionJobCancellationSpec
       kind = ScopeKind.Runtime,
       name = "process-execution-job-cancellation-test",
       parent = None,
-      observabilityContext = base.observability,
-      processExecutionDriverOption = Some(driver)
+      observabilitycontext = base.observability,
+      processexecutiondriveroption = Some(driver)
     )
     base.withScope(scope)
   }

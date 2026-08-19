@@ -733,8 +733,8 @@ final class AssociationBindingWorkflowSpec
     }
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.AssociationBindingAdapterSpec",
-      componentid = ComponentId("org.goldenport.cncf.test.AssociationBindingAdapterSpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.AssociationBindingAdapterSpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.AssociationBindingAdapterSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.AssociationBindingAdapterSpec")),
       protocol = protocol
     )
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))

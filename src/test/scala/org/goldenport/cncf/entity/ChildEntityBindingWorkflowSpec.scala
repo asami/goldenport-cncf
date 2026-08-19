@@ -427,8 +427,8 @@ final class ChildEntityBindingWorkflowSpec
     }
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.ChildEntityBindingSpec",
-      componentid = ComponentId("org.goldenport.cncf.test.ChildEntityBindingSpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ChildEntityBindingSpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.ChildEntityBindingSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.ChildEntityBindingSpec")),
       protocol = protocol
     )
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))

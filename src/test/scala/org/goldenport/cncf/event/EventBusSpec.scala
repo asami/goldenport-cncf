@@ -226,7 +226,7 @@ final class EventBusSpec
           handler = new EventDispatchHandler {
             def dispatch(event: DomainEvent): Consequence[Unit] = {
               val _ = event
-              Consequence.failure("authorized dispatch was not used")
+              Consequence.notImplemented("authorized dispatch was not used")
             }
 
             override def dispatchAuthorized(

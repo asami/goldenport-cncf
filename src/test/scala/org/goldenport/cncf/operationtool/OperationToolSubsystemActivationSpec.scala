@@ -57,7 +57,7 @@ final class OperationToolSubsystemActivationSpec
         kind = ScopeKind.Subsystem,
         name = "operation_tool_runtime_factory",
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       )
 
       When("generic subsystem assembly completes")

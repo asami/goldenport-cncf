@@ -950,8 +950,8 @@ final class RuntimeRepositoryBootstrapDevelopmentAssemblyFactory extends Compone
     val componentid = ComponentId("org.goldenport.cncf.test.DevelopmentAssembly")
     Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty,
       factory = this
     )
@@ -971,8 +971,8 @@ final class RuntimeRepositoryBootstrapPolicyComponentDirFactory extends Componen
     val componentid = ComponentId("org.goldenport.cncf.test.PolicyComponentDir")
     Component.Core.create(
       name = componentid.name,
-      componentid = componentid,
-      instanceid = ComponentInstanceId.default(componentid),
+      componentId = componentid,
+      instanceId = ComponentInstanceId.default(componentid),
       protocol = Protocol.empty,
       factory = this
     )

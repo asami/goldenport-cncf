@@ -328,20 +328,20 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       core = RuntimeContext.core(
         name = "aggregate-view-bootstrap-runtime",
         parent = None,
-        observabilityContext = observability,
+        observabilitycontext = observability,
         datastore = Some(DataStoreContext(datastorespace)),
         entitystore = Some(EntityStoreContext(entitystorespace))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] = {
           val _ = fa
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in this spec")
         }
       },
-      commitAction = _.commit(),
-      abortAction = _.rollback(),
-      disposeAction = _ => (),
+      commitaction = _.commit(),
+      abortaction = _.rollback(),
+      disposeaction = _ => (),
       token = "aggregate-view-bootstrap-runtime"
     )
     context

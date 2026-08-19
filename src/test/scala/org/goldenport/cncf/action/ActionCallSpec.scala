@@ -362,17 +362,17 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
         datastore = Some(DataStoreContext(datastorespace)),
         entitystore = Some(EntityStoreContext(entitystorespace))
       ),
-      unitOfWorkSupplier = () => new org.goldenport.cncf.unitofwork.UnitOfWork(context),
-      unitOfWorkInterpreterFn = interpreter.getOrElse(new (org.goldenport.cncf.unitofwork.UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new org.goldenport.cncf.unitofwork.UnitOfWork(context),
+      unitofworkinterpreterfn = interpreter.getOrElse(new (org.goldenport.cncf.unitofwork.UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: org.goldenport.cncf.unitofwork.UnitOfWorkOp[A]): Consequence[A] =
           if (realInterpreter)
             new org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter(new org.goldenport.cncf.unitofwork.UnitOfWork(context)).interpret(fa)
           else
             throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
       }),
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "action-call-spec-runtime"
     )
     context match {

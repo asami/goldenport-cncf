@@ -544,17 +544,17 @@ class ClientAdminSystemPingSpec
     }
     new RuntimeContext(
       core = _runtime_core("client-admin-system-ping-spec-runtime", driver, observability),
-      unitOfWorkSupplier = () => uow,
-      unitOfWorkInterpreterFn = idinterpreter,
-      commitAction = uowArg => {
+      unitofworksupplier = () => uow,
+      unitofworkinterpreterfn = idinterpreter,
+      commitaction = uowArg => {
         val _ = uowArg.commit()
         ()
       },
-      abortAction = uowArg => {
+      abortaction = uowArg => {
         val _ = uowArg.rollback()
         ()
       },
-      disposeAction = _ => (),
+      disposeaction = _ => (),
       token = "client-admin-system-ping-spec-runtime"
     )
   }
@@ -569,11 +569,11 @@ class ClientAdminSystemPingSpec
     }
     new RuntimeContext(
       core = _runtime_core("client-admin-system-ping-spec-bootstrap-runtime", driver, observability),
-      unitOfWorkSupplier = () => throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork"),
-      unitOfWorkInterpreterFn = idinterpreter,
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      unitofworksupplier = () => throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork"),
+      unitofworkinterpreterfn = idinterpreter,
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "client-admin-system-ping-spec-bootstrap-runtime"
     )
   }
@@ -586,8 +586,8 @@ class ClientAdminSystemPingSpec
     RuntimeContext.core(
       name = name,
       parent = None,
-      observabilityContext = observability,
-      httpDriverOption = Some(driver)
+      observabilitycontext = observability,
+      httpdriveroption = Some(driver)
     )
 
 }

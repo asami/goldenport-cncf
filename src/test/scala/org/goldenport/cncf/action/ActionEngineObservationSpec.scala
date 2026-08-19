@@ -185,19 +185,19 @@ class ActionEngineObservationSpec
       core = RuntimeContext.core(
         name = "test-runtime-context",
         parent = None,
-        observabilityContext = observability,
-        httpDriverOption = Some(driver)
+        observabilitycontext = observability,
+        httpdriveroption = Some(driver)
       ),
-      unitOfWorkSupplier = () => _unit_of_work.getOrElse {
+      unitofworksupplier = () => _unit_of_work.getOrElse {
         throw new IllegalStateException("UnitOfWork has not been bound")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in observation spec")
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "test-runtime-context"
     )
 

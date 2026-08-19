@@ -483,8 +483,8 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
     }
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.OperationDefinitionSemanticsSpec",
-      componentid = ComponentId("org.goldenport.cncf.test.OperationDefinitionSemanticsSpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.OperationDefinitionSemanticsSpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.OperationDefinitionSemanticsSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.OperationDefinitionSemanticsSpec")),
       protocol = protocol
     )
     val subsystem = TestComponentFactory.emptySubsystem("operation_definition_semantics_spec")

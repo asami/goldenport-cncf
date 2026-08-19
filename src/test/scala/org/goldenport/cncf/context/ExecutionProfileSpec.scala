@@ -701,16 +701,16 @@ final class ExecutionProfileSpec
       core = RuntimeContext.core(
         name = "execution-profile-spec",
         parent = Some(global),
-        observabilityContext = base.observability
+        observabilitycontext = base.observability
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           Consequence.serviceUnavailable("not used by execution-profile spec")
       },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "execution-profile-spec",
       operationMode = config.operationMode
     )

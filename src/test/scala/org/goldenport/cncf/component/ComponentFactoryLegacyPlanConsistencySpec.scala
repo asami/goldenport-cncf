@@ -51,8 +51,8 @@ final class ComponentFactoryLegacyPlanConsistencySpec
     val component = new Component() {}
     val core = Component.Core.create(
       name = "org.goldenport.cncf.test.LegacyPlanConsistencySpec",
-      componentid = ComponentId("org.goldenport.cncf.test.LegacyPlanConsistencySpec"),
-      instanceid = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.LegacyPlanConsistencySpec")),
+      componentId = ComponentId("org.goldenport.cncf.test.LegacyPlanConsistencySpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.LegacyPlanConsistencySpec")),
       protocol = Protocol.empty
     )
     val params = ComponentInit(

@@ -465,19 +465,19 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       core = RuntimeContext.core(
         name = "job-entity-sync-failure-test",
         parent = None,
-        observabilityContext = base.observability,
-        httpDriverOption = Some(FakeHttpDriver.okText("nop")),
+        observabilitycontext = base.observability,
+        httpdriveroption = Some(FakeHttpDriver.okText("nop")),
         datastore = Some(DataStoreContext(new DataStoreSpace())),
         entitystore = Some(EntityStoreContext(new EntityStoreSpace()))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(ctx),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+      unitofworksupplier = () => new UnitOfWork(ctx),
+      unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
-          Consequence.failure("unitOfWorkInterpreter is not used in this fixture")
+          Consequence.notImplemented("unitOfWorkInterpreter is not used in this fixture")
       },
-      commitAction = uow => { val _ = uow.commit(); () },
-      abortAction = uow => { val _ = uow.rollback(); () },
-      disposeAction = _ => (),
+      commitaction = uow => { val _ = uow.commit(); () },
+      abortaction = uow => { val _ = uow.rollback(); () },
+      disposeaction = _ => (),
       token = "job-entity-sync-failure-test"
     )
     ctx

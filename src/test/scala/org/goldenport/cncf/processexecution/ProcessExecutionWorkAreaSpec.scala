@@ -237,8 +237,8 @@ final class ProcessExecutionWorkAreaSpec
       kind = ScopeKind.Runtime,
       name = "process-workarea-tree-test",
       parent = None,
-      observabilityContext = base.observability,
-      processExecutionDriverOption = Some(driver)
+      observabilitycontext = base.observability,
+      processexecutiondriveroption = Some(driver)
     )
     base.withScope(scope)
   }

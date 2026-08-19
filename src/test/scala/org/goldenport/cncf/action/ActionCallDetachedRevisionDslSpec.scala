@@ -296,11 +296,11 @@ final class ActionCallDetachedRevisionDslSpec
         datastore = Some(DataStoreContext(datastorespace)),
         entitystore = Some(EntityStoreContext(entitystorespace))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context),
-      unitOfWorkInterpreterFn = capture.interpreter,
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      unitofworksupplier = () => new UnitOfWork(context),
+      unitofworkinterpreterfn = capture.interpreter,
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "action-call-detached-revision"
     )
     val action = new CommandAction {

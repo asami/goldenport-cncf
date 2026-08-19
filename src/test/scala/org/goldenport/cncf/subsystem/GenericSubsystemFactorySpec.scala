@@ -1288,7 +1288,7 @@ final class GenericSubsystemFactorySpec
             kind = ScopeKind.Subsystem,
             name = "textus-identity",
             parent = None,
-            observabilityContext = ExecutionContext.create().observability
+            observabilitycontext = ExecutionContext.create().observability
           ),
           configuration = configuration
         )

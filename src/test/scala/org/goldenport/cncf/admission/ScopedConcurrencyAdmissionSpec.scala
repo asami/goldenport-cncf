@@ -55,8 +55,8 @@ final class ScopedConcurrencyAdmissionSpec extends AnyWordSpec with Matchers wit
         kind = ScopeKind.Runtime,
         name = "runtime",
         parent = None,
-        observabilityContext = ExecutionContext.create().observability,
-        scopedConcurrencyAdmissionOption = Some(admission)
+        observabilitycontext = ExecutionContext.create().observability,
+        scopedconcurrencyadmissionoption = Some(admission)
       )
       val component = runtime.createChildScope(ScopeKind.Component, "textus-ai")
 
@@ -87,7 +87,7 @@ final class ScopedConcurrencyAdmissionSpec extends AnyWordSpec with Matchers wit
         kind = ScopeKind.Component,
         name = "component",
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       )
 
       When("the component tries to use a scoped permit")
