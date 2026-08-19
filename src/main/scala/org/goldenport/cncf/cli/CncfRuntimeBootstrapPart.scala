@@ -223,7 +223,7 @@ private[cli] trait CncfRuntimeBootstrapPart {
         kind = ScopeKind.Subsystem,
         name = DefaultSubsystemFactory.subsystemName,
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       )
     }
 

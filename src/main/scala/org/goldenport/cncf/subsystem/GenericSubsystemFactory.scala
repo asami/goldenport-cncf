@@ -379,7 +379,7 @@ object GenericSubsystemFactory {
             kind = ScopeKind.Subsystem,
             name = subsystemName,
             parent = None,
-            observabilityContext = ExecutionContext.create().observability
+            observabilitycontext = ExecutionContext.create().observability
           ),
           mode.flatMap(RunMode.from),
           configuration,
@@ -406,7 +406,7 @@ object GenericSubsystemFactory {
         kind = ScopeKind.Subsystem,
         name = admitteddescriptor.subsystemName,
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       ),
       mode = mode.flatMap(RunMode.from),
       configuration = configuration
@@ -460,7 +460,7 @@ object GenericSubsystemFactory {
                 kind = ScopeKind.Subsystem,
                 name = subsystemname,
                 parent = None,
-                observabilityContext = context.observabilityContext
+                observabilitycontext = context.observabilityContext
               )
           }
         ),
@@ -622,7 +622,7 @@ object GenericSubsystemFactory {
                 kind = ScopeKind.Subsystem,
                 name = admitteddescriptor.subsystemName,
                 parent = None,
-                observabilityContext = context.observabilityContext
+                observabilitycontext = context.observabilityContext
               )
           }
         ),

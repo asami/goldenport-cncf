@@ -105,7 +105,7 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
       kind = kind,
       name = name,
       parent = Some(this),
-      observabilityContext = observabilityContext.createChild(this, kind, name)
+      observabilitycontext = observabilityContext.createChild(this, kind, name)
     )
 
   protected def observability_Context: ObservabilityContext =
@@ -202,12 +202,12 @@ object ScopeContext {
           kind = other.kind,
           name = other.name,
           parent = Some(other),
-          observabilityContext = other.observabilityContext.createChild(
+          observabilitycontext = other.observabilityContext.createChild(
             other,
             other.kind,
             other.name
           ),
-          operationEvaluationCrossSinkPolicyOption = Some(policy)
+          operationevaluationcrosssinkpolicyoption = Some(policy)
         )
     }
 

@@ -147,16 +147,16 @@ object ObservabilityScopeDefaults {
     kind = ScopeKind.Subsystem,
     name = "Global",
     parent = None,
-    observabilityContext = _context,
-    httpDriverOption = None
+    observabilitycontext = _context,
+    httpdriveroption = None
   )
 
   val Bootstrap: ScopeContext = ScopeContext(
     kind = ScopeKind.Subsystem,
     name = "Bootstrap",
     parent = None,
-    observabilityContext = _bootstrap_context,
-    httpDriverOption = None
+    observabilitycontext = _bootstrap_context,
+    httpdriveroption = None
   )
 
   // This Bootstrap scope is permanent: bootstrap-phase logs remain buffered/replayed through GlobalObservability

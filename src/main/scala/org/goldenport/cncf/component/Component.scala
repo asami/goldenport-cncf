@@ -489,7 +489,7 @@ abstract class Component() extends Component.Core.Holder {
       kind = ScopeKind.Runtime,
       name = "runtime",
       parent = None,
-      observabilityContext = ExecutionContext.create().observability
+      observabilitycontext = ExecutionContext.create().observability
     )
   }
 

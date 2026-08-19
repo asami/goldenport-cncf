@@ -32,7 +32,7 @@ object TextusIdentitySubsystemFactory {
         kind = ScopeKind.Subsystem,
         name = subsystemName,
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       ),
       mode = mode.flatMap(RunMode.from),
       configuration = configuration

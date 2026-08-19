@@ -116,7 +116,7 @@ final class Http4sHttpServer(
       kind = ScopeKind.Subsystem,
       name = "cncf",
       parent = None,
-      observabilityContext = ExecutionContext.create().observability
+      observabilitycontext = ExecutionContext.create().observability
     )
     scope.observe_infoC(
       message = "started",

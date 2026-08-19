@@ -617,7 +617,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
           bindings = bindings,
           admittedprofiles = Some(admitted)
         )
-      case None => Consequence.success(preflight)
+      case _ => Consequence.success(preflight)
     }
 
   private[cli] def _fixed_profile_for_launch(
@@ -935,7 +935,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
         kind = ScopeKind.Subsystem,
         name = DefaultSubsystemFactory.subsystemName,
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       )
     }
 

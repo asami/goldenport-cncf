@@ -29,7 +29,7 @@ final class BlobUrnResolver extends TextusUrnResolver {
           BlobRepository.CollectionId,
           urn.value,
           Vector("shortid"),
-          includeEntityIdEntropy = true,
+          includeentityidentropy = true,
           EntityIdentityScope.CurrentContext
         )
         .map(_.map(id => UrnResolution(urn, BlobRepository.CollectionId, id)))

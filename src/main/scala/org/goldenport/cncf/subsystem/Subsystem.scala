@@ -707,8 +707,8 @@ final class Subsystem(
           kind = ScopeKind.Subsystem,
           name = name,
           parent = None,
-          observabilityContext = ExecutionContext.create().observability,
-          operationEvaluationCrossSinkPolicyOption =
+          observabilitycontext = ExecutionContext.create().observability,
+          operationevaluationcrosssinkpolicyoption =
             Some(_operation_evaluation_cross_sink_policy)
         )
       }
@@ -1825,11 +1825,11 @@ final class Subsystem(
   ): ExecutionContext = {
     val runtime = new RuntimeContext(
       core = ctx.runtime.core,
-      unitOfWorkSupplier = () => ctx.unitOfWork,
-      unitOfWorkInterpreterFn = ctx.runtime.unitOfWorkInterpreter,
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
+      unitofworksupplier = () => ctx.unitOfWork,
+      unitofworkinterpreterfn = ctx.runtime.unitOfWorkInterpreter,
+      commitaction = _ => (),
+      abortaction = _ => (),
+      disposeaction = _ => (),
       token = "operation-authorization",
       context = ctx.runtime.context,
       operationMode = policy.operationMode,

@@ -95,7 +95,7 @@ object DefaultSubsystemFactory {
         kind = ScopeKind.Subsystem,
         name = _subsystem_name,
         parent = None,
-        observabilityContext = ExecutionContext.create().observability
+        observabilitycontext = ExecutionContext.create().observability
       ),
       mode = mode.flatMap(RunMode.from),
       configuration = configuration
@@ -256,7 +256,7 @@ object DefaultSubsystemFactory {
                 kind = ScopeKind.Subsystem,
                 name = _subsystem_name,
                 parent = None,
-                observabilityContext = context.observabilityContext
+                observabilitycontext = context.observabilityContext
               )
           }
         ),

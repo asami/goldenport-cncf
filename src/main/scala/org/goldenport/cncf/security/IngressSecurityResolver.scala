@@ -561,14 +561,14 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
             datastore = Some(DataStoreContext(global.config.dataStoreSpace)),
             entitystore = Some(EntityStoreContext(global.config.entityStoreSpace))
           ),
-          unitOfWorkSupplier = () => new UnitOfWork(context),
-          unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+          unitofworksupplier = () => new UnitOfWork(context),
+          unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
             def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
               new UnitOfWorkInterpreter(new UnitOfWork(context)).interpret(fa)
           },
-          commitAction = _ => (),
-          abortAction = _ => (),
-          disposeAction = _ => (),
+          commitaction = _ => (),
+          abortaction = _ => (),
+          disposeaction = _ => (),
           token = "ingress-security",
           context = _runtime_context_from_config(global),
           operationMode = RuntimeConfig.defaultOperationMode

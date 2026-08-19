@@ -109,7 +109,7 @@ class ActionEngine(
               kind = ScopeKind.Action,
               name = call.action.name,
               parent = None,
-              observabilityContext = ec.observability
+              observabilitycontext = ec.observability
             ),
             http = None,
             operation = Some(OperationContext(call.action.name)),
@@ -137,7 +137,7 @@ class ActionEngine(
               kind = ScopeKind.Action,
               name = call.action.name,
               parent = None,
-              observabilityContext = ec.observability
+              observabilitycontext = ec.observability
             ),
             http = None,
             operation = Some(OperationContext(call.action.name)),
@@ -188,7 +188,7 @@ class ActionEngine(
                       kind = ScopeKind.Action,
                       name = call.action.name,
                       parent = None,
-                      observabilityContext = ec.observability
+                      observabilitycontext = ec.observability
                     ),
                     http = None,
                     operation = Some(OperationContext(call.action.name)),
@@ -261,8 +261,8 @@ class ActionEngine(
                     .map(_.value)
                 )
                 ec.runtime.noteExecutionDiagnostics(
-                  traceId = Some(ec.observability.traceId.value),
-                  executionId = ec.observability.correlationId.map(_.value),
+                  traceid = Some(ec.observability.traceId.value),
+                  executionid = ec.observability.correlationId.map(_.value),
                   failure = effectiveoutcome.flatMap {
                     case Left(conclusion) => Some(conclusion.display)
                     case Right(_) => None
@@ -521,12 +521,12 @@ class ActionEngine(
         kind = ScopeKind.Action,
         name = name,
         parent = None,
-        observabilityContext = org.goldenport.cncf.context.ObservabilityContext(
+        observabilitycontext = org.goldenport.cncf.context.ObservabilityContext(
           traceId = org.goldenport.cncf.context.TraceId("action", name),
           spanId = None,
           correlationId = None
         ),
-        httpDriverOption = None
+        httpdriveroption = None
       ))
       if (ObservabilityEngine.shouldEmit(level, scope, "org.goldenport.cncf.action", "ActionEngine", backend)) {
         val prefix = s"event=$level scope=Action name=$name "
@@ -578,8 +578,8 @@ class ActionEngine(
           ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value)
         )
         ec.runtime.noteExecutionDiagnostics(
-          traceId = Some(ec.observability.traceId.value),
-          executionId = ec.observability.correlationId.map(_.value),
+          traceid = Some(ec.observability.traceId.value),
+          executionid = ec.observability.correlationId.map(_.value),
           failure = Some(conclusion.display)
         )
         if (ec.framework.inlineCallTree) {

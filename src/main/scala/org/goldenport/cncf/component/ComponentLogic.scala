@@ -736,8 +736,8 @@ case class ComponentLogic(
     val core = RuntimeContext.core(
       name = "component-runtime",
       parent = Some(parent),
-      observabilityContext = parent.observabilityContext,
-      httpDriverOption = Some(driver),
+      observabilitycontext = parent.observabilityContext,
+      httpdriveroption = Some(driver),
       datastore = Some(DataStoreContext(parent.dataStoreSpace)),
       entitystore = Some(EntityStoreContext(parent.entityStoreSpace)),
       entityspace = Some(EntitySpaceContext(component.entitySpace))
@@ -748,17 +748,17 @@ case class ComponentLogic(
     }
     val runtime = new RuntimeContext(
       core = core,
-      unitOfWorkSupplier = uowsupplier,
-      unitOfWorkInterpreterFn = consequenceinterpreter,
-      commitAction = commituow => {
+      unitofworksupplier = uowsupplier,
+      unitofworkinterpreterfn = consequenceinterpreter,
+      commitaction = commituow => {
         val _ = commituow.commit()
         ()
       },
-      abortAction = abortuow => {
+      abortaction = abortuow => {
         val _ = abortuow.rollback()
         ()
       },
-      disposeAction = disposeuow => {
+      disposeaction = disposeuow => {
         val _ = disposeuow.dispose()
         ()
       },

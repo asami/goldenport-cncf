@@ -1001,8 +1001,8 @@ object ExecutionContext {
       core = RuntimeContext.core(
         name = "execution-context-test",
         parent = None,
-        observabilityContext = observability,
-        httpDriverOption = Some(driver),
+        observabilitycontext = observability,
+        httpdriveroption = Some(driver),
         datastore = Some(DataStoreContext(DataStoreSpace.default())),
         entitystore = Some(
           EntityStoreContext(
@@ -1016,17 +1016,17 @@ object ExecutionContext {
         ),
         entityspace = Some(EntitySpaceContext(new EntitySpace()))
       ),
-      unitOfWorkSupplier = () => new UnitOfWork(context()),
-      unitOfWorkInterpreterFn = consequenceinterpreter,
-      commitAction = uow => {
+      unitofworksupplier = () => new UnitOfWork(context()),
+      unitofworkinterpreterfn = consequenceinterpreter,
+      commitaction = uow => {
         val _ = uow.commit()
         ()
       },
-      abortAction = uow => {
+      abortaction = uow => {
         val _ = uow.rollback()
         ()
       },
-      disposeAction = _ => (),
+      disposeaction = _ => (),
       token = "execution-context-test"
     )
   }

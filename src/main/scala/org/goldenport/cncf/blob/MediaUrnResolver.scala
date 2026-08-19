@@ -28,7 +28,7 @@ final class MediaUrnResolver(mediaKind: MediaKind) extends TextusUrnResolver {
           collection,
           urn.value,
           Vector("shortid"),
-          includeEntityIdEntropy = true,
+          includeentityidentropy = true,
           EntityIdentityScope.CurrentContext
         )
         .map(_.map(id => UrnResolution(urn, collection, id)))
