@@ -20,7 +20,7 @@ Repository: /Users/asami/src/dev2025/cloud-native-component-framework
 | ID | Status | Scope | Evidence | Disposition |
 | --- | --- | --- | --- | --- |
 | HYG-H57-DEPRECATION-001 | RESOLVED | Production deprecated named-argument labels | Invocations `13467-20260819T030205Z`, `23484-20260819T033031Z` | Mechanical canonical-label migration; Batch 1 complete |
-| HYG-H57-DEPRECATION-002 | READY | 14 mechanically equivalent production deprecated API callers | Invocation `29032-20260819T034346Z` | Frozen ready Batch 2; `URL` and `HttpRequest.url` moved to DEV candidates |
+| HYG-H57-DEPRECATION-002 | RESOLVED | 14 mechanically equivalent production deprecated API callers | Compile `66002-20260819T052726Z`; full test `67311-20260819T053029Z` | Batch 2 complete; `URL` and `HttpRequest.url` remain excluded |
 | HYG-H57-DEPRECATION-003 | BLOCKED | Test-source deprecation warnings | Invocation `16358-20260819T021219Z` | Await exact test-source location inventory; Batch 3 |
 | HYG-H57-COMPILER-WARNING-004 | BLOCKED | Non-deprecation compiler warnings | Invocation `15277-20260819T020915Z` | Await safety-case classification; Compiler-warning batch |
 
@@ -73,6 +73,12 @@ Hygiene Triage: HANDED_OFF
 Hygiene ID: HYG-H57-DEPRECATION-002
 Handoff Journal: cloud-native-component-framework:docs/journal/2026/08/2026-08-19-deprecation-production-semantic-api-hygiene-batch-handoff.md
 Handed Off On: 2026-08-19
+
+Hygiene Status: RESOLVED
+Resolution Batch: cloud-native-component-framework:docs/journal/2026/08/2026-08-19-deprecation-production-semantic-api-hygiene-batch-handoff.md
+Validated On: 2026-08-19
+Validation Evidence: detailed compile `66002-20260819T052726Z`; focused review `CLEAN`; full test `67311-20260819T053029Z` (3,262 succeeded, 0 failed)
+Acceptance Commit: reported externally after commit execution
 
 ## Development Candidates — HYG-H57-DEPRECATION-002 exclusions
 
