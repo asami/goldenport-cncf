@@ -100,6 +100,7 @@ object ResolvedComponentResources {
   private val _artifact_coordinate_pattern = "[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._-]*".r
   private val _source_pattern = "[A-Za-z][A-Za-z0-9+._-]*:[A-Za-z0-9][A-Za-z0-9+._/:=-]*".r
   private val _role_pattern = "[A-Za-z][A-Za-z0-9._-]*".r
+  private val _member_integrity_states = Set("verified", "unverified")
   private val _terminal = Set(
     ComponentResourceAvailability.Restricted,
     ComponentResourceAvailability.Stale,
@@ -191,6 +192,7 @@ object ResolvedComponentResources {
     for {
       _ <- Either.cond(member.componentId != parent.componentId, (), "composition member must not repeat the parent ComponentId")
       _ <- _safe_text(member.logicalRelease, s"member ${member.componentId.name}.logicalRelease")
+      _ <- Either.cond(_member_integrity_states(member.integrity.state), (), s"member ${member.componentId.name}.integrity.state must be verified or unverified")
       _ <- _safe_role(member.role, s"member ${member.componentId.name}.role")
       _ <- _logical_resource(member.logicalResource, s"member ${member.componentId.name}.logicalResource")
       _ <- _safe_path(member.logicalPath, s"member ${member.componentId.name}.logicalPath")
@@ -247,7 +249,7 @@ object ResolvedComponentResources {
   ): (ResolvedComponentResource, Vector[ComponentResourceDiagnostic]) = {
     val source = ComponentResourceSourceKind.values.toVector.sortBy(_.precedence).flatMap { kind =>
       val available = candidates.filter(x => x.provenance.sourceKind == kind && x.availability != ComponentResourceAvailability.Missing && x.availability != ComponentResourceAvailability.Unavailable)
-      Option.when(available.nonEmpty)(kind -> available.sortBy(_candidate_key))
+      Option.when(available.nonEmpty)(kind -> available.sortBy(x => (!_terminal(x.availability), _candidate_key(x))))
     }.headOption
     source match {
       case Some((kind, selected +: rest)) =>

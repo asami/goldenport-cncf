@@ -2,6 +2,7 @@ package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component._
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -77,6 +78,7 @@ final class ResolvedComponentResourcesSpec
       val entries = _source_order.flatMap(sourcekind => _component_ids.map(_entry(_, sourcekind)))
       val forward = _evidence(entries)
       val permuted = _evidence(entries.reverse)
+      val expected = _component_ids.map(_ -> ComponentResourceSourceKind.EmbeddedPrimary).toMap
 
       When("the resolver receives the candidates in forward and reverse permutations")
       val forwardresolved = _resolved(ResolvedComponentResources.resolveC(composition, forward))
@@ -87,6 +89,12 @@ final class ResolvedComponentResourcesSpec
       forwardresolved.resources.map(entry => entry.logicalIdentity.componentId -> entry.provenance.sourceKind).toMap shouldBe
         permutedresolved.resources.map(entry => entry.logicalIdentity.componentId -> entry.provenance.sourceKind).toMap
       forwardresolved.resources.foreach(_.provenance.sourceKind shouldBe ComponentResourceSourceKind.EmbeddedPrimary)
+      val property = Prop.forAll(Gen.choose(1, entries.size - 1)) { rotation =>
+        val rotated = _evidence(entries.drop(rotation) ++ entries.take(rotation))
+        _resolved(ResolvedComponentResources.resolveC(composition, rotated)).resources.map(entry => entry.logicalIdentity.componentId -> entry.provenance.sourceKind).toMap == expected
+      }
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(32), property)
+      checked.passed shouldBe true
     }
 
     "which selects each registered source kind when that kind is isolated" in {
@@ -214,6 +222,25 @@ final class ResolvedComponentResourcesSpec
       }
     }
 
+    "which a terminal candidate wins over Available evidence from the same source" in {
+      Given("an available and a stale candidate for one child from the same expanded-CAR source")
+      val composition = _composition(_members.take(1))
+      val evidence = _evidence(Vector(
+        _entry(_parent_id, ComponentResourceSourceKind.EmbeddedPrimary),
+        _entry(_documentation_id, ComponentResourceSourceKind.ExpandedCar),
+        _entry(_documentation_id, ComponentResourceSourceKind.ExpandedCar, ComponentResourceAvailability.Stale)
+      ))
+
+      When("the resolver selects evidence from the shared source")
+      val resolved = _resolved(ResolvedComponentResources.resolveC(composition, evidence))
+      val documentation = resolved.resources.find(_.logicalIdentity.componentId == _documentation_id).get
+
+      Then("the terminal evidence is selected and retained as a Terminal diagnostic")
+      documentation.availability shouldBe ComponentResourceAvailability.Stale
+      documentation.provenance.sourceKind shouldBe ComponentResourceSourceKind.ExpandedCar
+      resolved.diagnostics.filter(_.kind == ComponentResourceDiagnosticKind.Terminal).map(_.sourceKind) should contain only Some(ComponentResourceSourceKind.ExpandedCar)
+    }
+
     "which orthogonal outcomes remain distinct in selected evidence" in {
       Given("an available resource with unverified integrity and denied authorization")
       val composition = _composition(_members.take(1))
@@ -309,6 +336,19 @@ final class ResolvedComponentResourcesSpec
       val result = ResolvedComponentResources.resolveC(composition, _evidence(Vector.empty))
 
       Then("the duplicate logical resource is rejected before evidence resolution")
+      result.toOption shouldBe None
+    }
+
+    "which rejects an invalid integrity state supplied without codec decoding" in {
+      Given("a direct composition whose child integrity state is stale")
+      val composition = _composition(Vector(
+        _member(_documentation_id, "Documentation", "parent-documentation-source", "documentation-guide").copy(integrity = ComponentSubcomponentState("stale"))
+      ))
+
+      When("the resolver receives the public composition value")
+      val result = ResolvedComponentResources.resolveC(composition, _evidence(Vector.empty))
+
+      Then("the integrity state is rejected before evidence resolution")
       result.toOption shouldBe None
     }
   }

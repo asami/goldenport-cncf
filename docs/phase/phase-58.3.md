@@ -1,6 +1,6 @@
 # Phase 58.3 - Resource Resolution, Activation Boundary, and Provenance
 
-status=in_progress
+status=done
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.2](phase-58.2.md)
 successor=[Phase 58.4](phase-58.4.md)
@@ -41,6 +41,21 @@ Every resolved resource retains logical identity and physical provenance;
 availability and integrity outcomes remain distinct; no lookup activates a
 child or deploys an external-platform artifact. Phase 58.4 consumes this API
 and its deterministic fixture matrix.
+
+## Release Evidence
+
+RSC-04 was accepted in Step commit
+`995e82fc4e65b6cb0437a617b607bc0dbb28dcb4` (`Implement RSC-04 component resource
+resolution`). The full Phase review, performed by Terra xhigh, returned
+`CPB-P58.3-001` (terminal same-source selection), `CPB-P58.3-002` (direct
+integrity state validation), and `CPB-P58.3-003` (active ScalaCheck property
+coverage). One Closure Fix Batch repaired all three, and focused re-review
+returned `SEALED_PASS`. The accepted post-fix focused accumulator
+`45210-20260820T201957Z` covered `ComponentSubcomponentCompositionCodecSpec`
+and `ResolvedComponentResourcesSpec`: 48 succeeded, 0 failed, 2 suites.
+The frozen-tree `sbt --batch test` gate remains pending and is run by the Phase
+release Commit Manifest; this page is committed as DONE only if that gate and
+the release commit succeed.
 
 ## Non-Goals
 
