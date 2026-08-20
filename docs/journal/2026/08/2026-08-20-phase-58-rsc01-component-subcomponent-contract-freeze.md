@@ -1,7 +1,8 @@
 # Phase 58 RSC-01 Component/Subcomponent Contract Freeze
 
-status=recorded, pending parent review
+status=closed
 date=2026-08-20
+closed_at=2026-08-20
 phase=[Phase 58](../../../phase/phase-58.md)
 step=RSC01-A
 slice=RSC01-A1-owner-inventory-and-reconciliation
@@ -162,6 +163,43 @@ registered identity.
 The separate ledgers are unchanged: `HYG-P58-001` remains OPEN / nonblocking
 for later terminology normalization, and the Development Candidate ledger
 remains None beyond the already authorized Phase 58.1 through Phase 58.9
-series. No new out-of-scope issue was found or implemented. The Phase remains
-`status=in_progress` and stops before Phase 58.1; review, validation, commit,
-and transition decisions remain parent-owned.
+series. No new out-of-scope issue was found or implemented.
+
+## Phase Closure Evidence
+
+RSC-01 was accepted in three Step commits:
+
+- split delivery plan: `308fdd6d830c9aa1fdc8e1dcb6421e1f6ec0d57e`;
+- RSC01-A architecture and owner freeze:
+  `46f276fadaaef73495b9796153f656fe6d970e53`; and
+- RSC01-B acceptance identity registry:
+  `5a850db392471374379b89cb95972e07536f0139`.
+
+The one mandatory Phase review covered the exact range
+`c9b39e57f249b610d7fdcd31f7ae7641b448e4d3..5a850db392471374379b89cb95972e07536f0139`
+with binary-diff SHA-256
+`d94e14551580763f61e0e056f53c3dc81e6038dc741fa08047615a90f249c9e1`
+and returned PASS with no current blocker.
+
+The first final-validation attempt exposed a build bootstrap constraint rather
+than an RSC-01 design defect: released Cozy evidence required the new mutable
+CNCF/Cozy development pair to be pre-registered. The user approved a bounded
+correction in which persistent compatibility evidence remains immutable-only,
+an explicit mutable pair is admitted only for development, executing Cozy must
+still equal the selected generator, and release remains restricted to an exact
+proven immutable pair. Cozy commit
+`44a26c8194ff8668503cabd37c95acd7f240dc32` records that contract. Its
+compatibility specs passed 28/28, its directly affected package boundary
+passed 100/100, and local-only `publishLocal` invocation
+`45650-20260820T040351Z` installed `0.3.2-SNAPSHOT` without remote publication.
+
+Final CNCF invocation `46026-20260820T040438Z` then selected CNCF
+`0.5.3-SNAPSHOT` and Cozy `0.3.2-SNAPSHOT`, emitted
+`MutableDevelopmentPairAccepted`, completed 444 suites, and passed 3,262 tests
+with no failure; 13 were canceled, 1 ignored, and 46 pending. A supplemental
+focused release-gate review covered only this post-mandatory-review Cozy
+prerequisite and CNCF build coordinate and returned PASS. It did not repeat or
+replace the sealed mandatory Phase review.
+
+Phase 58 is closed on this evidence. Phase 58.1 remains planned and unstarted;
+no successor implementation was performed.

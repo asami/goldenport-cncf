@@ -1,8 +1,9 @@
 # Phase 58 - Component and SubComponent Contract Freeze
 
-status=in_progress
+status=closed
 planned_at=2026-07-31
 split_approved_at=2026-08-20
+closed_at=2026-08-20
 split_decision=D-58-SPLIT
 depends_on=[Phase 57.5](phase-57.5.md)
 successor=[Phase 58.1](phase-58.1.md)
@@ -95,14 +96,38 @@ RSC09, including the owner Phase, repository, future path, suite or scripted
 identity, scenario IDs, shared Component/profile identities, invariant
 traceability, and RED-to-GREEN protocol. The registry creates no executable
 tests and makes no red-build claim; each successor must materialize its exact
-identity before its first production implementation edit. Phase 58 remains
-`status=in_progress` and stops before Phase 58.1 starts.
+identity before its first production implementation edit. Phase 58 is closed
+and stops before Phase 58.1 starts.
 
 ## Closure
 
-RSC-01 closes only when its proposal, inventory, ownership map, conflicts, and
-failing-first executable acceptance identities are recorded. Its reviewed
-handoff is the sole design input for Phase 58.1.
+RSC-01 closed on 2026-08-20 after its proposal, inventory, ownership map,
+conflicts, and failing-first executable acceptance identities were recorded in
+three accepted Steps:
+
+- split delivery plan: `308fdd6d830c9aa1fdc8e1dcb6421e1f6ec0d57e`;
+- RSC01-A architecture and owner freeze:
+  `46f276fadaaef73495b9796153f656fe6d970e53`; and
+- RSC01-B acceptance identity registry:
+  `5a850db392471374379b89cb95972e07536f0139`.
+
+The mandatory Phase review covered
+`c9b39e57f249b610d7fdcd31f7ae7641b448e4d3..5a850db392471374379b89cb95972e07536f0139`
+with binary-diff SHA-256
+`d94e14551580763f61e0e056f53c3dc81e6038dc741fa08047615a90f249c9e1`
+and returned PASS with no current blocker. Final generation required Cozy to
+admit an explicitly selected mutable development pair without registering it
+as immutable release evidence. That prerequisite was accepted in Cozy commit
+`44a26c8194ff8668503cabd37c95acd7f240dc32`, published locally only as
+`0.3.2-SNAPSHOT`, and covered by 28 compatibility and 100 package-boundary
+tests. CNCF final invocation `46026-20260820T040438Z` selected
+`0.5.3-SNAPSHOT` / `0.3.2-SNAPSHOT`, completed 444 suites, and passed
+3,262 tests with no failure. A supplemental focused release-gate review of
+only that post-review prerequisite and the CNCF generator coordinate returned
+PASS; it was not a second mandatory Phase review.
+
+The reviewed handoff is the sole design input for Phase 58.1. Phase 58.1
+remains planned and unstarted.
 
 ## Non-Goals
 
