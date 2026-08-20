@@ -1,6 +1,6 @@
 # Phase 58.2 - Subcomponent Packaging and Publication Completeness
 
-status=planned
+status=done
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.1](phase-58.1.md)
 successor=[Phase 58.3](phase-58.3.md)
@@ -33,7 +33,7 @@ Phase Plan Gate: PROCEED
   metadata for the frozen RSC-02 schema.
 - Bind digests and signatures after packaging; validate required release
   membership before upload and visibility.
-- Prove representative Documentation, Source, and executable-child fixture
+- Prove representative Documentation, Source, and external-platform presentation child fixture
   parity across the admitted packaging owners.
 
 ## Closure
@@ -41,6 +41,18 @@ Phase Plan Gate: PROCEED
 Archive layout, artifact metadata, integrity binding, and atomic release
 admission are deterministic; incomplete declared profiles are not visible.
 Phase 58.3 consumes the accepted packaged fixture and admission evidence.
+
+## Release Evidence
+
+RSC-03 accepted Step commits are Cozy `456451b6ff059fd875701dc600631acb5161a347`
+with development coordinate `0.3.3-SNAPSHOT`, and sbt-cozy
+`4a70d586ae9192609fec470a183dd1bc9f1ca9cd`. Initial review blocker
+`CB-RSC03-001` (stale fixture fallback) was repaired, and focused re-review
+sealed `PASS`. Final frozen-tree suites passed: Cozy test 1,347 passed / 0
+failed / 8 canceled Docker opt-in; sbt-cozy test 144 passed / 0 failed / 5
+canceled deferred external classpath; and sbt-cozy scripted 9/9 passed. The
+post-closure-fix full-suite gate runs in the Phase release commit; this page is
+committed as done only when that gate and the release commit succeed.
 
 ## Non-Goals
 
