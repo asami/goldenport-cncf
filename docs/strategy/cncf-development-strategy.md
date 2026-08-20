@@ -3296,7 +3296,7 @@ Admin product work.
 | Phase | Goal | Dependency |
 | --- | --- | --- |
 | [58](../phase/phase-58.md) | Closed on 2026-08-20: reconciled the architecture, inventoried owners and existing behavior, and froze the reviewed RSC-01 failing-first acceptance contract. | Phase 57.5 |
-| [58.1](../phase/phase-58.1.md) | RSC-02: deterministic parent/Subcomponent identity and composition codec. | Phase 58 |
+| [58.1](../phase/phase-58.1.md) | Closed on 2026-08-20: RSC-02 deterministic parent/Subcomponent identity and composition codec, including child-identity uniqueness independent of logical release. | Phase 58 |
 | [58.2](../phase/phase-58.2.md) | RSC-03: deterministic packaging and complete logical-release admission. | Phase 58.1 |
 | [58.3](../phase/phase-58.3.md) | RSC-04: common resolution, activation boundary, and provenance API. | Phase 58.2 |
 | [58.4](../phase/phase-58.4.md) | RSC-05: operation-mode and development composition policy. | Phase 58.3 |

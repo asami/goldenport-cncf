@@ -398,7 +398,7 @@ object ComponentSubcomponentCompositionCodec {
     parent: ComponentSubcomponentParent,
     members: Vector[ComponentSubcomponentMember]
   ): Either[String, Unit] = {
-    val coordinates = members.map(member => member.componentId.name -> member.logicalRelease)
+    val identities = members.map(_.componentId.name)
     val roles = members.map(_.role)
     val resources = members.map(_.logicalResource)
     for {
@@ -408,7 +408,7 @@ object ComponentSubcomponentCompositionCodec {
         (),
         "composition member must not reference its parent component identity"
       )
-      _ <- Either.cond(coordinates.distinct.size == coordinates.size, (), "composition contains a duplicate child release coordinate")
+      _ <- Either.cond(identities.distinct.size == identities.size, (), "composition contains a duplicate child component identity")
       _ <- Either.cond(roles.distinct.size == roles.size, (), "composition contains a duplicate child role")
       _ <- Either.cond(resources.distinct.size == resources.size, (), "composition contains a logical resource conflict")
     } yield ()

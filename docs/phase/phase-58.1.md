@@ -1,6 +1,6 @@
 # Phase 58.1 - Component Identity and Composition Codec
 
-status=planned
+status=done
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58](phase-58.md)
 successor=[Phase 58.2](phase-58.2.md)
@@ -39,6 +39,16 @@ Phase Plan Gate: PROCEED
 
 One codec represents exact release membership without duplicating Component
 identity. Its accepted schema and fixture handoff are consumed by Phase 58.2.
+
+## Release Evidence
+
+- RSC-02 implementation was accepted in Step commit
+  `bcbdd159a4b80e7783939463a550ba90ebbbf6c7`.
+- The mandatory Phase review found one bounded child-identity blocker;
+  Closure Fix Batch `F-58.1-RSC02-003` corrected it, and the focused closure
+  re-review sealed `PASS`.
+- The release commit is created only after the serialized `sbt --batch test`
+  gate passes for this frozen tree.
 
 ## Non-Goals
 

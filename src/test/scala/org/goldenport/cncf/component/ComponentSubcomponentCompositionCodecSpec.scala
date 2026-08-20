@@ -312,6 +312,30 @@ final class ComponentSubcomponentCompositionCodecSpec
     }
   }
 
+  "E33 duplicate child identity across releases rejects" should afterWord("in spec:component-subcomponent-composition-codec, example:E33, rules:RSC02-AC-01, phase:58.1, slice:RSC-02") {
+    "reject one canonical child ComponentId assigned distinct valid releases, roles, and logical resources" in {
+      Given("a parent registry that repeats one canonical child identity with distinct allowed membership evidence")
+      val json = _composition_json(
+        _member_json(),
+        _member_json(
+          logicalrelease = "0.2.0-SNAPSHOT",
+          role = "SourceCode",
+          implementationtechnology = "Scala",
+          logicalresource = "urn:cncf:resource:phase58/source-code",
+          logicalpath = "logical/source-code",
+          artifactcoordinate = "org.example:rsc-source-code-car:0.2.0-SNAPSHOT",
+          physicalpath = "repository/components/rsc-source-code-0.2.0.car"
+        )
+      )
+
+      When("the codec decodes the repeated child identity at distinct logical releases")
+      val result = _rejected(json)
+
+      Then("the repeated canonical child ComponentId is rejected independently of its other membership evidence")
+      result shouldBe None
+    }
+  }
+
   "E8 self-cycle rejects" should afterWord("in spec:component-subcomponent-composition-codec, example:E8, rules:RSC02-AC-03, phase:58.1, slice:RSC-02") {
     "reject a child membership that points back to its parent identity" in {
       Given("a parent composition whose child identity is the parent identity")
