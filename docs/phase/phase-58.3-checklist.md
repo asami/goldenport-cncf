@@ -37,7 +37,8 @@ Evidence:
   returned `SEALED_PASS`. Accepted post-fix focused accumulator
   `45210-20260820T201957Z` covered `ComponentSubcomponentCompositionCodecSpec`
   and `ResolvedComponentResourcesSpec`, with 48 succeeded / 0 failed / 2
-  suites. The final frozen-tree `sbt --batch test` remains pending as the
-  Phase release Commit Manifest gate and is not claimed as passed; this
-  checklist is committed as DONE only if that gate and the release commit
-  succeed.
+  suites. The frozen-tree `sbt --batch test` gate passed at Phase release as
+  invocation `59048-20260820T204120Z`: 3,310 succeeded / 0 failed / 13
+  canceled / 1 ignored / 46 pending, with 446 completed suites and none
+  aborted. The serial lock was released; final release commit is
+  `dcb39b7264c7d48c7a08a45ce3df5be3decaa608`.

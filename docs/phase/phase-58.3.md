@@ -53,9 +53,11 @@ coverage). One Closure Fix Batch repaired all three, and focused re-review
 returned `SEALED_PASS`. The accepted post-fix focused accumulator
 `45210-20260820T201957Z` covered `ComponentSubcomponentCompositionCodecSpec`
 and `ResolvedComponentResourcesSpec`: 48 succeeded, 0 failed, 2 suites.
-The frozen-tree `sbt --batch test` gate remains pending and is run by the Phase
-release Commit Manifest; this page is committed as DONE only if that gate and
-the release commit succeed.
+The frozen-tree `sbt --batch test` gate passed at Phase release as invocation
+`59048-20260820T204120Z`: 3,310 succeeded, 0 failed, 13 canceled, 1 ignored,
+46 pending, and 446 completed suites with none aborted. The serial SBT lock
+was released. Final release commit:
+`dcb39b7264c7d48c7a08a45ce3df5be3decaa608`.
 
 ## Non-Goals
 
