@@ -1,6 +1,6 @@
 # Phase 58 - Component and SubComponent Contract Freeze
 
-status=planned
+status=in_progress
 planned_at=2026-07-31
 split_approved_at=2026-08-20
 split_decision=D-58-SPLIT
@@ -10,6 +10,8 @@ strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 58 Checklist](phase-58-checklist.md)
 implementation_note=[Component and SubComponent Architecture Implementation Proposal](../notes/component-subcomponent-architecture-implementation.md)
 resource_implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
+rsc01_a_handoff=[RSC01-A owner inventory and reconciliation](../notes/component-subcomponent-architecture-implementation.md)
+rsc01_a_journal=[RSC01-A1 contract-freeze journal](../journal/2026/08/2026-08-20-phase-58-rsc01-component-subcomponent-contract-freeze.md)
 
 ## Purpose
 
@@ -68,6 +70,17 @@ Phase Plan Gate: PROCEED
   Component, payload, external-platform, and Subsystem distinctions.
 - Freeze the initial role, release-identity, publication/activation, and
   failing-first acceptance boundaries for the remaining children.
+
+## RSC01-A Handoff
+
+RSC01-A is in progress. Its A1 owner-inventory and proposal-reconciliation
+handoff is recorded in
+[`component-subcomponent-architecture-implementation.md`](../notes/component-subcomponent-architecture-implementation.md)
+and its design history and separate ledgers are recorded in
+[`2026-08-20-phase-58-rsc01-component-subcomponent-contract-freeze.md`](../journal/2026/08/2026-08-20-phase-58-rsc01-component-subcomponent-contract-freeze.md).
+The handoff preserves this Phase's RSC-01-only boundary and assigns exact
+failing-first acceptance identities to RSC01-B. It does not promote either
+implementation note to a canonical design/specification.
 
 ## Closure
 

@@ -18,112 +18,135 @@ After Phase 58.9 completes canonical promotion, this note becomes historical.
 ## Purpose
 
 Provide one physical-composition mechanism for large or access-controlled
-Component resources while preserving one logical Component identity.
+Component resources while presenting a parent release-membership view over
+independently identified parent and child Components.
 
 The immediate drivers are Documentation and SourceCode. The mechanism is
-resource-oriented and non-executable so later Help, AI, and Admin features can
-share it safely.
+resource-oriented and non-executable with respect to the information payload
+carried by those child Components. It does not erase a child Component's
+identity or CAR, and later Help, AI, and Admin features can share the payload
+safely.
 
 ## Core Model
 
-Provisional model concepts are:
+The following provisional concept labels are retained as legacy proposal
+vocabulary only. They are not frozen schema, API, type, wire, or lifecycle
+names:
 
-- `LogicalComponentRelease`: authoritative Component coordinate and version;
-- `PrimaryComponentArtifact`: executable primary CAR;
-- `ResourceSubComponentRole`: initial closed role vocabulary;
-- `ResourceSubComponentReference`: exact physical artifact membership;
-- `ComponentCompositionManifest`: root release composition;
-- `ResolvedComponentResource`: one logical resource plus physical provenance;
-- `ResolvedComponentResources`: one resolved logical resource space; and
-- `ResourceResolutionState`: availability and integrity state.
+- `LogicalComponentRelease`: the parent release/membership view, not a shared
+  Component identity;
+- `PrimaryComponentArtifact`: the parent Component's primary CAR;
+- `ResourceSubComponentRole`: initial information-payload role vocabulary;
+- `ResourceSubComponentReference`: a reference to an independently identified
+  child Component/release and its payload/provenance;
+- `ComponentCompositionManifest`: a legacy label for the parent composition
+  representation;
+- `ResolvedComponentResource`: a resolved child payload view with logical and
+  physical provenance;
+- `ResolvedComponentResources`: a resolved view over independently identified
+  child payloads; and
+- `ResourceResolutionState`: a legacy availability/source/provenance facet
+  label, with integrity and authorization represented separately.
 
-Initial roles:
+Initial information-payload roles:
 
 ```text
 Documentation
 SourceCode
 ```
 
-A role does not create another Component namespace or runtime participant.
+A role is not itself a Component namespace or runtime participant. For a
+declared Subcomponent, however, the declared child is an independent
+Component with canonical identity and its own CAR; the role names the
+information payload carried by that child.
+
+## RSC-01 Reconciliation
+
+This older resource proposal is reconciled by the frozen handoff in
+[`component-subcomponent-architecture-implementation.md`](component-subcomponent-architecture-implementation.md).
+The older proposition that a resource role does not create another Component
+namespace/runtime participant is superseded for a declared Subcomponent: the
+declared child is an independent Component. The payload remains a separate
+information artifact and is not itself a Component.
+
+The following resource boundaries remain inputs to successor implementation:
+
+- Documentation and SourceCode payloads are non-authoritative and
+  non-executable. They grant no activation, operation, MCP, disclosure, or
+  deployment authority.
+- Physical provenance, integrity, access, and security evidence remain
+  distinct from logical Component identity and release membership.
+- Operation mode and lifecycle/concurrency concerns remain successor inputs;
+  this note does not choose their schema, API, type, wire, or state names.
+- The child CAR identity and parent membership are owned by the broader RSC-01
+  model; the exact archive and repository layout remains allocated to Phases
+  58.1 through 58.8.
+
+RSC01-A1 does not promote this note to a canonical design/specification and
+does not add executable specifications. Exact failing-first acceptance
+identities belong to RSC01-B.
 
 ## Physical Shape
 
-The provisional topology is:
+The conceptual topology is a parent release membership containing an
+independently identified parent CAR and independently identified child CARs:
 
 ```text
-logical Component release
-├── primary component.car
-│   ├── component/
-│   ├── runtime/
-│   ├── car-runtime-manifest.json
-│   ├── component-composition-manifest.json
-│   └── minimal resource diagnostics
-├── documentation resource artifact
-│   ├── resource-manifest.json
-│   └── documentation resources
-└── source-code resource artifact
-    ├── resource-manifest.json
-    └── source resources
+parent release membership
+├── independently identified parent Component and parent CAR
+├── independently identified Documentation child Component and child CAR
+│   └── non-authoritative, non-executable information payload
+└── independently identified SourceCode child Component and child CAR
+    └── non-authoritative, non-executable information payload
 ```
 
-The exact archive suffix and repository coordinate shape are implementation
-decisions. They must not imply executable CAR semantics.
+This is a conceptual shape only. Exact archive entry names, suffixes, paths,
+descriptor names, and other physical layout choices are successor decisions;
+they must not be prescribed here. A child CAR's identity does not make its
+payload executable or grant it authority.
 
 ## Composition Manifest
 
-Provisional fields include:
+Any future composition representation must express, at information level:
 
-```yaml
-schemaVersion: cncf.component-composition.v1
-component:
-  name: example
-  version: 1.0.0
-artifacts:
-  - role: Documentation
-    coordinate: ...
-    parent: ...
-    version: 1.0.0
-    required: true
-    digest:
-      algorithm: SHA-256
-      value: ...
-    access: public
-  - role: SourceCode
-    coordinate: ...
-    parent: ...
-    version: 1.0.0
-    required: true
-    digest:
-      algorithm: SHA-256
-      value: ...
-    access: restricted
-```
+- the parent canonical identity and release;
+- each child canonical identity and release;
+- parent-child membership;
+- role separately from implementation technology;
+- requiredness and compatibility, as successor choices;
+- physical coordinate, digest, and provenance separately from logical
+  identity; and
+- no authority or activation grant.
 
-The composition manifest references authoritative identity; it does not
-redefine Component metadata, grant authorization, or make a resource
-executable.
+Concrete schema, version, field, type, and wire names belong to Phase 58.1;
+archive placement and package layout belong to Phase 58.2. This note does not
+choose them.
 
 ## Publication Completeness
 
-Repository publication is a logical-release transaction:
+Repository publication is a parent release-profile visibility condition:
 
 ```text
-admit primary
-  -> admit every required Resource SubComponent
-  -> validate identity/version/role/parent/digest/access metadata
-  -> publish one complete logical release index entry
+admit the independently identified parent CAR/release
+  -> admit every required child identity and child CAR/release evidence
+  -> validate membership, role, physical, and integrity evidence
+  -> expose the complete parent release profile
 ```
 
+A complete parent release must not become visible until required child
+identities, artifacts, and integrity evidence are admitted. This completeness
+condition does not merge parent and child identities or activate any child.
 An incomplete upload may exist in a private staging area but must not appear as
-an installable complete release.
+an installable complete parent release.
 
 Replacement of one artifact after release visibility requires a new immutable
-artifact digest and a repository policy that cannot silently mutate the
-logical release.
+artifact digest and a repository policy that cannot silently mutate the parent
+release profile or the independently identified child release.
 
 ## Resolution
 
-One resolver owns physical lookup:
+The legacy proposal's physical lookup precedence is retained as an input for a
+successor resolver:
 
 ```text
 explicit development directory
@@ -143,11 +166,17 @@ authorization, and integrity validation. A higher-precedence corrupt resource
 does not silently fall through unless the final specification explicitly
 admits and reports that recovery behavior.
 
+Phase 58.3 owns the concrete availability and provenance representation;
+Phase 58.5 owns the concrete authorization and integrity representation. The
+resolver must preserve their orthogonality and must not activate a child as a
+side effect of resolution.
+
 ## Provenance
 
 Every resolved resource retains:
 
-- logical Component/release identity;
+- independently identified logical Component/release identity and parent
+  membership when applicable;
 - logical resource identity and role;
 - physical artifact coordinate and digest;
 - source kind;
@@ -164,7 +193,8 @@ reconstruct it from paths or filenames.
 
 ## Resolution States
 
-The initial state vocabulary must distinguish at least:
+The following state tokens are retained only as provisional availability,
+source, and provenance vocabulary:
 
 - `Embedded`;
 - `Development`;
@@ -179,26 +209,30 @@ The initial state vocabulary must distinguish at least:
 - `Incompatible`; and
 - `Corrupt`.
 
-Exact names remain provisional. Availability, integrity, and authorization may
-be better modeled as separate dimensions than one enum; Phase 58 must decide
-through executable use cases.
+The tokens do not define a frozen single enum or finalized names. Availability,
+integrity, and authorization are orthogonal dimensions. Phase 58.3 chooses the
+concrete availability/provenance representation, and Phase 58.5 chooses the
+concrete authorization/integrity representation.
 
 ## Operation-Mode Policy
 
 | Mode | Documentation | SourceCode | Remote |
 | --- | --- | --- | --- |
-| `Develop` | Automatically resolve required resources. | Use development tree when admitted; otherwise resolve exact artifact under access policy. | Allowed by configured development policy. |
+| `Develop` | Resolve required resources only under an admitted explicit policy. | Use the development tree only when admitted; otherwise resolve the exact artifact under access policy. | Allowed by configured development policy. |
 | `Test` | Use explicit deterministic fixtures/bundles. | Use explicit deterministic fixtures. | No implicit access. |
 | `Demo` | Installed/cached or explicitly enabled remote access. | No automatic resolution. | Documentation only under explicit policy. |
-| `Production` | Primary activation is independent; authorized content may resolve on demand. | Never automatically resolve, mount, or fetch. | Explicit authorized Documentation only. |
+| `Production` | Primary activation is independent; explicitly authorized content may resolve on demand. | Never automatically resolve, mount, or fetch. | Explicitly authorized Documentation only. |
 
-Mode stays in launcher/runtime resource policy and never enters Component
-domain behavior.
+Resolution in any mode occurs only under an admitted explicit policy; it never
+activates the child or grants authority to the payload. Mode stays in
+launcher/runtime resource policy and never enters Component domain behavior.
 
 ## SourceCode Role
 
-Phase 58 implements the generic role and artifact mechanics. Phase 59 owns the
-actual documentation/source content contract and build production rules.
+Phase 58.2 owns child-CAR packaging and publication evidence, Phase 58.3 owns
+resolution and provenance, and Phase 58.7 owns the read-only consumer boundary.
+Phase 59 retains the actual documentation/source content contract and build
+production rules.
 
 The downstream SourceCode profile is expected to normalize admitted managed
 source collected from paths such as `target/scala-*/src_managed/**` into stable
@@ -215,7 +249,7 @@ SubComponent inputs.
 
 ## Help and Admin Consumer Boundary
 
-Phase 58 provides a shared read-only consumer contract.
+Phase 58.7 owns the shared read-only consumer contract.
 
 Phase 59 Help uses it to:
 
@@ -266,10 +300,11 @@ The resolver must define:
 
 Structured diagnostics should include:
 
-- Component/release identity;
+- independently identified Component/release identity and parent membership
+  when applicable;
 - role and logical resource identity;
 - safe source kind and repository identity;
-- resolution state;
+- provisional availability/source/provenance outcome;
 - integrity/compatibility/access outcome;
 - elapsed time; and
 - common `ConclusionDiagnostics`.
@@ -279,6 +314,11 @@ the host, and arbitrary provider output.
 
 ## Repository Ownership
 
+The existing proposed owner table is retained as historical evidence of
+repository concerns. It does not override the frozen successor allocations;
+packaging/evidence, resolution/provenance, and consumer-boundary ownership
+follow Phases 58.2, 58.3, and 58.7.
+
 | Repository | Proposed ownership |
 | --- | --- |
 | CNCF | Runtime model, resolver, provenance, policy, lifecycle, Help/Admin consumer API |
@@ -287,7 +327,11 @@ the host, and arbitrary provider output.
 | Component Repository owners | Staging, atomic visibility, exact retrieval, cache/repository evidence |
 | downstream Components | Content inputs and representative acceptance |
 
-## Implementation Sequence
+## Provisional Successor Sequence
+
+This sequence is retained as a successor input, not as an implementation
+assignment to Phase 58 as a whole. Concrete choices remain with the allocated
+Phase 58.1 through Phase 58.8 successors.
 
 1. Freeze existing behavior and failing-first identities.
 2. Implement identity, manifest, codec, and hostile-input validation.
@@ -303,8 +347,8 @@ the host, and arbitrary provider output.
 ## Open Issues
 
 - exact artifact suffix and coordinate vocabulary;
-- whether availability/integrity/authorization are one state or orthogonal
-  dimensions;
+- concrete composition of the already separate availability/provenance and
+  authorization/integrity representations, allocated to Phases 58.3 and 58.5;
 - signature authority and key rotation;
 - optional versus required role semantics;
 - immutable release repair policy;
