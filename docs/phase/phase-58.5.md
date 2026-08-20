@@ -1,6 +1,6 @@
 # Phase 58.5 - Resource Authorization, Disclosure, and Integrity
 
-status=planned
+status=in_progress
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.4](phase-58.4.md)
 successor=[Phase 58.6](phase-58.6.md)
@@ -40,6 +40,30 @@ Phase Plan Gate: PROCEED
 Restricted source is represented without disclosure; integrity, authorization,
 and path safety are enforced before content exposure; diagnostics cannot leak
 credentials, content, host paths, or repository secrets.
+
+## Implementation Evidence
+
+Phase-base HEAD is `312e9ca8db9a1bdc6c3adfc7899ba1e03db072ae` (`Close Phase 58.4
+operation-mode composition`).
+
+RSC-06A failing-first RED was serialized SBT invocation `5044-20260820T220922Z`:
+only the absent RSC-06 policy API caused the intended compile failures (22
+errors); the serial lock was released. RSC-06B first focused execution
+`7469-20260820T221439Z` exposed and then bounded fixes repaired two policy
+defects: parent primary-CAR membership and denial-before-content integrity
+ordering. This is intermediate evidence, not final success.
+
+Focused GREEN was invocation `9775-20260820T221958Z`:
+`ComponentResourceAuthorizationSpec`, 1 suite / 10 succeeded / 0 failed / lock
+released. The direct consumer accumulator GREEN was invocation
+`10569-20260820T222053Z`: `ComponentResourceAuthorizationSpec`,
+`ResolvedComponentResourcesSpec`, and `ComponentResourceOperationModePolicySpec`,
+3 suites / 34 succeeded / 0 failed / lock released.
+
+`D-58.5-STEP-REVIEW-STOP: AUTHORIZE_PROTECTED_STEP_REVIEW_EXCEPTION` authorizes
+only omission of the otherwise-required lightweight Luna Step review for this
+protected security boundary. The Step commit, mandatory Terra xhigh full Phase
+review, frozen-tree full `sbt --batch test`, and release commit remain pending.
 
 ## Non-Goals
 
