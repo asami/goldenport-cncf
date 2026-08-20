@@ -1,6 +1,6 @@
 # Phase 58.5 - Resource Authorization, Disclosure, and Integrity
 
-status=in_progress
+status=done
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.4](phase-58.4.md)
 successor=[Phase 58.6](phase-58.6.md)
@@ -62,8 +62,24 @@ released. The direct consumer accumulator GREEN was invocation
 
 `D-58.5-STEP-REVIEW-STOP: AUTHORIZE_PROTECTED_STEP_REVIEW_EXCEPTION` authorizes
 only omission of the otherwise-required lightweight Luna Step review for this
-protected security boundary. The Step commit, mandatory Terra xhigh full Phase
-review, frozen-tree full `sbt --batch test`, and release commit remain pending.
+protected security boundary. RSC-06 was accepted in Step commit
+`7386279ea77f7c18ed51fd979f2c7820fd4af736` (`Implement RSC-06 authorization
+integrity policy`). The mandatory Terra xhigh full Phase review admitted three
+bounded blockers: naming, key-specific signature attestation, and executable
+specification traceability. The one Closure Fix Batch passed focused validation
+`32297-20260820T225156Z` (10 succeeded / 0 failed) and accumulator
+`33209-20260820T225255Z` (34 succeeded / 0 failed); the Luna xhigh focused
+closure re-review returned `SEALED_PASS`. The frozen-tree full `sbt --batch
+test` release gate is required by this release commit's exact manifest.
+
+## Release Evidence
+
+The RSC-06 Step commit, mandatory Terra xhigh full review, one bounded Closure
+Fix Batch, and focused closure re-review provide the accepted Phase evidence.
+The final frozen-tree `sbt --batch test` is executed by the same exact release
+manifest immediately before this commit; a failing gate creates no release
+commit. The commit execution record is the authoritative invocation and
+aggregate-test evidence for the Phase closure.
 
 ## Non-Goals
 

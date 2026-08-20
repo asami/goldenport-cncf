@@ -3300,7 +3300,7 @@ Admin product work.
 | [58.2](../phase/phase-58.2.md) | RSC-03: deterministic packaging and complete logical-release admission. | Phase 58.1 |
 | [58.3](../phase/phase-58.3.md) | Closed on 2026-08-21: deterministic seven-source resource resolution preserves logical and physical provenance, distinct availability/integrity/authorization states, and direct composition validation without activation or deployment authority. | Phase 58.2 |
 | [58.4](../phase/phase-58.4.md) | Closed on 2026-08-21: deterministic runtime-owned Develop/Test/Demo/Production composition policy preserves resolver provenance, explicit external-platform handoff, and primary-only Production without authority grants. | Phase 58.3 |
-| [58.5](../phase/phase-58.5.md) | RSC-06: authorization, disclosure, and integrity. | Phase 58.4 |
+| [58.5](../phase/phase-58.5.md) | Closed on 2026-08-21: RSC-06 authorized, integrity-checked resource access across every resolver source, key-specific signature attestation, non-leaking diagnostics, and path/cache/authority denial without content exposure. | Phase 58.4 |
 | [58.6](../phase/phase-58.6.md) | RSC-07: lifecycle, concurrency, and observability. | Phase 58.5 |
 | [58.7](../phase/phase-58.7.md) | RSC-08: downstream Help/Admin consumer contract. | Phase 58.6 |
 | [58.8](../phase/phase-58.8.md) | RSC-09: end-to-end cross-repository validation. | Phase 58.7 |

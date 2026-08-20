@@ -52,7 +52,7 @@ final case class ComponentResourceAccessRequest(
   signingKeyId: String,
   grantedRoles: Set[String],
   admittedRepositories: Set[String],
-  trustedSigningKeyIds: Set[String],
+  trustedSignaturesByKeyId: Map[String, Set[String]],
   archiveEntries: Vector[ComponentResourceArchiveEntry],
   managedCacheVerified: Boolean
 )
@@ -64,47 +64,47 @@ object ComponentResourceAuthorizationPolicy:
   ): Consequence[ComponentResourceAccessResult] =
     val resource = request.resource
 
-    def diagnostic(kind: ComponentResourceAccessDiagnosticKind) =
+    def _diagnostic_(kind: ComponentResourceAccessDiagnosticKind) =
       ComponentResourceAccessDiagnostic(
         kind,
         resource.logicalIdentity.componentId,
         resource.provenance.sourceKind
       )
 
-    def reject(kind: ComponentResourceAccessDiagnosticKind) =
+    def _reject_(kind: ComponentResourceAccessDiagnosticKind) =
       ComponentResourceAccessResult(
         ComponentResourceAccessDisposition.Rejected,
         None,
-        diagnostic(kind)
+        _diagnostic_(kind)
       )
 
-    def restrict =
+    def _restrict_ =
       ComponentResourceAccessResult(
         ComponentResourceAccessDisposition.Restricted,
         None,
-        diagnostic(ComponentResourceAccessDiagnosticKind.Unauthorized)
+        _diagnostic_(ComponentResourceAccessDiagnosticKind.Unauthorized)
       )
 
     val result =
-      if _hasAuthority(resource) then
-        reject(ComponentResourceAccessDiagnosticKind.AuthorityViolation)
-      else _archiveProblem(request.archiveEntries) match
-        case Some(problem) => reject(problem)
+      if _has_authority(resource) then
+        _reject_(ComponentResourceAccessDiagnosticKind.AuthorityViolation)
+      else _archive_problem(request.archiveEntries) match
+        case Some(problem) => _reject_(problem)
         case None if resource.provenance.sourceKind == ComponentResourceSourceKind.ManagedCache && !request.managedCacheVerified =>
-          reject(ComponentResourceAccessDiagnosticKind.CorruptCache)
+          _reject_(ComponentResourceAccessDiagnosticKind.CorruptCache)
         case None =>
-          _authorizeComposition(composition, request) match
+          _authorize_composition(composition, request) match
             case Some(result) => result
             case None =>
               ComponentResourceAccessResult(
                 ComponentResourceAccessDisposition.Granted,
                 Some(request.content.clone()),
-                diagnostic(ComponentResourceAccessDiagnosticKind.Grant)
+                _diagnostic_(ComponentResourceAccessDiagnosticKind.Grant)
               )
 
     Consequence.success(result)
 
-  private def _authorizeComposition(
+  private def _authorize_composition(
     composition: ComponentSubcomponentComposition,
     request: ComponentResourceAccessRequest
   ): Option[ComponentResourceAccessResult] =
@@ -112,29 +112,29 @@ object ComponentResourceAuthorizationPolicy:
     val identity = resource.logicalIdentity
     val provenance = resource.provenance
 
-    def diagnostic(kind: ComponentResourceAccessDiagnosticKind) =
+    def _diagnostic_(kind: ComponentResourceAccessDiagnosticKind) =
       ComponentResourceAccessDiagnostic(kind, identity.componentId, provenance.sourceKind)
 
-    def rejected(kind: ComponentResourceAccessDiagnosticKind) =
+    def _rejected_(kind: ComponentResourceAccessDiagnosticKind) =
       Some(ComponentResourceAccessResult(
         ComponentResourceAccessDisposition.Rejected,
         None,
-        diagnostic(kind)
+        _diagnostic_(kind)
       ))
 
-    def restricted =
+    def _restricted_ =
       Some(ComponentResourceAccessResult(
         ComponentResourceAccessDisposition.Restricted,
         None,
-        diagnostic(ComponentResourceAccessDiagnosticKind.Unauthorized)
+        _diagnostic_(ComponentResourceAccessDiagnosticKind.Unauthorized)
       ))
 
     val (artifact, roleandresourcematch) =
       if identity.componentId == composition.parent.componentId then
         if identity.parentComponentId.nonEmpty then
-          return rejected(ComponentResourceAccessDiagnosticKind.ParentMismatch)
+          return _rejected_(ComponentResourceAccessDiagnosticKind.ParentMismatch)
         else if identity.logicalRelease != composition.parent.logicalRelease then
-          return rejected(ComponentResourceAccessDiagnosticKind.ReleaseMismatch)
+          return _rejected_(ComponentResourceAccessDiagnosticKind.ReleaseMismatch)
         else
           (
             composition.parent.primaryCar.artifact,
@@ -144,10 +144,10 @@ object ComponentResourceAuthorizationPolicy:
       else
         val matches = composition.members.filter(_.componentId == identity.componentId)
         if identity.parentComponentId != Some(composition.parent.componentId) || matches.size != 1 then
-          return rejected(ComponentResourceAccessDiagnosticKind.ParentMismatch)
+          return _rejected_(ComponentResourceAccessDiagnosticKind.ParentMismatch)
         val member = matches.head
         if identity.logicalRelease != member.logicalRelease then
-          return rejected(ComponentResourceAccessDiagnosticKind.ReleaseMismatch)
+          return _rejected_(ComponentResourceAccessDiagnosticKind.ReleaseMismatch)
         (
           member.subcomponentCar.artifact,
           identity.childRole == member.role &&
@@ -157,11 +157,11 @@ object ComponentResourceAuthorizationPolicy:
         )
 
     if resource.availability != ComponentResourceAvailability.Available then
-      rejected(ComponentResourceAccessDiagnosticKind.Unavailable)
+      _rejected_(ComponentResourceAccessDiagnosticKind.Unavailable)
     else if resource.authorization != ComponentResourceAuthorization.Granted then
-      restricted
+      _restricted_
     else if resource.integrity != ComponentResourceIntegrity.Verified then
-      rejected(ComponentResourceAccessDiagnosticKind.DigestMismatch)
+      _rejected_(ComponentResourceAccessDiagnosticKind.DigestMismatch)
     else
       val carmatch =
         provenance.artifactCoordinate == artifact.coordinate &&
@@ -171,44 +171,48 @@ object ComponentResourceAuthorizationPolicy:
           request.admittedRepositories.contains(provenance.repository)
 
       if !roleandresourcematch || !carmatch then
-        restricted
+        _restricted_
       else if !admitted then
-        restricted
+        _restricted_
       else
         val digest = _sha256(request.content)
         val digestmatch = digest == provenance.sha256 && digest == artifact.sha256
+        val trustedattestation =
+          request.trustedSignaturesByKeyId
+            .get(request.signingKeyId)
+            .exists(_.contains(request.signature))
         val signaturematch =
           request.signature == artifact.signature &&
-            request.trustedSigningKeyIds.contains(request.signingKeyId)
+            trustedattestation
 
         if !digestmatch then
-          rejected(ComponentResourceAccessDiagnosticKind.DigestMismatch)
+          _rejected_(ComponentResourceAccessDiagnosticKind.DigestMismatch)
         else if !signaturematch then
-          rejected(ComponentResourceAccessDiagnosticKind.SignatureMismatch)
+          _rejected_(ComponentResourceAccessDiagnosticKind.SignatureMismatch)
         else
           None
 
-  private def _hasAuthority(resource: ResolvedComponentResource): Boolean =
+  private def _has_authority(resource: ResolvedComponentResource): Boolean =
     resource.activationAuthority ||
       resource.operationAuthority ||
       resource.mcpAuthority ||
       resource.disclosureAuthority ||
       resource.deploymentAuthority
 
-  private def _archiveProblem(
+  private def _archive_problem(
     entries: Vector[ComponentResourceArchiveEntry]
   ): Option[ComponentResourceAccessDiagnosticKind] =
-    if entries.exists(entry => entry.linkTarget.isDefined || _unsafePath(entry.path)) then
+    if entries.exists(entry => entry.linkTarget.isDefined || _unsafe_path(entry.path)) then
       Some(ComponentResourceAccessDiagnosticKind.UnsafeArchive)
     else
       val rawPaths = entries.map(_.path)
-      val normalizedPaths = rawPaths.map(_normalizePath)
+      val normalizedPaths = rawPaths.map(_normalize_path)
       if rawPaths.distinct.size != rawPaths.size || normalizedPaths.distinct.size != normalizedPaths.size then
         Some(ComponentResourceAccessDiagnosticKind.AmbiguousArchive)
       else
         None
 
-  private def _unsafePath(path: String): Boolean =
+  private def _unsafe_path(path: String): Boolean =
     path.isEmpty ||
       path.startsWith("/") ||
       path.startsWith("\\") ||
@@ -217,7 +221,7 @@ object ComponentResourceAuthorizationPolicy:
       path.exists(character => Character.isISOControl(character)) ||
       path.split("/", -1).contains("..")
 
-  private def _normalizePath(path: String): String =
+  private def _normalize_path(path: String): String =
     path.split("/", -1).iterator.filter(segment => segment.nonEmpty && segment != ".").mkString("/")
 
   private def _sha256(content: Array[Byte]): String =

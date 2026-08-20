@@ -35,10 +35,14 @@ final class ComponentResourceAuthorizationSpec
   private val _component_ids = Vector(_parent_id, _documentation_id, _source_id, _external_platform_id)
   private val _repository = "https://repo.example.invalid/cncf/rsc"
   private val _trusted_signing_key = "phase58-rsc-signing-key-1"
+  private val _trusted_but_wrong_signing_key = "phase58-rsc-signing-key-2"
+  private val _e1 = afterWord("in spec:docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md, example:E1, rules:RSC06-AC-01, phase:58.5, slice:RSC-06")
+  private val _e2 = afterWord("in spec:docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md, example:E2, rules:RSC06-AC-02, phase:58.5, slice:RSC-06")
+  private val _e3 = afterWord("in spec:docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md, example:E3, rules:RSC06-AC-03, phase:58.5, slice:RSC-06")
 
-  "RSC06-AC-01 authorization, parent/release evidence, digest, and signature are checked before content exposure" should {
+  "E1 authorization, parent/release evidence, digest, and signature are checked before content exposure" must _e1 {
     "require explicit role and repository admission for every registered resolver source kind" in {
-      Given("the complete phase58 composition and one independently identified child resource at every current resolver source kind")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-01; Example: E1; the complete phase58 composition and one independently identified child resource at every current resolver source kind")
       val composition = _composition
       val cases = ComponentResourceSourceKind.values.toVector.flatMap { sourcekind =>
         _component_ids.map { componentid =>
@@ -63,7 +67,7 @@ final class ComponentResourceAuthorizationSpec
     }
 
     "keep every source kind non-content when role or repository admission is absent" in {
-      Given("one complete explicit admission fixture for every current resolver source kind")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-01; Example: E1; one complete explicit admission fixture for every current resolver source kind")
       val composition = _composition
       val sourcecases = ComponentResourceSourceKind.values.toVector.map { sourcekind =>
         val resource = _resource(_documentation_id, sourcekind)
@@ -75,8 +79,8 @@ final class ComponentResourceAuthorizationSpec
       When("each source is evaluated once without its role grant and once without its repository admission")
       val results = sourcecases.flatMap { case (sourcekind, resource, content, admitted) =>
         Vector(
-          (sourcekind, resource, _authorizeRequest(composition, admitted.copy(grantedRoles = Set.empty)), "missing role"),
-          (sourcekind, resource, _authorizeRequest(composition, admitted.copy(admittedRepositories = Set.empty)), "missing repository")
+          (sourcekind, resource, _authorize_request(composition, admitted.copy(grantedRoles = Set.empty)), "missing role"),
+          (sourcekind, resource, _authorize_request(composition, admitted.copy(admittedRepositories = Set.empty)), "missing repository")
         )
       }
 
@@ -88,7 +92,7 @@ final class ComponentResourceAuthorizationSpec
     }
 
     "require matching parent and logical release evidence in addition to composition membership" in {
-      Given("a Documentation resource whose role, repository, digest, signature, and key evidence otherwise match the composition")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-01; Example: E1; a Documentation resource whose role, repository, digest, signature, and key evidence otherwise match the composition")
       val composition = _composition
       val original = _resource(_documentation_id, ComponentResourceSourceKind.ExpandedCar)
       val content = _content(_documentation_id)
@@ -111,7 +115,7 @@ final class ComponentResourceAuthorizationSpec
     }
 
     "verify bytes, the composition CAR signature, and the trusted signing key before granting content" in {
-      Given("a valid ExpandedCar resource with composition-derived signature and trusted-key evidence")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-01; Example: E1; a valid ExpandedCar resource with composition-derived signature and trusted-key evidence")
       val composition = _composition
       val resource = _resource(_documentation_id, ComponentResourceSourceKind.ExpandedCar)
       val content = _content(_documentation_id)
@@ -119,24 +123,32 @@ final class ComponentResourceAuthorizationSpec
       val digestmismatch = valid.copy(content = "tampered documentation bytes".getBytes(StandardCharsets.UTF_8))
       val signaturemismatch = valid.copy(signature = "phase58-wrong-artifact-signature")
       val keymismatch = valid.copy(signingKeyId = "phase58-untrusted-signing-key")
+      val trustedbutwrongkey = valid.copy(
+        signingKeyId = _trusted_but_wrong_signing_key,
+        trustedSignaturesByKeyId = valid.trustedSignaturesByKeyId + (
+          _trusted_but_wrong_signing_key -> Set("phase58-other-artifact-signature")
+        )
+      )
 
-      When("the policy evaluates a digest mismatch, an unexpected artifact signature, and an untrusted key")
+      When("the policy evaluates a digest mismatch, an unexpected artifact signature, an untrusted key, and a trusted key without this signature attestation")
       val results = Vector(
-        _authorizeRequest(composition, digestmismatch),
-        _authorizeRequest(composition, signaturemismatch),
-        _authorizeRequest(composition, keymismatch)
+        _authorize_request(composition, digestmismatch),
+        _authorize_request(composition, signaturemismatch),
+        _authorize_request(composition, keymismatch),
+        _authorize_request(composition, trustedbutwrongkey)
       )
 
       Then("all integrity and key failures remain non-content")
       _assert_non_content(results(0), resource, "DigestMismatch")
       _assert_non_content(results(1), resource, "SignatureMismatch")
       _assert_non_content(results(2), resource, "SignatureMismatch")
+      _assert_non_content(results(3), resource, "SignatureMismatch")
     }
   }
 
-  "RSC06-AC-02 traversal, symlink escape, archive ambiguity, corrupt cache, and unauthorized source reject safely" should {
+  "E2 traversal, symlink escape, archive ambiguity, corrupt cache, and unauthorized source reject safely" must _e2 {
     "reject traversal, absolute, drive, and symlink-escaping archive entries without returning content" in {
-      Given("a valid OfflineBundle resource and locally scoped hostile archive-entry literals")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-02; Example: E2; a valid OfflineBundle resource and locally scoped hostile archive-entry literals")
       val composition = _composition
       val resource = _resource(_documentation_id, ComponentResourceSourceKind.OfflineBundle)
       val content = _content(_documentation_id)
@@ -149,7 +161,7 @@ final class ComponentResourceAuthorizationSpec
 
       When("the policy evaluates each hostile archive entry shape")
       val results = hostileentries.map(entries =>
-        _authorizeRequest(composition, _request(composition, resource, content).copy(archiveEntries = entries))
+        _authorize_request(composition, _request(composition, resource, content).copy(archiveEntries = entries))
       )
 
       Then("every unsafe path is represented as a non-content UnsafeArchive result")
@@ -157,7 +169,7 @@ final class ComponentResourceAuthorizationSpec
     }
 
     "reject duplicate and ambiguous archive entries as non-content results" in {
-      Given("a valid ExpandedCar resource and archive entries that normalize to duplicate or ambiguous logical names")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-02; Example: E2; a valid ExpandedCar resource and archive entries that normalize to duplicate or ambiguous logical names")
       val composition = _composition
       val resource = _resource(_documentation_id, ComponentResourceSourceKind.ExpandedCar)
       val content = _content(_documentation_id)
@@ -172,8 +184,8 @@ final class ComponentResourceAuthorizationSpec
 
       When("the policy evaluates duplicate and normalization-ambiguous archive entries")
       val results = Vector(
-        _authorizeRequest(composition, _request(composition, resource, content).copy(archiveEntries = duplicate)),
-        _authorizeRequest(composition, _request(composition, resource, content).copy(archiveEntries = ambiguous))
+        _authorize_request(composition, _request(composition, resource, content).copy(archiveEntries = duplicate)),
+        _authorize_request(composition, _request(composition, resource, content).copy(archiveEntries = ambiguous))
       )
 
       Then("both archive forms are rejected without content")
@@ -181,7 +193,7 @@ final class ComponentResourceAuthorizationSpec
     }
 
     "treat an unverified ManagedCache and unauthorized source as safe non-content states" in {
-      Given("a ManagedCache resource with cache verification disabled and a separately unauthorized source request")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-02; Example: E2; a ManagedCache resource with cache verification disabled and a separately unauthorized source request")
       val composition = _composition
       val cache = _resource(_documentation_id, ComponentResourceSourceKind.ManagedCache)
       val content = _content(_documentation_id)
@@ -194,8 +206,8 @@ final class ComponentResourceAuthorizationSpec
 
       When("the policy evaluates the corrupt cache and the unauthorized source")
       val results = Vector(
-        _authorizeRequest(composition, corruptcache),
-        _authorizeRequest(composition, unauthorized)
+        _authorize_request(composition, corruptcache),
+        _authorize_request(composition, unauthorized)
       )
 
       Then("cache corruption and authorization failure do not expose content")
@@ -204,9 +216,9 @@ final class ComponentResourceAuthorizationSpec
     }
   }
 
-  "RSC06-AC-03 diagnostics do not leak content/credentials/host paths/secrets and registry membership grants no Operation/MCP/activation authority" should {
+  "E3 diagnostics do not leak content/credentials/host paths/secrets and registry membership grants no Operation/MCP/activation authority" must _e3 {
     "keep diagnostics limited to stable kind, logical ComponentId, and source kind" in {
-      Given("a composition member marked as admitted in its manifest but a request carrying no explicit role or repository grant")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-03; Example: E3; a composition member marked as admitted in its manifest but a request carrying no explicit role or repository grant")
       val composition = _composition.copy(
         members = _composition.members.map(member =>
           member.copy(authorization = member.authorization.copy(state = "granted"))
@@ -220,7 +232,7 @@ final class ComponentResourceAuthorizationSpec
       )
 
       When("the policy evaluates membership-only authorization")
-      val result = _authorizeRequest(composition, request)
+      val result = _authorize_request(composition, request)
 
       Then("the diagnostic identifies only the stable failure and logical evidence")
       _assert_non_content(result, resource, "Unauthorized")
@@ -229,7 +241,7 @@ final class ComponentResourceAuthorizationSpec
     }
 
     "redact content credentials user-info host paths signing secrets and archive strings from hostile diagnostics" in {
-      Given("a valid resource and malicious literals local to a failing archive request")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-03; Example: E3; a valid resource and malicious literals local to a failing archive request")
       val composition = _composition
       val resource = _resource(_source_id, ComponentResourceSourceKind.RemoteRepository)
       val secretcontent = "source-content:do-not-disclose".getBytes(StandardCharsets.UTF_8)
@@ -245,7 +257,7 @@ final class ComponentResourceAuthorizationSpec
       )
 
       When("the policy evaluates the hostile archive request")
-      val result = _authorizeRequest(composition, request)
+      val result = _authorize_request(composition, request)
 
       Then("the result is unsafe non-content and its diagnostic contains only stable identity fields")
       _assert_non_content(result, resource, "UnsafeArchive")
@@ -258,7 +270,7 @@ final class ComponentResourceAuthorizationSpec
     }
 
     "deny every activation operation MCP disclosure and deployment authority even when composition membership is present" in {
-      Given("a complete composition and one valid resource fixture for each forbidden authority bit")
+      Given("Spec: docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md; Rules: RSC06-AC-03; Example: E3; a complete composition and one valid resource fixture for each forbidden authority bit")
       val composition = _composition
       val original = _resource(_documentation_id, ComponentResourceSourceKind.DevelopmentDirectory)
       val content = _content(_documentation_id)
@@ -288,9 +300,9 @@ final class ComponentResourceAuthorizationSpec
     resource: ResolvedComponentResource,
     content: Array[Byte]
   ): ComponentResourceAccessResult =
-    _authorizeRequest(composition, _request(composition, resource, content))
+    _authorize_request(composition, _request(composition, resource, content))
 
-  private def _authorizeRequest(
+  private def _authorize_request(
     composition: ComponentSubcomponentComposition,
     request: ComponentResourceAccessRequest
   ): ComponentResourceAccessResult =
@@ -308,7 +320,9 @@ final class ComponentResourceAuthorizationSpec
       signingKeyId = _trusted_signing_key,
       grantedRoles = Set(resource.logicalIdentity.childRole),
       admittedRepositories = Set(resource.provenance.repository),
-      trustedSigningKeyIds = Set(_trusted_signing_key),
+      trustedSignaturesByKeyId = Map(
+        _trusted_signing_key -> Set(_expected_signature(composition, resource.logicalIdentity.componentId))
+      ),
       archiveEntries = Vector(ComponentResourceArchiveEntry(resource.provenance.normalizedRelativePath)),
       managedCacheVerified = true
     )
