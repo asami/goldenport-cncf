@@ -1,6 +1,6 @@
 # Phase 58.4 - Operation-Mode and Development Composition
 
-status=in_progress
+status=done
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.3](phase-58.3.md)
 successor=[Phase 58.5](phase-58.5.md)
@@ -40,6 +40,17 @@ Phase Plan Gate: PROCEED
 Each mode has one runtime-owned, deterministic composition policy; production
 remains primary-only capable and never automatically resolves, mounts, or
 fetches source. Phase 58.5 consumes the confirmed policy matrix.
+
+## Release Evidence
+
+RSC-05 was accepted in Step commit
+`14af7b1582dc0e6c652443d338bd242404b2250a` (`Implement RSC-05 operation-mode
+composition policy`). The mandatory full Phase review, performed by Terra high,
+returned `SEALED_LEDGER PASS` with no Current Phase Blocker. The frozen-tree
+`sbt --batch test` release gate passed as invocation `85215-20260820T212901Z`:
+3,319 succeeded, 0 failed, 13 canceled, 1 ignored, 46 pending, and 447
+completed suites with none aborted. The serial SBT lock was released. This
+release commit records the Phase 58.4 closure evidence.
 
 ## Non-Goals
 
