@@ -1,6 +1,6 @@
 # Phase 58.3 - Resource Resolution, Activation Boundary, and Provenance
 
-status=planned
+status=in_progress
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.2](phase-58.2.md)
 successor=[Phase 58.4](phase-58.4.md)

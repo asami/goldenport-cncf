@@ -1,6 +1,6 @@
 # Phase 58.3 Checklist - Resource Resolution, Activation Boundary, and Provenance
 
-status=planned
+status=in_progress
 phase=[Phase 58.3 - Resource Resolution, Activation Boundary, and Provenance](phase-58.3.md)
 predecessor=[Phase 58.2](phase-58.2.md)
 successor=[Phase 58.4](phase-58.4.md)
@@ -8,10 +8,11 @@ successor=[Phase 58.4](phase-58.4.md)
 ## RSC-04: Resolution, Activation Boundary, and Provenance
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: CNCF Component Repository and runtime loading maintainers
 - Entry rule: Phase 58.2 RSC-03 is DONE.
 - Completion rule: Every resource and child form resolves through one API with exact logical identity and physical provenance, while discovery, activation, and external deployment remain separate.
+- Update rule: Boxes and evidence become DONE only after the committed RSC-04 acceptance, final phase validation, and release closure.
 
 - [ ] Resolve embedded primary resources.
 - [ ] Resolve explicit development-directory resources.
