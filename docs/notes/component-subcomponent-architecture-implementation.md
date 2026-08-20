@@ -319,11 +319,21 @@ invariant.
 
 ## Exact Acceptance Boundary
 
-RSC01-A1 records inventory and reconciles the proposals only. The exact
-failing-first acceptance identities and matrix are owned by the separate
-RSC01-B slice. They are deliberately not authored here. They must be recorded
-by RSC01-B before successor implementation Phases 58.1 through 58.8 consume
-this handoff, and must not be deferred from those successor phases.
+RSC01-A1 records inventory and reconciles the proposals only. RSC01-B now
+registers the exact failing-first acceptance identities and matrix in the
+[RSC01-B Failing-First Acceptance Registry](phase-58-rsc01b-failing-first-acceptance-registry.md).
+The registry has exactly eight authoritative groups, RSC02 through RSC09,
+with each successor Phase's repository, future path, suite or scripted
+identity, scenario IDs, applicable invariant numbers, and RED-to-GREEN rule.
+It also fixes the shared `org.goldenport.cncf.phase58` Component identities,
+version `0.1.0-SNAPSHOT`, and ten profile IDs for cross-successor evidence.
+
+The registry creates no executable specifications and makes no red-build claim.
+Successor Phases 58.1 through 58.8 must materialize each registered identity
+before its first production implementation edit and preserve the
+non-normative-until-58.9 status of this note. Concrete schema, API, type,
+wire, archive, resolver, lifecycle, policy, and consumer vocabulary remains
+successor-owned inside the twelve frozen invariants.
 
 ## Promotion and Closure
 

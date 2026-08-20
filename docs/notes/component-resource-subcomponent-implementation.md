@@ -83,8 +83,12 @@ The following resource boundaries remain inputs to successor implementation:
   58.1 through 58.8.
 
 RSC01-A1 does not promote this note to a canonical design/specification and
-does not add executable specifications. Exact failing-first acceptance
-identities belong to RSC01-B.
+does not add executable specifications. RSC01-B's exact failing-first
+acceptance identities are registered in the [RSC01-B Failing-First Acceptance
+Registry](phase-58-rsc01b-failing-first-acceptance-registry.md). The registry
+is a documentary handoff only: successor concrete schema, API, type, wire,
+archive, and physical layout names remain successor-owned, including the
+choice of names for resource resolution and lifecycle representations.
 
 ## Physical Shape
 

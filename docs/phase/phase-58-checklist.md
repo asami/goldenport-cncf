@@ -15,7 +15,7 @@ Phase 58.1 through Phase 58.9 under approved split `D-58-SPLIT`.
 Stage Status:
 - Current status: IN_PROGRESS
 - Owner: CNCF, Cozy/sbt-cozy, Component Repository, Help, Admin, and sample maintainers
-- Update rule: Record RSC01-A1 implementation evidence as it is produced; treat the Step as accepted only after its review and commit evidence are recorded, and retain RSC01-B unchecked until its own accepted evidence exists.
+- Update rule: Record RSC01-A1 and RSC01-B implementation evidence as it is produced; treat the Step as accepted only after its review and commit evidence are recorded. The RSC01-B registration item is implementation evidence subject to this existing review/commit acceptance rule.
 - Entry rule: Phase 57.5 is closed.
 - Completion rule: RSC01-A records the non-normative architecture proposal, existing behavior, conflicts, ownership, and frozen invariants; RSC01-B separately records exact failing-first acceptance identities.
 
@@ -30,8 +30,9 @@ Stage Status:
 - [x] Freeze initial executable-child role examples and the separation of role from implementation technology.
 - [x] Fix logical release identity separately from physical artifact identity.
 - [x] Fix publication completeness separately from runtime activation.
-- [ ] RSC01-B: Register exact failing-first specifications and acceptance identities for every Phase 58-series acceptance group.
+- [x] RSC01-B: Register exact failing-first specifications and acceptance identities for every Phase 58-series acceptance group (implementation evidence; subject to the existing review/commit acceptance rule).
 
 Evidence:
 - Main handoff: [`component-subcomponent-architecture-implementation.md`](../notes/component-subcomponent-architecture-implementation.md)
+- RSC01-B acceptance registry: [`phase-58-rsc01b-failing-first-acceptance-registry.md`](../notes/phase-58-rsc01b-failing-first-acceptance-registry.md)
 - Design history and ledgers: [`2026-08-20-phase-58-rsc01-component-subcomponent-contract-freeze.md`](../journal/2026/08/2026-08-20-phase-58-rsc01-component-subcomponent-contract-freeze.md)

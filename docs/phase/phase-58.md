@@ -11,13 +11,15 @@ checklist=[Phase 58 Checklist](phase-58-checklist.md)
 implementation_note=[Component and SubComponent Architecture Implementation Proposal](../notes/component-subcomponent-architecture-implementation.md)
 resource_implementation_note=[Component Resource SubComponent Implementation Proposal](../notes/component-resource-subcomponent-implementation.md)
 rsc01_a_handoff=[RSC01-A owner inventory and reconciliation](../notes/component-subcomponent-architecture-implementation.md)
+rsc01_b_acceptance_registry=[RSC01-B failing-first acceptance registry](../notes/phase-58-rsc01b-failing-first-acceptance-registry.md)
+rsc01_a_accepted_commit=46f276fadaaef73495b9796153f656fe6d970e53
 rsc01_a_journal=[RSC01-A1 contract-freeze journal](../journal/2026/08/2026-08-20-phase-58-rsc01-component-subcomponent-contract-freeze.md)
 
 ## Purpose
 
 Freeze the architecture, ownership inventory, and failing-first acceptance
-identity for the Component and SubComponent foundation. This Phase produces the
-durable contract handoff that later Phase 58 children consume; it does not
+identities for the Component and SubComponent foundation. This Phase produces
+the durable contract handoff that later Phase 58 children consume; it does not
 implement the registry, archive, repository, resolver, or runtime policy.
 
 ## Approved Split
@@ -73,7 +75,9 @@ Phase Plan Gate: PROCEED
 
 ## RSC01-A Handoff
 
-RSC01-A is in progress. Its A1 owner-inventory and proposal-reconciliation
+RSC01-A is recorded as accepted at commit
+`46f276fadaaef73495b9796153f656fe6d970e53`. Its A1 owner-inventory and
+proposal-reconciliation
 handoff is recorded in
 [`component-subcomponent-architecture-implementation.md`](../notes/component-subcomponent-architecture-implementation.md)
 and its design history and separate ledgers are recorded in
@@ -81,6 +85,18 @@ and its design history and separate ledgers are recorded in
 The handoff preserves this Phase's RSC-01-only boundary and assigns exact
 failing-first acceptance identities to RSC01-B. It does not promote either
 implementation note to a canonical design/specification.
+
+## RSC01-B Handoff
+
+RSC01-B's exact handoff is the [RSC01-B failing-first acceptance
+registry](../notes/phase-58-rsc01b-failing-first-acceptance-registry.md). It
+registers one authoritative acceptance row for each stable group RSC02 through
+RSC09, including the owner Phase, repository, future path, suite or scripted
+identity, scenario IDs, shared Component/profile identities, invariant
+traceability, and RED-to-GREEN protocol. The registry creates no executable
+tests and makes no red-build claim; each successor must materialize its exact
+identity before its first production implementation edit. Phase 58 remains
+`status=in_progress` and stops before Phase 58.1 starts.
 
 ## Closure
 

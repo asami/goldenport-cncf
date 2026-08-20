@@ -137,3 +137,31 @@ items, not contradictions in the RSC-01 handoff.
 The main architecture note is the detailed handoff; this journal is the
 design-history and ledger record. Parent review, validation, and transition
 decisions remain outside this implementation slice.
+
+## RSC01-B Design History and Acceptance Ownership
+
+RSC01-A was accepted at commit
+`46f276fadaaef73495b9796153f656fe6d970e53`. RSC01-B freezes exact
+failing-first acceptance identities in the [RSC01-B Failing-First Acceptance
+Registry](../../../notes/phase-58-rsc01b-failing-first-acceptance-registry.md):
+one authoritative row for each stable group RSC02 through RSC09, with its
+successor Phase, repository, future path, suite or scripted identity,
+scenarios, invariant traceability, and shared fixture identities.
+
+The identities are frozen in RSC01-B because acceptance must be attributable
+and stable before successor implementation can begin. This prevents a
+successor from changing the path, suite, script, or scenario while defining
+the behavior it is meant to prove. The tests and scripted specifications are
+created only by their successor Phases, immediately before each successor's
+first production implementation edit, because those Phases own the concrete
+schema/API/layout vocabulary and the repository-local executable contract.
+RSC01-B therefore creates no executable specification and makes no red-build
+claim; each successor must capture RED and GREEN evidence on the same
+registered identity.
+
+The separate ledgers are unchanged: `HYG-P58-001` remains OPEN / nonblocking
+for later terminology normalization, and the Development Candidate ledger
+remains None beyond the already authorized Phase 58.1 through Phase 58.9
+series. No new out-of-scope issue was found or implemented. The Phase remains
+`status=in_progress` and stops before Phase 58.1; review, validation, commit,
+and transition decisions remain parent-owned.
