@@ -136,4 +136,4 @@ unambiguously by stable parameters.
 - [Execution determinism](../design/execution-determinism.md)
 - [CNCF developer guide](../notes/cncf-developer-guide.md)
 - [Phase 57.5](phase-57.5.md)
-- [Phase 58](phase-58.md)
+- [Phase 58 series, closing in Phase 58.9](phase-58.9.md)

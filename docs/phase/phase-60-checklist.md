@@ -10,6 +10,9 @@ This checklist is the authoritative Phase 60 state ledger after Phase 60
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
 Phase 59 closes.
 
+References to “Phase 58” below mean the full Phase 58 series, whose final
+closure is Phase 58.9.
+
 ## ADM-01: Inventory and Executable Contract Freeze
 
 Stage Status:

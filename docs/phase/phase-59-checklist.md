@@ -8,7 +8,10 @@ phase_split_journal=[Resource SubComponent Phase Split and Planning (historical 
 
 This checklist is the authoritative Phase 59 state ledger after Phase 59
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 58 closes.
+Phase 58.9 closes the Phase 58 series.
+
+References to “Phase 58” below mean the full Phase 58 series; its final entry
+gate is Phase 58.9.
 
 ## DOC-01: Inventory and Executable Acceptance
 
@@ -16,7 +19,7 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF, Cozy/SmartDox, SimpleModeling.org, ai-directive, Skill/Launcher,
   Textus CBD Support, Textus BoK, and representative Component maintainers
-- Entry rule: Phase 58 is closed.
+- Entry rule: Phase 58.9 closes the Phase 58 series.
 - Completion rule: Existing contracts, conflicts, ownership boundaries, and
   exact failing-first acceptance identities are recorded before implementation.
 

@@ -2,13 +2,13 @@
 
 status=planned
 planned_at=2026-07-25
-depends_on=[Phase 58](phase-58.md)
+depends_on=[Phase 58.9](phase-58.9.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59 Checklist](phase-59-checklist.md)
 implementation_note=[Component Documentation Knowledge Package Implementation Proposal](../notes/component-documentation-knowledge-package-implementation.md)
 composition_journal=[Component SubComponent and Development Composition Decision](../journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md)
 phase_split_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
-foundation=[Phase 58 Component and SubComponent Composition Foundation](phase-58.md)
+foundation=[Phase 58 series, closing in Phase 58.9](phase-58.9.md)
 admin_consumer=[Phase 60 Component Admin and Documentation Visibility](phase-60.md)
 
 ## Purpose
@@ -37,12 +37,15 @@ discovery. The exact Component Help manifest remains authoritative.
 
 ## Dependency
 
-Phase 59 begins after Phase 58 closes.
+Phase 59 begins after Phase 58.9 closes the Phase 58 series.
 
-Phase 58 is authoritative for Subcomponent Component identity, composition,
+The Phase 58 series is authoritative for Subcomponent Component identity, composition,
 publication completeness, repository/cache access, resolution precedence,
 integrity, operation-mode policy, lifecycle, and physical provenance. Phase 59
 consumes that foundation and must not implement a second resolver.
+
+Unless an entry gate names Phase 58.9 explicitly, references to “Phase 58” in
+this document denote the full Phase 58 series rather than RSC-01 alone.
 
 Phase 59 does not reopen Phase 50 Entity revision/OCC behavior. It may document
 those contracts through the new Component knowledge mechanism after their
@@ -472,9 +475,9 @@ documents, source code, or tests.
 
 ## Current Resume Point
 
-Phase 59 is planned and must not start before Phase 58 closes.
+Phase 59 is planned and must not start before Phase 58.9 closes the Phase 58 series.
 
-After Phase 58 closes, begin DOC-01 with a cross-repository inventory. Freeze
+After Phase 58.9 closes the Phase 58 series, begin DOC-01 with a cross-repository inventory. Freeze
 the knowledge/model resource contract, AI development context, Help consumer
 API, and framework-publication separation before implementing manifests or
 changing Help routes. Treat Phase 58 composition/resolution as an input and

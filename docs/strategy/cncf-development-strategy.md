@@ -1810,7 +1810,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-003 | `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md` | Authorized force/merge/repair operations and conflict Web/API. | NEW_PHASE | [Phase 71](../phase/phase-71.md) | ADOPTED |
 | DEV-004 | `docs/journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md` | Admin entity-ID resolution with declared exact EntityCollection equality. | MERGED_EXISTING_PHASE | [Phase 60](../phase/phase-60.md) | ADOPTED |
 | DEV-005 | `docs/journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md` | Typed configuration binding, provenance, codecs, and fixed-user intake deferred from Phase 53. | STRATEGY_ITEM | [9.51](#951-typed-configuration-binding-and-provenance-resolution), Phase 55 closure evidence | RESOLVED |
-| DEV-006 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Parent/Subcomponent descriptor description and development/packaged parity. | MERGED_EXISTING_PHASE | [Phase 58](../phase/phase-58.md) | ADOPTED |
+| DEV-006 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Parent/Subcomponent descriptor description and development/packaged parity. | MERGED_EXISTING_PHASE | [Phase 58 series](../phase/phase-58.9.md) | ADOPTED |
 | DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
 | DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
 | DEV-009 | `docs/journal/2026/08/2026-08-19-conclusion-diagnostics-availability-kind-development-task.md` | Explicit availability-kind diagnostic keys for not-running, connection-refused, and unreachable conclusions. | STRATEGY_ITEM | [9.4](#94-metrics-and-observability) | CANDIDATE |
@@ -1821,7 +1821,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | `2026/01/phase-3.1-fatjar-component.md` | Retry semantics, failure aggregation, cross-operation compensation, and distributed failure handling. | [Phase 69](../phase/phase-69.md) may consume only Job-local retry and non-distributed failure aggregation. Retained result history and recovery remain independent Phase 69 / 9.14 commitments. Generic event/reception and outcome lanes remain [9.2](#92-event-mechanism-follow-ups); compensation remains [9.10](#910-compensation-recovery-events); distributed failure ownership remains [9.13](#913-distributed-component-runtime) and [9.15](#915-saga-management). |
 | `2026/04/view-projection-design-note.md` | Custom, inherited, dynamic, and GraphQL-style view projections. | Retained by [9.16](#916-persistent-materialized-view-store); no Phase is selected because the journal supplies no consumer or persistence/rebuild contract. |
 | `2026/05/knowledge-space-operational-semantic-structure-note.md` and Phase 27 knowledge journals | Incremental/streaming KnowledgeSpace updates, provider lifecycle, graph/projection expansion, and live external authority lookup. | Retained by [9.5](#95-knowledge-structure-follow-ups). Provider-specific live lookup remains application-owned by `textus-knowledge-editor`; it does not create a CNCF provider dependency or a new CNCF Phase. |
-| `2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Descriptor snapshot, declared style/capability metadata, and development/packaged parity. | Merged into [Phase 58](../phase/phase-58.md) only for parent/Subcomponent CAR description, packaging, and resolution parity. Generic capability-definition validation and Metadata Factory contribution remain [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution). |
+| `2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Descriptor snapshot, declared style/capability metadata, and development/packaged parity. | Merged into the [Phase 58 series](../phase/phase-58.9.md) only for parent/Subcomponent CAR description, packaging, and resolution parity. Generic capability-definition validation and Metadata Factory contribution remain [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution). |
 | `2026/07/2026-07-30-cml-application-mode-capability-consideration.md` | Metadata Factory contribution of additional ComponentStyles. | Retained by the explicit future item under [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution); no Phase is selected until a non-CNCF provider supplies concrete acceptance evidence. |
 | `2026/07/2026-07-24-simpleentity-revision-occ-consideration.md` and `2026/07/2026-07-24-phase-49-entity-conflict-conditional-transition-consideration.md` | Force overwrite, merge, repair, and conflict-resolution Web/API work. | Assigned to new [Phase 71](../phase/phase-71.md), which remains held until a first operator-facing conflict driver is admitted. [9.40](#940-entity-conflict-resolution-and-repair) remains the long-lived ownership record. |
 | `2026/05/sd-01-smartdox-core-parser-note.md` | SmartDox multilingual rendering. | SmartDox-owned; recorded here as an external dependency only. It is not a CNCF Phase or a CNCF runtime workaround. |
@@ -3283,40 +3283,44 @@ Planning references:
 - `docs/notes/phase-56-cid05-cncf-runtime-identity-migration-plan.md`; and
 - `docs/journal/2026/08/2026-08-08-phase-57-action-execution-semantics-and-renumbering.md`.
 
-#### Phase 58 - Component and SubComponent Composition Foundation
+#### Phase 58 Series - Component and SubComponent Composition Foundation
 
-Planned after Phase 57.5 closes. Resource identity and repository composition
-consume the namespace-qualified Component identity and derived release
-coordinates without defining another naming authority.
+The user-approved 2026-08-20 split keeps each delivery unit within a
+conservative six-hour upper bound. It preserves Phase 58 as the RSC-01
+contract-freeze identity and inserts decimal children before unchanged Phase
+59. The Phase 58 series owns parent/Subcomponent identity, release
+composition, packaging/admission, resolution/provenance, policy, integrity,
+lifecycle, and the common consumer contract. It does not start Help, AI, or
+Admin product work.
 
-- Starts by recording a non-normative Component/SubComponent architecture
-  proposal in `docs/notes`, then promotes verified architecture and behavior to
-  `docs/design` and `docs/spec` only at Phase 58 closure.
-- Owns parent Component and SubComponent identity, primary/release composition,
-  parent registry, packaging contract, atomic repository visibility,
-  cache/retrieval, offline bundles, integrity, access, resolution precedence,
-  lifecycle, operation-mode composition policy, physical provenance, and
-  common consumer APIs.
-- Makes every declared Subcomponent, including `Documentation` and `SourceCode`,
-  an independently identifiable Component with its own CAR and
-  parent/role/implementation membership. Its information payload does not by
-  itself grant a capability, authority, or implicit parent runtime dependency.
-- Keeps CAR admission and description distinct from executable-child activation
-  and external-platform deployment.
-- Keeps publication completeness separate from primary-only runtime
-  activation.
-- Supplies one resolver to Help, AI, CBD Support, BoK, and later Admin; those
-  consumers must not scan physical artifacts or repositories independently.
-- Planning references:
-  - `docs/phase/phase-58.md`;
-  - `docs/phase/phase-58-checklist.md`;
-  - `docs/notes/component-subcomponent-architecture-implementation.md`;
-  - `docs/notes/component-resource-subcomponent-implementation.md`; and
-  - `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`.
+| Phase | Goal | Dependency |
+| --- | --- | --- |
+| [58](../phase/phase-58.md) | RSC-01: reconcile the proposed architecture, inventory owners and existing behavior, and freeze the failing-first acceptance contract. | Phase 57.5 |
+| [58.1](../phase/phase-58.1.md) | RSC-02: deterministic parent/Subcomponent identity and composition codec. | Phase 58 |
+| [58.2](../phase/phase-58.2.md) | RSC-03: deterministic packaging and complete logical-release admission. | Phase 58.1 |
+| [58.3](../phase/phase-58.3.md) | RSC-04: common resolution, activation boundary, and provenance API. | Phase 58.2 |
+| [58.4](../phase/phase-58.4.md) | RSC-05: operation-mode and development composition policy. | Phase 58.3 |
+| [58.5](../phase/phase-58.5.md) | RSC-06: authorization, disclosure, and integrity. | Phase 58.4 |
+| [58.6](../phase/phase-58.6.md) | RSC-07: lifecycle, concurrency, and observability. | Phase 58.5 |
+| [58.7](../phase/phase-58.7.md) | RSC-08: downstream Help/Admin consumer contract. | Phase 58.6 |
+| [58.8](../phase/phase-58.8.md) | RSC-09: end-to-end cross-repository validation. | Phase 58.7 |
+| [58.9](../phase/phase-58.9.md) | RSC-10: canonical design/spec promotion and Phase 58-series closure. | Phase 58.8 |
+
+The costly discovery kernel belongs only to Phase 58 and produces the reviewed
+RSC-01 handoff. Later children consume that handoff in sequence; no child may
+redefine Component identity, make a payload grant authority, make repository
+completeness imply runtime activation, or create a second physical-resource
+resolver. Phase 59 starts only after Phase 58.9 closes.
+
+Planning references:
+- `docs/phase/phase-58.md` through `docs/phase/phase-58.9.md` and their checklists;
+- `docs/notes/component-subcomponent-architecture-implementation.md`;
+- `docs/notes/component-resource-subcomponent-implementation.md`; and
+- `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`.
 
 #### Phase 59 - Component Documentation and AI Knowledge Integration
 
-Planned after Phase 58 closes.
+Planned after Phase 58.9 closes the Phase 58 series.
 
 - Goal:
   - make each logical Component release a one-stop, self-describing execution,

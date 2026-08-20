@@ -4,13 +4,16 @@ status = proposed, non-normative
 date = 2026-08-14
 phase = Phase 58
 
-This is the initial implementation proposal for the expanded Phase 58. It
-does not create a runtime, archive, schema, repository, or launcher contract
-by itself. The Phase 58 executable specifications, followed by the promoted
-design and specification, are authoritative for implementation.
+This is the initial implementation proposal for the expanded Phase 58 series.
+It does not create a runtime, archive, schema, repository, or launcher contract
+by itself. During RSC-01, Phase 58 records and reconciles this proposal, the
+owner inventory, conflicts, invariants, and exact failing-first acceptance
+identities. Phase 58.1 through Phase 58.8 later implement and verify those
+frozen identities; the promoted design and specification are authoritative for
+implementation.
 
-At Phase 58 closure, verified architecture and normative behavior must be
-promoted to:
+After the Phase 58.1 through Phase 58.8 series evidence exists, Phase 58.9
+must promote the verified architecture and normative behavior to:
 
 - `docs/design/component-subcomponent-architecture.md`; and
 - `docs/spec/component-subcomponent-architecture.md`.
@@ -117,8 +120,9 @@ structured diagnostics.
 
 ## Initial Executable Specification Work
 
-Before implementation, Phase 58 must create failing-first executable
-specifications for:
+During RSC-01, Phase 58 registers the exact failing-first specification
+identities and acceptance matrix for the following series groups. Phase 58.1
+through Phase 58.8 realize and execute those specifications before promotion:
 
 1. parent and child Component identity, release, version, and cycle rules;
 2. independent Subcomponent CAR identity, including Documentation and Source
@@ -136,7 +140,7 @@ specifications for:
 
 This note is intentionally provisional. Phase 58 may not treat it as a
 normative implementation shortcut. Once the model, codecs, resolver behavior,
-cross-repository packaging, and executable acceptance are verified, Phase 58
-must promote the accepted architecture to `docs/design` and the behavior to
-`docs/spec`, update dependent Phase 59 and Phase 60 contracts, and mark this
-proposal historical.
+cross-repository packaging, and executable acceptance are verified across the
+Phase 58.1 through Phase 58.8 successors, Phase 58.9 must promote the accepted
+architecture to `docs/design` and the behavior to `docs/spec`, update dependent
+Phase 59 and Phase 60 contracts, and mark this proposal historical.

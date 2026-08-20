@@ -150,7 +150,7 @@ Repository-qualified Cozy references:
 - [Phase 66 Checklist](phase-66-checklist.md)
 - [CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 - [Codex Skill Bundle Contract Direction](../journal/2026/07/2026-07-21-codex-skill-bundle-contract.md)
-- [Phase 58](phase-58.md)
+- [Phase 58 series, closing in Phase 58.9](phase-58.9.md)
 - [Phase 59](phase-59.md)
 - [Phase 65](phase-65.md)
 - `cozy:docs/phase/phase-24.md`

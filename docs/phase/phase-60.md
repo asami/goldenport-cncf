@@ -17,7 +17,7 @@ authorized, manageable.
 Phase 60 consumes:
 
 - Phase 55 effective configuration values and provenance;
-- Phase 58 resolved Subcomponent Component inventory, state, integrity, and
+- Phase 58-series resolved Subcomponent Component inventory, state, integrity, and
   provenance; and
 - Phase 59 Component knowledge and model manifests.
 
@@ -29,9 +29,12 @@ documentation artifacts independently.
 
 Phase 60 begins after Phase 59 closes.
 
-Phase 58 supplies the physical Subcomponent CAR and payload resolver and Phase
+The Phase 58 series supplies the physical Subcomponent CAR and payload resolver and Phase
 59 supplies the documentation/model knowledge contract. Phase 60 is their
 operator-facing consumer and does not reopen either foundation.
+
+References to “Phase 58” below mean the full Phase 58 series, whose closure is
+Phase 58.9.
 
 ## Journal Candidate Merge
 
@@ -146,7 +149,7 @@ compatibility shortcut.
 ## Planning References
 
 - [Phase 55 - Configuration Binding and Provenance](phase-55.md)
-- [Phase 58 - Component and SubComponent Composition Foundation](phase-58.md)
+- [Phase 58 series, closing in Phase 58.9](phase-58.9.md)
 - [Phase 59 - Component Documentation and AI Knowledge Integration](phase-59.md)
 - [Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
 - [Planning Journal](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)

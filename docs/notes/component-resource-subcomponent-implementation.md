@@ -4,13 +4,16 @@ status = proposed, non-normative
 date = 2026-07-31
 phase = Phase 58
 
-This note is the working implementation proposal for Phase 58. Verified
-architecture and normative behavior must be promoted to:
+This note is a non-normative input proposal for the Phase 58 series. During
+RSC-01, Phase 58 only reconciles this proposal with the broader architecture
+and freezes the resulting handoff; Phase 58.1 through Phase 58.8 implement and
+verify the successor scope. After the series evidence exists, Phase 58.9 must
+promote the verified architecture and normative behavior to:
 
 - `docs/design/component-resource-subcomponent.md`; and
 - `docs/spec/component-resource-subcomponent.md`.
 
-At Phase 58 closure this note becomes historical.
+After Phase 58.9 completes canonical promotion, this note becomes historical.
 
 ## Purpose
 
