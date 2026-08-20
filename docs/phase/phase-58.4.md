@@ -1,6 +1,6 @@
 # Phase 58.4 - Operation-Mode and Development Composition
 
-status=planned
+status=in_progress
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.3](phase-58.3.md)
 successor=[Phase 58.5](phase-58.5.md)

@@ -1,6 +1,6 @@
 # Phase 58.4 Checklist - Operation-Mode and Development Composition
 
-status=planned
+status=in_progress
 phase=[Phase 58.4 - Operation-Mode and Development Composition](phase-58.4.md)
 predecessor=[Phase 58.3](phase-58.3.md)
 successor=[Phase 58.5](phase-58.5.md)
@@ -8,10 +8,11 @@ successor=[Phase 58.5](phase-58.5.md)
 ## RSC-05: Operation-Mode and Development Composition
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN PROGRESS
 - Owner: CNCF launcher, runtime, and development resolver maintainers
 - Entry rule: Phase 58.3 RSC-04 is DONE.
 - Completion rule: Operation mode selects one runtime-owned composition policy without entering Component domain code or deploying platform-specific child artifacts.
+- Update rule: Mark DONE only after the mandatory Phase final review finds no Current Phase Blocker and the Phase release commit succeeds.
 
 - [ ] Implement Develop precedence across explicit directory, development-local, expanded, local, cache, and remote sources.
 - [ ] Define structured development-readiness failure for required missing, stale, corrupt, or incompatible resources.
@@ -24,4 +25,4 @@ Stage Status:
 - [ ] Verify development and packaged parity.
 
 Evidence:
-- Pending.
+- RSC-05A RED invocation `73144-20260820T210445Z`; RSC-05B focused GREEN invocation `79817-20260820T211653Z`, 1 suite, 9 passed / 0 failed, SBT and wrapper exit 0, serial lock released; Step review and Phase-release evidence remain pending.
