@@ -16,7 +16,8 @@ import scala.concurrent.duration.DurationInt
 
 /*
  * Failing-first executable acceptance specification for
- * RSC07-LIFECYCLE-OBSERVABILITY (Phase 58.6 / RSC-07 / RSC-07A).
+ * RSC07-LIFECYCLE-OBSERVABILITY (Phase 58.6 / RSC-07 / RSC-07A) and
+ * RSC07B-TERMINAL-OUTCOME-RECOVERY (Phase 58.6.1 / RSC-07B).
  *
  * The lifecycle vocabulary is intentionally referenced before its production
  * implementation.  This specification fixes immutable resource reuse,
@@ -24,7 +25,7 @@ import scala.concurrent.duration.DurationInt
  * observability boundary without granting content or authorization authority.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 21, 2026
+ * @version Aug. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentResourceLifecycleSpec
@@ -48,6 +49,9 @@ final class ComponentResourceLifecycleSpec
   )
   private val _e3 = afterWord(
     "in spec:docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md, example:E3, rules:RSC07-AC-03, phase:58.6, slice:RSC-07A"
+  )
+  private val _rsc07b = afterWord(
+    "in spec:docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md, example:RSC07B, rules:RSC07B-AC-01,RSC07B-AC-02,RSC07B-AC-03,RSC07B-AC-04, phase:58.6.1, slice:RSC-07B"
   )
 
   "RSC07-AC-01 shared immutable resource evidence, in-flight resolution, refresh, and invalidation" should {
@@ -524,6 +528,255 @@ final class ComponentResourceLifecycleSpec
         ready.state shouldBe ComponentResourceLifecycleState.Ready
         ready.resource shouldBe Some(resource)
         store.snapshot(key).owners shouldBe Set("component-instance-a")
+      }
+    }
+  }
+
+  "RSC07B terminal-outcome recovery" should {
+    "separate producer cancellation from admitted waiter provenance failure and permit a valid retry" must _rsc07b {
+      "when a canceled loading producer releases mismatched evidence after a waiter is admitted" in {
+        Given("a blocked producer with a cancellation token, an admitted waiter, mismatched loader evidence, and valid retry evidence")
+        val resource = _resource(_source_id, "SourceCode", _digest)
+        val mismatched = resource.copy(provenance = resource.provenance.copy(
+          sourceKind = ComponentResourceSourceKind.RemoteRepository,
+          sha256 = _digest.reverse
+        ))
+        val key = _key(resource)
+        val loader = new BlockingLoader(mismatched)
+        val cancellation = new ComponentResourceLifecycleCancellation()
+        val store = new ComponentResourceLifecycleStore()
+        val executor = Executors.newFixedThreadPool(2)
+        given ExecutionContext = ExecutionContext.fromExecutor(executor)
+
+        When("waiter admission is proven before producer cancellation and the blocked mismatched loader is released")
+        val producer = Future(store.resolveBlocking(key, "component-instance-a", loader.loadBlocking, cancellation))
+        loader.entered.await(5, TimeUnit.SECONDS) shouldBe true
+        val waiter = Future {
+          store.resolveBlocking(key, "component-instance-b", () => fail("an admitted waiter must not invoke a second loader"))
+        }
+        def _await_owner_admission_(): Unit = {
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L)
+          while (!store.snapshot(key).owners.contains("component-instance-b") && System.nanoTime() < deadline)
+            Thread.`yield`()
+        }
+        _await_owner_admission_()
+        store.snapshot(key).owners should contain ("component-instance-b")
+        cancellation.cancel() shouldBe true
+        loader.release.countDown()
+        val snapshots = try {
+          Vector(Await.result(producer, 5.seconds), Await.result(waiter, 5.seconds))
+        } finally executor.shutdownNow()
+        val abandoned = store.snapshot(key)
+        val ready = store.resolveBlocking(key, "component-instance-c", () => resource)
+
+        Then("producer cancellation and waiter provenance failure remain separate, leak no owner or resource, and the later retry publishes once")
+        loader.calls.get() shouldBe 1
+        snapshots.head.outcome shouldBe ComponentResourceLifecycleOutcome.Cancelled
+        snapshots.head.state shouldBe ComponentResourceLifecycleState.Cancelled
+        snapshots.head.resource shouldBe None
+        snapshots.head.owners shouldBe empty
+        snapshots(1).outcome shouldBe ComponentResourceLifecycleOutcome.Failed
+        snapshots(1).state shouldBe ComponentResourceLifecycleState.Failed
+        snapshots(1).resource shouldBe None
+        snapshots(1).owners shouldBe empty
+        abandoned.state shouldBe ComponentResourceLifecycleState.Failed
+        abandoned.resource shouldBe None
+        abandoned.owners shouldBe empty
+        store.metrics.cancellationCount shouldBe 1
+        store.metrics.failureCount shouldBe 1
+        store.diagnostics should have size 1
+        store.diagnostics.head.key shouldBe key
+        store.diagnostics.head.operation shouldBe "resolve"
+        store.diagnostics.head.outcome shouldBe ComponentResourceLifecycleOutcome.Failed
+        ready.state shouldBe ComponentResourceLifecycleState.Ready
+        ready.resource shouldBe Some(resource)
+        ready.owners shouldBe Set("component-instance-c")
+        store.snapshot(key).resource shouldBe Some(resource)
+        store.snapshot(key).owners shouldBe Set("component-instance-c")
+      }
+    }
+
+    "preserve a completed release result when waiter cancellation arrives afterward" must _rsc07b {
+      "when release completes a blocked shared flight before the waiter's cancellation" in {
+        Given("a blocked producer, an admitted waiter with a cancellation token, and one shared lifecycle flight")
+        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val key = _key(resource)
+        val loader = new BlockingLoader(resource)
+        val cancellation = new ComponentResourceLifecycleCancellation()
+        val store = new ComponentResourceLifecycleStore()
+        val executor = Executors.newFixedThreadPool(2)
+        given ExecutionContext = ExecutionContext.fromExecutor(executor)
+        val waiterresult = new AtomicReference[ComponentResourceLifecycleSnapshot]()
+        val waiterfailure = new AtomicReference[Throwable]()
+
+        When("both owner claims are admitted, release completes the flight, and waiter cancellation is issued afterward")
+        val producer = Future(store.resolveBlocking(key, "component-instance-a", loader.loadBlocking))
+        loader.entered.await(5, TimeUnit.SECONDS) shouldBe true
+        val waiter = new Thread(() => {
+          try waiterresult.set(store.resolveBlocking(key, "component-instance-b", () => fail("an admitted waiter must not invoke a second loader"), cancellation))
+          catch { case caught: Throwable => waiterfailure.set(caught) }
+        })
+        waiter.start()
+        def _await_owner_admission_(): Unit = {
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L)
+          while (!store.snapshot(key).owners.contains("component-instance-b") && System.nanoTime() < deadline)
+            Thread.`yield`()
+        }
+        def _await_waiter_blocked_(): Unit = {
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L)
+          while (waiter.getState != Thread.State.WAITING && System.nanoTime() < deadline)
+            Thread.`yield`()
+        }
+        _await_owner_admission_()
+        store.snapshot(key).owners should contain allOf ("component-instance-a", "component-instance-b")
+        _await_waiter_blocked_()
+        waiter.getState shouldBe Thread.State.WAITING
+        store.release(key, "component-instance-a").owners shouldBe Set("component-instance-b")
+        val terminal = store.release(key, "component-instance-b")
+        terminal.outcome shouldBe ComponentResourceLifecycleOutcome.Released
+        cancellation.cancel() shouldBe true
+        loader.release.countDown()
+        val snapshots = try {
+          waiter.join(5000L)
+          waiterfailure.get() shouldBe null
+          Vector(waiterresult.get(), Await.result(producer, 5.seconds))
+        } finally executor.shutdownNow()
+
+        Then("the waiter receives Released with no resource or owners, cancellation is not counted, and the producer cannot publish later")
+        loader.calls.get() shouldBe 1
+        snapshots.head.outcome shouldBe ComponentResourceLifecycleOutcome.Released
+        snapshots.head.state shouldBe ComponentResourceLifecycleState.Released
+        snapshots.head.resource shouldBe None
+        snapshots.head.owners shouldBe empty
+        snapshots(1).outcome shouldBe ComponentResourceLifecycleOutcome.Released
+        snapshots(1).resource shouldBe None
+        snapshots(1).owners shouldBe empty
+        store.snapshot(key).outcome shouldBe ComponentResourceLifecycleOutcome.Released
+        store.snapshot(key).resource shouldBe None
+        store.snapshot(key).owners shouldBe empty
+        store.metrics.cancellationCount shouldBe 0
+      }
+    }
+
+    "preserve a completed unload result when waiter cancellation arrives afterward" must _rsc07b {
+      "when unload completes a blocked shared flight before the waiter's cancellation" in {
+        Given("a blocked producer, an admitted waiter with a cancellation token, and one shared lifecycle flight")
+        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val key = _key(resource)
+        val loader = new BlockingLoader(resource)
+        val cancellation = new ComponentResourceLifecycleCancellation()
+        val store = new ComponentResourceLifecycleStore()
+        val executor = Executors.newFixedThreadPool(2)
+        given ExecutionContext = ExecutionContext.fromExecutor(executor)
+        val waiterresult = new AtomicReference[ComponentResourceLifecycleSnapshot]()
+        val waiterfailure = new AtomicReference[Throwable]()
+
+        When("the waiter admission is proven, unload completes the flight, and waiter cancellation is issued afterward")
+        val producer = Future(store.resolveBlocking(key, "component-instance-a", loader.loadBlocking))
+        loader.entered.await(5, TimeUnit.SECONDS) shouldBe true
+        val waiter = new Thread(() => {
+          try waiterresult.set(store.resolveBlocking(key, "component-instance-b", () => fail("an admitted waiter must not invoke a second loader"), cancellation))
+          catch { case caught: Throwable => waiterfailure.set(caught) }
+        })
+        waiter.start()
+        def _await_owner_admission_(): Unit = {
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L)
+          while (!store.snapshot(key).owners.contains("component-instance-b") && System.nanoTime() < deadline)
+            Thread.`yield`()
+        }
+        def _await_waiter_blocked_(): Unit = {
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L)
+          while (waiter.getState != Thread.State.WAITING && System.nanoTime() < deadline)
+            Thread.`yield`()
+        }
+        _await_owner_admission_()
+        store.snapshot(key).owners should contain allOf ("component-instance-a", "component-instance-b")
+        _await_waiter_blocked_()
+        waiter.getState shouldBe Thread.State.WAITING
+        val terminal = store.unload(key)
+        terminal.outcome shouldBe ComponentResourceLifecycleOutcome.Unloaded
+        cancellation.cancel() shouldBe true
+        loader.release.countDown()
+        val snapshots = try {
+          waiter.join(5000L)
+          waiterfailure.get() shouldBe null
+          Vector(waiterresult.get(), Await.result(producer, 5.seconds))
+        } finally executor.shutdownNow()
+
+        Then("the waiter receives Unloaded with no resource or owners, cancellation is not counted, and the producer cannot publish later")
+        loader.calls.get() shouldBe 1
+        snapshots.head.outcome shouldBe ComponentResourceLifecycleOutcome.Unloaded
+        snapshots.head.state shouldBe ComponentResourceLifecycleState.Unloaded
+        snapshots.head.resource shouldBe None
+        snapshots.head.owners shouldBe empty
+        snapshots(1).outcome shouldBe ComponentResourceLifecycleOutcome.Unloaded
+        snapshots(1).resource shouldBe None
+        snapshots(1).owners shouldBe empty
+        store.snapshot(key).outcome shouldBe ComponentResourceLifecycleOutcome.Unloaded
+        store.snapshot(key).resource shouldBe None
+        store.snapshot(key).owners shouldBe empty
+        store.metrics.cancellationCount shouldBe 0
+      }
+    }
+
+    "preserve a completed store shutdown result when waiter cancellation arrives afterward" must _rsc07b {
+      "when store shutdown completes a blocked shared flight before the waiter's cancellation" in {
+        Given("a blocked producer, an admitted waiter with a cancellation token, and one shared lifecycle flight")
+        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val key = _key(resource)
+        val loader = new BlockingLoader(resource)
+        val cancellation = new ComponentResourceLifecycleCancellation()
+        val store = new ComponentResourceLifecycleStore()
+        val executor = Executors.newFixedThreadPool(2)
+        given ExecutionContext = ExecutionContext.fromExecutor(executor)
+        val waiterresult = new AtomicReference[ComponentResourceLifecycleSnapshot]()
+        val waiterfailure = new AtomicReference[Throwable]()
+
+        When("the waiter admission is proven, store shutdown completes the flight, and waiter cancellation is issued afterward")
+        val producer = Future(store.resolveBlocking(key, "component-instance-a", loader.loadBlocking))
+        loader.entered.await(5, TimeUnit.SECONDS) shouldBe true
+        val waiter = new Thread(() => {
+          try waiterresult.set(store.resolveBlocking(key, "component-instance-b", () => fail("an admitted waiter must not invoke a second loader"), cancellation))
+          catch { case caught: Throwable => waiterfailure.set(caught) }
+        })
+        waiter.start()
+        def _await_owner_admission_(): Unit = {
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L)
+          while (!store.snapshot(key).owners.contains("component-instance-b") && System.nanoTime() < deadline)
+            Thread.`yield`()
+        }
+        def _await_waiter_blocked_(): Unit = {
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L)
+          while (waiter.getState != Thread.State.WAITING && System.nanoTime() < deadline)
+            Thread.`yield`()
+        }
+        _await_owner_admission_()
+        store.snapshot(key).owners should contain allOf ("component-instance-a", "component-instance-b")
+        _await_waiter_blocked_()
+        waiter.getState shouldBe Thread.State.WAITING
+        val terminal = store.shutdown()
+        terminal.outcome shouldBe ComponentResourceLifecycleOutcome.Shutdown
+        cancellation.cancel() shouldBe true
+        loader.release.countDown()
+        val snapshots = try {
+          waiter.join(5000L)
+          waiterfailure.get() shouldBe null
+          Vector(waiterresult.get(), Await.result(producer, 5.seconds))
+        } finally executor.shutdownNow()
+
+        Then("the waiter receives Shutdown with no resource or owners, cancellation is not counted, and the producer cannot publish later")
+        loader.calls.get() shouldBe 1
+        snapshots.head.outcome shouldBe ComponentResourceLifecycleOutcome.Shutdown
+        snapshots.head.state shouldBe ComponentResourceLifecycleState.Shutdown
+        snapshots.head.resource shouldBe None
+        snapshots.head.owners shouldBe empty
+        snapshots(1).outcome shouldBe ComponentResourceLifecycleOutcome.Shutdown
+        snapshots(1).resource shouldBe None
+        snapshots(1).owners shouldBe empty
+        store.snapshot(key).outcome shouldBe ComponentResourceLifecycleOutcome.Shutdown
+        store.snapshot(key).resource shouldBe None
+        store.snapshot(key).owners shouldBe empty
+        store.metrics.cancellationCount shouldBe 0
       }
     }
   }

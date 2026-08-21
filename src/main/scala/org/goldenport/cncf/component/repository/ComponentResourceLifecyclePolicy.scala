@@ -13,7 +13,7 @@ import scala.util.control.NonFatal
  * It neither discovers content nor grants any resource or runtime authority.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 21, 2026
+ * @version Aug. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentResourceLifecycleKey(
@@ -427,12 +427,18 @@ final class ComponentResourceLifecycleStore(
           Transition(_snapshot_locked())
         else if (storeShutdown)
           _terminal_locked(ComponentResourceLifecycleOutcome.Shutdown)
-        else if (!_matches_key(resource))
-          _complete_failure_locked(flight)
         else if (flight.loadingCancellationCancelled) {
           _owners = _owners - flight.loadingOwner
           if (_owners.isEmpty)
             _terminal_locked(ComponentResourceLifecycleOutcome.Cancelled)
+          else if (!_matches_key(resource)) {
+            _complete_failure_locked(flight)
+            Transition(
+              _cancelled_snapshot_locked(),
+              cancellationWon = true,
+              failureWon = true
+            )
+          }
           else {
             _resource = Some(resource)
             _generation = _generation + 1L
@@ -443,7 +449,9 @@ final class ComponentResourceLifecycleStore(
             flight.complete(snapshot)
             Transition(_cancelled_snapshot_locked(), cancellationWon = true)
           }
-        } else {
+        } else if (!_matches_key(resource))
+          _complete_failure_locked(flight)
+        else {
           _resource = Some(resource)
           _generation = _generation + 1L
           _state = ComponentResourceLifecycleState.Ready
@@ -553,6 +561,7 @@ final class ComponentResourceLifecycleStore(
 
     private def _complete_failure_locked(flight: InFlight): Transition = {
       _resource = None
+      _owners = Set.empty
       _state = ComponentResourceLifecycleState.Failed
       _outcome = ComponentResourceLifecycleOutcome.Failed
       val snapshot = _snapshot_locked()
@@ -614,51 +623,71 @@ final class ComponentResourceLifecycleStore(
     private val _monitor = new Object()
     private var _completed = false
     private var _completion = Option.empty[FlightCompletion]
-    private var _completion_waiters = Vector.empty[CountDownLatch]
+    private var _completion_waiters = Vector.empty[Waiter]
 
     def loadingCancellationCancelled: Boolean = loadingcancellation.exists(_.isCancelled)
 
-    def complete(snapshot: ComponentResourceLifecycleSnapshot): Unit = {
-      val waiters = _monitor.synchronized {
-        _completed = true
-        _completion = Some(FlightSnapshot(snapshot))
-        val result = _completion_waiters
-        _completion_waiters = Vector.empty
-        result
-      }
-      waiters.foreach(_.countDown())
-    }
+    def complete(snapshot: ComponentResourceLifecycleSnapshot): Unit =
+      _complete(FlightSnapshot(snapshot))
 
-    def abandon(failure: Throwable): Unit = {
-      val waiters = _monitor.synchronized {
-        _completed = true
-        _completion = Some(FlightFailure(failure))
-        val result = _completion_waiters
-        _completion_waiters = Vector.empty
-        result
-      }
-      waiters.foreach(_.countDown())
-    }
+    def abandon(failure: Throwable): Unit =
+      _complete(FlightFailure(failure))
 
     def awaitBlockingCompletionOrCancellation(cancellation: Option[ComponentResourceLifecycleCancellation]): Option[FlightCompletion] = {
-      val signal = new CountDownLatch(1)
+      val waiter = new Waiter
       val completed = _monitor.synchronized {
         if (_completed)
-          true
+          _completion
         else {
-          _completion_waiters = _completion_waiters :+ signal
-          false
+          _completion_waiters = _completion_waiters :+ waiter
+          None
         }
       }
-      if (!completed && !cancellation.exists(_.isCancelled)) {
-        cancellation.foreach(_._on_cancelled(() => signal.countDown()))
-        if (!cancellation.exists(_.isCancelled))
-          signal.await()
+      completed match {
+        case Some(completion) => Some(completion)
+        case None =>
+          cancellation.foreach(_._on_cancelled(() => _cancel_waiter(waiter)))
+          waiter.signal.await()
+          _monitor.synchronized {
+            if (waiter.cancellationWon)
+              None
+            else
+              _completion
+          }
       }
-      if (cancellation.exists(_.isCancelled))
-        None
-      else
-        _monitor.synchronized(_completion)
+    }
+
+    private def _complete(completion: FlightCompletion): Unit = {
+      val waiters = _monitor.synchronized {
+        if (_completed)
+          Vector.empty
+        else {
+          _completed = true
+          _completion = Some(completion)
+          val result = _completion_waiters
+          _completion_waiters = Vector.empty
+          result
+        }
+      }
+      waiters.foreach(_.signal.countDown())
+    }
+
+    private def _cancel_waiter(waiter: Waiter): Unit =
+      _monitor.synchronized {
+        if (!_completed && _completion_waiters.exists(candidate => candidate eq waiter)) {
+          waiter.cancel()
+          _completion_waiters = _completion_waiters.filterNot(candidate => candidate eq waiter)
+          waiter.signal.countDown()
+        }
+      }
+
+    private final class Waiter {
+      val signal = new CountDownLatch(1)
+      private var _cancellation_won = false
+
+      def cancellationWon: Boolean = _cancellation_won
+
+      def cancel(): Unit = _cancellation_won = true
     }
   }
 
