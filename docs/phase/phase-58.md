@@ -38,7 +38,8 @@ implementation and settled validation work.
 | [58.3](phase-58.3.md) | RSC-04 resolution, activation boundary, and provenance | Terra / xhigh | 4–6h |
 | [58.4](phase-58.4.md) | RSC-05 operation-mode and development composition | Terra / high | 3–5h |
 | [58.5](phase-58.5.md) | RSC-06 authorization, disclosure, and integrity | Terra / xhigh | 3–5h |
-| [58.6](phase-58.6.md) | RSC-07 lifecycle, concurrency, and observability | Terra / xhigh | 3–5h |
+| [58.6](phase-58.6.md) | Closed on 2026-08-22: RSC-07A core lifecycle, concurrency, and observability | Terra / high | 2–4h |
+| [58.6.1](phase-58.6.1.md) | RSC-07B lifecycle terminal-outcome recovery | Terra / xhigh | 4–6h |
 | [58.7](phase-58.7.md) | RSC-08 downstream consumer contract | Terra / high | 3–5h |
 | [58.8](phase-58.8.md) | RSC-09 end-to-end cross-repository validation | Terra / high | 3–5h |
 | [58.9](phase-58.9.md) | RSC-10 canonical promotion and closure | Terra / high | 2–4h |

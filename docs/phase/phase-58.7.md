@@ -2,11 +2,11 @@
 
 status=planned
 split_from=[Phase 58](phase-58.md)
-depends_on=[Phase 58.6](phase-58.6.md)
+depends_on=[Phase 58.6.1](phase-58.6.1.md)
 successor=[Phase 58.8](phase-58.8.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 58.7 Checklist](phase-58.7-checklist.md)
-consumes_handoff=RSC-07 stable lifecycle, diagnostics, and provenance contract
+consumes_handoff=Phase 58.6.1 complete RSC-07 lifecycle, diagnostics, and provenance contract
 
 ## Goal
 
@@ -20,7 +20,7 @@ Phase Plan Gate: PROCEED
 - recommended_parent_profile: gpt-5.6-terra / high
 - profile_cost_role: lower-cost execution
 - expensive_reasoning_kernel: none
-- frozen_profile_transition_handoff: RSC-07 stable resource, provenance, and diagnostics contract
+- frozen_profile_transition_handoff: Phase 58.6.1 complete RSC-07 stable resource, provenance, and diagnostics contract
 - parent_reasoning_mode_policy: standard
 - estimated_at_recommended_profile: 3–5h
 - agent_reasoning_mode_policy: default standard; consider pro only at an eligible agent launch when the active interface supports it and frozen quality-first evidence justifies it

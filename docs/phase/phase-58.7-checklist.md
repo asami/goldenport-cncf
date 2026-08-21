@@ -2,7 +2,7 @@
 
 status=planned
 phase=[Phase 58.7 - Resolved-Resource Downstream Consumer Contract](phase-58.7.md)
-predecessor=[Phase 58.6](phase-58.6.md)
+predecessor=[Phase 58.6.1](phase-58.6.1.md)
 successor=[Phase 58.8](phase-58.8.md)
 
 ## RSC-08: Downstream Consumer Contract
@@ -10,7 +10,7 @@ successor=[Phase 58.8](phase-58.8.md)
 Stage Status:
 - Current status: PLANNED
 - Owner: CNCF resolver, Help, and Component Admin maintainers
-- Entry rule: Phase 58.6 RSC-07 is DONE.
+- Entry rule: Phase 58.6.1 RSC-07 is DONE.
 - Completion rule: Help and Admin fixtures consume the same resolved resources, child identities, and provenance without physical-artifact scans.
 
 - [ ] Define read-only resource inventory and content-access APIs.

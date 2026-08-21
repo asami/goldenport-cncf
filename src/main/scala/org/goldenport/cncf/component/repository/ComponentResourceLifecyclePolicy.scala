@@ -1,11 +1,12 @@
 package org.goldenport.cncf.component.repository
 
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.observability.CallTreeContext
+
+import scala.util.control.NonFatal
 
 /*
  * Lifecycle coordination for immutable resolved component-resource evidence.
@@ -21,23 +22,73 @@ final case class ComponentResourceLifecycleKey(
   role: String,
   sourceKind: ComponentResourceSourceKind,
   artifactDigest: String
-)
+) {
+  require(ComponentResourceLifecycleKey._is_safe(componentId, logicalRelease, role, sourceKind, artifactDigest), ComponentResourceLifecycleKey.INVALID_KEY_MESSAGE)
+}
+
+object ComponentResourceLifecycleKey {
+  private val COMPONENT_ID_PATTERN = "[A-Za-z][A-Za-z0-9.]{0,127}".r
+  private val RELEASE_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}".r
+  private val ROLE_PATTERN = "[A-Za-z][A-Za-z0-9._-]{0,63}".r
+  private val SHA256_PATTERN = "[0-9a-f]{64}".r
+  private val INVALID_KEY_MESSAGE = "invalid component resource lifecycle key"
+
+  private def _is_safe(
+    componentid: ComponentId,
+    logicalrelease: String,
+    role: String,
+    sourcekind: ComponentResourceSourceKind,
+    artifactdigest: String
+  ): Boolean =
+    Option(componentid).exists(id => Option(id.name).exists(value => COMPONENT_ID_PATTERN.matches(value))) &&
+      Option(logicalrelease).exists(value => RELEASE_PATTERN.matches(value)) &&
+      Option(role).exists(value => ROLE_PATTERN.matches(value)) &&
+      sourcekind != null &&
+      Option(artifactdigest).exists(value => SHA256_PATTERN.matches(value))
+}
 
 final class ComponentResourceLifecycleCancellation {
   private val _cancelled = new AtomicBoolean(false)
+  private val _monitor = new Object()
+  private var _callbacks = Vector.empty[() => Unit]
 
-  def cancel(): Boolean = _cancelled.compareAndSet(false, true)
+  def cancel(): Boolean =
+    if (_cancelled.compareAndSet(false, true)) {
+      val callbacks = _monitor.synchronized {
+        val result = _callbacks
+        _callbacks = Vector.empty
+        result
+      }
+      callbacks.foreach(_())
+      true
+    } else
+      false
 
   def isCancelled: Boolean = _cancelled.get()
 
   def cancelled: Boolean = isCancelled
+
+  private[repository] def _on_cancelled(callback: () => Unit): Unit = {
+    val invoke = _monitor.synchronized {
+      if (isCancelled)
+        true
+      else {
+        _callbacks = _callbacks :+ callback
+        false
+      }
+    }
+    if (invoke)
+      callback()
+  }
 }
 
-enum ComponentResourceLifecycleOutcome:
+enum ComponentResourceLifecycleOutcome {
   case Pending, Ready, Released, Unloaded, Shutdown, Cancelled, Failed
+}
 
-enum ComponentResourceLifecycleState:
+enum ComponentResourceLifecycleState {
   case Empty, Pending, Ready, Invalidated, Released, Unloaded, Shutdown, Cancelled, Failed
+}
 
 final case class ComponentResourceLifecycleSnapshot(
   resource: Option[ResolvedComponentResource],
@@ -64,53 +115,43 @@ final case class ComponentResourceLifecycleDiagnostic(
 )
 
 final class ComponentResourceLifecycleStore(
-  diagnosticLimit: Int = ComponentResourceLifecycleStore.DefaultDiagnosticLimit,
-  callTreeContext: Option[CallTreeContext] = None
+  diagnosticLimit: Int = ComponentResourceLifecycleStore.DEFAULT_DIAGNOSTIC_LIMIT,
+  callTreeContext: Option[CallTreeContext] = None,
+  callTreeEventLimit: Int = ComponentResourceLifecycleStore.DEFAULT_CALL_TREE_EVENT_LIMIT
 ) {
   require(diagnosticLimit > 0, "diagnosticLimit must be positive")
+  require(callTreeEventLimit > 0, "callTreeEventLimit must be positive")
 
   private val _entries = new ConcurrentHashMap[ComponentResourceLifecycleKey, Entry]()
   private val _store_shutdown = new AtomicBoolean(false)
   private val _cancellation_count = new AtomicLong(0L)
   private val _failure_count = new AtomicLong(0L)
+  private val _call_tree_node_count = new AtomicLong(0L)
   private val _diagnostics_monitor = new Object()
   private val _observability_monitor = new Object()
   private var _diagnostics = Vector.empty[ComponentResourceLifecycleDiagnostic]
 
-  def resolve(
+  def resolveBlocking(
     key: ComponentResourceLifecycleKey,
     owner: String,
     loader: () => ResolvedComponentResource
   ): ComponentResourceLifecycleSnapshot =
-    _resolve(key, owner, loader, None)
+    _resolve_blocking(key, owner, loader, None)
 
-  def resolve(
+  def resolveBlocking(
     key: ComponentResourceLifecycleKey,
     owner: String,
     loader: () => ResolvedComponentResource,
     cancellation: ComponentResourceLifecycleCancellation
   ): ComponentResourceLifecycleSnapshot =
-    _resolve(key, owner, loader, Option(cancellation))
+    _resolve_blocking(key, owner, loader, Option(cancellation))
 
-  def refresh(
+  def refreshBlocking(
     key: ComponentResourceLifecycleKey,
     owner: String,
     loader: () => ResolvedComponentResource
-  ): ComponentResourceLifecycleSnapshot = {
-    val entry = _entry(key)
-    var result = Option.empty[ComponentResourceLifecycleSnapshot]
-    while (result.isEmpty) {
-      entry.admit(owner, None, refresh = true, _store_shutdown.get()) match {
-        case Immediate(transition) =>
-          result = Some(_settle(key, "refresh", transition))
-        case Start(flight) =>
-          result = Some(_load(key, entry, flight, loader, "refresh"))
-        case Wait(flight) =>
-          flight.awaitCompletion()
-      }
-    }
-    result.get
-  }
+  ): ComponentResourceLifecycleSnapshot =
+    _admit_blocking(key, owner, loader, None, refresh = true, operation = "refresh")
 
   def invalidate(key: ComponentResourceLifecycleKey): ComponentResourceLifecycleSnapshot =
     _settle(key, "invalidate", _entry(key).invalidate(_store_shutdown.get()))
@@ -164,43 +205,58 @@ final class ComponentResourceLifecycleStore(
   def diagnostics: Vector[ComponentResourceLifecycleDiagnostic] =
     _diagnostics_monitor.synchronized(_diagnostics)
 
-  private def _resolve(
+  private def _resolve_blocking(
     key: ComponentResourceLifecycleKey,
     owner: String,
     loader: () => ResolvedComponentResource,
     cancellation: Option[ComponentResourceLifecycleCancellation]
+  ): ComponentResourceLifecycleSnapshot =
+    _admit_blocking(key, owner, loader, cancellation, refresh = false, operation = "resolve")
+
+  private def _admit_blocking(
+    key: ComponentResourceLifecycleKey,
+    owner: String,
+    loader: () => ResolvedComponentResource,
+    cancellation: Option[ComponentResourceLifecycleCancellation],
+    refresh: Boolean,
+    operation: String
   ): ComponentResourceLifecycleSnapshot = {
     val entry = _entry(key)
-    entry.admit(owner, cancellation, refresh = false, _store_shutdown.get()) match {
+    entry.admit(owner, cancellation, refresh, _store_shutdown.get()) match {
       case Immediate(transition) =>
-        _settle(key, "resolve", transition)
+        _settle(key, operation, transition)
       case Start(flight) =>
-        _load(key, entry, flight, loader, "resolve")
+        _load_blocking(key, entry, flight, loader, operation)
       case Wait(flight) =>
-        flight.awaitCompletion()
-        _settle(key, "resolve", Transition(entry.snapshot()))
+        _settle(key, operation, entry.awaitBlocking(flight, owner, cancellation))
     }
   }
 
-  private def _load(
+  private def _load_blocking(
     key: ComponentResourceLifecycleKey,
     entry: Entry,
     flight: InFlight,
     loader: () => ResolvedComponentResource,
     operation: String
-  ): ComponentResourceLifecycleSnapshot = {
-    val transition =
-      try {
-        val resource = loader()
+  ): ComponentResourceLifecycleSnapshot =
+    try {
+      val resource = loader()
+      val transition =
         if (resource == null)
-          throw new IllegalStateException("component resource loader returned no evidence")
-        entry.completeSuccess(flight, resource, _store_shutdown.get())
-      } catch {
-        case _: Throwable =>
           entry.completeFailure(flight, _store_shutdown.get())
-      }
-    _settle(key, operation, transition)
-  }
+        else
+          entry.completeSuccess(flight, resource, _store_shutdown.get())
+      _settle(key, operation, transition)
+    } catch {
+      case interrupted: InterruptedException =>
+        entry.abandon(flight, interrupted, _store_shutdown.get())
+        throw interrupted
+      case NonFatal(_) =>
+        _settle(key, operation, entry.completeFailure(flight, _store_shutdown.get()))
+      case fatal: Throwable =>
+        entry.abandon(flight, fatal, _store_shutdown.get())
+        throw fatal
+    }
 
   private def _settle(
     key: ComponentResourceLifecycleKey,
@@ -222,7 +278,7 @@ final class ComponentResourceLifecycleStore(
     if (current != null)
       current
     else {
-      val created = new Entry()
+      val created = new Entry(key)
       val previous = _entries.putIfAbsent(key, created)
       if (previous == null) created else previous
     }
@@ -264,21 +320,36 @@ final class ComponentResourceLifecycleStore(
         )
         _observability_monitor.synchronized {
           try {
-            context.mark("component-resource-lifecycle", attributes)
+            _mark_call_tree(context, attributes)
             if (outcome == ComponentResourceLifecycleOutcome.Failed)
-              context.failure(
-                "component-resource-lifecycle",
-                "component resource lifecycle failure",
-                attributes
-              )
+              _fail_call_tree(context, attributes)
           } catch {
-            case _: Throwable => ()
+            case NonFatal(_) => ()
           }
         }
       }
     }
 
-  private final class Entry {
+  private def _mark_call_tree(context: CallTreeContext, attributes: Map[String, String]): Unit =
+    if (_reserve_call_tree_nodes(CALL_TREE_MARK_NODE_COUNT))
+      context.mark(CALL_TREE_LABEL, attributes)
+
+  private def _fail_call_tree(context: CallTreeContext, attributes: Map[String, String]): Unit =
+    if (_reserve_call_tree_nodes(CALL_TREE_FAILURE_NODE_COUNT))
+      context.failure(CALL_TREE_LABEL, SAFE_FAILURE_MESSAGE, attributes)
+
+  private def _reserve_call_tree_nodes(nodecount: Long): Boolean = {
+    var reserved = false
+    while (!reserved) {
+      val current = _call_tree_node_count.get()
+      if (current + nodecount > callTreeEventLimit)
+        return false
+      reserved = _call_tree_node_count.compareAndSet(current, current + nodecount)
+    }
+    true
+  }
+
+  private final class Entry(key: ComponentResourceLifecycleKey) {
     private val _monitor = new Object()
     private var _resource = Option.empty[ResolvedComponentResource]
     private var _generation = 0L
@@ -298,32 +369,52 @@ final class ComponentResourceLifecycleStore(
           Immediate(_terminal_locked(ComponentResourceLifecycleOutcome.Shutdown))
         else if (_is_terminal(_state))
           Immediate(Transition(_snapshot_locked()))
-        else if (_state == ComponentResourceLifecycleState.Ready && !refresh) {
+        else if (cancellation.exists(_.isCancelled)) {
+          if (_state == ComponentResourceLifecycleState.Empty && _in_flight.isEmpty)
+            Immediate(_terminal_locked(ComponentResourceLifecycleOutcome.Cancelled))
+          else {
+            _owners = _owners - owner
+            Immediate(Transition(_cancelled_snapshot_locked(), cancellationWon = true))
+          }
+        } else if (_state == ComponentResourceLifecycleState.Ready && !refresh) {
           _owners = _owners + owner
           Immediate(Transition(_snapshot_locked()))
         } else {
           _owners = _owners + owner
           _in_flight match {
-            case Some(flight) =>
-              cancellation.foreach(flight.add)
-              if (flight.isCancelled)
-                Immediate(_terminal_locked(ComponentResourceLifecycleOutcome.Cancelled))
-              else
-                Wait(flight)
+            case Some(flight) => Wait(flight)
             case None =>
-              val flight = new InFlight()
-              cancellation.foreach(flight.add)
-              if (flight.isCancelled)
-                Immediate(_terminal_locked(ComponentResourceLifecycleOutcome.Cancelled))
-              else {
-                _resource = None
-                _state = ComponentResourceLifecycleState.Pending
-                _outcome = ComponentResourceLifecycleOutcome.Pending
-                _in_flight = Some(flight)
-                Start(flight)
-              }
+              val flight = new InFlight(owner, cancellation)
+              _resource = None
+              _state = ComponentResourceLifecycleState.Pending
+              _outcome = ComponentResourceLifecycleOutcome.Pending
+              _in_flight = Some(flight)
+              Start(flight)
           }
         }
+      }
+
+    def awaitBlocking(
+      flight: InFlight,
+      owner: String,
+      cancellation: Option[ComponentResourceLifecycleCancellation]
+    ): Transition =
+      try {
+        flight.awaitBlockingCompletionOrCancellation(cancellation) match {
+          case Some(FlightSnapshot(snapshot)) => Transition(snapshot)
+          case Some(FlightFailure(failure)) => throw failure
+          case None =>
+            _monitor.synchronized {
+              _owners = _owners - owner
+              Transition(_cancelled_snapshot_locked(), cancellationWon = true)
+            }
+        }
+      } catch {
+        case interrupted: InterruptedException =>
+          _monitor.synchronized {
+            _owners = _owners - owner
+          }
+          throw interrupted
       }
 
     def completeSuccess(
@@ -336,16 +427,31 @@ final class ComponentResourceLifecycleStore(
           Transition(_snapshot_locked())
         else if (storeShutdown)
           _terminal_locked(ComponentResourceLifecycleOutcome.Shutdown)
-        else if (flight.isCancelled)
-          _terminal_locked(ComponentResourceLifecycleOutcome.Cancelled)
-        else {
+        else if (!_matches_key(resource))
+          _complete_failure_locked(flight)
+        else if (flight.loadingCancellationCancelled) {
+          _owners = _owners - flight.loadingOwner
+          if (_owners.isEmpty)
+            _terminal_locked(ComponentResourceLifecycleOutcome.Cancelled)
+          else {
+            _resource = Some(resource)
+            _generation = _generation + 1L
+            _state = ComponentResourceLifecycleState.Ready
+            _outcome = ComponentResourceLifecycleOutcome.Ready
+            val snapshot = _snapshot_locked()
+            _in_flight = None
+            flight.complete(snapshot)
+            Transition(_cancelled_snapshot_locked(), cancellationWon = true)
+          }
+        } else {
           _resource = Some(resource)
           _generation = _generation + 1L
           _state = ComponentResourceLifecycleState.Ready
           _outcome = ComponentResourceLifecycleOutcome.Ready
+          val snapshot = _snapshot_locked()
           _in_flight = None
-          flight.complete()
-          Transition(_snapshot_locked())
+          flight.complete(snapshot)
+          Transition(snapshot)
         }
       }
 
@@ -358,15 +464,39 @@ final class ComponentResourceLifecycleStore(
           Transition(_snapshot_locked())
         else if (storeShutdown)
           _terminal_locked(ComponentResourceLifecycleOutcome.Shutdown)
-        else if (flight.isCancelled)
-          _terminal_locked(ComponentResourceLifecycleOutcome.Cancelled)
-        else {
-          _resource = None
-          _state = ComponentResourceLifecycleState.Failed
-          _outcome = ComponentResourceLifecycleOutcome.Failed
-          _in_flight = None
-          flight.complete()
-          Transition(_snapshot_locked(), failureWon = true)
+        else if (flight.loadingCancellationCancelled) {
+          _owners = _owners - flight.loadingOwner
+          if (_owners.isEmpty)
+            _terminal_locked(ComponentResourceLifecycleOutcome.Cancelled)
+          else {
+            _complete_failure_locked(flight)
+            Transition(
+              _cancelled_snapshot_locked(),
+              cancellationWon = true,
+              failureWon = true
+            )
+          }
+        } else
+          _complete_failure_locked(flight)
+      }
+
+    def abandon(
+      flight: InFlight,
+      failure: Throwable,
+      storeShutdown: Boolean
+    ): Unit =
+      _monitor.synchronized {
+        if (_in_flight.contains(flight)) {
+          if (storeShutdown)
+            _terminal_locked(ComponentResourceLifecycleOutcome.Shutdown)
+          else {
+            _resource = None
+            _owners = Set.empty
+            _state = ComponentResourceLifecycleState.Empty
+            _outcome = ComponentResourceLifecycleOutcome.Pending
+            _in_flight = None
+            flight.abandon(failure)
+          }
         }
       }
 
@@ -380,9 +510,10 @@ final class ComponentResourceLifecycleStore(
           _resource = None
           _state = ComponentResourceLifecycleState.Invalidated
           _outcome = ComponentResourceLifecycleOutcome.Pending
-          _in_flight.foreach(_.complete())
+          val snapshot = _snapshot_locked()
+          _in_flight.foreach(_.complete(snapshot))
           _in_flight = None
-          Transition(_snapshot_locked())
+          Transition(snapshot)
         }
       }
 
@@ -420,6 +551,24 @@ final class ComponentResourceLifecycleStore(
     def snapshot(): ComponentResourceLifecycleSnapshot =
       _monitor.synchronized(_snapshot_locked())
 
+    private def _complete_failure_locked(flight: InFlight): Transition = {
+      _resource = None
+      _state = ComponentResourceLifecycleState.Failed
+      _outcome = ComponentResourceLifecycleOutcome.Failed
+      val snapshot = _snapshot_locked()
+      _in_flight = None
+      flight.complete(snapshot)
+      Transition(snapshot, failureWon = true)
+    }
+
+    private def _matches_key(resource: ResolvedComponentResource): Boolean =
+      resource.logicalIdentity.componentId == key.componentId &&
+        resource.logicalIdentity.logicalRelease == key.logicalRelease &&
+        resource.logicalIdentity.childRole == key.role &&
+        resource.provenance.childRole == key.role &&
+        resource.provenance.sourceKind == key.sourceKind &&
+        resource.provenance.sha256 == key.artifactDigest
+
     private def _terminal_locked(
       outcome: ComponentResourceLifecycleOutcome
     ): Transition =
@@ -430,13 +579,23 @@ final class ComponentResourceLifecycleStore(
         _owners = Set.empty
         _state = _state_for(outcome)
         _outcome = outcome
-        _in_flight.foreach(_.complete())
+        val snapshot = _snapshot_locked()
+        _in_flight.foreach(_.complete(snapshot))
         _in_flight = None
         Transition(
-          _snapshot_locked(),
+          snapshot,
           cancellationWon = outcome == ComponentResourceLifecycleOutcome.Cancelled
         )
       }
+
+    private def _cancelled_snapshot_locked(): ComponentResourceLifecycleSnapshot =
+      ComponentResourceLifecycleSnapshot(
+        resource = None,
+        generation = _generation,
+        owners = _owners,
+        state = ComponentResourceLifecycleState.Cancelled,
+        outcome = ComponentResourceLifecycleOutcome.Cancelled
+      )
 
     private def _snapshot_locked(): ComponentResourceLifecycleSnapshot =
       ComponentResourceLifecycleSnapshot(
@@ -448,23 +607,64 @@ final class ComponentResourceLifecycleStore(
       )
   }
 
-  private final class InFlight {
-    private val _completion = new CountDownLatch(1)
-    private var _cancellations = Vector.empty[ComponentResourceLifecycleCancellation]
+  private final class InFlight(
+    val loadingOwner: String,
+    loadingcancellation: Option[ComponentResourceLifecycleCancellation]
+  ) {
+    private val _monitor = new Object()
+    private var _completed = false
+    private var _completion = Option.empty[FlightCompletion]
+    private var _completion_waiters = Vector.empty[CountDownLatch]
 
-    def add(cancellation: ComponentResourceLifecycleCancellation): Unit =
-      _cancellations = _cancellations :+ cancellation
+    def loadingCancellationCancelled: Boolean = loadingcancellation.exists(_.isCancelled)
 
-    def isCancelled: Boolean = _cancellations.exists(_.isCancelled)
-
-    def complete(): Unit = _completion.countDown()
-
-    def awaitCompletion(): Unit =
-      try _completion.await()
-      catch {
-        case _: InterruptedException => Thread.currentThread.interrupt()
+    def complete(snapshot: ComponentResourceLifecycleSnapshot): Unit = {
+      val waiters = _monitor.synchronized {
+        _completed = true
+        _completion = Some(FlightSnapshot(snapshot))
+        val result = _completion_waiters
+        _completion_waiters = Vector.empty
+        result
       }
+      waiters.foreach(_.countDown())
+    }
+
+    def abandon(failure: Throwable): Unit = {
+      val waiters = _monitor.synchronized {
+        _completed = true
+        _completion = Some(FlightFailure(failure))
+        val result = _completion_waiters
+        _completion_waiters = Vector.empty
+        result
+      }
+      waiters.foreach(_.countDown())
+    }
+
+    def awaitBlockingCompletionOrCancellation(cancellation: Option[ComponentResourceLifecycleCancellation]): Option[FlightCompletion] = {
+      val signal = new CountDownLatch(1)
+      val completed = _monitor.synchronized {
+        if (_completed)
+          true
+        else {
+          _completion_waiters = _completion_waiters :+ signal
+          false
+        }
+      }
+      if (!completed && !cancellation.exists(_.isCancelled)) {
+        cancellation.foreach(_._on_cancelled(() => signal.countDown()))
+        if (!cancellation.exists(_.isCancelled))
+          signal.await()
+      }
+      if (cancellation.exists(_.isCancelled))
+        None
+      else
+        _monitor.synchronized(_completion)
+    }
   }
+
+  private sealed trait FlightCompletion
+  private final case class FlightSnapshot(snapshot: ComponentResourceLifecycleSnapshot) extends FlightCompletion
+  private final case class FlightFailure(failure: Throwable) extends FlightCompletion
 
   private sealed trait Admission
   private final case class Immediate(transition: Transition) extends Admission
@@ -499,6 +699,11 @@ final class ComponentResourceLifecycleStore(
       case ComponentResourceLifecycleOutcome.Pending => ComponentResourceLifecycleState.Pending
     }
 
+  private val CALL_TREE_LABEL = "component-resource-lifecycle"
+  private val SAFE_FAILURE_MESSAGE = "component resource lifecycle failure"
+  private val CALL_TREE_MARK_NODE_COUNT = 2L
+  private val CALL_TREE_FAILURE_NODE_COUNT = 1L
+
   private val _empty_snapshot = ComponentResourceLifecycleSnapshot(
     resource = None,
     generation = 0L,
@@ -517,5 +722,6 @@ final class ComponentResourceLifecycleStore(
 }
 
 object ComponentResourceLifecycleStore {
-  val DefaultDiagnosticLimit: Int = 128
+  val DEFAULT_DIAGNOSTIC_LIMIT: Int = 128
+  val DEFAULT_CALL_TREE_EVENT_LIMIT: Int = 256
 }
