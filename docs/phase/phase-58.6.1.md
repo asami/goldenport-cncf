@@ -1,6 +1,6 @@
 # Phase 58.6.1 - Lifecycle Terminal-Outcome Recovery
 
-status=planned
+status=closed
 split_from=[Phase 58.6](phase-58.6.md)
 depends_on=[Phase 58.6](phase-58.6.md)
 successor=[Phase 58.7](phase-58.7.md)
@@ -51,6 +51,19 @@ resource or owner leaks, metrics are bounded and truthful, and a later valid
 retry succeeds. The acceptance registry has one consistent nine-row ownership
 contract. Phase 58.7 consumes the complete RSC-07 lifecycle, diagnostics, and
 provenance contract only after this Phase is done.
+
+## Completion Evidence
+
+- 2026-08-22: `RSC-07B1-RED` established the intended pre-fix failure
+  boundary; `RSC-07B2-GREEN` delivered the recovery in Step commit
+  `bddaa1c771e10640985f4149b51911199e50f00b`.
+- 2026-08-22: the focused lifecycle specification passed 22/22 scenarios and
+  the affected accumulator passed 47/47 scenarios.
+- 2026-08-22: the independent Terra/xhigh Phase full review sealed `PASS`
+  with no Current Phase Blocker, Hygiene, or Development Candidate entry.
+- 2026-08-22: repository-full release validation passed 3,351/3,351 tests
+  across 449 suites (`17965-20260821T224755Z`), with the serialized SBT lock
+  released.
 
 ## Non-Goals
 

@@ -1,6 +1,6 @@
 # Phase 58.6.1 Checklist - Lifecycle Terminal-Outcome Recovery
 
-status=planned
+status=closed
 phase=[Phase 58.6.1 - Lifecycle Terminal-Outcome Recovery](phase-58.6.1.md)
 predecessor=[Phase 58.6](phase-58.6.md)
 successor=[Phase 58.7](phase-58.7.md)
@@ -8,24 +8,32 @@ successor=[Phase 58.7](phase-58.7.md)
 ## RSC-07B: Lifecycle Terminal-Outcome Recovery
 
 Stage Status:
-- Current status: PLANNED
+- Current status: CLOSED
 - Owner: CNCF runtime, repository, and lifecycle maintainers
 - Update rule: Mark DONE only after the mandatory Phase final review finds no
   Current Phase Blocker and the Phase release commit succeeds.
 - Entry rule: Phase 58.6 core RSC-07 lifecycle is DONE.
 - Completion rule: A cancelled loading producer, a provenance-failed waiter, and a waiter observing a completed release/unload/shutdown flight retain their actual separate terminal outcomes with no publication or owner leak.
 
-- [ ] Prove actual waiter admission before the producer cancellation and mismatched evidence complete.
-- [ ] Preserve the cancelled producer's no-resource result and remove its owner claim.
-- [ ] Preserve the admitted waiter's provenance-mismatch failure without duplicate loading or resource publication.
-- [ ] Prove that a waiter cancellation arriving after shared-flight completion preserves the completed release/unload/shutdown terminal result.
-- [ ] Verify cancellation/failure metrics and owner state remain truthful and bounded.
-- [ ] Verify a later valid retry succeeds after the separated outcomes.
-- [ ] Reconcile the RSC07B acceptance-registry nine-row ownership statement.
-- [ ] Record focused, affected-accumulator, full-release, and independent-review evidence for this recovery boundary.
+- [x] Prove actual waiter admission before the producer cancellation and mismatched evidence complete.
+- [x] Preserve the cancelled producer's no-resource result and remove its owner claim.
+- [x] Preserve the admitted waiter's provenance-mismatch failure without duplicate loading or resource publication.
+- [x] Prove that a waiter cancellation arriving after shared-flight completion preserves the completed release/unload/shutdown terminal result.
+- [x] Verify cancellation/failure metrics and owner state remain truthful and bounded.
+- [x] Verify a later valid retry succeeds after the separated outcomes.
+- [x] Reconcile the RSC07B acceptance-registry nine-row ownership statement.
+- [x] Record focused, affected-accumulator, full-release, and independent-review evidence for this recovery boundary.
 
 Evidence:
-- Pending.
+- 2026-08-22: `RSC-07B1-RED` recorded the intended pre-fix boundary;
+  `RSC-07B2-GREEN` was accepted in Step commit
+  `bddaa1c771e10640985f4149b51911199e50f00b`.
+- 2026-08-22: focused lifecycle validation passed 22/22; the affected
+  lifecycle/resource/authorization accumulator passed 47/47.
+- 2026-08-22: independent Terra/xhigh Phase full review sealed `PASS` with
+  no Current Phase Blocker, Hygiene, or Development Candidate entry.
+- 2026-08-22: release validation `17965-20260821T224755Z` passed
+  3,351/3,351 tests across 449 suites with the SBT lock released.
 
 Decision Record:
 - 2026-08-21: `D-58.6-POST-EXCEPTION-CONVERGENCE` selected `SPLIT_PHASE`, and
