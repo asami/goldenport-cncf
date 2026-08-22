@@ -3303,7 +3303,7 @@ Admin product work.
 | [58.5](../phase/phase-58.5.md) | Closed on 2026-08-21: RSC-06 authorized, integrity-checked resource access across every resolver source, key-specific signature attestation, non-leaking diagnostics, and path/cache/authority denial without content exposure. | Phase 58.4 |
 | [58.6](../phase/phase-58.6.md) | Closed on 2026-08-22: RSC-07A core lifecycle, concurrency, and observability. | Phase 58.5 |
 | [58.6.1](../phase/phase-58.6.1.md) | Closed on 2026-08-22: RSC-07B producer cancellation/provenance mismatch and completed-flight waiter-cancellation terminal ordering. | Phase 58.6 |
-| [58.7](../phase/phase-58.7.md) | RSC-08: downstream Help/Admin consumer contract. | Phase 58.6.1 |
+| [58.7](../phase/phase-58.7.md) | Closed on 2026-08-22: RSC-08 common read-only Help/Admin resource projection preserves identical identity, availability, integrity, safe provenance, and authorization-mediated content access without physical scans or authority grants. | Phase 58.6.1 |
 | [58.8](../phase/phase-58.8.md) | RSC-09: end-to-end cross-repository validation. | Phase 58.7 |
 | [58.9](../phase/phase-58.9.md) | RSC-10: canonical design/spec promotion and Phase 58-series closure. | Phase 58.8 |
 

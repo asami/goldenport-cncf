@@ -7,6 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component._
 import org.goldenport.cncf.component.repository._
 import org.goldenport.cncf.testutil.SubsystemTestFixture
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -100,6 +101,44 @@ final class ResolvedComponentResourcesConsumerSpec
         composition.parent.componentId shouldBe _parent_id
         composition.members.map(_.componentId) shouldBe _component_ids.tail
       }
+    }
+
+    "which preserve supplied order and consumer-neutral views across resource rotations" in {
+      Given("a named Subsystem and supplied resolved resources with a generator of rotations")
+      val supplied = _resolved
+      val rotations = Gen.chooseNum(0, supplied.resources.size - 1)
+      val property = Prop.forAll(rotations) { offset =>
+        val rotated = supplied.copy(
+          resources = supplied.resources.drop(offset) ++ supplied.resources.take(offset)
+        )
+        val expected = rotated.resources.map(_view)
+        SubsystemTestFixture.withSubsystem(
+          params = SubsystemTestFixture.Params(name = _subsystem_name)
+        ) { subsystem =>
+          val help = ResolvedComponentResourcesConsumerProjection.inventory(
+            rotated,
+            ComponentResourceConsumer.Help,
+            subsystem.name
+          )
+          val admin = ResolvedComponentResourcesConsumerProjection.inventory(
+            rotated,
+            ComponentResourceConsumer.Admin,
+            subsystem.name
+          )
+          help.resources == expected &&
+          admin.resources == expected &&
+          help.resources == admin.resources
+        }
+      }
+
+      When("Help and Admin inventory projections are exercised for generated rotations")
+      val checked = Test.check(
+        Test.Parameters.default.withMinSuccessfulTests(20),
+        property
+      )
+
+      Then("each consumer preserves the exact supplied order and equal consumer-neutral views")
+      checked.passed shouldBe true
     }
   }
 
