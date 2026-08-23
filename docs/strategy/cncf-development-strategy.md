@@ -3305,13 +3305,14 @@ Admin product work.
 | [58.6.1](../phase/phase-58.6.1.md) | Closed on 2026-08-22: RSC-07B producer cancellation/provenance mismatch and completed-flight waiter-cancellation terminal ordering. | Phase 58.6 |
 | [58.7](../phase/phase-58.7.md) | Closed on 2026-08-22: RSC-08 common read-only Help/Admin resource projection preserves identical identity, availability, integrity, safe provenance, and authorization-mediated content access without physical scans or authority grants. | Phase 58.6.1 |
 | [58.8](../phase/phase-58.8.md) | Closed on 2026-08-23: RSC-09 cross-repository validation, canonical Cwitter UserAccount identity, ArtScene-aligned persistent versions, and the test-only current-CNCF snapshot exception. | Phase 58.7 |
-| [58.9](../phase/phase-58.9.md) | RSC-10: canonical design/spec promotion and Phase 58-series closure. | Phase 58.8 |
+| [58.9](../phase/phase-58.9.md) | Closed on 2026-08-23: RSC-10 canonical design/spec promotion, historical implementation notes, and Phase 59/60 entry reconciliation without reopening behavior. | Phase 58.8 |
 
 The costly discovery kernel belongs only to Phase 58 and produces the reviewed
 RSC-01 handoff. Later children consume that handoff in sequence; no child may
 redefine Component identity, make a payload grant authority, make repository
 completeness imply runtime activation, or create a second physical-resource
-resolver. Phase 59 starts only after Phase 58.9 closes.
+resolver. Phase 58.9 is closed; Phase 59 remains planned and is not started by
+this release.
 
 Planning references:
 - `docs/phase/phase-58.md` through `docs/phase/phase-58.9.md` and their checklists;
@@ -3321,7 +3322,8 @@ Planning references:
 
 #### Phase 59 - Component Documentation and AI Knowledge Integration
 
-Planned after Phase 58.9 closes the Phase 58 series.
+Phase 58.9 is closed. Phase 59 remains planned and is not started by this
+release.
 
 - Goal:
   - make each logical Component release a one-stop, self-describing execution,
@@ -3345,14 +3347,11 @@ Planned after Phase 58.9 closes the Phase 58 series.
   - Documentation and SourceCode Subcomponents are independently describable
     Component CARs; their payloads are not implicit parent runtime
     dependencies, Componentlets, or separately activated Subsystem members;
-  - `OperationMode.Develop` automatically resolves and mounts exact
-    Documentation plus the development target's admitted source while
-    Component domain code remains mode-independent;
+  - `OperationMode.Develop` consumes required Documentation only through the admitted explicit Phase 58 policy; the development target's source is used only when admitted, otherwise the exact SourceCode artifact is consumed under access policy; Component domain code remains mode-independent;
   - `OperationMode.Test` uses deterministic explicitly selected local
     resources without implicit remote retrieval, while Demo and Production do
     not automatically mount source;
-  - Production retains primary-only activation and resolves authorized
-    Documentation only on demand without changing execution readiness;
+  - `OperationMode.Production` retains independent primary activation, selects only embedded-primary resources, performs no remote resource selection, and never automatically resolves, mounts, or fetches SourceCode;
   - a manifest-based development context provides manuals, model metadata and
     diagrams, APIs, configuration, examples, source, tests, and provenance to
     AI;

@@ -1,6 +1,6 @@
 # Phase 58.9 - Component and SubComponent Canonical Closure
 
-status=planned
+status=closed
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.8](phase-58.8.md)
 successor=[Phase 59](phase-59.md)
@@ -39,6 +39,33 @@ Phase Plan Gate: PROCEED
 The final design/specification, historical implementation notes, strategy,
 Phase 58-series records, Phase 59/60 entry contracts, review evidence, and
 release evidence agree. Only then may Phase 59 begin.
+
+## Completion Evidence
+
+- RSC-10A canonical architecture promotion was accepted in
+  `e0bb279f4a994be33f7154480e9fe56130ca319a`; RSC-10B resource-subcomponent
+  promotion in `919929fd821278b91952fcac99c6e92dc3691a34`; and RSC-10C Phase
+  59/60 entry reconciliation in `8bf76f1eebb1ba9d6678c88c4e8972a51e1870ab`.
+- The mandatory Phase review identified only `CPB-P58.9-001`, a superseded
+  Strategy operation-mode statement. Its two-bullet R5 alignment passed the
+  independent focused closure re-review with no remaining Current Phase
+  Blocker.
+- The Phase range from
+  `bdd566b1064a2b28b51996b1db6cac76ffff4435` through the accepted Step commits
+  contains 13 Markdown paths and no program path. The final gate therefore has
+  no Phase program-change repository requiring `sbt --batch test`; it verifies
+  the frozen documentation release with exact diff and local-link checks.
+- Closure binding `phase-58.9-rsc10-20260823` binds this Phase, its checklist,
+  the Phase index, and the Strategy. It has empty accepted Hygiene and
+  Development Candidate ID lists; the corresponding Phase 58.9 journal paths
+  remain absent. The committed release receipt is the authoritative final
+  record.
+
+## Deferred Follow-up
+
+`HYG-P58-001` remains the pre-existing, nonblocking terminology-normalization
+record in the Phase 58 contract-freeze journal. It is not a Phase 58.9 repair
+or a new accepted ledger item.
 
 ## Non-Goals
 
