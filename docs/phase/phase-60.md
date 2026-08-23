@@ -7,6 +7,10 @@ strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 60 Checklist](phase-60-checklist.md)
 implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
 planning_journal=[Component Admin and Documentation Visibility Planning (historical Phase 58)](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
+canonical_architecture_design=[Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md)
+canonical_architecture_specification=[Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
+canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
+canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 
 ## Purpose
 
@@ -17,7 +21,8 @@ authorized, manageable.
 Phase 60 consumes:
 
 - Phase 55 effective configuration values and provenance;
-- Phase 58-series resolved Subcomponent Component inventory, state, integrity, and
+- the same four-document Phase 58 canonical identity/resource contract and its
+  already-resolved Subcomponent Component inventory, state, integrity, and
   provenance; and
 - Phase 59 Component knowledge and model manifests.
 
@@ -29,9 +34,11 @@ documentation artifacts independently.
 
 Phase 60 begins after Phase 59 closes.
 
-The Phase 58 series supplies the physical Subcomponent CAR and payload resolver and Phase
-59 supplies the documentation/model knowledge contract. Phase 60 is their
-operator-facing consumer and does not reopen either foundation.
+The Phase 58 series supplies the canonical identity/resource contract and its
+already-resolved output, and Phase 59 supplies the documentation/model knowledge
+contract. Phase 60 is their operator-facing consumer: it does not independently
+scan or resolve resources, broaden the resource/mode policy, or reopen either
+foundation.
 
 References to “Phase 58” below mean the full Phase 58 series, whose closure is
 Phase 58.9.
@@ -49,8 +56,9 @@ compatibility shortcut.
 
 - Help remains the human and AI knowledge entry point.
 - Admin is the operator-facing runtime inspection and management surface.
-- Both use the same Component identity, resource, integrity, availability,
-  and provenance contracts.
+- Both use the same canonical Component identity/resource contract and its
+  already-resolved projection, including integrity, availability, and
+  provenance.
 - Admin distinguishes Component class, loaded Component instance, Subsystem,
   and implicit Component Subsystem identities.
 - Admin shows effective configuration values together with their typed value,
@@ -75,8 +83,8 @@ compatibility shortcut.
 - Present Component class, release, instance, Subsystem, and implicit
   Component Subsystem identity without conflation.
 - Present primary CAR plus Documentation and SourceCode Subcomponent CAR
-  composition, availability, integrity, access state, and provenance through
-  the Phase 58 resolver.
+  composition, availability, integrity, access state, and provenance from the
+  same already-resolved Phase 58 projection.
 - Present Phase 59 manuals, Help, Scaladoc, source availability, model
   metadata, diagrams, schemas, examples, and troubleshooting navigation.
 - Present Phase 55 effective configuration and binding provenance.
@@ -97,6 +105,8 @@ compatibility shortcut.
 ## Non-Goals
 
 - Reimplementing Subcomponent CAR/payload resolution or repository access.
+- Independently scanning or resolving resources, or broadening the canonical
+  resource/mode policy.
 - Reimplementing Help, manuals, AI retrieval, CBD Support, or BoK.
 - Generating documentation, source archives, model metadata, or diagrams.
 - Treating Admin as an alternate configuration authority.
@@ -122,8 +132,9 @@ compatibility shortcut.
 
 - Admin identifies exactly which Component class, release, instance, and
   Subsystem context is being inspected.
-- Admin consumes the Phase 58 resolver; it does not scan physical resource
-  locations independently.
+- Admin consumes the same canonical Phase 58 identity/resource contract and
+  already-resolved projection; it does not independently scan or resolve
+  physical resources or broaden the resource/mode policy.
 - Admin consumes the Phase 59 knowledge/model manifest; it does not regenerate
   manuals, metadata, or diagrams.
 - Effective configuration shows the winning typed binding, overridden

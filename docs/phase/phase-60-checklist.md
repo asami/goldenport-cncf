@@ -5,6 +5,10 @@ phase=[Phase 60 - Component Admin and Documentation Visibility](phase-60.md)
 implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
 planning_journal=[Component Admin and Documentation Visibility Planning (historical Phase 58)](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
 candidate_journal=[Phase 52 direct-Admin canonical-ID boundary](../journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md)
+canonical_architecture_design=[Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md)
+canonical_architecture_specification=[Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
+canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
+canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 
 This checklist is the authoritative Phase 60 state ledger after Phase 60
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
@@ -12,6 +16,10 @@ Phase 59 closes.
 
 References to “Phase 58” below mean the full Phase 58 series, whose final
 closure is Phase 58.9.
+
+Phase 60 consumes the same four-document Phase 58 canonical identity/resource
+contract and its already-resolved output. Admin must not independently scan or
+resolve resources, or broaden the canonical resource/mode policy.
 
 ## ADM-01: Inventory and Executable Contract Freeze
 
@@ -52,17 +60,19 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF configuration, Resource SubComponent, and Admin maintainers
 - Entry rule: ADM-02 is DONE.
-- Completion rule: Admin projects Phase 55 configuration and Phase 58 resource
-  composition from authoritative contracts without independent scanning.
+- Completion rule: Admin projects Phase 55 configuration and the same
+  canonical Phase 58 identity/resource contract's already-resolved composition
+  without independent scanning, resolution, or policy broadening.
 
 - [ ] Consume Phase 55 `ConfigurationBindingCollection` and provenance.
 - [ ] Show effective typed values, winning and overridden bindings, scope,
   source location, and selection trace.
-- [ ] Consume Phase 58 `ResolvedComponentResources` or its accepted
-  equivalent.
+- [ ] Consume the same Phase 58 already-resolved resource projection,
+  `ResolvedComponentResources` or its accepted equivalent.
 - [ ] Show primary, Documentation, and SourceCode artifact identity,
   availability, integrity, access, and physical provenance.
-- [ ] Verify Admin performs no independent physical-resource scan.
+- [ ] Verify Admin performs no independent physical-resource scan or
+  resolution and does not broaden the resource/mode policy.
 
 ## ADM-04: Component Contract and Model Visibility
 
@@ -105,8 +115,9 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF Help, documentation-resource, knowledge, and Admin maintainers
 - Entry rule: ADM-05 is DONE.
-- Completion rule: Admin links exact Phase 59 knowledge resources and their
-  availability without generating or scanning documentation.
+- Completion rule: Admin links exact Phase 59 knowledge resources and the
+  same already-resolved Phase 58 projection without generating, scanning, or
+  resolving documentation independently.
 
 - [ ] Consume the Phase 59 Component knowledge manifest.
 - [ ] Link exact User Guide, Reference Manual, Help, Scaladoc, model diagrams,
@@ -115,7 +126,7 @@ Stage Status:
   resource state accurately.
 - [ ] Keep Help navigation and Admin operational context mutually linked
   without duplicating ownership.
-- [ ] Verify Admin generates or scans no documentation itself.
+- [ ] Verify Admin generates, scans, or resolves no documentation itself.
 
 ## ADM-07: Authorized Management
 

@@ -5,6 +5,10 @@ phase=[Phase 59 - Component Documentation and AI Knowledge Integration](phase-59
 implementation_note=[Component Documentation Knowledge Package Implementation Proposal](../notes/component-documentation-knowledge-package-implementation.md)
 composition_journal=[Component SubComponent and Development Composition Decision](../journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md)
 phase_split_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
+canonical_architecture_design=[Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md)
+canonical_architecture_specification=[Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
+canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
+canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 
 This checklist is the authoritative Phase 59 state ledger after Phase 59
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
@@ -58,8 +62,9 @@ Stage Status:
   reimplement.
 - [ ] Fix source filtering, license, and restricted-access profiles without a
   source-omitted logical release.
-- [ ] Fix develop-mode automatic Documentation composition and AI development
-  context requirements.
+- [ ] Fix Develop-mode Documentation consumption and AI development-context
+  requirements only through the admitted explicit Phase 58 policy, without a
+  separate fetch or resolver.
 - [ ] Fix the `Develop`, `Test`, `Demo`, and `Production` runtime resource
   policy matrix without exposing `OperationMode` to Component domain code.
 - [ ] Fix Component model coverage for Entity, Powertype, StateMachine, Value,
@@ -238,8 +243,9 @@ Stage Status:
 - [ ] Build a manifest-based `ComponentDevelopmentContext` with manuals,
   models, APIs, configuration, examples, source, generated source, Scaladoc,
   tests, and provenance.
-- [ ] Make develop-mode Documentation composition automatic rather than
-  requiring a separate manual fetch.
+- [ ] Consume Develop-mode Documentation only through the admitted explicit
+  Phase 58 policy; compose the resulting resources into the development
+  context without a separate fetch or resolver.
 - [ ] Project mounted/local/remote/restricted/unavailable/incompatible/stale/
   corrupt resource state from Phase 58 for Help and the later Admin surface.
 - [ ] Provide structured manifest/resource HTTP retrieval.
@@ -379,15 +385,17 @@ Stage Status:
   SubComponents.
 - [ ] Provide one restricted-source profile whose SourceCode SubComponent is
   repository-complete but authorization-controlled.
-- [ ] Verify `OperationMode.Develop` automatically composes Documentation and
-  the development target's source.
+- [ ] Verify `OperationMode.Develop` consumes required Documentation and uses
+  the development target's source only under the admitted explicit Phase 58
+  policy, without a separate fetch or resolver.
 - [ ] Verify `OperationMode.Test` uses deterministic explicitly selected
   local resources and performs no implicit remote retrieval.
 - [ ] Verify `OperationMode.Demo` does not automatically mount source and
   requires explicit policy for remote Documentation.
-- [ ] Verify `OperationMode.Production` permits primary-only activation,
-  resolves Documentation only on demand and under authorization, and never
-  automatically fetches source.
+- [ ] Verify `OperationMode.Production` retains independent primary
+  activation, selects only embedded-primary resources, performs no remote
+  resource selection, and never automatically resolves, mounts, or fetches
+  SourceCode.
 - [ ] Verify dependency Documentation is available to AI by exact version and
   dependency source obeys authorization policy.
 - [ ] Verify production activation does not fetch required knowledge
@@ -438,9 +446,12 @@ Stage Status:
   diagnostics, RAG context, or MCP responses.
 - [ ] Verify manifest/SubComponent relationships grant no Operation, runtime
   Component, Componentlet, or MCP execution authority.
-- [ ] Verify develop-mode automatic mounting cannot bypass source disclosure,
-  authorization, path, digest, or signature policy.
-- [ ] Verify production mode never auto-fetches SourceCode SubComponents.
+- [ ] Verify Develop-mode consumption under the admitted explicit Phase 58
+  policy cannot bypass source disclosure, authorization, path, digest, or
+  signature policy.
+- [ ] Verify Production selects only embedded-primary resources, performs no
+  remote resource selection, and never automatically resolves, mounts, or
+  fetches SourceCode SubComponents.
 - [ ] Verify production Help/knowledge exposure follows the accepted policy.
 - [ ] Verify online-documentation timeout, unavailable, cache, version
   mismatch, and immutable-evidence behavior.

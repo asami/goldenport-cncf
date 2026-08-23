@@ -9,6 +9,10 @@ implementation_note=[Component Documentation Knowledge Package Implementation Pr
 composition_journal=[Component SubComponent and Development Composition Decision](../journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md)
 phase_split_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
 foundation=[Phase 58 series, closing in Phase 58.9](phase-58.9.md)
+canonical_architecture_design=[Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md)
+canonical_architecture_specification=[Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
+canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
+canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 admin_consumer=[Phase 60 Component Admin and Documentation Visibility](phase-60.md)
 
 ## Purpose
@@ -65,19 +69,21 @@ canonical design/specification is stable.
   dependencies, Componentlets, or separately installed Subsystem capabilities.
 - Publication completeness, primary-only activation, and exact resource states
   follow the Phase 58 contract.
-- `OperationMode.Develop` receives the verified Documentation resource space
-  through the Phase 58 resolver.
-- The development target's source tree or exact SourceCode SubComponent is
-  also mounted for AI-assisted development; dependency source follows explicit
-  authorization and disclosure policy.
+- `OperationMode.Develop` consumes required Documentation only through the
+  admitted explicit Phase 58 policy.
+- The development target's source tree is used only when admitted; otherwise
+  the exact SourceCode artifact is consumed under access policy. Dependency
+  source follows explicit authorization and disclosure policy.
 - Component code does not receive or branch on `OperationMode`; development
   composition remains a launcher/runtime resource-resolution concern.
 - `OperationMode.Test` uses deterministic explicitly selected local fixtures
   or offline bundles without implicit remote retrieval.
-- `OperationMode.Demo` and `OperationMode.Production` do not automatically
-  mount source. Production retains primary-only activation; authorized
-  Documentation may be resolved on demand without changing execution
-  readiness.
+- `OperationMode.Demo` uses installed or cached content, or Documentation
+  remote access only under explicit Phase 58 policy; it does not automatically
+  resolve SourceCode.
+- `OperationMode.Production` retains independent primary activation, selects
+  only embedded-primary resources, performs no remote resource selection, and
+  never automatically resolves, mounts, or fetches SourceCode.
 - User Guide and Reference Manual are the two standard hand-written manual
   axes.
 - SmartDox is the canonical hand-written document model; admitted Markdown is
@@ -186,8 +192,8 @@ canonical design/specification is stable.
   semantic retrieval of authoritative packaged Component knowledge while CBD
   Support remains the primary detailed Component-use service.
 - Validate embedded-small and primary-plus-required-SubComponent profiles,
-  develop-mode automatic composition, restricted-source authorization, and
-  offline complete-release bundles.
+  Develop-policy composition admitted explicitly by Phase 58,
+  restricted-source authorization, and offline complete-release bundles.
 - Validate online-only framework documentation, installed framework
   Documentation Components, and a closed-network Documentation Hub SAR
   without changing Component-specific information ownership.
@@ -291,16 +297,17 @@ canonical design/specification is stable.
 - Help reports local, remote, restricted, unavailable, incompatible, stale,
   and corrupt states from Phase 58 without claiming physical content it did
   not resolve.
-- Develop mode automatically composes the Documentation SubComponent and the
-  development target's admitted source before claiming development readiness.
+- Develop mode consumes required Documentation and the development target's
+  admitted source only through the explicit Phase 58 policy, without a
+  separate fetch or resolver, before claiming development readiness.
 - Test mode uses only explicitly selected deterministic local fixtures,
   expanded artifacts, or offline bundles and performs no implicit remote
   retrieval.
 - Demo mode performs no automatic source composition; remote Documentation
   access requires explicit policy.
-- Production performs no automatic source resolution, mounting, or fetch;
-  on-demand authorized Documentation access does not change execution
-  readiness.
+- Production retains independent primary activation, selects only
+  embedded-primary resources, performs no remote resource selection, and never
+  automatically resolves, mounts, or fetches SourceCode.
 - Missing, stale, corrupt, or incompatible required development resources
   produce structured `development-resource-incomplete` failure.
 - The resolved development context supplies exact Component documentation,
