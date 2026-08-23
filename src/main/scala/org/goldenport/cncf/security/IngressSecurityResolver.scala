@@ -22,7 +22,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -203,7 +203,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         // They do not inherit a production local/provider identity from the
         // component's bootstrap context.
         _resolve_privilege(attributes).flatMap { privilege =>
-          _resolve_with_security(base, attributes, caps, _security_context(privilege, attributes))
+          _resolve_with_security(base, attributes, caps, _security_context(privilege, attributes, includecanonicalauthenticated = true))
         }
     }
   }
@@ -440,12 +440,13 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
 
   private def _security_context(
     privilege: SecurityContext.Privilege,
-    ingressattributes: Map[String, String] = Map.empty
+    ingressattributes: Map[String, String] = Map.empty,
+    includecanonicalauthenticated: Boolean = false
   ): SecurityContext =
     SecurityContext(
       principal = new Principal {
         val id: PrincipalId = _resolve_principal_id(ingressattributes).getOrElse(privilege.principalId)
-        val attributes: Map[String, String] = privilege.attributes ++ _security_subject_attributes(ingressattributes)
+        val attributes: Map[String, String] = privilege.attributes ++ _security_subject_attributes(ingressattributes, includecanonicalauthenticated)
       },
       capabilities = privilege.capabilities,
       level = privilege.level,
@@ -688,9 +689,10 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     )).map(PrincipalId(_))
 
   private def _security_subject_attributes(
-    attributes: Map[String, String]
-  ): Map[String, String] =
-    attributes.filter { case (k, _) =>
+    attributes: Map[String, String],
+    includecanonicalauthenticated: Boolean
+  ): Map[String, String] = {
+    val raw = attributes.filter { case (k, _) =>
       k.startsWith("subject.") ||
         k.startsWith("principal.") ||
         k == "subject_id" ||
@@ -706,6 +708,11 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         k == "capability" ||
         k == "capabilities"
     }
+    if (includecanonicalauthenticated)
+      raw ++ attributes.get("cncf.security.authenticated").map("authenticated" -> _)
+    else
+      raw
+  }
 
   private def _find_first(
     attributes: Map[String, String],

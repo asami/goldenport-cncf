@@ -1,6 +1,6 @@
 # Phase 58.8 - Component-Composition End-to-End Validation
 
-status=planned
+status=closed
 split_from=[Phase 58](phase-58.md)
 depends_on=[Phase 58.7](phase-58.7.md)
 successor=[Phase 58.9](phase-58.9.md)
@@ -156,6 +156,38 @@ Phase Plan Gate: PROCEED
   complementary consumer role.
 - consumed: true
 
+### D-58.8-RSC09-AUTH-GWT-001
+
+- answer_identity: developer approval in this Phase 58.8 execution task:
+  `承認します`
+- selected_option: `AUTHORIZE_RSC09_GWT_ORDER_REPAIR`
+- affected_phase_and_tree_identities: Phase 58.8 RSC-09 Cwitter auth-flow
+  acceptance; CNCF `2745d9eed1cc`; textus-sample-apps
+  `e96a88ea7f57` plus the frozen RSC-09 delta.
+- authorized_next_state: move the already approved controlled-runtime `Given`
+  assertion ahead of setup in the existing acceptance spec only; preserve
+  inputs, URLs, configuration, assertions, and runtime behavior; complete one
+  focused closure re-review without another Phase full review.
+- consumed: true
+
+### D-58.8-RSC09-CAR-LINT-BASELINE-001
+
+- answer_identity: developer approval in this Phase 58.8 execution task:
+  `承認します`
+- selected_option: `AUTHORIZE_RSC09_CAR_LINT_BASELINE_POLICY`
+- affected_phase_and_tree_identities: Phase 58.8;
+  `HYG-58.8-RSC09-CAR-BASELINE`; textus-sample-apps
+  `e96a88ea7f57` plus the frozen RSC-09 delta; CML source and the nested
+  `cwitter/component/build.sbt` path remain unchanged from that baseline.
+- authorized_next_state: accept only a verifier which proves the known
+  `build-sbt.missing` plus ten listed raw CML string-attribute lint failures
+  and no additional lint failures; continue only when the CML baseline is
+  unchanged, the nested build path is still absent, both repository full suites
+  pass, and all other Phase release checks pass. Do not add a duplicate build,
+  suppress lint, alter CML semantics, change ArtScene, or waive full-suite
+  validation.
+- consumed: true
+
 ## RSC09-01D ArtScene Complementary Consumer Boundary
 
 RSC09-01D admits the published ArtScene CAR only as complementary release
@@ -177,6 +209,41 @@ deferred.
 Focused and full validation proves the agreed embedded, split, restricted,
 development, repository, offline, primary-only, failure, lifecycle, and
 consumer profiles. Phase 58.9 consumes the exact evidence ledger only.
+
+## Completion Evidence
+
+- 2026-08-23: Cwitter's persistent shared versions remain aligned with the
+  published ArtScene consumer: Cozy `0.3.2.4` and CNCF `0.5.2`. The approved
+  `CNCF_VERSION=0.5.3-SNAPSHOT` override is process-local to RSC-09 Cwitter
+  tests; ArtScene was inspected as a read-only complementary consumer and was
+  not migrated.
+- 2026-08-23: the Cwitter assembly and subsystem descriptors, the factory
+  lookup order, and the controlled acceptance fixture use the canonical
+  `org.simplemodeling.textus.UserAccount` identity while retaining the two
+  legacy aliases only as lookup compatibility inputs.
+- 2026-08-23: focused Cwitter validation passed: auth flow
+  `7653-20260823T024804Z` (1 suite / 1 test) and component/subcomponent
+  composition `8021-20260823T024845Z` (3 suites / 3 tests), each with the
+  serialized SBT lock released. CNCF `publishLocal`
+  `7146-20260823T024728Z` supplied the local test-only snapshot.
+- 2026-08-23: the one mandatory Phase full review remained sealed. Its
+  authorized RSC-09 repair delta passed focused re-review with no remaining
+  Current Phase Blocker; the final Given/When/Then ordering repair is
+  `D-58.8-RSC09-AUTH-GWT-001`.
+- 2026-08-23: `D-58.8-RSC09-CAR-LINT-BASELINE-001` authorizes a passing
+  baseline verifier for the exact pre-existing Cwitter lint failure set only.
+  It does not convert the raw lint result to green, accept new lint failures,
+  or waive either repository-full suite.
+- The final release gate runs the full framework and Cwitter suites on the
+  frozen release tree before this Phase release commit. Its invocation
+  receipts and committed closure-ledger receipt are the authoritative final
+  validation record.
+
+## Deferred Follow-up
+
+The separately recorded Phase Hygiene items do not alter the closed RSC-09
+behavior boundary. Phase 58.9 remains the documented successor but is not
+started by this Phase closure.
 
 ## Non-Goals
 

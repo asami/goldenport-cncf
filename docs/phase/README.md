@@ -15,6 +15,14 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- Phase 58-series latest closed phase: `phase-58.8.md` -
+  Component-Composition End-to-End Validation.
+- Phase 58-series next planned phase: `phase-58.9.md` - canonical
+  design/spec promotion and Phase 58-series closure.
+- Phase 58.8 checklist: `phase-58.8-checklist.md` is closed. Its Phase
+  Hygiene follow-up is
+  `../journal/2026/08/2026-08-23-phase-58.8-hygiene-follow-up.md`.
+
 - Active phase: `phase-48.md` - Operation Evaluation and Corpus/Experiment
   Capture.
 - Active checklist: `phase-48-checklist.md`.
