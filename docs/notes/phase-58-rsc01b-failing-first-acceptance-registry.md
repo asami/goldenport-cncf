@@ -1,24 +1,29 @@
 # Phase 58 RSC01-B Failing-First Acceptance Registry
 
-status = frozen RSC01-B successor handoff
+status = historical RSC01-B acceptance evidence
 date = 2026-08-20
 phase = Phase 58
 step = RSC01-B
 slice = RSC01-B1-failing-first-acceptance-identities-and-handoff
 authority = [Phase 58](../phase/phase-58.md)
-architecture_authority = [Component and SubComponent Architecture Implementation Proposal](component-subcomponent-architecture-implementation.md)
-resource_authority = [Component Resource SubComponent Implementation Proposal](component-resource-subcomponent-implementation.md)
+architecture_design = [Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md)
+architecture_specification = [Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
+resource_design = [Component Resource Subcomponent](../design/component-resource-subcomponent.md)
+resource_specification = [Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 journal = [RSC-01 contract-freeze journal](../journal/2026/08/2026-08-20-phase-58-rsc01-component-subcomponent-contract-freeze.md)
 prior_acceptance = RSC01-A accepted commit `46f276fadaaef73495b9796153f656fe6d970e53`
 
 ## Purpose and Boundary
 
-This registry is the durable RSC01-B handoff for the exact future
-failing-first acceptance identities owned by Phase 58.1 through Phase 58.8.
-It freezes acceptance traceability for RSC-01 without implementing successor
-behavior, creating executable specifications, or claiming a red build. The
-architecture and resource notes remain provisional and non-normative until
-Phase 58.9.
+This registry preserves the RSC01-B acceptance evidence for the exact
+failing-first identities owned by Phase 58.1 through Phase 58.8. It records
+the acceptance traceability without creating behavior or executable
+specifications.
+
+The canonical authority is the architecture design/specification pair and the
+resource design/specification pair linked above. Future, provisional, and
+successor wording in this registry is historical evidence of the RSC01-B
+handoff and does not override either canonical pair.
 
 RSC01-B registers the identity that a successor must use: stable group ID,
 owner Phase, repository, path, suite or scripted identity, and scenario IDs.
@@ -28,7 +33,7 @@ consumer implementation.
 
 ## Interpretation Rules
 
-1. The authoritative acceptance unit is one matrix row below. Its group ID,
+1. The frozen acceptance identity is one matrix row below. Its group ID,
    owner Phase, repository, path, suite or script identity, and scenario IDs
    are one frozen identity set.
 2. A Component ID identifies an independently identified Component. A role
@@ -139,9 +144,10 @@ registered identity.
 
 ## Traceability to the Twelve RSC-01 Invariants
 
-The matrix's invariant column is the authoritative traceability for each
-acceptance group. The invariant numbers refer to the twelve frozen decisions
-in the [architecture note](component-subcomponent-architecture-implementation.md#frozen-rsc-01-decisions-and-invariants):
+The matrix's invariant column is the historical traceability for each
+acceptance group. The invariant numbers refer to the accepted Component and
+Subcomponent contract in the [Component and Subcomponent Architecture
+Specification](../spec/component-subcomponent-architecture.md):
 
 1. Every declared Subcomponent is an independent CNCF Component with
    canonical identity and its own CAR.
@@ -175,9 +181,8 @@ in the [architecture note](component-subcomponent-architecture-implementation.md
 
 ## Change-Control Rule
 
-This registry is a frozen RSC-01 authority. A new public, schema, API,
-repository, packaging, runtime, policy, or successor-vocabulary decision is
-outside RSC01-B and requires parent PLAN and explicit authority update. A
-required path, suite, script, scenario, group, fixture identity, or profile
-identity change must be recorded here before the affected successor proceeds.
-Phase 58 remains `status=in_progress` and stops before Phase 58.1 starts.
+This registry is historical RSC-01 evidence. Its recorded public, schema, API,
+repository, packaging, runtime, policy, and successor-vocabulary boundaries do
+not supersede the canonical architecture or resource pair. The exact path,
+suite, script, scenario, group, fixture, and profile identities remain
+historical acceptance evidence.

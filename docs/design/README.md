@@ -28,6 +28,7 @@ Current component composition design:
 - `generation-compatibility-contract.md`
 - `typed-component-api-and-multi-instance-spi.md`
 - `component-subcomponent-architecture.md`
+- `component-resource-subcomponent.md`
 
 Current component persistence design:
 

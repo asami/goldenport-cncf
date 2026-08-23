@@ -1,19 +1,18 @@
 # Component Resource SubComponent Implementation Proposal
 
-status = proposed, non-normative
+status = historical, non-normative
 date = 2026-07-31
 phase = Phase 58
 
-This note is a non-normative input proposal for the Phase 58 series. During
-RSC-01, Phase 58 only reconciles this proposal with the broader architecture
-and freezes the resulting handoff; Phase 58.1 through Phase 58.8 implement and
-verify the successor scope. After the series evidence exists, Phase 58.9 must
-promote the verified architecture and normative behavior to:
+This historical note is non-normative and is retained only as Phase 58
+proposal and handoff evidence. The canonical resource contract is the
+[Component Resource Subcomponent design](../design/component-resource-subcomponent.md)
+and the [Component Resource Subcomponent
+specification](../spec/component-resource-subcomponent.md). Those documents
+override this note.
 
-- `docs/design/component-resource-subcomponent.md`; and
-- `docs/spec/component-resource-subcomponent.md`.
-
-After Phase 58.9 completes canonical promotion, this note becomes historical.
+The following content preserves the proposal as historical context; it is not
+a competing current contract.
 
 ## Purpose
 
