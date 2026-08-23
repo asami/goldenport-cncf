@@ -1,12 +1,25 @@
 # Phase 59.1 - Public Documentation and AI Ownership Inventory
 
-status=planned
+status=in_progress
+started_at=2026-08-23
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59](phase-59.md)
 successor=[Phase 59.2](phase-59.2.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.1 Checklist](phase-59.1-checklist.md)
 consumes_handoff=DOC-01A source-to-package contract inventory and acceptance registry
+accepted_handoff_note=[DOC-01B public publication and AI ownership inventory](../notes/phase-59.1-doc01b-public-publication-and-ai-ownership-inventory-and-failing-first-acceptance-registry.md)
+accepted_handoff_commit=23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6
+accepted_handoff_sha256=bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560
+
+## Current Status
+
+The DOC-01B handoff is accepted at commit
+`23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6`, with the accepted handoff note
+SHA-256 `bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560`.
+Phase 59.1 remains `in_progress`; the mandatory Phase full review and
+`PHASE_RELEASE_COMMIT` are pending. Phase 59.2 through Phase 59.10 remain
+planned and unstarted.
 
 ## Goal
 

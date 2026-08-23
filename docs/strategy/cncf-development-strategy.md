@@ -3349,8 +3349,11 @@ review passed with no Current Phase Blocker. The distinct release commit is
 identified by closure binding
 `phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
 `HYG-P59-001` remains a persisted nonblocking Hygiene item; no Development
-Candidate was accepted. Phase 59.1 through Phase 59.10 remain planned and
-unstarted.
+Candidate was accepted. Phase 59.1 is `in_progress` after the accepted DOC-01B
+handoff at commit `23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6` (handoff note
+SHA-256 `bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560`).
+Its mandatory Phase full review and `PHASE_RELEASE_COMMIT` remain pending;
+Phase 59.2 through Phase 59.10 remain planned and unstarted.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost
