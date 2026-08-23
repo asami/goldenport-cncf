@@ -1,8 +1,21 @@
 # Component and SubComponent Architecture Implementation Proposal
 
-status = proposed, non-normative; RSC-01 frozen successor handoff
+status = historical, non-normative; retained RSC-01 successor handoff
 date = 2026-08-20
 phase = Phase 58
+
+## Current Authority
+
+This note is retained solely as historical RSC-01 handoff material. It is not
+a current architecture or behavioral authority. The current canonical
+documents are:
+
+- [Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md); and
+- [Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md).
+
+All content below remains historical, including its then-future promotion
+language and provisional terminology. It must be read subject to the canonical
+design/specification pair above.
 
 This note remains a provisional implementation proposal until Phase 58.9. The
 RSC-01 sections below are the frozen successor handoff for Phase 58.1 through
