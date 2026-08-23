@@ -15,12 +15,15 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Phase 58-series latest closed phase: `phase-58.9.md` - Component and
-  SubComponent Canonical Closure.
-- Phase 59: `phase-59.md` is in progress after the accepted DOC-01A handoff in
-  full commit `bb4245a92a6e3acc0a6573965a5843b4939c1e84`; its mandatory
-  phase-full review and release remain pending. Phase 59.1 through
-  `phase-59.10.md` are planned and unstarted under approved split D-59-SPLIT.
+- Latest closed phase: `phase-59.md` - Component Documentation Contract
+  Inventory. Its DOC-01A handoff and closure ledger are accepted, the
+  mandatory phase-full review passed, and its distinct release commit is
+  identified by closure binding
+  `phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
+- Phase 59.1 through `phase-59.10.md` remain planned and unstarted under
+  approved split D-59-SPLIT.
+- Phase 59 checklist: `phase-59-checklist.md` is closed. It persists
+  `HYG-P59-001` as nonblocking Hygiene and accepts no Development Candidate.
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 

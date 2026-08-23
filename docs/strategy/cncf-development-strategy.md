@@ -3311,8 +3311,8 @@ The costly discovery kernel belongs only to Phase 58 and produces the reviewed
 RSC-01 handoff. Later children consume that handoff in sequence; no child may
 redefine Component identity, make a payload grant authority, make repository
 completeness imply runtime activation, or create a second physical-resource
-resolver. Phase 58.9 is closed; Phase 59 remains planned and is not started by
-this release.
+resolver. Phase 58.9 is closed; Phase 59 subsequently completed its bounded
+DOC-01A inventory without reopening Phase 58 behavior.
 
 Planning references:
 - `docs/phase/phase-58.md` through `docs/phase/phase-58.9.md` and their checklists;
@@ -3330,7 +3330,7 @@ unchanged after the series.
 
 | Phase | Goal | Dependency |
 | --- | --- | --- |
-| [59](../phase/phase-59.md) | DOC-01A source-to-package documentation/resource inventory and acceptance freeze. | Phase 58.9 |
+| [59](../phase/phase-59.md) | Closed on 2026-08-23: DOC-01A source-to-package documentation/resource inventory and acceptance freeze. | Phase 58.9 |
 | [59.1](../phase/phase-59.1.md) | DOC-01B public publication, Directive, Skill, CBD Support, and BoK ownership/acceptance freeze. | Phase 59 |
 | [59.2](../phase/phase-59.2.md) | DOC-02 Component knowledge/model manifest codec and resource contract. | Phase 59.1 |
 | [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2 |
@@ -3342,10 +3342,15 @@ unchanged after the series.
 | [59.9](../phase/phase-59.9.md) | DOC-09 security, regression, and downstream validation. | Phase 59.8 |
 | [59.10](../phase/phase-59.10.md) | DOC-10 canonical documentation and Phase 59 series closure. | Phase 59.9 |
 
-Phase 59 is `in_progress`: the DOC-01A handoff is accepted in full commit
-`bb4245a92a6e3acc0a6573965a5843b4939c1e84`. The mandatory phase-full review
-and `PHASE_RELEASE_COMMIT` remain pending; Phase 59.1 through Phase 59.10 are
-planned and unstarted.
+Phase 59 is `closed`: the DOC-01A handoff is accepted in commit
+`bb4245a92a6e3acc0a6573965a5843b4939c1e84`, its closure ledger is accepted in
+commit `f7eb86c14354b259c646ccacc33f9b6901e391ba`, and the mandatory phase-full
+review passed with no Current Phase Blocker. The distinct release commit is
+identified by closure binding
+`phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
+`HYG-P59-001` remains a persisted nonblocking Hygiene item; no Development
+Candidate was accepted. Phase 59.1 through Phase 59.10 remain planned and
+unstarted.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

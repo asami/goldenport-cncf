@@ -1,8 +1,9 @@
 # Phase 59 - Component Documentation Contract Inventory
 
-status=in_progress
+status=closed
 planned_at=2026-07-25
 started_at=2026-08-23
+closed_at=2026-08-23
 split_approved_at=2026-08-23
 split_decision=D-59-SPLIT
 depends_on=[Phase 58.9](phase-58.9.md)
@@ -20,13 +21,18 @@ canonical_resource_specification=[Component Resource Subcomponent Specification]
 admin_consumer=[Phase 60 Component Admin and Documentation Visibility](phase-60.md)
 accepted_handoff_note=[Phase 59 DOC-01A source-to-package inventory and failing-first acceptance registry](../notes/phase-59-doc01a-source-to-package-inventory-and-failing-first-acceptance-registry.md)
 accepted_handoff_commit=bb4245a92a6e3acc0a6573965a5843b4939c1e84
+accepted_closure_commit=f7eb86c14354b259c646ccacc33f9b6901e391ba
+closure_binding_scope=phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965
 
 ## Current Status
 
-DOC-01A handoff Step accepted in full commit
-`bb4245a92a6e3acc0a6573965a5843b4939c1e84`; Phase 59 remains in_progress.
-Mandatory phase-full review and `PHASE_RELEASE_COMMIT` are pending. Phase 59.1
-through Phase 59.10 remain planned and unstarted.
+Phase 59 is closed. The DOC-01A handoff Step was accepted in commit
+`bb4245a92a6e3acc0a6573965a5843b4939c1e84`, and its closure-ledger Step was
+accepted in commit `f7eb86c14354b259c646ccacc33f9b6901e391ba`.
+The mandatory phase-full review passed with no Current Phase Blocker. The
+distinct release commit is identified by closure binding
+`phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
+Phase 59.1 through Phase 59.10 remain planned and unstarted.
 
 ## Goal
 
@@ -97,6 +103,25 @@ Phase Plan Gate: PROCEED
 The accepted DOC-01A inventory and acceptance registry is the sole handoff to
 Phase 59.1. It does not make publication, Directive, Skill, CBD Support, or
 BoK decisions owned by Phase 59.1 or later children.
+
+Closure evidence:
+
+- Phase-base commit:
+  `36e22bf6877d0fc01a5b5fbae56b91bf208a4510` (Phase 58.9 release).
+- Complete reviewed Phase range:
+  `36e22bf6877d0fc01a5b5fbae56b91bf208a4510..f7eb86c14354b259c646ccacc33f9b6901e391ba`;
+  binary-diff SHA-256
+  `c4203a167d3dd70d766779f8f614e45c7fc50eae09cb4ed679d187aba9b4f141`.
+- Mandatory phase-full review: PASS (`gpt-5.6-sol` / high), with no actionable
+  finding and no Current Phase Blocker.
+- Final release validation: complete Phase-range diff checks, UTF-8-aware
+  local-link checks, closure/status truth checks, acceptance-identity checks,
+  and closure-ledger checks passed. No SBT suite was required because the
+  frozen Phase program-change repository set is empty.
+- Accepted nonblocking Hygiene: `HYG-P59-001`, persisted in the canonical
+  Phase 59 Hygiene journal. Accepted Development Candidates: none.
+- Closure binding:
+  `phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
 
 ## Non-Goals
 

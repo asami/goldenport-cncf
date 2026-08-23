@@ -1,6 +1,7 @@
 # Phase 59 Checklist - Component Documentation Contract Inventory
 
-status=in_progress
+status=closed
+closed_at=2026-08-23
 split_approved_at=2026-08-23
 split_decision=D-59-SPLIT
 phase=[Phase 59 - Component Documentation Contract Inventory](phase-59.md)
@@ -54,8 +55,22 @@ Stage Status:
 Evidence:
 - [Accepted DOC-01A handoff note](../notes/phase-59-doc01a-source-to-package-inventory-and-failing-first-acceptance-registry.md), accepted in full commit `bb4245a92a6e3acc0a6573965a5843b4939c1e84` (note SHA-256 `f26e9379bbf5b3975fcbc6962afa94204b6dadb8b646e283e6a95f87c648da09`).
 - Sealed Luna-high step-lightweight PASS with zero blockers; eight stable acceptance groups recorded; current evidence and linked paths resolved; diff checks passed; Class D documentation/status-only work with no SBT.
+- Mandatory phase-full review PASS (`gpt-5.6-sol` / high), with no actionable
+  finding and no Current Phase Blocker, over
+  `36e22bf6877d0fc01a5b5fbae56b91bf208a4510..f7eb86c14354b259c646ccacc33f9b6901e391ba`
+  (binary-diff SHA-256
+  `c4203a167d3dd70d766779f8f614e45c7fc50eae09cb4ed679d187aba9b4f141`).
+- Final release validation passed for the complete documentation-only Phase
+  range. The frozen Phase program-change repository set is empty, so no SBT
+  suite was applicable.
+- Closure binding:
+  `phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
+- `HYG-P59-001` is persisted as nonblocking Hygiene; there are no accepted
+  Development Candidates and no unpersisted ledger item.
 
-Overall checklist status remains `in_progress`; mandatory Phase-full review and `PHASE_RELEASE_COMMIT` are pending.
+Overall checklist status is `closed`. Phase 59.1 through Phase 59.10 remain
+planned and unstarted; no historical unchecked box below activates successor
+work.
 
 ## Pre-Split Historical Ledger
 
