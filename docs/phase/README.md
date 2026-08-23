@@ -15,17 +15,16 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed phase: `phase-59.md` - Component Documentation Contract
-  Inventory. Its DOC-01A handoff and closure ledger are accepted, the
-  mandatory phase-full review passed, and its distinct release commit is
+- Latest closed phase: `phase-59.1.md` - Public Documentation and AI Ownership
+  Inventory. Its DOC-01B handoff and closure ledger are accepted, the
+  mandatory Phase full review passed, and its distinct release commit is
   identified by closure binding
-  `phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
-- Phase 59.1 is `in_progress` after the accepted DOC-01B handoff at commit
-  `23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6` (handoff note SHA-256
-  `bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560`). Its
-  mandatory Phase full review and `PHASE_RELEASE_COMMIT` remain pending; Phase
-  59.2 through `phase-59.10.md` remain planned and unstarted under approved
-  split D-59-SPLIT.
+  `phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
+- Phase 59.2 through `phase-59.10.md` remain planned and unstarted under
+  approved split D-59-SPLIT.
+- Phase 59.1 checklist: `phase-59.1-checklist.md` is closed. It persists
+  `HYG-DOC01B2-001` as nonblocking Hygiene and accepts no Development
+  Candidate.
 - Phase 59 checklist: `phase-59-checklist.md` is closed. It persists
   `HYG-P59-001` as nonblocking Hygiene and accepts no Development Candidate.
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no

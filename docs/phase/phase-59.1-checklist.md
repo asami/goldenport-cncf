@@ -1,6 +1,7 @@
 # Phase 59.1 Checklist - Public Documentation and AI Ownership Inventory
 
-status=in_progress
+status=closed
+closed_at=2026-08-23
 phase=[Phase 59.1 - Public Documentation and AI Ownership Inventory](phase-59.1.md)
 predecessor=[Phase 59](phase-59.md)
 successor=[Phase 59.2](phase-59.2.md)
@@ -51,6 +52,18 @@ Evidence:
   `CB-DOC01B-002`; both were repaired by one bounded M2 parent-direct fix.
 - Independent focused re-review passed with no new finding, Hygiene, or
   Development Candidate.
+- The mandatory Phase full review passed (`gpt-5.6-sol` / high) with no Current
+  Phase Blocker over
+  `17ea4bb6595084a0cf1a592056b1dd9331a01063..0bcf5b8e71015d7aa2a48e7c4de39f7324eefe16`
+  (binary-diff SHA-256
+  `2bec7d65f3f5cb9523f3397635693624d7324c76349b54cc04a20a24c60c246b`).
+- Final release validation passed for the complete Class D Phase range. The
+  frozen Phase program-change repository set is empty, so no SBT suite was
+  applicable.
+- `HYG-DOC01B2-001` is persisted as nonblocking Hygiene; there are no accepted
+  Development Candidates and no unpersisted ledger item.
+- Closure binding:
+  `phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
 
-Overall checklist status remains `in_progress` pending the mandatory Phase
-full review and `PHASE_RELEASE_COMMIT`.
+Overall checklist status is `closed`. Phase 59.2 through Phase 59.10 remain
+planned and unstarted.

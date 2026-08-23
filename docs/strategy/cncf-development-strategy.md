@@ -3331,7 +3331,7 @@ unchanged after the series.
 | Phase | Goal | Dependency |
 | --- | --- | --- |
 | [59](../phase/phase-59.md) | Closed on 2026-08-23: DOC-01A source-to-package documentation/resource inventory and acceptance freeze. | Phase 58.9 |
-| [59.1](../phase/phase-59.1.md) | DOC-01B public publication, Directive, Skill, CBD Support, and BoK ownership/acceptance freeze. | Phase 59 |
+| [59.1](../phase/phase-59.1.md) | Closed on 2026-08-23: DOC-01B public publication, Directive, Skill, CBD Support, and BoK ownership/acceptance freeze. | Phase 59 |
 | [59.2](../phase/phase-59.2.md) | DOC-02 Component knowledge/model manifest codec and resource contract. | Phase 59.1 |
 | [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2 |
 | [59.4](../phase/phase-59.4.md) | DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
@@ -3349,11 +3349,16 @@ review passed with no Current Phase Blocker. The distinct release commit is
 identified by closure binding
 `phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
 `HYG-P59-001` remains a persisted nonblocking Hygiene item; no Development
-Candidate was accepted. Phase 59.1 is `in_progress` after the accepted DOC-01B
-handoff at commit `23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6` (handoff note
-SHA-256 `bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560`).
-Its mandatory Phase full review and `PHASE_RELEASE_COMMIT` remain pending;
-Phase 59.2 through Phase 59.10 remain planned and unstarted.
+Candidate was accepted by Phase 59. Phase 59.1 is `closed`: its DOC-01B
+handoff is accepted in commit `23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6`,
+its closure ledger is accepted in commit
+`0bcf5b8e71015d7aa2a48e7c4de39f7324eefe16`, and the mandatory Phase full
+review passed with no Current Phase Blocker. The distinct release commit is
+identified by closure binding
+`phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
+`HYG-DOC01B2-001` is persisted as nonblocking Hygiene; no Development
+Candidate was accepted. Phase 59.2 through Phase 59.10 remain planned and
+unstarted.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

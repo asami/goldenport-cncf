@@ -1,7 +1,8 @@
 # Phase 59.1 - Public Documentation and AI Ownership Inventory
 
-status=in_progress
+status=closed
 started_at=2026-08-23
+closed_at=2026-08-23
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59](phase-59.md)
 successor=[Phase 59.2](phase-59.2.md)
@@ -11,15 +12,20 @@ consumes_handoff=DOC-01A source-to-package contract inventory and acceptance reg
 accepted_handoff_note=[DOC-01B public publication and AI ownership inventory](../notes/phase-59.1-doc01b-public-publication-and-ai-ownership-inventory-and-failing-first-acceptance-registry.md)
 accepted_handoff_commit=23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6
 accepted_handoff_sha256=bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560
+accepted_closure_commit=0bcf5b8e71015d7aa2a48e7c4de39f7324eefe16
+closure_binding_scope=phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c
 
 ## Current Status
 
-The DOC-01B handoff is accepted at commit
-`23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6`, with the accepted handoff note
-SHA-256 `bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560`.
-Phase 59.1 remains `in_progress`; the mandatory Phase full review and
-`PHASE_RELEASE_COMMIT` are pending. Phase 59.2 through Phase 59.10 remain
-planned and unstarted.
+Phase 59.1 is closed. The DOC-01B handoff was accepted in commit
+`23f6bd8aafd948802d0e38d0dc0a01109cd4fdd6`, with handoff-note SHA-256
+`bd4e55ee664f35d89bc430973aff4cb40325348bc5fdeabc577172c9905b7560`,
+and the closure-ledger Step was accepted in commit
+`0bcf5b8e71015d7aa2a48e7c4de39f7324eefe16`. The mandatory Phase full
+review passed with no Current Phase Blocker. The distinct release commit is
+identified by closure binding
+`phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
+Phase 59.2 through Phase 59.10 remain planned and unstarted.
 
 ## Goal
 
@@ -55,6 +61,27 @@ Phase Plan Gate: PROCEED
 DOC-01 is complete only when DOC-01A and DOC-01B produce one reviewed
 inventory, ownership map, and acceptance registry. Phase 59.2 consumes that
 frozen handoff and does not rediscover it.
+
+Closure evidence:
+
+- Phase-base commit:
+  `17ea4bb6595084a0cf1a592056b1dd9331a01063` (Phase 59 release).
+- Complete reviewed Phase range:
+  `17ea4bb6595084a0cf1a592056b1dd9331a01063..0bcf5b8e71015d7aa2a48e7c4de39f7324eefe16`;
+  binary-diff SHA-256
+  `2bec7d65f3f5cb9523f3397635693624d7324c76349b54cc04a20a24c60c246b`.
+- Mandatory Phase full review: PASS (`gpt-5.6-sol` / high), with no Current
+  Phase Blocker. `EXEC-P59.1-DOC01B2-001` was assessed as nonblocking and
+  requires no commit amendment.
+- Final release validation: complete Phase-range, UTF-8/local-link,
+  status/acceptance-identity, closure-ledger, exact-path, and Git diff checks
+  passed. The frozen Phase program-change repository set is empty, so no SBT
+  suite was applicable.
+- Accepted nonblocking Hygiene: `HYG-DOC01B2-001`, persisted in the canonical
+  Phase 59.1 Hygiene journal. Accepted Development Candidates: none; the
+  canonical Development Candidate journal remains absent.
+- Closure binding:
+  `phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
 
 ## Non-Goals
 
