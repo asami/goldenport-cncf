@@ -1,8 +1,12 @@
-# Phase 59 - Component Documentation and AI Knowledge Integration
+# Phase 59 - Component Documentation Contract Inventory
 
-status=planned
+status=in_progress
 planned_at=2026-07-25
+started_at=2026-08-23
+split_approved_at=2026-08-23
+split_decision=D-59-SPLIT
 depends_on=[Phase 58.9](phase-58.9.md)
+successor=[Phase 59.1](phase-59.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59 Checklist](phase-59-checklist.md)
 implementation_note=[Component Documentation Knowledge Package Implementation Proposal](../notes/component-documentation-knowledge-package-implementation.md)
@@ -14,8 +18,100 @@ canonical_architecture_specification=[Component and Subcomponent Architecture Sp
 canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
 canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 admin_consumer=[Phase 60 Component Admin and Documentation Visibility](phase-60.md)
+accepted_handoff_note=[Phase 59 DOC-01A source-to-package inventory and failing-first acceptance registry](../notes/phase-59-doc01a-source-to-package-inventory-and-failing-first-acceptance-registry.md)
+accepted_handoff_commit=bb4245a92a6e3acc0a6573965a5843b4939c1e84
 
-## Purpose
+## Current Status
+
+DOC-01A handoff Step accepted in full commit
+`bb4245a92a6e3acc0a6573965a5843b4939c1e84`; Phase 59 remains in_progress.
+Mandatory phase-full review and `PHASE_RELEASE_COMMIT` are pending. Phase 59.1
+through Phase 59.10 remain planned and unstarted.
+
+## Goal
+
+Freeze the first half of DOC-01: the CNCF, Cozy/sbt-cozy, and SmartDox
+documentation/resource contract inventory and its exact failing-first
+acceptance identities. This Phase produces the DOC-01A handoff only; it does
+not implement manifests, packaging, Help, CBD Support, BoK, or Phase 60.
+
+## Approved Split
+
+On 2026-08-23 the user approved Decision Request D-59-SPLIT through
+$cncf-split-phase Phase 59 and the subsequent confirmation of the corrected
+eleven-unit sequence. The former ten-stage Phase had a conservative
+40--54-hour estimate and mixed two open-ended discovery kernels with protected
+cross-repository implementation, acceptance, and documentation closure work.
+
+| Phase | Owned closure | Parent profile | Estimate |
+| --- | --- | --- | --- |
+| 59 | DOC-01A source-to-package contract inventory | Sol / high | 4--6h |
+| [59.1](phase-59.1.md) | DOC-01B public publication, Directive, Skill, CBD, and BoK boundary inventory | Sol / high | 4--6h |
+| [59.2](phase-59.2.md) | DOC-02 knowledge and model manifest contract | Terra / xhigh | 5--6h |
+| [59.3](phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain | Terra / xhigh | 5--6h |
+| [59.4](phase-59.4.md) | DOC-04 knowledge and development-context composition | Terra / high | 4--6h |
+| [59.5](phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface | Terra / xhigh | 5--6h |
+| [59.6](phase-59.6.md) | DOC-06 Textus CBD Support exact-detail integration | Terra / high | 4--6h |
+| [59.7](phase-59.7.md) | DOC-07 Textus BoK semantic RAG/MCP and CBD handoff | Terra / xhigh | 5--6h |
+| [59.8](phase-59.8.md) | DOC-08 representative Component and framework profiles | Terra / high | 4--6h |
+| [59.9](phase-59.9.md) | DOC-09 security, regression, and downstream validation | Terra / high | 4--6h |
+| [59.10](phase-59.10.md) | DOC-10 canonical documentation and Phase closure | Terra / high | 4--6h |
+
+Pre-split gate evidence: SPLIT_REQUIRED. The critical path is DOC-01A,
+DOC-01B, DOC-02, DOC-03, DOC-04, DOC-05, DOC-06, DOC-07, DOC-08, DOC-09, and
+DOC-10 in that order. The expensive kernels are limited to the two DOC-01
+inventory children. Every later child consumes its predecessor's frozen
+handoff rather than rediscovering Component identity, Phase 58 resource
+resolution, documentation ownership, authority, or Phase 60's later-consumer
+boundary.
+
+Phase Plan Gate: PROCEED
+- target: conservative upper bound <= 6h
+- planning_demand: open-ended-discovery
+- recommended_parent_profile: gpt-5.6-sol / high
+- profile_cost_role: expensive reasoning kernel
+- expensive_reasoning_kernel: reconcile CNCF, Cozy/sbt-cozy, and SmartDox documentation/resource ownership and acceptance evidence into the DOC-01A handoff
+- frozen_profile_transition_handoff: none
+- parent_reasoning_mode_policy: standard
+- estimated_at_recommended_profile: 4--6h
+- agent_reasoning_mode_policy: default standard; consider pro only at an eligible agent launch when the active interface supports it and frozen quality-first evidence justifies it
+- runtime_suitability: re-evaluate in the Phase execution task
+- source: approved split from Phase 59
+
+## Current Scope
+
+- Inventory CNCF Help, Manual, /man, OpenAPI, MCP, Web, CAR resource,
+  production-visibility, and authorization contracts.
+- Inventory Cozy CAR documentation lint, source/archive projection, Scaladoc,
+  and publication behavior.
+- Inventory SmartDox/Markdown parsing and HTML/PDF projection behavior.
+- Inventory and admit the closed Phase 58 logical-release, resolved-resource,
+  integrity, provenance, operation-mode, and no-second-resolver contracts as
+  read-only input; Phase 59 must not change or reimplement Phase 58 behavior or
+  create a second resolver.
+- Record DOC-01A ownership conflicts and exact failing-first acceptance
+  identities for the source-to-package boundary.
+
+## Closure
+
+The accepted DOC-01A inventory and acceptance registry is the sole handoff to
+Phase 59.1. It does not make publication, Directive, Skill, CBD Support, or
+BoK decisions owned by Phase 59.1 or later children.
+
+## Non-Goals
+
+- Manifest/schema implementation, authoring/package implementation, Help
+  routes, direct AI retrieval, CBD Support, BoK, representative profiles,
+  security/regression closure, canonical design/specification promotion, and
+  any Phase 60 Admin behavior.
+
+## Pre-Split Context (Historical)
+
+The former Phase-wide material below is retained as dated pre-split context.
+It is not the current scope of Phase 59. Its unfinished work is owned exactly
+once by the child map in Approved Split and the child checklists.
+
+### Purpose
 
 Make every CNCF Component a one-stop, self-describing execution and knowledge
 package for humans and AI.
@@ -39,7 +135,7 @@ discovery, detail, usage, MCP assistance, and CAR Review. It also implements
 the complementary Textus BoK RAG/MCP route for terminology and semantic
 discovery. The exact Component Help manifest remains authoritative.
 
-## Dependency
+### Dependency
 
 Phase 59 begins after Phase 58.9 closes the Phase 58 series.
 
@@ -55,7 +151,7 @@ Phase 59 does not reopen Phase 50 Entity revision/OCC behavior. It may document
 those contracts through the new Component knowledge mechanism after their
 canonical design/specification is stable.
 
-## Selected Direction
+### Selected Direction
 
 - Physical Components carry the Component-specific information required to
   understand and use them.
@@ -123,7 +219,7 @@ canonical design/specification is stable.
   canonical closed-phase contract, and executable specifications are behavior
   evidence.
 
-## Scope
+### Scope
 
 - Define a versioned Component knowledge manifest and resource model.
 - Consume the Phase 58 composition manifest and resolved resource API without
@@ -200,7 +296,7 @@ canonical design/specification is stable.
 - Promote verified behavior to current CNCF, Textus CBD Support, and Textus BoK
   design/specification documents before closure.
 
-## Boundaries
+### Boundaries
 
 - Phase 59 does not make CAR embedding the primary public distribution of
   CNCF/CML/Cozy documentation.
@@ -248,7 +344,7 @@ canonical design/specification is stable.
   SubComponent archives, repositories, caches, or development directories.
 - Component-specific manual content remains owned by each Component.
 
-## Work Stack
+### Work Stack
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
@@ -263,7 +359,7 @@ canonical design/specification is stable.
 | DOC-09 | Security, regression, and downstream validation | Path, integrity, authorization, disclosure, compatibility, regression, and full cross-repository suites pass. | planned |
 | DOC-10 | Canonical documentation and closure | CNCF/CBD Support/Textus BoK design/spec/notes/strategy/phase records match verified behavior; working notes are marked overridden and historical. | planned |
 
-## Acceptance
+### Acceptance
 
 - One manifest deterministically enumerates every admitted Component knowledge
   resource.
@@ -363,7 +459,7 @@ canonical design/specification is stable.
 - No current design/spec/note/manual/strategy/phase record contradicts the
   verified behavior.
 
-## Verification
+### Verification
 
 Phase 59 closure requires:
 
@@ -411,7 +507,7 @@ Phase 59 closure requires:
   `docs/design`, `docs/spec`, and notes; and
 - strategy/phase/checklist closure records with exact evidence.
 
-## Final Documentation Gate
+### Final Documentation Gate
 
 DOC-10 is mandatory and occurs only after implementation and cross-repository
 acceptance are stable.
@@ -444,7 +540,7 @@ It must:
 Phase 59 cannot close with behavior represented only in notes, journal, phase
 documents, source code, or tests.
 
-## Repository Responsibility
+### Repository Responsibility
 
 | Repository | Phase 59 responsibility |
 | --- | --- |
@@ -458,7 +554,7 @@ documents, source code, or tests.
 | `/Users/asami/src/dev2026/textus-bok` | Complementary semantic manifest/resource admission, RAG/MCP retrieval, CBD handoff, and canonical BoK contract |
 | selected sample/Component repositories | Embedded and required-SubComponent, develop-mode, restricted-source, and offline-bundle end-to-end acceptance |
 
-## Planning References
+### Planning References
 
 - `docs/notes/component-documentation-knowledge-package-implementation.md`
 - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`
@@ -480,9 +576,11 @@ documents, source code, or tests.
 - `/Users/asami/src/dev2026/textus-bok/docs/strategy/textus-bok-development-strategy.md`
 - `/Users/asami/src/dev2026/textus-bok/docs/spec/bok-domain-model.md`
 
-## Current Resume Point
+### Current Resume Point (Historical/Superseded)
 
-Phase 59 is planned and must not start before Phase 58.9 closes the Phase 58 series.
+This former pre-split resume point is historical and superseded by the approved
+D-59-SPLIT child sequence. Phase 59 is planned and must not start before Phase
+58.9 closes the Phase 58 series.
 
 After Phase 58.9 closes the Phase 58 series, begin DOC-01 with a cross-repository inventory. Freeze
 the knowledge/model resource contract, AI development context, Help consumer

@@ -1,7 +1,11 @@
-# Phase 59 Checklist - Component Documentation and AI Knowledge Integration
+# Phase 59 Checklist - Component Documentation Contract Inventory
 
-status=planned
-phase=[Phase 59 - Component Documentation and AI Knowledge Integration](phase-59.md)
+status=in_progress
+split_approved_at=2026-08-23
+split_decision=D-59-SPLIT
+phase=[Phase 59 - Component Documentation Contract Inventory](phase-59.md)
+predecessor=[Phase 58.9](phase-58.9.md)
+successor=[Phase 59.1](phase-59.1.md)
 implementation_note=[Component Documentation Knowledge Package Implementation Proposal](../notes/component-documentation-knowledge-package-implementation.md)
 composition_journal=[Component SubComponent and Development Composition Decision](../journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md)
 phase_split_journal=[Resource SubComponent Phase Split and Planning (historical Phase 56)](../journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md)
@@ -10,14 +14,58 @@ canonical_architecture_specification=[Component and Subcomponent Architecture Sp
 canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
 canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 
-This checklist is the authoritative Phase 59 state ledger after Phase 59
-starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 58.9 closes the Phase 58 series.
+This checklist owns DOC-01A only. DOC-01B through DOC-10 moved exactly once to
+Phase 59.1 through Phase 59.10 under approved split D-59-SPLIT. The former
+Phase-wide ledger is retained below as pre-split historical context; its open
+boxes are not current Phase 59 work and must not be used to start a later
+child.
 
 References to “Phase 58” below mean the full Phase 58 series; its final entry
 gate is Phase 58.9.
 
-## DOC-01: Inventory and Executable Acceptance
+## DOC-01A: Source-to-Package Inventory and Executable Acceptance
+
+Stage Status:
+- Current status: DONE
+- Owner: CNCF, Cozy/sbt-cozy, and SmartDox maintainers
+- Update rule: Preserve DONE after the reviewed DOC-01A Step and accepted
+  handoff; any later correction proceeds through reviewed maintenance.
+- Entry rule: Phase 58.9 is closed.
+- Completion rule: Existing CNCF, Cozy/sbt-cozy, and SmartDox source-to-package
+  contracts, conflicts, ownership boundaries, and exact failing-first
+  acceptance identities are recorded without making DOC-01B public-publication
+  or AI-service decisions.
+
+- [x] Inventory CNCF Help, Manual, /man, OpenAPI, MCP, Web, CAR resource,
+  production-visibility, and authorization contracts.
+- [x] Inventory Cozy CAR documentation lint, source/archive projection,
+  Scaladoc, and publication behavior.
+- [x] Inventory SmartDox/Markdown parsing and HTML/PDF projection behavior.
+- [x] Fix exact Component Help/resource authority separately from framework
+  installed-snapshot, online-publication, and RAG-snapshot authority.
+- [x] Admit the Phase 58 logical release, Resource SubComponent, resolver,
+  integrity, and provenance contract as an input that DOC-01A does not
+  reimplement.
+- [x] Fix source filtering, license, restricted-access, and operation-mode
+  input profiles without exposing OperationMode to Component domain code.
+- [x] Register failing-first Executable Specification identities for every
+  DOC-01A source-to-package acceptance group.
+
+Evidence:
+- [Accepted DOC-01A handoff note](../notes/phase-59-doc01a-source-to-package-inventory-and-failing-first-acceptance-registry.md), accepted in full commit `bb4245a92a6e3acc0a6573965a5843b4939c1e84` (note SHA-256 `f26e9379bbf5b3975fcbc6962afa94204b6dadb8b646e283e6a95f87c648da09`).
+- Sealed Luna-high step-lightweight PASS with zero blockers; eight stable acceptance groups recorded; current evidence and linked paths resolved; diff checks passed; Class D documentation/status-only work with no SBT.
+
+Overall checklist status remains `in_progress`; mandatory Phase-full review and `PHASE_RELEASE_COMMIT` are pending.
+
+## Pre-Split Historical Ledger
+
+The remaining sections are the original unsplit record. Their current
+ownership is: DOC-01B in Phase 59.1; DOC-02 in Phase 59.2; DOC-03 in Phase
+59.3; DOC-04 in Phase 59.4; DOC-05 in Phase 59.5; DOC-06 in Phase 59.6;
+DOC-07 in Phase 59.7; DOC-08 in Phase 59.8; DOC-09 in Phase 59.9; and DOC-10
+in Phase 59.10. They are historical only and are not duplicate current work.
+
+## Pre-Split DOC-01: Inventory and Executable Acceptance
 
 Stage Status:
 - Current status: PLANNED
@@ -79,7 +127,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-02: Knowledge and Model Resource Contracts
+## Pre-Split DOC-02: Knowledge and Model Resource Contracts
 
 Stage Status:
 - Current status: PLANNED
@@ -126,7 +174,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-03: Authoring and Content Packaging Toolchain
+## Pre-Split DOC-03: Authoring and Content Packaging Toolchain
 
 Stage Status:
 - Current status: PLANNED
@@ -185,7 +233,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-04: Knowledge and Development Context Composition
+## Pre-Split DOC-04: Knowledge and Development Context Composition
 
 Stage Status:
 - Current status: PLANNED
@@ -224,7 +272,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-05: Unified Help and Direct AI Access
+## Pre-Split DOC-05: Unified Help and Direct AI Access
 
 Stage Status:
 - Current status: PLANNED
@@ -277,7 +325,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-06: Textus CBD Support Primary Integration
+## Pre-Split DOC-06: Textus CBD Support Primary Integration
 
 Stage Status:
 - Current status: PLANNED
@@ -309,7 +357,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-07: Textus BoK Complementary RAG/MCP Integration
+## Pre-Split DOC-07: Textus BoK Complementary RAG/MCP Integration
 
 Stage Status:
 - Current status: PLANNED
@@ -369,7 +417,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-08: Representative Component and Framework Documentation Acceptance
+## Pre-Split DOC-08: Representative Component and Framework Documentation Acceptance
 
 Stage Status:
 - Current status: PLANNED
@@ -431,7 +479,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-09: Security, Regression, and Downstream Validation
+## Pre-Split DOC-09: Security, Regression, and Downstream Validation
 
 Stage Status:
 - Current status: PLANNED
@@ -472,7 +520,7 @@ Stage Status:
 Evidence:
 - Pending.
 
-## DOC-10: Canonical Documentation and Closure
+## Pre-Split DOC-10: Canonical Documentation and Closure
 
 Stage Status:
 - Current status: PLANNED

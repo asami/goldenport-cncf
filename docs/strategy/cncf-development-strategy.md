@@ -3320,10 +3320,46 @@ Planning references:
 - `docs/notes/component-resource-subcomponent-implementation.md`; and
 - `docs/journal/2026/07/2026-07-31-phase-56-resource-subcomponent-phase-split.md`.
 
-#### Phase 59 - Component Documentation and AI Knowledge Integration
+#### Phase 59 Series - Component Documentation and AI Knowledge Integration
 
-Phase 58.9 is closed. Phase 59 remains planned and is not started by this
-release.
+On 2026-08-23 the user approved D-59-SPLIT. The former Phase 59 had a
+conservative 40--54-hour estimate and mixed two open-ended ownership-discovery
+kernels with protected implementation, validation, and closure work. The
+children below are sequential, independently closable, and retain Phase 60
+unchanged after the series.
+
+| Phase | Goal | Dependency |
+| --- | --- | --- |
+| [59](../phase/phase-59.md) | DOC-01A source-to-package documentation/resource inventory and acceptance freeze. | Phase 58.9 |
+| [59.1](../phase/phase-59.1.md) | DOC-01B public publication, Directive, Skill, CBD Support, and BoK ownership/acceptance freeze. | Phase 59 |
+| [59.2](../phase/phase-59.2.md) | DOC-02 Component knowledge/model manifest codec and resource contract. | Phase 59.1 |
+| [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2 |
+| [59.4](../phase/phase-59.4.md) | DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
+| [59.5](../phase/phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface. | Phase 59.4 |
+| [59.6](../phase/phase-59.6.md) | DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
+| [59.7](../phase/phase-59.7.md) | DOC-07 BoK complementary semantic RAG/MCP and CBD handoff. | Phase 59.6 |
+| [59.8](../phase/phase-59.8.md) | DOC-08 representative Component and framework documentation profiles. | Phase 59.7 |
+| [59.9](../phase/phase-59.9.md) | DOC-09 security, regression, and downstream validation. | Phase 59.8 |
+| [59.10](../phase/phase-59.10.md) | DOC-10 canonical documentation and Phase 59 series closure. | Phase 59.9 |
+
+Phase 59 is `in_progress`: the DOC-01A handoff is accepted in full commit
+`bb4245a92a6e3acc0a6573965a5843b4939c1e84`. The mandatory phase-full review
+and `PHASE_RELEASE_COMMIT` remain pending; Phase 59.1 through Phase 59.10 are
+planned and unstarted.
+
+The expensive reasoning kernels belong only to 59 and 59.1. Every later child
+consumes a reviewed predecessor handoff and uses its recorded least-cost
+compatible parent profile. No child may redefine Phase 58 identity/resource
+resolution or begin Phase 60. The retained pre-split material below is
+historical context; current ownership is the child table and each child Phase
+document/checklist.
+
+#### Pre-Split Context (Historical)
+
+The retained material below is non-normative historical context. Current
+ownership is only the Phase 59 series table and the individual child documents;
+it does not activate, reopen, or modify any successor or the closed Phase 58
+series.
 
 - Goal:
   - make each logical Component release a one-stop, self-describing execution,
@@ -3447,15 +3483,15 @@ release.
   - Phase 59 cannot close while the latest contract exists only in notes,
     journal, phase documents, implementation, or tests.
 - Planning references:
-  - `docs/phase/phase-59.md`;
-  - `docs/phase/phase-59-checklist.md`;
+  - `docs/phase/phase-59.md` through `docs/phase/phase-59.10.md`;
+  - the matching Phase 59 child checklists;
   - `docs/journal/2026/07/2026-07-25-component-documentation-and-ai-knowledge-package-consideration.md`;
   - `docs/journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md`; and
   - `docs/notes/component-documentation-knowledge-package-implementation.md`.
 
 #### Phase 60 - Component Admin and Documentation Visibility
 
-Planned after Phase 59 closes.
+Planned after Phase 59.10 closes the Phase 59 series.
 
 - Goal:
   - make the full operational and descriptive state of a loaded Component

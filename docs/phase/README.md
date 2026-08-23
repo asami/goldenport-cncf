@@ -17,8 +17,10 @@ Current baseline:
 
 - Phase 58-series latest closed phase: `phase-58.9.md` - Component and
   SubComponent Canonical Closure.
-- Phase 58-series documented successor: `phase-59.md` remains planned; this
-  Phase 58.9 release does not start it.
+- Phase 59: `phase-59.md` is in progress after the accepted DOC-01A handoff in
+  full commit `bb4245a92a6e3acc0a6573965a5843b4939c1e84`; its mandatory
+  phase-full review and release remain pending. Phase 59.1 through
+  `phase-59.10.md` are planned and unstarted under approved split D-59-SPLIT.
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 

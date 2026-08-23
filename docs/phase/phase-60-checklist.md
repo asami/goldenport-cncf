@@ -12,7 +12,7 @@ canonical_resource_specification=[Component Resource Subcomponent Specification]
 
 This checklist is the authoritative Phase 60 state ledger after Phase 60
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 59 closes.
+Phase 59.10 closes the Phase 59 series.
 
 References to “Phase 58” below mean the full Phase 58 series, whose final
 closure is Phase 58.9.
@@ -27,7 +27,7 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF Admin, Help, configuration, runtime, datastore, and management
   maintainers
-- Entry rule: Phase 59 is closed.
+- Entry rule: Phase 59.10 is closed.
 - Completion rule: Existing surfaces, identity ambiguities, scan boundaries,
   ownership, and exact failing-first acceptance identities are recorded.
 

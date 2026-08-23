@@ -2,7 +2,7 @@
 
 status=planned
 planned_at=2026-07-31
-depends_on=[Phase 59](phase-59.md)
+depends_on=[Phase 59.10](phase-59.10.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 60 Checklist](phase-60-checklist.md)
 implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
@@ -24,7 +24,8 @@ Phase 60 consumes:
 - the same four-document Phase 58 canonical identity/resource contract and its
   already-resolved Subcomponent Component inventory, state, integrity, and
   provenance; and
-- Phase 59 Component knowledge and model manifests.
+- Phase 59 series Component knowledge and model manifests, closed by Phase
+  59.10.
 
 Admin must use those contracts rather than reconstructing Component state by
 scanning CARs, repositories, development directories, source trees, or
@@ -32,11 +33,12 @@ documentation artifacts independently.
 
 ## Dependency
 
-Phase 60 begins after Phase 59 closes.
+Phase 60 begins after Phase 59.10 closes the Phase 59 series.
 
 The Phase 58 series supplies the canonical identity/resource contract and its
-already-resolved output, and Phase 59 supplies the documentation/model knowledge
-contract. Phase 60 is their operator-facing consumer: it does not independently
+already-resolved output, and the Phase 59 series supplies the
+documentation/model knowledge contract. Phase 60 is their operator-facing
+consumer: it does not independently
 scan or resolve resources, broaden the resource/mode policy, or reopen either
 foundation.
 
@@ -161,11 +163,12 @@ compatibility shortcut.
 
 - [Phase 55 - Configuration Binding and Provenance](phase-55.md)
 - [Phase 58 series, closing in Phase 58.9](phase-58.9.md)
-- [Phase 59 - Component Documentation and AI Knowledge Integration](phase-59.md)
+- [Phase 59.10 - Canonical Documentation and Phase Closure](phase-59.10.md)
 - [Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
 - [Planning Journal](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
 - [Phase 52 direct-Admin canonical-ID boundary](../journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md)
 
 ## Current Status
 
-Phase 60 is planned and must not start before Phase 59 closes.
+Phase 60 is planned and must not start before Phase 59.10 closes the Phase 59
+series.
