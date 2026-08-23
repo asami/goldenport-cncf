@@ -76,6 +76,71 @@ Phase Plan Gate: PROCEED
   acceptance before component migration is complete.
 - consumed: true
 
+### D-58.8-CWITTER-RESUME-001
+
+- answer_identity: developer decision in this Phase 58.8 execution task:
+  `cwitterをその目的に使うことにして。`
+- selected_option: `AUTHORIZE_CWITTER_MIGRATION_AND_RSC09_ACCEPTANCE`
+- supersedes: the deferral in `D-58.8-RSC09-CWITTER-ENTITY-ACCESS-001` only
+  for the Cwitter Component migration and the registered RSC09 Cwitter
+  consumer acceptance.
+- affected_phase_and_tree_identities: Phase 58.8; RSC09 Cwitter consumer;
+  textus-sample-apps `3202c0204e57`; the preserved Cwitter ComponentFactory
+  migration and acceptance-spec draft.
+- authorized_next_state: `PARENT_CAPABILITY_CHECK`, then a frozen RSC09
+  Cwitter migration/consumer-acceptance plan. Preserve the existing
+  no-remote-publication, no-deployment, no-push, and no-Sanpomap-substitution
+  boundaries. The existing local-only CNCF snapshot publication and
+  process-local `CNCF_VERSION=0.5.3-SNAPSHOT` authority remains governed by
+  `D-58.8-RSC09-CONSUMER-DEP-001`.
+- consumed: true
+
+### D-58.8-PARENT-PROFILE-001
+
+- answer_identity: developer decision in this Phase 58.8 execution task:
+  `terra xhigh`
+- selected_option: `PARENT_PROFILE_GPT_5_6_TERRA_XHIGH`
+- affected_phase_and_tree_identities: Phase 58.8; RSC09 Cwitter version
+  alignment and consumer-acceptance replan; textus-sample-apps
+  `3202c0204e57`.
+- authorized_next_state: `PARENT_CAPABILITY_CHECK` using parent profile
+  `gpt-5.6-terra / xhigh`, then a material RSC09 replan.
+- consumed: true
+
+### D-58.8-RSC09-CWITTER-VERSION-001
+
+- answer_identity: developer decision in this Phase 58.8 execution task:
+  `テスト用に例外ありで進めて。`
+- selected_option: `AUTHORIZE_EPHEMERAL_RSC09_CNCF_0_5_3_SNAPSHOT`
+- affected_phase_and_tree_identities: Phase 58.8; RSC09 Cwitter version
+  alignment and component-composition acceptance; textus-sample-apps
+  `3202c0204e57`; ArtScene `24e9671db6f3` remains a read-only complementary
+  consumer at CNCF `0.5.2`.
+- authorized_next_state: resume `PLAN`. Align Cwitter's persistent shared
+  build versions with ArtScene, but retain the previously authorized
+  process-local `CNCF_VERSION=0.5.3-SNAPSHOT` exception only for the RSC09
+  focused composition acceptance. Do not change ArtScene, remotely publish,
+  deploy, push, or fabricate a compatibility fixture.
+- consumed: true
+
+### D-58.8-CWITTER-COZY-IDENTITY-001
+
+- answer_identity: developer decision in this Phase 58.8 execution task:
+  `AUTHORIZE_CWITTER_CANONICAL_IDENTITY_MIGRATION`
+- selected_option: `AUTHORIZE_CWITTER_CANONICAL_IDENTITY_MIGRATION`
+- affected_phase_and_tree_identities: Phase 58.8 RSC09 Cwitter alignment;
+  CNCF `63024930277f`; textus-sample-apps/Cwitter `3202c0204e57`; ArtScene
+  `24e9671db6f3` remains read-only.
+- authorized_next_state: `PARENT_CAPABILITY_CHECK`, then a material RSC09
+  replan may add the Cwitter component and subsystem canonical `project.yaml`
+  identity metadata and only the necessary aligned build configuration. Freeze
+  the CAR/SAR identities from authoritative Cwitter source evidence before
+  implementation. Preserve Cwitter's ArtScene-aligned persistent versions, the
+  test-only `CNCF_VERSION=0.5.3-SNAPSHOT` exception, and the existing
+  no-remote-publication, no-deployment, no-push, no-ArtScene-change, and
+  no-compatibility-fixture boundaries.
+- consumed: true
+
 ### D-58.8-RSC09-ARTSCENE-CONSUMER-001
 
 - answer_identity: developer instruction in this Phase 58.8 execution task:
@@ -101,9 +166,11 @@ acceptance asserts the real release archive is returned directly from that
 coordinate-relative path and that the same archive yields the real
 `component/main.jar` under the canonical runtime-dependency path. ArtScene
 does not replace the canonical synthetic `RscParent` plus its three-child
-fixture, and it makes no composition or provider-API claim. Cwitter and the
-Sanpomap substitute remain deferred under
-`D-58.8-RSC09-CWITTER-ENTITY-ACCESS-001`.
+fixture, and it makes no composition or provider-API claim. Cwitter is
+admitted by `D-58.8-CWITTER-RESUME-001`,
+`D-58.8-RSC09-CWITTER-VERSION-001`, and
+`D-58.8-CWITTER-COZY-IDENTITY-001`; only the Sanpomap substitute remains
+deferred.
 
 ## Closure
 
