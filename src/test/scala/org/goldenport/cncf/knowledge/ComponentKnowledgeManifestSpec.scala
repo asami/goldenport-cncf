@@ -92,36 +92,58 @@ final class ComponentKnowledgeManifestSpec
   }
 
   "DOC02-AC-02 duplicate, unsafe, malformed, incompatible, and duplicate-key inputs" should {
-    "reject invalid identity, path, digest, role/media, and JSON object-key values" in {
-      Given("otherwise valid manifests containing one prohibited value at a time")
+    "reject invalid identity, path, digest, role/media, and recursively protected extension aliases" in {
+      Given("otherwise valid manifests containing one prohibited value or protected Phase 58 extension alias at a time")
       val duplicateidentity = _manifest.copy(resources = Vector(_documentation_entry, _documentation_entry.copy(logicalPath = "docs/duplicate.md")))
       val unsafepath = _manifest.copy(resources = Vector(_documentation_entry.copy(logicalPath = "docs/../secret.md")))
       val malformeddigest = _manifest.copy(resources = Vector(_documentation_entry.copy(sha256 = "not-a-digest")))
       val incompatible = _manifest.copy(resources = Vector(_documentation_entry.copy(role = ComponentKnowledgeResourceRole.SourceCode)))
       val protectedextension = _manifest.copy(extensions = Map("physicalPath" -> Json.fromString("private/phase58/resource.bin")))
       val authorizationextension = _manifest.copy(extensions = Map("AuThOrIzAtIoN" -> Json.fromBoolean(true)))
+      val repositoryurl = _manifest.copy(extensions = Map("repositoryUrl" -> Json.fromString("https://repo.example.invalid/private")))
+      val credentialtoken = _manifest.copy(extensions = Map("credential-token" -> Json.fromBoolean(true)))
+      val credentialtokencompound = _manifest.copy(extensions = Map("credentialtoken" -> Json.fromBoolean(true)))
+      val normalizedpath = _manifest.copy(extensions = Map("normalized_relative_path" -> Json.obj("value" -> Json.fromString("private/resource.bin"))))
+      val nestedaliases = _manifest.copy(extensions = Map("futureRoot" -> Json.obj("futureList" -> Json.arr(Json.obj("physicalLocation" -> Json.fromString("/private/resource.bin"))), "futureObject" -> Json.obj("credentialToken" -> Json.fromBoolean(true)))))
       val duplicatekeyjson = ComponentKnowledgeManifestCodec.encode(_manifest).replace(
         s"\"schema\":\"$_schema\"",
         s"\"schema\":\"$_schema\",\"schema\":\"$_schema\""
       )
+      val codecrepositoryurl = ComponentKnowledgeManifestCodec.encode(_manifest).replace("\"resources\":[", "\"repositoryUrl\":\"https://repo.example.invalid/private\",\"resources\":[")
+      val codeccredentialtoken = ComponentKnowledgeManifestCodec.encode(_manifest).replace("\"resources\":[", "\"credential-token\":true,\"resources\":[")
+      val codeccredentialtokencompound = ComponentKnowledgeManifestCodec.encode(_manifest).replace("\"resources\":[", "\"credentialtoken\":true,\"resources\":[")
+      val codecnormalizedpath = ComponentKnowledgeManifestCodec.encode(_manifest).replace("\"resources\":[", "\"normalized_relative_path\":{\"value\":\"private/resource.bin\"},\"resources\":[")
+      val codecnestedaliases = ComponentKnowledgeManifestCodec.encode(_manifest).replace("\"resources\":[", "\"futureRoot\":{\"futureList\":[{\"physicalLocation\":\"/private/resource.bin\"}],\"futureObject\":{\"credentialToken\":true}},\"resources\":[")
 
-      When("model validation and codec decoding process the invalid values")
+      When("model validation and codec decoding normalize aliases through nested JSON object and array values")
       val duplicates = ComponentKnowledgeManifest.validateC(duplicateidentity).toOption
       val path = ComponentKnowledgeManifest.validateC(unsafepath).toOption
       val digest = ComponentKnowledgeManifest.validateC(malformeddigest).toOption
       val rolemedia = ComponentKnowledgeManifest.validateC(incompatible).toOption
       val extension = ComponentKnowledgeManifest.validateC(protectedextension).toOption
       val authorization = ComponentKnowledgeManifest.validateC(authorizationextension).toOption
+      val repository = ComponentKnowledgeManifest.validateC(repositoryurl).toOption
+      val credential = ComponentKnowledgeManifest.validateC(credentialtoken).toOption
+      val credentialcompound = ComponentKnowledgeManifest.validateC(credentialtokencompound).toOption
+      val normalized = ComponentKnowledgeManifest.validateC(normalizedpath).toOption
+      val nested = ComponentKnowledgeManifest.validateC(nestedaliases).toOption
       val json = ComponentKnowledgeManifestCodec.decodeC(duplicatekeyjson).toOption
+      val decodedaliases = Vector(codecrepositoryurl, codeccredentialtoken, codeccredentialtokencompound, codecnormalizedpath, codecnestedaliases).map(ComponentKnowledgeManifestCodec.decodeC(_).toOption)
 
-      Then("each invalid value is rejected through the manifest argument-validation boundary")
+      Then("each invalid value and normalized direct or nested protected alias is rejected through the manifest argument-validation boundary")
       duplicates shouldBe None
       path shouldBe None
       digest shouldBe None
       rolemedia shouldBe None
       extension shouldBe None
       authorization shouldBe None
+      repository shouldBe None
+      credential shouldBe None
+      credentialcompound shouldBe None
+      normalized shouldBe None
+      nested shouldBe None
       json shouldBe None
+      decodedaliases shouldBe Vector(None, None, None, None, None)
     }
 
     "reject binding identities outside the manifest release and declared Component tree" in {

@@ -2,11 +2,11 @@
 
 status=planned
 split_from=[Phase 59](phase-59.md)
-depends_on=[Phase 59.2](phase-59.2.md)
+depends_on=[Phase 59.2.3](phase-59.2.3.md)
 successor=[Phase 59.4](phase-59.4.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.3 Checklist](phase-59.3-checklist.md)
-consumes_handoff=accepted DOC-02 manifest schema, codec, resource identities, and acceptance matrix
+consumes_handoff=accepted complete DOC-02 manifest schema, codec, resource identities, public metadata, read-only consumer contract, and acceptance matrix
 
 ## Goal
 
@@ -22,7 +22,7 @@ Phase Plan Gate: PROCEED
 - recommended_parent_profile: gpt-5.6-terra / xhigh
 - profile_cost_role: lower-cost execution
 - expensive_reasoning_kernel: none
-- frozen_profile_transition_handoff: accepted DOC-02 manifest schema, codec, resource identities, and acceptance matrix
+- frozen_profile_transition_handoff: accepted complete DOC-02 manifest schema, codec, resource identities, public metadata, read-only consumer contract, and acceptance matrix
 - parent_reasoning_mode_policy: standard
 - estimated_at_recommended_profile: 5--6h
 - agent_reasoning_mode_policy: default standard; consider pro only at an eligible agent launch when the active interface supports it and frozen quality-first evidence justifies it

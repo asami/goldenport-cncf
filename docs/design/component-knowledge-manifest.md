@@ -30,9 +30,12 @@ a fixed order, resources ordered by their complete Phase 58 logical identity
 and canonical logical path, and extension object keys in lexical order.
 Unknown safe fields in the root, resource, binding, metadata, and
 safe-provenance objects are retained as extensions and re-emitted without
-overriding known v1 fields. Extension keys that name protected Phase 58
-location, content, credential, or authority evidence are rejected
-case-insensitively, including `authorization`.
+overriding known v1 fields. Every extension-object key is checked recursively.
+Its identifier is normalized across case, punctuation, camel-case, and compound
+word forms; keys naming protected Phase 58 repository/location,
+physical-or-normalized path, content/bytes, credential-token, authorization,
+activation, operation, MCP, deployment, or disclosure-authority evidence are
+rejected.
 
 The optional resource `language` and binding `parentComponentId` fields may be
 absent or JSON `null` when decoded; canonical output writes the known fields.

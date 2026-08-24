@@ -25,7 +25,10 @@ and the closure-ledger Step was accepted in commit
 review passed with no Current Phase Blocker. The distinct release commit is
 identified by closure binding
 `phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
-Phase 59.2 through Phase 59.10 remain planned and unstarted.
+At Phase 59.1 closure, Phases 59.2 through 59.10 were planned and unstarted.
+On 2026-08-24, Phase 59.2 started DOC-02A and its remaining work was
+partitioned into Phases 59.2.1 through 59.2.3 by
+`D-P59.2-NESTED-SPLIT-NUMBERING-001`.
 
 ## Goal
 

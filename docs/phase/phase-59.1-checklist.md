@@ -65,5 +65,7 @@ Evidence:
 - Closure binding:
   `phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
 
-Overall checklist status is `closed`. Phase 59.2 through Phase 59.10 remain
-planned and unstarted.
+Overall checklist status is `closed`. At that closure, Phases 59.2 through
+59.10 were planned and unstarted. Phase 59.2 subsequently started DOC-02A and
+the remaining DOC-02 work was partitioned into Phases 59.2.1 through 59.2.3 by
+`D-P59.2-NESTED-SPLIT-NUMBERING-001`.

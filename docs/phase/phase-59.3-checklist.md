@@ -2,7 +2,7 @@
 
 status=planned
 phase=[Phase 59.3 - Documentation Authoring and Content Packaging Toolchain](phase-59.3.md)
-predecessor=[Phase 59.2](phase-59.2.md)
+predecessor=[Phase 59.2.3](phase-59.2.3.md)
 successor=[Phase 59.4](phase-59.4.md)
 
 ## DOC-03: Authoring and Content Packaging Toolchain
@@ -12,7 +12,7 @@ Stage Status:
 - Owner: Cozy/sbt-cozy and SmartDox maintainers
 - Update rule: Record owning-toolchain focused evidence and source/package
   equivalence before handing resources to Phase 59.4.
-- Entry rule: Phase 59.2 DOC-02 is DONE.
+- Entry rule: Phase 59.2.3 DOC-02D is DONE.
 - Completion rule: Required manuals, projections, Scaladoc, and filtered
   release source are validated and handed through the already accepted closed
   Phase 58 packaging/resource contract to Phase 59.4, without reopening or

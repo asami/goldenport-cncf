@@ -32,7 +32,8 @@ accepted in commit `f7eb86c14354b259c646ccacc33f9b6901e391ba`.
 The mandatory phase-full review passed with no Current Phase Blocker. The
 distinct release commit is identified by closure binding
 `phase59-clb-ad9f697eccc55db83a779c6555efab8a9e89b68e6445400cb497fc31615fb965`.
-Phase 59.1 through Phase 59.10 remain planned and unstarted.
+Phase 59.2 started DOC-02A on 2026-08-24. The dated nested split record below
+owns its remaining work without reopening this closed Phase.
 
 ## Goal
 
@@ -53,7 +54,10 @@ cross-repository implementation, acceptance, and documentation closure work.
 | --- | --- | --- | --- |
 | 59 | DOC-01A source-to-package contract inventory | Sol / high | 4--6h |
 | [59.1](phase-59.1.md) | DOC-01B public publication, Directive, Skill, CBD, and BoK boundary inventory | Sol / high | 4--6h |
-| [59.2](phase-59.2.md) | DOC-02 knowledge and model manifest contract | Terra / xhigh | 5--6h |
+| [59.2](phase-59.2.md) | DOC-02A base manifest codec and safe Phase 58 binding | Terra / xhigh | 1--2h |
+| [59.2.1](phase-59.2.1.md) | DOC-02B framework publication context and projection evidence | Terra / xhigh | 3--5h |
+| [59.2.2](phase-59.2.2.md) | DOC-02C portable model and diagram resource contract | Terra / high | 3--4h |
+| [59.2.3](phase-59.2.3.md) | DOC-02D public Directive/Skill metadata and read-only consumer contract | Terra / xhigh | 4--5h |
 | [59.3](phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain | Terra / xhigh | 5--6h |
 | [59.4](phase-59.4.md) | DOC-04 knowledge and development-context composition | Terra / high | 4--6h |
 | [59.5](phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface | Terra / xhigh | 5--6h |
@@ -70,6 +74,16 @@ inventory children. Every later child consumes its predecessor's frozen
 handoff rather than rediscovering Component identity, Phase 58 resource
 resolution, documentation ownership, authority, or Phase 60's later-consumer
 boundary.
+
+### Dated Nested Split Correction — 2026-08-24
+
+The user approved `D-P59.2-NESTED-SPLIT-NUMBERING-001` after DOC-02A exposed a
+protected manifest-schema review boundary. Phase 59.2 retains its completed
+DOC-02A history; Phases 59.2.1, 59.2.2, and 59.2.3 own the remaining framework
+context, model/diagram, and public-metadata/consumer scopes exactly once. The
+sequence is 59.2 → 59.2.1 → 59.2.2 → 59.2.3 → 59.3. The added release and
+handoff overhead is accepted so each schema change receives one Phase full
+review rather than an impermissible Step full review.
 
 Phase Plan Gate: PROCEED
 - target: conservative upper bound <= 6h

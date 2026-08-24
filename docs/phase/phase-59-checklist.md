@@ -16,7 +16,10 @@ canonical_resource_design=[Component Resource Subcomponent](../design/component-
 canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 
 This checklist owns DOC-01A only. DOC-01B through DOC-10 moved exactly once to
-Phase 59.1 through Phase 59.10 under approved split D-59-SPLIT. The former
+Phase 59.1 through Phase 59.10 under approved split D-59-SPLIT. DOC-02 is
+further partitioned under dated decision D-P59.2-NESTED-SPLIT-NUMBERING-001:
+DOC-02A in Phase 59.2, DOC-02B in Phase 59.2.1, DOC-02C in Phase 59.2.2, and
+DOC-02D in Phase 59.2.3. The former
 Phase-wide ledger is retained below as pre-split historical context; its open
 boxes are not current Phase 59 work and must not be used to start a later
 child.
@@ -68,14 +71,15 @@ Evidence:
 - `HYG-P59-001` is persisted as nonblocking Hygiene; there are no accepted
   Development Candidates and no unpersisted ledger item.
 
-Overall checklist status is `closed`. Phase 59.1 through Phase 59.10 remain
-planned and unstarted; no historical unchecked box below activates successor
-work.
+Overall checklist status is `closed`. Phase 59.2 started DOC-02A; its remaining
+DOC-02 ownership is the dated 59.2 → 59.2.1 → 59.2.2 → 59.2.3 sequence. No
+historical unchecked box below activates successor work.
 
 ## Pre-Split Historical Ledger
 
 The remaining sections are the original unsplit record. Their current
-ownership is: DOC-01B in Phase 59.1; DOC-02 in Phase 59.2; DOC-03 in Phase
+ownership is: DOC-01B in Phase 59.1; DOC-02A in Phase 59.2; DOC-02B in Phase
+59.2.1; DOC-02C in Phase 59.2.2; DOC-02D in Phase 59.2.3; DOC-03 in Phase
 59.3; DOC-04 in Phase 59.4; DOC-05 in Phase 59.5; DOC-06 in Phase 59.6;
 DOC-07 in Phase 59.7; DOC-08 in Phase 59.8; DOC-09 in Phase 59.9; and DOC-10
 in Phase 59.10. They are historical only and are not duplicate current work.

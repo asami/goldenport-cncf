@@ -14,9 +14,12 @@ manifest content it is byte-stable: known field order is fixed, resources use
 canonical logical-identity/path ordering, and extension keys are lexical.
 Unknown safe JSON object fields are retained in the corresponding `extensions`
 map and re-emitted; known schema fields always take precedence over an
-extension key of the same name. An extension may not name protected Phase 58
-location, content, credential, or authority evidence, including
-`authorization`; protected names are matched case-insensitively.
+extension key of the same name. Every extension-object key, including nested
+objects and objects in arrays, is normalized across case, punctuation,
+camel-case, and compound word forms. A normalized key may not name protected
+Phase 58 repository/location, physical-or-normalized path, content/bytes,
+credential-token, authorization, activation, operation, MCP, deployment, or
+disclosure-authority evidence.
 
 ## Manifest and Resource Contract
 

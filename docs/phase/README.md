@@ -15,13 +15,15 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed phase: `phase-59.1.md` - Public Documentation and AI Ownership
-  Inventory. Its DOC-01B handoff and closure ledger are accepted, the
-  mandatory Phase full review passed, and its distinct release commit is
-  identified by closure binding
-  `phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
-- Phase 59.2 through `phase-59.10.md` remain planned and unstarted under
-  approved split D-59-SPLIT.
+- Latest closed Phase 59-series phase: `phase-59.2.md` - Base Component
+  Knowledge Manifest Contract. Its DOC-02A handoff, protected-evidence repair,
+  mandatory Phase review, and focused closure re-review are accepted; its
+  distinct release commit is bound by
+  `phase59.2-clb-6169a9ee53e67b52ceeacdcd6682d553a84cb3b06cd6a053ac4a03a3cf77ea65`.
+- Phase 59.2.1 is the next planned DOC-02 boundary. It, then 59.2.2 and
+  59.2.3, own the remaining DOC-02 work under approved decision
+  D-P59.2-NESTED-SPLIT-NUMBERING-001; `phase-59.3.md` follows 59.2.3. This
+  closure does not start any successor Phase.
 - Phase 59.1 checklist: `phase-59.1-checklist.md` is closed. It persists
   `HYG-DOC01B2-001` as nonblocking Hygiene and accepts no Development
   Candidate.

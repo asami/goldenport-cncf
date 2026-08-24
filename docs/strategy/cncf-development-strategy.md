@@ -3332,8 +3332,11 @@ unchanged after the series.
 | --- | --- | --- |
 | [59](../phase/phase-59.md) | Closed on 2026-08-23: DOC-01A source-to-package documentation/resource inventory and acceptance freeze. | Phase 58.9 |
 | [59.1](../phase/phase-59.1.md) | Closed on 2026-08-23: DOC-01B public publication, Directive, Skill, CBD Support, and BoK ownership/acceptance freeze. | Phase 59 |
-| [59.2](../phase/phase-59.2.md) | DOC-02 Component knowledge/model manifest codec and resource contract. | Phase 59.1 |
-| [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2 |
+| [59.2](../phase/phase-59.2.md) | Closed on 2026-08-24: DOC-02A base Component knowledge manifest codec, safe Phase 58 binding, and protected-evidence closure. | Phase 59.1 |
+| [59.2.1](../phase/phase-59.2.1.md) | DOC-02B framework publication context and projection evidence. | Phase 59.2 |
+| [59.2.2](../phase/phase-59.2.2.md) | DOC-02C portable model and diagram resource contract. | Phase 59.2.1 |
+| [59.2.3](../phase/phase-59.2.3.md) | DOC-02D public Directive/Skill metadata and read-only consumer contract. | Phase 59.2.2 |
+| [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2.3 |
 | [59.4](../phase/phase-59.4.md) | DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
 | [59.5](../phase/phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface. | Phase 59.4 |
 | [59.6](../phase/phase-59.6.md) | DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
@@ -3357,8 +3360,15 @@ review passed with no Current Phase Blocker. The distinct release commit is
 identified by closure binding
 `phase59.1-clb-05f52fc41884bf8e8bc56b7ce0098cec57d3c40455a72b1fbf531c057a92d41c`.
 `HYG-DOC01B2-001` is persisted as nonblocking Hygiene; no Development
-Candidate was accepted. Phase 59.2 through Phase 59.10 remain planned and
-unstarted.
+Candidate was accepted. Phase 59.2 is `closed`: its DOC-02A Step is accepted
+in commit `d86dfc54305427be9e49b18a30d0f2a4721513d7`; its mandatory full
+review findings were closed by the bounded repair plus the one user-authorized
+`credentialtoken` exceptional repair, and its final focused re-review found no
+Current Phase Blocker. Its distinct release commit is bound by
+`phase59.2-clb-6169a9ee53e67b52ceeacdcd6682d553a84cb3b06cd6a053ac4a03a3cf77ea65`.
+`DEV-P592-001` is persisted as a Development Candidate for the separately
+owned later boundaries. Under approved decision D-P59.2-NESTED-SPLIT-NUMBERING-001,
+Phases 59.2.1 through 59.2.3 own the remaining DOC-02 work before Phase 59.3.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

@@ -194,10 +194,16 @@ object ComponentKnowledgeManifest {
   private val _role_pattern = "[A-Za-z][A-Za-z0-9._-]*".r
   private val _token_pattern = "[a-z][a-z0-9-]*".r
   private val _license_pattern = "[A-Za-z0-9][A-Za-z0-9.+-]*".r
-  private val _protected_extension_keys = Set(
+  private val _protected_extension_key_aliases = Set(
     "repository",
+    "repositoryurl",
+    "repositoryuri",
     "repositorylocation",
+    "location",
+    "physicallocation",
+    "normalizedlocation",
     "normalizedrelativepath",
+    "normalizedpath",
     "hostpath",
     "physicalsource",
     "physicalpath",
@@ -207,6 +213,7 @@ object ComponentKnowledgeManifest {
     "authorization",
     "credential",
     "credentials",
+    "credentialtoken",
     "activation",
     "operation",
     "mcp",
@@ -216,6 +223,22 @@ object ComponentKnowledgeManifest {
     "operationauthority",
     "mcpauthority",
     "deploymentauthority"
+  )
+  private val _protected_extension_key_words = Set(
+    "repository",
+    "location",
+    "physical",
+    "normalized",
+    "path",
+    "content",
+    "bytes",
+    "credential",
+    "token",
+    "authorization",
+    "activation",
+    "operation",
+    "mcp",
+    "deployment"
   )
 
   private def _validate(manifest: ComponentKnowledgeManifest): Either[String, ComponentKnowledgeManifest] = {
@@ -395,9 +418,24 @@ object ComponentKnowledgeManifest {
 
   private def _validate_extension(key: String, value: Json, context: String): Either[String, Unit] =
     for {
-      _ <- Either.cond(!_protected_extension_keys.contains(Option(key).map(_.toLowerCase(Locale.ROOT)).getOrElse("")), (), s"$context must not expose protected Phase 58 evidence: $key")
+      _ <- Either.cond(!_protected_extension_key(key), (), s"$context must not expose protected Phase 58 evidence: $key")
       _ <- _validate_extension_json(value, s"$context.$key")
     } yield ()
+
+  private def _protected_extension_key(key: String): Boolean = {
+    val normalized = Option(key).map(_.toLowerCase(Locale.ROOT).filter(_.isLetterOrDigit)).getOrElse("")
+    val words = Option(key).toVector.flatMap { value =>
+      value
+        .replaceAll("([a-z0-9])([A-Z])", "$1 $2")
+        .replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2")
+        .split("[^A-Za-z0-9]+")
+        .toVector
+        .map(_.toLowerCase(Locale.ROOT))
+    }.filter(_.nonEmpty).toSet
+    _protected_extension_key_aliases.contains(normalized) ||
+      words.exists(_protected_extension_key_words.contains) ||
+      (words.contains("disclosure") && words.contains("authority"))
+  }
 
   private def _validate_extension_json(value: Json, context: String): Either[String, Unit] =
     value.arrayOrObject(
