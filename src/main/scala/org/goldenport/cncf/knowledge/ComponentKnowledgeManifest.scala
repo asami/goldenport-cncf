@@ -163,7 +163,8 @@ final case class ComponentKnowledgeManifest(
   logicalRelease: String,
   resources: Vector[ComponentKnowledgeResourceEntry],
   extensions: Map[String, Json] = Map.empty,
-  frameworkPublication: Option[FrameworkPublicationContext] = None
+  frameworkPublication: Option[FrameworkPublicationContext] = None,
+  modelResources: Option[PortableModelResourceContext] = None
 )
 
 object ComponentKnowledgeManifest {
@@ -253,6 +254,7 @@ object ComponentKnowledgeManifest {
       _ <- Either.cond(paths.distinct.size == paths.size, (), "manifest.resources must not repeat a canonical logical path")
       _ <- _validate_extensions(manifest.extensions, "manifest.extensions")
       _ <- manifest.frameworkPublication.map(FrameworkPublicationContext.validateC(_).toOption.toRight("manifest.frameworkPublication violates framework publication validation")).getOrElse(Right(()))
+      _ <- manifest.modelResources.map(PortableModelResourceContext.validateC(_, manifest.resources).toOption.toRight("manifest.modelResources violates portable model resource validation")).getOrElse(Right(()))
       _ <- _sequence(manifest.resources.zipWithIndex.map { case (entry, index) =>
         for {
           _ <- _resource(entry, s"manifest.resources[$index]")

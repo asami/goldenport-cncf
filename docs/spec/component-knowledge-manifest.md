@@ -32,6 +32,26 @@ unknown fields are recursively lexical. In that context only, normalized
 aliases for resource binding, resolver, scan, and read evidence are also
 rejected, alongside all protected Phase 58 evidence aliases.
 
+`modelResources` is an optional root field after `frameworkPublication` and
+before `resources`; it leaves context-free and framework-only encodings
+byte-stable when absent. It contains `models` and `diagrams`, each ordered by
+the exact existing manifest resource logical identity it references. A model
+reference admits only Entity, Powertype, StateMachine, Value, Datatype, or
+Relationship evidence with `model` / `application/json`. A diagram reference
+admits only ClassDiagram or StateDiagram evidence with `diagram` /
+`image/svg+xml`. The referenced value must be exactly one existing resource
+entry; it does not reconstruct or otherwise recompute that entry's identity,
+role, media type, digest, provenance, availability, integrity, or
+authorization. Context logical identities and logical paths are unique.
+
+Every diagram has a nonempty `generatedFrom` array. Each source carries an
+existing admitted model logical identity and precisely its recorded SHA-256;
+source identities do not repeat. StateDiagram requires a StateMachine source;
+ClassDiagram accepts one or more admitted model sources. Model-resource
+extensions are retained and recursively lexical only when their normalized keys
+do not name protected Phase 58, resource-binding, resolver, scan, or read
+evidence. Duplicate JSON keys remain rejected by the root parser.
+
 ## Manifest and Resource Contract
 
 A manifest has a canonical Component identifier, a nonempty logical release,
@@ -84,6 +104,10 @@ safe provenance, availability, integrity, and authorization values. The
 adapter performs no resource discovery, scan, source selection, content read,
 network access, or resolver call.
 
+`modelResources` validation is part of candidate validation only. It never
+adds discovery, source selection, or a second resolver to the Phase 58
+`createC` adapter.
+
 ## Framework Publication Context
 
 A framework publication context contains a lowercase safe product token and
@@ -119,3 +143,8 @@ executable specification for DOC02B-01 deterministic framework-context codec,
 safe recursive extensions, all availability values, pure freshness comparison,
 optional snapshot evidence, malformed context values, protected normalized
 aliases, and duplicate JSON keys.
+
+`org.goldenport.cncf.knowledge.PortableModelResourceContextSpec` is the paired
+executable specification for DOC02C-01 optional-root compatibility, portable
+model and diagram typing, deterministic JSON, generated-from source/digest
+validation, protected aliases and paths, and duplicate-key rejection.

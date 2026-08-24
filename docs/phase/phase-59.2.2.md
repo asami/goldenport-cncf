@@ -1,12 +1,16 @@
 # Phase 59.2.2 - Portable Model and Diagram Resource Contract
 
-status=planned
+status=closed
+started_at=2026-08-24
+closed_at=2026-08-24
 split_from=[Phase 59.2](phase-59.2.md)
 depends_on=[Phase 59.2.1](phase-59.2.1.md)
 successor=[Phase 59.2.3](phase-59.2.3.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.2.2 Checklist](phase-59.2.2-checklist.md)
 consumes_handoff=accepted DOC-02B framework-context and projection-evidence contract
+review_authorization=D-P5922-PROTECTED-STEP-REVIEW-001 inherited user authorization for the mandatory Phase-level review
+closure_scope_binding=phase59.2.2-clb-113e6c41ad4cc78afce3e3237e93f6d4a7daec956f4cf72065be749a533c5eb5
 
 ## Goal
 
@@ -38,8 +42,15 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-The accepted portable model and diagram-resource contract is the sole model
-resource handoff to Phase 59.2.3.
+DOC-02C is closed by this distinct Phase release. The mandatory Phase full
+review found no Current Phase Blocker, Hygiene, or Development Candidate. The
+accepted portable model and diagram-resource contract is the sole model-resource
+handoff to Phase 59.2.3; it preserves the accepted Phase 58 identity/resource
+boundary and Phase 59.2.1 framework-context contract.
+
+No Hygiene or Development Candidate item was accepted in this Phase. The final
+full-suite receipt and this distinct release commit bind closure scope
+`phase59.2.2-clb-113e6c41ad4cc78afce3e3237e93f6d4a7daec956f4cf72065be749a533c5eb5`.
 
 ## Non-Goals
 

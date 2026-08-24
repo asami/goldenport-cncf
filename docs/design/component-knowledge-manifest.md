@@ -48,6 +48,29 @@ source identity and SHA-256 with the recorded generated-from value. It reports
 resource, resolve an identity, access a filesystem/cache/repository/network,
 or create a resolver.
 
+## Portable Model and Diagram Resource Context
+
+An optional `modelResources` root context records portable model and diagram
+evidence by exact reference to values already in `resources`. It does not
+create a resource binding, logical identity, resolver input, physical path,
+resource read, renderer, cache/repository/network operation, execution,
+activation, authority, or access grant. The referenced entry retains its
+existing typed logical identity, role, media type, digest, safe provenance,
+availability, integrity, and authorization as Phase 58 evidence.
+
+`models` admits only Entity, Powertype, StateMachine, Value, Datatype, and
+Relationship entries with the existing `model` / `application/json`
+combination. `diagrams` admits only ClassDiagram and StateDiagram entries with
+the existing `diagram` / `image/svg+xml` combination. Logical identities and
+logical paths cannot repeat across the context.
+
+Every diagram has nonempty generated-from evidence. Each generated source is
+an admitted model logical identity plus that entry's matching SHA-256 digest;
+it never derives a digest or grants source authority. A StateDiagram must name
+at least one StateMachine source; a ClassDiagram names one or more admitted
+model sources. Safe extension fields are retained only after recursive
+protected-alias rejection.
+
 ## Canonical Form
 
 The codec uses duplicate-key-rejecting JSON parsing. It writes known fields in
@@ -69,6 +92,13 @@ fields are recursively lexical. In addition to protected Phase 58 aliases,
 framework-context extensions reject normalized aliases for resource binding,
 resolver, scan, and read evidence. This local rejection does not alter the
 pre-existing extension behavior of other manifest objects.
+
+When `modelResources` is absent, legacy and framework-only encodings remain
+byte-stable. When present it follows `frameworkPublication` and precedes
+`resources`. Its `models` and `diagrams` are ordered by referenced logical
+identity; diagrams order their generated-from evidence by source identity.
+Its extension maps are lexical recursively and reject every protected Phase 58
+alias plus resource-binding, resolver, scan, and read aliases.
 
 The optional resource `language` and binding `parentComponentId` fields may be
 absent or JSON `null` when decoded; canonical output writes the known fields.
