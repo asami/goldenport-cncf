@@ -1,6 +1,6 @@
 # Phase 59.2.3 - Public Metadata and Read-Only Consumer Contract
 
-status=in-progress
+status=closed
 split_from=[Phase 59.2](phase-59.2.md)
 depends_on=[Phase 59.2.2](phase-59.2.2.md)
 successor=[Phase 59.3](phase-59.3.md)
@@ -44,8 +44,12 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-The complete DOC-02 manifest contract is accepted with executable evidence and
-is the sole handoff to Phase 59.3.
+The complete DOC-02 manifest contract is accepted with deterministic codec and
+executable evidence: the representative public-metadata specification and the
+five-spec accumulator pass, the mandatory Phase full review and its focused
+closure review report no remaining Current Phase Blocker, and the final full
+suite is required for the distinct release commit. This is the sole handoff to
+Phase 59.3; it does not start that successor Phase.
 
 ## Non-Goals
 

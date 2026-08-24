@@ -165,7 +165,8 @@ object ComponentKnowledgeManifestConsumerContract {
       frameworkPublication = manifest.frameworkPublication.map(_framework_publication),
       modelResources = manifest.modelResources.map(_model_resources),
       publicDirective = manifest.publicDirective.map(_public_directive),
-      skillCatalog = manifest.skillCatalog.map(_skill_catalog)
+      skillCatalog = manifest.skillCatalog.map(_skill_catalog),
+      extensions = manifest.extensions
     )
 
   private def _resource(value: ComponentKnowledgeResourceEntry): ComponentKnowledgeManifestConsumerResourceEvidence =
@@ -183,7 +184,8 @@ object ComponentKnowledgeManifestConsumerContract {
         stability = value.metadata.stability,
         source = value.metadata.source,
         license = value.metadata.license,
-        disclosure = value.metadata.disclosure
+        disclosure = value.metadata.disclosure,
+        extensions = value.metadata.extensions
       ),
       availability = value.availability,
       integrity = value.integrity,
@@ -194,8 +196,10 @@ object ComponentKnowledgeManifestConsumerContract {
         logicalSource = value.provenance.logicalSource,
         resolutionStep = value.provenance.resolutionStep,
         externalDeploymentRequired = value.provenance.externalDeploymentRequired,
-        matchingDigest = value.provenance.matchingDigest
-      )
+        matchingDigest = value.provenance.matchingDigest,
+        extensions = value.provenance.extensions
+      ),
+      extensions = value.extensions
     )
 
   private def _framework_publication(value: FrameworkPublicationContext): ComponentKnowledgeManifestConsumerFrameworkPublicationEvidence =
@@ -210,7 +214,8 @@ object ComponentKnowledgeManifestConsumerContract {
       availability = value.availability,
       sourceIdentity = value.generatedFrom.sourceIdentity,
       sourceSha256 = value.generatedFrom.sourceSha256,
-      documentationComponentSnapshot = value.documentationComponentSnapshot.map(_framework_snapshot)
+      documentationComponentSnapshot = value.documentationComponentSnapshot.map(_framework_snapshot),
+      extensions = value.extensions
     )
 
   private def _framework_snapshot(value: FrameworkDocumentationComponentSnapshot): ComponentKnowledgeManifestConsumerFrameworkSnapshotEvidence =
@@ -218,20 +223,23 @@ object ComponentKnowledgeManifestConsumerContract {
       componentId = value.componentId,
       logicalRelease = value.logicalRelease,
       publicationSha256 = value.publicationSha256,
-      availability = value.availability
+      availability = value.availability,
+      extensions = value.extensions
     )
 
   private def _model_resources(value: PortableModelResourceContext): ComponentKnowledgeManifestConsumerModelEvidence =
     ComponentKnowledgeManifestConsumerModelEvidence(
-      models = value.models.sortBy(model => _identity_order(model.entry.binding.logicalIdentity)).map(model => ComponentKnowledgeManifestConsumerModelReferenceEvidence(model.entry.binding.logicalIdentity)),
+      models = value.models.sortBy(model => _identity_order(model.entry.binding.logicalIdentity)).map(model => ComponentKnowledgeManifestConsumerModelReferenceEvidence(model.entry.binding.logicalIdentity, model.extensions)),
       diagrams = value.diagrams.sortBy(diagram => _identity_order(diagram.entry.binding.logicalIdentity)).map { diagram =>
         ComponentKnowledgeManifestConsumerDiagramEvidence(
           logicalIdentity = diagram.entry.binding.logicalIdentity,
           generatedFrom = diagram.generatedFrom.sortBy(source => _identity_order(source.sourceIdentity)).map { source =>
-            ComponentKnowledgeManifestConsumerDiagramGeneratedFromEvidence(source.sourceIdentity, source.sourceSha256)
-          }
+            ComponentKnowledgeManifestConsumerDiagramGeneratedFromEvidence(source.sourceIdentity, source.sourceSha256, source.extensions)
+          },
+          extensions = diagram.extensions
         )
-      }
+      },
+      extensions = value.extensions
     )
 
   private def _public_directive(value: PublicDirectiveProjection): ComponentKnowledgeManifestConsumerPublicDirectiveMetadata =
@@ -246,7 +254,8 @@ object ComponentKnowledgeManifestConsumerContract {
       visibility = value.visibility,
       sourceSha256 = value.sourceSha256,
       redaction = value.redaction,
-      guideReference = value.guideReference
+      guideReference = value.guideReference,
+      extensions = value.extensions
     )
 
   private def _skill_catalog(value: PublicSkillCatalog): ComponentKnowledgeManifestConsumerSkillCatalogMetadata =
@@ -263,7 +272,8 @@ object ComponentKnowledgeManifestConsumerContract {
       installationReference = value.installationReference,
       visibility = value.visibility,
       version = value.version,
-      sourceSha256 = value.sourceSha256
+      sourceSha256 = value.sourceSha256,
+      extensions = value.extensions
     )
 
   private def _validate(contract: ComponentKnowledgeManifestConsumerContract): Either[String, ComponentKnowledgeManifestConsumerContract] = {

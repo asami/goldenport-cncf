@@ -35,15 +35,53 @@ final class ComponentKnowledgeManifestConsumerContractSpec
 
   "DOC02D-01 stable consumer projection" should {
     "project validated optional evidence into a deterministic value-only consumer contract" in {
-      Given("a validated manifest with framework, portable model, public Directive, and public Skill Catalog evidence in noncanonical resource order")
-      val manifest = _manifest.copy(resources = _resources.reverse)
+      Given("a validated manifest with safe extensions at every matching consumer evidence level and noncanonical resource order")
+      val rootextensions = Map("futureRoot" -> Json.obj("value" -> Json.fromString("root")))
+      val resourceextensions = Map("futureResource" -> Json.obj("value" -> Json.fromString("resource")))
+      val metadataextensions = Map("futureMetadata" -> Json.obj("value" -> Json.fromString("metadata")))
+      val provenanceextensions = Map("futureProvenance" -> Json.obj("value" -> Json.fromString("provenance")))
+      val frameworkextensions = Map("futureFramework" -> Json.obj("value" -> Json.fromString("framework")))
+      val snapshotextensions = Map("futureSnapshot" -> Json.obj("value" -> Json.fromString("snapshot")))
+      val modelextensions = Map("futureModel" -> Json.obj("value" -> Json.fromString("model")))
+      val modelreferenceextensions = Map("futureModelReference" -> Json.obj("value" -> Json.fromString("model-reference")))
+      val diagramextensions = Map("futureDiagram" -> Json.obj("value" -> Json.fromString("diagram")))
+      val generatedfromextensions = Map("futureGeneratedFrom" -> Json.obj("value" -> Json.fromString("generated-from")))
+      val directiveextensions = Map("futureDirective" -> Json.obj("value" -> Json.fromString("directive")))
+      val catalogextensions = Map("futureCatalog" -> Json.obj("value" -> Json.fromString("catalog")))
+      val directiveentry = _directive_entry.copy(
+        metadata = _directive_entry.metadata.copy(extensions = metadataextensions),
+        provenance = _directive_entry.provenance.copy(extensions = provenanceextensions),
+        extensions = resourceextensions
+      )
+      val framework = _framework_publication.copy(
+        documentationComponentSnapshot = Some(FrameworkDocumentationComponentSnapshot(_component_id, _release, _digest, FrameworkPublicationReferenceAvailability.Online, snapshotextensions)),
+        extensions = frameworkextensions
+      )
+      val modelresources = _model_resources.copy(
+        models = _model_resources.models.map(_.copy(extensions = modelreferenceextensions)),
+        diagrams = _model_resources.diagrams.map { diagram =>
+          diagram.copy(
+            generatedFrom = diagram.generatedFrom.map(_.copy(extensions = generatedfromextensions)),
+            extensions = diagramextensions
+          )
+        },
+        extensions = modelextensions
+      )
+      val manifest = _manifest.copy(
+        resources = _resources.map(value => if (value == _directive_entry) directiveentry else value).reverse,
+        extensions = rootextensions,
+        frameworkPublication = Some(framework),
+        modelResources = Some(modelresources),
+        publicDirective = Some(_directive.copy(entry = directiveentry, extensions = directiveextensions)),
+        skillCatalog = Some(_catalog.copy(extensions = catalogextensions))
+      )
 
       When("the pure projection creates and the strict codec round-trips the consumer value")
       val projected = ComponentKnowledgeManifestConsumerContract.fromManifestC(manifest).toOption
       val encoded = projected.map(ComponentKnowledgeManifestConsumerContractCodec.encode)
       val decoded = encoded.flatMap(value => ComponentKnowledgeManifestConsumerContractCodec.decodeC(value).toOption)
 
-      Then("safe evidence, optional metadata, and canonical resource/reference ordering are preserved without a resolver or runtime action")
+      Then("safe evidence, extensions at every matching level, and canonical resource/reference ordering are preserved without a resolver or runtime action")
       projected should not be empty
       decoded shouldBe projected
       encoded should not be empty
@@ -53,6 +91,18 @@ final class ComponentKnowledgeManifestConsumerContractSpec
       projected.get.modelResources.map(_.models.map(_.logicalIdentity.logicalResource)) shouldBe Some(Vector(_entity_entry.binding.logicalIdentity.logicalResource))
       projected.get.publicDirective.map(_.redaction) shouldBe Some(PublicDirectiveRedaction.SourceAndRuleContentWithheld)
       projected.get.skillCatalog.map(_.installationReference) shouldBe Some("https://example.com/skill-installation")
+      projected.map(_.extensions) shouldBe Some(rootextensions)
+      projected.get.resources.find(_.logicalIdentity == directiveentry.binding.logicalIdentity).map(_.extensions) shouldBe Some(resourceextensions)
+      projected.get.resources.find(_.logicalIdentity == directiveentry.binding.logicalIdentity).map(_.metadata.extensions) shouldBe Some(metadataextensions)
+      projected.get.resources.find(_.logicalIdentity == directiveentry.binding.logicalIdentity).map(_.provenance.extensions) shouldBe Some(provenanceextensions)
+      projected.flatMap(_.frameworkPublication).map(_.extensions) shouldBe Some(frameworkextensions)
+      projected.flatMap(_.frameworkPublication).flatMap(_.documentationComponentSnapshot).map(_.extensions) shouldBe Some(snapshotextensions)
+      projected.flatMap(_.modelResources).map(_.extensions) shouldBe Some(modelextensions)
+      projected.flatMap(_.modelResources).map(_.models.head.extensions) shouldBe Some(modelreferenceextensions)
+      projected.flatMap(_.modelResources).map(_.diagrams.head.extensions) shouldBe Some(diagramextensions)
+      projected.flatMap(_.modelResources).map(_.diagrams.head.generatedFrom.head.extensions) shouldBe Some(generatedfromextensions)
+      projected.flatMap(_.publicDirective).map(_.extensions) shouldBe Some(directiveextensions)
+      projected.flatMap(_.skillCatalog).map(_.extensions) shouldBe Some(catalogextensions)
     }
 
     "canonicalize future-safe consumer extensions for fifty generated value-space cases" in {

@@ -144,13 +144,19 @@ private[knowledge] object PublicDirectiveSkillCatalogContextValidation {
     "install", "installation", "activation", "execution", "operation", "mcp",
     "deployment", "disclosureauthority", "activationauthority", "executionauthority",
     "operationauthority", "mcpauthority", "deploymentauthority", "resourcebinding",
-    "componentknowledgeresourcebinding", "resolver", "scan", "read"
+    "componentknowledgeresourcebinding", "resolver", "scan", "read",
+    "source", "sourcetext", "rawsource", "rawsourcetext",
+    "profile", "profiletext", "rawprofile", "rawprofiletext",
+    "rule", "ruletext", "rawrule", "rawruletext",
+    "prompt", "prompttext", "rawprompt", "rawprompttext"
   )
   private val _protected_extension_key_prefixes = Set(
     "repository", "location", "physical", "normalized", "path", "content",
     "bytes", "credential", "token", "authorization", "approval", "config",
     "install", "activation", "execution", "operation", "mcp", "deployment",
-    "resolver", "scan", "read"
+    "resolver", "scan", "read",
+    "source", "rawsource", "profile", "rawprofile", "rule", "rawrule",
+    "prompt", "rawprompt"
   )
 
   def _directive_entry(

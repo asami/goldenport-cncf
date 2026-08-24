@@ -15,14 +15,14 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed Phase 59-series phase: `phase-59.2.2.md` - Portable Model and
-  Diagram Resource Contract. Its DOC-02C portable model/diagram context,
-  focused validation, and mandatory Phase review are accepted; its distinct
-  release commit is bound by
-  `phase59.2.2-clb-113e6c41ad4cc78afce3e3237e93f6d4a7daec956f4cf72065be749a533c5eb5`.
-- Phase 59.2.3 is the next planned DOC-02 boundary. It owns the remaining
-  DOC-02 work under approved decision D-P59.2-NESTED-SPLIT-NUMBERING-001;
-  `phase-59.3.md` follows it. This closure does not start any successor Phase.
+- Latest closed Phase 59-series phase: `phase-59.2.3.md` - Public Metadata and
+  Read-Only Consumer Contract. Its DOC-02D public Directive/Skill metadata and
+  read-only consumer contract, focused validation, mandatory Phase review, and
+  focused closure review are accepted; its distinct release commit is bound by
+  `phase59.2.3-clb-ea8afe0b44b80ee122964acbd38571e5e632246cc540553620296dfb781e7ffc`.
+- Phase 59.3 is the next DOC-03 boundary. Phase 59.2.3 completed the remaining
+  DOC-02 work under approved decision D-P59.2-NESTED-SPLIT-NUMBERING-001; this
+  closure does not start its successor Phase.
 - Phase 59.1 checklist: `phase-59.1-checklist.md` is closed. It persists
   `HYG-DOC01B2-001` as nonblocking Hygiene and accepts no Development
   Candidate.

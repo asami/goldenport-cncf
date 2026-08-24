@@ -3335,7 +3335,7 @@ unchanged after the series.
 | [59.2](../phase/phase-59.2.md) | Closed on 2026-08-24: DOC-02A base Component knowledge manifest codec, safe Phase 58 binding, and protected-evidence closure. | Phase 59.1 |
 | [59.2.1](../phase/phase-59.2.1.md) | Closed on 2026-08-24: DOC-02B framework publication context and projection evidence, including safe extension retention. | Phase 59.2 |
 | [59.2.2](../phase/phase-59.2.2.md) | Closed on 2026-08-24: DOC-02C portable model and diagram resource contract. | Phase 59.2.1 |
-| [59.2.3](../phase/phase-59.2.3.md) | DOC-02D public Directive/Skill metadata and read-only consumer contract. | Phase 59.2.2 |
+| [59.2.3](../phase/phase-59.2.3.md) | Closed on 2026-08-24: DOC-02D public Directive/Skill metadata and read-only consumer contract. | Phase 59.2.2 |
 | [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2.3 |
 | [59.4](../phase/phase-59.4.md) | DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
 | [59.5](../phase/phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface. | Phase 59.4 |
@@ -3374,8 +3374,14 @@ focused validation, and its mandatory Phase full review found no Current Phase
 Blocker, Hygiene, or Development Candidate. Its distinct release commit is
 bound by
 `phase59.2.2-clb-113e6c41ad4cc78afce3e3237e93f6d4a7daec956f4cf72065be749a533c5eb5`.
-No Hygiene or Development Candidate item was accepted. Phase 59.2.3 remains
-the separately owned successor boundary.
+No Hygiene or Development Candidate item was accepted. Phase 59.2.3 is
+`closed`: its DOC-02D public metadata and read-only consumer contract Step is
+accepted in commit `33b66ed25be28a8e44bfe03da383c1e36305cd02`, its mandatory
+Phase full review found three Current Phase Blockers, the one admitted closure
+fix plus focused re-review closed them with no remaining Current Phase Blocker,
+and its distinct release commit is bound by
+`phase59.2.3-clb-ea8afe0b44b80ee122964acbd38571e5e632246cc540553620296dfb781e7ffc`.
+Phase 59.3 remains the separately owned successor boundary.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

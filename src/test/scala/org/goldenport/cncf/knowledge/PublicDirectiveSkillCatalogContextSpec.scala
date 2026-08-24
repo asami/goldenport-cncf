@@ -90,8 +90,8 @@ final class PublicDirectiveSkillCatalogContextSpec
   }
 
   "DOC02D-01 exact evidence linkage and public metadata boundary" should {
-    "reject wrong referenced evidence, digest, URI, collection, and protected-extension values" in {
-      Given("otherwise valid public metadata values with one invalid linkage, descriptive value, or recursive alias")
+    "reject wrong referenced evidence, digest, URI, collection, and protected source/profile/rule/prompt extension material" in {
+      Given("otherwise valid public metadata values with one invalid linkage, descriptive value, or recursively protected extension alias/prefix")
       val wrongdirectiveentry = _directive.copy(entry = _skill_entry)
       val wrongcatalogentry = _catalog.copy(entry = _directive_entry)
       val unlistedentry = _directive.copy(entry = _directive_entry.copy(logicalPath = "directive/unlisted.yaml"))
@@ -103,16 +103,24 @@ final class PublicDirectiveSkillCatalogContextSpec
       val duplicatepermissions = _catalog.copy(permissions = Vector("network", "network"))
       val emptytrigger = _catalog.copy(trigger = "")
       val directalias = _directive.copy(extensions = Map("installConfig" -> Json.fromBoolean(true)))
+      val sourcealias = _directive.copy(extensions = Map("sourceText" -> Json.fromBoolean(true)))
+      val profilealias = _directive.copy(extensions = Map("profileText" -> Json.fromBoolean(true)))
       val nestedalias = _catalog.copy(extensions = Map("future" -> Json.obj("Authorization-Approval" -> Json.fromBoolean(true))))
       val nestedmcpalias = _catalog.copy(extensions = Map("future" -> Json.arr(Json.obj("futureMcpExecution" -> Json.fromBoolean(true)))))
+      val rulealias = _catalog.copy(extensions = Map("ruleText" -> Json.fromBoolean(true)))
+      val promptalias = _catalog.copy(extensions = Map("promptText" -> Json.fromBoolean(true)))
+      val nestedsourceprefix = _directive.copy(extensions = Map("future" -> Json.obj("rawSourceMaterial" -> Json.fromBoolean(true))))
+      val nestedprofileprefix = _directive.copy(extensions = Map("future" -> Json.obj("rawProfileMaterial" -> Json.fromBoolean(true))))
+      val nestedruleprefix = _catalog.copy(extensions = Map("future" -> Json.obj("rawRuleMaterial" -> Json.fromBoolean(true))))
+      val nestedpromptprefix = _catalog.copy(extensions = Map("future" -> Json.obj("rawPromptMaterial" -> Json.fromBoolean(true))))
 
-      When("context validation evaluates exact manifest membership, matching SHA-256, safe descriptive values, and normalized aliases")
-      val invaliddirectives = Vector(wrongdirectiveentry, unlistedentry, digest, malformedorigin, malformedguide, directalias).map(PublicDirectiveProjection.validateC(_, _resources).toOption)
-      val invalidcatalogs = Vector(wrongcatalogentry, malformedinstallation, emptyrequirements, duplicatepermissions, emptytrigger, nestedalias, nestedmcpalias).map(PublicSkillCatalog.validateC(_, _resources).toOption)
+      When("context validation evaluates exact manifest membership, matching SHA-256, safe descriptive values, and normalized protected aliases/prefixes")
+      val invaliddirectives = Vector(wrongdirectiveentry, unlistedentry, digest, malformedorigin, malformedguide, directalias, sourcealias, profilealias, nestedsourceprefix, nestedprofileprefix).map(PublicDirectiveProjection.validateC(_, _resources).toOption)
+      val invalidcatalogs = Vector(wrongcatalogentry, malformedinstallation, emptyrequirements, duplicatepermissions, emptytrigger, nestedalias, nestedmcpalias, rulealias, promptalias, nestedruleprefix, nestedpromptprefix).map(PublicSkillCatalog.validateC(_, _resources).toOption)
 
-      Then("all values are rejected before public metadata can become a binding, installation, activation, execution, or MCP authority")
-      invaliddirectives shouldBe Vector.fill(6)(None)
-      invalidcatalogs shouldBe Vector.fill(7)(None)
+      Then("all values, including source/profile/rule/prompt material aliases, are rejected before public metadata can become a binding, installation, activation, execution, or MCP authority")
+      invaliddirectives shouldBe Vector.fill(10)(None)
+      invalidcatalogs shouldBe Vector.fill(11)(None)
     }
 
     "reject duplicate JSON keys and hostile public-context codec input" in {
@@ -121,12 +129,12 @@ final class PublicDirectiveSkillCatalogContextSpec
       val duplicate = directivejson.replace("\"directiveId\":\"mounted-directive\",", "\"directiveId\":\"mounted-directive\",\"directiveId\":\"mounted-directive\",")
       val hostile = directivejson.replace("\"guideReference\":", "\"future\":{\"physicalReadPath\":true},\"guideReference\":")
       val manifestjson = ComponentKnowledgeManifestCodec.encode(_manifest)
-      val duplicate_root = manifestjson.replace("\"publicDirective\":", "\"publicDirective\":null,\"publicDirective\":")
+      val duplicateroot = manifestjson.replace("\"publicDirective\":", "\"publicDirective\":null,\"publicDirective\":")
 
       When("the strict parsers decode each hostile JSON input")
       val duplicatedirective = PublicDirectiveSkillCatalogContextCodec.decodeDirectiveC(duplicate, _resources).toOption
       val hostiledirective = PublicDirectiveSkillCatalogContextCodec.decodeDirectiveC(hostile, _resources).toOption
-      val duplicatemanifest = ComponentKnowledgeManifestCodec.decodeC(duplicate_root).toOption
+      val duplicatemanifest = ComponentKnowledgeManifestCodec.decodeC(duplicateroot).toOption
 
       Then("duplicate keys and recursive content, path, or reader aliases are rejected")
       duplicatedirective shouldBe None
