@@ -108,6 +108,58 @@ network access, or resolver call.
 adds discovery, source selection, or a second resolver to the Phase 58
 `createC` adapter.
 
+## Public Directive and Skill Catalog Metadata
+
+`publicDirective` and `skillCatalog` are optional roots after `modelResources`
+and before `resources`, in that order. Their absence preserves all DOC-02A,
+DOC-02B, and DOC-02C output byte-for-byte. JSON `null` is accepted as absence.
+Their codec decoding occurs only after `resources` has been parsed, so each
+metadata value can reference exactly one existing resource entry.
+
+`publicDirective` requires an exact existing `Directive` / `directive` /
+`application/yaml` resource entry; `skillCatalog` requires an exact existing
+`SkillCatalog` / `skill-catalog` / `application/json` entry. In each case, the
+referenced source SHA-256 equals that entry digest. Directive identity labels,
+absolute origin, version, `mounted-directive-remains-authoritative` descriptive
+authority, visibility, `source-and-rule-content-withheld` redaction, and a
+canonical public HTTPS guide reference are metadata only. The mounted Directive
+remains authoritative; raw source, profile and rule text, prompts, credentials,
+approvals, configuration, and restricted content are not schema values.
+
+Skill Catalog identity, owner, purpose, trigger, requirements, permissions,
+side effects, MCP requirements, installation reference, visibility, version,
+and source SHA-256 are metadata only. The four collections are nonempty,
+ordered, trimmed-safe text and contain no duplicates. The installation reference
+is canonical absolute HTTPS evidence only. No value installs, activates,
+executes, configures, operates, discloses, or grants authority to a Skill or
+MCP requirement.
+
+The exact visibility vocabulary is `public`, `ecosystem`, `project`,
+`internal`, and `restricted`. Public-context extension objects are lexical and
+recursively reject normalized aliases for repository/location,
+physical-or-normalized path, content/bytes, credential/token,
+authorization/approval/configuration, install/activation/execution/operation/
+MCP/deployment/disclosure authority, resource binding, resolver, scan, or read
+evidence. Case, punctuation, camel case, and compound aliases are normalized.
+This stricter policy is local to the new public contexts.
+
+## Stable Consumer Contract
+
+`ComponentKnowledgeManifestConsumerContractCodec` accepts only
+`cncf.component-knowledge-consumer.v1`, rejects duplicate object keys, and
+emits deterministic compact JSON. Its roots retain Component/release identity,
+safe manifest-resource evidence, and optional framework-publication,
+model-resource, public Directive, and Skill Catalog evidence. Resource and
+reference order is canonical; known fields win over lexical unknown fields.
+
+The contract is a pure read-only projection of a validated
+`ComponentKnowledgeManifest`. It has no bytes/content, physical path,
+repository, credential, approval, configuration, resolver, resource read,
+route, Admin, installation, activation, execution, operation, or authority
+grant. Its unknown fields round-trip only after the same recursive protected
+alias validation as public metadata. It is not a Phase 60 resolver or runtime
+contract.
+
 ## Framework Publication Context
 
 A framework publication context contains a lowercase safe product token and
@@ -148,3 +200,13 @@ aliases, and duplicate JSON keys.
 executable specification for DOC02C-01 optional-root compatibility, portable
 model and diagram typing, deterministic JSON, generated-from source/digest
 validation, protected aliases and paths, and duplicate-key rejection.
+
+`org.goldenport.cncf.knowledge.PublicDirectiveSkillCatalogContextSpec` is the
+paired executable specification for DOC02D public metadata linkage, redaction,
+visibility, non-installation semantics, deterministic canonical JSON, safe
+extensions, and hostile input rejection.
+
+`org.goldenport.cncf.knowledge.ComponentKnowledgeManifestConsumerContractSpec`
+is the paired executable specification for DOC02D pure consumer projection,
+canonical resource ordering, deterministic codec behavior, safe extensions,
+and hostile consumer-input rejection.

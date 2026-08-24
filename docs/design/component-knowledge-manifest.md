@@ -71,6 +71,55 @@ at least one StateMachine source; a ClassDiagram names one or more admitted
 model sources. Safe extension fields are retained only after recursive
 protected-alias rejection.
 
+## Public Directive and Skill Catalog Metadata
+
+The optional `publicDirective` and `skillCatalog` roots record only descriptive
+metadata for one exact existing `Directive` / `directive` /
+`application/yaml` entry and one exact existing `SkillCatalog` /
+`skill-catalog` / `application/json` entry, respectively. Each referenced
+entry must occur once in `resources`, and the recorded source SHA-256 must
+equal that entry's existing digest. These references create neither a new
+Phase 58 binding nor a resolver input.
+
+Directive metadata carries identity labels, an absolute origin, version, one
+typed descriptive authority value (`mounted-directive-remains-authoritative`),
+one typed visibility value, a canonical public HTTPS guide reference, and the
+typed redaction statement `source-and-rule-content-withheld`. The mounted
+Directive remains authoritative. No directive source, profile text, rule text,
+prompt, credential, approval, configuration, or restricted material is part
+of this context.
+
+Skill Catalog metadata carries identity, owner, purpose, trigger, ordered
+nonempty unique requirements, permissions, side effects, and MCP requirements,
+a canonical public HTTPS installation reference, visibility, version, and its
+matching source digest. All such values describe a Skill only. They do not
+install, activate, execute, configure, operate, disclose, or grant authority
+to a Skill or MCP requirement.
+
+Both public contexts retain safe extensions only after recursive normalized
+alias rejection. In addition to the earlier protected evidence aliases, their
+extension policy rejects repository/location/physical-or-normalized-path,
+content/bytes, credential/token, authorization/approval/configuration,
+installation/activation/execution/operation/MCP/deployment/disclosure
+authority, resource binding, resolver, scan, and read aliases. Normalization
+handles case, punctuation, camel case, and compound forms.
+
+## Read-Only Consumer Contract
+
+`ComponentKnowledgeManifestConsumerContract` is the stable, deterministic
+`cncf.component-knowledge-consumer.v1` value projection for later consumers.
+It contains only Component/release identity, safe manifest-resource evidence,
+and optional framework-publication, model-resource, public Directive, and
+Skill Catalog evidence. It canonicalizes resource and reference order and
+retains only recursively safe unknown fields under the same public-context
+protected-alias policy.
+
+The projection has no resource bytes or content, physical path, repository,
+credential, approval, configuration, resolver, resource read, route, Admin,
+installation, activation, execution, operation, or authority-grant behavior.
+It is a Phase 60-facing data shape only; it does not implement a Phase 60
+consumer.
+
 ## Canonical Form
 
 The codec uses duplicate-key-rejecting JSON parsing. It writes known fields in
@@ -93,12 +142,13 @@ framework-context extensions reject normalized aliases for resource binding,
 resolver, scan, and read evidence. This local rejection does not alter the
 pre-existing extension behavior of other manifest objects.
 
-When `modelResources` is absent, legacy and framework-only encodings remain
-byte-stable. When present it follows `frameworkPublication` and precedes
-`resources`. Its `models` and `diagrams` are ordered by referenced logical
-identity; diagrams order their generated-from evidence by source identity.
-Its extension maps are lexical recursively and reject every protected Phase 58
-alias plus resource-binding, resolver, scan, and read aliases.
+When `modelResources`, `publicDirective`, and `skillCatalog` are absent, legacy
+and framework-only encodings remain byte-stable. When present, their root order
+is `frameworkPublication`, `modelResources`, `publicDirective`, `skillCatalog`,
+then `resources`. The model context's `models` and `diagrams` are ordered by
+referenced logical identity; diagrams order generated-from evidence by source
+identity. Each context's extension maps are lexical recursively and reject its
+protected aliases.
 
 The optional resource `language` and binding `parentComponentId` fields may be
 absent or JSON `null` when decoded; canonical output writes the known fields.

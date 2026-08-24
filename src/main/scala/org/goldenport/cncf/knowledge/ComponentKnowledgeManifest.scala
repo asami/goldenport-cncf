@@ -164,7 +164,9 @@ final case class ComponentKnowledgeManifest(
   resources: Vector[ComponentKnowledgeResourceEntry],
   extensions: Map[String, Json] = Map.empty,
   frameworkPublication: Option[FrameworkPublicationContext] = None,
-  modelResources: Option[PortableModelResourceContext] = None
+  modelResources: Option[PortableModelResourceContext] = None,
+  publicDirective: Option[PublicDirectiveProjection] = None,
+  skillCatalog: Option[PublicSkillCatalog] = None
 )
 
 object ComponentKnowledgeManifest {
@@ -255,6 +257,8 @@ object ComponentKnowledgeManifest {
       _ <- _validate_extensions(manifest.extensions, "manifest.extensions")
       _ <- manifest.frameworkPublication.map(FrameworkPublicationContext.validateC(_).toOption.toRight("manifest.frameworkPublication violates framework publication validation")).getOrElse(Right(()))
       _ <- manifest.modelResources.map(PortableModelResourceContext.validateC(_, manifest.resources).toOption.toRight("manifest.modelResources violates portable model resource validation")).getOrElse(Right(()))
+      _ <- manifest.publicDirective.map(PublicDirectiveProjection.validateC(_, manifest.resources).toOption.toRight("manifest.publicDirective violates public Directive validation")).getOrElse(Right(()))
+      _ <- manifest.skillCatalog.map(PublicSkillCatalog.validateC(_, manifest.resources).toOption.toRight("manifest.skillCatalog violates public Skill Catalog validation")).getOrElse(Right(()))
       _ <- _sequence(manifest.resources.zipWithIndex.map { case (entry, index) =>
         for {
           _ <- _resource(entry, s"manifest.resources[$index]")

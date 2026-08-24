@@ -50,13 +50,17 @@ object ComponentKnowledgeManifestCodec {
         resourcesjson <- _field(root, "resources", "manifest")
         resources <- _array(resourcesjson, "manifest.resources").flatMap(_resources)
         modelresources <- _optional_model_resources(root, "modelResources", resources, "manifest")
+        publicdirective <- _optional_public_directive(root, "publicDirective", resources, "manifest")
+        skillcatalog <- _optional_skill_catalog(root, "skillCatalog", resources, "manifest")
         manifest = ComponentKnowledgeManifest(
           componentId = componentid,
           logicalRelease = release,
           resources = resources,
-          extensions = _extensions(root, Set("schema", "componentId", "logicalRelease", "frameworkPublication", "modelResources", "resources")),
+          extensions = _extensions(root, Set("schema", "componentId", "logicalRelease", "frameworkPublication", "modelResources", "publicDirective", "skillCatalog", "resources")),
           frameworkPublication = frameworkpublication,
-          modelResources = modelresources
+          modelResources = modelresources,
+          publicDirective = publicdirective,
+          skillCatalog = skillcatalog
         )
         _ <- ComponentKnowledgeManifest.validateC(manifest).toOption.toRight("Component knowledge manifest violates v1 validation")
       } yield manifest
@@ -88,6 +92,30 @@ object ComponentKnowledgeManifestCodec {
       case None => Right(None)
       case Some(value) if value.isNull => Right(None)
       case Some(value) => PortableModelResourceContextCodec._decode_json(value, resources, s"$context.$field").map(Some(_))
+    }
+
+  private def _optional_public_directive(
+    obj: JsonObject,
+    field: String,
+    resources: Vector[ComponentKnowledgeResourceEntry],
+    context: String
+  ): Either[String, Option[PublicDirectiveProjection]] =
+    obj(field) match {
+      case None => Right(None)
+      case Some(value) if value.isNull => Right(None)
+      case Some(value) => PublicDirectiveSkillCatalogContextCodec._decode_directive_json(value, resources, s"$context.$field").map(Some(_))
+    }
+
+  private def _optional_skill_catalog(
+    obj: JsonObject,
+    field: String,
+    resources: Vector[ComponentKnowledgeResourceEntry],
+    context: String
+  ): Either[String, Option[PublicSkillCatalog]] =
+    obj(field) match {
+      case None => Right(None)
+      case Some(value) if value.isNull => Right(None)
+      case Some(value) => PublicDirectiveSkillCatalogContextCodec._decode_skill_catalog_json(value, resources, s"$context.$field").map(Some(_))
     }
 
   private def _resource(json: Json, context: String): Either[String, ComponentKnowledgeResourceEntry] =
@@ -365,12 +393,14 @@ object ComponentKnowledgeManifestCodec {
   private def _manifest_json(manifest: ComponentKnowledgeManifest): Json = {
     val frameworkpublication = manifest.frameworkPublication.map(value => Vector("frameworkPublication" -> FrameworkPublicationContextCodec._encode_json(value))).getOrElse(Vector.empty)
     val modelresources = manifest.modelResources.map(value => Vector("modelResources" -> PortableModelResourceContextCodec._encode_json(value))).getOrElse(Vector.empty)
+    val publicdirective = manifest.publicDirective.map(value => Vector("publicDirective" -> PublicDirectiveSkillCatalogContextCodec._encode_directive_json(value))).getOrElse(Vector.empty)
+    val skillcatalog = manifest.skillCatalog.map(value => Vector("skillCatalog" -> PublicDirectiveSkillCatalogContextCodec._encode_skill_catalog_json(value))).getOrElse(Vector.empty)
     _json_object(
       Vector(
         "schema" -> Json.fromString(ComponentKnowledgeManifest.SCHEMA),
         "componentId" -> Json.fromString(manifest.componentId.name),
         "logicalRelease" -> Json.fromString(manifest.logicalRelease)
-      ) ++ frameworkpublication ++ modelresources ++ Vector(
+      ) ++ frameworkpublication ++ modelresources ++ publicdirective ++ skillcatalog ++ Vector(
         "resources" -> Json.arr(manifest.resources.sortBy(_resource_order).map(_resource_json)*)
       ),
       manifest.extensions

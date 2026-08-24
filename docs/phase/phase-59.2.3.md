@@ -1,12 +1,13 @@
 # Phase 59.2.3 - Public Metadata and Read-Only Consumer Contract
 
-status=planned
+status=in-progress
 split_from=[Phase 59.2](phase-59.2.md)
 depends_on=[Phase 59.2.2](phase-59.2.2.md)
 successor=[Phase 59.3](phase-59.3.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.2.3 Checklist](phase-59.2.3-checklist.md)
 consumes_handoff=accepted DOC-02C portable model and diagram-resource contract
+protected_step_review_routing=D-P59.2-NESTED-SPLIT-NUMBERING-001 reserves this schema boundary for mandatory Phase full review; no lightweight Step review is prepared here
 
 ## Goal
 
