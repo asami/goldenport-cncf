@@ -162,7 +162,8 @@ final case class ComponentKnowledgeManifest(
   componentId: ComponentId,
   logicalRelease: String,
   resources: Vector[ComponentKnowledgeResourceEntry],
-  extensions: Map[String, Json] = Map.empty
+  extensions: Map[String, Json] = Map.empty,
+  frameworkPublication: Option[FrameworkPublicationContext] = None
 )
 
 object ComponentKnowledgeManifest {
@@ -251,6 +252,7 @@ object ComponentKnowledgeManifest {
       _ <- Either.cond(identities.distinct.size == identities.size, (), "manifest.resources must not repeat a Phase 58 logical identity")
       _ <- Either.cond(paths.distinct.size == paths.size, (), "manifest.resources must not repeat a canonical logical path")
       _ <- _validate_extensions(manifest.extensions, "manifest.extensions")
+      _ <- manifest.frameworkPublication.map(FrameworkPublicationContext.validateC(_).toOption.toRight("manifest.frameworkPublication violates framework publication validation")).getOrElse(Right(()))
       _ <- _sequence(manifest.resources.zipWithIndex.map { case (entry, index) =>
         for {
           _ <- _resource(entry, s"manifest.resources[$index]")

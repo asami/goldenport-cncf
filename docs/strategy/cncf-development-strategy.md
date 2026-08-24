@@ -3333,7 +3333,7 @@ unchanged after the series.
 | [59](../phase/phase-59.md) | Closed on 2026-08-23: DOC-01A source-to-package documentation/resource inventory and acceptance freeze. | Phase 58.9 |
 | [59.1](../phase/phase-59.1.md) | Closed on 2026-08-23: DOC-01B public publication, Directive, Skill, CBD Support, and BoK ownership/acceptance freeze. | Phase 59 |
 | [59.2](../phase/phase-59.2.md) | Closed on 2026-08-24: DOC-02A base Component knowledge manifest codec, safe Phase 58 binding, and protected-evidence closure. | Phase 59.1 |
-| [59.2.1](../phase/phase-59.2.1.md) | DOC-02B framework publication context and projection evidence. | Phase 59.2 |
+| [59.2.1](../phase/phase-59.2.1.md) | Closed on 2026-08-24: DOC-02B framework publication context and projection evidence, including safe extension retention. | Phase 59.2 |
 | [59.2.2](../phase/phase-59.2.2.md) | DOC-02C portable model and diagram resource contract. | Phase 59.2.1 |
 | [59.2.3](../phase/phase-59.2.3.md) | DOC-02D public Directive/Skill metadata and read-only consumer contract. | Phase 59.2.2 |
 | [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2.3 |

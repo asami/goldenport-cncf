@@ -46,13 +46,15 @@ object ComponentKnowledgeManifestCodec {
         _ <- Either.cond(schema == ComponentKnowledgeManifest.SCHEMA, (), s"Unsupported Component knowledge manifest schema: $schema")
         componentid <- _component_id(root, "componentId", "manifest")
         release <- _safe_text(_string(root, "logicalRelease", "manifest"), "manifest.logicalRelease")
+        frameworkpublication <- _optional_framework_publication(root, "frameworkPublication", "manifest")
         resourcesjson <- _field(root, "resources", "manifest")
         resources <- _array(resourcesjson, "manifest.resources").flatMap(_resources)
         manifest = ComponentKnowledgeManifest(
           componentId = componentid,
           logicalRelease = release,
           resources = resources,
-          extensions = _extensions(root, Set("schema", "componentId", "logicalRelease", "resources"))
+          extensions = _extensions(root, Set("schema", "componentId", "logicalRelease", "frameworkPublication", "resources")),
+          frameworkPublication = frameworkpublication
         )
         _ <- ComponentKnowledgeManifest.validateC(manifest).toOption.toRight("Component knowledge manifest violates v1 validation")
       } yield manifest
@@ -62,6 +64,17 @@ object ComponentKnowledgeManifestCodec {
 
   private def _resources(values: Vector[Json]): Either[String, Vector[ComponentKnowledgeResourceEntry]] =
     _sequence(values.zipWithIndex.map { case (json, index) => _resource(json, s"manifest.resources[$index]") })
+
+  private def _optional_framework_publication(
+    obj: JsonObject,
+    field: String,
+    context: String
+  ): Either[String, Option[FrameworkPublicationContext]] =
+    obj(field) match {
+      case None => Right(None)
+      case Some(value) if value.isNull => Right(None)
+      case Some(value) => FrameworkPublicationContextCodec._decode_json(value, s"$context.$field").map(Some(_))
+    }
 
   private def _resource(json: Json, context: String): Either[String, ComponentKnowledgeResourceEntry] =
     for {
@@ -335,16 +348,19 @@ object ComponentKnowledgeManifestCodec {
       } yield xs :+ value
     }
 
-  private def _manifest_json(manifest: ComponentKnowledgeManifest): Json =
+  private def _manifest_json(manifest: ComponentKnowledgeManifest): Json = {
+    val frameworkpublication = manifest.frameworkPublication.map(value => Vector("frameworkPublication" -> FrameworkPublicationContextCodec._encode_json(value))).getOrElse(Vector.empty)
     _json_object(
       Vector(
         "schema" -> Json.fromString(ComponentKnowledgeManifest.SCHEMA),
         "componentId" -> Json.fromString(manifest.componentId.name),
-        "logicalRelease" -> Json.fromString(manifest.logicalRelease),
+        "logicalRelease" -> Json.fromString(manifest.logicalRelease)
+      ) ++ frameworkpublication ++ Vector(
         "resources" -> Json.arr(manifest.resources.sortBy(_resource_order).map(_resource_json)*)
       ),
       manifest.extensions
     )
+  }
 
   private def _resource_json(entry: ComponentKnowledgeResourceEntry): Json =
     _json_object(

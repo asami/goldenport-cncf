@@ -21,6 +21,17 @@ Phase 58 repository/location, physical-or-normalized path, content/bytes,
 credential-token, authorization, activation, operation, MCP, deployment, or
 disclosure-authority evidence.
 
+`frameworkPublication` is an optional root field. An absent field preserves
+the context-free legacy encoding byte-for-byte; an encoded context is ordered
+after `logicalRelease` and before `resources`. Its product/version,
+canonical URL, publication generation, document ID, optional section ID,
+publication digest, availability, generated-from evidence, optional
+documentation snapshot, and safe extensions are all descriptive and do not
+bind a resource. Context known fields have fixed order, while retained safe
+unknown fields are recursively lexical. In that context only, normalized
+aliases for resource binding, resolver, scan, and read evidence are also
+rejected, alongside all protected Phase 58 evidence aliases.
+
 ## Manifest and Resource Contract
 
 A manifest has a canonical Component identifier, a nonempty logical release,
@@ -73,8 +84,38 @@ safe provenance, availability, integrity, and authorization values. The
 adapter performs no resource discovery, scan, source selection, content read,
 network access, or resolver call.
 
+## Framework Publication Context
+
+A framework publication context contains a lowercase safe product token and
+safe product version, a canonical absolute HTTPS URL with a required lowercase
+host, no user info, query, fragment, or non-default port, safe publication
+generation, absolute document and optional section URIs, a lowercase 64-hex
+publication SHA-256, one of `local`, `installed`, `cached`, `online`, or
+`unavailable` availability, and generated-from absolute source identity plus
+lowercase 64-hex source SHA-256. `unavailable` is valid descriptive evidence
+and does not change execution readiness.
+
+An optional documentation Component snapshot contains a canonical Component
+ID, safe logical release, context-matching publication SHA-256, and the same
+availability vocabulary. It is descriptive publication evidence only; it is
+not a Phase 58 resource binding or logical resource identity, resolver
+dependency/input, authoring source or authority, activation, execution
+dependency, or access grant.
+
+`projectionFreshnessFor` compares only caller-provided source identity and
+source SHA-256 with the context's generated-from fields. Both equal values
+produce `current`; either difference produces `stale`. This operation performs
+no identity creation or resource, resolver, filesystem, cache, repository, or
+network access. Equal URL or digest values never establish authority.
+
 ## Executable Specification
 
 `org.goldenport.cncf.knowledge.ComponentKnowledgeManifestSpec` is the paired
 executable specification for DOC02-AC-01 through DOC02-AC-03, including the
 hostile path/value-space property boundary.
+
+`org.goldenport.cncf.knowledge.FrameworkPublicationContextSpec` is the paired
+executable specification for DOC02B-01 deterministic framework-context codec,
+safe recursive extensions, all availability values, pure freshness comparison,
+optional snapshot evidence, malformed context values, protected normalized
+aliases, and duplicate JSON keys.

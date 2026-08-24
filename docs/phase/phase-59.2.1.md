@@ -1,12 +1,15 @@
 # Phase 59.2.1 - Framework Publication Context and Projection Evidence
 
-status=planned
+status=closed
+started_at=2026-08-24
+closed_at=2026-08-24
 split_from=[Phase 59.2](phase-59.2.md)
 depends_on=[Phase 59.2](phase-59.2.md)
 successor=[Phase 59.2.2](phase-59.2.2.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.2.1 Checklist](phase-59.2.1-checklist.md)
 consumes_handoff=accepted DOC-02A base manifest schema, codec, safe Phase 58 binding, and hostile-input evidence
+closure_scope_binding=phase59.2.1-clb-b1770b5094e44f3707bf252c1c0598d88c90d3aeb257d9ab828bc300c3ff229e
 
 ## Goal
 
@@ -27,6 +30,22 @@ Phase Plan Gate: PROCEED
 - runtime_suitability: re-evaluate in the Phase execution task
 - source: approved nested split from Phase 59.2
 
+## Decision Resolutions
+
+### D-P5921-PROTECTED-STEP-REVIEW-001
+
+- answer_identity: user-authored `承認します` recorded in
+  `D-P59.2-NESTED-SPLIT-NUMBERING-001` on 2026-08-24
+- selected_option: carry the single DOC-02B framework-context schema boundary
+  through this Phase's mandatory full review rather than an impermissible Step
+  lightweight review
+- affected_phase: Phase 59.2.1
+- affected_tree: `96503baa4636bd0d130182f0c2e799b9085410cb`
+- authority: the approved nested split explicitly reserves one independent
+  Phase full-review boundary for each manifest-schema change
+- authorized_next_state: IMPLEMENT
+- consumed: true
+
 ## Scope
 
 - Define typed framework product/version, canonical URL, publication generation,
@@ -42,8 +61,16 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-An accepted framework-context and projection-evidence contract preserves the
-Phase 58 no-second-resolver boundary. Phase 59.2.2 consumes that contract.
+DOC-02B is closed by this distinct Phase release: the mandatory Phase full
+review admitted and the one closure batch resolved
+`CPB-P5921-DOC02B-001` (safe extension keys containing a protected substring),
+then its focused re-review converged with no Current Phase Blocker. The accepted
+framework-context and projection-evidence contract preserves the Phase 58
+no-second-resolver boundary; Phase 59.2.2 consumes that contract.
+
+No Hygiene or Development Candidate item was accepted in this Phase. The final
+full-suite receipt and this distinct release commit bind the closure scope
+`phase59.2.1-clb-b1770b5094e44f3707bf252c1c0598d88c90d3aeb257d9ab828bc300c3ff229e`.
 
 ## Non-Goals
 
