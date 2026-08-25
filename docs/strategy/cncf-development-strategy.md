@@ -3336,7 +3336,7 @@ unchanged after the series.
 | [59.2.1](../phase/phase-59.2.1.md) | Closed on 2026-08-24: DOC-02B framework publication context and projection evidence, including safe extension retention. | Phase 59.2 |
 | [59.2.2](../phase/phase-59.2.2.md) | Closed on 2026-08-24: DOC-02C portable model and diagram resource contract. | Phase 59.2.1 |
 | [59.2.3](../phase/phase-59.2.3.md) | Closed on 2026-08-24: DOC-02D public Directive/Skill metadata and read-only consumer contract. | Phase 59.2.2 |
-| [59.3](../phase/phase-59.3.md) | DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2.3 |
+| [59.3](../phase/phase-59.3.md) | Closed on 2026-08-25: DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2.3 |
 | [59.4](../phase/phase-59.4.md) | DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
 | [59.5](../phase/phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface. | Phase 59.4 |
 | [59.6](../phase/phase-59.6.md) | DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
@@ -3381,7 +3381,13 @@ Phase full review found three Current Phase Blockers, the one admitted closure
 fix plus focused re-review closed them with no remaining Current Phase Blocker,
 and its distinct release commit is bound by
 `phase59.2.3-clb-ea8afe0b44b80ee122964acbd38571e5e632246cc540553620296dfb781e7ffc`.
-Phase 59.3 remains the separately owned successor boundary.
+Phase 59.3 is `closed`: DOC-03's source/archive, Scaladoc, release-source,
+SmartDox projection, CAR-lint, and canonical Directive-projection steps are
+accepted; its mandatory Phase full review found no Current Phase Blocker and
+no Development Candidate. Its distinct release commit is bound by
+`phase59.3-clb-1de8591e8f385db16c57ffe200b32fd8ac77c9115feff3515f60cd4d1bd9696e`.
+`HYG-P593-DOC03-SMARTDOX-001` remains a persisted nonblocking hygiene item.
+Phase 59.4 remains the separately owned successor boundary.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

@@ -15,14 +15,13 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed Phase 59-series phase: `phase-59.2.3.md` - Public Metadata and
-  Read-Only Consumer Contract. Its DOC-02D public Directive/Skill metadata and
-  read-only consumer contract, focused validation, mandatory Phase review, and
-  focused closure review are accepted; its distinct release commit is bound by
-  `phase59.2.3-clb-ea8afe0b44b80ee122964acbd38571e5e632246cc540553620296dfb781e7ffc`.
-- Phase 59.3 is the next DOC-03 boundary. Phase 59.2.3 completed the remaining
-  DOC-02 work under approved decision D-P59.2-NESTED-SPLIT-NUMBERING-001; this
-  closure does not start its successor Phase.
+- Latest closed Phase 59-series phase: `phase-59.3.md` - Documentation
+  Authoring and Content Packaging Toolchain. Its DOC-03 source/archive,
+  Scaladoc, release-source, SmartDox, CAR-lint, and public Directive-projection
+  evidence is accepted; its closure is bound by
+  `phase59.3-clb-1de8591e8f385db16c57ffe200b32fd8ac77c9115feff3515f60cd4d1bd9696e`.
+- Phase 59.4 is the next DOC-04 boundary. Phase 59.3 accepted the DOC-03
+  handoff without starting its successor.
 - Phase 59.1 checklist: `phase-59.1-checklist.md` is closed. It persists
   `HYG-DOC01B2-001` as nonblocking Hygiene and accepts no Development
   Candidate.

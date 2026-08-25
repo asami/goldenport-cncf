@@ -1,6 +1,6 @@
 # Phase 59.3 - Documentation Authoring and Content Packaging Toolchain
 
-status=planned
+status=closed
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59.2.3](phase-59.2.3.md)
 successor=[Phase 59.4](phase-59.4.md)
@@ -39,8 +39,21 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-The generated content inventory and provenance handoff is accepted by exact
-toolchain evidence. Phase 59.4 consumes only those admitted Phase 58 resources.
+DOC-03 is closed. The source/archive, Scaladoc, release-source, SmartDox
+projection, CAR-lint, and public Directive-projection boundaries are accepted
+in commits `7dca56b8`, `5b5663f9`, `7d94d402`, `f0396f6f`, `3154cc7e`, and
+`fb0fbec6`. The final full suites pass for Cozy (1415 succeeded, 0 failed),
+sbt-cozy (149 succeeded, 0 failed), and SmartDox (282 succeeded, 0 failed);
+the SimpleModeling.org publication-contract and canonical Directive-projection
+checks also pass.
+
+Mandatory Phase full review `P593-DOC03-PHASE-FULL-REVIEW-001` reports no
+Current Phase Blocker and no Development Candidate. It records the single
+nonblocking follow-up `HYG-P593-DOC03-SMARTDOX-001` without changing
+behavior. This distinct closure is bound by
+`phase59.3-clb-1de8591e8f385db16c57ffe200b32fd8ac77c9115feff3515f60cd4d1bd9696e`.
+Phase 59.4 may consume only the admitted resources; this closure does not
+start that successor.
 
 ## Non-Goals
 
