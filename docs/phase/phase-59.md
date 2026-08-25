@@ -59,7 +59,7 @@ cross-repository implementation, acceptance, and documentation closure work.
 | [59.2.2](phase-59.2.2.md) | DOC-02C portable model and diagram resource contract | Terra / high | 3--4h |
 | [59.2.3](phase-59.2.3.md) | DOC-02D public Directive/Skill metadata and read-only consumer contract | Terra / xhigh | 4--5h |
 | [59.3](phase-59.3.md) | Closed on 2026-08-25: DOC-03 authoring, source packaging, and publication toolchain | Terra / xhigh | 5--6h |
-| [59.4](phase-59.4.md) | DOC-04 knowledge and development-context composition | Terra / high | 4--6h |
+| [59.4](phase-59.4.md) | Closed on 2026-08-26: DOC-04 knowledge and development-context composition | Terra / high | 4--6h |
 | [59.5](phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface | Terra / xhigh | 5--6h |
 | [59.6](phase-59.6.md) | DOC-06 Textus CBD Support exact-detail integration | Terra / high | 4--6h |
 | [59.7](phase-59.7.md) | DOC-07 Textus BoK semantic RAG/MCP and CBD handoff | Terra / xhigh | 5--6h |
@@ -390,7 +390,7 @@ canonical design/specification is stable.
 | DOC-01 | Inventory and executable acceptance | Existing Help/Manual/CAR/CBD Support/BoK contracts, contradictions, routes, publication surfaces, and exact acceptance identities are fixed before implementation. | planned |
 | DOC-02 | Knowledge and model resource contracts | Versioned knowledge and Component-model manifests bind content, identity, provenance, disclosure, integrity, and codecs to the Phase 58 resource contract. | planned |
 | DOC-03 | Authoring and content packaging toolchain | User Guide/Reference, model diagrams, Scaladoc, filtered release source, and Documentation/SourceCode content are generated through Cozy/SmartDox ownership for Phase 58 packaging. | closed |
-| DOC-04 | Knowledge and development context composition | Knowledge, model, source, and framework publication resources compose over Phase 58 resolution into one attributed development context. | planned |
+| DOC-04 | Knowledge and development context composition | Knowledge, model, source, and framework publication resources compose over Phase 58 resolution into one attributed development context. | closed |
 | DOC-05 | Unified Help and direct AI access | Help and AI consume one resolved Component resource space and publish the stable consumer contract later used by Phase 60 Admin. | planned |
 | DOC-06 | Textus CBD Support primary integration | CBD admits exact manifests/resources into Component detail, usage, MCP, and CAR Review without losing source authority or selection evidence. | planned |
 | DOC-07 | Textus BoK complementary integration | BoK performs Component semantic retrieval and admits structured framework, public Directive guidance, and Skill metadata with attributable RAG/MCP evidence and exact CBD handoff. | planned |

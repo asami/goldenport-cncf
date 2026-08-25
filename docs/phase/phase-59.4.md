@@ -1,12 +1,14 @@
 # Phase 59.4 - Knowledge and Development Context Composition
 
-status=planned
+status=closed
+closed_at=2026-08-26
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59.3](phase-59.3.md)
 successor=[Phase 59.5](phase-59.5.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.4 Checklist](phase-59.4-checklist.md)
 consumes_handoff=accepted DOC-03 content inventory, resource digests, provenance, and Phase 58 packaging handoff
+closure_binding_scope=phase59.4-clb-27f6c014f98f7bd6f37e678796140c28f1b068e5005af578abbe5bd5a4d99b2e
 
 ## Goal
 
@@ -38,8 +40,19 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-One attributed development-context composition contract is accepted. Phase 59.5
-consumes it for human and direct-AI navigation.
+DOC-04 is closed. `ResolvedComponentKnowledge` and
+`ComponentDevelopmentContext` are accepted in Step commit `6645ec3b`; the
+framework Documentation and closed-network Hub profiles are accepted in Step
+commit `dde42535`. The mandatory Phase full review identified one normative
+specification inconsistency; the bounded specification correction and focused
+closure re-review converge with no remaining Current Phase Blocker, Hygiene,
+or Development Candidate.
+
+The final `sbt --batch test` suite is the final integration gate for the
+distinct release commit bound by
+`phase59.4-clb-27f6c014f98f7bd6f37e678796140c28f1b068e5005af578abbe5bd5a4d99b2e`.
+Phase 59.5 may consume this accepted contract; this closure does not start its
+successor.
 
 ## Non-Goals
 

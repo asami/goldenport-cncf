@@ -3337,7 +3337,7 @@ unchanged after the series.
 | [59.2.2](../phase/phase-59.2.2.md) | Closed on 2026-08-24: DOC-02C portable model and diagram resource contract. | Phase 59.2.1 |
 | [59.2.3](../phase/phase-59.2.3.md) | Closed on 2026-08-24: DOC-02D public Directive/Skill metadata and read-only consumer contract. | Phase 59.2.2 |
 | [59.3](../phase/phase-59.3.md) | Closed on 2026-08-25: DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2.3 |
-| [59.4](../phase/phase-59.4.md) | DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
+| [59.4](../phase/phase-59.4.md) | Closed on 2026-08-26: DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
 | [59.5](../phase/phase-59.5.md) | DOC-05 unified Help and direct-AI consumer interface. | Phase 59.4 |
 | [59.6](../phase/phase-59.6.md) | DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
 | [59.7](../phase/phase-59.7.md) | DOC-07 BoK complementary semantic RAG/MCP and CBD handoff. | Phase 59.6 |
@@ -3387,7 +3387,14 @@ accepted; its mandatory Phase full review found no Current Phase Blocker and
 no Development Candidate. Its distinct release commit is bound by
 `phase59.3-clb-1de8591e8f385db16c57ffe200b32fd8ac77c9115feff3515f60cd4d1bd9696e`.
 `HYG-P593-DOC03-SMARTDOX-001` remains a persisted nonblocking hygiene item.
-Phase 59.4 remains the separately owned successor boundary.
+Phase 59.4 is `closed`: DOC-04's resolver-preserving knowledge and development
+context, framework Documentation profile, and closed-network Hub profile are
+accepted in commits `6645ec3b` and `dde42535`. Its mandatory Phase full review
+identified one specification-only Current Phase Blocker; the bounded correction
+and focused closure re-review found no remaining Current Phase Blocker,
+Hygiene, or Development Candidate. Its distinct release commit is bound by
+`phase59.4-clb-27f6c014f98f7bd6f37e678796140c28f1b068e5005af578abbe5bd5a4d99b2e`.
+Phase 59.5 remains the separately owned successor boundary.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

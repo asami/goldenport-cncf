@@ -17,8 +17,9 @@ availability, integrity, and authorization must already satisfy
 `ResolvedComponentResource` beside the entry, preserving logical identity,
 full resolver provenance, availability, integrity, authorization, and every
 authority/disclosure flag exactly as supplied. Duplicate, absent, ambiguous,
-stale, or mismatched evidence shall be rejected without source selection or
-fallback.
+or mismatched evidence shall be rejected without source selection or fallback.
+A caller-supplied Phase 58 `Stale` resource is valid resolver evidence and shall
+be retained unchanged; it is not a fallback or source-selection case.
 
 The manifest and `ComponentKnowledgeManifestConsumerContract` shall remain
 safe-provenance-only public values. Physical repository, normalized-path, and
@@ -85,7 +86,7 @@ activation are not specified by S02.
 
 - `P594-DOC04A-S01-AC01`: exact preservation of every Phase 58 availability
   state and resolver evidence.
-- `P594-DOC04A-S01-AC02`: rejection of stale or mismatched manifest evidence
+- `P594-DOC04A-S01-AC02`: rejection of stale or mismatched manifest claims
   without a fallback resource.
 - `P594-DOC04A-S01-AC03`: separation of public safe provenance from retained
   internal physical resolver evidence.
