@@ -8,11 +8,11 @@ import org.goldenport.cncf.component.repository._
  * Read-only consumer projection for resolved component-resource evidence.
  *
  * @since   Aug. 22, 2026
- * @version Aug. 22, 2026
+ * @version Aug. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentResourceConsumer:
-  case Help, Admin
+  case Help, DirectAi, Admin
 
 final case class ResolvedComponentResourceConsumerView(
   componentId: ComponentId,

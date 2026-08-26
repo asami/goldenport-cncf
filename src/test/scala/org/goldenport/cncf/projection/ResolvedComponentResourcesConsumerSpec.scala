@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * owned by their existing repository contracts.
  *
  * @since   Aug. 22, 2026
- * @version Aug. 22, 2026
+ * @version Aug. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedComponentResourcesConsumerSpec
@@ -84,16 +84,25 @@ final class ResolvedComponentResourcesConsumerSpec
           ComponentResourceConsumer.Admin,
           subsystem.name
         )
+        val directai = ResolvedComponentResourcesConsumerProjection.inventory(
+          resolved,
+          ComponentResourceConsumer.DirectAi,
+          subsystem.name
+        )
         val expected = resolved.resources.map(_view)
 
         Then("both consumers retain deterministic fixture order and the same consumer-neutral fields")
         help.consumer shouldBe ComponentResourceConsumer.Help
         admin.consumer shouldBe ComponentResourceConsumer.Admin
+        directai.consumer shouldBe ComponentResourceConsumer.DirectAi
         help.subsystemIdentity shouldBe _subsystem_name
         admin.subsystemIdentity shouldBe _subsystem_name
+        directai.subsystemIdentity shouldBe _subsystem_name
         help.resources shouldBe expected
         admin.resources shouldBe expected
+        directai.resources shouldBe expected
         help.resources shouldBe admin.resources
+        help.resources shouldBe directai.resources
         help.resources.map(_.componentId) shouldBe _component_ids
         help.resources.foreach { view =>
           view.productElementNames.toVector shouldBe _safe_view_fields
@@ -224,6 +233,13 @@ final class ResolvedComponentResourcesConsumerSpec
           ComponentResourceConsumer.Admin
         )
       )
+      val directai = _access(
+        ResolvedComponentResourcesConsumerProjection.access(
+          composition,
+          request,
+          ComponentResourceConsumer.DirectAi
+        )
+      )
       val exposed = access.content.get
       exposed(0) = (exposed(0) ^ 1).toByte
 
@@ -233,6 +249,9 @@ final class ResolvedComponentResourcesConsumerSpec
       access.content.map(_.toVector) should not be empty
       exposed.toVector should not be content.toVector
       request.content.toVector shouldBe content.toVector
+      directai.consumer shouldBe ComponentResourceConsumer.DirectAi
+      directai.disposition.toString shouldBe "Granted"
+      directai.content.map(_.toVector) shouldBe Some(content.toVector)
     }
   }
 
