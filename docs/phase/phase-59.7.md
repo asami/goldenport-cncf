@@ -1,6 +1,6 @@
 # Phase 59.7 - Textus BoK Complementary RAG/MCP Integration
 
-status=planned
+status=in_progress
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59.6](phase-59.6.md)
 successor=[Phase 59.8](phase-59.8.md)

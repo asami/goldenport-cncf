@@ -1,6 +1,6 @@
 # Phase 59.7 Checklist - Textus BoK Complementary RAG/MCP Integration
 
-status=planned
+status=in_progress
 phase=[Phase 59.7 - Textus BoK Complementary RAG/MCP Integration](phase-59.7.md)
 predecessor=[Phase 59.6](phase-59.6.md)
 successor=[Phase 59.8](phase-59.8.md)
@@ -8,7 +8,7 @@ successor=[Phase 59.8](phase-59.8.md)
 ## DOC-07: Textus BoK Complementary RAG/MCP Integration
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN PROGRESS
 - Owner: Textus BoK RAG/MCP maintainers
 - Update rule: Record admission, evidence, disclosure, MCP, and CBD-handoff
   evidence before representative profile work begins.
@@ -45,4 +45,12 @@ Stage Status:
   specifications.
 
 Evidence:
-- Pending.
+- P597-S1 commit `736145992aebf60d74b6af00345328b052f2271b`: digest-bound
+  semantic knowledge carrier/producer admission.
+- P597-S2 P597-S2A RED receipt `71942-20260826T203708Z` (compile failed on
+  absent fields as expected), followed by current GREEN receipts
+  `87890-20260826T211323Z` BoK (11/11) and
+  `88331-20260826T211425Z` CBD Support (2/2), each through serialized SBT
+  with `lock=released`.
+- Focused Step review and Phase final validation/release are pending; Phase
+  59.7 is not closed.
