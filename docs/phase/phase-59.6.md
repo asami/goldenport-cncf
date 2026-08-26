@@ -1,12 +1,14 @@
 # Phase 59.6 - Textus CBD Support Primary Integration
 
-status=in_progress
+status=closed
+closed_at=2026-08-26
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59.5](phase-59.5.md)
 successor=[Phase 59.7](phase-59.7.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.6 Checklist](phase-59.6-checklist.md)
 consumes_handoff=accepted DOC-05 manifest/resource discovery and read-only consumer contract
+closure_binding_scope=phase59.6-clb-doc06-20260826
 
 ## Goal
 
@@ -104,6 +106,18 @@ Phase Plan Gate: PROCEED
 - Authorized next state: IMPLEMENT
 - Consumed: true
 
+- Decision ID: `D-P596-RR-CAR-LINT-GATE-001`
+- Date: 2026-08-26
+- Authority: user-authored Phase 59.6 execution instruction: `進めて`.
+- Selected option: retain the frozen one-full-review budget.  The focused
+  closure review verified both repaired code blockers and requested CAR-lint
+  evidence only; normal CAR lint therefore remains part of the final release
+  gate rather than starting a prohibited second full Phase review.
+- Affected identity: Phase 59.6 repair cycle 1, `CPB-P596-001`,
+  `CPB-P596-002`, and the final CBD Support CAR-lint receipt.
+- Authorized next state: `PHASE_RELEASE_COMMIT`
+- Consumed: true
+
 ## Scope
 
 - Admit exact manifest identity/location/digest from supported observations and
@@ -133,24 +147,35 @@ Phase Plan Gate: PROCEED
   only; Cozy/BOK preserves the checked version-scoped transport; and CBD has
   no archive fallback, ambient scan, arbitrary endpoint, or raw-content
   projection path.
+- Repair cycle 1 admitted the normal Cozy producer/evidence edge and the CBD
+  local-action absence correction.  Focused validation passed 29 Cozy carrier
+  producer/BOK tests and 18 CBD local carrier/action tests.  The independent
+  closure review verified both code blockers as fixed, with no new code
+  finding.
+- Final release validation, after the closure documentation was prepared,
+  passed 3,406 CNCF core tests, 1,469 Cozy tests, and 308 CBD Support tests;
+  every serialized wrapper reported `lock=released`.
 
-## Open Closure Conditions
+## Final Release Gate
 
-- `P596-PHASE-RELEASE-VALIDATION-001`: the current carrier tree needs the
-  normal final full CFC and CBD Support suites immediately before phase
-  release.  Focused results are not a replacement for that release gate.
-- `P596-COZY-VALIDATION-001`: the final Cozy full test currently has four
-  failures in the separately dirty video storyboard/profile work.  Each fails
-  direct-path validation for a target or temporary directory; the Phase 59.6
-  carrier specs are not among the failures.  The phase must not close until
-  the shared Cozy worktree passes its full test suite.
+- The final post-document tree requires normal CBD Support CAR lint plus one
+  `sbt --batch test` suite in each Phase program-change repository: CNCF core,
+  Cozy, and CBD Support.  Focused evidence is not a replacement for these
+  release receipts.
+- The distinct release commits bind the final receipt set to
+  `phase59.6-clb-doc06-20260826`; no external publication or successor-Phase
+  work is part of this closure.
 
 ## Closure
 
-CBD Support has accepted exact-detail, usage, MCP, and CAR Review behavior.
-Phase 59.7 consumes the documented CBD handoff boundary.
+DOC-06 is closed by the distinct Phase release boundary.  The accepted carrier
+codec, Cozy producer/evidence path, and CBD exact-detail, usage, MCP, and CAR
+Review behavior remain value-only and resolver-free.  The separately
+persisted `HYG-P596-001` test-organization follow-up and `DEV-P596-001`
+resource-tree API candidate do not alter this acceptance.  Phase 59.7 may
+consume the documented CBD handoff only after this release commits.
 
 ## Non-Goals
 
 BoK semantic retrieval, Phase 60 behavior, unrelated catalog/runtime changes,
-and final cross-repository release closure.
+and successor implementation.

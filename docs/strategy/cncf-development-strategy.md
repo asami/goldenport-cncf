@@ -3339,7 +3339,7 @@ unchanged after the series.
 | [59.3](../phase/phase-59.3.md) | Closed on 2026-08-25: DOC-03 authoring, source packaging, and publication toolchain. | Phase 59.2.3 |
 | [59.4](../phase/phase-59.4.md) | Closed on 2026-08-26: DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
 | [59.5](../phase/phase-59.5.md) | Closed on 2026-08-26: DOC-05 unified Help and direct-AI consumer interface. | Phase 59.4 |
-| [59.6](../phase/phase-59.6.md) | DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
+| [59.6](../phase/phase-59.6.md) | Closed on 2026-08-26: DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
 | [59.7](../phase/phase-59.7.md) | DOC-07 BoK complementary semantic RAG/MCP and CBD handoff. | Phase 59.6 |
 | [59.8](../phase/phase-59.8.md) | DOC-08 representative Component and framework documentation profiles. | Phase 59.7 |
 | [59.9](../phase/phase-59.9.md) | DOC-09 security, regression, and downstream validation. | Phase 59.8 |
@@ -3401,7 +3401,11 @@ user-selected raw-identity/encoded-route repair and focused closure re-review
 converged with no remaining Current Phase Blocker or Development Candidate.
 Its distinct release commit is bound by `phase59.5-clb-doc05a-20260826`.
 `HYG-P595-PHASE-001` remains a persisted nonblocking Hygiene item. Phase 59.6
-remains the separately owned successor boundary.
+is `closed`: its digest-bound carrier producer/consumer path, exact
+detail/usage, bounded MCP, and value-only CAR Review integration are bound by
+`phase59.6-clb-doc06-20260826`. `HYG-P596-001` remains a persisted nonblocking
+Hygiene item and `DEV-P596-001` remains a separately owned resource-tree API
+candidate. Phase 59.7 is the separately owned successor boundary.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

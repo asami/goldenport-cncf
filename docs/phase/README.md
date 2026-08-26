@@ -15,14 +15,16 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed Phase 59-series phase: `phase-59.5.md` - Unified Help and
-  Direct AI Access. Its DOC-05 raw-identity/encoded-route Help descriptor,
-  Direct-AI access, and framework-navigation evidence is accepted; its closure
-  is bound by `phase59.5-clb-doc05a-20260826`.
-- Phase 59.6 is the next DOC-06 boundary. Phase 59.5 accepted the DOC-05
+- Latest closed Phase 59-series phase: `phase-59.6.md` - Textus CBD Support
+  Primary Integration. Its DOC-06 digest-bound carrier, exact detail/usage,
+  bounded MCP, and value-only CAR Review integration is bound by
+  `phase59.6-clb-doc06-20260826`.
+- Phase 59.7 is the next DOC-07 boundary. Phase 59.6 accepted the CBD Support
   handoff without starting its successor.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
+- Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
+  `DEV-P596-001` as a separately owned resource-tree API candidate.
 - Phase 59.1 checklist: `phase-59.1-checklist.md` is closed. It persists
   `HYG-DOC01B2-001` as nonblocking Hygiene and accepts no Development
   Candidate.

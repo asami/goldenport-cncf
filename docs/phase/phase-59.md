@@ -61,7 +61,7 @@ cross-repository implementation, acceptance, and documentation closure work.
 | [59.3](phase-59.3.md) | Closed on 2026-08-25: DOC-03 authoring, source packaging, and publication toolchain | Terra / xhigh | 5--6h |
 | [59.4](phase-59.4.md) | Closed on 2026-08-26: DOC-04 knowledge and development-context composition | Terra / high | 4--6h |
 | [59.5](phase-59.5.md) | Closed on 2026-08-26: DOC-05 unified Help and direct-AI consumer interface | Terra / xhigh | 5--6h |
-| [59.6](phase-59.6.md) | DOC-06 Textus CBD Support exact-detail integration | Terra / high | 4--6h |
+| [59.6](phase-59.6.md) | Closed on 2026-08-26: DOC-06 Textus CBD Support exact-detail, usage, MCP, and CAR Review integration. | Terra / high | 4--6h |
 | [59.7](phase-59.7.md) | DOC-07 Textus BoK semantic RAG/MCP and CBD handoff | Terra / xhigh | 5--6h |
 | [59.8](phase-59.8.md) | DOC-08 representative Component and framework profiles | Terra / high | 4--6h |
 | [59.9](phase-59.9.md) | DOC-09 security, regression, and downstream validation | Terra / high | 4--6h |
