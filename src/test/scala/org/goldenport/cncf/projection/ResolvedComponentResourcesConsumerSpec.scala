@@ -63,6 +63,12 @@ final class ResolvedComponentResourcesConsumerSpec
     "resolutionStep",
     "externalDeploymentRequired"
   )
+  private val _p595_e1 = afterWord(
+    "in spec:resolved-component-resources-consumer, example:E1, rules:DOC05-A-AC01,DOC05-A-AC04, phase:59.5, slice:DOC05-A-S02"
+  )
+  private val _p595_e2 = afterWord(
+    "in spec:resolved-component-resources-consumer, example:E2, rules:DOC05-A-AC04, phase:59.5, slice:DOC05-A-S02"
+  )
 
   "RSC08-AC-01 Help and Admin consumer projections" should {
     "which preserve identical safe identity, state, and provenance views for the complete fixture" in {
@@ -84,25 +90,16 @@ final class ResolvedComponentResourcesConsumerSpec
           ComponentResourceConsumer.Admin,
           subsystem.name
         )
-        val directai = ResolvedComponentResourcesConsumerProjection.inventory(
-          resolved,
-          ComponentResourceConsumer.DirectAi,
-          subsystem.name
-        )
         val expected = resolved.resources.map(_view)
 
         Then("both consumers retain deterministic fixture order and the same consumer-neutral fields")
         help.consumer shouldBe ComponentResourceConsumer.Help
         admin.consumer shouldBe ComponentResourceConsumer.Admin
-        directai.consumer shouldBe ComponentResourceConsumer.DirectAi
         help.subsystemIdentity shouldBe _subsystem_name
         admin.subsystemIdentity shouldBe _subsystem_name
-        directai.subsystemIdentity shouldBe _subsystem_name
         help.resources shouldBe expected
         admin.resources shouldBe expected
-        directai.resources shouldBe expected
         help.resources shouldBe admin.resources
-        help.resources shouldBe directai.resources
         help.resources.map(_.componentId) shouldBe _component_ids
         help.resources.foreach { view =>
           view.productElementNames.toVector shouldBe _safe_view_fields
@@ -233,13 +230,6 @@ final class ResolvedComponentResourcesConsumerSpec
           ComponentResourceConsumer.Admin
         )
       )
-      val directai = _access(
-        ResolvedComponentResourcesConsumerProjection.access(
-          composition,
-          request,
-          ComponentResourceConsumer.DirectAi
-        )
-      )
       val exposed = access.content.get
       exposed(0) = (exposed(0) ^ 1).toByte
 
@@ -249,9 +239,61 @@ final class ResolvedComponentResourcesConsumerSpec
       access.content.map(_.toVector) should not be empty
       exposed.toVector should not be content.toVector
       request.content.toVector shouldBe content.toVector
-      directai.consumer shouldBe ComponentResourceConsumer.DirectAi
-      directai.disposition.toString shouldBe "Granted"
-      directai.content.map(_.toVector) shouldBe Some(content.toVector)
+    }
+  }
+
+  "P595-DOC05-A-AC04 Direct-AI consumer projection" should {
+    "E1 preserve the supplied inventory order and the safe consumer-neutral view fields" must _p595_e1 {
+      "preserve the supplied inventory order and the safe consumer-neutral view fields" in {
+        Given("Spec: docs/spec/component-knowledge-help-contract.md; Rules: DOC05-A-AC01,DOC05-A-AC04; Example: E1; caller-supplied resolved resources in deterministic input order and a named Subsystem")
+        val resolved = _resolved
+
+        When("the Direct-AI consumer projects its inventory from the supplied resolved-resource value")
+        SubsystemTestFixture.withSubsystem(
+          params = SubsystemTestFixture.Params(name = _subsystem_name)
+        ) { subsystem =>
+          val directai = ResolvedComponentResourcesConsumerProjection.inventory(
+            resolved,
+            ComponentResourceConsumer.DirectAi,
+            subsystem.name
+          )
+          val expected = resolved.resources.map(_view)
+
+          Then("Direct-AI retains exact input order and exposes only the established consumer-neutral fields")
+          directai.consumer shouldBe ComponentResourceConsumer.DirectAi
+          directai.subsystemIdentity shouldBe _subsystem_name
+          directai.resources shouldBe expected
+          directai.resources.map(_.componentId) shouldBe _component_ids
+          directai.resources.foreach { view =>
+            view.productElementNames.toVector shouldBe _safe_view_fields
+          }
+        }
+      }
+    }
+
+    "E2 delegate an authorized exact resource to the established authorization policy" must _p595_e2 {
+      "delegate an authorized exact resource to the established authorization policy" in {
+        Given("Spec: docs/spec/component-knowledge-help-contract.md; Rules: DOC05-A-AC04; Example: E2; an Available, Verified, Granted Documentation resource and matching composition authorization evidence")
+        val composition = _composition
+        val resource = _resource(_documentation_id)
+        val content = _content(_documentation_id)
+        val request = _request(composition, resource, content)
+
+        When("the Direct-AI consumer requests the exact supplied resource through the existing authorization policy")
+        val access = _access(
+          ResolvedComponentResourcesConsumerProjection.access(
+            composition,
+            request,
+            ComponentResourceConsumer.DirectAi
+          )
+        )
+
+        Then("the policy grants access without changing the consumer identity or supplied content")
+        access.consumer shouldBe ComponentResourceConsumer.DirectAi
+        access.disposition.toString shouldBe "Granted"
+        access.content.map(_.toVector) shouldBe Some(content.toVector)
+        request.content.toVector shouldBe content.toVector
+      }
     }
   }
 

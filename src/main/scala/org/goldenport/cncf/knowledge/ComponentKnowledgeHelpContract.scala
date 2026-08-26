@@ -373,7 +373,11 @@ object ComponentKnowledgeHelpContract {
     prefix: String,
     logicalpath: String
   ): ComponentKnowledgeHelpResourceRoute =
-    ComponentKnowledgeHelpResourceRoute(identity, logicalpath, s"$prefix/resources/$logicalpath")
+    ComponentKnowledgeHelpResourceRoute(
+      identity,
+      logicalpath,
+      s"$prefix/resources/${logicalpath.split("/", -1).map(_segment).mkString("/")}"
+    )
 
   private def _resource_navigation(
     value: ComponentKnowledgeManifestConsumerResourceEvidence,

@@ -36,6 +36,9 @@ final class ComponentKnowledgeHelpContractSpec
   private val _e1b = afterWord(
     "in spec:component-knowledge-help-contract, example:E1, rules:DOC05-A-AC01, phase:59.5, slice:DOC05-A-S01"
   )
+  private val _e1c = afterWord(
+    "in spec:component-knowledge-help-contract, example:E1, rules:DOC05-A-AC01,DOC05-A-AC03,DOC05-A-AC04,DOC05-A-AC06, phase:59.5, slice:DOC05-A-S01"
+  )
   private val _e3 = afterWord(
     "in spec:component-knowledge-help-contract, example:E3, rules:DOC05-A-AC03,DOC05-A-AC04, phase:59.5, slice:DOC05-A-S02"
   )
@@ -116,6 +119,43 @@ final class ComponentKnowledgeHelpContractSpec
 
       Then("canonical identity ordering, not caller order, determines the equal Help and Direct-AI resource inventory")
       checked.passed shouldBe true
+      }
+    }
+
+    "E1 retain raw logical-path identity while segment-encoding hostile and non-ASCII public resource routes" must _e1c {
+      "retain raw logical-path identity while segment-encoding hostile and non-ASCII public resource routes" in {
+        Given("Spec: docs/spec/component-knowledge-help-contract.md; Rules: DOC05-A-AC01,DOC05-A-AC03,DOC05-A-AC04,DOC05-A-AC06; Example: E1; caller-supplied raw manifest paths containing percent, query, fragment, and non-ASCII segments")
+        val base = _knowledge(states = Vector.fill(4)(_ready_state))
+        val logicalpaths = Vector(
+          "guides/%2e%2e.md",
+          "guides/what?.md",
+          "guides/anchor#.md",
+          "guides/日本語.md"
+        )
+        val pairs = base.entries.zip(logicalpaths).map { case (pair, logicalpath) =>
+          pair.copy(entry = pair.entry.copy(logicalPath = logicalpath))
+        }
+        val knowledge = base.copy(
+          manifest = base.manifest.copy(resources = pairs.map(_.entry)),
+          entries = pairs
+        )
+        val target = pairs.find(_.entry.logicalPath == "guides/%2e%2e.md").get.resource
+        val contract = _contract(knowledge, _outcome(knowledge, Vector(target.logicalIdentity)))
+
+        When("the Help contract projects canonical route objects and Direct-AI receives the exact raw matching resource through one of those objects")
+        val routes = contract.humanNavigation.resources.map(resource => resource.logicalPath -> resource.route).toMap
+        val access = contract.accessC(_composition(target), routes("guides/%2e%2e.md"), _request(target)).toOption
+
+        Then("logicalPath remains the untouched raw DSL and manifest identity while only each outbound route segment is RFC 3986 encoded")
+        contract.humanNavigation.resources.map(_.logicalPath).toSet shouldBe logicalpaths.toSet
+        contract.directAiNavigation.resources.map(_.logicalPath).toSet shouldBe logicalpaths.toSet
+        routes("guides/%2e%2e.md").logicalPath shouldBe "guides/%2e%2e.md"
+        routes("guides/%2e%2e.md").path should endWith ("/guides/%252e%252e.md")
+        routes("guides/what?.md").path should endWith ("/guides/what%3F.md")
+        routes("guides/anchor#.md").path should endWith ("/guides/anchor%23.md")
+        routes("guides/日本語.md").path should endWith ("/guides/%E6%97%A5%E6%9C%AC%E8%AA%9E.md")
+        access.map(_.consumer) shouldBe Some(ComponentResourceConsumer.DirectAi)
+        access.map(_.disposition.toString) shouldBe Some("Granted")
       }
     }
   }
@@ -207,27 +247,45 @@ final class ComponentKnowledgeHelpContractSpec
   }
 
   "P595-DOC05-A-AC04 framework developer-toolchain navigation" should {
-    "E4 retain supplied framework publication availability and distinguish exact expected version, mismatch, absent snapshot, and online evidence without making Component Help conditional" must _e4 {
-      "retain supplied framework publication availability and distinguish exact expected version, mismatch, absent snapshot, and online evidence without making Component Help conditional" in {
-        Given("Spec: docs/spec/component-knowledge-help-contract.md; Rules: DOC05-A-AC05,DOC05-A-AC07; Example: E4; an online caller-supplied framework publication with an absent snapshot and exact or mismatched expected product/version evidence")
+    "E4 retain every supplied framework publication availability and keep absent or present snapshots exclusively in developer-toolchain navigation" must _e4 {
+      "retain every supplied framework publication availability and keep absent or present snapshots exclusively in developer-toolchain navigation" in {
+        Given("Spec: docs/spec/component-knowledge-help-contract.md; Rules: DOC05-A-AC05,DOC05-A-AC07; Example: E4; caller-supplied Local, Installed, Cached, Online, and Unavailable framework profiles, exact or mismatched expectations, and valid absent or present snapshots")
         val knowledge = _knowledge()
         val outcome = _outcome(knowledge, Vector(knowledge.entries.head.resource.logicalIdentity))
-        val profile = FrameworkDocumentationProfile.createC(_framework_publication, None).toOption.get
-        val exact = _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(Some(profile), Some(FrameworkProductVersion("simplemodeling", "0.1.0"))))
-        val mismatch = _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(Some(profile), Some(FrameworkProductVersion("simplemodeling", "0.2.0"))))
+        val absentprofile = FrameworkDocumentationProfile.createC(_framework_publication, None).toOption.get
+        val profiles = FrameworkPublicationReferenceAvailability.values.toVector.map { availability =>
+          availability -> _framework_profile(availability)
+        }
+        val exact = _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(Some(absentprofile), Some(FrameworkProductVersion("simplemodeling", "0.1.0"))))
+        val mismatch = _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(Some(absentprofile), Some(FrameworkProductVersion("simplemodeling", "0.2.0"))))
+        val noexpectation = _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(Some(absentprofile)))
+        val profileabsent = _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(expectedProductVersion = Some(FrameworkProductVersion("simplemodeling", "0.1.0"))))
+        val present = _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(Some(_framework_profile(FrameworkPublicationReferenceAvailability.Installed))))
         val absent = _contract(knowledge, outcome)
 
         When("the Help contract projects optional framework evidence separately from the Component operator inventory")
         val exactnavigation = exact.frameworkDeveloperToolchainNavigation.get
         val mismatchnavigation = mismatch.frameworkDeveloperToolchainNavigation.get
+        val availabilities = profiles.map { case (_, profile) =>
+          _contract(knowledge, outcome, ComponentKnowledgeHelpFrameworkEvidence(Some(profile))).frameworkDeveloperToolchainNavigation.get
+        }
+        val presentnavigation = present.frameworkDeveloperToolchainNavigation.get
 
-        Then("publication product/version/availability remain caller supplied, version evidence is exact or mismatch, and no snapshot leaves Component Help available")
+        Then("publication product/version/availability remain caller supplied, every expectation state is explicit, and framework snapshot material never enters human or Direct-AI operator navigation")
         exactnavigation.frameworkPublication shouldBe Some(_framework_publication)
         exactnavigation.expectation shouldBe ComponentKnowledgeHelpFrameworkExpectation.Exact(FrameworkProductVersion("simplemodeling", "0.1.0"))
         mismatchnavigation.expectation shouldBe ComponentKnowledgeHelpFrameworkExpectation.Mismatch(FrameworkProductVersion("simplemodeling", "0.2.0"), FrameworkProductVersion("simplemodeling", "0.1.0"))
         exactnavigation.snapshot shouldBe ComponentKnowledgeHelpFrameworkSnapshotNavigation.Absent
+        availabilities.map(_.frameworkPublication.map(_.availability)) shouldBe FrameworkPublicationReferenceAvailability.values.toVector.map(Some(_))
+        availabilities.map(_.expectation) shouldBe Vector.fill(FrameworkPublicationReferenceAvailability.values.size)(ComponentKnowledgeHelpFrameworkExpectation.NoExpectation)
+        noexpectation.frameworkDeveloperToolchainNavigation.map(_.expectation) shouldBe Some(ComponentKnowledgeHelpFrameworkExpectation.NoExpectation)
+        profileabsent.frameworkDeveloperToolchainNavigation.map(_.expectation) shouldBe Some(ComponentKnowledgeHelpFrameworkExpectation.ProfileAbsent(FrameworkProductVersion("simplemodeling", "0.1.0")))
+        presentnavigation.snapshot shouldBe a [ComponentKnowledgeHelpFrameworkSnapshotNavigation.Present]
+        presentnavigation.snapshot.asInstanceOf[ComponentKnowledgeHelpFrameworkSnapshotNavigation.Present].resources.map(_.logicalPath) shouldBe Vector("framework/documentation.md")
         exact.humanNavigation.resources should not be empty
         exact.humanNavigation.resources.map(_.kind) should not contain ComponentKnowledgeResourceKind.FrameworkDocumentation
+        present.humanNavigation.resources.map(_.kind) should not contain ComponentKnowledgeResourceKind.FrameworkDocumentation
+        present.directAiNavigation.resources.map(_.kind) should not contain ComponentKnowledgeResourceKind.FrameworkDocumentation
         absent.frameworkDeveloperToolchainNavigation shouldBe None
       }
     }
@@ -416,4 +474,59 @@ final class ComponentKnowledgeHelpContractSpec
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       )
     )
+
+  private def _framework_profile(
+    availability: FrameworkPublicationReferenceAvailability
+  ): FrameworkDocumentationProfile = {
+    val componentid = ComponentId("org.goldenport.cncf.phase595.FrameworkDocumentation")
+    val release = "0.1.0-SNAPSHOT"
+    val publication = _framework_publication.copy(
+      availability = availability,
+      documentationComponentSnapshot = Some(FrameworkDocumentationComponentSnapshot(
+        componentid,
+        release,
+        _framework_publication.sha256,
+        availability
+      ))
+    )
+    val documentation = ComponentKnowledgeResourceEntry(
+      binding = ComponentKnowledgeResourceBinding(
+        ComponentResourceLogicalIdentity(componentid, release, None, "FrameworkDocumentation", "urn:cncf:resource:phase595:framework-documentation")
+      ),
+      logicalPath = "framework/documentation.md",
+      kind = ComponentKnowledgeResourceKind.FrameworkDocumentation,
+      role = ComponentKnowledgeResourceRole.FrameworkDocumentation,
+      language = Some("en"),
+      mediaType = ComponentKnowledgeMediaType.TextMarkdown,
+      size = 42,
+      sha256 = publication.sha256,
+      metadata = ComponentKnowledgeMetadata(
+        ComponentKnowledgeAuthority.Framework,
+        ComponentKnowledgeStability.Stable,
+        ComponentKnowledgeSource.SuppliedPhase58,
+        "Apache-2.0",
+        ComponentKnowledgeDisclosure.MetadataOnly
+      ),
+      availability = ComponentResourceAvailability.Available,
+      integrity = ComponentResourceIntegrity.Verified,
+      authorization = ComponentResourceAuthorization.Granted,
+      provenance = ComponentKnowledgeSafeProvenance(
+        ComponentResourceSourceKind.ExpandedCar,
+        "org.goldenport.cncf:phase595-framework-documentation:0.1.0",
+        "urn:cncf:source:phase595:framework-documentation",
+        "expanded-car:2",
+        false,
+        publication.sha256
+      )
+    )
+    FrameworkDocumentationProfile.createC(
+      publication,
+      Some(ComponentKnowledgeManifest(
+        componentId = componentid,
+        logicalRelease = release,
+        resources = Vector(documentation),
+        frameworkPublication = Some(publication)
+      ))
+    ).toOption.get
+  }
 }

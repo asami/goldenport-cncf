@@ -31,12 +31,16 @@ and logical release to:
 ```
 
 Every `ComponentKnowledgeHelpResourceRoute` uses the same route prefix plus
-`/resources/` and the existing manifest-validated relative logical path. The
-route model, rather than ad-hoc caller strings, is the source for human links,
-HTTP discovery/resource descriptors, CLI inspection descriptors, and Direct-AI
-access selection. Component and release segments are deterministically
-path-segment encoded; resource logical paths are never normalized, joined,
-resolved, or selected again.
+`/resources/` and the existing manifest-validated relative logical path. Its
+`logicalPath` remains the exact raw DSL/manifest identity and membership key.
+Only the public route `path` is an RFC 3986 UTF-8, segment-encoded transport
+representation: each raw slash-delimited logical-path segment is encoded while
+the slash hierarchy is retained. The route model, rather than ad-hoc caller
+strings, is the source for human links, HTTP discovery/resource descriptors,
+CLI inspection descriptors, and Direct-AI access selection. Component and
+release segments retain their deterministic path-segment encoding; resource
+logical paths are never decoded, normalized, joined, resolved, or selected
+again.
 
 Human navigation and Direct-AI navigation contain the same ordered resource
 inventory: logical path, kind, role, language, media type, availability,
@@ -100,7 +104,10 @@ The deterministic HTTP and CLI values are descriptors only. There is no
 Http4s endpoint or CLI parser wiring in this Step, because the current runtime
 does not retain resolved knowledge suitable for a live endpoint. A later
 transport adapter must receive an already-created Help contract; it must not
-re-resolve resources to synthesize one.
+re-resolve resources to synthesize one. It must accept canonical route
+encoding, decode every logical-path segment once only, and exact-compare the
+recovered raw path and membership. It must not double-decode, dot-normalize,
+or filesystem-join route segments.
 
 ## Executable Specification
 

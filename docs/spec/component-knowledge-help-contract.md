@@ -28,12 +28,18 @@ manifest path shall be logically bound to the supplied Component and release:
 /help/{component}/knowledge/{logicalRelease}/manifest.json
 ```
 
-Each resource path shall be below the same prefix as
-`/resources/{logicalPath}`, where `logicalPath` is exactly an existing
-manifest-validated relative logical path. The route descriptor shall be the
-only route source for the Help inventory, Direct-AI inventory, HTTP descriptor,
-and CLI inspection descriptor. HTTP and CLI descriptors are descriptive
-transport inputs and shall not wire an endpoint or parser.
+Each resource path shall be below the same prefix as `/resources/{logicalPath}`.
+`logicalPath` shall remain exactly the existing raw DSL/manifest relative
+logical-path identity and membership key. The public route `path` alone shall
+be an RFC 3986 UTF-8 segment-encoded transport representation: every raw
+slash-delimited logical-path segment is encoded while slash hierarchy is
+preserved. The route descriptor shall be the only route source for the Help
+inventory, Direct-AI inventory, HTTP descriptor, and CLI inspection descriptor.
+HTTP and CLI descriptors are descriptive transport inputs and shall not wire an
+endpoint or parser. A future HTTP/CLI adapter shall accept canonical route
+encoding, decode each logical-path segment once only, and exact-compare the
+recovered raw logical path and membership; it shall not double-decode,
+dot-normalize, or filesystem-join segments.
 
 Human and Direct-AI navigation shall expose identical canonical-order resource
 navigation entries, manifest identity, and release. Entries shall preserve

@@ -15,13 +15,14 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed Phase 59-series phase: `phase-59.4.md` - Knowledge and
-  Development Context Composition. Its DOC-04 resolver-preserving knowledge,
-  development context, framework-profile, and closed-network Hub evidence is
-  accepted; its closure is bound by
-  `phase59.4-clb-27f6c014f98f7bd6f37e678796140c28f1b068e5005af578abbe5bd5a4d99b2e`.
-- Phase 59.5 is the next DOC-05 boundary. Phase 59.4 accepted the DOC-04
+- Latest closed Phase 59-series phase: `phase-59.5.md` - Unified Help and
+  Direct AI Access. Its DOC-05 raw-identity/encoded-route Help descriptor,
+  Direct-AI access, and framework-navigation evidence is accepted; its closure
+  is bound by `phase59.5-clb-doc05a-20260826`.
+- Phase 59.6 is the next DOC-06 boundary. Phase 59.5 accepted the DOC-05
   handoff without starting its successor.
+- Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
+  no Development Candidate.
 - Phase 59.1 checklist: `phase-59.1-checklist.md` is closed. It persists
   `HYG-DOC01B2-001` as nonblocking Hygiene and accepts no Development
   Candidate.
