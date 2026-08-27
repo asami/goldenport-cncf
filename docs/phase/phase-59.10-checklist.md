@@ -30,7 +30,7 @@ Stage Status:
 - [x] Record exact executable evidence in normative documents.
 - [x] Mark the implementation note historical/non-normative and state that
   final design/specification overrides it; retain journals as history.
-- [ ] Remove/mark superseded contradictory current documentation and confirm no
+- [x] Remove/mark superseded contradictory current documentation and confirm no
   latest specification remains only in notes, journal, phase, implementation,
   or tests.
 - [ ] Update strategy completed history and close the Phase 59 series
@@ -44,8 +44,15 @@ Evidence:
   `docs/design/README.md`, and `docs/spec/README.md`.
 - Parent static validation passed for links and existing executable-specification
   paths, `git diff --check`, and the forbidden-term scan.
-- Clean independent lightweight Step review passed. Step commit is pending;
-  cross-repository documentation and final Phase closure remain pending.
+- Clean independent lightweight Step review passed. Step A committed
+  `7c996b12eabf972aa040f2a86d7c02c49afb9a38`; cross-repository Step B committed
+  `cd493b7c2c5618732e784d0600b46eff85e3dcd3`; both external static scripts
+  passed in B. Only the current-document audit commit and final Phase closure
+  remain.
 - [Phase 59.10 DOC-10-B1 cross-repository documentation reconciliation](../journal/2026/08/2026-08-27-phase-59.10-cross-repository-documentation-reconciliation.md)
   records the existing canonical evidence and responsibility boundaries.
-  External static script execution and final Phase closure remain pending.
+  SimpleModeling.org `check-cncf-framework-publication-contract.sh` and
+  ai-directive `check-cncf-public-directive-projection.sh` both passed in B.
+- [Phase 59.10 DOC-10-C1 current-document contradiction audit](../journal/2026/08/2026-08-27-phase-59.10-current-document-audit.md)
+  records the current-versus-historical documentation distinction and the
+  remaining release-close dashboard discrepancy.
