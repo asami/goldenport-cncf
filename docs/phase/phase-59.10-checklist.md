@@ -20,13 +20,13 @@ Stage Status:
 
 - [x] Create/update component-documentation-knowledge-package design and
   specification records.
-- [ ] Update affected CNCF Help/Manual/CAR/Web/MCP design/specification
+- [x] Update affected CNCF Help/Manual/CAR/Web/MCP design/specification
   documents.
-- [ ] Update SimpleModeling.org and Cozy publication design/specification for
+- [x] Update SimpleModeling.org and Cozy publication design/specification for
   versioned HTML, structured metadata, and Documentation Component projection.
-- [ ] Update public Directive and Skill bundle/catalog documentation without
+- [x] Update public Directive and Skill bundle/catalog documentation without
   weakening authoritative installation, activation, execution, or MCP bounds.
-- [ ] Update CBD Support and BoK design/spec/strategy/manual documents.
+- [x] Update CBD Support and BoK design/spec/strategy/manual documents.
 - [x] Record exact executable evidence in normative documents.
 - [x] Mark the implementation note historical/non-normative and state that
   final design/specification overrides it; retain journals as history.
@@ -46,3 +46,6 @@ Evidence:
   paths, `git diff --check`, and the forbidden-term scan.
 - Clean independent lightweight Step review passed. Step commit is pending;
   cross-repository documentation and final Phase closure remain pending.
+- [Phase 59.10 DOC-10-B1 cross-repository documentation reconciliation](../journal/2026/08/2026-08-27-phase-59.10-cross-repository-documentation-reconciliation.md)
+  records the existing canonical evidence and responsibility boundaries.
+  External static script execution and final Phase closure remain pending.
