@@ -17,7 +17,8 @@ Current baseline:
 
 - Latest closed phase: `phase-60.2.md` - ADM-03 Component Admin configuration
   provenance and resolved-composition visibility. It is closed under
-  `phase60.2-clb-adm03-20260828`; Phase 60.3 remains planned and not started.
+  `phase60.2-clb-adm03-20260828`; Phase 60.3 is active and in progress under
+  ADM-04, while Phase 60.4 remains not started.
 - Latest closed Phase 59-series phase: `phase-59.10.md` - DOC-10 canonical
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
@@ -40,8 +41,10 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. `phase-60.3.md` (ADM-04)
-  remains planned and requires its own explicit start.
+- Active phase in the current CNCF sequence: `phase-60.3.md` (ADM-04),
+  implementing the package-private, value-only
+  `ComponentAdminContractModelProjection` over the Phase 59 consumer contract;
+  Phase 60.4 remains not started.
 - Latest closed checklist: `phase-60.2-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
@@ -91,7 +94,7 @@ Current baseline:
   - `phase-60.1.md`
   - `phase-60.2.md`
 - Active phase set currently includes:
-  - none; `phase-60.3.md` is planned and not started
+  - `phase-60.3.md` (ADM-04) is active and in progress
 
 ## Related Rules
 

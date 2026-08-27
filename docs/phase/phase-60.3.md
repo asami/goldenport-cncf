@@ -1,7 +1,8 @@
 # Phase 60.3 - Component Admin Contract and Model Visibility
 
-status=planned
+status=in-progress
 planned_at=2026-08-28
+started_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.2](phase-60.2.md)
 successor=[Phase 60.4](phase-60.4.md)
@@ -46,4 +47,7 @@ navigation, management, and surface acceptance.
 
 ## Current Status
 
-Phase 60.3 is planned and starts only after Phase 60.2 closes.
+Phase 60.3 is in progress under ADM-04. The admitted implementation target is
+the package-private, value-only `ComponentAdminContractModelProjection` over
+the Phase 59 `ComponentKnowledgeManifestConsumerContract`; Phase 60.4 has not
+started.
