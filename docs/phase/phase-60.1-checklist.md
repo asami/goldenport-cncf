@@ -1,6 +1,6 @@
 # Phase 60.1 Checklist - Component Admin Identity and View Model
 
-status=planned
+status=in-progress
 phase=[Phase 60.1 - Component Admin Identity and View Model](phase-60.1.md)
 predecessor=[Phase 60](phase-60.md)
 successor=[Phase 60.2](phase-60.2.md)
@@ -8,7 +8,7 @@ successor=[Phase 60.2](phase-60.2.md)
 ## ADM-02: Identity and Admin View Model
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
 - Owner: CNCF Component identity and Admin view-model maintainers
 - Update rule: Record the accepted versioned view-model contract before Phase 60.2 begins.
 - Entry rule: ADM-01 is DONE.

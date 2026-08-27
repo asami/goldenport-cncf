@@ -1,7 +1,7 @@
 # Phase 60.1 - Component Admin Identity and View Model
 
-status=planned
-planned_at=2026-08-28
+status=in-progress
+started_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60](phase-60.md)
 successor=[Phase 60.2](phase-60.2.md)
@@ -48,4 +48,4 @@ navigation, management, surface delivery, and canonical documentation closure.
 
 ## Current Status
 
-Phase 60.1 is planned and starts only after ADM-01 is closed.
+Phase 60.1 is in progress.
