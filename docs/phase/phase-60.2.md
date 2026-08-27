@@ -1,7 +1,8 @@
 # Phase 60.2 - Component Admin Configuration and Composition Visibility
 
-status=planned
+status=in-progress
 planned_at=2026-08-28
+started_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.1](phase-60.1.md)
 successor=[Phase 60.3](phase-60.3.md)
@@ -47,4 +48,6 @@ documentation navigation, management, and surface acceptance.
 
 ## Current Status
 
-Phase 60.2 is planned and starts only after Phase 60.1 closes.
+Phase 60.2 is in progress after the Phase 60.1 closure. ADM-03 is implementing
+typed configuration provenance and already-resolved composition visibility;
+Phase 60.3 has not started.

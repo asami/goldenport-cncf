@@ -16,8 +16,8 @@ This directory does **not** contain design details or thinking processes.
 Current baseline:
 
 - Latest closed phase: `phase-60.1.md` - ADM-02 Component Admin identity and
-  view model. It is closed under `phase60.1-clb-adm02-20260828`; Phase 60.2
-  remains planned and is not started by this closure.
+  view model. It is closed under `phase60.1-clb-adm02-20260828`; Phase 60.2 is
+  now active/in progress after that closure.
 - Latest closed Phase 59-series phase: `phase-59.10.md` - DOC-10 canonical
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
@@ -39,8 +39,8 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. `phase-60.2.md` is the next
-  planned successor and requires a separate explicit start.
+- Active phase in the current CNCF sequence: `phase-60.2.md` (ADM-03), active
+  and in progress after Phase 60.1; Phase 60.3 remains not started.
 - Latest closed checklist: `phase-60.1-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
@@ -89,7 +89,7 @@ Current baseline:
   - `phase-60.md`
   - `phase-60.1.md`
 - Active phase set currently includes:
-  - none; `phase-60.2.md` is planned and not started
+  - `phase-60.2.md` (ADM-03), active/in progress
 
 ## Related Rules
 

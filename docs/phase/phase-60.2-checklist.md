@@ -1,6 +1,7 @@
 # Phase 60.2 Checklist - Component Admin Configuration and Composition Visibility
 
-status=planned
+status=in-progress
+started_at=2026-08-28
 phase=[Phase 60.2 - Component Admin Configuration and Composition Visibility](phase-60.2.md)
 predecessor=[Phase 60.1](phase-60.1.md)
 successor=[Phase 60.3](phase-60.3.md)
@@ -8,9 +9,9 @@ successor=[Phase 60.3](phase-60.3.md)
 ## ADM-03: Configuration and Composition Visibility
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN PROGRESS
 - Owner: CNCF configuration, Resource SubComponent, and Admin maintainers
-- Update rule: Record authoritative configuration and resolved-composition projection evidence before Phase 60.3 begins.
+- Update rule: Record authoritative configuration and resolved-composition projection evidence before Phase 60.3 begins; this ADM-03 stage is currently in progress.
 - Entry rule: ADM-02 is DONE.
 - Completion rule: Admin projects Phase 55 configuration and the same canonical Phase 58 identity/resource contract's already-resolved composition without independent scanning, resolution, or policy broadening.
 
