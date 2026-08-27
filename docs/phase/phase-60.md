@@ -3,20 +3,67 @@
 status=planned
 planned_at=2026-07-31
 depends_on=[Phase 59.10](phase-59.10.md)
+successor=[Phase 60.1](phase-60.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 60 Checklist](phase-60-checklist.md)
 implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
+adm01_handoff=[Phase 60 ADM-01A — Component Admin Inventory and Failing-First Contract](../notes/phase-60-adm01-component-admin-inventory-and-failing-first-contract.md)
 planning_journal=[Component Admin and Documentation Visibility Planning (historical Phase 58)](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
 canonical_architecture_design=[Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md)
 canonical_architecture_specification=[Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
 canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
 canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
 
+## Split Record
+
+On 2026-08-28, user decision `D-P60-SPLIT-001` partitioned the formerly
+oversized Phase 60. The pre-split planning gate estimated the full ADM-01
+through ADM-09 path at 40--55 hours and required independently closable
+delivery units. This retained Phase owns ADM-01; Phases 60.1 through 60.8 own
+ADM-02 through ADM-09 sequentially. The split adds planning, handoff, review,
+validation, and release overhead, but isolates the one inventory/contract
+freeze before protected implementation and keeps every unit within six hours.
+
+Profile-transition handoff: Phase 60 produces the reviewed ADM-01 inventory,
+identity ambiguity record, no-scan map, Help/Admin boundary, and failing-first
+acceptance registry. Each later Phase consumes its predecessor's accepted
+handoff and does not rediscover resolved Phase 55, Phase 58, or Phase 59
+contracts.
+
+Pre-split gate evidence (2026-08-28): `SPLIT_REQUIRED`, time-bound and
+reasoning-cost isolation, conservative estimate 40--55 hours, critical path
+ADM-01 -> ADM-02 -> ADM-03/04 -> ADM-05/06 -> ADM-07 -> ADM-08 -> ADM-09.
+This is historical gate evidence; the current structural gate follows.
+
+## Goal
+
+Freeze the existing Admin, Help, configuration, model, runtime, datastore, and
+management ownership map and exact failing-first acceptance registry without
+implementing an Admin view, resolver, route, management action, or runtime
+projection.
+
+Phase Plan Gate: PROCEED
+- target: conservative upper bound <= 6h
+- planning_demand: protected-decision
+- recommended_parent_profile: gpt-5.6-terra / xhigh
+- profile_cost_role: expensive reasoning kernel
+- expensive_reasoning_kernel: reconcile the inherited identity, no-scan,
+  authority, and acceptance boundaries into one ADM-01 contract handoff
+- frozen_profile_transition_handoff: Phase 55 configuration provenance, Phase
+  58 resolved resource contract, and Phase 59 knowledge/model manifest
+- parent_reasoning_mode_policy: standard
+- estimated_at_recommended_profile: 5--6h
+- agent_reasoning_mode_policy: default standard; consider pro only at an
+  eligible agent launch when the active interface supports it and frozen
+  quality-first evidence justifies it
+- runtime_suitability: re-evaluate in the Phase execution task
+- source: approved split from Phase 60
+
 ## Purpose
 
-Provide one Component-owned Admin surface that makes the complete operational
-and descriptive state of a loaded Component visible and, where explicitly
-authorized, manageable.
+Freeze the inventory and executable contract that later enables one
+Component-owned Admin surface to make the operational and descriptive state of
+a loaded Component visible and, where explicitly authorized, manageable.
 
 Phase 60 consumes:
 
@@ -54,7 +101,10 @@ must reject a scalar locator, foreign canonical-ID rebinding, entropy fallback,
 missing owner, and ambiguous owner rather than treating any of them as a
 compatibility shortcut.
 
-## Selected Direction
+## Series Invariants
+
+ADM-01 records these as constraints for the sequential child Phases; it does
+not implement their projections or management actions.
 
 - Help remains the human and AI knowledge entry point.
 - Admin is the operator-facing runtime inspection and management surface.
@@ -81,83 +131,34 @@ compatibility shortcut.
 
 ## Scope
 
-- Define a versioned Component Admin view model and discovery contract.
-- Present Component class, release, instance, Subsystem, and implicit
-  Component Subsystem identity without conflation.
-- Present primary CAR plus Documentation and SourceCode Subcomponent CAR
-  composition, availability, integrity, access state, and provenance from the
-  same already-resolved Phase 58 projection.
-- Present Phase 59 manuals, Help, Scaladoc, source availability, model
-  metadata, diagrams, schemas, examples, and troubleshooting navigation.
-- Present Phase 55 effective configuration and binding provenance.
-- Present Service, Operation, SPI, capability, dependency, runtime, health,
-  lifecycle, ClassLoader, datastore, schema, collection, and Entity
-  collection information.
-- For any Admin Entity-ID input, require the declared backing `EntityCollection`
-  and exact collection equality before resolving the ID.
-- Define basic read-only inspection separately from authorized management
-  actions.
-- Define HTTP, Web, CLI, and machine-readable Admin projections from one view
-  model.
-- Define authorization, redaction, audit, path safety, integrity, disclosure,
-  caching, multi-instance, and failure behavior.
-- Validate representative standalone and multi-user Subsystem operation
-  without exposing mode branches to Component implementation.
+- Inventory existing Admin, Help, configuration, model, runtime, datastore,
+  and management surfaces.
+- Record class/release/instance/Subsystem identity ambiguities and every direct
+  physical-resource, repository, source, or documentation scan.
+- Freeze Help as the knowledge surface and Admin as the operator surface.
+- Register exact failing-first acceptance identities for the later ADM stages.
 
 ## Non-Goals
 
-- Reimplementing Subcomponent CAR/payload resolution or repository access.
-- Independently scanning or resolving resources, or broadening the canonical
-  resource/mode policy.
-- Reimplementing Help, manuals, AI retrieval, CBD Support, or BoK.
-- Generating documentation, source archives, model metadata, or diagrams.
-- Treating Admin as an alternate configuration authority.
-- Inferring Component metadata from arbitrary source or artifact scanning.
-- Granting management authority because a resource or Operation is visible.
-- Building a general external observability platform.
+- Implementing a view model, projection, configuration/resource consumer,
+  model/runtime view, navigation, management action, or acceptance surface.
+- Reimplementing resource resolution, Help, manuals, AI retrieval, CBD
+  Support, BoK, documentation generation, or source scanning.
+- Granting management authority or changing operation-mode policy.
 
 ## Work Stack
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | ADM-01 | Inventory and executable contract freeze | Existing Admin, Help, configuration, model, runtime, and management surfaces plus exact failing-first acceptance identities are fixed. | planned |
-| ADM-02 | Identity and Admin view model | One versioned model distinguishes class, release, instance, Subsystem, implicit Subsystem, and physical resource identities. | planned |
-| ADM-03 | Configuration and composition visibility | Effective typed configuration/provenance and primary/Documentation/SourceCode composition are projected from Phase 55/58 contracts. | planned |
-| ADM-04 | Component contract and model visibility | Service, Operation, SPI, capability, schema, model types, relationships, and Phase 59 diagrams are visible without reconstruction. | planned |
-| ADM-05 | Runtime and datastore visibility | Dependency, ClassLoader, lifecycle, health, datastore, collection, and Entity collection evidence is projected from authoritative runtime state. | planned |
-| ADM-06 | Documentation navigation | Admin links exact manuals, Help, Scaladoc, source availability, examples, and troubleshooting resources through the Phase 59 manifest. | planned |
-| ADM-07 | Authorized management | Explicitly admitted management actions enforce Operation authorization, audit, lifecycle safety, and deterministic failure. | planned |
-| ADM-08 | Surface and security acceptance | Web, HTTP, CLI, machine-readable, standalone, multi-user, multi-instance, redaction, and hostile-input profiles pass. | planned |
-| ADM-09 | Canonical documentation and closure | Verified behavior is promoted to design/specification and all planning records are reconciled. | planned |
 
 ## Acceptance
 
-- Admin identifies exactly which Component class, release, instance, and
-  Subsystem context is being inspected.
-- Admin consumes the same canonical Phase 58 identity/resource contract and
-  already-resolved projection; it does not independently scan or resolve
-  physical resources or broaden the resource/mode policy.
-- Admin consumes the Phase 59 knowledge/model manifest; it does not regenerate
-  manuals, metadata, or diagrams.
-- Effective configuration shows the winning typed binding, overridden
-  bindings, scope, and provenance without duplicating public `textus` and
-  internal `cncf` parameters.
-- Primary CAR, Documentation SubComponent, and SourceCode SubComponent state
-  is accurate and does not claim remote or restricted content is local.
-- Entity, Powertype, StateMachine, Value, Datatype, relationships, class
-  diagrams, and state diagrams are navigable from the Component.
-- Service, Operation, SPI, capability, dependency, runtime, datastore,
-  schema, collection, health, and lifecycle views use authoritative evidence.
-- An Admin Entity-ID surface rejects a scalar locator, foreign canonical ID,
-  entropy fallback, missing owner, and ambiguous owner deterministically.
-- Read-only visibility grants no Operation or resource access authority.
-- Management actions require explicit authorization and produce attributable
-  audit evidence.
-- Standalone and multi-user operation project identity through
-  `ExecutionContext`; Component implementation remains mode-independent.
-- Multiple loaded versions and instances do not cross-wire configuration,
-  resources, runtime state, or management actions.
-- Final design/specification and executable evidence agree before closure.
+- One reviewed ADM-01 inventory identifies existing surfaces, identity
+  ambiguities, direct scans, owners, Help/Admin division, and exact
+  failing-first acceptance identities.
+- The accepted ADM-01 handoff gives each later child a single source for its
+  inherited no-scan, identity, authority, and validation constraints.
 
 ## Planning References
 
@@ -170,5 +171,5 @@ compatibility shortcut.
 
 ## Current Status
 
-Phase 60 is planned and must not start before Phase 59.10 closes the Phase 59
-series.
+Phase 60 is planned. Phase 59.10 is closed; ADM-01 is the first independently
+closable unit of the approved Phase 60 series.

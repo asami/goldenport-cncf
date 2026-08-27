@@ -5,7 +5,7 @@ phase=[Phase 61 - Information CML Runtime Canonicalization](phase-61.md)
 
 This checklist is the authoritative Phase 61 state ledger after Phase 61
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 60 closes.
+the Phase 60 series closes in Phase 60.8.
 
 ## IC-01: Inventory and Failing-First Acceptance
 
@@ -13,7 +13,7 @@ Stage Status:
 - Current status: PLANNED
 - Owner: CNCF Information, Entity, projection, provider, and downstream
   maintainers
-- Entry rule: Phase 60 is closed.
+- Entry rule: Phase 60.8 is closed.
 - Completion rule: The exact current split, target contract, migration surface,
   and failing-first acceptance identities are recorded before implementation.
 

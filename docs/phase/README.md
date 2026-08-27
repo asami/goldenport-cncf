@@ -19,8 +19,10 @@ Current baseline:
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
   regression, downstream, and full-suite evidence without changing behavior.
-- Phase 59 is now fully closed. Phase 60 remains a later planned consumer and
-  is not started by this release.
+- Phase 59 is fully closed. Phase 60 is an approved sequential ADM-01 through
+  ADM-09 series: `phase-60.md` retains ADM-01 and `phase-60.1.md` through
+  `phase-60.8.md` each own one later independently closable stage. No Phase 60
+  child has started.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and

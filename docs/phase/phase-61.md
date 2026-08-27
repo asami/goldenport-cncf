@@ -2,7 +2,7 @@
 
 status=planned
 planned_at=2026-07-26
-depends_on=[Phase 60](phase-60.md)
+depends_on=[Phase 60.8](phase-60.8.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 61 Checklist](phase-61-checklist.md)
 
@@ -19,7 +19,7 @@ hand-written case class.
 
 ## Dependency
 
-Phase 61 begins after Phase 60 closes.
+Phase 61 begins after the Phase 60 series closes in Phase 60.8.
 
 Technical foundations are Phase 26, Phase 27, Phase 49, and Phase 50.
 

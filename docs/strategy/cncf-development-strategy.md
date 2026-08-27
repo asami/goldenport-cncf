@@ -1808,7 +1808,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-001 | `docs/journal/2026/04/view-projection-design-note.md` | Custom, inherited, dynamic, and GraphQL-style projections. | STRATEGY_ITEM | [9.16](#916-persistent-materialized-view-store) | CANDIDATE |
 | DEV-002 | `docs/journal/2026/05/phase-27-ke-09-publish-materialize-feedback.md` | SIE-backed RDF/vector provider replacement and richer external-source behavior. | STRATEGY_ITEM | [9.5](#95-knowledge-structure-follow-ups), external owner `textus-knowledge-editor` | RESOLVED |
 | DEV-003 | `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md` | Authorized force/merge/repair operations and conflict Web/API. | NEW_PHASE | [Phase 71](../phase/phase-71.md) | ADOPTED |
-| DEV-004 | `docs/journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md` | Admin entity-ID resolution with declared exact EntityCollection equality. | MERGED_EXISTING_PHASE | [Phase 60](../phase/phase-60.md) | ADOPTED |
+| DEV-004 | `docs/journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md` | Admin entity-ID resolution with declared exact EntityCollection equality. | MERGED_EXISTING_PHASE | [Phase 60.4](../phase/phase-60.4.md) | ADOPTED |
 | DEV-005 | `docs/journal/2026/07/2026-07-30-phase-53-component-style-execution-context-configuration-consolidation.md` | Typed configuration binding, provenance, codecs, and fixed-user intake deferred from Phase 53. | STRATEGY_ITEM | [9.51](#951-typed-configuration-binding-and-provenance-resolution), Phase 55 closure evidence | RESOLVED |
 | DEV-006 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Parent/Subcomponent descriptor description and development/packaged parity. | MERGED_EXISTING_PHASE | [Phase 58 series](../phase/phase-58.9.md) | ADOPTED |
 | DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
@@ -2580,12 +2580,12 @@ Future Web/platform development item.
   - public developer portal.
 
 ### 9.23 Component-owned Admin Surface Discovery
-Planned as the Web discovery/presentation subset of Phase 60.
+Planned as the Web discovery/presentation subset of Phase 60.7.
 
 - Design references:
   - `docs/design/management-console.md`
   - `docs/notes/cncf-web-static-form-app-contract.md`
-  - `docs/phase/phase-60.md`
+  - `docs/phase/phase-60.7.md`
 - Goal: improve discovery and diagnostics for component-owned admin pages
   beyond explicit Web composition while preserving declared-page
   authorization and projecting the common Phase 60 Admin view model.
@@ -3572,37 +3572,36 @@ series.
   - `docs/journal/2026/07/2026-07-31-phase-56-component-subcomponent-development-composition.md`; and
   - `docs/notes/component-documentation-knowledge-package-implementation.md`.
 
-#### Phase 60 - Component Admin and Documentation Visibility
+#### Phase 60 Series - Component Admin and Documentation Visibility
 
-Planned after Phase 59.10 closes the Phase 59 series.
+On 2026-08-28, user decision `D-P60-SPLIT-001` split the formerly 40--55-hour
+Phase 60 into sequential, independently closable units. Phase 60 retains the
+ADM-01 expensive reasoning kernel; each child consumes the accepted predecessor
+handoff and does not rediscover Phase 55 configuration, Phase 58 resources, or
+Phase 59 knowledge/model contracts.
 
-- Goal:
-  - make the full operational and descriptive state of a loaded Component
-    visible through one Component-owned Admin surface;
-  - combine Phase 55 configuration provenance, Phase 58 resource composition,
-    Phase 59 knowledge/model manifests, and authoritative runtime state; and
-  - provide explicitly authorized management without conflating visibility
-    with authority.
-- Selected direction:
-  - Help is the human/AI knowledge surface and Admin is the operator/runtime
-    surface;
-  - Admin consumes the Phase 58 resolver and Phase 59 manifests and never
-    reconstructs them by scanning files, CARs, repositories, or source;
-  - identity distinguishes Component class, release, instance, Subsystem, and
-    implicit Component Subsystem;
-  - visibility covers effective configuration/provenance, primary and
-    Subcomponent Component composition, Service, Operation, SPI, capability,
-    dependency, Entity/Powertype/StateMachine/Value/Datatype models and
-    diagrams, datastore/schema/collection, lifecycle, health, ClassLoader,
-    manuals, Scaladoc, source availability, and troubleshooting; and
-  - management actions require explicit Operation authorization, lifecycle
-    safety, validation, and audit.
-- Planning references:
-  - `docs/phase/phase-60.md`;
-  - `docs/phase/phase-60-checklist.md`;
-  - `docs/notes/component-admin-documentation-visibility-implementation.md`;
-    and
-  - `docs/journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md`.
+| Phase | Goal | Dependency |
+| --- | --- | --- |
+| [60](../phase/phase-60.md) | ADM-01 inventory, identity/no-scan/authority boundary, and failing-first acceptance freeze. | Phase 59.10 |
+| [60.1](../phase/phase-60.1.md) | ADM-02 versioned Component Admin identity and view model. | Phase 60 |
+| [60.2](../phase/phase-60.2.md) | ADM-03 configuration provenance and resolved composition visibility. | Phase 60.1 |
+| [60.3](../phase/phase-60.3.md) | ADM-04 Component contract and model visibility. | Phase 60.2 |
+| [60.4](../phase/phase-60.4.md) | ADM-05 runtime/datastore visibility and direct Admin Entity-ID equality. | Phase 60.3 |
+| [60.5](../phase/phase-60.5.md) | ADM-06 manifest-backed documentation navigation. | Phase 60.4 |
+| [60.6](../phase/phase-60.6.md) | ADM-07 authorized management. | Phase 60.5 |
+| [60.7](../phase/phase-60.7.md) | ADM-08 Web/HTTP/CLI/machine surface and security acceptance. | Phase 60.6 |
+| [60.8](../phase/phase-60.8.md) | ADM-09 canonical documentation and Phase 60 series closure. | Phase 60.7 |
+
+The split adds Phase, handoff, validation, review, and commit overhead, but it
+keeps every child at or below six hours and limits Terra/xhigh work to the
+inventory, identity, runtime/identity, and authorization boundaries. Later
+bounded children consume frozen handoffs at the least-cost compatible profile.
+
+Planning references:
+- `docs/phase/phase-60.md` through `docs/phase/phase-60.8.md`;
+- their matching checklists;
+- `docs/notes/component-admin-documentation-visibility-implementation.md`; and
+- `docs/journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md`.
 
 ### 9.43 REST and Web Form Transport Idempotency
 Future development item after Phase 50 establishes the Entity revision and
@@ -3685,7 +3684,7 @@ Alignment with Phases 63-65:
   retention work remains owned by this candidate.
 
 ### 9.44 Information CML Runtime Canonicalization
-Planned for Phase 61 after Phase 60 closes.
+Planned for Phase 61 after the Phase 60 series closes in Phase 60.8.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected
