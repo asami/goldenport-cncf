@@ -62,7 +62,7 @@ cross-repository implementation, acceptance, and documentation closure work.
 | [59.4](phase-59.4.md) | Closed on 2026-08-26: DOC-04 knowledge and development-context composition | Terra / high | 4--6h |
 | [59.5](phase-59.5.md) | Closed on 2026-08-26: DOC-05 unified Help and direct-AI consumer interface | Terra / xhigh | 5--6h |
 | [59.6](phase-59.6.md) | Closed on 2026-08-26: DOC-06 Textus CBD Support exact-detail, usage, MCP, and CAR Review integration. | Terra / high | 4--6h |
-| [59.7](phase-59.7.md) | DOC-07 Textus BoK semantic RAG/MCP and CBD handoff | Terra / xhigh | 5--6h |
+| [59.7](phase-59.7.md) | Closed on 2026-08-27: DOC-07 Textus BoK semantic RAG/MCP and CBD handoff. | Terra / xhigh | 5--6h |
 | [59.8](phase-59.8.md) | DOC-08 representative Component and framework profiles | Terra / high | 4--6h |
 | [59.9](phase-59.9.md) | DOC-09 security, regression, and downstream validation | Terra / high | 4--6h |
 | [59.10](phase-59.10.md) | DOC-10 canonical documentation and Phase closure | Terra / high | 4--6h |
@@ -393,7 +393,7 @@ canonical design/specification is stable.
 | DOC-04 | Knowledge and development context composition | Knowledge, model, source, and framework publication resources compose over Phase 58 resolution into one attributed development context. | closed |
 | DOC-05 | Unified Help and direct AI access | Help and AI consume one resolved Component resource space and publish the stable consumer contract later used by Phase 60 Admin. | closed |
 | DOC-06 | Textus CBD Support primary integration | CBD admits exact manifests/resources into Component detail, usage, MCP, and CAR Review without losing source authority or selection evidence. | planned |
-| DOC-07 | Textus BoK complementary integration | BoK performs Component semantic retrieval and admits structured framework, public Directive guidance, and Skill metadata with attributable RAG/MCP evidence and exact CBD handoff. | in progress |
+| DOC-07 | Textus BoK complementary integration | BoK performs Component semantic retrieval and admits structured framework, public Directive guidance, and Skill metadata with attributable RAG/MCP evidence and exact CBD handoff. | closed |
 | DOC-08 | Representative Component and framework documentation acceptance | Existing Component-specific profiles plus online/installed/offline framework, public Directive guide, and Skill Catalog profiles prove consistent ownership and access. | planned |
 | DOC-09 | Security, regression, and downstream validation | Path, integrity, authorization, disclosure, compatibility, regression, and full cross-repository suites pass. | planned |
 | DOC-10 | Canonical documentation and closure | CNCF/CBD Support/Textus BoK design/spec/notes/strategy/phase records match verified behavior; working notes are marked overridden and historical. | planned |

@@ -3340,7 +3340,7 @@ unchanged after the series.
 | [59.4](../phase/phase-59.4.md) | Closed on 2026-08-26: DOC-04 resolved knowledge and development-context composition. | Phase 59.3 |
 | [59.5](../phase/phase-59.5.md) | Closed on 2026-08-26: DOC-05 unified Help and direct-AI consumer interface. | Phase 59.4 |
 | [59.6](../phase/phase-59.6.md) | Closed on 2026-08-26: DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
-| [59.7](../phase/phase-59.7.md) | DOC-07 BoK complementary semantic RAG/MCP and CBD handoff. | Phase 59.6 |
+| [59.7](../phase/phase-59.7.md) | Closed on 2026-08-27: DOC-07 value-only BoK semantic RAG/MCP, evidence attribution, and exact CBD handoff after accepted repair and evidence-only focused re-review. | Phase 59.6 |
 | [59.8](../phase/phase-59.8.md) | DOC-08 representative Component and framework documentation profiles. | Phase 59.7 |
 | [59.9](../phase/phase-59.9.md) | DOC-09 security, regression, and downstream validation. | Phase 59.8 |
 | [59.10](../phase/phase-59.10.md) | DOC-10 canonical documentation and Phase 59 series closure. | Phase 59.9 |
@@ -3405,7 +3405,11 @@ is `closed`: its digest-bound carrier producer/consumer path, exact
 detail/usage, bounded MCP, and value-only CAR Review integration are bound by
 `phase59.6-clb-doc06-20260826`. `HYG-P596-001` remains a persisted nonblocking
 Hygiene item and `DEV-P596-001` remains a separately owned resource-tree API
-candidate. Phase 59.7 is the separately owned successor boundary.
+candidate. Phase 59.7's value-only semantic retrieval, evidence attribution,
+and exact CBD handoff are closed after the accepted repair and evidence-only
+focused re-review under closure binding `phase59.7-clb-doc07r1-20260827`.
+`HYG-P59.7-001` and `DEV-P59.7-001` are persisted separately as nonblocking
+follow-ups. Phase 59.8 remains a separately owned future boundary.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

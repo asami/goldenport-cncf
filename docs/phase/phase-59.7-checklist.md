@@ -1,6 +1,6 @@
 # Phase 59.7 Checklist - Textus BoK Complementary RAG/MCP Integration
 
-status=in_progress
+status=closed
 phase=[Phase 59.7 - Textus BoK Complementary RAG/MCP Integration](phase-59.7.md)
 predecessor=[Phase 59.6](phase-59.6.md)
 successor=[Phase 59.8](phase-59.8.md)
@@ -8,40 +8,40 @@ successor=[Phase 59.8](phase-59.8.md)
 ## DOC-07: Textus BoK Complementary RAG/MCP Integration
 
 Stage Status:
-- Current status: IN PROGRESS
+- Current status: CLOSED
 - Owner: Textus BoK RAG/MCP maintainers
-- Update rule: Record admission, evidence, disclosure, MCP, and CBD-handoff
-  evidence before representative profile work begins.
+- Update rule: Later corrections use post-completion maintenance and do not
+  reopen the Phase.
 - Entry rule: Phase 59.6 DOC-06 is DONE.
 - Completion rule: Component and framework semantic retrieval remain distinct,
   bounded, attributable, and capable of exact CBD/direct-Help handoff.
 
-- [ ] Define admission resource kinds for Component manifests, structured
+- [x] Define admission resource kinds for Component manifests, structured
   framework publication/snapshot, public guidance, and Skill metadata.
-- [ ] Admit SmartDox document/section metadata, RDF/JSON-LD, glossary,
+- [x] Admit SmartDox document/section metadata, RDF/JSON-LD, glossary,
   ontology, schema, and catalog without HTML scraping.
-- [ ] Resolve Component-local and Documentation/SourceCode resources safely.
-- [ ] Define deterministic document/section/chunk/evidence identity and
+- [x] Resolve Component-local and Documentation/SourceCode resources safely.
+- [x] Define deterministic document/section/chunk/evidence identity and
   preserve Component or framework version, digest, authority, license, path,
   publication generation, canonical URL, and indexed-at data.
-- [ ] Preserve Directive/rule/profile or Skill/bundle identity, authority,
+- [x] Preserve Directive/rule/profile or Skill/bundle identity, authority,
   visibility, owner, canonical URL, and digest.
-- [ ] Preserve SmartDox structure/schema/API semantics; implement lexical and
+- [x] Preserve SmartDox structure/schema/API semantics; implement lexical and
   structural retrieval independent of embeddings and optional provider-boundary
   vector retrieval.
-- [ ] Return exact Component/resource/section and framework identity/hash
+- [x] Return exact Component/resource/section and framework identity/hash
   evidence, distinguish authority classes, and report stale snapshots.
-- [ ] Add read-only MCP discovery/search/manifest/resource/section operations
+- [x] Add read-only MCP discovery/search/manifest/resource/section operations
   under explicit readiness; keep framework Operations and mutation/execution
   operations absent.
-- [ ] Add bounded public guidance/Skill metadata retrieval and prove it cannot
+- [x] Add bounded public guidance/Skill metadata retrieval and prove it cannot
   override directives, mutate configuration, install/activate Skills, or grant
   MCP authority.
-- [ ] Enforce proprietary-source/caller authorization at response time and
+- [x] Enforce proprietary-source/caller authorization at response time and
   return exact evidence for CBD handoff.
-- [ ] Preserve CBD detail/usage/comparison/review ownership and update BoK
+- [x] Preserve CBD detail/usage/comparison/review ownership and update BoK
   domain/design/spec/strategy/manual contracts.
-- [ ] Add no-match, ambiguous-version, stale, forbidden, and bounded-result
+- [x] Add no-match, ambiguous-version, stale, forbidden, and bounded-result
   specifications.
 
 Evidence:
@@ -52,5 +52,20 @@ Evidence:
   `87890-20260826T211323Z` BoK (11/11) and
   `88331-20260826T211425Z` CBD Support (2/2), each through serialized SBT
   with `lock=released`.
-- Focused Step review and Phase final validation/release are pending; Phase
-  59.7 is not closed.
+- P597-S1 is committed as `736145992aebf60d74b6af00345328b052f2271b`.
+- The P597 Step is committed as `2cba822ce0a82c63ee71c3fdc5cf223d68d0b4fd` for
+  BoK and `7a8c5aa6f7d375d41bdb5bd19f8afb72fc7bb590` for CBD Support.
+- P597-S3 is committed as `518320a6aa23c0612f62c756b5a057fcecce6e72` for
+  test-only executable-spec alignment: `BokDomainModelSpec` now covers all
+  11 DOC-07 operation response contracts.
+- The mandatory Terra xhigh Phase review raised `CPB-P59.7-001` and
+  `CPB-P59.7-002`; cycle 1 repaired four files.
+- Focused evidence passed for BoK (11/11) and CBD Support (2/2), and normal
+  CAR lint had no FAIL. The one evidence-only focused re-review accepted the
+  unchanged repair delta.
+- Final full-test receipts and distinct release commits are the frozen final
+  release gate; they are not claimed as already passed here.
+- `HYG-P59.7-001` and `DEV-P59.7-001` are separately persisted, nonblocking,
+  and outside acceptance in their [hygiene](../journal/2026/08/2026-08-27-phase-59.7-hygiene-follow-up.md)
+  and [Development Candidate](../journal/2026/08/2026-08-27-phase-59.7-development-candidate-follow-up.md)
+  journals.

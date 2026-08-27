@@ -15,16 +15,19 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed Phase 59-series phase: `phase-59.6.md` - Textus CBD Support
-  Primary Integration. Its DOC-06 digest-bound carrier, exact detail/usage,
-  bounded MCP, and value-only CAR Review integration is bound by
-  `phase59.6-clb-doc06-20260826`.
-- Phase 59.7 is the next DOC-07 boundary. Phase 59.6 accepted the CBD Support
-  handoff without starting its successor.
+- Latest closed Phase 59-series phase: `phase-59.7.md` - Textus BoK
+  complementary semantic RAG/MCP and CBD handoff. Its value-only semantic
+  retrieval, evidence attribution, and exact CBD handoff are closed under
+  `phase59.7-clb-doc07r1-20260827` after the accepted repair and evidence-only
+  focused re-review.
+- Phase 59.8 remains the next separately owned boundary and is not active work
+  in this release.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
   `DEV-P596-001` as a separately owned resource-tree API candidate.
+- Phase 59.7 persists `HYG-P59.7-001` and `DEV-P59.7-001` as separately owned,
+  nonblocking follow-ups outside acceptance.
 - Phase 59.1 checklist: `phase-59.1-checklist.md` is closed. It persists
   `HYG-DOC01B2-001` as nonblocking Hygiene and accepts no Development
   Candidate.
