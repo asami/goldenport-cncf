@@ -15,12 +15,13 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed Phase 59-series phase: `phase-59.8.md` - representative
-  Component and framework documentation profiles. Its value-only public
-  metadata, digest-bound BoK/CBD flow, and no-authority Skill Catalog boundary
-  are closed under `phase59.8-clb-doc08-20260827`.
-- Phase 59.9 remains the next separately owned boundary and is not active work
-  in this release.
+- Latest closed Phase 59-series phase: `phase-59.9.md` - DOC-09 security,
+  regression, and downstream validation. It is closed under
+  `phase59.9-clb-doc09-20260827`, including the separately committed CBD
+  Support `0.5.3-SNAPSHOT` coordinate prerequisite and representative
+  CAR/subsystem acceptance.
+- Phase 59.10 remains the next separately owned canonical-documentation
+  boundary and is not active work in this release.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and

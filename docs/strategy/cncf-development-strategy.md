@@ -3342,7 +3342,7 @@ unchanged after the series.
 | [59.6](../phase/phase-59.6.md) | Closed on 2026-08-26: DOC-06 CBD Support primary exact-detail/usage/MCP/CAR Review integration. | Phase 59.5 |
 | [59.7](../phase/phase-59.7.md) | Closed on 2026-08-27: DOC-07 value-only BoK semantic RAG/MCP, evidence attribution, and exact CBD handoff after accepted repair and evidence-only focused re-review. | Phase 59.6 |
 | [59.8](../phase/phase-59.8.md) | Closed on 2026-08-27: DOC-08 representative Component and framework documentation profiles, including descriptive-only public Skill Catalog metadata and digest-bound BoK/CBD evidence. | Phase 59.7 |
-| [59.9](../phase/phase-59.9.md) | DOC-09 security, regression, and downstream validation. | Phase 59.8 |
+| [59.9](../phase/phase-59.9.md) | Closed on 2026-08-27: DOC-09 security, regression, and downstream validation, including the separately committed CBD Support `0.5.3-SNAPSHOT` coordinate prerequisite and representative CAR/subsystem acceptance. | Phase 59.8 |
 | [59.10](../phase/phase-59.10.md) | DOC-10 canonical documentation and Phase 59 series closure. | Phase 59.9 |
 
 Phase 59 is `closed`: the DOC-01A handoff is accepted in commit
@@ -3414,7 +3414,13 @@ follow-ups. Phase 59.8 is closed under
 descriptive metadata only and defers actual CAR `SkillBundleManifest`
 linkage/lifecycle to CNCF Phase 66, Cozy Phase 24, and launcher work.
 `DEV-P598-CANONICAL-CARRIER-001` remains a separate nonblocking carrier-
-compatibility candidate. Phase 59.9 is the next separately owned boundary.
+compatibility candidate. Phase 59.9 is closed under
+`phase59.9-clb-doc09-20260827`: its final downstream evidence includes the
+separately committed CBD Support `0.5.3-SNAPSHOT` coordinate prerequisite,
+representative CAR cache acceptance, and the Cwitter test-process-only
+snapshot override. DOC-09 retains the frozen adversarial, disclosure,
+no-authority, and operation-mode boundary without beginning its successor.
+Phase 59.10 remains the next separately owned canonical-documentation boundary.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost
