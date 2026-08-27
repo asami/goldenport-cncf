@@ -15,12 +15,11 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed Phase 59-series phase: `phase-59.7.md` - Textus BoK
-  complementary semantic RAG/MCP and CBD handoff. Its value-only semantic
-  retrieval, evidence attribution, and exact CBD handoff are closed under
-  `phase59.7-clb-doc07r1-20260827` after the accepted repair and evidence-only
-  focused re-review.
-- Phase 59.8 remains the next separately owned boundary and is not active work
+- Latest closed Phase 59-series phase: `phase-59.8.md` - representative
+  Component and framework documentation profiles. Its value-only public
+  metadata, digest-bound BoK/CBD flow, and no-authority Skill Catalog boundary
+  are closed under `phase59.8-clb-doc08-20260827`.
+- Phase 59.9 remains the next separately owned boundary and is not active work
   in this release.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.

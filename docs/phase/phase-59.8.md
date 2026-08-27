@@ -1,6 +1,6 @@
 # Phase 59.8 - Representative Documentation and Framework Profiles
 
-status=planned
+status=closed
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59.7](phase-59.7.md)
 successor=[Phase 59.9](phase-59.9.md)
@@ -52,8 +52,18 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-Representative profiles prove the integrated contract under exact identities.
-Phase 59.9 owns adversarial, regression, and full-suite validation.
+- Status: CLOSED on 2026-08-27 after the accepted P598 representative-profile
+  Steps, the mandatory independent Phase full review, and the final
+  affected-repository release gate.
+- The delivered boundary proves the existing typed Component/framework
+  manifest, Help/Direct-AI, BoK retrieval, and CBD carrier contracts under
+  exact identities and digests.
+- The public Skill Catalog remains descriptive metadata only. It creates no
+  installation, activation, runtime, MCP, or packaging authority.
+- Phase 59.9 remains the separately owned adversarial, security, regression,
+  and downstream-validation boundary. Actual CAR `SkillBundleManifest`
+  linkage and lifecycle remain deferred to CNCF Phase 66, Cozy Phase 24, and
+  launcher work.
 
 ## Non-Goals
 
