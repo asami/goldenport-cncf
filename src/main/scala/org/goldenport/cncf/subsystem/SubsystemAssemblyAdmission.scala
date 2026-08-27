@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentR
  * is not a source of subsystem capability authority.
  *
  * @since   Jul. 31, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object SubsystemAssemblyAdmission {
@@ -210,7 +210,7 @@ object SubsystemAssemblyAdmission {
             _descriptor_lookup_names(binding).iterator
               .map(repository.resolveStaticComponentDescriptor)
           }
-          .collectFirst { case Some(value) => value }
+          .collectFirst { case Some(value) if _matches_binding_version(binding, value) => value }
           .map(_project_descriptor_c(binding, _).map(Some(_)))
           .getOrElse(Consequence.success(None))
       case xs =>
@@ -224,6 +224,12 @@ object SubsystemAssemblyAdmission {
     binding.componentId
       .map(ComponentIdentityCompatibilityAdapter.descriptorAliases)
       .getOrElse(Vector(binding.componentName))
+
+  private def _matches_binding_version(
+    binding: GenericSubsystemComponentBinding,
+    descriptor: ComponentDescriptor
+  ): Boolean =
+    binding.componentVersion.forall(descriptor.version.contains)
 
   private def _resolve_descriptor_c(
     descriptor: GenericSubsystemDescriptor,

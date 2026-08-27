@@ -37,7 +37,7 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jul. 31, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -1331,6 +1331,42 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         Then("the coordinate already satisfied by the active repository is not resolved again")
         remaining shouldBe empty
+      }
+      }
+    }
+
+    "E75 assign canonical component descriptors to standard CAR but not standard SAR" must _metadata("E75") {
+      "when exercising: assign canonical component descriptors across shared standard repository cache roots" in {
+      Given("standard CAR and SAR specifications sharing one cache root and one exact canonical component descriptor")
+      _with_temp_dir { root =>
+        val componentid = ComponentId("org.goldenport.cncf.Specification")
+        val descriptor = _canonical_component_descriptor(componentid, "0.1.0")
+        val car = ComponentRepository.StandardRepository.Specification(
+          ComponentRepository.StandardRepositoryKind.Car,
+          "https://example.invalid/repository/car",
+          root
+        )
+        val sar = ComponentRepository.StandardRepository.Specification(
+          ComponentRepository.StandardRepositoryKind.Sar,
+          "https://example.invalid/repository/sar",
+          root
+        )
+
+        When("the CAR receives the descriptor before the SAR is assigned after it")
+        val carassigned = ComponentRepository.descriptorsForSpecification(
+          car,
+          Vector.empty,
+          Vector(descriptor)
+        )
+        val sarassigned = ComponentRepository.descriptorsForSpecification(
+          sar,
+          Vector(car),
+          Vector(descriptor)
+        )
+
+        Then("the CAR receives the descriptor and the SAR receives no component descriptors")
+        carassigned shouldBe Vector(descriptor)
+        sarassigned shouldBe Vector.empty
       }
       }
     }

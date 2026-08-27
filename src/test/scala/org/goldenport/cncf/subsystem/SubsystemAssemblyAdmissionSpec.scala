@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 31, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -124,6 +124,47 @@ final class SubsystemAssemblyAdmissionSpec extends AnyWordSpec with Matchers wit
           result.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
             s"component descriptor closure canonical binding mismatch: expected=${componentid.name}:1.0.0"
           )
+        }
+      }
+
+      "CNCF-DESCRIPTOR-EXACT-VERSION-001 select a later exact release over an earlier wrong release" must _cid06c_metadata("CNCF-DESCRIPTOR-EXACT-VERSION-001") {
+        "when ordered static component-directory repositories expose the same canonical component at different releases" in {
+          Given("a higher-priority local descriptor at 0.1.0-SNAPSHOT and a later public descriptor at 0.1.0")
+          _with_work_dir { root =>
+            val componentid = "org.simplemodeling.textus.Supervisor"
+            val localroot = root.resolve("local")
+            val publicroot = root.resolve("public")
+            val localcar = localroot.resolve("supervisor-local.car")
+            val publiccar = publicroot.resolve("supervisor-public.car")
+            Files.createDirectories(localcar.resolve("component"))
+            Files.createDirectories(publiccar.resolve("component"))
+            Files.writeString(
+              localcar.resolve("component-descriptor.json"),
+              _canonical_descriptor_json(componentid, "0.1.0-SNAPSHOT"),
+              StandardCharsets.UTF_8
+            )
+            Files.writeString(
+              publiccar.resolve("component-descriptor.json"),
+              _canonical_descriptor_json(componentid, "0.1.0"),
+              StandardCharsets.UTF_8
+            )
+            Files.write(localcar.resolve("component").resolve("main.jar"), Array.emptyByteArray)
+            Files.write(publiccar.resolve("component").resolve("main.jar"), Array.emptyByteArray)
+            val descriptor = _assembly_descriptor(componentid)
+
+            When("assembly admission searches later repositories after a same-ID wrong-release descriptor")
+            val result = SubsystemAssemblyAdmission.resolveC(
+              descriptor,
+              Vector(
+                ComponentRepository.ComponentDirRepository.Specification(localroot),
+                ComponentRepository.ComponentDirRepository.Specification(publicroot)
+              )
+            )
+
+            Then("the exact public release supplies the materialized descriptor override")
+            val admitted = result.toOption.get
+            admitted.componentDescriptorOverrides.map(_.version) shouldBe Vector(Some("0.1.0"))
+          }
         }
       }
 

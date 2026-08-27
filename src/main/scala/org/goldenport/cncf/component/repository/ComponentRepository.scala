@@ -32,7 +32,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -1136,18 +1136,23 @@ object ComponentRepository extends GlobalObservable {
     descriptors: Vector[ComponentDescriptor],
     developmentclaims: Map[Specification, Set[(ComponentId, String)]] = Map.empty
   ): Vector[ComponentDescriptor] = {
-    developmentclaims.get(spec) match {
-      case Some(claims) =>
-        descriptors.filter(_is_descriptor_claimed(_, claims))
-      case None =>
-        val claimed = developmentclaims.values.flatten.toSet
-        val eligible = descriptors.filterNot(_is_descriptor_claimed(_, claimed))
-        val unresolved = eligible.filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
-        spec match {
-          case _: ComponentFileRepository.Specification =>
-            unresolved.filter(_is_descriptor_satisfied_by_specs(_, Seq(spec)))
-          case _ =>
-            unresolved
+    spec match {
+      case StandardRepository.Specification(StandardRepositoryKind.Sar, _, _) =>
+        Vector.empty
+      case _ =>
+        developmentclaims.get(spec) match {
+          case Some(claims) =>
+            descriptors.filter(_is_descriptor_claimed(_, claims))
+          case None =>
+            val claimed = developmentclaims.values.flatten.toSet
+            val eligible = descriptors.filterNot(_is_descriptor_claimed(_, claimed))
+            val unresolved = eligible.filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
+            spec match {
+              case _: ComponentFileRepository.Specification =>
+                unresolved.filter(_is_descriptor_satisfied_by_specs(_, Seq(spec)))
+              case _ =>
+                unresolved
+            }
         }
     }
   }
