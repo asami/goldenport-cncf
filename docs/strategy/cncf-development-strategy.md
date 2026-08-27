@@ -3592,6 +3592,15 @@ Phase 59 knowledge/model contracts.
 | [60.7](../phase/phase-60.7.md) | ADM-08 Web/HTTP/CLI/machine surface and security acceptance. | Phase 60.6 |
 | [60.8](../phase/phase-60.8.md) | ADM-09 canonical documentation and Phase 60 series closure. | Phase 60.7 |
 
+Phase 60 is closed under `phase60-clb-adm01-20260828`. Its reviewed ADM-01
+inventory and failing-first contract were committed in
+`435890835eda99c48c6524e6e7a325e94f7b3c4b`; the mandatory Phase full review
+found no Current Phase Blocker. This is a documentation-only closure with no
+Phase program-change repository requiring an SBT full suite. `HYG-P60-001`
+reconciles the phase index's obsolete active/current entries and is resolved in
+the Phase 60 Hygiene follow-up journal. Phase 60.1 is eligible as the next
+consumer but is not started by this closure.
+
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the
 inventory, identity, runtime/identity, and authorization boundaries. Later

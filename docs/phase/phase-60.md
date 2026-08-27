@@ -1,7 +1,8 @@
 # Phase 60 - Component Admin and Documentation Visibility
 
-status=planned
+status=closed
 planned_at=2026-07-31
+closed_at=2026-08-28
 depends_on=[Phase 59.10](phase-59.10.md)
 successor=[Phase 60.1](phase-60.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -13,6 +14,7 @@ canonical_architecture_design=[Component and Subcomponent Architecture](../desig
 canonical_architecture_specification=[Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
 canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
 canonical_resource_specification=[Component Resource Subcomponent Specification](../spec/component-resource-subcomponent.md)
+closure_binding=phase60-clb-adm01-20260828
 
 ## Split Record
 
@@ -150,7 +152,7 @@ not implement their projections or management actions.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| ADM-01 | Inventory and executable contract freeze | Existing Admin, Help, configuration, model, runtime, and management surfaces plus exact failing-first acceptance identities are fixed. | planned |
+| ADM-01 | Inventory and executable contract freeze | Existing Admin, Help, configuration, model, runtime, and management surfaces plus exact failing-first acceptance identities are fixed. | done |
 
 ## Acceptance
 
@@ -159,6 +161,20 @@ not implement their projections or management actions.
   failing-first acceptance identities.
 - The accepted ADM-01 handoff gives each later child a single source for its
   inherited no-scan, identity, authority, and validation constraints.
+
+## Closure
+
+Status: CLOSED on 2026-08-28 under `phase60-clb-adm01-20260828`.
+
+- The reviewed ADM-01 inventory and failing-first contract are accepted in
+  `435890835eda99c48c6524e6e7a325e94f7b3c4b`.
+- The mandatory independent Phase full review passed with no Current Phase
+  Blocker. The range is documentation-only, with no Phase program-change
+  repository; no SBT full suite is required for this release gate.
+- `HYG-P60-001` reconciles the Phase index's obsolete active/current entries
+  and is recorded as resolved in the Phase 60 Hygiene follow-up journal.
+- Phase 60.1 is eligible as the next consumer of the accepted ADM-01 handoff,
+  but is not started by this closure.
 
 ## Planning References
 
@@ -171,5 +187,5 @@ not implement their projections or management actions.
 
 ## Current Status
 
-Phase 60 is planned. Phase 59.10 is closed; ADM-01 is the first independently
-closable unit of the approved Phase 60 series.
+Phase 60 is closed. ADM-01 is the accepted first independently closable unit
+of the approved Phase 60 series. Phase 60.1 is eligible but not started.
