@@ -1,7 +1,8 @@
 # Phase 60.1 - Component Admin Identity and View Model
 
-status=in-progress
+status=closed
 started_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60](phase-60.md)
 successor=[Phase 60.2](phase-60.2.md)
@@ -48,4 +49,8 @@ navigation, management, surface delivery, and canonical documentation closure.
 
 ## Current Status
 
-Phase 60.1 is in progress.
+Phase 60.1 is closed under `phase60.1-clb-adm02-20260828`. ADM-02 delivers
+the reviewed versioned Component Admin identity and view model, strict codec,
+explicit selection/candidate preservation, safe provenance, and typed
+unavailable/failure states. This closure records no accepted Hygiene or
+Development Candidate item and does not start Phase 60.2.

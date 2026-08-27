@@ -147,6 +147,7 @@ private[cncf] object ComponentAdminViewModel {
     componentclass: ComponentAdminComponentClass
   ): Either[String, Unit] =
     for {
+      _ <- Either.cond(fields != null, (), "logicalReleaseCandidates is required")
       _ <- Either.cond(fields.nonEmpty, (), "logicalReleaseCandidates must not be empty")
       _ <- _sequence(fields.zipWithIndex.map { case (field, index) => _logical_release_field(field, componentclass, s"logicalReleaseCandidates[$index]") })
       _ <- Either.cond(fields.map(_.value).distinct.size == fields.size, (), "logicalReleaseCandidates must not contain duplicate identities")
@@ -169,6 +170,7 @@ private[cncf] object ComponentAdminViewModel {
     componentclass: ComponentAdminComponentClass
   ): Either[String, Unit] =
     for {
+      _ <- Either.cond(fields != null, (), "loadedInstanceCandidates is required")
       _ <- Either.cond(fields.nonEmpty, (), "loadedInstanceCandidates must not be empty")
       _ <- _sequence(fields.zipWithIndex.map { case (field, index) => _loaded_instance_field(field, componentclass, s"loadedInstanceCandidates[$index]") })
       _ <- Either.cond(fields.map(_.value).distinct.size == fields.size, (), "loadedInstanceCandidates must not contain duplicate identities")
@@ -222,6 +224,7 @@ private[cncf] object ComponentAdminViewModel {
     for {
       _ <- Either.cond(value != null, (), s"$context is required")
       _ <- Either.cond(value.sourceKind != null, (), s"$context.sourceKind is required")
+      _ <- Either.cond(value.logicalIdentity != null, (), s"$context.logicalIdentity is required")
       _ <- value.logicalIdentity.map(_logical_identity(_, s"$context.logicalIdentity")).getOrElse(Right(()))
     } yield ()
 
@@ -231,6 +234,7 @@ private[cncf] object ComponentAdminViewModel {
       _ <- _nonempty_trimmed_text(value.logicalRelease, s"$context.logicalRelease")
       _ <- _safe_role(value.childRole, s"$context.childRole")
       _ <- _logical_resource(value.logicalResource, s"$context.logicalResource")
+      _ <- Either.cond(value.parentComponentId != null, (), s"$context.parentComponentId is required")
       _ <- value.parentComponentId.fold[Either[String, Unit]](Right(()))(parent => Either.cond(parent != value.componentId, (), s"$context.parentComponentId must differ from componentId"))
     } yield ()
 

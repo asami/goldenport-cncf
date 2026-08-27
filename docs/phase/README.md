@@ -15,16 +15,16 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed phase: `phase-60.md` - ADM-01 Component Admin inventory,
-  identity/no-scan/authority boundary, and failing-first acceptance freeze. It
-  is closed under `phase60-clb-adm01-20260828`; Phase 60.1 is in progress.
+- Latest closed phase: `phase-60.1.md` - ADM-02 Component Admin identity and
+  view model. It is closed under `phase60.1-clb-adm02-20260828`; Phase 60.2
+  remains planned and is not started by this closure.
 - Latest closed Phase 59-series phase: `phase-59.10.md` - DOC-10 canonical
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
   regression, downstream, and full-suite evidence without changing behavior.
-- Phase 59 is fully closed. Phase 60 is closed after ADM-01. Phase 60.1 is in
-  progress; `phase-60.2.md` through `phase-60.8.md` retain the later
-  independently closable ADM-03 through ADM-09 stages.
+- Phase 59 is fully closed. Phase 60 is closed after ADM-01. Phase 60.1 is
+  closed after ADM-02; `phase-60.2.md` through `phase-60.8.md` retain the
+  later independently closable ADM-03 through ADM-09 stages.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
@@ -39,9 +39,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: `phase-60.1.md` - Component Admin
-  Identity and View Model; Phase 60.1 is in progress.
-- Latest closed checklist: `phase-60-checklist.md`.
+- Active phase in the current CNCF sequence: none. `phase-60.2.md` is the next
+  planned successor and requires a separate explicit start.
+- Latest closed checklist: `phase-60.1-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -87,8 +87,9 @@ Current baseline:
   - `phase-46.md`
   - `phase-47.md`
   - `phase-60.md`
+  - `phase-60.1.md`
 - Active phase set currently includes:
-  - `phase-60.1.md` - Component Admin Identity and View Model
+  - none; `phase-60.2.md` is planned and not started
 
 ## Related Rules
 

@@ -3598,8 +3598,10 @@ inventory and failing-first contract were committed in
 found no Current Phase Blocker. This is a documentation-only closure with no
 Phase program-change repository requiring an SBT full suite. `HYG-P60-001`
 reconciles the phase index's obsolete active/current entries and is resolved in
-the Phase 60 Hygiene follow-up journal. Phase 60.1 is in progress as the next
-consumer.
+the Phase 60 Hygiene follow-up journal. Phase 60.1 delivers the ADM-02
+versioned Component Admin identity and view model and is closed under
+`phase60.1-clb-adm02-20260828`; Phase 60.2 remains planned and is not started
+by this closure.
 
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the

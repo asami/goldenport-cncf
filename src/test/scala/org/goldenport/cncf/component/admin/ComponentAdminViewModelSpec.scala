@@ -20,7 +20,8 @@ final class ComponentAdminViewModelSpec
     with Matchers
     with GivenWhenThen {
   "ADM02-IDENTITY-VIEW-MODEL Component Admin view model" should {
-    "round-trip all six identity axes, field provenance, and available state canonically" in {
+    "canonical identity projection" which {
+      "round-trip all six identity axes, field provenance, and available state canonically" in {
       Given("one value-only view with distinct class, release, loaded instance, Subsystem, implicit Subsystem, and canonical Phase 58 logical provenance")
       val view = _view(ComponentAdminResourceState.Available)
 
@@ -40,9 +41,37 @@ final class ComponentAdminViewModelSpec
       decoded.map(_.resourceState.value) shouldBe Some(ComponentAdminResourceState.Available)
       decoded.map(_.resourceState.provenance.logicalIdentity) should not be Some(None)
       decoded.map(_.resourceState.provenance.logicalIdentity.map(_.logicalResource)) shouldBe Some(Some("urn:cncf:resource:phase58/documentation-guide"))
+      }
+
+      "preserve multiple releases and loaded instances only through explicit selections" in {
+        Given("two logical releases and two loaded instances with non-first selections")
+        val view = _view(ComponentAdminResourceState.Available)
+
+        When("the model is created and canonically round-tripped")
+        val created = ComponentAdminViewModel.createC(
+          view.componentClass,
+          view.selectedLogicalRelease,
+          view.logicalReleaseCandidates,
+          view.selectedLoadedInstance,
+          view.loadedInstanceCandidates,
+          view.subsystemClass,
+          view.subsystemInstance,
+          view.implicitComponentSubsystem,
+          view.resourceState
+        )
+        val decoded = created.toOption.map(ComponentAdminViewModelCodec.encode).flatMap(ComponentAdminViewModelCodec.decodeC(_).toOption)
+
+        Then("the chosen values remain declared values instead of a first, nearest, or default fallback")
+        created.isSuccess shouldBe true
+        decoded.map(_.selectedLogicalRelease.value.release) shouldBe Some("2.0.0")
+        decoded.map(_.selectedLoadedInstance.value.instanceId.instance) shouldBe Some("blue")
+        decoded.map(_.logicalReleaseCandidates.head.value.release) shouldBe Some("1.0.0")
+        decoded.map(_.loadedInstanceCandidates.head.value.instanceId.instance) shouldBe Some("green")
+      }
     }
 
-    "reject alternate schema, unknown fields, duplicate keys, malformed provenance source kinds, and malformed logical identities" in {
+    "strict boundary rejection" which {
+      "reject alternate schema, unknown fields, duplicate keys, malformed provenance source kinds, and malformed logical identities" in {
       Given("one canonical v1 encoding and hostile schema, source, bare-resource, invalid-role, and self-parent variants")
       val canonical = ComponentAdminViewModelCodec.encode(_view(ComponentAdminResourceState.Available))
       val hostile = Vector(
@@ -60,54 +89,34 @@ final class ComponentAdminViewModelSpec
 
       Then("each unsupported or malformed source or logical identity representation is a Consequence failure")
       decoded shouldBe Vector.fill(hostile.size)(None)
+      }
+
+      "reject absent, duplicate, and mismatched selection identities through Consequence failure" in {
+        Given("a valid view and mutations that remove selection membership, violate retained ownership, or provide malformed direct model containers")
+        val view = _view(ComponentAdminResourceState.Available)
+        val otherclass = ComponentAdminComponentClass(ComponentId("org.goldenport.cncf.admin.Other"))
+        val absentrelease = view.copy(logicalReleaseCandidates = Vector(view.logicalReleaseCandidates.head))
+        val duplicaterelease = view.copy(logicalReleaseCandidates = Vector(view.selectedLogicalRelease, view.selectedLogicalRelease))
+        val absentinstance = view.copy(loadedInstanceCandidates = Vector(view.loadedInstanceCandidates.head))
+        val duplicateinstance = view.copy(loadedInstanceCandidates = Vector(view.selectedLoadedInstance, view.selectedLoadedInstance))
+        val mismatchedinstance = view.copy(selectedLoadedInstance = _field(ComponentAdminLoadedInstance(otherclass, ComponentInstanceId(otherclass.componentId, "other")), ComponentAdminSourceKind.RuntimeFact))
+        val mismatchedsubsystem = view.copy(subsystemInstance = _field(ComponentAdminSubsystemInstance(ComponentAdminSubsystemClass("other-subsystem"), "main"), ComponentAdminSourceKind.RuntimeFact))
+        val mismatchedimplicit = view.copy(implicitComponentSubsystem = _field(ComponentAdminImplicitComponentSubsystem(otherclass, "implicit"), ComponentAdminSourceKind.RuntimeFact))
+        val nulllogicalreleases = view.copy(logicalReleaseCandidates = null)
+        val nullloadedinstances = view.copy(loadedInstanceCandidates = null)
+        val nulllogicalidentity = view.copy(resourceState = view.resourceState.copy(provenance = view.resourceState.provenance.copy(logicalIdentity = null)))
+        val nullparentcomponentid = view.copy(resourceState = view.resourceState.copy(provenance = view.resourceState.provenance.copy(logicalIdentity = view.resourceState.provenance.logicalIdentity.map(_.copy(parentComponentId = null)))))
+
+        When("each mutated view is validated directly through ComponentAdminViewModel.validateC")
+        val results = Vector(absentrelease, duplicaterelease, absentinstance, duplicateinstance, mismatchedinstance, mismatchedsubsystem, mismatchedimplicit, nulllogicalreleases, nullloadedinstances, nulllogicalidentity, nullparentcomponentid).map(ComponentAdminViewModel.validateC)
+
+        Then("no missing, duplicate, cross-axis, or malformed direct value is silently selected, normalized, or thrown")
+        results.map(_.isSuccess) shouldBe Vector.fill(results.size)(false)
+      }
     }
 
-    "preserve multiple releases and loaded instances only through explicit selections" in {
-      Given("two logical releases and two loaded instances with non-first selections")
-      val view = _view(ComponentAdminResourceState.Available)
-
-      When("the model is created and canonically round-tripped")
-      val created = ComponentAdminViewModel.createC(
-        view.componentClass,
-        view.selectedLogicalRelease,
-        view.logicalReleaseCandidates,
-        view.selectedLoadedInstance,
-        view.loadedInstanceCandidates,
-        view.subsystemClass,
-        view.subsystemInstance,
-        view.implicitComponentSubsystem,
-        view.resourceState
-      )
-      val decoded = created.toOption.map(ComponentAdminViewModelCodec.encode).flatMap(ComponentAdminViewModelCodec.decodeC(_).toOption)
-
-      Then("the chosen values remain declared values instead of a first, nearest, or default fallback")
-      created.isSuccess shouldBe true
-      decoded.map(_.selectedLogicalRelease.value.release) shouldBe Some("2.0.0")
-      decoded.map(_.selectedLoadedInstance.value.instanceId.instance) shouldBe Some("blue")
-      decoded.map(_.logicalReleaseCandidates.head.value.release) shouldBe Some("1.0.0")
-      decoded.map(_.loadedInstanceCandidates.head.value.instanceId.instance) shouldBe Some("green")
-    }
-
-    "reject absent, duplicate, and mismatched selection identities through Consequence failure" in {
-      Given("a valid view and mutations that remove selection membership or violate retained ownership")
-      val view = _view(ComponentAdminResourceState.Available)
-      val otherclass = ComponentAdminComponentClass(ComponentId("org.goldenport.cncf.admin.Other"))
-      val absentrelease = view.copy(logicalReleaseCandidates = Vector(view.logicalReleaseCandidates.head))
-      val duplicaterelease = view.copy(logicalReleaseCandidates = Vector(view.selectedLogicalRelease, view.selectedLogicalRelease))
-      val absentinstance = view.copy(loadedInstanceCandidates = Vector(view.loadedInstanceCandidates.head))
-      val duplicateinstance = view.copy(loadedInstanceCandidates = Vector(view.selectedLoadedInstance, view.selectedLoadedInstance))
-      val mismatchedinstance = view.copy(selectedLoadedInstance = _field(ComponentAdminLoadedInstance(otherclass, ComponentInstanceId(otherclass.componentId, "other")), ComponentAdminSourceKind.RuntimeFact))
-      val mismatchedsubsystem = view.copy(subsystemInstance = _field(ComponentAdminSubsystemInstance(ComponentAdminSubsystemClass("other-subsystem"), "main"), ComponentAdminSourceKind.RuntimeFact))
-      val mismatchedimplicit = view.copy(implicitComponentSubsystem = _field(ComponentAdminImplicitComponentSubsystem(otherclass, "implicit"), ComponentAdminSourceKind.RuntimeFact))
-
-      When("each mutated view is validated through the model constructor convention")
-      val results = Vector(absentrelease, duplicaterelease, absentinstance, duplicateinstance, mismatchedinstance, mismatchedsubsystem, mismatchedimplicit).map(ComponentAdminViewModel.validateC)
-
-      Then("no missing, duplicate, or cross-axis value is silently selected or normalized")
-      results.map(_.isSuccess) shouldBe Vector.fill(results.size)(false)
-    }
-
-    "retain every non-ready resource state as distinct observational data with provenance" in {
+    "resource state provenance" which {
+      "retain every non-ready resource state as distinct observational data with provenance" in {
       Given("one valid view for each unavailable or failed resource observation")
       val states = Vector(
         ComponentAdminResourceState.Unavailable,
@@ -125,9 +134,11 @@ final class ComponentAdminViewModelSpec
       decoded.map(_.map(_.resourceState.value)) shouldBe states.map(Some(_))
       decoded.map(_.flatMap(_.resourceState.provenance.logicalIdentity)) should not contain None
       decoded.map(_.map(_.resourceState.provenance.sourceKind)) shouldBe Vector.fill(states.size)(Some(ComponentAdminSourceKind.ResolvedResource))
+      }
     }
 
-    "deterministically round-trip generated canonical valid values" in {
+    "property-based canonical values" which {
+      "deterministically round-trip generated canonical valid values" in {
       Given("arbitrary canonical release and instance labels with a closed typed resource state")
       val labels = Gen.choose(1, 9999)
       val states = Gen.oneOf(
@@ -150,6 +161,7 @@ final class ComponentAdminViewModelSpec
 
       Then("every generated value retains deterministic canonical v1 JSON")
       checked.passed shouldBe true
+      }
     }
   }
 
