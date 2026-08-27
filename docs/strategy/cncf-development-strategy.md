@@ -3343,7 +3343,7 @@ unchanged after the series.
 | [59.7](../phase/phase-59.7.md) | Closed on 2026-08-27: DOC-07 value-only BoK semantic RAG/MCP, evidence attribution, and exact CBD handoff after accepted repair and evidence-only focused re-review. | Phase 59.6 |
 | [59.8](../phase/phase-59.8.md) | Closed on 2026-08-27: DOC-08 representative Component and framework documentation profiles, including descriptive-only public Skill Catalog metadata and digest-bound BoK/CBD evidence. | Phase 59.7 |
 | [59.9](../phase/phase-59.9.md) | Closed on 2026-08-27: DOC-09 security, regression, and downstream validation, including the separately committed CBD Support `0.5.3-SNAPSHOT` coordinate prerequisite and representative CAR/subsystem acceptance. | Phase 59.8 |
-| [59.10](../phase/phase-59.10.md) | DOC-10 canonical documentation and Phase 59 series closure. | Phase 59.9 |
+| [59.10](../phase/phase-59.10.md) | Closed on 2026-08-27: DOC-10 canonical documentation, current-document reconciliation, and Phase 59 series closure without reopening product behavior. | Phase 59.9 |
 
 Phase 59 is `closed`: the DOC-01A handoff is accepted in commit
 `bb4245a92a6e3acc0a6573965a5843b4939c1e84`, its closure ledger is accepted in
@@ -3420,7 +3420,15 @@ separately committed CBD Support `0.5.3-SNAPSHOT` coordinate prerequisite,
 representative CAR cache acceptance, and the Cwitter test-process-only
 snapshot override. DOC-09 retains the frozen adversarial, disclosure,
 no-authority, and operation-mode boundary without beginning its successor.
-Phase 59.10 remains the next separately owned canonical-documentation boundary.
+Phase 59.10 is closed under `phase59.10-clb-doc10-20260827`: its Core
+design/specification promotion, cross-repository evidence reconciliation, and
+current-document audit are accepted in `7c996b12eabf972aa040f2a86d7c02c49afb9a38`,
+`cd493b7c2c5618732e784d0600b46eff85e3dcd3`, and
+`15ff1802ef000fe1ab9deb22e85f3ad679eda927`. The mandatory full review found
+no Current Phase Blocker, Hygiene, or Development Candidate. DOC-10 is
+documentation-only and consumes the accepted DOC-09 behavior evidence; it
+does not reopen Phase 58 resource resolution or begin Phase 60. No Phase
+59.10 Hygiene or Development Candidate record was accepted.
 
 The expensive reasoning kernels belong only to 59 and 59.1. Every later child
 consumes a reviewed predecessor handoff and uses its recorded least-cost

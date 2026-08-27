@@ -1,12 +1,14 @@
 # Phase 59.10 - Canonical Documentation and Phase Closure
 
-status=planned
+status=closed
+closed_at=2026-08-27
 split_from=[Phase 59](phase-59.md)
 depends_on=[Phase 59.9](phase-59.9.md)
 successor=[Phase 60](phase-60.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 59.10 Checklist](phase-59.10-checklist.md)
 consumes_handoff=accepted DOC-09 security, regression, downstream, and full-suite evidence
+closure_binding=phase59.10-clb-doc10-20260827
 
 ## Goal
 
@@ -38,8 +40,27 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-The Phase 59 series closes only when canonical records and verified behavior
-agree and the final release evidence is complete.
+Status: CLOSED on 2026-08-27 under
+`phase59.10-clb-doc10-20260827`.
+
+- Core canonical design/specification promotion is accepted in
+  `7c996b12eabf972aa040f2a86d7c02c49afb9a38`; the cross-repository evidence
+  reconciliation and current-document audit are accepted in
+  `cd493b7c2c5618732e784d0600b46eff85e3dcd3` and
+  `15ff1802ef000fe1ab9deb22e85f3ad679eda927`.
+- The mandatory independent Phase full review passed with no Current Phase
+  Blocker, Hygiene, or Development Candidate. The DOC-10 range is
+  documentation-only; its Phase base is the accepted DOC-09 closure, so no
+  new program-change repository or additional SBT full suite is required.
+- The accepted DOC-09 security, regression, downstream, and full-suite
+  evidence remains the behavior gate for this closure. DOC-10 does not reopen
+  that evidence or change product behavior.
+- No Phase 59.10 Hygiene or Development Candidate record was accepted. Actual
+  `SkillBundleManifest` packaging, installation, and activation remain
+  separately deferred to their owned future work.
+
+The Phase 59 series is closed. Phase 60 is eligible only as a later consumer;
+this closure does not start it.
 
 ## Non-Goals
 
