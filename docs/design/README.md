@@ -30,6 +30,13 @@ Current component composition design:
 - `component-subcomponent-architecture.md`
 - `component-resource-subcomponent.md`
 
+Current Component documentation and knowledge design:
+
+- `component-documentation-knowledge-package.md`
+- `component-knowledge-manifest.md`
+- `component-knowledge-help-contract.md`
+- `framework-documentation-profile.md`
+
 Current component persistence design:
 
 - `component-local-datastore-layout.md` (non-normative rationale; see

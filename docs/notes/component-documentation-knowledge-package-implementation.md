@@ -1,21 +1,26 @@
 # Component Documentation Knowledge Package Implementation Proposal
 
-status = proposed, non-normative
+status = historical, non-normative, superseded
 date = 2026-07-25
 phase = Phase 59
 
-This note is the working implementation proposal for Phase 59. It is not the
-final Component documentation contract.
+This note is the historical working implementation proposal for Phase 59. It
+is not the current Component documentation contract and must not be treated
+as a current proposal or specification. The canonical design and
+specification now supersede this note:
+
+- `docs/design/component-documentation-knowledge-package.md`
+- `docs/spec/component-documentation-knowledge-package.md`
 
 During Phase 59, verified decisions and behavior must be promoted to:
 
 - `docs/design/component-documentation-knowledge-package.md`; and
 - `docs/spec/component-documentation-knowledge-package.md`.
 
-When either canonical document differs from this note, the design and
-specification take precedence. At Phase 59 closure this note must be marked
-historical and must point to the final design/specification instead of
-remaining a competing latest specification.
+The consideration history below is retained for traceability. Any difference
+between this historical note and either canonical document is resolved in
+favor of the current design/specification. This note contains no competing
+latest requirements.
 
 Consideration history:
 

@@ -14,6 +14,10 @@ Current runtime/I18N specs:
 
 - `component-subcomponent-architecture.md`
 - `component-resource-subcomponent.md`
+- `component-documentation-knowledge-package.md`
+- `component-knowledge-manifest.md`
+- `component-knowledge-help-contract.md`
+- `framework-documentation-profile.md`
 - `component-local-datastore-layout.md`
 - `fixed-profile-service-ingress.md`
 - `entity-collection-identity.md`
