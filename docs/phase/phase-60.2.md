@@ -1,8 +1,9 @@
 # Phase 60.2 - Component Admin Configuration and Composition Visibility
 
-status=in-progress
+status=closed
 planned_at=2026-08-28
 started_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.1](phase-60.1.md)
 successor=[Phase 60.3](phase-60.3.md)
@@ -48,6 +49,10 @@ documentation navigation, management, and surface acceptance.
 
 ## Current Status
 
-Phase 60.2 is in progress after the Phase 60.1 closure. ADM-03 is implementing
-typed configuration provenance and already-resolved composition visibility;
-Phase 60.3 has not started.
+Phase 60.2 is closed under `phase60.2-clb-adm03-20260828`. ADM-03 delivers
+the reviewed internal projection of typed configuration provenance and the same
+already-resolved primary, Documentation, and SourceCode composition. The
+mandatory full Phase review's evidence gaps were closed by repair cycle 1 and
+its focused closure review; the final full suite is bound to this distinct
+release closure. This closure records no accepted Hygiene or Development
+Candidate follow-up and does not start Phase 60.3.

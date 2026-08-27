@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.component.repository.{ComponentResourceAuthorization, ComponentResourceAvailability, ComponentResourceCompositionShape, ComponentResourceDiagnostic, ComponentResourceDiagnosticKind, ComponentResourceIntegrity, ComponentResourceLogicalIdentity, ComponentResourceProvenance, ComponentResourceSourceKind, ResolvedComponentResource, ResolvedComponentResources}
 import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, SubsystemInstanceId}
 import org.goldenport.cncf.subsystem.SubsystemUserMode
-import org.goldenport.configuration.{CanonicalParameterId, ConfigurationBinding, ConfigurationBindingCandidate, ConfigurationBindingCollection, ConfigurationBindingTrace, ConfigurationOrigin, ConfigurationParameter, ConfigurationProvenance, ConfigurationValueCodec}
+import org.goldenport.configuration.{ConfigurationBinding, ConfigurationBindingCandidate, ConfigurationBindingCollection, ConfigurationOrigin, ConfigurationParameter, ConfigurationProvenance}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -51,6 +51,16 @@ final class ComponentAdminConfigurationCompositionProjectionSpec
         org.goldenport.configuration.ConfigurationBindingTraceValue.Redacted
       )
       explanation.entries.map(_.provenance.sourceIdentity) shouldBe Vector("winner-source", "previous-source")
+      explanation.entries.map(_.provenance.inputPath) shouldBe Vector(
+        Some(".textus/config.yaml"),
+        Some(".textus/config.yaml")
+      )
+      explanation.entries.map(_.provenance.inputSpelling) shouldBe Vector(
+        Some(parameter.id.value),
+        Some(parameter.id.value)
+      )
+      explanation.entries.map(_.provenance.sourceRank) shouldBe Vector(20, 10)
+      explanation.entries.map(_.provenance.sourceOrdinal) shouldBe Vector(1, 0)
       projected.identityView shouldBe _identity_view
     }
 
@@ -87,6 +97,11 @@ final class ComponentAdminConfigurationCompositionProjectionSpec
         resource.provenance.access,
         resource.provenance.physicalSource
       ))
+      resources.map(_.provenance.resolutionStep) shouldBe Vector(
+        "embedded-primary:0",
+        "expanded-car:2",
+        "expanded-car:2"
+      )
     }
 
     "retain stale restricted and denied evidence without fallback or authority expansion" in {
@@ -238,7 +253,15 @@ final class ComponentAdminConfigurationCompositionProjectionSpec
         s"expanded/${role.toLowerCase}.car",
         "composition-registry:adm",
         physicalsource,
-        "expanded-car:2",
+        sourcekind match {
+          case ComponentResourceSourceKind.EmbeddedPrimary => "embedded-primary:0"
+          case ComponentResourceSourceKind.DevelopmentDirectory => "development-directory:1"
+          case ComponentResourceSourceKind.ExpandedCar => "expanded-car:2"
+          case ComponentResourceSourceKind.LocalRepository => "local-repository:3"
+          case ComponentResourceSourceKind.ManagedCache => "managed-cache:4"
+          case ComponentResourceSourceKind.OfflineBundle => "offline-bundle:5"
+          case ComponentResourceSourceKind.RemoteRepository => "remote-repository:6"
+        },
         role,
         logicalresource,
         "described",
