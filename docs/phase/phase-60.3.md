@@ -1,8 +1,9 @@
 # Phase 60.3 - Component Admin Contract and Model Visibility
 
-status=in-progress
+status=closed
 planned_at=2026-08-28
 started_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.2](phase-60.2.md)
 successor=[Phase 60.4](phase-60.4.md)
@@ -47,7 +48,10 @@ navigation, management, and surface acceptance.
 
 ## Current Status
 
-Phase 60.3 is in progress under ADM-04. The admitted implementation target is
-the package-private, value-only `ComponentAdminContractModelProjection` over
-the Phase 59 `ComponentKnowledgeManifestConsumerContract`; Phase 60.4 has not
-started.
+Phase 60.3 is closed under `phase60.3-clb-adm04-20260828`. ADM-04 delivers
+the reviewed package-private, value-only `ComponentAdminContractModelProjection`
+over the Phase 59 `ComponentKnowledgeManifestConsumerContract`. The mandatory
+full Phase review's Stage Status token finding was closed by repair cycle 1 and
+its focused closure re-review; the final full suite is bound to this distinct
+release closure. This closure records no accepted Hygiene or Development
+Candidate follow-up and does not start Phase 60.4.

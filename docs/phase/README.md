@@ -15,18 +15,17 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed phase: `phase-60.2.md` - ADM-03 Component Admin configuration
-  provenance and resolved-composition visibility. It is closed under
-  `phase60.2-clb-adm03-20260828`; Phase 60.3 is active and in progress under
-  ADM-04, while Phase 60.4 remains not started.
+- Latest closed phase: `phase-60.3.md` - ADM-04 Component Admin contract and
+  model visibility. It is closed under `phase60.3-clb-adm04-20260828`; Phase
+  60.4 remains planned and not started.
 - Latest closed Phase 59-series phase: `phase-59.10.md` - DOC-10 canonical
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
   regression, downstream, and full-suite evidence without changing behavior.
-- Phase 59 is fully closed. Phase 60 is closed after ADM-01; Phases 60.1 and
-  60.2 are closed after ADM-02 and ADM-03. `phase-60.3.md` through
-  `phase-60.8.md` retain the later independently closable ADM-04 through
-  ADM-09 stages.
+- Phase 59 is fully closed. Phase 60 is closed after ADM-01; Phases 60.1,
+  60.2, and 60.3 are closed after ADM-02, ADM-03, and ADM-04.
+  `phase-60.4.md` through `phase-60.8.md` retain the later independently
+  closable ADM-05 through ADM-09 stages.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
@@ -41,11 +40,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: `phase-60.3.md` (ADM-04),
-  implementing the package-private, value-only
-  `ComponentAdminContractModelProjection` over the Phase 59 consumer contract;
-  Phase 60.4 remains not started.
-- Latest closed checklist: `phase-60.2-checklist.md`.
+- Active phase in the current CNCF sequence: none. `phase-60.4.md` (ADM-05)
+  remains planned and requires its own explicit start.
+- Latest closed checklist: `phase-60.3-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -93,8 +90,9 @@ Current baseline:
   - `phase-60.md`
   - `phase-60.1.md`
   - `phase-60.2.md`
+  - `phase-60.3.md`
 - Active phase set currently includes:
-  - `phase-60.3.md` (ADM-04) is active and in progress
+  - none; `phase-60.4.md` is planned and not started
 
 ## Related Rules
 

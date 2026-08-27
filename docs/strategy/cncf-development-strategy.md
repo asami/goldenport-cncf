@@ -3602,10 +3602,11 @@ the Phase 60 Hygiene follow-up journal. Phase 60.1 delivers the ADM-02
 versioned Component Admin identity and view model and is closed under
 `phase60.1-clb-adm02-20260828`. Phase 60.2 delivers the reviewed ADM-03
 typed-configuration provenance and already-resolved composition projection and
-is closed under `phase60.2-clb-adm03-20260828`. Phase 60.3 is in progress under
-ADM-04 with the admitted package-private, value-only
-`ComponentAdminContractModelProjection` over the Phase 59 consumer contract;
-Phase 60.4 remains not started.
+is closed under `phase60.2-clb-adm03-20260828`. Phase 60.3 delivers the
+reviewed package-private, value-only `ComponentAdminContractModelProjection`
+over the Phase 59 consumer contract and is closed under
+`phase60.3-clb-adm04-20260828` after its bounded repair cycle and final full
+suite. Phase 60.4 remains planned and not started.
 
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the
