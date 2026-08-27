@@ -36,6 +36,20 @@ Phase Plan Gate: PROCEED
 - Produce representative acceptance evidence consumed by the security and
   downstream validation Phase.
 
+## Decision Record
+
+- Decision ID: `D-P598-SKILL-CATALOG-001`
+- Date: 2026-08-27
+- Authority: user decision in the Phase 59.8 execution task
+- Decision: Phase 59.8 accepts a public, descriptive Skill Catalog as
+  discovery metadata only. Its identity, digest, visibility, and descriptive
+  fields may be represented by the existing value-only manifest contracts.
+- Boundary: Phase 59.8 does not assert or simulate an actual CAR-owned
+  `SkillBundleManifest`. Actual Skill bundle linkage, schema/path/digest
+  validation, CAR packaging/projection, and Skill activation or installation
+  remain deferred to CNCF Phase 66, Cozy Phase 24, and launcher work.
+- Consumed: true
+
 ## Closure
 
 Representative profiles prove the integrated contract under exact identities.

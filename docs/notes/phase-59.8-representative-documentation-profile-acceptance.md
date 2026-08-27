@@ -1,0 +1,42 @@
+# Phase 59.8 P598-S1 Representative Documentation Profile Acceptance Matrix
+
+Status: noncanonical P598-S1 acceptance matrix; no validation receipt is
+claimed by this note.
+
+This matrix records the exact executable specifications that cover every
+current DOC-08 checklist category. Existing executable identities are written
+as repository paths plus fully qualified specification or script names where
+available. P598-S1 contributes only the core
+representative profile, identity, availability, disclosure, and descriptive
+metadata evidence in
+`org.goldenport.cncf.knowledge.RepresentativeDocumentationProfileSpec`.
+The parent Phase workflow owns focused validation and must not treat this
+mapping as a test result.
+
+| DOC-08 checklist category | P598-S1 core profile/identity/metadata evidence | Prior accepted Phase 59.3 authoring/package evidence | Later P598-S2 BoK/CBD read-only retrieval evidence |
+| --- | --- | --- | --- |
+| Embedded small-Component manuals, model metadata/diagrams, Scaladoc, source, and manifest profile | `cloud-native-component-framework/src/test/scala/org/goldenport/cncf/knowledge/RepresentativeDocumentationProfileSpec.scala` — `P598-DOC08-AC02` covers the typed manifest, all model/diagram kinds, development classifications, and Help projection | `cozy/src/test/scala/cozy/lint/CozyCarLintSpec.scala` (`cozy.lint.CozyCarLintSpec`); `cozy/src/test/scala/cozy/archive/ComponentSourceArchiveProjectionSpec.scala` (`cozy.archive.ComponentSourceArchiveProjectionSpec`); sbt-cozy `src/sbt-test/cozy/component-source-archive-projection` and `src/sbt-test/cozy/component-scaladoc-packaging`; smartdox `src/test/scala/org/smartdox/service/operations/SmartDoxPublicationProjectionSpec.scala` (`org.smartdox.service.operations.SmartDoxPublicationProjectionSpec`) | Not a P598-S2 retrieval assertion; BoK/CBD consumers use only admitted metadata |
+| Required Documentation/SourceCode SubComponents and restricted-source repository-complete authorization-controlled profiles | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC03` preserves denied SourceCode metadata and no raw/physical projection | `cozy/src/test/scala/cozy/archive/ComponentSourceArchiveProjectionSpec.scala`; CNCF `src/test/scala/org/goldenport/cncf/component/repository/ResolvedComponentResourcesSpec.scala` and `ComponentResourceAuthorizationSpec.scala` | Not a P598-S2 retrieval assertion; authorization remains the existing Phase 58 boundary |
+| Develop, Test, Demo, and Production mode policy | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC02` records classifications without putting operation mode in Component-domain values | CNCF `src/test/scala/org/goldenport/cncf/cli/ComponentResourceOperationModePolicySpec.scala` (`org.goldenport.cncf.cli.ComponentResourceOperationModePolicySpec`) and Cozy packaging/source evidence | Not a P598-S2 retrieval assertion |
+| Dependency documentation, exact source authorization, offline complete-release resolution, and production tolerance of offline knowledge SubComponents | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC02` carries dependency-documentation and provenance classifications without a resolver | Cozy source/archive and CAR packaging evidence; CNCF `src/test/scala/org/goldenport/cncf/component/repository/ResolvedComponentResourcesSpec.scala` (`org.goldenport.cncf.component.repository.ResolvedComponentResourcesSpec`) | Not a P598-S2 retrieval assertion; no new resolver is admitted |
+| Online-only SimpleModeling.org, installed framework snapshot, and closed-network Documentation Hub profiles | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC01` uses `FrameworkDocumentationProfile` and `ClosedNetworkDocumentationHubSarProfile` with exact document/section/publication identity and distinct availability | Phase 59.3 `simplemodeling-org/scripts/test/check-cncf-framework-publication-contract.sh`; smartdox `src/test/scala/org/smartdox/service/operations/SmartDoxPublicationProjectionSpec.scala` | Not a P598-S2 retrieval assertion |
+| Public AI Development Guide and public Skill Catalog | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC04` accepts descriptive public metadata only. The Phase 59.8 decision record `D-P598-SKILL-CATALOG-001` explicitly defers actual CAR SkillBundleManifest linkage/schema/path/digest validation, CAR packaging/projection, and installation/activation | ai-directive `scripts/test/check-cncf-public-directive-projection.sh`; CNCF `src/test/scala/org/goldenport/cncf/knowledge/PublicDirectiveSkillCatalogContextSpec.scala` (`org.goldenport.cncf.knowledge.PublicDirectiveSkillCatalogContextSpec`) | Not a P598-S2 retrieval assertion; later retrieval may consume metadata but cannot add bundle authority |
+| User Guide/Reference navigation, Help-to-manifest discovery, exact configuration/Operation/schema/example/Scaladoc retrieval, and disclosed source retrieval without leakage | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC02` covers manual, API, configuration, example, Scaladoc, source, and exact Help/Direct-AI manifest identity; `P598-DOC08-AC03` covers non-disclosure | CNCF `src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHelpContractSpec.scala` (`org.goldenport.cncf.knowledge.ComponentKnowledgeHelpContractSpec`); sbt-cozy `component-scaladoc-packaging`; Cozy CAR documentation lint; accepted SmartDox publication projection | Later read-only retrieval is P598-S2 work; no unrun result is claimed |
+| Model metadata/diagrams covering Entity, Powertype, StateMachine, Value, and Datatype | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC02` covers all five model kinds plus class and state diagrams through `PortableModelResourceContext` | smartdox `src/test/scala/org/smartdox/service/operations/SmartDoxPublicationProjectionSpec.scala` and prior generated-model/diagram packaging evidence | Not a P598-S2 retrieval assertion |
+| CBD exact detail/usage/MCP/CAR Review, BoK evidence RAG/MCP, and BoK-to-CBD-to-Help identity/version/hash handoff | Outside P598-S1; no BoK/CBD Support mutation is authorized | Phase 59.3 package evidence is only upstream input, not CBD/BoK evidence | P598-S2 owns read-only retrieval evidence: `org.simplemodeling.textus.cbdsupport.ComponentKnowledgeIntegrationSpec`, `org.simplemodeling.textus.bok.ComponentKnowledgeRetrievalSpec`, BoK `org.simplemodeling.textus.bok.BokCbdComponentReferenceHandoffSpec`, and CBD `org.simplemodeling.textus.cbdsupport.ComponentReferenceHandoffSpec` |
+| Offline/runtime operation without build/render/embedding tools and identical framework availability profiles | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC01` is value-only and asserts identity/availability separation; it does not claim runtime execution | Phase 59.3 SmartDox/CAR authoring and packaging evidence is build-time only | Not a P598-S2 retrieval assertion; runtime/full-suite evidence is deferred |
+| Public Guide cannot override the mounted directive and Skill Catalog cannot install/activate its referenced Skill | `RepresentativeDocumentationProfileSpec` — `P598-DOC08-AC04` retains `MountedDirectiveRemainsAuthoritative`, descriptive visibility/digest, and rejects authority-bearing metadata; actual SkillBundleManifest linkage/schema/packaging/validation and installation remain deferred by `D-P598-SKILL-CATALOG-001` | CNCF `src/test/scala/org/goldenport/cncf/knowledge/PublicDirectiveSkillCatalogContextSpec.scala` (`org.goldenport.cncf.knowledge.PublicDirectiveSkillCatalogContextSpec`) and ai-directive `scripts/test/check-cncf-public-directive-projection.sh` | P598-S2 may retrieve public descriptive metadata only; it does not own installation/activation |
+
+## Ownership boundaries
+
+- P598-S1 core evidence is the new representative executable specification and
+  the existing value-only contracts it calls. It does not add production APIs,
+  routes, schemas, persistence, resolver logic, source access, or authority.
+- Phase 59.3 authoring/package evidence remains prior accepted evidence. This
+  note does not rerun, extend, or reopen that Phase.
+- P598-S2 owns later BoK/CBD read-only retrieval evidence. Its future work may
+  consume these exact identities and digests but may not turn the public
+  catalog into a bundle or runtime authority.
+- Phase 59.9 owns adversarial, regression, and full-suite validation. Phase
+  59.10 owns canonical documentation closure. Neither ownership is claimed as
+  complete by this P598-S1 note.

@@ -29,8 +29,11 @@ Stage Status:
   SubComponents.
 - [ ] Provide online-only SimpleModeling.org, installed framework snapshot,
   and closed-network Documentation Hub profiles.
-- [ ] Provide public AI Development Guide and public Skill Catalog linked to an
-  actual CAR-owned SkillBundleManifest.
+- [ ] Provide a public AI Development Guide and descriptive public Skill Catalog
+  as metadata-only projections; actual CAR SkillBundleManifest linkage,
+  schema/path/digest validation, CAR packaging/projection, and
+  activation/installation remain deferred to CNCF Phase 66, Cozy Phase 24,
+  and launcher work.
 - [ ] Verify User Guide/Reference navigation, Help-to-manifest discovery, exact
   configuration/Operation/schema/example/Scaladoc retrieval, and disclosed
   source retrieval without secrets/local-state leakage.
