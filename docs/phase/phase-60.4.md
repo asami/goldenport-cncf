@@ -1,7 +1,9 @@
 # Phase 60.4 - Component Admin Runtime and Datastore Visibility
 
-status=planned
+status=closed
 planned_at=2026-08-28
+started_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.3](phase-60.3.md)
 successor=[Phase 60.5](phase-60.5.md)
@@ -53,4 +55,12 @@ documentation navigation, management operations, or transport surfaces.
 
 ## Current Status
 
-Phase 60.4 is planned and starts only after Phase 60.3 closes.
+Phase 60.4 is closed under `phase60.4-clb-adm05-20260828`. ADM-05 delivers
+the reviewed package-private, value-only
+`ComponentAdminRuntimeDatastoreProjection`, including exact runtime identity
+binding, lifecycle and datastore evidence, Entity-ID collection equality, and
+instance-isolation rejection. The mandatory full Phase review's three Current
+Phase Blockers were closed by repair cycle 1 and its focused closure re-review;
+the final full suite is bound to this distinct release closure. This closure
+records no accepted Hygiene or Development Candidate follow-up and does not
+start Phase 60.5.

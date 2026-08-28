@@ -39,6 +39,7 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
   private val _e4 = afterWord("in spec:component-admin-runtime-datastore-identity, example:E4, rules:ADM05-R4, phase:60.4, slice:ADM-05A")
   private val _e5 = afterWord("in spec:component-admin-runtime-datastore-identity, example:E5, rules:ADM05-R5, phase:60.4, slice:ADM-05A")
   private val _e6 = afterWord("in spec:component-admin-runtime-datastore-identity, example:E6, rules:ADM05-R6, phase:60.4, slice:ADM-05A")
+  private val _e7 = afterWord("in spec:component-admin-runtime-datastore-identity, example:E7, rules:ADM05-R7, phase:60.4, slice:ADM-05A")
 
   "ADM05-RUNTIME-DATASTORE-IDENTITY Component Admin projection" should {
     "E1 retain distinct operational, lifecycle, health, runtime, datastore, schema, and provenance evidence" must _e1 {
@@ -120,7 +121,8 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
       "when an Admin Entity-ID input names its owner explicitly" in {
         Given("Spec: ADM05-RUNTIME-DATASTORE-IDENTITY; Rules: ADM05-R3; Example: E3; one declared entity name, one registered exact collection, and a canonical EntityId owned by it")
         val entityid = EntityId("runtime", "entry_1", _collection_id)
-        val input = ComponentAdminEntityIdInput(Some("facility"), entityid.value, _provenance)
+        val entityidprovenance = _entity_id_provenance
+        val input = ComponentAdminEntityIdInput(Some("facility"), entityid.value, entityidprovenance)
         val facts = _facts(_view, _space(_collection_id), Vector(input), SubsystemUserMode.Standalone)
 
         When("the projection resolves the owner through EntitySpace.entityByNameC")
@@ -130,16 +132,21 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
         projected.flatMap(_.entityids.headOption).map(_.entityid) shouldBe Some(entityid)
         projected.flatMap(_.entityids.headOption).map(_.collection.collectionid) shouldBe Some(_collection_id)
         projected.flatMap(_.entityids.headOption).map(_.declaredentityname) shouldBe Some("facility")
+        projected.flatMap(_.entityids.headOption).map(_.provenance) shouldBe Some(entityidprovenance)
+        projected.flatMap(_.entityids.headOption).map(_.collection.provenance) shouldBe Some(entityidprovenance)
         projected.flatMap(_.datastore.collections.find(_.collectionid == _collection_id)).map(_.entityname) shouldBe Some("facility")
+        projected.flatMap(_.datastore.collections.find(_.collectionid == _collection_id)).map(_.provenance) shouldBe Some(entityidprovenance)
       }
     }
 
-    "E4 reject scalar, foreign, missing-owner, and ambiguous-owner Entity-ID inputs deterministically" must _e4 {
+    "E4 reject scalar, foreign, blank-owner, missing-owner, and ambiguous-owner Entity-ID inputs deterministically" must _e4 {
       "when malformed or non-exact identity evidence reaches the boundary" in {
-        Given("Spec: ADM05-RUNTIME-DATASTORE-IDENTITY; Rules: ADM05-R4; Example: E4; scalar input, foreign canonical ID, absent declared owner, and two exact collections sharing one name")
+        Given("Spec: ADM05-RUNTIME-DATASTORE-IDENTITY; Rules: ADM05-R4; Example: E4; scalar input, foreign canonical ID, blank and whitespace declared owners, absent declared owner, and two exact collections sharing one name")
         val selectedspace = _space(_collection_id)
         val scalar = _input(Some("facility"), "notice_1")
         val foreign = _input(Some("facility"), EntityId("runtime", "notice_1", _foreign_collection).value)
+        val blank = _input(Some(""), EntityId("runtime", "notice_1", _collection_id).value)
+        val whitespace = _input(Some(" "), EntityId("runtime", "notice_1", _collection_id).value)
         val missing = _input(None, EntityId("runtime", "notice_1", _collection_id).value)
         val ambiguousspace = new EntitySpace()
         ambiguousspace.registerEntity("facility", _collection(_first_collection))
@@ -149,15 +156,21 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
         When("the projection evaluates each independent boundary input")
         val scalarresult = ComponentAdminRuntimeDatastoreProjection.projectC(_view, _facts(_view, selectedspace, Vector(scalar), SubsystemUserMode.Standalone))
         val foreignresult = ComponentAdminRuntimeDatastoreProjection.projectC(_view, _facts(_view, selectedspace, Vector(foreign), SubsystemUserMode.Standalone))
+        val blankresult = ComponentAdminRuntimeDatastoreProjection.projectC(_view, _facts(_view, selectedspace, Vector(blank), SubsystemUserMode.Standalone))
+        val whitespaceresult = ComponentAdminRuntimeDatastoreProjection.projectC(_view, _facts(_view, selectedspace, Vector(whitespace), SubsystemUserMode.Standalone))
         val missingresult = ComponentAdminRuntimeDatastoreProjection.projectC(_view, _facts(_view, selectedspace, Vector(missing), SubsystemUserMode.Standalone))
         val ambiguousresult = ComponentAdminRuntimeDatastoreProjection.projectC(_view, _facts(_view, ambiguousspace, Vector(ambiguous), SubsystemUserMode.Standalone))
 
-        Then("the scalar parser failure, exact collection mismatch, missing owner, and EntitySpace ambiguity remain failures")
+        Then("the scalar parser failure, exact collection mismatch, blank and whitespace owner rejection, missing owner, and EntitySpace ambiguity remain failures")
         scalarresult shouldBe a[Consequence.Failure[?]]
         foreignresult shouldBe a[Consequence.Failure[?]]
+        blankresult shouldBe a[Consequence.Failure[?]]
+        whitespaceresult shouldBe a[Consequence.Failure[?]]
         missingresult shouldBe a[Consequence.Failure[?]]
         ambiguousresult shouldBe a[Consequence.Failure[?]]
         foreignresult.display should include("collection")
+        blankresult.display should include("backing entity name")
+        whitespaceresult.display should include("backing entity name")
         missingresult.display should include("backing entity name")
         ambiguousresult.display should include("ambiguous")
       }
@@ -204,6 +217,41 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
         result.display should include("operational state evidence")
       }
     }
+
+    "E7 reject equal-instance facts on selected logical release and Subsystem identity collisions" must _e7 {
+      "when facts from one identity view are projected against another release or Subsystem" in {
+        Given("Spec: ADM05-RUNTIME-DATASTORE-IDENTITY; Rules: ADM05-R7; Example: E7; source facts and equal-instance target views differing only by selected release or Subsystem identity")
+        val sourceview = _view
+        val sourcefacts = _facts(sourceview, _space(_collection_id), Vector.empty, SubsystemUserMode.Standalone)
+        val release = ComponentAdminLogicalRelease(sourceview.componentClass.value, "2.0.0")
+        val releaseview = sourceview.copy(
+          selectedLogicalRelease = ComponentAdminViewField(release, _provenance),
+          logicalReleaseCandidates = Vector(ComponentAdminViewField(release, _provenance))
+        )
+        val subsystemclass = ComponentAdminSubsystemClass("other-subsystem")
+        val subsystemview = sourceview.copy(
+          subsystemClass = ComponentAdminViewField(subsystemclass, _provenance),
+          subsystemInstance = ComponentAdminViewField(
+            ComponentAdminSubsystemInstance(subsystemclass, "other-main"),
+            _provenance
+          ),
+          implicitComponentSubsystem = ComponentAdminViewField(
+            ComponentAdminImplicitComponentSubsystem(sourceview.componentClass.value, "other-implicit"),
+            _provenance
+          )
+        )
+
+        When("the projection validates source facts against each equal-instance target identity")
+        val releaseresult = ComponentAdminRuntimeDatastoreProjection.projectC(releaseview, sourcefacts)
+        val subsystemresult = ComponentAdminRuntimeDatastoreProjection.projectC(subsystemview, sourcefacts)
+
+        Then("both cross-identity projections return structured failures despite the matching ComponentInstanceId")
+        releaseresult shouldBe a[Consequence.Failure[?]]
+        releaseresult.display should include("selected logical release")
+        subsystemresult shouldBe a[Consequence.Failure[?]]
+        subsystemresult.display should include("Subsystem class")
+      }
+    }
   }
 
   private val _component_id = ComponentId("org.goldenport.cncf.admin.Runtime")
@@ -220,6 +268,16 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
       None,
       "runtime",
       "urn:cncf:resource:adm/runtime"
+    ))
+  )
+  private val _entity_id_provenance = ComponentAdminSafeProvenance(
+    ComponentAdminSourceKind.KnowledgeManifest,
+    Some(ComponentResourceLogicalIdentity(
+      _component_id,
+      "1.0.0",
+      None,
+      "entity-id",
+      "urn:cncf:resource:adm/entity-id"
     ))
   )
 
@@ -278,7 +336,13 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
       ComponentAdminDatastoreEvidence("datastore:adm", "schema:adm-v1", Vector.empty, _provenance),
       ComponentAdminExecutionContextEvidence(mode, s"context:${mode.toString.toLowerCase}", _provenance),
       entityspace,
-      inputs
+      inputs,
+      ComponentAdminRuntimeIdentityBinding(
+        identityview.selectedLogicalRelease.value,
+        identityview.subsystemClass.value,
+        identityview.subsystemInstance.value,
+        identityview.implicitComponentSubsystem.value
+      )
     )
   }
 

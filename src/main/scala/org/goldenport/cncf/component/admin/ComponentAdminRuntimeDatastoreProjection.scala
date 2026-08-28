@@ -98,6 +98,13 @@ private[cncf] final case class ComponentAdminEntityIdInput(
   provenance: ComponentAdminSafeProvenance
 )
 
+private[cncf] final case class ComponentAdminRuntimeIdentityBinding(
+  selectedlogicalrelease: ComponentAdminLogicalRelease,
+  subsystemclass: ComponentAdminSubsystemClass,
+  subsysteminstance: ComponentAdminSubsystemInstance,
+  implicitcomponentsubsystem: ComponentAdminImplicitComponentSubsystem
+)
+
 private[cncf] final case class ComponentAdminRuntimeDatastoreFacts(
   loadedinstanceid: ComponentInstanceId,
   operationalstates: Vector[ComponentAdminOperationalStateEvidence],
@@ -107,7 +114,8 @@ private[cncf] final case class ComponentAdminRuntimeDatastoreFacts(
   datastore: ComponentAdminDatastoreEvidence,
   executioncontext: ComponentAdminExecutionContextEvidence,
   entityspace: EntitySpace,
-  entityidinputs: Vector[ComponentAdminEntityIdInput]
+  entityidinputs: Vector[ComponentAdminEntityIdInput],
+  identitybinding: ComponentAdminRuntimeIdentityBinding
 )
 
 private[cncf] final case class ComponentAdminEntityIdEvidence(
@@ -169,7 +177,19 @@ private[cncf] object ComponentAdminRuntimeDatastoreProjection {
     val invalidstates = states.exists(_invalid_operational_state_evidence)
     lazy val statevalues = states.map(_.state)
     val expectedstates = ComponentAdminOperationalState.values.toSet
-    if (facts.loadedinstanceid == null) {
+    if (facts.identitybinding == null) {
+      Consequence.argumentInvalid("Component Admin runtime identity binding is required")
+    } else if (_invalid_runtime_identity_binding(facts.identitybinding)) {
+      Consequence.argumentInvalid("Component Admin runtime identity binding is incomplete")
+    } else if (facts.identitybinding.selectedlogicalrelease != identityview.selectedLogicalRelease.value) {
+      Consequence.argumentInvalid("Component Admin runtime facts belong to a different selected logical release")
+    } else if (facts.identitybinding.subsystemclass != identityview.subsystemClass.value) {
+      Consequence.argumentInvalid("Component Admin runtime facts belong to a different Subsystem class")
+    } else if (facts.identitybinding.subsysteminstance != identityview.subsystemInstance.value) {
+      Consequence.argumentInvalid("Component Admin runtime facts belong to a different Subsystem instance")
+    } else if (facts.identitybinding.implicitcomponentsubsystem != identityview.implicitComponentSubsystem.value) {
+      Consequence.argumentInvalid("Component Admin runtime facts belong to a different implicit Component Subsystem")
+    } else if (facts.loadedinstanceid == null) {
       Consequence.argumentInvalid("Component Admin loaded instance evidence is required")
     } else if (facts.loadedinstanceid != selectedinstance) {
       Consequence.argumentInvalid("Component Admin runtime facts belong to a different loaded Component instance")
@@ -195,6 +215,14 @@ private[cncf] object ComponentAdminRuntimeDatastoreProjection {
       Consequence.unit
     }
   }
+
+  private def _invalid_runtime_identity_binding(
+    value: ComponentAdminRuntimeIdentityBinding
+  ): Boolean =
+    value.selectedlogicalrelease == null ||
+      value.subsystemclass == null ||
+      value.subsysteminstance == null ||
+      value.implicitcomponentsubsystem == null
 
   private def _invalid_operational_state_evidence(
     value: ComponentAdminOperationalStateEvidence
