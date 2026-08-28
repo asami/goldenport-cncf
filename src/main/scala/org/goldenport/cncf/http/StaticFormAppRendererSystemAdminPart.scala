@@ -35,8 +35,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 20, 2026
  *  version Jun. 19, 2026
- *  version Aug. 11, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -687,22 +686,27 @@ trait StaticFormAppRendererSystemAdminPart {
   protected def component_owned_admin_pages_list(
     pages: Vector[WebDescriptor.AdminPage]
   ): String = {
-    val items = pages.map { page =>
+    val items = pages.flatMap { page =>
+      page.canonicalHref.map { href =>
       val description = Option(page.description).map(_.trim).filter(_.nonEmpty)
         .map(value => s"""<p class="mb-2 text-body-secondary">${escape(value)}</p>""")
         .getOrElse("")
-      s"""<a class="list-group-item list-group-item-action" href="${escape(page.href)}">
+      s"""<a class="list-group-item list-group-item-action" href="${escape(href)}">
          |  <div class="d-flex justify-content-between align-items-start gap-3">
          |    <div>
          |      <div class="fw-semibold">${escape(page.effectiveLabel)}</div>
          |      ${description}
-         |      <code>${escape(page.href)}</code>
+         |      <code>${escape(href)}</code>
          |    </div>
          |    <span class="badge text-bg-secondary">${escape(page.effectivePermission)}</span>
          |  </div>
          |</a>""".stripMargin
+      }
     }
-    s"""<div class="list-group">${items.mkString("\n")}</div>"""
+    if (items.isEmpty)
+      admin_empty_state("No descriptor-declared component admin pages are available.")
+    else
+      s"""<div class="list-group">${items.mkString("\n")}</div>"""
   }
 
   protected def admin_runtime_configuration(

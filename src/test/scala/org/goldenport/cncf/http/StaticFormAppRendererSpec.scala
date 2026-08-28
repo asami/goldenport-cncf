@@ -75,7 +75,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug. 14, 2026
+ * @version Aug. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -14036,6 +14036,35 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("admin.entity.read")
       html should include ("list-group")
       html should include ("data-textus-ux-profile=\"material\"")
+    }
+
+    "render only validated canonical component Admin page hrefs" in {
+      Given("one component descriptor with an exact declared page and direct in-memory raw href, query, and foreign-component entries")
+      val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val descriptor = WebDescriptor(adminPages = Vector(
+        WebDescriptor.AdminPage("safe-page", "Safe Page", s"/web/${componentpath}/admin/safe-page", component = Some(componentpath)),
+        WebDescriptor.AdminPage("system-safe", "System Safe", s"/web/${componentpath}/admin/system-safe", component = Some(componentpath), audience = WebDescriptor.AdminAudience.System),
+        WebDescriptor.AdminPage("raw-page", "Raw Page", "javascript:alert(1)", component = Some(componentpath)),
+        WebDescriptor.AdminPage("query-page", "Query Page", s"/web/${componentpath}/admin/query-page?debug=true", component = Some(componentpath)),
+        WebDescriptor.AdminPage("foreign-page", "Foreign Page", "/web/other/admin/foreign-page", component = Some(componentpath))
+      ))
+
+      When("component, application, and system indexes render their descriptor-declared Admin page links")
+      val componenthtml = _renderer.renderComponentAdmin(subsystem, componentpath, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
+      val applicationhtml = _renderer.renderApplicationAdmin(subsystem, descriptor).body
+      val systemhtml = _renderer.renderSystemAdmin(subsystem, descriptor).body
+
+      Then("only the canonical page href is emitted with the existing HTML escaping boundary")
+      componenthtml should include (s"href=\"/web/${componentpath}/admin/safe-page\"")
+      componenthtml should include (s"href=\"/web/${componentpath}/admin/system-safe\"")
+      applicationhtml should include (s"href=\"/web/${componentpath}/admin/safe-page\"")
+      applicationhtml should not include (s"/web/${componentpath}/admin/system-safe")
+      systemhtml should include (s"href=\"/web/${componentpath}/admin/system-safe\"")
+      Vector(componenthtml, applicationhtml, systemhtml).mkString("\n") should not include ("javascript:alert")
+      Vector(componenthtml, applicationhtml, systemhtml).mkString("\n") should not include ("query-page?debug=true")
+      Vector(componenthtml, applicationhtml, systemhtml).mkString("\n") should not include ("/web/other/admin/foreign-page")
     }
 
     "render Application Admin separately from System Admin diagnostics" in {

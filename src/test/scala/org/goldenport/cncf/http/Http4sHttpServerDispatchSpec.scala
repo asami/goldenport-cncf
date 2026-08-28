@@ -41,7 +41,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1187,6 +1187,11 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
           |      href: /web/debug/admin/notifications
           |      permission: admin.entity.read
           |      component: debug
+          |    - name: missing-template
+          |      label: Missing Template
+          |      href: /web/debug/admin/missing-template
+          |      permission: admin.entity.read
+          |      component: debug
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -1208,20 +1213,22 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val server = _server(subsystem)
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
-      When("declared and undeclared component admin routes are dispatched")
+      When("declared, undeclared, and declared-but-templateless component admin routes are dispatched through the existing authorization checkpoint")
       val applicationadmin = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/admin"))).unsafeRunSync()
       val declared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/notifications"))).unsafeRunSync()
       val undeclared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/unknown"))).unsafeRunSync()
+      val missingtemplate = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/missing-template"))).unsafeRunSync()
       val applicationadminbody = applicationadmin.as[String].unsafeRunSync()
       val declaredbody = declared.as[String].unsafeRunSync()
 
-      Then("only descriptor-declared component admin pages are rendered")
+      Then("the admitted declaration succeeds while undeclared and missing-template names fail deterministically without another-page fallback")
       applicationadmin.status.code shouldBe 200
       applicationadminbody should include ("Application Admin")
       applicationadminbody should include ("Notification Admin")
       declared.status.code shouldBe 200
       declaredbody should include ("Notification Admin")
       undeclared.status.code shouldBe 404
+      missingtemplate.status.code shouldBe 404
     }
 
     "dispatch system observability drill-down routes" in {

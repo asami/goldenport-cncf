@@ -12,6 +12,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -20,10 +21,10 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 25, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 28, 2026
  * @author  ASAMI, Tomoharu
  */
-final class WebDescriptorSpec extends AnyWordSpec with Matchers {
+final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "WebDescriptor" should {
     "load the minimum Phase 12 schema from an explicit descriptor path" in {
       val path = Files.createTempFile("cncf-web-descriptor", ".yaml")
@@ -677,6 +678,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "merge src/main/web-inf/web.yaml form.yaml and admin.yaml from a development project root" in {
+      Given("a split development-root descriptor with a canonical Admin declaration")
       val root = Files.createTempDirectory("cncf-web-descriptor-source-web-inf-split-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
       Files.writeString(
@@ -710,14 +712,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    pages:
           |      - name: notice-admin
           |        label: Notice Admin
-          |        href: /web/notice-board/admin/notices
+          |        href: /web/notice-board/admin/notice-admin
           |        component: notice-board
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
 
+      When("loading the descriptor")
       val descriptor = WebDescriptor.load(root).toOption.get
 
+      Then("merged runtime Web metadata")
       descriptor.apps.map(_.name) should contain ("notice-board")
       descriptor.pageCustomization(Some("notice-board"), Some("index")).flatMap(_.heading) shouldBe Some("Notice Board")
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
@@ -926,6 +930,48 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       }
     }
 
+    "fail closed for noncanonical component Admin page declarations" in {
+      Given("a direct descriptor with one canonical component Admin page and hostile raw, traversal, query, fragment, foreign-component, and non-ASCII variants")
+      val valid = WebDescriptor.AdminPage(
+        name = "notifications",
+        href = "/web/notice-board/admin/notifications",
+        component = Some("notice-board")
+      )
+      val hostile = Vector(
+        WebDescriptor.AdminPage("../escape", href = "/web/notice-board/admin/../escape", component = Some("notice-board")),
+        WebDescriptor.AdminPage("other", href = "/web/notice-board/admin/other?debug=true", component = Some("notice-board")),
+        WebDescriptor.AdminPage("fragment", href = "/web/notice-board/admin/fragment#details", component = Some("notice-board")),
+        WebDescriptor.AdminPage("foreign", href = "/web/inventory/admin/foreign", component = Some("notice-board")),
+        WebDescriptor.AdminPage("日本語", href = "/web/notice-board/admin/日本語", component = Some("notice-board")),
+        WebDescriptor.AdminPage("raw/path", href = "/web/notice-board/admin/raw/path", component = Some("notice-board"))
+      )
+      val descriptor = WebDescriptor(adminPages = valid +: hostile)
+      val persisted = Files.createTempFile("cncf-web-descriptor-admin-page-noncanonical", ".yaml")
+      Files.writeString(
+        persisted,
+        """web:
+          |  admin:
+          |    pages:
+          |      - name: notifications
+          |        component: notice-board
+          |        href: /web/notice-board/admin/notifications?debug=true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("component and audience lookups select only exact canonical component Admin routes and a persisted raw route is loaded")
+      val componentpages = descriptor.adminPagesFor("notice-board")
+      val audiencepages = descriptor.adminPagesForAudience(WebDescriptor.AdminAudience.Application)
+      val lookedup = hostile.map(page => descriptor.adminPage("notice-board", page.name))
+      val loaded = WebDescriptor.load(persisted)
+
+      Then("persisted invalid declarations fail loading while direct in-memory invalid declarations are absent from rendering and dispatch lookup without normalization or fallback")
+      componentpages shouldBe Vector(valid)
+      audiencepages shouldBe Vector(valid)
+      lookedup shouldBe Vector.fill(hostile.size)(None)
+      loaded.isSuccess shouldBe false
+    }
+
     "deduplicate identical Web route aliases during descriptor load" in {
       val path = Files.createTempFile("cncf-web-descriptor-route-duplicate", ".yaml")
       Files.writeString(
@@ -1101,6 +1147,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "merge component CAR Web descriptors before runtime override descriptors" in {
+      Given("a component-CAR plus runtime override including a canonical Admin declaration")
       val componentcar = Files.createTempFile("cncf-component-web", ".car")
       val overridepath = Files.createTempFile("cncf-web-override", ".yaml")
       try {
@@ -1130,7 +1177,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
                 |    pages:
                 |      - name: signup-admin
                 |        label: Signup Admin
-                |        href: /web/textus-user-account/admin/signup
+                |        href: /web/textus-user-account/admin/signup-admin
                 |        component: textus-user-account
                 |""".stripMargin
           )
@@ -1164,8 +1211,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
         )
         subsystem.add(_component("textus-user-account", componentcar))
 
+        When("resolving their merge")
         val descriptor = WebDescriptorResolver.resolve(subsystem).toOption.get
 
+        Then("CAR Web metadata and runtime override precedence")
         descriptor.apps.map(_.name) should contain ("signup")
         descriptor.routes.map(_.normalizedPathText) should contain ("/web/textus-user-account/signup")
         descriptor.adminPages.map(_.name) should contain ("signup-admin")

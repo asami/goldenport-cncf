@@ -15,7 +15,8 @@ import org.goldenport.record.Record
  *  version Apr. 25, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ *  version Jul.  7, 2026
+ * @version Aug. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -474,12 +475,12 @@ final case class WebDescriptor(
   def adminPagesFor(
     componentname: String
   ): Vector[WebDescriptor.AdminPage] =
-    adminPages.filter(_.matchesComponent(componentname))
+    adminPages.filter(page => page.isCanonicalComponentPage && page.matchesComponent(componentname))
 
   def adminPagesForAudience(
     audience: WebDescriptor.AdminAudience
   ): Vector[WebDescriptor.AdminPage] =
-    adminPages.filter(_.audience == audience)
+    adminPages.filter(page => page.isCanonicalComponentPage && page.audience == audience)
 
   def adminPage(
     componentname: String,
@@ -725,15 +726,28 @@ object WebDescriptor {
     def isSystemAudience: Boolean =
       audience == AdminAudience.System
 
+    /*
+     * Component Admin pages are declarations for one existing Web route, not
+     * a general-purpose hyperlink facility. Keep the raw href out of all
+     * lookup and rendering paths unless it is exactly that canonical route.
+     */
+    def canonicalHref: Option[String] =
+      for {
+        componentname <- component.flatMap(_canonical_admin_segment)
+        pagename <- _canonical_admin_segment(name)
+        route <- Option(href)
+        if route == s"/web/${componentname}/admin/${pagename}"
+      } yield route
+
+    def isCanonicalComponentPage: Boolean =
+      canonicalHref.nonEmpty
+
     def scopeKey: String =
       Vector(component.map(_normalize_app_segment).orElse(_href_component), Some(audience.name), Some(normalizedName)).flatten.mkString(":")
 
     def matchesComponent(componentname: String): Boolean = {
-      val target = _normalize_app_segment(componentname)
-      component.map(_normalize_app_segment) match {
-        case Some(value) => value == target
-        case None => _href_component.contains(target)
-      }
+      val target = _canonical_admin_segment(componentname)
+      target.nonEmpty && component.flatMap(_canonical_admin_segment).contains(target.get)
     }
 
     def componentHrefMismatch: Option[(String, String)] =
@@ -1131,6 +1145,8 @@ object WebDescriptor {
         case page if page.componentHrefMismatch.nonEmpty =>
           val (declared, href) = page.componentHrefMismatch.get
           s"invalid admin page component in ${path}: ${page.name} component=${declared}, href component=${href}"
+        case page if !page.isCanonicalComponentPage =>
+          s"invalid admin page route in ${path}: ${page.name} must declare one canonical component Admin route"
       }
     invalidapp.orElse(invalidpage).orElse(invalidshell).orElse(invalidadminpage) match {
       case Some(message) => Consequence.resourceInvalid(message)
@@ -1606,6 +1622,12 @@ object WebDescriptor {
 
   private def _normalize_app_segment(value: String): String =
     value.trim.toLowerCase.replace("_", "-")
+
+  private def _canonical_admin_segment(value: String): Option[String] =
+    Option(value).filter(segment => segment == segment.trim).filter(_.nonEmpty).filter { segment =>
+      _normalize_app_segment(segment) == segment &&
+        segment.matches("[a-z0-9]+(?:[.-][a-z0-9]+)*")
+    }
 
   def normalizeSelector(value: String): String =
     _normalize_selector(value)
