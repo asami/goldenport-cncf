@@ -3610,7 +3610,13 @@ suite. Phase 60.4 delivers the reviewed package-private, value-only
 `ComponentAdminRuntimeDatastoreProjection` with exact identity binding,
 runtime/datastore provenance, Entity-ID collection equality, and instance
 isolation. It is closed under `phase60.4-clb-adm05-20260828` after its bounded
-repair cycle and final full suite. Phase 60.5 remains planned and not started.
+repair cycle and final full suite. Phase 60.5 delivers the reviewed
+package-private, value-only `ComponentAdminDocumentationNavigationProjection`,
+linking exact manifest-backed documentation evidence to the existing Human Help
+routes without resolution, scanning, generation, content access, or Help
+ownership duplication. It is closed under `phase60.5-clb-adm06-20260828`
+after its bounded repair cycle and final full suite. Phase 60.6 remains planned
+and not started.
 
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the

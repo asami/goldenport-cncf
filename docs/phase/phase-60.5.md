@@ -1,7 +1,9 @@
 # Phase 60.5 - Component Admin Documentation Navigation
 
-status=planned
+status=closed
 planned_at=2026-08-28
+started_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.4](phase-60.4.md)
 successor=[Phase 60.6](phase-60.6.md)
@@ -48,4 +50,13 @@ resolution, management action implementation, or transport delivery.
 
 ## Current Status
 
-Phase 60.5 is planned and starts only after Phase 60.4 closes.
+Phase 60.5 is closed under `phase60.5-clb-adm06-20260828`. ADM-06 delivers
+the reviewed package-private, value-only
+`ComponentAdminDocumentationNavigationProjection`, binding the exact Phase 59
+manifest evidence and pre-existing Human Help routes for User Guide, Reference
+Manual, Scaladoc, diagrams, examples, source availability, and troubleshooting.
+It retains the complete Help inventory while exposing only the selected Admin
+links in canonical Help order, preserves safe resource state/provenance, and
+does not read, scan, resolve, generate, or own documentation. The final full
+suite is bound to this distinct Phase closure. This closure records no accepted
+Hygiene or Development Candidate follow-up and does not start Phase 60.6.
