@@ -1,6 +1,6 @@
 # Phase 61 - Information CML Runtime Canonicalization
 
-status=planned
+status=in-progress
 planned_at=2026-07-26
 depends_on=[Phase 60.8](phase-60.8.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -48,7 +48,7 @@ Technical foundations are Phase 26, Phase 27, Phase 49, and Phase 50.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| IC-01 | Inventory and failing-first acceptance | The hand-written/generated split, downstream use, compatibility surface, and exact executable acceptance identities are fixed. | planned |
+| IC-01 | Inventory and failing-first acceptance | The hand-written/generated split, downstream use, compatibility surface, and exact executable acceptance identities are fixed. | done |
 | IC-02 | Canonical CML and generator contract | Information CML completely describes the canonical Entity/value/lifecycle contract and generates usable revision-aware outputs and transition evidence. | planned |
 | IC-03 | Generated type adoption | CNCF runtime source uses one generated Information and generated CML values, with bounded compatibility adapters only where required. | planned |
 | IC-04 | InformationSpace Entity persistence and OCC | InformationSpace operates through the standard Entity repository/UnitOfWork boundary with managed revision and atomic stale-write rejection. | planned |

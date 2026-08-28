@@ -1,6 +1,6 @@
 # Phase 61 Checklist - Information CML Runtime Canonicalization
 
-status=planned
+status=in-progress
 phase=[Phase 61 - Information CML Runtime Canonicalization](phase-61.md)
 
 This checklist is the authoritative Phase 61 state ledger after Phase 61
@@ -10,37 +10,44 @@ the Phase 60 series closes in Phase 60.8.
 ## IC-01: Inventory and Failing-First Acceptance
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: CNCF Information, Entity, projection, provider, and downstream
   maintainers
 - Entry rule: Phase 60.8 is closed.
 - Completion rule: The exact current split, target contract, migration surface,
   and failing-first acceptance identities are recorded before implementation.
 
-- [ ] Inventory every hand-written Information model and helper.
-- [ ] Inventory every CML-generated Entity, input, view, value, powertype, and
+- [x] Inventory every hand-written Information model and helper.
+- [x] Inventory every CML-generated Entity, input, view, value, powertype, and
   state-machine output.
-- [ ] Record which generated types are used by runtime and which are only
+- [x] Record which generated types are used by runtime and which are only
   compilation/specification evidence.
-- [ ] Inventory InformationSpace, Behavior DSL, Component ownership, provider
+- [x] Inventory InformationSpace, Behavior DSL, Component ownership, provider
   requests, projections, serialization, and persistence references.
-- [ ] Inventory Textus Knowledge Editor and Textus SIE public and persisted
+- [x] Inventory Textus Knowledge Editor and Textus SIE public and persisted
   dependencies.
-- [ ] Record current source, binary, JSON/YAML/XML/Form, schema, operation, and
+- [x] Record current source, binary, JSON/YAML/XML/Form, schema, operation, and
   persisted-state compatibility surfaces.
-- [ ] Fix `src/main/cozy/information.cml` as the canonical source and generated
+- [x] Fix `src/main/cozy/information.cml` as the canonical source and generated
   `entity.Information` as the target runtime identity.
-- [ ] Fix the temporary alias/adapter and final removal policy.
-- [ ] Fix InformationSpace as the public curation/capability boundary and the
+- [x] Fix the temporary alias/adapter and final removal policy.
+- [x] Fix InformationSpace as the public curation/capability boundary and the
   Entity repository as its persistence/OCC boundary.
-- [ ] Fix the exact expected use of CML state-machine output.
-- [ ] Register failing-first Executable Specification identities for every
+- [x] Fix the exact expected use of CML state-machine output.
+- [x] Register failing-first Executable Specification identities for every
   Phase 61 acceptance group.
-- [ ] Add a runtime reference test that fails while InformationSpace still
+- [x] Add a runtime reference test that fails while InformationSpace still
   uses the hand-written Information class.
 
 Evidence:
-- Pending.
+- `docs/notes/phase-61-ic01-information-cml-runtime-inventory-and-failing-first-contract.md`
+  records the local and read-only Textus downstream inventory, generated
+  lifecycle-scaffold limitation, compatibility and boundary contract, and
+  stable IC-01 through IC-08 executable acceptance registry.
+- `org.goldenport.cncf.information.InformationCanonicalRuntimeReferenceSpec`
+  is the pending runtime class-identity suite. Its assertion is intentionally
+  pending until generated-runtime adoption (IC-03); it exposes the current
+  handwritten `Information` runtime returned by InformationSpace.
 
 ## IC-02: Canonical CML and Generator Contract
 

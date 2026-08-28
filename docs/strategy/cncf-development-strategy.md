@@ -3639,7 +3639,8 @@ passed focused re-review plus the mandatory independent full Phase review.
 It is a documentation-only Phase with no program change repository, so final
 release validation is static and no SBT full suite is required. It admitted no
 Hygiene or Development Candidate record. The Phase 60 series is closed under
-`phase60.8-clb-adm09-20260828`; Phase 61 is eligible but not started.
+`phase60.8-clb-adm09-20260828`; Phase 61 is active/in-progress: IC-01 is
+complete and IC-02 through IC-08 are planned.
 
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the
@@ -3733,8 +3734,8 @@ Alignment with Phases 63-65:
   retention work remains owned by this candidate.
 
 ### 9.44 Information CML Runtime Canonicalization
-The Phase 60 series closed in Phase 60.8; Phase 61 is the next planned Phase
-and remains unstarted.
+The Phase 60 series closed in Phase 60.8; Phase 61 is active/in-progress, with
+IC-01 complete and IC-02 through IC-08 planned.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected
