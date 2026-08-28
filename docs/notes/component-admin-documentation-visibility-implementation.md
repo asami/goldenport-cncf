@@ -1,13 +1,14 @@
 # Component Admin and Documentation Visibility Implementation Proposal
 
-status = proposed, non-normative
+status = historical, non-normative
 date = 2026-07-31
 phase = Phase 60
 
-This note is the provisional implementation plan for Phase 60. It must not be
-treated as the final specification. Verified behavior is promoted to
-`docs/design/component-admin.md` and `docs/spec/component-admin.md` after
-implementation.
+This note records the provisional implementation plan for Phase 60. It is
+historical consideration material and must not be treated as a current
+contract. The final canonical [Component Admin design](../design/component-admin.md)
+and authoritative [Component Admin specification](../spec/component-admin.md)
+override this note.
 
 ## Responsibility
 
@@ -93,6 +94,6 @@ and its provenance without turning it into Component-domain policy.
 
 ## Closure
 
-At Phase 60 closure this note becomes historical. The accepted Admin identity,
-view model, authorization, management, and projection contracts must exist in
-design/specification and executable evidence.
+The accepted Admin identity, view model, authorization, management, and
+projection contracts now belong to the canonical design/specification and
+their executable evidence. This note remains only as historical context.

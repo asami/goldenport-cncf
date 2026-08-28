@@ -1,6 +1,7 @@
 # Phase 60.8 - Component Admin Canonical Documentation and Closure
 
-status=planned
+status=in-progress
+started_at=2026-08-28
 planned_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.7](phase-60.7.md)
@@ -48,4 +49,9 @@ generation, management policy, or a Phase 61 Information migration change.
 
 ## Current Status
 
-Phase 60.8 is planned and starts only after Phase 60.7 closes.
+Phase 60.8 is in progress as of 2026-08-28. ADM-09A is promoting the
+accepted ADM-02 through ADM-08 identity, projection, management, and surface
+contracts to the canonical design/specification and marking the implementation
+note historical. Parent-owned focused validation, review, and ADM-09/Step
+closure remain pending. This status does not close Phase 60.8 or the Phase 60
+series and does not start Phase 61.
