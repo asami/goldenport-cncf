@@ -3615,8 +3615,15 @@ package-private, value-only `ComponentAdminDocumentationNavigationProjection`,
 linking exact manifest-backed documentation evidence to the existing Human Help
 routes without resolution, scanning, generation, content access, or Help
 ownership duplication. It is closed under `phase60.5-clb-adm06-20260828`
-after its bounded repair cycle and final full suite. Phase 60.6 remains planned
-and not started.
+after its bounded repair cycle and final full suite. Phase 60.6 delivers the
+reviewed package-private, value-only `ComponentAdminAuthorizedManagement`
+catalog, with a finite exact Component-owned management selector set, current
+stored-operation authorization before availability/lifecycle/replay decisions,
+exact runtime identity and lifecycle evidence, validated action input,
+attributable audit, and deterministic outcomes. It is closed under
+`phase60.6-clb-adm07-20260828` after its bounded repair cycle and final full
+suite. `HYG-BASELINE-001` remains a separately owned resolver-header hygiene
+follow-up; Phase 60.7 remains planned and not started.
 
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the

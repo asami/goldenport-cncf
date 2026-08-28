@@ -1,6 +1,6 @@
 # Phase 60 Hygiene Follow-up
 
-status=resolved
+status=open
 date=2026-08-28
 phase=[Phase 60](../../../phase/phase-60.md)
 
@@ -19,3 +19,32 @@ Phase 60 acceptance or successor scope.
 - Closure and commit reference: `phase60-clb-adm01-20260828`; the distinct Phase 60 release commit records this resolution.
 - Prohibited workaround: Do not mark Phase 60.1 active or begin successor implementation as an index-only repair.
 - Source identity: Phase 60 full review of `68efd663ed489e0e388164979dc0e88b600f77ef..435890835eda99c48c6524e6e7a325e94f7b3c4b`.
+
+## HYG-BASELINE-001 — Preserved resolver header-history normalization
+
+- Status: OPEN
+- Discovered: 2026-08-28, Phase 60.6 baseline review.
+- Repository and affected paths: `cloud-native-component-framework`;
+  `src/main/scala/org/goldenport/cncf/subsystem/resolver/OperationResolver.scala`
+  and
+  `src/test/scala/org/goldenport/cncf/subsystem/resolver/OperationResolverSpec.scala`.
+- Evidence: The preserved user-owned resolver delta updates both Scala files,
+  while their latest `@version` dates remain Aug. 8 and Aug. 15, 2026. The
+  Phase 60.6 review found no ADM-07 behavioral defect in those paths.
+- Classification: Hygiene — source-header history conformance only; no
+  authorized-management behavior, public contract, resolver semantics, or
+  validation-coverage defect is admitted here.
+- Outside reason: Updating the preserved resolver files would cross the frozen
+  ADM-07 ownership boundary and alter user-owned Phase 56/CID-05C work.
+- Owner and later boundary: A separately authorized resolver-header hygiene
+  task.
+- Dependency: The closed Phase 60.6 ADM-07 boundary.
+- Resume condition: An explicit hygiene task admits only the preserved resolver
+  source/spec paths, normalizes their version-history headers, and runs
+  proportionate resolver validation.
+- Prohibited local workaround: Do not stage, commit, reinterpret, or alter the
+  preserved resolver delta in the Phase 60.6 release; do not use this follow-up
+  to reopen Phase 60.6 or begin Phase 60.7.
+- Source identity: `HYG-BASELINE-001`; Phase 60.6 baseline review, preserved
+  resolver combined diff SHA-256
+  `f4618dbdb0259bfe254818c847782f3231c360954bbe27cdc9ddd3fa37718d9e`.

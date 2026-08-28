@@ -1,7 +1,9 @@
 # Phase 60.6 - Component Admin Authorized Management
 
-status=planned
+status=closed
 planned_at=2026-08-28
+started_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.5](phase-60.5.md)
 successor=[Phase 60.7](phase-60.7.md)
@@ -48,4 +50,14 @@ new resource resolution, or app-specific management policies.
 
 ## Current Status
 
-Phase 60.6 is planned and starts only after Phase 60.5 closes.
+Phase 60.6 is closed under `phase60.6-clb-adm07-20260828`. ADM-07 delivers
+the reviewed package-private, value-only
+`ComponentAdminAuthorizedManagement` catalog: its six exact Component-owned
+management selectors are distinct from ordinary visible queries, and each
+request requires current stored-operation authorization, exact runtime
+identity/instance and lifecycle evidence, validated action input, attributable
+audit, and explicit idempotency handling. It does not discover, resolve,
+invoke, or expose management actions. The final focused specification and
+complete Phase suite are bound to this distinct closure. `HYG-BASELINE-001` is
+recorded as a separate resolver-header follow-up without changing its
+user-owned paths. This closure does not start Phase 60.7.
