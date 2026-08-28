@@ -6,6 +6,7 @@ implementation_note=[Component Admin and Documentation Visibility Implementation
 planning_journal=[Component Admin and Documentation Visibility Planning (historical Phase 58)](../journal/2026/07/2026-07-31-phase-58-component-admin-documentation-visibility-planning.md)
 candidate_journal=[Phase 52 direct-Admin canonical-ID boundary](../journal/2026/07/2026-07-30-phase-52-direct-admin-canonical-id-boundary-consideration.md)
 successor=[Phase 60.1 Checklist](phase-60.1-checklist.md)
+series_successor=[Phase 61 Checklist](phase-61-checklist.md)
 canonical_architecture_design=[Component and Subcomponent Architecture](../design/component-subcomponent-architecture.md)
 canonical_architecture_specification=[Component and Subcomponent Architecture Specification](../spec/component-subcomponent-architecture.md)
 canonical_resource_design=[Component Resource Subcomponent](../design/component-resource-subcomponent.md)
@@ -55,3 +56,16 @@ Evidence:
   resolved Phase-index status reconciliation.
 - ADM-01 was committed in `435890835eda99c48c6524e6e7a325e94f7b3c4b`.
   This closure does not start Phase 60.1.
+
+## Series Closure
+
+- The sequential child checklists for Phases 60.1 through 60.8 closed ADM-02
+  through ADM-09. The final ADM-09 closure is bound by
+  `phase60.8-clb-adm09-20260828`.
+- The Phase 60.8 Step promoted the canonical
+  `docs/design/component-admin.md` and `docs/spec/component-admin.md` in
+  `9da0170942b7506ca3879c82d8259798ade5efdd`; the focused re-review and full
+  Phase review passed with no Current Phase Blocker.
+- Phase 60.8 has no program change repository, so final release validation is
+  static and no SBT full suite is required. It admitted no Hygiene or
+  Development Candidate record. Phase 61 is eligible but remains unstarted.

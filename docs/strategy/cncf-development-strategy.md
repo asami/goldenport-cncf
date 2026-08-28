@@ -3632,8 +3632,14 @@ eligibility, and limits component pages to declared canonical routes with
 deterministic absence for aliases and reserved dispatcher names. It is closed
 under `phase60.7-clb-adm08-20260828` after one bounded repair cycle, final full
 suite, independent full review, and focused closure re-review.
-`HYG-P607-001` remains a separately owned hygiene follow-up; Phase 60.8
-remains planned and not started.
+`HYG-P607-001` remains a separately owned hygiene follow-up. Phase 60.8
+promoted the canonical Component Admin design/specification in
+`9da0170942b7506ca3879c82d8259798ade5efdd`, corrected `CB-ADM09-001`, and
+passed focused re-review plus the mandatory independent full Phase review.
+It is a documentation-only Phase with no program change repository, so final
+release validation is static and no SBT full suite is required. It admitted no
+Hygiene or Development Candidate record. The Phase 60 series is closed under
+`phase60.8-clb-adm09-20260828`; Phase 61 is eligible but not started.
 
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the
@@ -3727,7 +3733,8 @@ Alignment with Phases 63-65:
   retention work remains owned by this candidate.
 
 ### 9.44 Information CML Runtime Canonicalization
-Planned for Phase 61 after the Phase 60 series closes in Phase 60.8.
+The Phase 60 series closed in Phase 60.8; Phase 61 is the next planned Phase
+and remains unstarted.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected

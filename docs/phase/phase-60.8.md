@@ -1,14 +1,16 @@
 # Phase 60.8 - Component Admin Canonical Documentation and Closure
 
-status=in-progress
+status=closed
 started_at=2026-08-28
 planned_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.7](phase-60.7.md)
 successor=[Phase 61](phase-61.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 60.8 Checklist](phase-60.8-checklist.md)
 consumes_handoff=ADM-08 accepted surface, security, downstream, and review evidence
+closure_binding=phase60.8-clb-adm09-20260828
 
 ## Goal
 
@@ -49,9 +51,15 @@ generation, management policy, or a Phase 61 Information migration change.
 
 ## Current Status
 
-Phase 60.8 is in progress as of 2026-08-28. ADM-09A is promoting the
-accepted ADM-02 through ADM-08 identity, projection, management, and surface
-contracts to the canonical design/specification and marking the implementation
-note historical. Parent-owned focused validation, review, and ADM-09/Step
-closure remain pending. This status does not close Phase 60.8 or the Phase 60
-series and does not start Phase 61.
+Phase 60.8 is closed as of 2026-08-28 under
+`phase60.8-clb-adm09-20260828`. ADM-09 promoted the accepted ADM-02 through
+ADM-08 identity, projection, management, and surface contracts to the canonical
+design/specification and marked the implementation note historical in Step
+commit `9da0170942b7506ca3879c82d8259798ade5efdd`.
+
+`CB-ADM09-001` was corrected and passed focused re-review; the mandatory full
+Phase review then passed with no Current Phase Blocker. The Phase contains no
+program change repository, so final release validation is static and a full SBT
+suite is not required. No Phase 60.8 Hygiene or Development Candidate record
+was admitted. This closes the Phase 60 series; Phase 61 is eligible but is not
+started by this closure.

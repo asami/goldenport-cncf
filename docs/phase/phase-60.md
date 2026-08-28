@@ -5,6 +5,7 @@ planned_at=2026-07-31
 closed_at=2026-08-28
 depends_on=[Phase 59.10](phase-59.10.md)
 successor=[Phase 60.1](phase-60.1.md)
+series_successor=[Phase 61](phase-61.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 60 Checklist](phase-60-checklist.md)
 implementation_note=[Component Admin and Documentation Visibility Implementation Proposal](../notes/component-admin-documentation-visibility-implementation.md)
@@ -173,8 +174,21 @@ Status: CLOSED on 2026-08-28 under `phase60-clb-adm01-20260828`.
   repository; no SBT full suite is required for this release gate.
 - `HYG-P60-001` reconciles the Phase index's obsolete active/current entries
   and is recorded as resolved in the Phase 60 Hygiene follow-up journal.
-- Phase 60.1 is eligible as the next consumer of the accepted ADM-01 handoff,
-  but is not started by this closure.
+- At ADM-01 closure, Phase 60.1 was eligible as the next consumer of the
+  accepted handoff. The sequential child phases 60.1 through 60.8 subsequently
+  completed ADM-02 through ADM-09; the series closes in Phase 60.8.
+
+## Series Closure
+
+The Phase 60 series is closed under `phase60.8-clb-adm09-20260828`.
+Phase 60.8 promoted the canonical [Component Admin design](../design/component-admin.md)
+and [specification](../spec/component-admin.md), with the accepted Step in
+`9da0170942b7506ca3879c82d8259798ade5efdd`. Its corrected focused re-review
+and mandatory independent full Phase review passed with no Current Phase
+Blocker. Phase 60.8 contains no program change repository, so final release
+validation is static and no SBT full suite is required. No Phase 60.8 Hygiene
+or Development Candidate record was admitted. Phase 61 is eligible but is not
+started by this closure.
 
 ## Planning References
 
@@ -188,4 +202,5 @@ Status: CLOSED on 2026-08-28 under `phase60-clb-adm01-20260828`.
 ## Current Status
 
 Phase 60 is closed. ADM-01 is the accepted first independently closable unit
-of the approved Phase 60 series. Phase 60.1 is eligible but not started.
+of the approved Phase 60 series. Phases 60.1 through 60.8 subsequently closed
+ADM-02 through ADM-09, and Phase 61 is eligible but not started.
