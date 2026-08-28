@@ -972,6 +972,57 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
       loaded.isSuccess shouldBe false
     }
 
+    "require exact lower-case canonical component Admin page lookup segments" in {
+      Given("one canonical component Admin page whose request aliases differ by case and underscore normalization")
+      val descriptor = WebDescriptor(adminPages = Vector(
+        WebDescriptor.AdminPage(
+          name = "notifications",
+          href = "/web/notice-board/admin/notifications",
+          component = Some("notice-board")
+        )
+      ))
+
+      When("the descriptor looks up the exact page segment and its case and underscore aliases")
+      val exact = descriptor.adminPage("notice-board", "notifications")
+      val aliases = Vector("Notifications", "notice_board").map(value => descriptor.adminPage("notice-board", value))
+
+      Then("only the exact lower-case canonical request segment resolves")
+      exact.map(_.name) shouldBe Some("notifications")
+      aliases shouldBe Vector(None, None)
+    }
+
+    "reject component Admin page names reserved by existing dispatcher routes" in {
+      Given("one canonical component Admin declaration for each reserved one-segment dispatcher route name")
+      val reserved = Vector("descriptor", "entities", "data", "aggregates", "views")
+      val descriptors = reserved.map { name =>
+        val path = Files.createTempFile(s"cncf-web-descriptor-admin-reserved-${name}", ".yaml")
+        Files.writeString(
+          path,
+          s"""web:
+            |  admin:
+            |    pages:
+            |      - name: ${name}
+            |        href: /web/notice-board/admin/${name}
+            |        component: notice-board
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        path
+      }
+
+      When("the direct descriptor admits the declarations and persisted descriptors are loaded")
+      val direct = WebDescriptor(adminPages = reserved.map(name =>
+        WebDescriptor.AdminPage(name, href = s"/web/notice-board/admin/${name}", component = Some("notice-board"))
+      ))
+      val lookups = reserved.map(name => direct.adminPage("notice-board", name))
+      val loaded = descriptors.map(WebDescriptor.load)
+
+      Then("reserved names are absent from direct lookup and every persisted declaration fails deterministically")
+      direct.adminPagesFor("notice-board") shouldBe Vector.empty
+      lookups shouldBe Vector.fill(reserved.size)(None)
+      loaded.forall(_.isSuccess == false) shouldBe true
+    }
+
     "deduplicate identical Web route aliases during descriptor load" in {
       val path = Files.createTempFile("cncf-web-descriptor-route-duplicate", ".yaml")
       Files.writeString(

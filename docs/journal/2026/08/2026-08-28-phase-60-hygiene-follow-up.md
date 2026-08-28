@@ -48,3 +48,36 @@ Phase 60 acceptance or successor scope.
 - Source identity: `HYG-BASELINE-001`; Phase 60.6 baseline review, preserved
   resolver combined diff SHA-256
   `f4618dbdb0259bfe254818c847782f3231c360954bbe27cdc9ddd3fa37718d9e`.
+
+## HYG-P607-001 — Component Admin target-program size debt
+
+- Status: OPEN
+- Discovered: 2026-08-28, Phase 60.7 mandatory full review and focused closure re-review.
+- Repository and affected paths: `cloud-native-component-framework`;
+  `src/main/scala/org/goldenport/cncf/http/WebDescriptor.scala`,
+  `src/main/scala/org/goldenport/cncf/http/StaticFormAppRendererSystemAdminPart.scala`,
+  `src/test/scala/org/goldenport/cncf/http/WebDescriptorSpec.scala`,
+  `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`, and
+  `src/test/scala/org/goldenport/cncf/http/Http4sHttpServerDispatchSpec.scala`.
+- Evidence: The Phase 60.7 full review recorded pre-existing target-program
+  size debt while accepting the frozen ADM-08 security boundary; the focused
+  closure re-review confirms it remains maintenance-only and no refactor was
+  admitted.
+- Classification: Hygiene — behavior-preserving source/spec decomposition only;
+  no Phase 60.7 security, authorization, canonical-route, or executable-spec
+  defect is admitted.
+- Outside reason: Splitting these target programs would mix a broad
+  behavior-preserving maintenance refactor with the frozen ADM-08 acceptance
+  boundary.
+- Owner and later boundary: A separately authorized Component Admin source-size
+  hygiene task.
+- Dependency: The closed Phase 60.7 ADM-08 boundary.
+- Resume condition: An explicit hygiene task admits only the selected
+  target-program decomposition, preserves behavior, and runs proportionate
+  Web/Admin validation.
+- Prohibited local workaround: Do not refactor, stage, or reinterpret this
+  size debt in the Phase 60.7 release; do not use it to reopen Phase 60.7 or
+  begin Phase 60.8.
+- Source identity: `HYG-P607-001`; Phase 60.7 full review of
+  `d4771a43f2950ebcee481341fb2db3ddb9696e0c..4cbd331d5a3f341b67e876fb85c402dfaa9ac563`
+  and focused closure re-review of the accepted CPB repair delta.

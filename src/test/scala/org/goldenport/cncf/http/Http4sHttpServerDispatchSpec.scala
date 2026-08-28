@@ -1216,6 +1216,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       When("declared, undeclared, and declared-but-templateless component admin routes are dispatched through the existing authorization checkpoint")
       val applicationadmin = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/admin"))).unsafeRunSync()
       val declared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/notifications"))).unsafeRunSync()
+      val casealias = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/Notifications"))).unsafeRunSync()
+      val underscorealias = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/notice_board"))).unsafeRunSync()
       val undeclared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/unknown"))).unsafeRunSync()
       val missingtemplate = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/missing-template"))).unsafeRunSync()
       val applicationadminbody = applicationadmin.as[String].unsafeRunSync()
@@ -1227,6 +1229,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       applicationadminbody should include ("Notification Admin")
       declared.status.code shouldBe 200
       declaredbody should include ("Notification Admin")
+      casealias.status.code shouldBe 404
+      underscorealias.status.code shouldBe 404
       undeclared.status.code shouldBe 404
       missingtemplate.status.code shouldBe 404
     }

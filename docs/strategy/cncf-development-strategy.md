@@ -3623,7 +3623,17 @@ exact runtime identity and lifecycle evidence, validated action input,
 attributable audit, and deterministic outcomes. It is closed under
 `phase60.6-clb-adm07-20260828` after its bounded repair cycle and final full
 suite. `HYG-BASELINE-001` remains a separately owned resolver-header hygiene
-follow-up; Phase 60.7 remains planned and not started.
+follow-up. Phase 60.7 delivers the reviewed package-private, value-only
+`ComponentAdminSurfaceSecurity` projection of the exact validated Admin view
+through Web, HTTP, CLI, and machine descriptors. It retains metadata-only
+documentation disclosure only for exact existing Human Help navigation,
+requires an exact Active authorized-management target before display
+eligibility, and limits component pages to declared canonical routes with
+deterministic absence for aliases and reserved dispatcher names. It is closed
+under `phase60.7-clb-adm08-20260828` after one bounded repair cycle, final full
+suite, independent full review, and focused closure re-review.
+`HYG-P607-001` remains a separately owned hygiene follow-up; Phase 60.8
+remains planned and not started.
 
 The split adds Phase, handoff, validation, review, and commit overhead, but it
 keeps every child at or below six hours and limits Terra/xhigh work to the

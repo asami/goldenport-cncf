@@ -4,7 +4,7 @@ import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.component.repository.{ComponentResourceAuthorization, ComponentResourceAvailability, ComponentResourceIntegrity, ComponentResourceLogicalIdentity, ComponentResourceSourceKind}
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 import org.goldenport.cncf.http.WebDescriptor
-import org.goldenport.cncf.knowledge.{ComponentKnowledgeAuthority, ComponentKnowledgeDisclosure, ComponentKnowledgeHelpManifestIdentity, ComponentKnowledgeHelpResourceRoute, ComponentKnowledgeManifestConsumerMetadataEvidence, ComponentKnowledgeManifestConsumerResourceEvidence, ComponentKnowledgeManifestConsumerSafeProvenanceEvidence, ComponentKnowledgeMediaType, ComponentKnowledgeResourceKind, ComponentKnowledgeResourceRole, ComponentKnowledgeSource, ComponentKnowledgeStability}
+import org.goldenport.cncf.knowledge.{ComponentKnowledgeAuthority, ComponentKnowledgeDisclosure, ComponentKnowledgeHelpDevelopmentContextEvidence, ComponentKnowledgeHelpDiscoveryDescriptor, ComponentKnowledgeHelpHumanNavigation, ComponentKnowledgeHelpManifestIdentity, ComponentKnowledgeHelpManifestRoute, ComponentKnowledgeHelpResourceNavigation, ComponentKnowledgeHelpResourceRoute, ComponentKnowledgeManifestConsumerMetadataEvidence, ComponentKnowledgeManifestConsumerResourceEvidence, ComponentKnowledgeManifestConsumerSafeProvenanceEvidence, ComponentKnowledgeMediaType, ComponentKnowledgeResourceKind, ComponentKnowledgeResourceRole, ComponentKnowledgeSource, ComponentKnowledgeStability}
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -105,6 +105,92 @@ final class ComponentAdminSurfaceSecuritySpec
       user.web.ordinaryQueries shouldBe Vector(ComponentAdminOrdinaryQueryDisplay("entity/list", visible = true))
       anonymous.web.management.forall(value => !value.eligible) shouldBe true
       mismatched.map(_.web.management.find(_.selector == "entity/create").map(_.eligible)) shouldBe Vector.fill(variants.size)(Some(false))
+    }
+
+    "withhold display eligibility from every non-Active lifecycle" in {
+      Given("one otherwise authorized visible and available management action for each Constructed, Stopped, and Failed lifecycle")
+      val view = _view()
+      val documentation = _documentation(view)
+      val descriptor = _descriptor(view)
+      val catalogs = Vector(
+        ComponentAdminLifecycleState.Constructed,
+        ComponentAdminLifecycleState.Stopped,
+        ComponentAdminLifecycleState.Failed
+      ).map(value => _catalog(view, visible = Set("entity/create"), lifecyclestate = value))
+
+      When("the surface contract projects each non-Active catalog while the action remains authorized")
+      val projected = catalogs.map { catalog =>
+        given ExecutionContext = _user_context
+        ComponentAdminSurfaceSecurity.projectC(view, documentation, catalog, descriptor).toOption
+      }
+
+      Then("the action is ineligible for every non-Active lifecycle while the Active positive case remains eligible")
+      projected.map(_.flatMap(_.web.management.find(_.selector == "entity/create").map(_.eligible))) shouldBe Vector.fill(catalogs.size)(Some(false))
+      given ExecutionContext = _user_context
+      ComponentAdminSurfaceSecurity.projectC(view, documentation, _catalog(view, visible = Set("entity/create")), descriptor).toOption
+        .flatMap(_.web.management.find(_.selector == "entity/create").map(_.eligible)) shouldBe Some(true)
+    }
+
+    "reject documentation navigation with a foreign Help identity" in {
+      Given("a valid metadata-only documentation navigation whose Help human-navigation identity names another Component and release")
+      val view = _view()
+      val documentation = _documentation(view)
+      val foreignhelp = documentation.helpnavigation.copy(
+        manifestIdentity = ComponentKnowledgeHelpManifestIdentity(ComponentId("org.goldenport.cncf.admin.Foreign"), "9.0.0")
+      )
+      val foreign = documentation.copy(helpnavigation = foreignhelp)
+
+      When("the surface security projection evaluates the foreign Help identity")
+      given ExecutionContext = _user_context
+      val projected = ComponentAdminSurfaceSecurity.projectC(view, foreign, _catalog(view, visible = Set("entity/create")), _descriptor(view))
+
+      Then("the projection fails closed before disclosing documentation metadata")
+      projected.isSuccess shouldBe false
+    }
+
+    "reject documentation navigation with a foreign resource identity" in {
+      Given("a valid metadata-only documentation navigation whose projected resource belongs to another Component and release")
+      val view = _view()
+      val documentation = _documentation(view)
+      val foreignresource = documentation.navigations.head.resource.copy(
+        logicalIdentity = ComponentResourceLogicalIdentity(
+          ComponentId("org.goldenport.cncf.admin.Foreign"),
+          "9.0.0",
+          None,
+          "documentation",
+          "urn:cncf:resource:phase607:foreign"
+        )
+      )
+      val foreign = documentation.copy(
+        navigations = Vector(documentation.navigations.head.copy(resource = foreignresource))
+      )
+
+      When("the surface security projection evaluates the foreign resource identity")
+      given ExecutionContext = _user_context
+      val projected = ComponentAdminSurfaceSecurity.projectC(view, foreign, _catalog(view, visible = Set("entity/create")), _descriptor(view))
+
+      Then("the projection fails closed before disclosing foreign resource metadata")
+      projected.isSuccess shouldBe false
+    }
+
+    "reject documentation navigation with a foreign or encoded route" in {
+      Given("a valid metadata-only documentation navigation and foreign, encoded-separator, and encoded-traversal route variants")
+      val view = _view()
+      val documentation = _documentation(view)
+      val variants = Vector(
+        documentation.navigations.head.route.copy(path = "/help/other-component/manual/user-guide"),
+        documentation.navigations.head.route.copy(path = "/help/org-goldenport-cncf-admin-surface/manual/%2Fuser-guide"),
+        documentation.navigations.head.route.copy(path = "/help/org-goldenport-cncf-admin-surface/manual/%2e%2e/source")
+      ).map(route => documentation.copy(navigations = Vector(documentation.navigations.head.copy(route = route))))
+
+      When("the surface security projection evaluates each route variant against the existing Help human-navigation route")
+      val projected = variants.map { value =>
+        given ExecutionContext = _user_context
+        ComponentAdminSurfaceSecurity.projectC(view, value, _catalog(view, visible = Set("entity/create")), _descriptor(view))
+      }
+
+      Then("foreign resource routes and encoded separator or traversal variants are rejected")
+      projected.forall(_.isSuccess == false) shouldBe true
     }
 
     "retain deterministic ordering and encoded disclosure when hostile page segments are supplied" in {
@@ -227,9 +313,31 @@ final class ComponentAdminSurfaceSecuritySpec
         helppath
       )
     )
+    val helpidentity = ComponentKnowledgeHelpManifestIdentity(componentid, release)
+    val helproute = ComponentKnowledgeHelpResourceRoute(helpidentity, logicalpath, helppath)
+    val helpnavigation = ComponentKnowledgeHelpHumanNavigation(
+      helpidentity,
+      ComponentKnowledgeHelpDiscoveryDescriptor(
+        "describedby",
+        "application/vnd.cncf.component-knowledge+json;version=1",
+        ComponentKnowledgeHelpManifestRoute(helpidentity, "/help/org-goldenport-cncf-admin-surface", "/help/org-goldenport-cncf-admin-surface/manifest")
+      ),
+      Vector(ComponentKnowledgeHelpResourceNavigation(
+        logicalpath,
+        ComponentKnowledgeResourceKind.Documentation,
+        ComponentKnowledgeResourceRole.Documentation,
+        Some("en"),
+        ComponentKnowledgeMediaType.TextMarkdown,
+        availability,
+        integrity,
+        authorization,
+        helproute
+      )),
+      ComponentKnowledgeHelpDevelopmentContextEvidence.Ready
+    )
     ComponentAdminDocumentationNavigationView(
       view,
-      null,
+      helpnavigation,
       navigation,
       navigation,
       navigation,
@@ -245,7 +353,8 @@ final class ComponentAdminSurfaceSecuritySpec
     view: ComponentAdminViewModel,
     visible: Set[String],
     unavailable: Set[String] = Set.empty,
-    denied: Set[String] = Set.empty
+    denied: Set[String] = Set.empty,
+    lifecyclestate: ComponentAdminLifecycleState = ComponentAdminLifecycleState.Active
   ): ComponentAdminAuthorizedManagementCatalog = {
     val binding = ComponentAdminRuntimeIdentityBinding(
       view.selectedLogicalRelease.value,
@@ -254,8 +363,8 @@ final class ComponentAdminSurfaceSecuritySpec
       view.implicitComponentSubsystem.value
     )
     val lifecycle = ComponentAdminLifecycleEvidence(
-      ComponentAdminLifecycleState.Active,
-      "active",
+      lifecyclestate,
+      lifecyclestate.toString.toLowerCase,
       view.resourceState.provenance
     )
     val registrations = _management_selectors.map { selector =>

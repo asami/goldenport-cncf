@@ -15,17 +15,17 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed phase: `phase-60.6.md` - ADM-07 Component Admin authorized
-  management. It is closed under `phase60.6-clb-adm07-20260828`; Phase 60.7
+- Latest closed phase: `phase-60.7.md` - ADM-08 Component Admin surface and
+  security acceptance. It is closed under `phase60.7-clb-adm08-20260828`; Phase 60.8
   remains planned and not started.
 - Latest closed Phase 59-series phase: `phase-59.10.md` - DOC-10 canonical
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
   regression, downstream, and full-suite evidence without changing behavior.
 - Phase 59 is fully closed. Phase 60 is closed after ADM-01; Phases 60.1,
-  60.2, 60.3, 60.4, 60.5, and 60.6 are closed after ADM-02, ADM-03, ADM-04,
-  ADM-05, ADM-06, and ADM-07. `phase-60.7.md` and `phase-60.8.md` retain the
-  later independently closable ADM-08 and ADM-09 stages.
+  60.2, 60.3, 60.4, 60.5, 60.6, and 60.7 are closed after ADM-02, ADM-03,
+  ADM-04, ADM-05, ADM-06, ADM-07, and ADM-08. `phase-60.8.md` retains the
+  later independently closable ADM-09 stage.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
@@ -40,9 +40,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. `phase-60.7.md` (ADM-08)
+- Active phase in the current CNCF sequence: none. `phase-60.8.md` (ADM-09)
   remains planned and requires its own explicit start.
-- Latest closed checklist: `phase-60.6-checklist.md`.
+- Latest closed checklist: `phase-60.7-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -94,8 +94,9 @@ Current baseline:
   - `phase-60.4.md`
   - `phase-60.5.md`
   - `phase-60.6.md`
+  - `phase-60.7.md`
 - Active phase set currently includes:
-  - none; `phase-60.7.md` is planned and not started
+  - none; `phase-60.8.md` is planned and not started
 
 ## Related Rules
 

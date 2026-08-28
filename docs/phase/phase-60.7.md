@@ -1,7 +1,9 @@
 # Phase 60.7 - Component Admin Surface and Security Acceptance
 
-status=planned
+status=closed
 planned_at=2026-08-28
+started_at=2026-08-28
+closed_at=2026-08-28
 split_from=[Phase 60](phase-60.md)
 depends_on=[Phase 60.6](phase-60.6.md)
 successor=[Phase 60.8](phase-60.8.md)
@@ -49,4 +51,16 @@ application-specific navigation systems, or new management authority.
 
 ## Current Status
 
-Phase 60.7 is planned and starts only after Phase 60.6 closes.
+Phase 60.7 is closed under `phase60.7-clb-adm08-20260828`. ADM-08 delivers
+the reviewed package-private, value-only `ComponentAdminSurfaceSecurity`
+projection: the exact validated Component Admin view is retained across Web,
+HTTP, CLI, and machine surfaces; documentation remains metadata-only and binds
+to the existing exact Human Help route; management display eligibility requires
+the admitted catalog's exact identity, Active lifecycle, visibility,
+availability, and stored-operation authorization. Component Admin pages remain
+declared, canonical `/web/{component}/admin/{page}` routes with deterministic
+absence for aliases, reserved dispatcher names, undeclared pages, and missing
+templates. The final focused and full suites, full Phase review, and focused
+closure re-review are bound to this distinct closure. `HYG-P607-001` is
+recorded as a separate target-program size follow-up. This closure does not
+start Phase 60.8.

@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.repository.{ComponentResourceAuthorization, ComponentResourceAvailability, ComponentResourceIntegrity, ComponentResourceLogicalIdentity, ComponentResourceSourceKind}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.WebDescriptor
-import org.goldenport.cncf.knowledge.{ComponentKnowledgeManifestConsumerSafeProvenanceEvidence, ComponentKnowledgeMediaType, ComponentKnowledgeResourceKind, ComponentKnowledgeResourceRole}
+import org.goldenport.cncf.knowledge.{ComponentKnowledgeHelpManifestIdentity, ComponentKnowledgeManifestConsumerSafeProvenanceEvidence, ComponentKnowledgeMediaType, ComponentKnowledgeResourceKind, ComponentKnowledgeResourceRole}
 import org.goldenport.cncf.security.OperationAuthorization
 
 /*
@@ -149,11 +149,12 @@ private[cncf] object ComponentAdminSurfaceSecurity {
   )(using context: ExecutionContext): SurfaceValues = {
     val pages = descriptor.adminPagesFor(_component_path(identityview)).flatMap(_page)
     val targetmatches = _target_matches(identityview, catalog.target)
+    val targetactive = Option(catalog.target).flatMap(value => Option(value.lifecycle)).exists(_.state == ComponentAdminLifecycleState.Active)
     val management = Option(catalog.managementInventory).getOrElse(Vector.empty).flatMap { registration =>
       Option(registration).map { value =>
         val authorized = OperationAuthorization.authorize(value.selector.value, value.authorization).isSuccess
         val available = value.availability == ComponentAdminManagementAvailability.Available
-        val eligible = targetmatches && value.visible && available && authorized
+        val eligible = targetmatches && targetactive && value.visible && available && authorized
         ComponentAdminManagementDisplay(value.selector.value, value.visible, available, authorized, eligible)
       }
     }
@@ -181,18 +182,54 @@ private[cncf] object ComponentAdminSurfaceSecurity {
   private def _documentation(
     navigation: ComponentAdminDocumentationNavigationView
   ): Either[String, Vector[ComponentAdminSurfaceDocumentation]] =
-    Option(navigation.navigations)
-      .toRight("Component Admin documentation navigation entries are required")
-      .flatMap(values => _sequence(values.map(_documentation_entry)))
+    for {
+      value <- Option(navigation).toRight("Component Admin documentation navigation is required")
+      help <- Option(value.helpnavigation).toRight("Component Admin Help human navigation is required")
+      values <- Option(value.navigations).toRight("Component Admin documentation navigation entries are required")
+      expectedidentity <- Option(value.identityview).flatMap(identityview =>
+        Option(identityview.componentClass).map(_.value).flatMap(Option(_)).flatMap(componentclass =>
+          Option(identityview.selectedLogicalRelease).map(_.value).flatMap(Option(_)).map(release =>
+            ComponentKnowledgeHelpManifestIdentity(componentclass.componentId, release.release)
+          )
+        )
+      ).toRight("Component Admin Help human navigation identity is required")
+      _ <- Either.cond(help.manifestIdentity == expectedidentity, (), "Component Admin Help human navigation must match the Admin identity")
+      result <- _sequence(values.map(value => _documentation_entry(value, help, expectedidentity)))
+    } yield result
 
   private def _documentation_entry(
-    navigation: ComponentAdminDocumentationResourceNavigation
+    navigation: ComponentAdminDocumentationResourceNavigation,
+    help: org.goldenport.cncf.knowledge.ComponentKnowledgeHelpHumanNavigation,
+    expectedidentity: ComponentKnowledgeHelpManifestIdentity
   ): Either[String, ComponentAdminSurfaceDocumentation] =
     for {
       value <- Option(navigation).toRight("Component Admin documentation entry is required")
       resource <- Option(value.resource).toRight("Component Admin documentation resource is required")
+      logicalidentity <- Option(resource.logicalIdentity).toRight("Component Admin documentation resource logical identity is required")
+      _ <- Either.cond(
+        logicalidentity.componentId == expectedidentity.componentId && logicalidentity.logicalRelease == expectedidentity.logicalRelease,
+        (),
+        "Component Admin documentation resource identity must match the Help manifest identity"
+      )
       route <- Option(value.route).toRight("Component Admin Help route is required")
+      _ <- Either.cond(
+        route.manifestIdentity == expectedidentity && route.logicalPath == resource.logicalPath,
+        (),
+        "Component Admin Help route must match the Help manifest identity and resource logical path"
+      )
       path <- _help_path(route.path)
+      resources <- Option(help.resources).toRight("Component Admin Help human navigation resources are required")
+      _ <- Either.cond(!resources.exists(_ == null), (), "Component Admin Help human navigation resources must not contain null values")
+      matching <- resources.filter(_.logicalPath == resource.logicalPath) match {
+        case Vector(value) => Right(value)
+        case Vector() => Left("Component Admin Help human navigation has no matching resource")
+        case _ => Left("Component Admin Help human navigation has ambiguous matching resources")
+      }
+      _ <- Either.cond(
+        matching.route == route,
+        (),
+        "Component Admin Help human navigation route must match the projected route"
+      )
       provenance <- Option(resource.provenance).toRight("Component Admin documentation provenance is required")
     } yield ComponentAdminSurfaceDocumentation(
       resource.logicalIdentity,
@@ -222,10 +259,15 @@ private[cncf] object ComponentAdminSurfaceSecurity {
 
   private def _help_path(value: String): Either[String, String] =
     Option(value).filter { path =>
+      val encoded = path.toLowerCase
       path.startsWith("/help/") &&
         !path.exists(_.isControl) &&
+        !path.contains('\\') &&
         !path.contains('?') &&
         !path.contains('#') &&
+        !encoded.contains("%2f") &&
+        !encoded.contains("%5c") &&
+        !encoded.contains("%2e") &&
         path.split("/", -1).drop(1).forall(segment => segment.nonEmpty && segment != "." && segment != "..")
     }.toRight("Component Admin Help route must be a canonical encoded Help path")
 

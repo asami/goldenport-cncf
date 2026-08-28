@@ -475,19 +475,19 @@ final case class WebDescriptor(
   def adminPagesFor(
     componentname: String
   ): Vector[WebDescriptor.AdminPage] =
-    adminPages.filter(page => page.isCanonicalComponentPage && page.matchesComponent(componentname))
+    adminPages.filter(page => page.isCanonicalComponentPage && !WebDescriptor._is_reserved_component_admin_page(page) && page.matchesComponent(componentname))
 
   def adminPagesForAudience(
     audience: WebDescriptor.AdminAudience
   ): Vector[WebDescriptor.AdminPage] =
-    adminPages.filter(page => page.isCanonicalComponentPage && page.audience == audience)
+    adminPages.filter(page => page.isCanonicalComponentPage && !WebDescriptor._is_reserved_component_admin_page(page) && page.audience == audience)
 
   def adminPage(
     componentname: String,
     pagename: String
   ): Option[WebDescriptor.AdminPage] = {
-    val page = WebDescriptor.normalizeSelector(pagename)
-    adminPagesFor(componentname).find(_.normalizedName == page)
+    val page = Option(pagename).filter(value => WebDescriptor._canonical_admin_segment(value).contains(value))
+    page.flatMap(value => adminPagesFor(componentname).find(_.name == value))
   }
 }
 
@@ -1145,6 +1145,8 @@ object WebDescriptor {
         case page if page.componentHrefMismatch.nonEmpty =>
           val (declared, href) = page.componentHrefMismatch.get
           s"invalid admin page component in ${path}: ${page.name} component=${declared}, href component=${href}"
+        case page if page.isCanonicalComponentPage && _is_reserved_component_admin_page(page) =>
+          s"invalid admin page route in ${path}: ${page.name} is reserved by the component Admin dispatcher"
         case page if !page.isCanonicalComponentPage =>
           s"invalid admin page route in ${path}: ${page.name} must declare one canonical component Admin route"
       }
@@ -1628,6 +1630,12 @@ object WebDescriptor {
       _normalize_app_segment(segment) == segment &&
         segment.matches("[a-z0-9]+(?:[.-][a-z0-9]+)*")
     }
+
+  private val _reserved_component_admin_page_names = Set("descriptor", "entities", "data", "aggregates", "views")
+
+  private def _is_reserved_component_admin_page(page: AdminPage): Boolean =
+    page.component.nonEmpty &&
+      _canonical_admin_segment(page.name).exists(value => !value.contains(".") && _reserved_component_admin_page_names.contains(value))
 
   def normalizeSelector(value: String): String =
     _normalize_selector(value)
