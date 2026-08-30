@@ -101,7 +101,7 @@ final class InformationSpace {
         workingData = workingdata,
         state = InformationLifecycleState.imported,
         validationIssues = Vector.empty,
-        updatedAt = ctx.clock.instant()
+        lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
       )
     }
 
@@ -112,7 +112,7 @@ final class InformationSpace {
     _update_information(informationid) { information =>
       information.copy(
         fieldEvents = information.fieldEvents :+ event,
-        updatedAt = ctx.clock.instant()
+        lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
       )
     }
 
@@ -123,7 +123,7 @@ final class InformationSpace {
     _update_information(informationid) { information =>
       information.copy(
         fieldEvents = information.fieldEvents ++ events,
-        updatedAt = ctx.clock.instant()
+        lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
       )
     }
 
@@ -141,7 +141,7 @@ final class InformationSpace {
         val updated = information.copy(
           state = state,
           validationIssues = issues,
-          updatedAt = ctx.clock.instant()
+          lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
         )
         _replace_information(updated)
         Consequence.success(updated)
@@ -169,7 +169,7 @@ final class InformationSpace {
           state = InformationLifecycleState.needsResolution,
           resolutionCandidates = information.resolutionCandidates :+ candidate,
           identityBindings = information.identityBindings :+ nextbinding,
-          updatedAt = ctx.clock.instant()
+          lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
         )
         _replace_information(updated)
         Consequence.success(candidate)
@@ -199,7 +199,7 @@ final class InformationSpace {
               state = state,
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              updatedAt = ctx.clock.instant()
+              lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
             )
             _replace_information(updated)
             Consequence.success(selected)
@@ -226,7 +226,7 @@ final class InformationSpace {
               state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              updatedAt = ctx.clock.instant()
+              lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
             )
             _replace_information(updated)
             Consequence.success(candidate)
@@ -258,7 +258,7 @@ final class InformationSpace {
               state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              updatedAt = ctx.clock.instant()
+              lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
             )
             _replace_information(updated)
             Consequence.success(nextcandidate)
@@ -282,7 +282,7 @@ final class InformationSpace {
           state = InformationLifecycleState.confirmed,
           identityBindings = bindings,
           confirmedAt = information.confirmedAt.orElse(Some(now)),
-          updatedAt = now
+          lifecycleAttributes = Information.lifecycleAttributes(now)
         )
         _replace_information(confirmed)
         Consequence.success(confirmed)
@@ -300,10 +300,20 @@ final class InformationSpace {
     informationid: InformationId,
     reason: String
   )(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information(informationid)(_.copy(state = InformationLifecycleState.rejected, updatedAt = ctx.clock.instant()))
+    _update_information(informationid) { information =>
+      information.copy(
+        state = InformationLifecycleState.rejected,
+        lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
+      )
+    }
 
   def reopenInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information(informationid)(_.copy(state = InformationLifecycleState.readyForConfirmation, updatedAt = ctx.clock.instant()))
+    _update_information(informationid) { information =>
+      information.copy(
+        state = InformationLifecycleState.readyForConfirmation,
+        lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
+      )
+    }
 
   def publishInformation(
     informationid: InformationId,
@@ -326,7 +336,7 @@ final class InformationSpace {
         val published = information.copy(
           state = InformationLifecycleState.published,
           publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
-          updatedAt = now
+          lifecycleAttributes = Information.lifecycleAttributes(now)
         )
         _replace_information(published)
         Consequence.success(publication)
@@ -356,7 +366,7 @@ final class InformationSpace {
         )
         val failed = information.copy(
           publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
-          updatedAt = now
+          lifecycleAttributes = Information.lifecycleAttributes(now)
         )
         _replace_information(failed)
         Consequence.success(publication)
@@ -391,7 +401,7 @@ final class InformationSpace {
         val updated = information.copy(
           state = InformationLifecycleState.conflict,
           conflicts = information.conflicts :+ conflict,
-          updatedAt = ctx.clock.instant()
+          lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
         )
         _replace_information(updated)
         Consequence.success(conflict)
@@ -426,7 +436,11 @@ final class InformationSpace {
                 information.publicationStatuses.find(_.state == InformationPublicationState.published).fold(InformationLifecycleState.confirmed)(_ => InformationLifecycleState.published)
               else
                 InformationLifecycleState.conflict
-            _replace_information(information.copy(state = state, conflicts = conflicts, updatedAt = ctx.clock.instant()))
+            _replace_information(information.copy(
+              state = state,
+              conflicts = conflicts,
+              lifecycleAttributes = Information.lifecycleAttributes(ctx.clock.instant())
+            ))
             Consequence.success(resolved)
           case None =>
             Consequence.argumentInvalid(s"information conflict not found: $conflictkey")

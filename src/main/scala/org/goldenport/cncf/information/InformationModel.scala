@@ -11,7 +11,7 @@ import org.goldenport.cncf.knowledge.{
 }
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 
 /*
  * @since   May. 20, 2026
@@ -77,56 +77,93 @@ object InformationFieldState {
 
 type InformationImportContext = value.InformationImportContext
 
-final case class Information(
-  id: InformationId,
-  domain: String,
-  rawData: Record,
-  workingData: Record,
-  state: InformationLifecycleState = InformationLifecycleState.imported,
-  importContext: Option[InformationImportContext] = None,
-  validationIssues: Vector[InformationValidationIssue] = Vector.empty,
-  resolutionCandidates: Vector[InformationResolutionCandidate] = Vector.empty,
-  identityBindings: Vector[InformationIdentityBinding] = Vector.empty,
-  publicationStatuses: Vector[InformationPublicationStatus] = Vector.empty,
-  conflicts: Vector[InformationConflict] = Vector.empty,
-  fieldEvents: Vector[InformationFieldEvent] = Vector.empty,
-  confirmedAt: Option[Instant] = None,
-  updatedAt: Instant
-) {
-  def data: Record = workingData
+// The CML-generated types are the only Information runtime model.  These
+// root-level aliases keep the established source surface while deliberately
+// confining compatibility behavior to construction and legacy wire decoding.
+type Information = entity.Information
+object Information {
+  def apply(
+    id: InformationId,
+    domain: String,
+    rawData: Record,
+    workingData: Record,
+    state: InformationLifecycleState = InformationLifecycleState.imported,
+    importContext: Option[InformationImportContext] = None,
+    validationIssues: Vector[InformationValidationIssue] = Vector.empty,
+    resolutionCandidates: Vector[InformationResolutionCandidate] = Vector.empty,
+    identityBindings: Vector[InformationIdentityBinding] = Vector.empty,
+    publicationStatuses: Vector[InformationPublicationStatus] = Vector.empty,
+    conflicts: Vector[InformationConflict] = Vector.empty,
+    fieldEvents: Vector[InformationFieldEvent] = Vector.empty,
+    confirmedAt: Option[Instant] = None,
+    updatedAt: Instant = Instant.EPOCH
+  ): Information =
+    entity.Information.Builder()
+      .withId(id)
+      .withRevision(EntityRevision.INITIAL)
+      .withLifecycleAttributes(Information.lifecycleAttributes(updatedAt))
+      .withDomain(domain)
+      .withRawData(rawData)
+      .withWorkingData(workingData)
+      .withState(state)
+      .withImportContext(importContext)
+      .withValidationIssues(validationIssues)
+      .withResolutionCandidates(resolutionCandidates)
+      .withIdentityBindings(identityBindings)
+      .withPublicationStatuses(publicationStatuses)
+      .withConflicts(conflicts)
+      .withFieldEvents(fieldEvents)
+      .withConfirmedAt(confirmedAt)
+      .buildC()
+      .TAKE
+
+  private[information] def lifecycleAttributes(updatedAt: Instant) =
+    org.simplemodeling.model.value.LifecycleAttributes(
+      updatedAt,
+      updatedAt,
+      org.goldenport.datatype.Identifier("system"),
+      org.goldenport.datatype.Identifier("system"),
+      org.simplemodeling.model.statemachine.PostStatus.default,
+      org.simplemodeling.model.statemachine.Aliveness.default
+    )
 }
 
-final case class InformationValidationIssue(
-  fieldPath: String,
-  severity: String,
-  message: String
-)
+extension (information: Information) {
+  def data: Record = information.workingData
+  def updatedAt: Instant = information.lifecycleAttributes.updatedAt
+}
 
-final case class InformationIdentityBinding(
-  rdfSubject: Option[RdfNodeName] = None,
-  externalIdentifiers: Vector[ExternalKnowledgeIdentifier] = Vector.empty,
-  entityBindings: Vector[KnowledgeEntityBinding] = Vector.empty,
-  knowledgeNodeId: Option[KnowledgeNodeId] = None,
-  authority: Option[String] = None,
-  confidence: Option[Double] = None,
-  status: InformationBindingStatus = InformationBindingStatus.candidate
-)
+type InformationValidationIssue = value.InformationValidationIssue
+object InformationValidationIssue {
+  def apply(fieldPath: String, severity: String, message: String): InformationValidationIssue =
+    value.InformationValidationIssue(fieldPath, severity, message)
+}
 
+type InformationIdentityBinding = value.InformationIdentityBinding
 object InformationIdentityBinding {
-  def createC(record: Record): Consequence[InformationIdentityBinding] =
-    for {
-      rdfsubject <- _record_get_as_c[RdfNodeName](record, List("rdfSubject", "rdf_subject"))
-      knowledgenodeid <- _record_get_as_c[KnowledgeNodeId](record, List("knowledgeNodeId", "knowledge_node_id"))
-      authority <- record.getAsC[String]("authority")
-      confidence <- record.getAsC[Double]("confidence")
-    } yield InformationIdentityBinding(
-      rdfSubject = rdfsubject,
-      externalIdentifiers = Vector.empty,
-      entityBindings = Vector.empty,
-      knowledgeNodeId = knowledgenodeid,
-      authority = authority,
-      confidence = confidence
+  def apply(
+    rdfSubject: Option[RdfNodeName] = None,
+    externalIdentifiers: Vector[ExternalKnowledgeIdentifier] = Vector.empty,
+    entityBindings: Vector[KnowledgeEntityBinding] = Vector.empty,
+    knowledgeNodeId: Option[KnowledgeNodeId] = None,
+    authority: Option[String] = None,
+    confidence: Option[Double] = None,
+    status: InformationBindingStatus = InformationBindingStatus.candidate
+  ): InformationIdentityBinding =
+    value.InformationIdentityBinding(
+      rdfSubject,
+      externalIdentifiers,
+      entityBindings,
+      knowledgeNodeId,
+      authority,
+      confidence,
+      status
     )
+
+  def createC(record: Record): Consequence[InformationIdentityBinding] =
+    _normalize_aliases(record)
+      .flatMap(_supply_default_status)
+      .flatMap(value.InformationIdentityBinding.createC)
 
   given ValueReader[InformationIdentityBinding] with {
     def readC(v: Any): Consequence[InformationIdentityBinding] = v match {
@@ -136,76 +173,118 @@ object InformationIdentityBinding {
     }
   }
 
-  private def _record_get_as_c[A](
+  private def _normalize_aliases(record: Record): Consequence[Record] =
+    for {
+      withrdfsubject <- _normalize_alias[RdfNodeName](record, "rdfSubject", "rdf_subject")
+      withknowledgenodeid <- _normalize_alias[KnowledgeNodeId](withrdfsubject, "knowledgeNodeId", "knowledge_node_id")
+    } yield withknowledgenodeid
+
+  private def _normalize_alias[A](
     record: Record,
-    keys: List[String]
-  )(using vr: ValueReader[A]): Consequence[Option[A]] =
-    keys.foldLeft(Consequence.success(Option.empty[A])) { (z, key) =>
-      z.flatMap {
-        case s @ Some(_) => Consequence.success(s)
-        case None => record.getAsC[A](key)
+    canonical: String,
+    alias: String
+  )(using ValueReader[A]): Consequence[Record] =
+    for {
+      canonicalvalue <- record.getAsC[A](canonical)
+      aliasvalue <- record.getAsC[A](alias)
+      normalized <- (canonicalvalue, aliasvalue) match {
+        case (Some(left), Some(right)) if left != right =>
+          Consequence.argumentInvalid(s"conflicting Information compatibility aliases: $canonical and $alias")
+        case (None, Some(value)) =>
+          Consequence.success(record ++ Record.dataAuto(canonical -> value))
+        case _ =>
+          Consequence.success(record)
       }
+    } yield normalized
+
+  private def _supply_default_status(record: Record): Consequence[Record] =
+    record.getAsC[InformationBindingStatus]("status").map {
+      case Some(_) => record
+      case None => record ++ Record.dataAuto("status" -> InformationBindingStatus.candidate)
     }
 }
 
-final case class InformationResolutionCandidate(
-  candidateKey: String,
-  fieldPath: String,
-  candidateLabel: String,
-  binding: InformationIdentityBinding,
-  confidence: Option[Double] = None,
-  evidence: Option[String] = None,
-  selected: Boolean = false
-) {
-  def label: String = candidateLabel
+type InformationResolutionCandidate = value.InformationResolutionCandidate
+object InformationResolutionCandidate {
+  def apply(
+    candidateKey: String,
+    fieldPath: String,
+    candidateLabel: String,
+    binding: InformationIdentityBinding,
+    confidence: Option[Double] = None,
+    evidence: Option[String] = None,
+    selected: Boolean = false
+  ): InformationResolutionCandidate =
+    value.InformationResolutionCandidate(candidateKey, fieldPath, candidateLabel, binding, confidence, evidence, selected)
 }
 
-final case class InformationPublicationStatus(
-  publicationKey: String,
-  state: InformationPublicationState,
-  target: String,
-  message: Option[String] = None,
-  knowledgeFrameId: Option[KnowledgeFrameId] = None,
-  publishedAt: Option[Instant] = None
-)
+extension (candidate: InformationResolutionCandidate)
+  def label: String = candidate.candidateLabel
 
-final case class InformationConflict(
-  conflictKey: String,
-  fieldPath: String,
-  informationValue: String,
-  rdfValue: String,
-  severity: String = "warning",
-  state: InformationConflictState = InformationConflictState.open,
-  resolution: Option[String] = None
-)
+type InformationPublicationStatus = value.InformationPublicationStatus
+object InformationPublicationStatus {
+  def apply(
+    publicationKey: String,
+    state: InformationPublicationState,
+    target: String,
+    message: Option[String] = None,
+    knowledgeFrameId: Option[KnowledgeFrameId] = None,
+    publishedAt: Option[Instant] = None
+  ): InformationPublicationStatus =
+    value.InformationPublicationStatus(publicationKey, state, target, message, knowledgeFrameId, publishedAt)
+}
 
-final case class InformationFieldEvent(
-  fieldPath: String,
-  state: InformationFieldState,
-  source: String,
-  operation: Option[String] = None,
-  provider: Option[String] = None,
-  transformation: Option[String] = None,
-  valueBefore: Option[String] = None,
-  valueAfter: Option[String] = None,
-  evidence: Option[String] = None,
-  note: Option[String] = None,
-  occurredAt: Instant,
-  actor: Option[String] = None
-)
+type InformationConflict = value.InformationConflict
+object InformationConflict {
+  def apply(
+    conflictKey: String,
+    fieldPath: String,
+    informationValue: String,
+    rdfValue: String,
+    severity: String = "warning",
+    state: InformationConflictState = InformationConflictState.open,
+    resolution: Option[String] = None
+  ): InformationConflict =
+    value.InformationConflict(conflictKey, fieldPath, informationValue, rdfValue, severity, state, resolution)
+}
 
-final case class InformationSpaceSnapshot(
-  information: Vector[Information] = Vector.empty
-)
+type InformationFieldEvent = value.InformationFieldEvent
+object InformationFieldEvent {
+  def apply(
+    fieldPath: String,
+    state: InformationFieldState,
+    source: String,
+    operation: Option[String] = None,
+    provider: Option[String] = None,
+    transformation: Option[String] = None,
+    valueBefore: Option[String] = None,
+    valueAfter: Option[String] = None,
+    evidence: Option[String] = None,
+    note: Option[String] = None,
+    occurredAt: Instant,
+    actor: Option[String] = None
+  ): InformationFieldEvent =
+    value.InformationFieldEvent(fieldPath, state, source, operation, provider, transformation, valueBefore, valueAfter, evidence, note, occurredAt, actor)
+}
 
-final case class InformationSpaceCounts(
-  informationCount: Int = 0,
-  validationIssueCount: Int = 0,
-  resolutionCandidateCount: Int = 0,
-  identityBindingCount: Int = 0,
-  publicationStatusCount: Int = 0,
-  conflictCount: Int = 0
-)
+type InformationSpaceSnapshot = value.InformationSpaceSnapshot
+object InformationSpaceSnapshot {
+  def apply(information: Vector[Information] = Vector.empty): InformationSpaceSnapshot =
+    value.InformationSpaceSnapshot(information)
+}
+
+type InformationSpaceCounts = value.InformationSpaceCounts
+object InformationSpaceCounts {
+  def apply(
+    informationCount: Int = 0,
+    validationIssueCount: Int = 0,
+    resolutionCandidateCount: Int = 0,
+    identityBindingCount: Int = 0,
+    publicationStatusCount: Int = 0,
+    conflictCount: Int = 0
+  ): InformationSpaceCounts =
+    value.InformationSpaceCounts(informationCount, validationIssueCount, resolutionCandidateCount, identityBindingCount, publicationStatusCount, conflictCount)
+}
 
 final case class PaperInformation(
   title: String,

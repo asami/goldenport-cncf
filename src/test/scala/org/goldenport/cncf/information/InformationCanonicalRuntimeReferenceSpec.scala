@@ -41,9 +41,7 @@ final class InformationCanonicalRuntimeReferenceSpec
           case Consequence.Success(items) => items.head
           case Consequence.Failure(conclusion) => fail(conclusion.toString)
         }
-        pendingUntilFixed {
-          registered shouldBe a[org.goldenport.cncf.information.entity.Information]
-        }
+        registered shouldBe a[org.goldenport.cncf.information.entity.Information]
       }
     }
   }
