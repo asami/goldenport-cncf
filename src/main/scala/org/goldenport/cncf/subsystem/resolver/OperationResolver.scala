@@ -12,7 +12,7 @@ import OperationResolver._
  *  version Jan. 16, 2026
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResolver private (
@@ -498,7 +498,7 @@ object OperationResolver {
     private val _alias_comparison = aliases.map(NamingConventions.toComparisonKey).distinct
 
     def canonicalMatches(input: String): Boolean =
-      canonical == input.trim
+      canonical == input.trim || NamingConventions.equivalentByNormalized(canonical, input.trim)
 
     def matches(input: String): Boolean = {
       val trimmed = input.trim

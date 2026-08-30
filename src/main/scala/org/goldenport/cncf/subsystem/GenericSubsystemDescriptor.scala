@@ -20,7 +20,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug. 13, 2026
+ * @version Aug. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -423,7 +423,8 @@ object GenericSubsystemDescriptor {
     val over = overrides.asMap
     val wiring = _merge_assembly_wiring(base.get("wiring"), over.get("wiring"))
     val spi = _merge_assembly_spi(base.get("spi"), over.get("spi"))
-    val entries = base.toVector ++ over.toVector.filterNot {
+    val overridekeys = over.keySet -- Set("wiring", "spi")
+    val entries = base.toVector.filterNot { case (key, _) => overridekeys.contains(key) } ++ over.toVector.filterNot {
       case (key, _) => key == "wiring" || key == "spi"
     }
     val withwiring = wiring match {

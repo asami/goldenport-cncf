@@ -25,7 +25,9 @@ Current baseline:
   regression, downstream, and full-suite evidence without changing behavior.
 - Phase 59 is fully closed. The Phase 60 series is fully closed: Phase 60 and
   Phases 60.1 through 60.8 completed ADM-01 through ADM-09. Phase 61 is
-  eligible but not started.
+  closed under `phase61-clb-ic02-20260831`: IC-01 and IC-02 are complete,
+  the required full suites and final review/re-review gates passed, and Phases
+  61.1 through 61.6 remain planned sequential successors and have not started.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
@@ -40,9 +42,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. Phase 61 is eligible but
+- Active phase in the current CNCF sequence: none. Phase 61.1 is planned and
   requires its own explicit start.
-- Latest closed checklist: `phase-60.8-checklist.md`.
+- Latest closed checklist: `phase-61-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -96,8 +98,9 @@ Current baseline:
   - `phase-60.6.md`
   - `phase-60.7.md`
   - `phase-60.8.md`
+  - `phase-61.md`
 - Active phase set currently includes:
-  - none; Phase 61 is eligible but not started
+  - none; `phase-61.1.md` is the next planned Phase
 
 ## Related Rules
 

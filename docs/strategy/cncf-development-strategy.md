@@ -3639,13 +3639,34 @@ passed focused re-review plus the mandatory independent full Phase review.
 It is a documentation-only Phase with no program change repository, so final
 release validation is static and no SBT full suite is required. It admitted no
 Hygiene or Development Candidate record. The Phase 60 series is closed under
-`phase60.8-clb-adm09-20260828`; Phase 61 is active/in-progress: IC-01 is
-complete and IC-02 through IC-08 are planned.
+`phase60.8-clb-adm09-20260828`. On 2026-08-30, user decision
+`D-P61-SPLIT-001` split the oversized Phase 61 migration: IC-01 remains
+complete history; Phase 61 owns IC-02 and Phases 61.1 through 61.6 own IC-03
+through IC-08 sequentially.
 
-The split adds Phase, handoff, validation, review, and commit overhead, but it
-keeps every child at or below six hours and limits Terra/xhigh work to the
-inventory, identity, runtime/identity, and authorization boundaries. Later
-bounded children consume frozen handoffs at the least-cost compatible profile.
+#### Phase 61 Series - Information CML Runtime Canonicalization
+
+The pre-split estimate for IC-02 through IC-08 was 48--59 hours. The split
+adds Phase, handoff, validation, review, and commit overhead, but makes each
+delivery unit independently closable in the preferred 4--8 hour band.
+
+| Phase | Goal | Dependency |
+| --- | --- | --- |
+| [61](../phase/phase-61.md) | Closed: IC-02 canonical CML and generator contract. | Phase 60.8 |
+| [61.1](../phase/phase-61.1.md) | IC-03 generated Information type adoption. | Phase 61 |
+| [61.2](../phase/phase-61.2.md) | IC-04 InformationSpace Entity persistence and OCC. | Phase 61.1 |
+| [61.3](../phase/phase-61.3.md) | IC-05 curation and Knowledge lifecycle parity. | Phase 61.2 |
+| [61.4](../phase/phase-61.4.md) | IC-06 DSL, transport, Help, and editor projections. | Phase 61.3 |
+| [61.5](../phase/phase-61.5.md) | IC-07 persisted-state and downstream migration acceptance. | Phase 61.4 |
+| [61.6](../phase/phase-61.6.md) | IC-08 duplicate removal and canonical closure. | Phase 61.5 |
+
+Phase 61 produced the accepted CML/generator handoff and is closed under
+`phase61-clb-ic02-20260831`. Its mandatory full review found the Phase 62
+entry-rule discrepancy `CPB-61-001`; the bounded planning correction and
+focused re-review resolved it without changing the IC-02 source/test delta.
+Every later Phase consumes its predecessor's accepted contract; no child
+restarts an earlier identity, lifecycle, persistence, projection, or migration
+decision.
 
 Planning references:
 - `docs/phase/phase-60.md` through `docs/phase/phase-60.8.md`;
@@ -3734,8 +3755,9 @@ Alignment with Phases 63-65:
   retention work remains owned by this candidate.
 
 ### 9.44 Information CML Runtime Canonicalization
-The Phase 60 series closed in Phase 60.8; Phase 61 is active/in-progress, with
-IC-01 complete and IC-02 through IC-08 planned.
+The Phase 60 series closed in Phase 60.8. Phase 61 is closed with IC-01 and
+IC-02 complete; Phases 61.1 through 61.6 sequentially own the planned IC-03
+through IC-08 work.
 
 - Historical basis:
   - Phase 27 added `src/main/cozy/information.cml` and adopted selected
@@ -4007,7 +4029,7 @@ is section 8.30; this item retains the detailed historical acceptance evidence.
   - `../cozy/docs/spec/car-project-scaffold.md`.
 
 ### 9.46 Web Session CSRF Unification
-Planned for Phase 62 after Phase 61 closes.
+Planned for Phase 62 after the Phase 61 series closes in Phase 61.6.
 
 - Historical basis:
   - CNCF already protects normal Form and `/form-api` POST execution with a

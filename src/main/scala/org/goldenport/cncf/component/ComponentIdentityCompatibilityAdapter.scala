@@ -7,7 +7,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * admitted canonical Component identity.
  *
  * @since   Aug.  8, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object ComponentIdentityCompatibilityAdapter {
@@ -197,10 +197,15 @@ private[cncf] object ComponentIdentityCompatibilityAdapter {
           val presentationmatching = _presentation_matches(aliasvalue, canonicalcandidates, surface)
           if (presentationmatching.nonEmpty)
             _legacy_result(aliasvalue, surface, AliasKind.Presentation, presentationmatching)
-          else if (allowprefix && aliasvalue.nonEmpty)
-            _prefix_result(aliasvalue, canonicalcandidates, surface)
-          else
-            Rejected(Unsupported(surface, AliasKind.Presentation, aliasvalue))
+          else {
+            val artifactmatching = componentids.filter(_artifact_aliases(_).contains(aliasvalue))
+            if (artifactmatching.nonEmpty)
+              _legacy_result(aliasvalue, surface, AliasKind.Artifact, artifactmatching)
+            else if (allowprefix && aliasvalue.nonEmpty)
+              _prefix_result(aliasvalue, canonicalcandidates, surface)
+            else
+              Rejected(Unsupported(surface, AliasKind.Presentation, aliasvalue))
+          }
         }
     }
   }

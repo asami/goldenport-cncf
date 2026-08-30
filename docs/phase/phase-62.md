@@ -2,7 +2,7 @@
 
 status=planned
 planned_at=2026-07-26
-depends_on=[Phase 61](phase-61.md)
+depends_on=[Phase 61.6](phase-61.6.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 62 Checklist](phase-62-checklist.md)
 
@@ -19,7 +19,7 @@ or another downstream application phase for its completion evidence.
 
 ## Dependency
 
-Phase 62 begins after Phase 61 closes.
+Phase 62 begins after the Phase 61 series closes in Phase 61.6.
 
 The relevant foundations are the Static Form/Web contracts, the existing
 stateless `WebCsrf` implementation, Operation authorization, and the planned

@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Phase56ComponentIdentityCompatibilitySpec
@@ -44,6 +44,9 @@ final class Phase56ComponentIdentityCompatibilitySpec
   )
   private val _e9 = afterWord(
     "in spec:phase-56-component-identity-compatibility, example:E9, rules:CID06-R1,R3, phase:56, slice:CID-06A"
+  )
+  private val _e10 = afterWord(
+    "in spec:phase-56-component-identity-compatibility, example:E10, rules:CID06-R1,R3, phase:56, slice:CID-06A"
   )
 
   "Phase 56 Component identity compatibility" should {
@@ -299,6 +302,35 @@ final class Phase56ComponentIdentityCompatibilitySpec
         component.componentId shouldBe participantid
         component.instanceMetadata.map(_.componentName) shouldBe Some("textus-scraper")
       }
+      }
+    }
+
+    "runtime artifact alias compatibility behavior (E10)" which {
+      "resolve a schema-v3 artifact alias when no explicit presentation alias matches" must _e10 {
+        "when the runtime candidate retains its versioned discovery alias" in {
+          Given("a canonical UserNotification candidate with its schema-v3 discovery aliases")
+          val componentid = ComponentId("org.simplemodeling.textus.UserNotification")
+          val candidates = Vector(
+            ComponentIdentityCompatibilityAdapter.AliasCandidate(
+              componentid,
+              Vector("textus-user-notification-0.6.0", componentid.name)
+            )
+          )
+
+          When("the WebPath adapter resolves the unversioned artifact alias")
+          val result = ComponentIdentityCompatibilityAdapter.resolveAliases(
+            "textus-user-notification",
+            candidates,
+            ComponentIdentityCompatibilityAdapter.Surface.WebPath
+          )
+
+          Then("the alias adapts to the canonical identity as an artifact alias")
+          result shouldBe a[ComponentIdentityCompatibilityAdapter.Adapted]
+          val adapted = result.asInstanceOf[ComponentIdentityCompatibilityAdapter.Adapted]
+          adapted.componentid shouldBe componentid
+          adapted.notice.aliaskind shouldBe ComponentIdentityCompatibilityAdapter.AliasKind.Artifact
+          adapted.notice.surface shouldBe ComponentIdentityCompatibilityAdapter.Surface.WebPath
+        }
       }
     }
   }

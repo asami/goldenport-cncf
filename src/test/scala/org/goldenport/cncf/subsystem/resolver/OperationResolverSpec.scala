@@ -15,7 +15,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 
 /*
  * @since   Aug.  8, 2026
- * @version Aug. 15, 2026
+ * @version Aug. 30, 2026
  * @author ASAMI, Tomoharu
  */
 class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen with TableDrivenPropertyChecks {
@@ -432,6 +432,29 @@ class OperationResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen
         "org.example.Catalog",
         "notice",
         "search"
+      )
+      }
+    }
+
+    "E26 resolve a normalized operation selector exactly before prefix matching" must _metadata("E26") {
+      "when exercising: resolve a normalized operation selector exactly before prefix matching" in {
+      Given("one service with a canonical operation and a longer operation sharing its normalized prefix")
+      val resolver = OperationResolver.fromFqns(
+        Seq(
+          "org.example.Facility.facility.searchFacility",
+          "org.example.Facility.facility.searchFacilityRecord"
+        )
+      )
+
+      When("the normalized qualified operation selector is resolved")
+      val result = resolver.resolve("org.example.Facility.facility.search-facility")
+
+      Then("the canonical operation is selected rather than returning a prefix ambiguity")
+      result shouldBe ResolutionResult.Resolved(
+        "org.example.Facility.facility.searchFacility",
+        "org.example.Facility",
+        "facility",
+        "searchFacility"
       )
       }
     }

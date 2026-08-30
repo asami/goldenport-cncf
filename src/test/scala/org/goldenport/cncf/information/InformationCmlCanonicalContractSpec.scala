@@ -352,6 +352,7 @@ final class InformationCmlCanonicalContractSpec
 
     "remain a value-mode CML contract without a DomainComponent" in {
       Given("the Information generated type class loader")
+      When("the optional generated DomainComponent class is resolved")
 
       Then("no generated DomainComponent is present or required")
       an[ClassNotFoundException] shouldBe thrownBy {

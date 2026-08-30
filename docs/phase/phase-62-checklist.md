@@ -5,14 +5,14 @@ phase=[Phase 62 - Web Session CSRF Unification](phase-62.md)
 
 This checklist is the authoritative Phase 62 state ledger after Phase 62
 starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 61 closes.
+the Phase 61 series closes in Phase 61.6.
 
 ## CS-01: Inventory and Contract Freeze
 
 Stage Status:
 - Current status: PLANNED
 - Owner: CNCF HTTP, Web, Form, REST, security, and component maintainers
-- Entry rule: Phase 61 is closed.
+- Entry rule: Phase 61.6 is closed.
 - Completion rule: Current security behavior and exact failing-first
   acceptance identities are recorded before implementation.
 

@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Aug. 18, 2026
+ * @version Aug. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec
@@ -1659,6 +1659,48 @@ final class GenericSubsystemDescriptorSpec
 
       Then("the unsupported selector fails explicitly")
       result shouldBe a[Consequence.Failure[_]]
+      }
+    }
+
+    "E40 retain an assembly component replacement when the effective assembly is replayed" must _metadata("E40") {
+      "when exercising: retain an assembly component replacement when the effective assembly is replayed" in {
+      Given("a component CAR assembly and a multi-user overlay with a replacement component list")
+      val staticassembly = GenericSubsystemAssemblyDescriptorSource(
+        Record.data(
+          "components" -> Vector(
+            Record.data("namespace" -> "org.example", "id" -> "ArtScene", "version" -> "1.0.0"),
+            Record.data("namespace" -> "org.example", "id" -> "UserNotification", "version" -> "1.0.0")
+          )
+        ),
+        source = "component-car"
+      )
+      val multiuserassembly = GenericSubsystemAssemblyDescriptorSource(
+        Record.data(
+          "components" -> Vector(
+            Record.data("namespace" -> "org.example", "id" -> "ArtScene", "version" -> "1.0.0"),
+            Record.data("namespace" -> "org.example", "id" -> "UserAccount", "version" -> "1.0.0"),
+            Record.data("namespace" -> "org.example", "id" -> "UserNotification", "version" -> "1.0.0")
+          )
+        ),
+        source = "multi-user"
+      )
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("art-scene.car"),
+        subsystemName = "art-scene",
+        componentBindings = Vector(_binding("ArtScene"), _binding("UserNotification")),
+        assemblyDescriptor = Some(staticassembly)
+      )
+
+      When("the overlay and then its merged assembly source are applied")
+      val overlaid = GenericSubsystemDescriptor.applyAssemblyOverride(descriptor, multiuserassembly)
+      val replayed = GenericSubsystemDescriptor.applyAssemblyOverride(overlaid, overlaid.assemblyDescriptor.get)
+
+      Then("the replay preserves the overlay component set rather than restoring the CAR defaults")
+      replayed.componentBindings.map(_.componentId.map(_.name).get) shouldBe Vector(
+        "org.example.ArtScene",
+        "org.example.UserAccount",
+        "org.example.UserNotification"
+      )
       }
     }
     }
