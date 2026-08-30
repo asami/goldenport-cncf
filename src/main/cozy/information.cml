@@ -264,7 +264,6 @@ package = org.goldenport.cncf.information
 | conflicts            | InformationConflict             | *            |
 | fieldEvents          | InformationFieldEvent           | *            |
 | confirmedAt          | java.time.Instant                                      | ?            |
-| updatedAt            | java.time.Instant                                      | 1            |
 
 # VALUE
 
