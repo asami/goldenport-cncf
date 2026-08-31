@@ -58,7 +58,6 @@ final class InformationSpace(
 
   def snapshot: InformationSpaceSnapshot =
     _snapshot
-
   def snapshotC(using ctx: ExecutionContext): Consequence[InformationSpaceSnapshot] =
     _repository.search().map { information =>
       _cache_information_values(information)
@@ -67,7 +66,6 @@ final class InformationSpace(
 
   def counts: InformationSpaceCounts =
     _counts(_snapshot)
-
   def countsC(using ctx: ExecutionContext): Consequence[InformationSpaceCounts] =
     snapshotC.map(_counts)
 
@@ -88,7 +86,6 @@ final class InformationSpace(
         Consequence.Failure(clearfailure ++ searchfailure)
     }
   }
-
   def registerInformation(
     domain: String,
     records: Vector[Record]
@@ -123,7 +120,6 @@ final class InformationSpace(
 
   def getInformation(id: InformationId): Option[Information] =
     _snapshot.information.find(_.id == id)
-
   def getInformationC(
     informationId: InformationId
   )(using ctx: ExecutionContext): Consequence[Option[Information]] =
@@ -137,7 +133,6 @@ final class InformationSpace(
       }
       information
     }
-
   def updateInformation(
     informationid: InformationId,
     workingdata: Record
@@ -150,7 +145,6 @@ final class InformationSpace(
         lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
       )
     }
-
   /**
    * Applies an edit selected by a strict ingress adapter that has retained the
    * revision it observed while presenting this Information.
@@ -357,19 +351,25 @@ final class InformationSpace(
     informationid: InformationId,
     reason: String
   )(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information(informationid) { information =>
-      information.copy(
-        state = InformationLifecycleState.rejected,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
-      )
+    _with_information(informationid) { information =>
+      if (Set(InformationLifecycleState.imported, InformationLifecycleState.invalid, InformationLifecycleState.needsResolution, InformationLifecycleState.readyForConfirmation).contains(information.state))
+        _save_information(information.copy(
+          state = InformationLifecycleState.rejected,
+          lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        ))
+      else
+        Consequence.argumentInvalid(s"information cannot be rejected: ${informationid.print}")
     }
 
   def reopenInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information(informationid) { information =>
-      information.copy(
-        state = InformationLifecycleState.readyForConfirmation,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
-      )
+    _with_information(informationid) { information =>
+      if (Set(InformationLifecycleState.confirmed, InformationLifecycleState.rejected).contains(information.state))
+        _save_information(information.copy(
+          state = InformationLifecycleState.imported,
+          lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        ))
+      else
+        Consequence.argumentInvalid(s"information cannot be reopened: ${informationid.print}")
     }
 
   def publishInformation(

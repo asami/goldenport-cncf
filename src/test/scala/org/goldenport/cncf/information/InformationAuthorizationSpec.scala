@@ -6,7 +6,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationAuthorizationSpec
@@ -34,6 +35,23 @@ final class InformationAuthorizationSpec
         "information:audit:read"
       )
       actual.exists(_.startsWith("paper_information")) shouldBe false
+    }
+
+    "keep confirmation and publication as separate canonical capabilities" in {
+      Given("the public Information capability catalog")
+      val capabilities = InformationCapabilities.all
+      When("the confirmation and publication capabilities are resolved")
+      val lifecyclecapabilities = Vector(
+        InformationCapabilities.confirm,
+        InformationCapabilities.publish
+      )
+      Then("confirmation and publication remain distinct canonical public capabilities")
+      lifecyclecapabilities shouldBe Vector(
+        "information:confirm",
+        "information:publish"
+      )
+      lifecyclecapabilities.distinct should have size 2
+      capabilities should contain allElementsOf lifecyclecapabilities
     }
   }
 }

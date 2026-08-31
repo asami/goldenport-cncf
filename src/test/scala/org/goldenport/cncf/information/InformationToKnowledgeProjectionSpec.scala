@@ -3,6 +3,7 @@ package org.goldenport.cncf.information
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeNodeId, KnowledgeRelationshipKind, KnowledgeTagBinding, KnowledgeWorkingSet, RdfNodeName}
+import org.goldenport.cncf.tag.{TagCreate, TagRepository}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -12,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   May. 20, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -67,6 +69,36 @@ final class InformationToKnowledgeProjectionSpec
 
       Then("the tag binding is attached to the KnowledgeNode")
       node.bindings.tagBindings should contain (KnowledgeTagBinding("information", "knowledge/book"))
+    }
+
+    "materialize dedicated Information TagSpace bindings through InformationSpace" in {
+      Given("a confirmed Information item bound to a Tag in the dedicated Information TagSpace")
+      val tag = _success(TagRepository.entityStore().create(TagCreate(
+        None,
+        "materialization-tag",
+        None,
+        tagSpace = InformationTagging.TagSpace,
+        title = Some("Materialization Tag")
+      )))
+      val space = new InformationSpace
+      val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "Tagged Materialization"))))
+      val informationid = batch.head.id
+      _success(space.validateInformation(informationid))
+      val information = _success(space.confirmInformation(informationid))
+      _success(InformationTagging.workflow().sync(
+        information.id.print,
+        Vector(tag.path),
+        InformationTagging.Role
+      ))
+
+      When("the tagged Information is materialized through InformationSpace")
+      val snapshot = _success(InformationSpace.materializeInformationWithTags(information))
+      val workingset = _success(KnowledgeWorkingSet.load(snapshot))
+      val nodeid = KnowledgeNodeId(s"information-${information.id.print}")
+      val node = workingset.nodeOption(nodeid).getOrElse(fail("missing materialized Information node"))
+
+      Then("the focal KnowledgeNode has exactly the dedicated Information TagSpace binding")
+      node.bindings.tagBindings shouldBe Vector(KnowledgeTagBinding(InformationTagging.TagSpace, tag.id.value))
     }
 
     "materialize selected book person and organization candidates as surrounding nodes" in {
