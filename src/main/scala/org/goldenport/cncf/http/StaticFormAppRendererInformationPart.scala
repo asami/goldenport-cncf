@@ -8,7 +8,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   May. 20, 2026
- * @version Aug. 31, 2026
+ * @version Sep.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererInformationPart {
@@ -105,14 +105,19 @@ trait StaticFormAppRendererInformationPart {
     val previewlimit = renderer_config.previewLimit
     val output = InformationProjectionContract.output
     val revision = output.field("revision").filter(x => x.systemManaged && x.readOnly)
-    val workingdata = output.field("workingData").filter(_.readOnly)
+    val workingdata = output.field("workingData").filter(
+      _.valueCategory == InformationProjectionValueCategory.SanitizedApplicationData
+    )
     val conflictsdescriptor = output.field("conflicts").filter(
       _.valueCategory == InformationProjectionValueCategory.StructuredConflict
     )
     val informationrows = snapshot.information.sortBy(_.id.print).take(previewlimit).map { information =>
       val title =
         if (workingdata.nonEmpty)
-          escape(information.workingData.getString("title").getOrElse(""))
+          escape(InformationProjectionContract
+            .projectOutputApplicationData(information.workingData)
+            .getString("title")
+            .getOrElse(""))
         else
           ""
       val revisionvalue = revision.map(_ => s"<td><code>${information.revision.value}</code></td>").getOrElse("")

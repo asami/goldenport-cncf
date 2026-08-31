@@ -4,10 +4,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.Behavior
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter}
+import org.goldenport.observation.Descriptor
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
-import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -41,9 +42,57 @@ final class InformationProjectionCompatibilitySpec
         create.field("revision") shouldBe empty
         create.excludedFields should contain ("revision")
         output.excludedFields should contain ("rawData")
+        output.excludedFields should contain ("providerPayload")
       }
 
-      "declare observed revision as a required transport precondition distinct from application data" in {
+      "project only the existing System Admin Information HTTP read surface" in {
+        Given("the existing System Admin Information read-projection metadata")
+        val surfaces = InformationProjectionContract.output.surfaces
+
+        When("the named consumer surfaces are inspected")
+        val http = surfaces.find(_.surface == InformationProjectionSurface.Http)
+        val unavailable = surfaces.filterNot(_.surface == InformationProjectionSurface.Http)
+
+        Then("only HTTP is applicable and every unavailable surface records the missing Information seam")
+        http.map(_.status) shouldBe Some(InformationProjectionSurfaceStatus.Applicable)
+        unavailable.map(_.surface.name) shouldBe Vector(
+          "help", "form", "json", "yaml", "xml", "schema", "openapi", "mcp"
+        )
+        unavailable.foreach { surface =>
+          surface.status shouldBe InformationProjectionSurfaceStatus.Inapplicable
+          surface.reason shouldBe Some(
+            "No existing Information access seam: only the System Admin Information Web/HTTP read projection exists."
+          )
+        }
+      }
+
+      "project bounded profile-selected application output without provider payloads" in {
+        Given("Information working data containing a title, provider payload, and an unselected field")
+        val providerpayload = "provider-secret-payload"
+        val applicationdata = Record.data(
+          "title" -> "Approved title",
+          "providerPayload" -> providerpayload,
+          "authors" -> "Alice Example"
+        )
+        val field = InformationProjectionContract.output.field("workingData")
+
+        When("the System Admin output projection is applied")
+        val projected = InformationProjectionContract.projectOutputApplicationData(applicationdata)
+
+        Then("only the bounded profile-selected title is exposed")
+        field.map(_.datatype) shouldBe Some("InformationProfileOutput")
+        field.map(_.valueCategory) shouldBe Some(
+          InformationProjectionValueCategory.SanitizedApplicationData
+        )
+        field.map(_.projectedFieldPaths) shouldBe Some(Vector("title"))
+        field.map(_.excludedFieldPaths) shouldBe Some(Set("providerPayload"))
+        projected.getString("title") shouldBe Some("Approved title")
+        projected.getString("providerPayload") shouldBe empty
+        projected.getString("authors") shouldBe empty
+        projected.print should not include providerpayload
+      }
+
+      "declare observed revision and structured stale-entity failure metadata distinct from application data" in {
         Given("the conditional Information update projection")
         val update = InformationProjectionContract.conditionalUpdate
 
@@ -56,27 +105,11 @@ final class InformationProjectionCompatibilitySpec
         precondition.transportPrecondition shouldBe true
         update.application.field("observedRevision") shouldBe empty
         update.application.field("revision") shouldBe empty
-        update.conflictValues.map(_.valueCategory) should contain (
-          InformationProjectionValueCategory.StructuredConflict
-        )
-      }
-
-      "give every named consumer surface an identical canonical descriptor vocabulary" in {
-        Given("the complete public projection-surface enumeration")
-        val descriptors = InformationProjectionContract.descriptors
-        val property = Prop.forAll(Gen.oneOf(InformationProjectionContract.surfaces)) { surface =>
-          descriptors.forall(_.surfaces.contains(surface)) &&
-            InformationProjectionContract.conditionalUpdate.surfaces.contains(surface)
-        }
-
-        When("each named surface is checked against every reusable descriptor")
-        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(48), property)
-
-        Then("Help HTTP Form JSON YAML XML schema OpenAPI and MCP retain descriptor parity")
-        InformationProjectionContract.surfaces.map(_.name) shouldBe Vector(
-          "help", "http", "form", "json", "yaml", "xml", "schema", "openapi", "mcp"
-        )
-        checked.passed shouldBe true
+        update.staleFailure.reason shouldBe "stale-entity-revision"
+        update.staleFailure.policy shouldBe "entity.optimistic-concurrency"
+        update.staleFailure.expectedRevision.name shouldBe "expectedRevision"
+        update.staleFailure.actualRevision.name shouldBe "actualRevision"
+        update.staleFailure.actualRevision.systemManaged shouldBe true
       }
     }
   }
@@ -95,27 +128,45 @@ final class InformationProjectionCompatibilitySpec
           Vector(Record.data("title" -> "Initial title"))
         )).head
         val behavior = new InformationBehavior(Behavior.Core(context, Some(component), None))
-        val secret = "confidential-working-payload"
+        val winnerpayload = "winner-working-payload"
+        val stalepayload = "stale-working-payload"
 
         When("the protected DSL submits a conditional update with the observed revision")
         val updated = behavior.updateObserved(
           registered.id,
-          Record.data("title" -> secret),
+          Record.data("title" -> winnerpayload),
           registered.revision
         )
         val stale = behavior.updateObserved(
           registered.id,
-          Record.data("title" -> "stale"),
+          Record.data("title" -> stalepayload),
           registered.revision
         )
         val rendered = context.observability.callTreeContext.build().map(_.toRecord.print).getOrElse("")
+        val (diagnostic, facets, stalefailure) = stale match {
+          case Consequence.Failure(conclusion) =>
+            (
+              ConclusionDiagnostics.classify(conclusion),
+              conclusion.observation.cause.descriptor.facets,
+              conclusion.show
+            )
+          case other =>
+            fail(s"stale Information update failure expected: $other")
+        }
 
-        Then("the observed update advances managed revision, rejects a stale retry, and omits working payload")
+        Then("the observed update reports structured Entity concurrency facets without leaking raw current or proposed values")
         updated.toOption.map(_.revision.value) shouldBe Some(2L)
         stale shouldBe a[Consequence.Failure[?]]
+        diagnostic.reason shouldBe Some("stale-entity-revision")
+        diagnostic.policy shouldBe Some("entity.optimistic-concurrency")
+        facets should contain(Descriptor.Facet.Expected(1L))
+        facets should contain(Descriptor.Facet.Actual(2L))
+        stalefailure should not include winnerpayload
+        stalefailure should not include stalepayload
         rendered should include ("uow:information:update")
         rendered should include ("observed_revision")
-        rendered should not include secret
+        rendered should not include winnerpayload
+        rendered should not include stalepayload
       }
     }
   }

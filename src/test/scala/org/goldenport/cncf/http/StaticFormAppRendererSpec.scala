@@ -75,7 +75,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug. 28, 2026
+ * @version Sep.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -454,7 +454,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Given("a subsystem containing published Information and one structured conflict")
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
+      subsystem.add(TestComponentFactory.create("isolated_information_component", Protocol.empty))
       val component = subsystem.findComponent(ComponentId("org.goldenport.cncf.test.InformationComponent")).getOrElse(fail("information component missing"))
+      val isolatedcomponent = subsystem.findComponent(ComponentId("org.goldenport.cncf.test.IsolatedInformationComponent")).getOrElse(fail("isolated information component missing"))
       given ExecutionContext = component.logic.executionContext()
       val providerpayload = "provider-secret-payload"
       val batch = _success(component.informationSpace.registerInformation(
@@ -479,6 +481,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         rdfvalue
       ))
       val current = component.informationSpace.getInformation(item.id).getOrElse(fail("current information missing"))
+      val isolatedtitle = "Isolated component title"
+      val isolatedpayload = "isolated-provider-secret-payload"
+      {
+        given ExecutionContext = isolatedcomponent.logic.executionContext()
+        _success(isolatedcomponent.informationSpace.registerInformation(
+          "paper",
+          Vector(Record.data("title" -> isolatedtitle, "providerPayload" -> isolatedpayload))
+        ))
+      }
 
       When("the system Information index and component detail are rendered")
       val index = _renderer.renderSystemAdminInformation(subsystem).body
@@ -500,6 +511,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       detail should not include providerpayload
       detail should not include informationvalue
       detail should not include rdfvalue
+      detail should not include isolatedtitle
+      detail should not include isolatedpayload
       _renderer.renderSystemAdminInformationComponent(subsystem, "missing") shouldBe None
     }
     }

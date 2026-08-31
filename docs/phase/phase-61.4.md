@@ -1,7 +1,8 @@
 # Phase 61.4 - Information DSL, Transport, Help, and Editor Projections
 
-status=planned
+status=closed
 planned_at=2026-08-30
+closed_at=2026-09-01
 split_from=[Phase 61](phase-61.md)
 depends_on=[Phase 61.3](phase-61.3.md)
 successor=[Phase 61.5](phase-61.5.md)
@@ -47,9 +48,14 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-Every CNCF access surface uses the canonical Entity and preserves managed-input,
-authorization, provider-payload, and stale-conflict boundaries. Phase 61.5
-consumes the accepted public projection contract.
+IC-06 is closed under `phase61.4-clb-ic06-20260901`. The existing System
+Admin Information HTTP/Web surface is the applicable production projection;
+Help, generic HTTP JSON/YAML/XML/Form, schema, OpenAPI, and MCP have no
+Information route or adapter seam and are explicitly inapplicable. The
+projection exposes only sanitized profile output, uses the Entity stale-write
+consequence, and preserves component isolation and authorization denial. The
+distinct release commit binds final full-suite evidence. Phase 61.5 remains
+planned and unstarted.
 
 ## Non-Goals
 
@@ -58,4 +64,7 @@ removal, full closure, or new access-surface capabilities.
 
 ## Current Status
 
-Planned. This Phase starts only after Phase 61.3 accepts IC-05.
+IC-06 is complete. The protected DSL, editor, and applicable System Admin
+Information HTTP/Web projection consume the canonical Entity contract; focused
+closure validation and re-review are accepted. Phase 61.5 is the next planned
+consumer and requires its own explicit Phase invocation.

@@ -41,7 +41,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 28, 2026
+ * @version Sep.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -49,6 +49,9 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
     afterWord("in spec:subsystem-user-mode-http-dispatch, example:PM-53-01, rules:PM-53-01, phase:53")
   private val _e9 = afterWord(
     "in spec:action-execution-semantics, example:E9, rules:R5,R6,R13, phase:57.2, slice:AES-05A"
+  )
+  private val _ic06e2 = afterWord(
+    "in spec:phase-61.4-information-projection-compatibility, example:E2, rules:IC-06, phase:61.4, slice:IC-06B"
   )
 
   "Http4sHttpServer" must _in_phase53_spec {
@@ -1345,6 +1348,33 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       componentpage.status.code shouldBe 200
       componentpage.as[String].unsafeRunSync() should include ("Information Import")
       unknowncomponent.status.code shouldBe 404
+    }
+
+    "E2 enforce existing system-admin Information authorization" must _ic06e2 {
+    "deny anonymous requests to index and component read projections in production" in {
+      Given("the existing production system-admin authorization policy with no authenticated session")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production")
+        )),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(Some("server"), configuration)
+      val server = _server(subsystem)
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      When("the existing Information index and component routes are dispatched anonymously")
+      val index = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information"))).unsafeRunSync()
+      val component = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information/missing"))).unsafeRunSync()
+      val indexbody = index.as[String].unsafeRunSync()
+      val componentbody = component.as[String].unsafeRunSync()
+
+      Then("the shared system-admin authorization checkpoint rejects both Information read routes")
+      index.status.code shouldBe 403
+      component.status.code shouldBe 403
+      indexbody should include ("Forbidden")
+      componentbody should include ("Forbidden")
+    }
     }
 
     "dispatch app-facing TagSpace routes" in {
