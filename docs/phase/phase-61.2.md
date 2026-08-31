@@ -63,5 +63,8 @@ migration, duplicate removal, and canonical documentation closure.
 In progress. IC-04A has bound InformationSpace to a deterministic,
 Component-owned EntityStore collection with StoreOnly memory policy and embedded
 managed revision. Its focused Information and Component integration suite
-passed 56 tests in 12 suites; IC-04B continues with the remaining mutation and
-observed-revision contracts.
+passed 56 tests in 12 suites. IC-04B has added the explicit strict-ingress
+update route: the adapter-observed revision remains execution metadata, while
+the standard EntityStore path applies `WriteIfChanged + ObservedRequired` and
+rejects a stale retry atomically without changing the stored or cached root.
+Its focused persistence specification passed 5 tests; IC-04C remains.

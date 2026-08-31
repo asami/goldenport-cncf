@@ -16,7 +16,9 @@ import org.goldenport.cncf.entity.{
   EntityRevisionBinding,
   EntityRevisionRepresentation,
   EntitySearchScope,
-  EntityStore
+  EntityStore,
+  EntityWritePolicy,
+  RevisionPreconditionPolicy
 }
 import org.goldenport.cncf.entity.runtime.{
   EntityCollection,
@@ -30,7 +32,7 @@ import org.goldenport.cncf.entity.runtime.{
   PartitionStrategy
 }
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 
 /*
  * Component-owned EntityStore repository for generated Information roots.
@@ -99,6 +101,31 @@ private[information] final class InformationEntityRepository(
         information,
         None,
         EntityMutationExecutionPolicy.default
+      )(using InformationEntityRepository.informationPersistent, ctx)
+    } yield saved.entity
+
+  /**
+   * Saves an Information edit from a strict ingress adapter.  The adapter's
+   * observed revision is checked atomically by the standard EntityStore path;
+   * it is not copied into the Information domain model.
+  */
+  def updateObserved(
+    information: Information,
+    observedRevision: EntityRevision
+  )(using ctx: ExecutionContext): Consequence[Information] =
+    for {
+      collectionid <- _ensure_collection()
+      _ <- _require_collection(information.id, collectionid)
+      policy <- EntityMutationExecutionPolicy(
+        concurrencyPolicy = EntityConcurrencyPolicy.Optimistic,
+        writePolicy = EntityWritePolicy.WriteIfChanged,
+        preconditionPolicy = RevisionPreconditionPolicy.ObservedRequired,
+        observedRevision = Some(observedRevision)
+      ).validateC
+      saved <- EntityStore.standard().update(
+        information,
+        None,
+        policy
       )(using InformationEntityRepository.informationPersistent, ctx)
     } yield saved.entity
 

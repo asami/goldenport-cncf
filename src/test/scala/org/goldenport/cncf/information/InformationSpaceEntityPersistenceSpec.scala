@@ -39,6 +39,9 @@ final class InformationSpaceEntityPersistenceSpec
   private val _e4 = afterWord(
     "in spec:phase-61.2-information-space-entity-persistence, example:E4, rules:IC-04, phase:61.2, slice:IC-04A"
   )
+  private val _e5 = afterWord(
+    "in spec:phase-61.2-information-space-entity-persistence, example:E5, rules:IC-04, phase:61.2, slice:IC-04B"
+  )
 
   "InformationSpace Entity persistence" should {
     "E1 register the exact Component-owned collection and read a generated Information root back from EntityStore" must _e1 {
@@ -222,6 +225,42 @@ final class InformationSpaceEntityPersistenceSpec
         rehydrated.binding.authority shouldBe binding.authority
         rehydrated.binding.confidence shouldBe binding.confidence
         rehydrated.binding.status shouldBe binding.status
+      }
+    }
+
+    "E5 accept the current observed revision for a strict Information edit and reject a stale retry without mutation" must _e5 {
+      "keep observed revision as adapter metadata and persist only the current edit" in {
+        Given("one Component-owned Information root and its initial managed revision")
+        val namespace = IdGenerationContext.IdNamespace("phase61", "information")
+        given ExecutionContext = _context(namespace, "information-observed-update")
+        val component = _component("org.goldenport.cncf.information.ObservedUpdateOwner")
+        val registered = _success(component.informationSpace.registerInformation(
+          "paper",
+          Vector(Record.data("title" -> "Initial title"))
+        )).head
+
+        When("a strict adapter submits the current revision and later retries with that now-stale revision")
+        val accepted = _success(component.informationSpace.updateInformationObserved(
+          registered.id,
+          Record.data("title" -> "Current title"),
+          registered.revision
+        ))
+        val stale = component.informationSpace.updateInformationObserved(
+          registered.id,
+          Record.data("title" -> "Stale title"),
+          registered.revision
+        )
+        val reloaded = _success(
+          EntityStore.standard().load[org.goldenport.cncf.information.entity.Information](registered.id)
+        ).getOrElse(fail(s"Information EntityStore readback is missing: ${registered.id.print}"))
+
+        Then("the strict update advances its managed revision, while the stale retry fails without changing the stored or cached root")
+        accepted.revision.value shouldBe 2L
+        stale shouldBe a[Consequence.Failure[?]]
+        reloaded.revision shouldBe accepted.revision
+        reloaded.workingData.getString("title") shouldBe Some("Current title")
+        component.informationSpace.getInformation(registered.id).map(_.workingData.getString("title")) shouldBe
+          Some(Some("Current title"))
       }
     }
   }

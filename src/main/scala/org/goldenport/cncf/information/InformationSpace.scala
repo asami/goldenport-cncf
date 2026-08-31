@@ -2,7 +2,7 @@ package org.goldenport.cncf.information
 
 import java.time.Instant
 import org.goldenport.Consequence
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 import org.goldenport.cncf.knowledge.{
   ExternalKnowledgeIdentifier,
   KnowledgeAttributes,
@@ -114,6 +114,28 @@ final class InformationSpace(
     _update_information(informationid) { information =>
       information.copy(
         workingData = workingdata,
+        state = InformationLifecycleState.imported,
+        validationIssues = Vector.empty,
+        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+      )
+    }
+
+  /**
+   * Applies an edit selected by a strict ingress adapter that has retained the
+   * revision it observed while presenting this Information.
+   *
+   * The revision remains execution metadata: ordinary Information operations
+   * continue to use [[updateInformation]], while this explicit adapter-facing
+   * route selects the standard observed-revision policy.
+  */
+  def updateInformationObserved(
+    informationId: InformationId,
+    workingData: Record,
+    observedRevision: EntityRevision
+  )(using ctx: ExecutionContext): Consequence[Information] =
+    _update_information_observed(informationId, observedRevision) { information =>
+      information.copy(
+        workingData = workingData,
         state = InformationLifecycleState.imported,
         validationIssues = Vector.empty,
         lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
@@ -442,6 +464,16 @@ final class InformationSpace(
       _save_information(f(information))
     }
 
+  private def _update_information_observed(
+    informationid: InformationId,
+    observedrevision: EntityRevision
+  )(
+    f: Information => Information
+  )(using ctx: ExecutionContext): Consequence[Information] =
+    _with_information(informationid) { information =>
+      _save_information_observed(f(information), observedrevision)
+    }
+
   private def _with_information[A](
     informationid: InformationId
   )(
@@ -459,6 +491,15 @@ final class InformationSpace(
     information: Information
   )(using ctx: ExecutionContext): Consequence[Information] =
     _repository.update(information).map { persisted =>
+      _cache_information(persisted)
+      persisted
+    }
+
+  private def _save_information_observed(
+    information: Information,
+    observedrevision: EntityRevision
+  )(using ctx: ExecutionContext): Consequence[Information] =
+    _repository.updateObserved(information, observedrevision).map { persisted =>
       _cache_information(persisted)
       persisted
     }

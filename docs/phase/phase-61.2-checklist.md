@@ -8,7 +8,7 @@ successor=[Phase 61.3 Checklist](phase-61.3-checklist.md)
 ## IC-04: InformationSpace Entity Persistence and OCC
 
 Stage Status:
-- Current status: IN PROGRESS — IC-04A accepted; IC-04B and IC-04C remain.
+- Current status: IN PROGRESS — IC-04A and IC-04B accepted; IC-04C remains.
 - Owner: CNCF InformationSpace, Entity runtime, and persistence maintainers
 - Update rule: Update only from accepted IC-04 evidence; preserve the IC-03
   generated identity contract.
@@ -24,11 +24,11 @@ Stage Status:
 - [ ] Apply create defaults for id, revision, common attributes, audit, and
   security without admitting managed input.
 - [ ] Advance revision on every effective Information mutation.
-- [ ] Apply `WriteIfChanged` only where the Information operation contract
+- [x] Apply `WriteIfChanged` only where the Information operation contract
   explicitly selects it; preserve the standard default otherwise.
-- [ ] Require observed revision for user-visible edit/save paths according to
+- [x] Require observed revision for user-visible edit/save paths according to
   Phase 50 policy.
-- [ ] Use atomic conditional transition for stale-write rejection.
+- [x] Use atomic conditional transition for stale-write rejection.
 - [ ] Ensure failed/stale mutations do not partially modify nested state,
   field events, Tags, publication records, or Knowledge projections.
 - [ ] Preserve component ownership and isolation for multiple Components.
@@ -46,3 +46,13 @@ Evidence:
   in 12 suites on the Step candidate tree (SBT receipt `phase61.2-ic04-020`).
 - IC-04A lightweight independent review: PASS; no current-boundary blockers,
   Hygiene, or Development Candidates.
+- IC-04B: `InformationSpace.updateInformationObserved` keeps adapter-observed
+  revision outside the Information domain model and delegates to the standard
+  EntityStore `WriteIfChanged + ObservedRequired` update policy. A stale retry
+  fails without changing the persisted or cached root.
+- IC-04B focused validation: `testOnly
+  org.goldenport.cncf.information.InformationSpaceEntityPersistenceSpec` passed
+  5 tests in 1 suite (SBT receipt `84942-20260831T040356Z`).
+- IC-04B focused independent re-review: PASS; CB-01 closed; no
+  current-boundary blockers. `HYG-INFORMATIONSPACE-SIZE` remains a separate,
+  pre-existing, nonblocking source-size item.
