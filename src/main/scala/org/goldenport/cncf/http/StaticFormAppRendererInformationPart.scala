@@ -103,15 +103,28 @@ trait StaticFormAppRendererInformationPart {
   ): String = {
     val snapshot = projection.snapshot
     val previewlimit = renderer_config.previewLimit
+    val output = InformationProjectionContract.output
+    val revision = output.field("revision").filter(x => x.systemManaged && x.readOnly)
+    val workingdata = output.field("workingData").filter(_.readOnly)
+    val conflictsdescriptor = output.field("conflicts").filter(
+      _.valueCategory == InformationProjectionValueCategory.StructuredConflict
+    )
     val informationrows = snapshot.information.sortBy(_.id.print).take(previewlimit).map { information =>
+      val title =
+        if (workingdata.nonEmpty)
+          escape(information.workingData.getString("title").getOrElse(""))
+        else
+          ""
+      val revisionvalue = revision.map(_ => s"<td><code>${information.revision.value}</code></td>").getOrElse("")
       s"""<tr>
          |  <td><code>${escape(information.id.print)}</code></td>
          |  <td>${escape(information.domain)}</td>
          |  <td><span class="badge text-bg-secondary">${escape(information.state.label)}</span></td>
-         |  <td>${escape(information.workingData.getString("title").getOrElse(""))}</td>
+         |  <td>${title}</td>
          |  <td>${information.validationIssues.size}</td>
          |  <td>${information.resolutionCandidates.size}</td>
          |  <td>${information.publicationStatuses.headOption.map(x => s"<code>${escape(x.publicationKey)}</code>").getOrElse("")}</td>
+         |  ${revisionvalue}
          |</tr>""".stripMargin
     }.mkString("\n")
     val issues = snapshot.information.flatMap(information =>
@@ -124,11 +137,24 @@ trait StaticFormAppRendererInformationPart {
     ).sortBy(x => (x._1.id.print, x._2.publicationKey)).take(previewlimit).map { case (information, publication) =>
       s"""<tr><td><code>${escape(information.id.print)}</code></td><td><code>${escape(publication.publicationKey)}</code></td><td>${escape(publication.target)}</td><td>${escape(publication.state.label)}</td><td>${escape(publication.message.getOrElse(""))}</td></tr>"""
     }.mkString("\n")
-    val conflicts = snapshot.information.flatMap(information =>
-      information.conflicts.map(conflict => information -> conflict)
-    ).sortBy(x => (x._1.id.print, x._2.conflictKey)).take(previewlimit).map { case (information, conflict) =>
-      s"""<tr><td><code>${escape(information.id.print)}</code></td><td><code>${escape(conflict.conflictKey)}</code></td><td>${escape(conflict.fieldPath)}</td><td>${escape(conflict.state.label)}</td><td>${escape(conflict.resolution.getOrElse(""))}</td></tr>"""
-    }.mkString("\n")
+    val conflicts =
+      if (conflictsdescriptor.nonEmpty)
+        snapshot.information.flatMap(information =>
+          information.conflicts.map(conflict => information -> conflict)
+        ).sortBy(x => (x._1.id.print, x._2.conflictKey)).take(previewlimit).map { case (information, conflict) =>
+          s"""<tr><td><code>${escape(information.id.print)}</code></td><td><code>${escape(conflict.conflictKey)}</code></td><td>${escape(conflict.fieldPath)}</td><td>${escape(conflict.state.label)}</td><td>${escape(conflict.resolution.getOrElse(""))}</td></tr>"""
+        }.mkString("\n")
+      else
+        ""
+    val informationheaders = Vector(
+      "Information",
+      "Domain",
+      "State",
+      "Title",
+      "Issues",
+      "Candidates",
+      "Publication"
+    ) ++ revision.map(_ => "Revision (system-managed)")
     simple_page(
       title = s"System Information ${component.displayName}",
       subtitle = "Component InformationSpace compact projection",
@@ -146,7 +172,7 @@ trait StaticFormAppRendererInformationPart {
              "Publications" -> projection.counts.publicationStatusCount.toString,
              "Conflicts" -> projection.counts.conflictCount.toString
            )))}
-           |${admin_card("Information", information_table(informationrows, 7, "No information is loaded.", "Information", "Domain", "State", "Title", "Issues", "Candidates", "Publication"))}
+           |${admin_card("Information", information_table(informationrows, informationheaders.size, "No information is loaded.", informationheaders*))}
            |${admin_card("Validation issues", information_table(issues, 4, "No validation issues are loaded.", "Information", "Field", "Severity", "Message"))}
            |${admin_card("Publication status", information_table(publications, 5, "No publication status records are loaded.", "Information", "Publication", "Target", "State", "Message"))}
            |${admin_card("Conflicts", information_table(conflicts, 5, "No conflicts are loaded.", "Information", "Conflict", "Field", "State", "Resolution"))}""".stripMargin

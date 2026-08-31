@@ -149,7 +149,7 @@ import org.goldenport.cncf.processexecution.{
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Aug. 31, 2026
+ * @version Sep.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -2168,6 +2168,22 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     exec_from_calltree("uow:information:update", _information_attributes("update", informationid)) {
       _information_space.flatMap(_.updateInformation(informationid, workingdata)(using
       execution_context))
+    }
+
+  protected final def information_update_observed(
+    informationId: InformationId,
+    workingData: Record,
+    observedRevision: EntityRevision
+  ): ExecUowM[Information] =
+    exec_from_calltree(
+      "uow:information:update",
+      _information_attributes("update", informationId) + ("observed_revision" -> observedRevision.value.toString)
+    ) {
+      _information_space.flatMap(_.updateInformationObserved(
+        informationId,
+        workingData,
+        observedRevision
+      )(using execution_context))
     }
 
   protected final def information_append_field_event(

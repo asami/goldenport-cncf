@@ -27,6 +27,12 @@ final class InformationEditorProjectionSpec
   private val _e1 = afterWord(
     "in spec:phase-61.3-information-editor-projection-lifecycle, example:E1, rules:CB-61.3-RR-001, phase:61.3"
   )
+  private val _ic06e1 = afterWord(
+    "in spec:phase-61.4-information-projection-compatibility, example:E1, rules:IC-06, phase:61.4, slice:IC-06B"
+  )
+  private val _ic06e2 = afterWord(
+    "in spec:phase-61.4-information-projection-compatibility, example:E2, rules:IC-06, phase:61.4, slice:IC-06B"
+  )
 
   "InformationSpaceEditorProjection" should {
     "provide book field descriptors and knowledge mapping metadata" in {
@@ -141,6 +147,47 @@ final class InformationEditorProjectionSpec
       language.status.map(_.state) shouldBe Some(InformationFieldState.inferred)
       language.events.headOption.flatMap(_.transformation) shouldBe Some("isbn-language-inference")
       dbpedia.resolutionCandidates.map(_.label) shouldBe Vector("Domain-driven design")
+    }
+
+    "E1 project the canonical output and conditional-update boundaries" must _ic06e1 {
+      "keep the generated revision outside application data while retaining working data for editing" in {
+        Given("registered Information containing application fields and an unprojected provider payload")
+        val component = _component()
+        val providerpayload = "provider-secret-payload"
+        val registered = _success(component.informationSpace.registerInformation("book", Vector(
+          Record.data("title" -> "Canonical editor title", "providerPayload" -> providerpayload)
+        ))).head
+
+        When("the existing editor projection consumes the canonical descriptors")
+        val projection = _success(InformationSpaceEditorProjection.component(component, "book"))
+        val record = projection.information.headOption.getOrElse(fail("record projection missing"))
+
+        Then("managed revision is output, observed revision is a separate precondition, and raw data is absent")
+        record.revision shouldBe registered.revision
+        projection.output shouldBe InformationProjectionContract.output
+        projection.output.field("revision").exists(x => x.systemManaged && x.readOnly) shouldBe true
+        projection.createApplicationInput.field("workingData").map(_.required) shouldBe Some(true)
+        projection.createApplicationInput.excludedFields should contain allOf ("revision", "rawData")
+        projection.conditionalUpdate.application.field("workingData").map(_.required) shouldBe Some(true)
+        projection.conditionalUpdate.application.field("observedRevision") shouldBe empty
+        projection.conditionalUpdate.observedRevision.transportPrecondition shouldBe true
+        record.toString should not include providerpayload
+      }
+    }
+
+    "E2 keep raw provider data outside canonical editor output" must _ic06e2 {
+      "project only canonical output fields and profile-backed working data" in {
+        Given("the editor projection output descriptor")
+        val output = InformationProjectionContract.output
+
+        When("the editor consumer metadata is inspected")
+        val fields = output.fields.map(_.name).toSet
+
+        Then("raw provider data has no editable or projected editor field")
+        fields should contain allOf ("id", "domain", "workingData", "state", "conflicts", "revision")
+        fields should not contain "rawData"
+        output.excludedFields should contain ("rawData")
+      }
     }
 
     "rehydrate persisted Information into an editor projection after a fresh component cache starts empty" in {

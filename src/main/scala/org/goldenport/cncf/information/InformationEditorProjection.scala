@@ -7,6 +7,7 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.tag.{Tag, TaggingWorkflow}
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   May. 21, 2026
@@ -69,6 +70,7 @@ final case class InformationEditorFieldProjection(
 
 final case class InformationEditorRecordProjection(
   informationId: InformationId,
+  revision: EntityRevision,
   domain: String,
   state: InformationLifecycleState,
   title: Option[String],
@@ -86,7 +88,10 @@ final case class InformationEditorProjection(
   componentName: String,
   domain: String,
   fields: Vector[InformationFieldDescriptor],
-  information: Vector[InformationEditorRecordProjection]
+  information: Vector[InformationEditorRecordProjection],
+  output: InformationProjectionDescriptor = InformationProjectionContract.output,
+  createApplicationInput: InformationProjectionDescriptor = InformationProjectionContract.createApplicationInput,
+  conditionalUpdate: InformationConditionalUpdateProjection = InformationProjectionContract.conditionalUpdate
 )
 
 final case class InformationEditorProfile(
@@ -1147,6 +1152,7 @@ object InformationSpaceEditorProjection {
       .map { information =>
         InformationEditorRecordProjection(
           informationId = information.id,
+          revision = information.revision,
           domain = information.domain,
           state = information.state,
           title = _title(information.workingData),

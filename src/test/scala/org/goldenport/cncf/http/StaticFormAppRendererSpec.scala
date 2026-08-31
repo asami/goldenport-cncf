@@ -88,6 +88,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private val _aes05b = afterWord(
     "in spec:action-execution-semantics, example:E9, rules:R13, phase:57.2, slice:AES-05B"
   )
+  private val _ic06e2 = afterWord(
+    "in spec:phase-61.4-information-projection-compatibility, example:E2, rules:IC-06, phase:61.4, slice:IC-06B"
+  )
 
   "StaticFormAppRenderer" must _in_phase53_spec {
     "provide dashboard, system administration, Blob, and documentation contracts" which {
@@ -446,30 +449,42 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       _renderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "missing") shouldBe None
     }
 
-    "render system admin information pages" in {
-      Given("a subsystem containing published Information")
+    "E2 render canonical managed Information output in system admin pages" must _ic06e2 {
+    "render system admin information pages without provider or raw conflict values" in {
+      Given("a subsystem containing published Information and one structured conflict")
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
       val component = subsystem.findComponent(ComponentId("org.goldenport.cncf.test.InformationComponent")).getOrElse(fail("information component missing"))
       given ExecutionContext = component.logic.executionContext()
+      val providerpayload = "provider-secret-payload"
       val batch = _success(component.informationSpace.registerInformation(
         "paper",
         Vector(Record.data(
           "title" -> "Knowledge Import",
           "authors" -> "Alice Example",
-          "venue" -> "CNCF Notes"
+          "venue" -> "CNCF Notes",
+          "providerPayload" -> providerpayload
         ))
       ))
       val record = batch.headOption.getOrElse(fail("information record missing"))
       _success(component.informationSpace.validateInformation(record.id))
       val item = _success(component.informationSpace.confirmInformation(record.id))
       _success(component.informationSpace.publishInformation(item.id, "fuseki", Some("published")))
+      val informationvalue = "editor-conflict-value"
+      val rdfvalue = "provider-conflict-value"
+      _success(component.informationSpace.recordConflict(
+        item.id,
+        "title",
+        informationvalue,
+        rdfvalue
+      ))
+      val current = component.informationSpace.getInformation(item.id).getOrElse(fail("current information missing"))
 
       When("the system Information index and component detail are rendered")
       val index = _renderer.renderSystemAdminInformation(subsystem).body
       val detail = _renderer.renderSystemAdminInformationComponent(subsystem, "information-component").map(_.body).getOrElse(fail("information component page missing"))
 
-      Then("the pages expose component identity and published Information metadata")
+      Then("the pages expose managed revision and structured conflict summary without raw values")
       index should include ("System Information")
       index should include (component.displayName)
       index should include ("/web/system/admin/information/information_component")
@@ -477,7 +492,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       detail should include ("Knowledge Import")
       detail should include ("paper")
       detail should include ("published")
+      detail should include ("Revision (system-managed)")
+      detail should include (current.revision.value.toString)
+      detail should include ("conflict-1")
+      detail should include ("title")
+      detail should include (current.conflicts.head.state.label)
+      detail should not include providerpayload
+      detail should not include informationvalue
+      detail should not include rdfvalue
       _renderer.renderSystemAdminInformationComponent(subsystem, "missing") shouldBe None
+    }
     }
 
     "reject ambiguous display aliases in system admin projection routes" in {
