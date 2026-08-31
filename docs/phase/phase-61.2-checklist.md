@@ -1,6 +1,6 @@
 # Phase 61.2 Checklist - InformationSpace Entity Persistence and OCC
 
-status=planned
+status=in-progress
 phase=[Phase 61.2 - InformationSpace Entity Persistence and OCC](phase-61.2.md)
 predecessor=[Phase 61.1 Checklist](phase-61.1-checklist.md)
 successor=[Phase 61.3 Checklist](phase-61.3-checklist.md)
@@ -8,7 +8,7 @@ successor=[Phase 61.3 Checklist](phase-61.3-checklist.md)
 ## IC-04: InformationSpace Entity Persistence and OCC
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN PROGRESS — IC-04A accepted; IC-04B and IC-04C remain.
 - Owner: CNCF InformationSpace, Entity runtime, and persistence maintainers
 - Update rule: Update only from accepted IC-04 evidence; preserve the IC-03
   generated identity contract.
@@ -16,10 +16,10 @@ Stage Status:
 - Completion rule: InformationSpace uses the standard Entity
   repository/UnitOfWork/revision path without a parallel persistence kernel.
 
-- [ ] Define the component-scoped Information Entity collection identity.
-- [ ] Register the generated Information Entity descriptor deterministically.
-- [ ] Bind InformationSpace to the owning Component Entity repository.
-- [ ] Replace private mutable snapshot authority with repository-backed
+- [x] Define the component-scoped Information Entity collection identity.
+- [x] Register the generated Information Entity descriptor deterministically.
+- [x] Bind InformationSpace to the owning Component Entity repository.
+- [x] Replace private mutable snapshot authority with repository-backed
   reads/writes while retaining a storage-neutral InformationSpace API.
 - [ ] Apply create defaults for id, revision, common attributes, audit, and
   security without admitting managed input.
@@ -36,4 +36,13 @@ Stage Status:
 - [ ] Add concurrent update, replay, restart, and rollback specifications.
 
 Evidence:
-- Pending.
+- IC-04A: Component-owned `information` collections use the canonical
+  `major/minor_component-id/information` identity, StoreOnly memory policy,
+  and embedded revisions. InformationSpace delegates persistence reads and
+  writes to the standard EntityStore, retaining its snapshot only as a cache.
+- IC-04A focused validation: `testOnly
+  org.goldenport.cncf.information.*
+  org.goldenport.cncf.component.ComponentInformationSpaceSpec` passed 56 tests
+  in 12 suites on the Step candidate tree (SBT receipt `phase61.2-ic04-020`).
+- IC-04A lightweight independent review: PASS; no current-boundary blockers,
+  Hygiene, or Development Candidates.

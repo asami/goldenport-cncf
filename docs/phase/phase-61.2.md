@@ -1,6 +1,6 @@
 # Phase 61.2 - InformationSpace Entity Persistence and OCC
 
-status=planned
+status=in-progress
 planned_at=2026-08-30
 split_from=[Phase 61](phase-61.md)
 depends_on=[Phase 61.1](phase-61.1.md)
@@ -60,4 +60,8 @@ migration, duplicate removal, and canonical documentation closure.
 
 ## Current Status
 
-Planned. This Phase starts only after Phase 61.1 accepts IC-03.
+In progress. IC-04A has bound InformationSpace to a deterministic,
+Component-owned EntityStore collection with StoreOnly memory policy and embedded
+managed revision. Its focused Information and Component integration suite
+passed 56 tests in 12 suites; IC-04B continues with the remaining mutation and
+observed-revision contracts.

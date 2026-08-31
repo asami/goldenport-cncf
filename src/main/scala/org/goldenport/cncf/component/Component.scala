@@ -61,7 +61,8 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -97,7 +98,7 @@ abstract class Component() extends Component.Core.Holder {
   val aggregateEditContextSpace: AggregateEditContextSpace = new AggregateEditContextSpace()
   val viewSpace: ViewSpace = new ViewSpace()
   val knowledgeSpace: KnowledgeSpace = new KnowledgeSpace()
-  val informationSpace: InformationSpace = new InformationSpace()
+  val informationSpace: InformationSpace = new InformationSpace(this)
 
   override def core: Component.Core =
     _core.getOrElse(throw new IllegalStateException("Component core is not initialized."))

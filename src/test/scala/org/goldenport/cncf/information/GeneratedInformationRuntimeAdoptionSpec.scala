@@ -1,6 +1,7 @@
 package org.goldenport.cncf.information
 
-import java.time.{Clock, Instant, ZoneOffset}
+import java.time.{Clock, Instant, ZoneId, ZoneOffset}
+import java.util.concurrent.atomic.AtomicReference
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.record.Record
@@ -29,35 +30,36 @@ final class GeneratedInformationRuntimeAdoptionSpec
       Given("an InformationSpace with a deterministic execution clock")
       val createdat = Instant.parse("2026-08-31T00:00:00Z")
       val updatedat = Instant.parse("2026-08-31T00:01:00Z")
-      val registrationcontext = ExecutionContext.create(Clock.fixed(createdat, ZoneOffset.UTC))
-      val mutationcontext = ExecutionContext.create(Clock.fixed(updatedat, ZoneOffset.UTC))
+      val clock = new _MutableTestClock(createdat, ZoneOffset.UTC)
+      val context = ExecutionContext.create(clock)
       val space = new InformationSpace
 
       When("a minimal Information record is registered")
       val registered = _success(space.registerInformation(
         "paper",
         Vector(Record.data("title" -> "Generated runtime identity"))
-      )(using registrationcontext)).head
+      )(using context)).head
 
-      Then("registration and snapshot retain the generated Entity identity and lifecycle timestamp")
+      Then("registration and snapshot retain the generated Entity identity, lifecycle timestamp, and managed initial revision")
       registered shouldBe a[org.goldenport.cncf.information.entity.Information]
       space.snapshot.information.head should be theSameInstanceAs registered
       registered.lifecycleAttributes.createdAt shouldBe createdat
       registered.lifecycleAttributes.updatedAt shouldBe createdat
-      registered.revision shouldBe org.simplemodeling.model.datatype.EntityRevision.INITIAL
+      registered.revision.value shouldBe 1L
 
       When("the registered Information is mutated at a later deterministic instant")
+      clock.advanceTo(updatedat)
       val updated = _success(space.updateInformation(
         registered.id,
         Record.data("title" -> "Generated runtime identity, updated")
-      )(using mutationcontext))
+      )(using context))
 
-      Then("mutation retains generated creation provenance while advancing its lifecycle update")
+      Then("mutation retains generated creation provenance while advancing its lifecycle update and managed revision")
       updated.lifecycleAttributes.createdAt shouldBe registered.lifecycleAttributes.createdAt
       updated.lifecycleAttributes.createdBy shouldBe registered.lifecycleAttributes.createdBy
       updated.lifecycleAttributes.updatedAt shouldBe updatedat
       space.snapshot.information.head should be theSameInstanceAs updated
-      updated.revision shouldBe org.simplemodeling.model.datatype.EntityRevision.INITIAL
+      updated.revision.value shouldBe 2L
     }
 
     "E2 default an omitted binding status, preserve an explicit status, and reject alias conflicts" must _e2 {
@@ -96,4 +98,23 @@ final class GeneratedInformationRuntimeAdoptionSpec
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) => fail(conclusion.toString)
     }
+
+  private final class _MutableTestClock(
+    initial: Instant,
+    zone: ZoneId
+  ) extends Clock {
+    private val _instant = new AtomicReference[Instant](initial)
+
+    def advanceTo(value: Instant): Unit = {
+      _instant.set(value)
+    }
+
+    override def getZone(): ZoneId = zone
+
+    override def withZone(value: ZoneId): Clock =
+      new _MutableTestClock(_instant.get(), value)
+
+    override def instant(): Instant =
+      _instant.get()
+  }
 }
