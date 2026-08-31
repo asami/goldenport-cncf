@@ -67,4 +67,7 @@ passed 56 tests in 12 suites. IC-04B has added the explicit strict-ingress
 update route: the adapter-observed revision remains execution metadata, while
 the standard EntityStore path applies `WriteIfChanged + ObservedRequired` and
 rejects a stale retry atomically without changing the stored or cached root.
-Its focused persistence specification passed 5 tests; IC-04C remains.
+Its focused persistence specification passed 5 tests. IC-04C has added
+managed-create, rehydration/restart, concurrency, and rollback evidence; its
+focused suite passed 25 tests in 4 suites and its independent Step review
+passed. The mandatory full Phase review is pending.

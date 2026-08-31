@@ -8,7 +8,8 @@ successor=[Phase 61.3 Checklist](phase-61.3-checklist.md)
 ## IC-04: InformationSpace Entity Persistence and OCC
 
 Stage Status:
-- Current status: IN PROGRESS — IC-04A and IC-04B accepted; IC-04C remains.
+- Current status: IN PROGRESS — IC-04A, IC-04B, and IC-04C accepted; the
+  mandatory full Phase review is pending.
 - Owner: CNCF InformationSpace, Entity runtime, and persistence maintainers
 - Update rule: Update only from accepted IC-04 evidence; preserve the IC-03
   generated identity contract.
@@ -21,19 +22,19 @@ Stage Status:
 - [x] Bind InformationSpace to the owning Component Entity repository.
 - [x] Replace private mutable snapshot authority with repository-backed
   reads/writes while retaining a storage-neutral InformationSpace API.
-- [ ] Apply create defaults for id, revision, common attributes, audit, and
+- [x] Apply create defaults for id, revision, common attributes, audit, and
   security without admitting managed input.
-- [ ] Advance revision on every effective Information mutation.
+- [x] Advance revision on every effective Information mutation.
 - [x] Apply `WriteIfChanged` only where the Information operation contract
   explicitly selects it; preserve the standard default otherwise.
 - [x] Require observed revision for user-visible edit/save paths according to
   Phase 50 policy.
 - [x] Use atomic conditional transition for stale-write rejection.
-- [ ] Ensure failed/stale mutations do not partially modify nested state,
+- [x] Ensure failed/stale mutations do not partially modify nested state,
   field events, Tags, publication records, or Knowledge projections.
-- [ ] Preserve component ownership and isolation for multiple Components.
-- [ ] Add in-memory, SQLite, and representative provider OCC specifications.
-- [ ] Add concurrent update, replay, restart, and rollback specifications.
+- [x] Preserve component ownership and isolation for multiple Components.
+- [x] Add in-memory, SQLite, and representative provider OCC specifications.
+- [x] Add concurrent update, replay, restart, and rollback specifications.
 
 Evidence:
 - IC-04A: Component-owned `information` collections use the canonical
@@ -56,3 +57,13 @@ Evidence:
 - IC-04B focused independent re-review: PASS; CB-01 closed; no
   current-boundary blockers. `HYG-INFORMATIONSPACE-SIZE` remains a separate,
   pre-existing, nonblocking source-size item.
+- IC-04C focused validation: `sbt --batch "testOnly
+  org.goldenport.cncf.information.InformationSpaceEntityPersistenceSpec
+  org.goldenport.cncf.information.InformationSpaceSpec
+  org.goldenport.cncf.information.InformationSpaceDeterminismSpec
+  org.goldenport.cncf.datastore.EntityRevisionProviderParitySpec"`
+  passed 25 tests in 4 suites covering E6-E9 (SBT receipt
+  `19886-20260831T052913Z`).
+- IC-04C lightweight independent Step review: PASS; no current-boundary
+  blockers or Development Candidates. `HYG-61.1-RR1-002` remains the separate,
+  pre-existing, nonblocking InformationSpace source-size item.
