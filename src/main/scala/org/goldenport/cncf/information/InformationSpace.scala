@@ -59,18 +59,35 @@ final class InformationSpace(
   def snapshot: InformationSpaceSnapshot =
     _snapshot
 
-  def counts: InformationSpaceCounts =
-    InformationSpaceCounts(
-      informationCount = _snapshot.information.size,
-      validationIssueCount = _snapshot.information.map(_.validationIssues.size).sum,
-      resolutionCandidateCount = _snapshot.information.map(_.resolutionCandidates.size).sum,
-      identityBindingCount = _snapshot.information.map(_.identityBindings.size).sum,
-      publicationStatusCount = _snapshot.information.map(_.publicationStatuses.size).sum,
-      conflictCount = _snapshot.information.map(_.conflicts.size).sum
-    )
+  def snapshotC(using ctx: ExecutionContext): Consequence[InformationSpaceSnapshot] =
+    _repository.search().map { information =>
+      _cache_information_values(information)
+      _snapshot
+    }
 
-  def clear(): Unit =
-    _snapshot = InformationSpaceSnapshot()
+  def counts: InformationSpaceCounts =
+    _counts(_snapshot)
+
+  def countsC(using ctx: ExecutionContext): Consequence[InformationSpaceCounts] =
+    snapshotC.map(_counts)
+
+  def clear()(using ctx: ExecutionContext): Consequence[Unit] = {
+    val cleared = _repository.clear()
+    val refreshed = _repository.search()
+    (cleared, refreshed) match {
+      case (Consequence.Success(_), Consequence.Success(information)) =>
+        _cache_information_values(information)
+        Consequence.unit
+      case (failure @ Consequence.Failure(_), Consequence.Success(information)) =>
+        _cache_information_values(information)
+        failure
+      case (Consequence.Success(_), Consequence.Failure(searchfailure)) =>
+        _snapshot = InformationSpaceSnapshot()
+        Consequence.Failure(searchfailure)
+      case (Consequence.Failure(clearfailure), Consequence.Failure(searchfailure)) =>
+        Consequence.Failure(clearfailure ++ searchfailure)
+    }
+  }
 
   def registerInformation(
     domain: String,
@@ -106,6 +123,20 @@ final class InformationSpace(
 
   def getInformation(id: InformationId): Option[Information] =
     _snapshot.information.find(_.id == id)
+
+  def getInformationC(
+    informationId: InformationId
+  )(using ctx: ExecutionContext): Consequence[Option[Information]] =
+    _repository.load(informationId).map { information =>
+      information match {
+        case Some(value) => _cache_information(value)
+        case None =>
+          _snapshot = _snapshot.copy(
+            information = _snapshot.information.filterNot(_.id == informationId)
+          )
+      }
+      information
+    }
 
   def updateInformation(
     informationid: InformationId,
@@ -183,6 +214,11 @@ final class InformationSpace(
 
   def validationIssues(informationid: InformationId): Vector[InformationValidationIssue] =
     getInformation(informationid).map(_.validationIssues).getOrElse(Vector.empty)
+
+  def validationIssuesC(
+    informationId: InformationId
+  )(using ctx: ExecutionContext): Consequence[Vector[InformationValidationIssue]] =
+    getInformationC(informationId).map(_.map(_.validationIssues).getOrElse(Vector.empty))
 
   def addResolutionCandidate(
     informationid: InformationId,
@@ -305,6 +341,16 @@ final class InformationSpace(
     domain match {
       case Some(value) => _snapshot.information.filter(_.domain == value)
       case None => _snapshot.information
+    }
+
+  def searchInformationC(
+    domain: Option[String] = None
+  )(using ctx: ExecutionContext): Consequence[Vector[Information]] =
+    snapshotC.map { snapshot =>
+      domain match {
+        case Some(value) => snapshot.information.filter(_.domain == value)
+        case None => snapshot.information
+      }
     }
 
   def rejectInformation(
@@ -513,6 +559,16 @@ final class InformationSpace(
     information: Vector[Information]
   ): Unit =
     _snapshot = InformationSpaceSnapshot(information)
+
+  private def _counts(snapshot: InformationSpaceSnapshot): InformationSpaceCounts =
+    InformationSpaceCounts(
+      informationCount = snapshot.information.size,
+      validationIssueCount = snapshot.information.map(_.validationIssues.size).sum,
+      resolutionCandidateCount = snapshot.information.map(_.resolutionCandidates.size).sum,
+      identityBindingCount = snapshot.information.map(_.identityBindings.size).sum,
+      publicationStatusCount = snapshot.information.map(_.publicationStatuses.size).sum,
+      conflictCount = snapshot.information.map(_.conflicts.size).sum
+    )
 
   private def _next_key(
     prefix: String,

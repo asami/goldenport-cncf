@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May. 21, 2026
  *  version Jun.  5, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationEditorProjectionSpec
@@ -137,6 +137,27 @@ final class InformationEditorProjectionSpec
       language.status.map(_.state) shouldBe Some(InformationFieldState.inferred)
       language.events.headOption.flatMap(_.transformation) shouldBe Some("isbn-language-inference")
       dbpedia.resolutionCandidates.map(_.label) shouldBe Vector("Domain-driven design")
+    }
+
+    "rehydrate persisted Information into an editor projection after a fresh component cache starts empty" in {
+      Given("one persisted book Information root and a new Component instance with the same identity")
+      val componentname = "BookEditorRestartProjectionComponent"
+      val original = _component(componentname)
+      val registered = _success(original.informationSpace.registerInformation(
+        "book",
+        Vector(Record.data("title" -> "Restarted editor projection"))
+      )).head
+      val restarted = _component(componentname)
+      val cacheempty = restarted.informationSpace.snapshot.information.isEmpty
+
+      When("the fresh component editor projection is requested under the supplied ExecutionContext")
+      val projection = _success(InformationSpaceEditorProjection.component(restarted, "book"))
+
+      Then("the persisted root is projected and the fresh cache is refreshed")
+      cacheempty shouldBe true
+      projection.information.map(_.informationId) shouldBe Vector(registered.id)
+      projection.information.map(_.title) shouldBe Vector(Some("Restarted editor projection"))
+      restarted.informationSpace.snapshot.information.map(_.id) shouldBe Vector(registered.id)
     }
 
     "provide person and organization field descriptors" in {
@@ -425,8 +446,10 @@ final class InformationEditorProjectionSpec
   ): InformationFieldDescriptor =
     profile.fields.find(_.fieldPath == fieldpath).getOrElse(fail(s"field missing: $fieldpath"))
 
-  private def _component(): Component =
-    TestComponentFactory.create("BookEditorComponent", Protocol.empty)
+  private def _component(
+    componentname: String = "BookEditorComponent"
+  ): Component =
+    TestComponentFactory.create(componentname, Protocol.empty)
 
   private def _success[A](result: Consequence[A]): A =
     result match {

@@ -139,7 +139,45 @@ private[information] final class InformationEntityRepository(
             scope = EntitySearchScope.Store
           )
         )(using InformationEntityRepository.informationPersistent, ctx)
-        .map(_.data)
+        .map(_.data.sortBy(_.id.print))
+    }
+
+  def clear()(using ctx: ExecutionContext): Consequence[Unit] =
+    search().flatMap { information =>
+      _clear_information(information, Vector.empty)
+    }
+
+  private def _clear_information(
+    remaining: Vector[Information],
+    deleted: Vector[Information]
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    remaining match {
+      case head +: tail =>
+        EntityStore.standard().delete(head.id) match {
+          case Consequence.Success(_) =>
+            _clear_information(tail, deleted :+ head)
+          case Consequence.Failure(deletefailure) =>
+            _restore_information(deleted.reverse) match {
+              case Consequence.Success(_) =>
+                Consequence.Failure(deletefailure)
+              case Consequence.Failure(restorefailure) =>
+                Consequence.Failure(deletefailure ++ restorefailure)
+            }
+        }
+      case _ =>
+        Consequence.unit
+    }
+
+  private def _restore_information(
+    information: Vector[Information]
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    information match {
+      case head +: tail =>
+        val restored = EntityStore.standard().restore(head.id)
+        val remaining = _restore_information(tail)
+        restored.zip(remaining).map(_ => ())
+      case _ =>
+        Consequence.unit
     }
 
   private def _ensure_collection()(using

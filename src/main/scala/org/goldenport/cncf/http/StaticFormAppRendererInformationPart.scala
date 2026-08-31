@@ -1,12 +1,14 @@
 package org.goldenport.cncf.http
 
+import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.information.{InformationSpaceProjection, *}
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   May. 20, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererInformationPart {
@@ -24,8 +26,18 @@ trait StaticFormAppRendererInformationPart {
       .componentOption(subsystem.components, componentname)
       .map(component => Page(information_component_page(component)))
 
-  protected def information_admin_page(subsystem: Subsystem): String = {
-    val projections = InformationSpaceProjection.components(subsystem.components)
+  protected def information_admin_page(subsystem: Subsystem): String =
+    InformationSpaceProjection.components(subsystem.components) match {
+      case Consequence.Success(projections) =>
+        _information_admin_page(subsystem, projections)
+      case Consequence.Failure(conclusion) =>
+        _information_failure_page("System Information", conclusion.display)
+    }
+
+  private def _information_admin_page(
+    subsystem: Subsystem,
+    projections: Vector[ComponentInformationProjection]
+  ): String = {
     val rows =
       if (projections.isEmpty)
         admin_empty_table_cell(7, "No components are loaded.")
@@ -73,7 +85,22 @@ trait StaticFormAppRendererInformationPart {
   }
 
   protected def information_component_page(component: Component): String = {
-    val projection = InformationSpaceProjection.component(component)
+    given ExecutionContext = component.logic.executionContext()
+    InformationSpaceProjection.component(component) match {
+      case Consequence.Success(projection) =>
+        _information_component_page(component, projection)
+      case Consequence.Failure(conclusion) =>
+        _information_failure_page(
+          s"System Information ${component.displayName}",
+          conclusion.display
+        )
+    }
+  }
+
+  private def _information_component_page(
+    component: Component,
+    projection: ComponentInformationProjection
+  ): String = {
     val snapshot = projection.snapshot
     val previewlimit = renderer_config.previewLimit
     val informationrows = snapshot.information.sortBy(_.id.print).take(previewlimit).map { information =>
@@ -139,4 +166,14 @@ trait StaticFormAppRendererInformationPart {
        |  <tbody>${body}</tbody>
        |</table></div>""".stripMargin
   }
+
+  private def _information_failure_page(
+    title: String,
+    message: String
+  ): String =
+    simple_page(
+      title = title,
+      subtitle = "InformationSpace persistence projection is unavailable",
+      body = admin_card("Information unavailable", s"<p class=\"mb-0\">${escape(message)}</p>")
+    )
 }

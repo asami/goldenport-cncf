@@ -1,11 +1,13 @@
 package org.goldenport.cncf.information
 
+import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentIdentityCompatibilityAdapter
+import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   May. 20, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentInformationProjection(
@@ -15,15 +17,24 @@ final case class ComponentInformationProjection(
 )
 
 object InformationSpaceProjection {
-  def components(components: Vector[Component]): Vector[ComponentInformationProjection] =
-    components.sortBy(_.name).map(component)
+  def components(
+    components: Vector[Component]
+  ): Consequence[Vector[ComponentInformationProjection]] =
+    components.sortBy(_.name).foldLeft(Consequence.success(Vector.empty[ComponentInformationProjection])) {
+      case (z, component) =>
+        z.flatMap(values => _component(component).map(values :+ _))
+    }
 
-  def component(component: Component): ComponentInformationProjection =
-    ComponentInformationProjection(
-      component.name,
-      component.informationSpace.counts,
-      component.informationSpace.snapshot
-    )
+  def component(
+    component: Component
+  )(using ctx: ExecutionContext): Consequence[ComponentInformationProjection] =
+    component.informationSpace.snapshotC.map { snapshot =>
+      ComponentInformationProjection(
+        component.name,
+        component.informationSpace.counts,
+        snapshot
+      )
+    }
 
   def componentOption(
     components: Vector[Component],
@@ -57,4 +68,11 @@ object InformationSpaceProjection {
       case _ =>
         component.name
     }
+
+  private def _component(
+    component: Component
+  ): Consequence[ComponentInformationProjection] = {
+    given ExecutionContext = component.logic.executionContext()
+    InformationSpaceProjection.component(component)
+  }
 }

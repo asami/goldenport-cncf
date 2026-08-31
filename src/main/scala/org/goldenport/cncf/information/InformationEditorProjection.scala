@@ -9,7 +9,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -1079,16 +1079,17 @@ object InformationSpaceEditorProjection {
   def component(
     component: Component,
     domain: String
-  ): Consequence[InformationEditorProjection] =
+  )(using ctx: ExecutionContext): Consequence[InformationEditorProjection] =
     InformationEditorProfile.forDomain(domain) match {
       case Some(profile) =>
-        val snapshot = component.informationSpace.snapshot
-        Consequence.success(InformationEditorProjection(
-          component.name,
-          profile.domain,
-          profile.fields,
-          _information_projections(profile, snapshot, Map.empty)
-        ))
+        component.informationSpace.snapshotC.map { snapshot =>
+          InformationEditorProjection(
+            component.name,
+            profile.domain,
+            profile.fields,
+            _information_projections(profile, snapshot, Map.empty)
+          )
+        }
       case None =>
         Consequence.argumentInvalid(s"information editor profile not found: $domain")
     }
@@ -1099,14 +1100,15 @@ object InformationSpaceEditorProjection {
   )(using ExecutionContext): Consequence[InformationEditorProjection] =
     InformationEditorProfile.forDomain(domain) match {
       case Some(profile) =>
-        val snapshot = component.informationSpace.snapshot
-        _information_tags(snapshot).map { tags =>
-          InformationEditorProjection(
-            component.name,
-            profile.domain,
-            profile.fields,
-            _information_projections(profile, snapshot, tags)
-          )
+        component.informationSpace.snapshotC.flatMap { snapshot =>
+          _information_tags(snapshot).map { tags =>
+            InformationEditorProjection(
+              component.name,
+              profile.domain,
+              profile.fields,
+              _information_projections(profile, snapshot, tags)
+            )
+          }
         }
       case None =>
         Consequence.argumentInvalid(s"information editor profile not found: $domain")

@@ -1,6 +1,6 @@
 # Phase 61.2 Checklist - InformationSpace Entity Persistence and OCC
 
-status=in-progress
+status=closed
 phase=[Phase 61.2 - InformationSpace Entity Persistence and OCC](phase-61.2.md)
 predecessor=[Phase 61.1 Checklist](phase-61.1-checklist.md)
 successor=[Phase 61.3 Checklist](phase-61.3-checklist.md)
@@ -8,8 +8,7 @@ successor=[Phase 61.3 Checklist](phase-61.3-checklist.md)
 ## IC-04: InformationSpace Entity Persistence and OCC
 
 Stage Status:
-- Current status: IN PROGRESS — IC-04A, IC-04B, and IC-04C accepted; the
-  mandatory full Phase review is pending.
+- Current status: DONE
 - Owner: CNCF InformationSpace, Entity runtime, and persistence maintainers
 - Update rule: Update only from accepted IC-04 evidence; preserve the IC-03
   generated identity contract.
@@ -67,3 +66,11 @@ Evidence:
 - IC-04C lightweight independent Step review: PASS; no current-boundary
   blockers or Development Candidates. `HYG-61.1-RR1-002` remains the separate,
   pre-existing, nonblocking InformationSpace source-size item.
+- Mandatory Phase review found `CPB-61.2-001` (clear/cache authority). Cycle 1
+  and Cycle 2 narrowed the repair surface; Cycle 3 resolved post-clear refresh
+  cache safety and canonical repository ordering. The focused closure review
+  passed with no Current Phase Blocker, Hygiene, or Development Candidate.
+- The final full-suite gate and distinct release commit close IC-04 under
+  `phase61.2-clb-ic04-20260831`. `sbt --batch test` passed 3,498 tests in 473
+  suites with no failure (serialized receipt `26313-20260831T095702Z`). Phase
+  61.3 remains planned and unstarted.

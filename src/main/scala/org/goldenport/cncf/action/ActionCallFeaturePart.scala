@@ -149,7 +149,7 @@ import org.goldenport.cncf.processexecution.{
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Aug. 11, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -2325,7 +2325,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     informationid: InformationId
   ): ExecUowM[Option[Information]] =
     exec_from_calltree("uow:information:option", _information_attributes("option", informationid)) {
-      _information_space.map(_.getInformation(informationid))
+      _information_space.flatMap(_.getInformationC(informationid)(using execution_context))
     }
 
   protected final def information_validation_issues(
@@ -2335,7 +2335,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
       "uow:information:validation-issues",
       _information_attributes("validation-issues", informationid)
     ) {
-      _information_space.map(_.validationIssues(informationid))
+      _information_space.flatMap(_.validationIssuesC(informationid)(using execution_context))
     }
 
   protected final def information_add_conflict(

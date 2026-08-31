@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May. 20, 2026
  *  version May. 25, 2026
- * @version Jul. 30, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceSpec
@@ -95,7 +95,7 @@ final class InformationSpaceSpec
       space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.published)
 
       When("the InformationSpace is cleared")
-      space.clear()
+      _success(space.clear())
 
       Then("its lifecycle records are removed")
       space.counts shouldBe InformationSpaceCounts()

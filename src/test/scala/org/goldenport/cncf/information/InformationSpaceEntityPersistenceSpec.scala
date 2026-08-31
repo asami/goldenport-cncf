@@ -6,7 +6,14 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, TimeUnit}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
-import org.goldenport.cncf.datastore.{DataStore, EntityVersionedMutationCheckpoint}
+import org.goldenport.cncf.datastore.{
+  DataStore,
+  EntityVersionedMutationCheckpoint,
+  QueryDirective,
+  SearchResult,
+  SearchableDataStore,
+  TotalCountCapability
+}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.cncf.entity.{EntityRevisionRepresentation, EntityStore}
 import org.goldenport.cncf.entity.runtime.EntityMemoryPolicy
@@ -58,6 +65,24 @@ final class InformationSpaceEntityPersistenceSpec
   )
   private val _e9 = afterWord(
     "in spec:phase-61.2-information-space-entity-persistence, example:E9, rules:IC-04, phase:61.2, slice:IC-04C"
+  )
+  private val _e10 = afterWord(
+    "in spec:phase-61.2-information-space-entity-persistence, example:E10, rules:IC-04, phase:61.2, slice:IC-04D"
+  )
+  private val _e11 = afterWord(
+    "in spec:phase-61.2-information-space-entity-persistence, example:E11, rules:IC-04, phase:61.2, slice:IC-04D"
+  )
+  private val _e12 = afterWord(
+    "in spec:phase-61.2-information-space-entity-persistence, example:E12, rules:IC-04, phase:61.2, slice:IC-04D"
+  )
+  private val _e13 = afterWord(
+    "in spec:phase-61.2-information-space-entity-persistence, example:E13, rules:IC-04, phase:61.2, slice:IC-04D"
+  )
+  private val _e14 = afterWord(
+    "in spec:phase-61.2-information-space-entity-persistence, example:E14, rules:IC-04, phase:61.2, slice:IC-04D"
+  )
+  private val _e15 = afterWord(
+    "in spec:phase-61.2-information-space-entity-persistence, example:E15, rules:IC-04, phase:61.2, slice:IC-04D"
   )
 
   "InformationSpace Entity persistence" should {
@@ -411,6 +436,185 @@ final class InformationSpaceEntityPersistenceSpec
         reloaded.publicationStatuses shouldBe empty
       }
     }
+
+    "E10 rehydrate authoritative Information reads and reset persisted lifecycle roots" must _e10 {
+      "load search count and reset a cache-empty Component-owned InformationSpace" in {
+        Given("one persisted Component-owned Information root and a fresh empty InformationSpace cache")
+        val namespace = IdGenerationContext.IdNamespace("phase61", "information_authoritative_read_reset")
+        given ExecutionContext = _context(namespace, "information-authoritative-read-reset")
+        val owner = _component("org.goldenport.cncf.information.AuthoritativeReadResetOwner")
+        val registered = _success(owner.informationSpace.registerInformation(
+          "paper",
+          Vector(Record.data("title" -> "Authoritative restart read"))
+        )).head
+        val restarted = new InformationSpace(owner)
+        val cacheempty = restarted.snapshot.information.isEmpty
+
+        When("the fresh InformationSpace reads, searches, counts, and resets through its repository")
+        val loaded = _success(restarted.getInformationC(registered.id))
+        val searched = _success(restarted.searchInformationC(Some("paper")))
+        val counts = _success(restarted.countsC)
+        val snapshot = _success(restarted.snapshotC)
+        _success(restarted.clear())
+        val recreated = new InformationSpace(owner)
+        val remaining = _success(recreated.snapshotC)
+
+        Then("the authoritative reads refresh the cache and reset removes persisted roots for a recreated InformationSpace")
+        cacheempty shouldBe true
+        loaded.map(_.id) shouldBe Some(registered.id)
+        searched.map(_.id) shouldBe Vector(registered.id)
+        counts.informationCount shouldBe 1
+        snapshot.information.map(_.id) shouldBe Vector(registered.id)
+        restarted.snapshot shouldBe InformationSpaceSnapshot()
+        remaining shouldBe InformationSpaceSnapshot()
+      }
+    }
+
+    "E11 preserve the cache and persisted root when repository-backed reset fails" must _e11 {
+      "reject reset before publishing a lifecycle deletion" in {
+        Given("a cached Component-owned Information root and a provider armed to reject its lifecycle mutation")
+        val namespace = IdGenerationContext.IdNamespace("phase61", "information_reset_failure")
+        val store = new FailingBeforePublishDataStore
+        given ExecutionContext = _context(namespace, "information-reset-failure", store)
+        val owner = _component("org.goldenport.cncf.information.ResetFailureOwner")
+        val space = owner.informationSpace
+        val registered = _success(space.registerInformation(
+          "paper",
+          Vector(Record.data("title" -> "Reset failure preservation"))
+        )).head
+        val cached = space.snapshot
+        store.arm()
+
+        When("the repository-backed reset reaches the provider failure before publication")
+        val failed = space.clear()
+        val persisted = _success(
+          EntityStore.standard().load[org.goldenport.cncf.information.entity.Information](registered.id)
+        )
+
+        Then("the failure publishes neither a cache invalidation nor a lifecycle deletion")
+        failed shouldBe a[Consequence.Failure[?]]
+        space.snapshot shouldBe cached
+        persisted.map(_.id) shouldBe Some(registered.id)
+      }
+    }
+
+    "E12 compensate an earlier Information lifecycle deletion when a later reset deletion fails" must _e12 {
+      "restore the selected roots and refresh the cache from authoritative persistence" in {
+        Given("two cached Component-owned Information roots and a provider that fails only its second reset lifecycle mutation")
+        val namespace = IdGenerationContext.IdNamespace("phase61", "information_reset_compensation")
+        val store = new FailingNthBeforePublishDataStore
+        given ExecutionContext = _context(namespace, "information-reset-compensation", store)
+        val owner = _component("org.goldenport.cncf.information.ResetCompensationOwner")
+        val space = owner.informationSpace
+        val registered = _success(space.registerInformation(
+          "paper",
+          Vector(
+            Record.data("title" -> "First reset compensation root"),
+            Record.data("title" -> "Second reset compensation root")
+          )
+        ))
+        store.failOnNextMutation(2)
+
+        When("reset deletes the first selected root and the later selected deletion fails")
+        val failed = space.clear()
+        val recreated = new InformationSpace(owner)
+        val authoritative = _success(recreated.snapshotC)
+
+        Then("the original failure is retained, the first logical deletion is compensated, and both caches match the authoritative roots")
+        failed shouldBe a[Consequence.Failure[?]]
+        authoritative.information.map(_.id) shouldBe registered.map(_.id).sortBy(_.print)
+        space.snapshot shouldBe authoritative
+        registered.foreach { information =>
+          _success(
+            EntityStore.standard().load[org.goldenport.cncf.information.entity.Information](information.id)
+          ).map(_.id) shouldBe Some(information.id)
+        }
+      }
+    }
+
+    "E13 evict exactly one stale cached Information root after an authoritative absence" must _e13 {
+      "retain other cached roots when a direct lifecycle deletion makes one authoritative load absent" in {
+        Given("two cached Component-owned Information roots and a direct deletion of only the first persisted root")
+        val namespace = IdGenerationContext.IdNamespace("phase61", "information_authoritative_absence")
+        given ExecutionContext = _context(namespace, "information-authoritative-absence")
+        val owner = _component("org.goldenport.cncf.information.AuthoritativeAbsenceOwner")
+        val space = owner.informationSpace
+        val registered = _success(space.registerInformation(
+          "paper",
+          Vector(
+            Record.data("title" -> "Stale cached Information root"),
+            Record.data("title" -> "Retained cached Information root")
+          )
+        ))
+        val deleted = registered.head
+        val retained = registered(1)
+        _success(EntityStore.standard().delete(deleted.id))
+
+        When("the InformationSpace reads the directly deleted root from its authoritative repository")
+        val loaded = _success(space.getInformationC(deleted.id))
+
+        Then("the authoritative absence evicts only the stale cached id and preserves the other cached root")
+        loaded shouldBe None
+        space.snapshot.information.map(_.id) shouldBe Vector(retained.id)
+        space.getInformation(deleted.id) shouldBe None
+        space.getInformation(retained.id).map(_.id) shouldBe Some(retained.id)
+      }
+    }
+
+    "E14 clear the local cache when a successful persistent reset cannot refresh it" must _e14 {
+      "return the post-clear refresh failure without retaining deleted cached roots" in {
+        Given("a cached persisted root and a searchable provider armed to fail only its post-clear refresh")
+        val namespace = IdGenerationContext.IdNamespace("phase61", "information_clear_refresh_failure")
+        val store = new FailingPostClearRefreshDataStore
+        given ExecutionContext = _context(namespace, "information-clear-refresh-failure", store)
+        val owner = _component("org.goldenport.cncf.information.ClearRefreshFailureOwner")
+        val space = owner.informationSpace
+        _success(space.registerInformation(
+          "paper",
+          Vector(Record.data("title" -> "Clear refresh failure"))
+        ))
+        store.armPostClearRefresh()
+
+        When("InformationSpace clears persistent roots and its immediate authoritative refresh fails")
+        val failed = space.clear()
+        val recreated = new InformationSpace(owner)
+        val authoritative = _success(recreated.snapshotC)
+
+        Then("the refresh failure is retained while local and recreated authoritative snapshots are empty")
+        failed shouldBe a[Consequence.Failure[?]]
+        space.snapshot shouldBe InformationSpaceSnapshot()
+        authoritative shouldBe InformationSpaceSnapshot()
+      }
+    }
+
+    "E15 sort authoritative Information restart reads by canonical id across local providers" must _e15 {
+      "normalize multi-record provider output before publishing the restarted snapshot" in {
+        Given("multi-record in-memory, reversed-emission, and SQLite Information stores")
+        val memory = DataStore.inMemorySearchable()
+        val reversed = new ReversedSearchableDataStore
+        val sqlitepath = _database_path("restart-ordering")
+        val providers: Vector[(String, DataStore, () => DataStore)] = Vector(
+          ("in-memory", memory, () => memory),
+          ("reversed-emission", reversed, () => reversed),
+          (
+            "sqlite",
+            SqlDataStore.sqlite(sqlitepath.toString),
+            () => SqlDataStore.sqlite(sqlitepath.toString)
+          )
+        )
+
+        When("a fresh InformationSpace hydrates each repository through search")
+        val evidence = providers.map { case (name, initialstore, restartedstore) =>
+          _ordering_evidence(name, initialstore, restartedstore)
+        }
+
+        Then("every restarted snapshot uses ascending canonical ids instead of provider emission order")
+        evidence.foreach { result =>
+          result.snapshotids shouldBe result.expectedids
+        }
+        reversed.emittedReversed shouldBe true
+      }
+    }
   }
 
   private def _context(
@@ -568,6 +772,51 @@ final class InformationSpaceEntityPersistenceSpec
     )
   }
 
+  private def _ordering_evidence(
+    provider: String,
+    initialstore: DataStore,
+    restartedstore: () => DataStore
+  ): OrderingEvidence = {
+    val namespace = IdGenerationContext.IdNamespace(
+      "phase61",
+      s"information_restart_ordering_${provider.replace("-", "_")}"
+    )
+    val owner = _component(
+      s"org.goldenport.cncf.information.RestartOrdering${provider.replace("-", "")}Owner"
+    )
+    val seedcontext = _context(
+      namespace,
+      s"information-restart-ordering-$provider-seed",
+      initialstore
+    )
+    val registered = {
+      given ExecutionContext = seedcontext
+      _success(owner.informationSpace.registerInformation(
+        "paper",
+        Vector(
+          Record.data("title" -> s"First $provider"),
+          Record.data("title" -> s"Second $provider"),
+          Record.data("title" -> s"Third $provider")
+        )
+      ))
+    }
+    val restartedspace = new InformationSpace(owner)
+    val restartedcontext = _context(
+      namespace,
+      s"information-restart-ordering-$provider-restarted",
+      restartedstore()
+    )
+    val snapshot = {
+      given ExecutionContext = restartedcontext
+      _success(restartedspace.snapshotC)
+    }
+    OrderingEvidence(
+      provider,
+      registered.map(_.id).sortBy(_.print),
+      snapshot.information.map(_.id)
+    )
+  }
+
   private def _database_path(name: String): Path =
     Files.createTempFile(s"information-space-$name-", ".db")
 
@@ -588,6 +837,12 @@ final class InformationSpaceEntityPersistenceSpec
     successfulTitles: Vector[String]
   )
 
+  private final case class OrderingEvidence(
+    provider: String,
+    expectedids: Vector[InformationId],
+    snapshotids: Vector[InformationId]
+  )
+
   private final class FailingBeforePublishDataStore
       extends DataStore.InMemoryDataStore(CommitRecorder.noop) {
     private var _armed = false
@@ -605,6 +860,105 @@ final class InformationSpaceEntityPersistenceSpec
         Consequence.operationInvalid("injected-before-publication-failure")
       else
         Consequence.unit
+  }
+
+  private final class FailingNthBeforePublishDataStore
+      extends DataStore.InMemoryDataStore(CommitRecorder.noop)
+      with SearchableDataStore {
+    private var _armed = false
+    private var _mutation_count = 0
+    private var _failure_mutation = Int.MaxValue
+
+    def failOnNextMutation(index: Int): Unit = {
+      _armed = true
+      _mutation_count = 0
+      _failure_mutation = index
+    }
+
+    override protected def versioned_mutation_checkpoint(
+      checkpoint: EntityVersionedMutationCheckpoint
+    ): Consequence[Unit] =
+      if (_armed && checkpoint == EntityVersionedMutationCheckpoint.BeforePublish) {
+        _mutation_count += 1
+        if (_mutation_count == _failure_mutation)
+          Consequence.operationInvalid("injected-later-reset-deletion-failure")
+        else
+          Consequence.unit
+      } else
+        Consequence.unit
+
+    def search(
+      collection: DataStore.CollectionId,
+      directive: QueryDirective
+    ): Consequence[SearchResult] =
+      synchronized {
+        ensure_collection(collection).flatMap(_.search(directive))
+      }
+
+    override def totalCountCapability(
+      collection: DataStore.CollectionId
+    ): TotalCountCapability =
+      TotalCountCapability.Supported
+  }
+
+  private final class FailingPostClearRefreshDataStore
+      extends DataStore.InMemoryDataStore(CommitRecorder.noop)
+      with SearchableDataStore {
+    private var _armed = false
+    private var _search_count = 0
+
+    def armPostClearRefresh(): Unit = {
+      _armed = true
+      _search_count = 0
+    }
+
+    def search(
+      collection: DataStore.CollectionId,
+      directive: QueryDirective
+    ): Consequence[SearchResult] =
+      synchronized {
+        if (_armed) {
+          _search_count += 1
+          if (_search_count == 2)
+            Consequence.operationInvalid("injected-post-clear-refresh-failure")
+          else
+            ensure_collection(collection).flatMap(_.search(directive))
+        } else
+          ensure_collection(collection).flatMap(_.search(directive))
+      }
+
+    override def totalCountCapability(
+      collection: DataStore.CollectionId
+    ): TotalCountCapability =
+      TotalCountCapability.Supported
+  }
+
+  private final class ReversedSearchableDataStore
+      extends DataStore.InMemoryDataStore(CommitRecorder.noop)
+      with SearchableDataStore {
+    private var _emitted_reversed = false
+
+    def emittedReversed: Boolean =
+      _emitted_reversed
+
+    def search(
+      collection: DataStore.CollectionId,
+      directive: QueryDirective
+    ): Consequence[SearchResult] =
+      synchronized {
+        ensure_collection(collection).flatMap(_.search(directive).map { searchresult =>
+          if (searchresult.records.size > 1) {
+            _emitted_reversed = true
+            searchresult.copy(records = searchresult.records.reverse)
+          } else
+            searchresult
+        })
+      }
+
+    override def totalCountCapability(
+      collection: DataStore.CollectionId
+    ): TotalCountCapability =
+      TotalCountCapability.Supported
   }
 
   private def _component(

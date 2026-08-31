@@ -1,6 +1,6 @@
 # Phase 61.2 - InformationSpace Entity Persistence and OCC
 
-status=in-progress
+status=closed
 planned_at=2026-08-30
 split_from=[Phase 61](phase-61.md)
 depends_on=[Phase 61.1](phase-61.1.md)
@@ -19,6 +19,11 @@ Phase Plan Gate: PROCEED
 - target: approximate-6h packing target; preferred 4--8h band
 - planning_demand: protected-decision
 - recommended_parent_profile: gpt-5.6-terra / xhigh
+- full_review_selection: gpt-5.6-terra / xhigh
+- agent_reasoning_mode_and_selection_evidence: IC-04 crosses component-owned
+  repository, managed revision, persistence-provider, restart, rollback, and
+  concurrent-update evidence; the architecture and acceptance criteria are
+  frozen, so this needs a dense audit rather than semantic arbitration.
 - profile_cost_role: expensive reasoning kernel
 - expensive_reasoning_kernel: component-scoped Entity repository ownership,
   revision/OCC transition, and no-partial-mutation invariants
@@ -53,6 +58,14 @@ InformationSpace uses the standard Entity repository/UnitOfWork boundary; each
 effective mutation has managed revision and stale writes fail without partial
 state. Phase 61.3 consumes this persistence/OCC handoff.
 
+Phase 61.2 closes IC-04 under `phase61.2-clb-ic04-20260831` after the
+accepted IC-04A--IC-04C Step commits, mandatory Phase review, and the accepted
+three-cycle focused closure-repair ledger. The final full-suite gate and this
+distinct release commit bind the persistent clear, restart, rollback, stale
+write, and deterministic ordering contracts. The final suite passed 3,498
+tests with no failures. Phase 61.3 remains planned and is not started by this
+closure.
+
 ## Non-Goals
 
 New curation behavior, lifecycle semantics, transport projections, downstream
@@ -60,14 +73,9 @@ migration, duplicate removal, and canonical documentation closure.
 
 ## Current Status
 
-In progress. IC-04A has bound InformationSpace to a deterministic,
-Component-owned EntityStore collection with StoreOnly memory policy and embedded
-managed revision. Its focused Information and Component integration suite
-passed 56 tests in 12 suites. IC-04B has added the explicit strict-ingress
-update route: the adapter-observed revision remains execution metadata, while
-the standard EntityStore path applies `WriteIfChanged + ObservedRequired` and
-rejects a stale retry atomically without changing the stored or cached root.
-Its focused persistence specification passed 5 tests. IC-04C has added
-managed-create, rehydration/restart, concurrency, and rollback evidence; its
-focused suite passed 25 tests in 4 suites and its independent Step review
-passed. The mandatory full Phase review is pending.
+IC-04 is complete. InformationSpace now uses the component-owned EntityStore
+and standard UnitOfWork/revision path with deterministic repository reads.
+The accepted closure ledger preserves atomic stale-write rejection, managed
+create/restart/rollback behavior, post-clear cache safety, and canonical
+information-ID ordering. Phase 61.3 is the next planned consumer and requires
+its own explicit Phase invocation.
