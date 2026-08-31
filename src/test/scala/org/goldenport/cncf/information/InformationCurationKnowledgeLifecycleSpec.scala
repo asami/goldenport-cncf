@@ -62,9 +62,9 @@ final class InformationCurationKnowledgeLifecycleSpec
     }
 
     "select validation state from invalid and unresolved evidence and keep candidate bindings aligned" in {
-      Given("invalid and unresolved paper records with an available resolution candidate")
+      Given("imported invalid and unresolved paper records with an available resolution candidate")
       val space = new InformationSpace
-      val invalid = _information_in_state(space, InformationLifecycleState.invalid)
+      val invalid = _registered(space, "")
       val unresolved = _registered(space, "Resolvable")
       val candidate = _success(space.addResolutionCandidate(
         unresolved.id,
@@ -101,11 +101,11 @@ final class InformationCurationKnowledgeLifecycleSpec
       When("the selected resolution candidate is cleared")
       val cleared = _success(space.clearResolutionCandidate(unresolved.id, candidate.candidateKey))
 
-      Then("clearing removes the candidate binding and returns the record to imported state")
+      Then("clearing removes the candidate binding without fabricating a lifecycle transition")
       cleared shouldBe selected
       space.resolutionCandidates(unresolved.id) shouldBe Vector.empty
       space.getInformation(unresolved.id).map(_.identityBindings) shouldBe Some(Vector.empty)
-      space.getInformation(unresolved.id).map(_.state) shouldBe Some(InformationLifecycleState.imported)
+      space.getInformation(unresolved.id).map(_.state) shouldBe Some(InformationLifecycleState.readyForConfirmation)
     }
 
     "reject each CML-permitted source-state facet" in {
@@ -151,6 +151,7 @@ final class InformationCurationKnowledgeLifecycleSpec
         space.getInformation(information.id) shouldBe before
         space.getInformation(information.id).map(_.revision) shouldBe before.map(_.revision)
         space.snapshot shouldBe snapshotbefore
+        _success(space.getInformationC(information.id)) shouldBe Some(before.getOrElse(fail("persisted Information is missing")))
       }
     }
 
@@ -197,6 +198,7 @@ final class InformationCurationKnowledgeLifecycleSpec
         space.getInformation(information.id) shouldBe before
         space.getInformation(information.id).map(_.revision) shouldBe before.map(_.revision)
         space.snapshot shouldBe snapshotbefore
+        _success(space.getInformationC(information.id)) shouldBe Some(before.getOrElse(fail("persisted Information is missing")))
       }
     }
 
@@ -245,6 +247,67 @@ final class InformationCurationKnowledgeLifecycleSpec
       space.getInformation(confirmed.id).map(_.workingData.getString("title")) shouldBe Some(Some("Information title"))
       space.getInformation(confirmed.id).map(_.state) shouldBe Some(InformationLifecycleState.confirmed)
       space.counts.conflictCount shouldBe 1
+    }
+
+    "admit the invalid update route and deny undeclared validation and update moves without mutation" in {
+      Given("an invalid Information record and a ready-for-confirmation Information record")
+      val space = new InformationSpace
+      val invalid = _information_in_state(space, InformationLifecycleState.invalid)
+      val ready = _information_in_state(space, InformationLifecycleState.readyForConfirmation)
+
+      Given("the invalid record and its persisted and cached values before revalidation")
+      val invalidbefore = space.getInformation(invalid.id)
+      val invalidsnapshotbefore = space.snapshot
+
+      When("validation is repeated from invalid without an imported admission state")
+      val invalidvalidation = space.validateInformation(invalid.id)
+
+      Then("the undeclared invalid validation event is rejected without persisted, revision, snapshot, or cache mutation")
+      _argument_invalid(invalidvalidation)
+      space.getInformation(invalid.id) shouldBe invalidbefore
+      space.getInformation(invalid.id).map(_.revision) shouldBe invalidbefore.map(_.revision)
+      space.snapshot shouldBe invalidsnapshotbefore
+      _success(space.getInformationC(invalid.id)) shouldBe Some(invalidbefore.getOrElse(fail("persisted Information is missing")))
+
+      When("the invalid record is edited")
+      val updated = _success(space.updateInformation(invalid.id, Record.data("title" -> "Corrected title")))
+
+      Then("the declared invalid-to-imported update route is admitted")
+      updated.state shouldBe InformationLifecycleState.imported
+      updated.revision.value should be > invalid.revision.value
+
+      Given("the ready record and its persisted and cached values before an edit that would reopen it")
+      val readybefore = space.getInformation(ready.id)
+      val readysnapshotbefore = space.snapshot
+
+      When("the ready record is edited")
+      val readyupdate = space.updateInformation(ready.id, Record.data("title" -> "Changed ready title"))
+
+      Then("the undeclared ready-to-imported update is rejected without persisted, revision, snapshot, or cache mutation")
+      _argument_invalid(readyupdate)
+      space.getInformation(ready.id) shouldBe readybefore
+      space.getInformation(ready.id).map(_.revision) shouldBe readybefore.map(_.revision)
+      space.snapshot shouldBe readysnapshotbefore
+      _success(space.getInformationC(ready.id)) shouldBe Some(readybefore.getOrElse(fail("persisted Information is missing")))
+    }
+
+    "resolve a published-origin conflict to confirmed rather than restoring published" in {
+      Given("a published Information record")
+      val space = new InformationSpace
+      val published = _information_in_state(space, InformationLifecycleState.published)
+
+      When("a conflict is detected for the published record")
+      val conflict = _success(space.recordConflict(published.id, "title", "Published title", "RDF title"))
+
+      Then("the declared published-to-conflict route is admitted")
+      space.getInformation(published.id).map(_.state) shouldBe Some(InformationLifecycleState.conflict)
+
+      When("the published-origin conflict is resolved")
+      val resolved = _success(space.resolveConflict(published.id, conflict.conflictKey, "keep-information"))
+
+      Then("the only declared conflict-resolution route reaches confirmed")
+      resolved.state shouldBe InformationConflictState.resolved
+      space.getInformation(published.id).map(_.state) shouldBe Some(InformationLifecycleState.confirmed)
     }
   }
 

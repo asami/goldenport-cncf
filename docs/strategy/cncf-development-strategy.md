@@ -3655,7 +3655,7 @@ delivery unit independently closable in the preferred 4--8 hour band.
 | [61](../phase/phase-61.md) | Closed: IC-02 canonical CML and generator contract. | Phase 60.8 |
 | [61.1](../phase/phase-61.1.md) | Closed: IC-03 generated Information type adoption. | Phase 61 |
 | [61.2](../phase/phase-61.2.md) | Closed: IC-04 InformationSpace Entity persistence and OCC. | Phase 61.1 |
-| [61.3](../phase/phase-61.3.md) | IC-05 curation and Knowledge lifecycle parity. | Phase 61.2 |
+| [61.3](../phase/phase-61.3.md) | Closed: IC-05 curation and Knowledge lifecycle parity. | Phase 61.2 |
 | [61.4](../phase/phase-61.4.md) | IC-06 DSL, transport, Help, and editor projections. | Phase 61.3 |
 | [61.5](../phase/phase-61.5.md) | IC-07 persisted-state and downstream migration acceptance. | Phase 61.4 |
 | [61.6](../phase/phase-61.6.md) | IC-08 duplicate removal and canonical closure. | Phase 61.5 |
@@ -3675,6 +3675,16 @@ restart, rollback, post-clear cache, and canonical ordering contracts are
 accepted. Every later Phase consumes its predecessor's accepted contract; no
 child restarts an earlier identity, lifecycle, persistence, projection, or
 migration decision.
+
+Phase 61.3 closes IC-05 under `phase61.3-clb-ic05-20260901`: Information
+curation, Tag binding, provider-failure preservation, publication, conflict,
+and Knowledge materialization retain their Phase 26/27 behavior on the
+generated revision-aware Entity. Lifecycle-changing operations and editor
+action availability now use the canonical generated lifecycle; both focused
+closure reviews passed. `HYG-P61.3-001` and `HYG-61.3-RR-001` remain separate
+nonblocking maintainability follow-ups, while the existing
+`HYG-61.1-RR1-002` continues to own InformationSpace source-size debt. Phase
+61.4 remains planned and is not started by this closure.
 
 Planning references:
 - `docs/phase/phase-60.md` through `docs/phase/phase-60.8.md`;

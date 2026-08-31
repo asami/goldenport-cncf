@@ -1,6 +1,7 @@
 package org.goldenport.cncf.information
 
 import java.time.Instant
+import domain.statemachine.informationLifecycle
 import org.goldenport.Consequence
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 import org.goldenport.cncf.knowledge.{
@@ -137,12 +138,17 @@ final class InformationSpace(
     informationid: InformationId,
     workingdata: Record
   )(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information(informationid) { information =>
-      information.copy(
+    _with_information(informationid) { information =>
+      val updated = information.copy(
         workingData = workingdata,
         state = InformationLifecycleState.imported,
         validationIssues = Vector.empty,
         lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+      )
+      _save_information_transition(
+        information,
+        if (information.state == updated.state) None else Some("update"),
+        updated
       )
     }
   /**
@@ -158,12 +164,18 @@ final class InformationSpace(
     workingData: Record,
     observedRevision: EntityRevision
   )(using ctx: ExecutionContext): Consequence[Information] =
-    _update_information_observed(informationId, observedRevision) { information =>
-      information.copy(
+    _with_information(informationId) { information =>
+      val updated = information.copy(
         workingData = workingData,
         state = InformationLifecycleState.imported,
         validationIssues = Vector.empty,
         lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+      )
+      _save_information_transition_observed(
+        information,
+        if (information.state == updated.state) None else Some("update"),
+        updated,
+        observedRevision
       )
     }
 
@@ -192,14 +204,14 @@ final class InformationSpace(
   def validateInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
       val issues = InformationSpace.validate(information)
-      val state =
+      val (event, state) =
         if (issues.nonEmpty)
-          InformationLifecycleState.invalid
+          "validateInvalid" -> InformationLifecycleState.invalid
         else if (information.resolutionCandidates.exists(!_.selected))
-          InformationLifecycleState.needsResolution
+          "validateNeedsResolution" -> InformationLifecycleState.needsResolution
         else
-          InformationLifecycleState.readyForConfirmation
-      _save_information(information.copy(
+          "validateReady" -> InformationLifecycleState.readyForConfirmation
+      _save_information_transition(information, Some(event), information.copy(
         state = state,
         validationIssues = issues,
         lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
@@ -226,8 +238,7 @@ final class InformationSpace(
       val key = _next_key("candidate", information.resolutionCandidates.size + 1)
       val nextbinding = binding.copy(status = InformationBindingStatus.candidate)
       val candidate = InformationResolutionCandidate(key, fieldpath, label, nextbinding, confidence, evidence)
-      _save_information(information.copy(
-        state = InformationLifecycleState.needsResolution,
+      _save_information_transition(information, None, information.copy(
         resolutionCandidates = information.resolutionCandidates :+ candidate,
         identityBindings = information.identityBindings :+ nextbinding,
         lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
@@ -250,13 +261,17 @@ final class InformationSpace(
           val bindings = information.identityBindings.map { binding =>
             if (_same_binding(binding, candidate.binding)) selectedbinding else binding
           }
-          val state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates))
-          _save_information(information.copy(
-            state = state,
-            resolutionCandidates = candidates,
-            identityBindings = bindings,
-            lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
-          )).map(_ => selected)
+          val state = _state_after_resolution_selection(information, candidates)
+          _save_information_transition(
+            information,
+            if (information.state == state) None else Some("selectResolution"),
+            information.copy(
+              state = state,
+              resolutionCandidates = candidates,
+              identityBindings = bindings,
+              lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+            )
+          ).map(_ => selected)
         case None =>
           Consequence.argumentInvalid(s"information resolution candidate not found: $candidatekey")
       }
@@ -274,8 +289,7 @@ final class InformationSpace(
           case Some(candidate) =>
             val candidates = information.resolutionCandidates.filterNot(_.candidateKey == candidatekey)
             val bindings = information.identityBindings.filterNot(_same_binding(_, candidate.binding))
-            _save_information(information.copy(
-              state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
+            _save_information_transition(information, None, information.copy(
               resolutionCandidates = candidates,
               identityBindings = bindings,
               lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
@@ -302,8 +316,7 @@ final class InformationSpace(
           val bindings = information.identityBindings.map { binding =>
             if (_same_binding(binding, candidate.binding)) nextbinding else binding
           }
-          _save_information(information.copy(
-            state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
+          _save_information_transition(information, None, information.copy(
             resolutionCandidates = candidates,
             identityBindings = bindings,
             lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
@@ -315,19 +328,21 @@ final class InformationSpace(
 
   def confirmInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
-      if (information.state == InformationLifecycleState.invalid) {
-        Consequence.argumentInvalid(s"information is invalid: ${informationid.print}")
-      } else if (information.state != InformationLifecycleState.readyForConfirmation && information.state != InformationLifecycleState.confirmed) {
+      if (information.state != InformationLifecycleState.readyForConfirmation && information.state != InformationLifecycleState.confirmed) {
         Consequence.argumentInvalid(s"information is not ready for confirmation: ${informationid.print}")
       } else {
         val now = ctx.clock.instant()
         val bindings = information.identityBindings.map(_.copy(status = InformationBindingStatus.confirmed))
-        _save_information(information.copy(
-          state = InformationLifecycleState.confirmed,
-          identityBindings = bindings,
-          confirmedAt = information.confirmedAt.orElse(Some(now)),
-          lifecycleAttributes = Information.updatedLifecycleAttributes(information, now)
-        ))
+        _save_information_transition(
+          information,
+          if (information.state == InformationLifecycleState.readyForConfirmation) Some("confirm") else None,
+          information.copy(
+            state = InformationLifecycleState.confirmed,
+            identityBindings = bindings,
+            confirmedAt = information.confirmedAt.orElse(Some(now)),
+            lifecycleAttributes = Information.updatedLifecycleAttributes(information, now)
+          )
+        )
       }
     }
 
@@ -352,24 +367,18 @@ final class InformationSpace(
     reason: String
   )(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
-      if (Set(InformationLifecycleState.imported, InformationLifecycleState.invalid, InformationLifecycleState.needsResolution, InformationLifecycleState.readyForConfirmation).contains(information.state))
-        _save_information(information.copy(
+      _save_information_transition(information, Some("reject"), information.copy(
           state = InformationLifecycleState.rejected,
           lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
-        ))
-      else
-        Consequence.argumentInvalid(s"information cannot be rejected: ${informationid.print}")
+      ))
     }
 
   def reopenInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
-      if (Set(InformationLifecycleState.confirmed, InformationLifecycleState.rejected).contains(information.state))
-        _save_information(information.copy(
+      _save_information_transition(information, Some("reopen"), information.copy(
           state = InformationLifecycleState.imported,
           lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
-        ))
-      else
-        Consequence.argumentInvalid(s"information cannot be reopened: ${informationid.print}")
+      ))
     }
 
   def publishInformation(
@@ -390,11 +399,15 @@ final class InformationSpace(
           knowledgeFrameId = knowledgeframeid,
           publishedAt = Some(now)
         )
-        _save_information(information.copy(
-          state = InformationLifecycleState.published,
-          publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
-          lifecycleAttributes = Information.updatedLifecycleAttributes(information, now)
-        )).map(_ => publication)
+        _save_information_transition(
+          information,
+          if (information.state == InformationLifecycleState.confirmed) Some("publish") else None,
+          information.copy(
+            state = InformationLifecycleState.published,
+            publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
+            lifecycleAttributes = Information.updatedLifecycleAttributes(information, now)
+          )
+        ).map(_ => publication)
       } else {
         Consequence.argumentInvalid(s"information is not confirmed: ${informationid.print}")
       }
@@ -448,7 +461,7 @@ final class InformationSpace(
         rdfValue = rdfvalue,
         severity = severity
       )
-      _save_information(information.copy(
+      _save_information_transition(information, Some("detectConflict"), information.copy(
         state = InformationLifecycleState.conflict,
         conflicts = information.conflicts :+ conflict,
         lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
@@ -478,14 +491,18 @@ final class InformationSpace(
           val conflicts = information.conflicts.map(x => if (x.conflictKey == conflictkey) resolved else x)
           val state =
             if (conflicts.forall(_.state == InformationConflictState.resolved))
-              information.publicationStatuses.find(_.state == InformationPublicationState.published).fold(InformationLifecycleState.confirmed)(_ => InformationLifecycleState.published)
+              InformationLifecycleState.confirmed
             else
               InformationLifecycleState.conflict
-          _save_information(information.copy(
-            state = state,
-            conflicts = conflicts,
-            lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
-          )).map(_ => resolved)
+          _save_information_transition(
+            information,
+            if (information.state == state) None else Some("resolveConflict"),
+            information.copy(
+              state = state,
+              conflicts = conflicts,
+              lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+            )
+          ).map(_ => resolved)
         case None =>
           Consequence.argumentInvalid(s"information conflict not found: $conflictkey")
       }
@@ -507,17 +524,7 @@ final class InformationSpace(
     informationid: InformationId
   )(f: Information => Information)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
-      _save_information(f(information))
-    }
-
-  private def _update_information_observed(
-    informationid: InformationId,
-    observedrevision: EntityRevision
-  )(
-    f: Information => Information
-  )(using ctx: ExecutionContext): Consequence[Information] =
-    _with_information(informationid) { information =>
-      _save_information_observed(f(information), observedrevision)
+      _save_information_transition(information, None, f(information))
     }
 
   private def _with_information[A](
@@ -527,7 +534,6 @@ final class InformationSpace(
   )(using ctx: ExecutionContext): Consequence[A] =
     _repository.load(informationid).flatMap {
       case Some(information) =>
-        _cache_information(information)
         f(information)
       case None =>
         Consequence.argumentInvalid(s"information not found: ${informationid.print}")
@@ -548,6 +554,45 @@ final class InformationSpace(
     _repository.updateObserved(information, observedrevision).map { persisted =>
       _cache_information(persisted)
       persisted
+    }
+
+  private def _save_information_transition(
+    current: Information,
+    event: Option[String],
+    next: Information
+  )(using ctx: ExecutionContext): Consequence[Information] =
+    _admit_information_transition(current, event, next).flatMap { _ =>
+      _save_information(next)
+    }
+
+  private def _save_information_transition_observed(
+    current: Information,
+    event: Option[String],
+    next: Information,
+    observedrevision: EntityRevision
+  )(using ctx: ExecutionContext): Consequence[Information] =
+    _admit_information_transition(current, event, next).flatMap { _ =>
+      _save_information_observed(next, observedrevision)
+    }
+
+  private def _admit_information_transition(
+    current: Information,
+    event: Option[String],
+    next: Information
+  ): Consequence[Unit] =
+    event match {
+      case Some(value) if informationLifecycle.permits(current.state.value, value, next.state.value) =>
+        Consequence.unit
+      case None if current.state == next.state =>
+        Consequence.unit
+      case Some(value) =>
+        Consequence.argumentInvalid(
+          s"information lifecycle transition is not permitted: ${current.state.value} --$value--> ${next.state.value}"
+        )
+      case None =>
+        Consequence.argumentInvalid(
+          s"information lifecycle transition requires a CML event: ${current.state.value} -> ${next.state.value}"
+        )
     }
 
   private def _cache_information(information: Information): Unit =
@@ -576,17 +621,18 @@ final class InformationSpace(
   ): String =
     s"$prefix-$index"
 
-  private def _state_after_candidate_update(information: Information): InformationLifecycleState =
-    if (information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published)
-      information.state
-    else if (information.validationIssues.nonEmpty)
-      InformationLifecycleState.invalid
-    else if (information.resolutionCandidates.isEmpty)
-      InformationLifecycleState.imported
-    else if (information.resolutionCandidates.forall(_.selected))
+  private def _state_after_resolution_selection(
+    information: Information,
+    candidates: Vector[InformationResolutionCandidate]
+  ): InformationLifecycleState =
+    if (
+      information.state == InformationLifecycleState.needsResolution &&
+      candidates.nonEmpty &&
+      candidates.forall(_.selected)
+    )
       InformationLifecycleState.readyForConfirmation
     else
-      InformationLifecycleState.needsResolution
+      information.state
 
   private def _same_binding(
     lhs: InformationIdentityBinding,

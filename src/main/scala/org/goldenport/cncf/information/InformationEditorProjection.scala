@@ -1,6 +1,7 @@
 package org.goldenport.cncf.information
 
 import java.time.Instant
+import domain.statemachine.informationLifecycle
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
@@ -1179,15 +1180,45 @@ object InformationSpaceEditorProjection {
 
   private def _information_actions(information: Information): Vector[InformationEditorActionDescriptor] =
     Vector(
-      _action("save", "Save", information.state != InformationLifecycleState.published, None),
-      _action("validate", "Validate", information.state != InformationLifecycleState.published, None),
-      _action("resolve", "Resolve", information.resolutionCandidates.nonEmpty && information.state == InformationLifecycleState.needsResolution, Some("available when unresolved candidates exist")),
-      _action("confirm", "Confirm", information.state == InformationLifecycleState.readyForConfirmation || information.state == InformationLifecycleState.confirmed, Some("requires valid and resolved information")),
-      _action("reject", "Reject", information.state != InformationLifecycleState.rejected && information.state != InformationLifecycleState.published, None),
-      _action("reopen", "Reopen", information.state == InformationLifecycleState.rejected || information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published || information.state == InformationLifecycleState.conflict, None),
-      _action("publish", "Publish", information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published, Some("requires confirmed information")),
+      _action("save", "Save", _save_available(information), None),
+      _action("validate", "Validate", _validate_available(information), None),
+      _action("resolve", "Resolve", information.resolutionCandidates.nonEmpty && _permits_transition(information, "selectResolution", InformationLifecycleState.readyForConfirmation), Some("available when unresolved candidates exist")),
+      _action("confirm", "Confirm", _confirm_available(information), Some("requires valid and resolved information")),
+      _action("reject", "Reject", _permits_transition(information, "reject", InformationLifecycleState.rejected), None),
+      _action("reopen", "Reopen", _permits_transition(information, "reopen", InformationLifecycleState.imported), None),
+      _action("publish", "Publish", _publish_available(information), Some("requires confirmed information")),
       _action("materialize", "Materialize", information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published, Some("creates KnowledgeFrame / KnowledgeSpace projection"))
     )
+
+  private def _save_available(information: Information): Boolean =
+    information.state == InformationLifecycleState.imported ||
+      _permits_transition(information, "update", InformationLifecycleState.imported)
+
+  private def _validate_available(information: Information): Boolean = {
+    val (event, state) =
+      if (InformationSpace.validate(information).nonEmpty)
+        "validateInvalid" -> InformationLifecycleState.invalid
+      else if (information.resolutionCandidates.exists(!_.selected))
+        "validateNeedsResolution" -> InformationLifecycleState.needsResolution
+      else
+        "validateReady" -> InformationLifecycleState.readyForConfirmation
+    _permits_transition(information, event, state)
+  }
+
+  private def _confirm_available(information: Information): Boolean =
+    information.state == InformationLifecycleState.confirmed ||
+      _permits_transition(information, "confirm", InformationLifecycleState.confirmed)
+
+  private def _publish_available(information: Information): Boolean =
+    information.state == InformationLifecycleState.published ||
+      _permits_transition(information, "publish", InformationLifecycleState.published)
+
+  private def _permits_transition(
+    information: Information,
+    event: String,
+    state: InformationLifecycleState
+  ): Boolean =
+    informationLifecycle.permits(information.state.value, event, state.value)
 
   private def _action(
     name: String,

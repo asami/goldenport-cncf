@@ -24,6 +24,9 @@ final class InformationEditorProjectionSpec
   with GivenWhenThen {
 
   private given ExecutionContext = ExecutionContext.test()
+  private val _e1 = afterWord(
+    "in spec:phase-61.3-information-editor-projection-lifecycle, example:E1, rules:CB-61.3-RR-001, phase:61.3"
+  )
 
   "InformationSpaceEditorProjection" should {
     "provide book field descriptors and knowledge mapping metadata" in {
@@ -93,6 +96,7 @@ final class InformationEditorProjectionSpec
         confidence = Some(0.85)
       )
       _success(component.informationSpace.addResolutionCandidate(recordid, "dbpediaUri", "Domain-driven design", binding, Some(0.85), Some("title match")))
+      _success(component.informationSpace.validateInformation(recordid))
       _success(component.informationSpace.appendFieldEvent(recordid, InformationFieldEvent(
         fieldPath = "title",
         state = InformationFieldState.imported,
@@ -250,6 +254,7 @@ final class InformationEditorProjectionSpec
         confidence = Some(0.80)
       )
       _success(component.informationSpace.addResolutionCandidate(recordid, "doi", "Knowledge Editing with InformationSpace", binding, Some(0.80), Some("local identifier")))
+      _success(component.informationSpace.validateInformation(recordid))
 
       When("the paper editor state is projected")
       val projection = _success(InformationSpaceEditorProjection.component(component, "paper"))
@@ -307,6 +312,7 @@ final class InformationEditorProjectionSpec
         confidence = Some(0.80)
       )
       _success(component.informationSpace.addResolutionCandidate(recordid, "url", "KnowledgeSpace Web Resource", binding, Some(0.80), Some("local URL")))
+      _success(component.informationSpace.validateInformation(recordid))
 
       When("the web-resource editor state is projected")
       val projection = _success(InformationSpaceEditorProjection.component(component, "web-resource"))
@@ -349,26 +355,61 @@ final class InformationEditorProjectionSpec
       _success(InformationSpaceEditorProjection.informationTagSourceIds("projection-tag")) should contain (information.id.print)
     }
 
-    "project action availability across lifecycle states" in {
-      Given("book Information observed before and after confirmation and publication")
+    "E1 project only lifecycle-authorized action availability" must _e1 {
+      "enable actions only when InformationSpace accepts their lifecycle state" in {
+      Given("book Information in imported, invalid, ready, confirmed, published, and rejected lifecycle states")
       val component = _component()
-      val batch = _success(component.informationSpace.registerInformation("book", Vector(Record.data("title" -> "Ready"))))
-      val recordid = batch.head.id
-      _success(component.informationSpace.validateInformation(recordid))
-      When("editor actions are projected for ready and published states")
-      val readyprojection = _success(InformationSpaceEditorProjection.component(component, "book"))
-      val readyrecord = readyprojection.information.headOption.getOrElse(fail("ready record missing"))
+      val imported = _success(component.informationSpace.registerInformation("book", Vector(Record.data("title" -> "Imported")))).head
+      val invalid = _success(component.informationSpace.registerInformation("book", Vector(Record.data("isbn13" -> "9780134685991")))).head
+      val ready = _success(component.informationSpace.registerInformation("book", Vector(Record.data("title" -> "Ready")))).head
+      val confirmable = _success(component.informationSpace.registerInformation("book", Vector(Record.data("title" -> "Confirmed")))).head
+      val publishable = _success(component.informationSpace.registerInformation("book", Vector(Record.data("title" -> "Published")))).head
+      val rejected = _success(component.informationSpace.registerInformation("book", Vector(Record.data("title" -> "Rejected")))).head
+      _success(component.informationSpace.validateInformation(invalid.id))
+      _success(component.informationSpace.validateInformation(ready.id))
+      _success(component.informationSpace.validateInformation(confirmable.id))
+      val confirmed = _success(component.informationSpace.confirmInformation(confirmable.id))
+      _success(component.informationSpace.validateInformation(publishable.id))
+      val published = _success(component.informationSpace.confirmInformation(publishable.id))
+      _success(component.informationSpace.publishInformation(published.id, "rdf-vector", Some("published")))
+      _success(component.informationSpace.rejectInformation(rejected.id, "editor matrix"))
 
-      val item = _success(component.informationSpace.confirmInformation(recordid))
-      _success(component.informationSpace.publishInformation(item.id, "rdf-vector", Some("published")))
-      val publishedprojection = _success(InformationSpaceEditorProjection.component(component, "book"))
-      val publisheditem = publishedprojection.information.headOption.getOrElse(fail("published item missing"))
+      When("the editor projects the lifecycle action matrix")
+      val records = _success(InformationSpaceEditorProjection.component(component, "book"))
+        .information
+        .map(record => record.informationId -> record)
+        .toMap
+      def _enabled_(informationid: InformationId, action: String): Option[Boolean] =
+        records.get(informationid).flatMap(_.actions.find(_.name == action)).map(_.enabled)
 
-      Then("each lifecycle exposes only its valid next actions")
-      readyrecord.actions.find(_.name == "confirm").map(_.enabled) shouldBe Some(true)
-      publisheditem.actions.find(_.name == "publish").map(_.enabled) shouldBe Some(true)
-      publisheditem.actions.find(_.name == "materialize").map(_.enabled) shouldBe Some(true)
-      publisheditem.publication.map(_.state) shouldBe Some(InformationPublicationState.published)
+      Then("save and validate remain available only for accepted imported or update paths")
+      _enabled_(imported.id, "save") shouldBe Some(true)
+      _enabled_(imported.id, "validate") shouldBe Some(true)
+      _enabled_(invalid.id, "save") shouldBe Some(true)
+      _enabled_(invalid.id, "validate") shouldBe Some(false)
+      _enabled_(ready.id, "save") shouldBe Some(false)
+      _enabled_(ready.id, "validate") shouldBe Some(false)
+      _enabled_(confirmed.id, "save") shouldBe Some(false)
+      _enabled_(confirmed.id, "validate") shouldBe Some(false)
+      _enabled_(published.id, "save") shouldBe Some(false)
+      _enabled_(published.id, "validate") shouldBe Some(false)
+
+      And("reject and reopen follow the generated lifecycle topology")
+      _enabled_(imported.id, "reject") shouldBe Some(true)
+      _enabled_(ready.id, "confirm") shouldBe Some(true)
+      _enabled_(rejected.id, "reject") shouldBe Some(false)
+      _enabled_(rejected.id, "reopen") shouldBe Some(true)
+      _enabled_(confirmed.id, "reject") shouldBe Some(false)
+      _enabled_(confirmed.id, "reopen") shouldBe Some(true)
+      _enabled_(confirmed.id, "confirm") shouldBe Some(true)
+
+      And("published records retain only deliberate publication and materialization repeats")
+      _enabled_(published.id, "publish") shouldBe Some(true)
+      _enabled_(published.id, "materialize") shouldBe Some(true)
+      _enabled_(published.id, "reopen") shouldBe Some(false)
+      _enabled_(published.id, "reject") shouldBe Some(false)
+      records(published.id).publication.map(_.state) shouldBe Some(InformationPublicationState.published)
+      }
     }
 
     "disable confirmation when required book fields are missing" in {

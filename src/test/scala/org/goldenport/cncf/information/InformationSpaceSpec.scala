@@ -238,7 +238,10 @@ final class InformationSpaceSpec
         Some("dbpedia lookup")
       ))
 
-      And("the candidate and binding are visible before removal")
+      And("the candidate-bearing imported record is validated")
+      _success(space.validateInformation(recordid))
+
+      Then("the candidate and binding are visible in the CML needs-resolution state before removal")
       space.counts.resolutionCandidateCount shouldBe 1
       space.counts.identityBindingCount shouldBe 1
       space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.needsResolution)
@@ -246,12 +249,12 @@ final class InformationSpaceSpec
       When("the candidate is cleared before confirmation")
       val removed = _success(space.clearResolutionCandidate(recordid, candidate.candidateKey))
 
-      Then("the candidate and its identity binding are both removed")
+      Then("the candidate and its identity binding are removed without fabricating a lifecycle transition")
       removed.candidateKey shouldBe candidate.candidateKey
       space.resolutionCandidates(recordid) shouldBe Vector.empty
       space.counts.resolutionCandidateCount shouldBe 0
       space.counts.identityBindingCount shouldBe 0
-      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.imported)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.needsResolution)
       space.getInformation(recordid).map(_.resolutionCandidates) shouldBe Some(Vector.empty)
       space.getInformation(recordid).map(_.identityBindings) shouldBe Some(Vector.empty)
     }

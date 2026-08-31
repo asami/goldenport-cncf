@@ -1,7 +1,8 @@
 # Phase 61.3 - Information Curation and Knowledge Lifecycle Migration
 
-status=planned
+status=closed
 planned_at=2026-08-30
+closed_at=2026-09-01
 split_from=[Phase 61](phase-61.md)
 depends_on=[Phase 61.2](phase-61.2.md)
 successor=[Phase 61.4](phase-61.4.md)
@@ -50,6 +51,16 @@ All curation and Knowledge lifecycle behavior is preserved on the generated
 Entity with the accepted persistence/OCC semantics. Phase 61.4 consumes the
 behavioral handoff for access-surface projections.
 
+Phase 61.3 closes IC-05 under `phase61.3-clb-ic05-20260901` after the accepted
+IC-05 Step, mandatory Phase review, and two focused closure-repair cycles. The
+first cycle made every InformationSpace lifecycle transition admit the
+generated CML before persistence or cache mutation; the second aligned editor
+action availability with that same lifecycle. The distinct release commit binds
+the final full-suite evidence: `sbt --batch test` passed 3,510 tests in 474
+suites with no failure (`96580-20260831T175306Z`). It also binds the
+nonblocking Hygiene ledger. Phase 61.4 remains planned and is not started by
+this closure.
+
 ## Non-Goals
 
 New access surfaces, downstream migration, duplicate removal, or design/spec
@@ -57,4 +68,7 @@ promotion.
 
 ## Current Status
 
-Planned. This Phase starts only after Phase 61.2 accepts IC-04.
+IC-05 is complete. Information curation, Tag binding, publication, conflict,
+and Knowledge materialization behavior now preserve the generated Entity,
+revision/OCC, and CML lifecycle contracts. Phase 61.4 is the next planned
+consumer and requires its own explicit Phase invocation.

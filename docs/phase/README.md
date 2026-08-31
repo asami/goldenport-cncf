@@ -30,8 +30,11 @@ Current baseline:
   Information runtime adoption is complete after the required full suite and
   full/focused review gates. Phase 61.2 is closed under
   `phase61.2-clb-ic04-20260831`: IC-04 InformationSpace entity persistence and
-  OCC are complete after the required full suite and closure review. Phases
-  61.3 through 61.6 remain planned sequential successors and have not started.
+  OCC are complete after the required full suite and closure review. Phase
+  61.3 is closed under `phase61.3-clb-ic05-20260901`: IC-05 curation and
+  Knowledge lifecycle parity is complete after the required full suite,
+  mandatory review, and focused closure reviews. Phases 61.4 through 61.6
+  remain planned sequential successors and have not started.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
@@ -46,9 +49,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. Phase 61.3 is planned and
+- Active phase in the current CNCF sequence: none. Phase 61.4 is planned and
   requires its own explicit start.
-- Latest closed checklist: `phase-61.2-checklist.md`.
+- Latest closed checklist: `phase-61.3-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -105,8 +108,9 @@ Current baseline:
   - `phase-61.md`
   - `phase-61.1.md`
   - `phase-61.2.md`
+  - `phase-61.3.md`
 - Active phase set currently includes:
-  - none; `phase-61.3.md` is the next planned Phase
+  - none; `phase-61.4.md` is the next planned Phase
 
 ## Related Rules
 
