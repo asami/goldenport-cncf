@@ -10,13 +10,14 @@ import org.goldenport.cncf.knowledge.{
   RdfNodeName
 }
 import org.goldenport.convert.ValueReader
+import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 
 /*
  * @since   May. 20, 2026
  *  version May. 30, 2026
- * @version Aug.  8, 2026
+ * @version Aug. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
@@ -125,6 +126,15 @@ object Information {
       org.goldenport.datatype.Identifier("system"),
       org.simplemodeling.model.statemachine.PostStatus.default,
       org.simplemodeling.model.statemachine.Aliveness.default
+    )
+
+  private[information] def updatedLifecycleAttributes(
+    information: Information,
+    updatedAt: Instant
+  ) =
+    information.lifecycleAttributes.copy(
+      updatedAt = updatedAt,
+      updatedBy = Identifier("system")
     )
 }
 

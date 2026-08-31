@@ -3653,7 +3653,7 @@ delivery unit independently closable in the preferred 4--8 hour band.
 | Phase | Goal | Dependency |
 | --- | --- | --- |
 | [61](../phase/phase-61.md) | Closed: IC-02 canonical CML and generator contract. | Phase 60.8 |
-| [61.1](../phase/phase-61.1.md) | IC-03 generated Information type adoption. | Phase 61 |
+| [61.1](../phase/phase-61.1.md) | Closed: IC-03 generated Information type adoption. | Phase 61 |
 | [61.2](../phase/phase-61.2.md) | IC-04 InformationSpace Entity persistence and OCC. | Phase 61.1 |
 | [61.3](../phase/phase-61.3.md) | IC-05 curation and Knowledge lifecycle parity. | Phase 61.2 |
 | [61.4](../phase/phase-61.4.md) | IC-06 DSL, transport, Help, and editor projections. | Phase 61.3 |
@@ -3664,9 +3664,13 @@ Phase 61 produced the accepted CML/generator handoff and is closed under
 `phase61-clb-ic02-20260831`. Its mandatory full review found the Phase 62
 entry-rule discrepancy `CPB-61-001`; the bounded planning correction and
 focused re-review resolved it without changing the IC-02 source/test delta.
-Every later Phase consumes its predecessor's accepted contract; no child
-restarts an earlier identity, lifecycle, persistence, projection, or migration
-decision.
+Phase 61.1 closed IC-03 under `phase61.1-clb-ic03-20260831`: the runtime now
+uses the generated Information Entity/value/powertype family with bounded
+compatibility adapters, creation provenance remains intact on mutation, and
+E1/E2 expose IC-03 traceability. It records `HYG-61.1-RR1-002` as a separate
+InformationSpace source-size follow-up. Every later Phase consumes its
+predecessor's accepted contract; no child restarts an earlier identity,
+lifecycle, persistence, projection, or migration decision.
 
 Planning references:
 - `docs/phase/phase-60.md` through `docs/phase/phase-60.8.md`;

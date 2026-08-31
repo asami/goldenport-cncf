@@ -1,6 +1,6 @@
 # Phase 61.1 - Generated Information Type Adoption
 
-status=planned
+status=closed
 planned_at=2026-08-30
 split_from=[Phase 61](phase-61.md)
 depends_on=[Phase 61](phase-61.md)
@@ -51,6 +51,13 @@ Runtime uses one generated Information family, all remaining adapters have
 explicit removal criteria, and the accepted handoff lets Phase 61.2 bind the
 canonical Entity to standard persistence/OCC without changing type identity.
 
+Phase 61.1 is closed after the generated-runtime adoption Step commit, the
+mandatory full review, and the focused closure review resolved lifecycle
+creation-provenance and executable-spec metadata findings. The final full-suite
+gate and this distinct release commit bind the closure under
+`phase61.1-clb-ic03-20260831`. Phase 61.2 is the next planned consumer; it is
+not started by this closure.
+
 ## Non-Goals
 
 Entity repository binding, OCC semantics, curation lifecycle behavior,
@@ -58,4 +65,6 @@ projections, downstream migration, duplicate removal, and canonical closure.
 
 ## Current Status
 
-Planned. This Phase starts only after Phase 61 accepts IC-02.
+IC-03 is complete. Phase 61.2 is the next planned consumer of the accepted
+generated runtime identity and bounded adapter policy, and requires its own
+explicit Phase invocation.
