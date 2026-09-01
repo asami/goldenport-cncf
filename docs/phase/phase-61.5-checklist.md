@@ -23,6 +23,12 @@ Stage Status:
 - [ ] Preserve ids, lifecycle, working/raw data, candidates, bindings,
   publications, conflicts, events, audit, and revision provenance.
 - [ ] Add migration preview and rollback-safe failure behavior.
+- [x] Complete IC-07A PMR-D design/compatibility review against a frozen
+  migration dossier.
+- [x] Complete IC-07A PMR-I implementation review against the accepted
+  migration dossier and current focused evidence.
+- [x] Complete IC-07A PMR-R focused re-review for every byte-changing PMR-I
+  correction, when applicable (not required: PMR-I was clean).
 - [ ] Validate Textus Knowledge Editor list/detail/edit/lifecycle flows.
 - [ ] Validate Textus SIE authority resolution, publication, and
   materialization flows.
@@ -34,4 +40,6 @@ Stage Status:
 - [ ] Run focused downstream suites and representative end-to-end smoke tests.
 
 Evidence:
-- Pending.
+- IC-07A migration admission: PMR-D, typed PMR-D re-review, and PMR-I PASS;
+  migration focused spec 7/0 (`15623-20260901T010636Z`) and physical
+  EntityStore focused spec 16/0 (`16405-20260901T010811Z`).

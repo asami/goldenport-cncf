@@ -293,7 +293,9 @@ private[information] object InformationEntityRepository {
       _generated_persistent.fromRecord(record)
 
     override def fromStoreRecord(record: Record): Consequence[Information] =
-      _generated_persistent.fromStoreRecord(record)
+      InformationPersistenceMigration.canonicalRecordC(record).flatMap(
+        _generated_persistent.fromStoreRecord
+      )
   }
 
   val informationPersistentCreate: EntityPersistentCreate[Information] =
@@ -338,6 +340,11 @@ private[information] object InformationEntityRepository {
       candidate.toDataStore(),
       "binding" -> _binding_store_record(candidate.binding)
     )
+
+  private[information] def bindingStoreRecord(
+    binding: InformationIdentityBinding
+  ): Record =
+    _binding_store_record(binding)
 
   private def _binding_store_record(
     binding: InformationIdentityBinding

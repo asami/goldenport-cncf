@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 31, 2026
- * @version Aug. 31, 2026
+ * @version Sep. 1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceEntityPersistenceSpec
@@ -83,6 +83,9 @@ final class InformationSpaceEntityPersistenceSpec
   )
   private val _e15 = afterWord(
     "in spec:phase-61.2-information-space-entity-persistence, example:E15, rules:IC-04, phase:61.2, slice:IC-04D"
+  )
+  private val _e16 = afterWord(
+    "in spec:phase-61.5-information-persistence-migration, example:E16, rules:IC-07, phase:61.5, slice:IC-07A.1"
   )
 
   "InformationSpace Entity persistence" should {
@@ -613,6 +616,55 @@ final class InformationSpaceEntityPersistenceSpec
           result.snapshotids shouldBe result.expectedids
         }
         reversed.emittedReversed shouldBe true
+      }
+    }
+
+    "E16 retain a generated canonical store record through the migration admission gate" must _e16 {
+      "classifies the EntityStore representation as canonical without rewriting it" in {
+        Given("one persisted Information root using the generated EntityStore record shape")
+        val namespace = IdGenerationContext.IdNamespace("phase61", "information_canonical_admission")
+        val store = DataStore.inMemorySearchable()
+        given ExecutionContext = _context(
+          namespace,
+          "information-canonical-admission",
+          store
+        )
+        val owner = _component("org.goldenport.cncf.information.CanonicalAdmissionOwner")
+        val registered = _success(owner.informationSpace.registerInformation(
+          "paper",
+          Vector(Record.data("title" -> "Canonical admission"))
+        )).head
+        val collection = DataStore.CollectionId.EntityStore(registered.id.collection)
+        val entry = DataStore.EntryId(registered.id)
+        val stored = _success(store.load(collection, entry)).getOrElse(
+          fail(s"Information EntityStore raw record is missing: ${registered.id.print}")
+        )
+
+        When("the repository previews and decodes the actual EntityStore physical record")
+        val preview = InformationPersistenceMigration.preview(stored)
+        val decoded = _success(
+          InformationEntityRepository.informationPersistent.fromStoreRecord(stored)
+        )
+
+        Then("the complete physical snake_case lifecycle representation remains canonical and unchanged")
+        val keys = stored.fields.iterator.map(_.key).toSet
+        Set(
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by",
+          "post_status",
+          "aliveness"
+        ).subsetOf(keys) shouldBe true
+        Set(
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy",
+          "postStatus"
+        ).intersect(keys) shouldBe empty
+        preview shouldBe InformationPersistenceMigration.Preview.Canonical(stored)
+        decoded shouldBe registered
       }
     }
   }
