@@ -17,13 +17,20 @@ import org.simplemodeling.model.value.SecurityAttributes
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
  *  version Apr. 26, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
     with Identified[E, EntityId] {
   def toStoreRecord(e: E): Record =
     toRecord(e)
+
+  private[cncf] def admitStoreRecord(r: Record): Consequence[Record] =
+    Consequence.success(r)
+
+  private[cncf] def decodeAdmittedStoreRecord(r: Record): Consequence[E] =
+    fromStoreRecord(r)
 
   def fromStoreRecord(r: Record): Consequence[E] =
     fromRecord(r)
@@ -72,6 +79,21 @@ object EntityPersistent {
   ): Consequence[E] =
     persistent
       .fromStoreRecord(record)
+      .flatMap { entity =>
+        val actual = persistent.id(entity).collection
+        if (actual == collectionid)
+          Consequence.success(entity)
+        else
+          _collection_mismatch(actual, collectionid)
+      }
+
+  private[cncf] def _decode_admitted_store_record[E](
+    persistent: EntityPersistent[E],
+    collectionid: EntityCollectionId,
+    record: Record
+  ): Consequence[E] =
+    persistent
+      .decodeAdmittedStoreRecord(record)
       .flatMap { entity =>
         val actual = persistent.id(entity).collection
         if (actual == collectionid)

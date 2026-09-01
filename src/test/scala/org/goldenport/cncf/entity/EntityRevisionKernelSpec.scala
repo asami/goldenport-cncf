@@ -62,6 +62,10 @@ final class EntityRevisionKernelSpec
     afterWord(
       "in phase:50, slice:SE-03D, acceptance:ER-08, superseding phase:49 rule:R3 for the migrated EntityRevision path"
     )
+  private val _cb_p615_rr_001_metadata =
+    afterWord(
+      "in spec:phase-61.5-codec-dispatch, example:E1, rules:R1, phase:61.5"
+    )
 
   "Entity revision kernel" should {
     "SE-03D use the common positive revision semantics directly" must
@@ -461,6 +465,44 @@ final class EntityRevisionKernelSpec
           Consequence.success(Some(99L))
       }
     }
+
+    "E1 CB-P61.5-RR-001 preserve the overridden physical-store codec after revision admission" must
+      _cb_p615_rr_001_metadata {
+      "when a revision-bound EntityStore load receives a physical store record" in {
+        Given(
+          "Spec: docs/phase/phase-61.5.md; Rules: R1; Example: E1; one revision-bound Entity whose presentation decoder rejects its physical store field"
+        )
+        val fixture = _fixture()
+        given ExecutionContext = fixture.context
+        val id = EntityId("test", "store_codec", _collection_id)
+        val seeded = fixture.datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(
+              DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(_collection_id),
+                Record.dataAuto(
+                  "id" -> id,
+                  "store_name" -> "physical-store-value",
+                  EntityConcurrencyMetadata.STORAGE_FIELD_NAME -> 1L
+                )
+              )
+            )
+          )
+        )
+
+        When("the EntityStore validates the admitted revision before decoding the Entity")
+        val loaded = seeded.flatMap(_ =>
+          fixture.entitystorespace.load(
+            UnitOfWorkOp.EntityStoreLoad(id, _store_dispatch_persistent)
+          )
+        )
+
+        Then("the overridden physical-store decoder supplies the domain Entity")
+        loaded shouldBe Consequence.success(
+          Some(TestEntity(id, "physical-store-value", None))
+        )
+      }
+    }
   }
 
   private val _collection_id =
@@ -507,6 +549,33 @@ final class EntityRevisionKernelSpec
           record: Record
       ): Consequence[TestEntity] =
         _decode_entity(record)
+    }
+
+  private val _store_dispatch_persistent: EntityPersistent[TestEntity] =
+    new EntityPersistent[TestEntity] {
+      def id(entity: TestEntity): EntityId = entity.id
+      def toRecord(entity: TestEntity): Record =
+        _entity_record(entity)
+      def fromRecord(record: Record): Consequence[TestEntity] =
+        if (record.getAny("store_name").isDefined)
+          Consequence.argumentInvalid(
+            "presentationRecord",
+            "record without physical store fields",
+            record
+          )
+        else
+          _decode_entity(record)
+      override def fromStoreRecord(record: Record): Consequence[TestEntity] =
+        (record.getAny("id"), record.getString("store_name")) match {
+          case (Some(id: EntityId), Some(name)) =>
+            Consequence.success(TestEntity(id, name, None))
+          case _ =>
+            Consequence.argumentInvalid(
+              "storeRecord",
+              "EntityId and physical store name",
+              record
+            )
+        }
     }
 
   private val _entity_update: EntityPersistentUpdate[TestPatch] =

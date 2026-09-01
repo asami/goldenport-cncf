@@ -24,7 +24,7 @@ final class InformationPersistenceMigrationSpec
   "Information persisted-record migration" should {
     "preview and decode the one supported legacy v0 shape without changing its input" in {
       Given("a complete legacy v0 Information record with one top-level updatedAt and all curation data")
-      val legacy = _legacy_record
+      val legacy = _legacy_record()
 
       When("the repository previews and decodes the legacy record before generated decoding")
       val preview = InformationPersistenceMigration.preview(legacy)
@@ -33,7 +33,7 @@ final class InformationPersistenceMigrationSpec
       )
 
       Then("the preview is non-mutating, deterministic, and preserves curation data through canonical decoding")
-      legacy shouldBe _legacy_record
+      legacy shouldBe _legacy_record()
       preview match {
         case InformationPersistenceMigration.Preview.LegacyV0(canonical) =>
           canonical.getAny("revision").isDefined shouldBe true
@@ -44,9 +44,39 @@ final class InformationPersistenceMigrationSpec
       decoded shouldBe _information
     }
 
+    "admit a supported legacy v0 record through the EntityStore repository read without rewriting storage" in {
+      Given("one tracking DataStore seeded with a supported legacy v0 Information record")
+      val store = new TrackingInMemoryDataStore
+      given ExecutionContext = _context(store)
+      val repository = new InformationEntityRepository(None)
+      val collectionid = _success(repository.collectionIdC)
+      val information = _information.copy(
+        id = _information.id.copy(collection = collectionid)
+      )
+      val collection = DataStore.CollectionId.EntityStore(information.id.collection)
+      val entry = DataStore.EntryId(information.id)
+      val legacy = _legacy_record(information)
+      _success(store.create(collection, entry, legacy))
+      val before = _success(store.load(collection, entry)).getOrElse(
+        fail(s"legacy physical record is missing: ${information.id.print}")
+      )
+      val writesbefore = store.writeCount
+
+      When("the Information repository loads the legacy record through EntityStore")
+      val loaded = _success(repository.load(information.id))
+      val after = _success(store.load(collection, entry)).getOrElse(
+        fail(s"legacy physical record disappeared: ${information.id.print}")
+      )
+
+      Then("the exact Information is decoded after in-memory admission with no physical write")
+      loaded shouldBe Some(information)
+      after shouldBe before
+      store.writeCount shouldBe writesbefore
+    }
+
     "reject mixed revision and lifecycle evidence with one stable compatibility failure" in {
       Given("a legacy candidate that also declares a revision without canonical lifecycle evidence")
-      val mixed = _legacy_record ++ Record.dataAuto("revision" -> 7L)
+      val mixed = _legacy_record() ++ Record.dataAuto("revision" -> 7L)
 
       When("the repository previews and decodes the ambiguous persisted shape")
       val preview = InformationPersistenceMigration.preview(mixed)
@@ -71,7 +101,7 @@ final class InformationPersistenceMigrationSpec
       val collisionbinding = _legacy_binding_record ++ Record.dataAuto(
         "rdfSubject" -> "urn:canonical:paper"
       )
-      val collision = _legacy_record.upsertSingle(
+      val collision = _legacy_record().upsertSingle(
         "identityBindings",
         Vector(collisionbinding)
       )
@@ -152,12 +182,12 @@ final class InformationPersistenceMigrationSpec
         ),
         (
           "legacy lifecycle without updatedAt",
-          Record(_legacy_record.fields.filterNot(_.key == "updatedAt")),
+          Record(_legacy_record().fields.filterNot(_.key == "updatedAt")),
           "information-persistence-incompatible:legacy-v0-missing-updatedAt"
         ),
         (
           "legacy lifecycle with invalid updatedAt",
-          _legacy_record.upsertSingle("updatedAt", "not-an-instant"),
+          _legacy_record().upsertSingle("updatedAt", "not-an-instant"),
           "information-persistence-incompatible:legacy-v0-missing-or-invalid-updatedAt"
         )
       )
@@ -294,10 +324,10 @@ final class InformationPersistenceMigrationSpec
       "knowledge_node_id" -> "knowledge:legacy:paper"
     )
 
-  private def _legacy_record: Record = {
+  private def _legacy_record(information: Information = _information): Record = {
     val aliases = _legacy_binding_record
     val candidate = Record(
-      _information.resolutionCandidates.head.toDataStore().fields.filterNot(
+      information.resolutionCandidates.head.toDataStore().fields.filterNot(
         _.key == "binding"
       )
     ) ++ Record.dataAuto("binding" -> aliases)
@@ -312,7 +342,7 @@ final class InformationPersistenceMigrationSpec
     )
     Record(
       InformationEntityRepository.informationPersistent
-        .toStoreRecord(_information)
+        .toStoreRecord(information)
         .fields
         .filterNot(field => managed.contains(field.key))
     ) ++ Record.dataAuto(

@@ -38,7 +38,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
  * Component-owned EntityStore repository for generated Information roots.
  *
  * @since   Aug. 31, 2026
- * @version Aug. 31, 2026
+ * @version Sep.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 private[information] final class InformationEntityRepository(
@@ -292,10 +292,16 @@ private[information] object InformationEntityRepository {
     def fromRecord(record: Record): Consequence[Information] =
       _generated_persistent.fromRecord(record)
 
+    override private[cncf] def admitStoreRecord(record: Record): Consequence[Record] =
+      InformationPersistenceMigration.canonicalRecordC(record)
+
     override def fromStoreRecord(record: Record): Consequence[Information] =
-      InformationPersistenceMigration.canonicalRecordC(record).flatMap(
-        _generated_persistent.fromStoreRecord
-      )
+      admitStoreRecord(record).flatMap(_generated_persistent.fromStoreRecord)
+
+    override private[cncf] def decodeAdmittedStoreRecord(
+      record: Record
+    ): Consequence[Information] =
+      _generated_persistent.fromStoreRecord(record)
   }
 
   val informationPersistentCreate: EntityPersistentCreate[Information] =

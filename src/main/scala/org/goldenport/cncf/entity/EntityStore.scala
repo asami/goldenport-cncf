@@ -860,9 +860,11 @@ class StandardEntityStore(
       )
       record <- _load_record(id)
       snapshot <- record.traverse(
-        binding.snapshot(_)(
-          EntityPersistent._decode_store_record(tc, id.collection, _)
-        )
+        tc.admitStoreRecord(_).flatMap { admitted =>
+          binding.snapshot(admitted)(
+            EntityPersistent._decode_admitted_store_record(tc, id.collection, _)
+          )
+        }
       )
     } yield snapshot
 
@@ -879,9 +881,11 @@ class StandardEntityStore(
       )
       record <- _load_record(id)
       carrier <- record.traverse(
-        binding.detachedCarrier(_)(
-          EntityPersistent._decode_store_record(tc, id.collection, _)
-        )
+        tc.admitStoreRecord(_).flatMap { admitted =>
+          binding.detachedCarrier(admitted)(
+            EntityPersistent._decode_admitted_store_record(tc, id.collection, _)
+          )
+        }
       )
     } yield carrier
 
@@ -3007,11 +3011,12 @@ class StandardEntityStore(
         (for {
           hydratedroot <-
             ContentBodyStoragePolicy.hydrate(request.rootId, rootrecord)
+          admittedroot <- request.rootPersistent.admitStoreRecord(hydratedroot)
           rootvalue <- _conditional_transition_value(
             rootbinding,
-            hydratedroot
+            admittedroot
           )(
-            EntityPersistent._decode_store_record(
+            EntityPersistent._decode_admitted_store_record(
               request.rootPersistent,
               request.rootId.collection,
               _
@@ -3019,11 +3024,12 @@ class StandardEntityStore(
           )
           hydratedsuccessor <-
             ContentBodyStoragePolicy.hydrate(successorid, successorrecord)
+          admittedsuccessor <- request.successor.persisted.admitStoreRecord(hydratedsuccessor)
           successorvalue <- _conditional_transition_value(
             successorbinding,
-            hydratedsuccessor
+            admittedsuccessor
           )(
-            EntityPersistent._decode_store_record(
+            EntityPersistent._decode_admitted_store_record(
               request.successor.persisted,
               successorid.collection,
               _
@@ -3041,11 +3047,12 @@ class StandardEntityStore(
         for {
           hydratedroot <-
             ContentBodyStoragePolicy.hydrate(request.rootId, existingroot)
+          admittedroot <- request.rootPersistent.admitStoreRecord(hydratedroot)
           rootvalue <- _conditional_transition_value(
             rootbinding,
-            hydratedroot
+            admittedroot
           )(
-            EntityPersistent._decode_store_record(
+            EntityPersistent._decode_admitted_store_record(
               request.rootPersistent,
               request.rootId.collection,
               _
@@ -3190,9 +3197,11 @@ class StandardEntityStore(
   ): Consequence[T] =
     _revision_binding_option(collection) match {
       case Some(binding) =>
-        binding.decodeEntity(record)(
-          EntityPersistent._decode_store_record(persistent, collection, _)
-        )
+        persistent.admitStoreRecord(record).flatMap { admitted =>
+          binding.decodeEntity(admitted)(
+            EntityPersistent._decode_admitted_store_record(persistent, collection, _)
+          )
+        }
       case None =>
         EntityPersistent._decode_store_record(persistent, collection, record)
     }
@@ -3330,28 +3339,32 @@ class StandardEntityStore(
       case EntityVersionedMutationResult.Applied(record) =>
         ContentBodyStoragePolicy
           .hydrate(id, record)
-          .flatMap(
-            revisionbinding.snapshot(_)(
-              EntityPersistent._decode_store_record(
-                persistent,
-                id.collection,
-                _
+          .flatMap { hydrated =>
+            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+              revisionbinding.snapshot(admitted)(
+                EntityPersistent._decode_admitted_store_record(
+                  persistent,
+                  id.collection,
+                  _
+                )
               )
-            )
-          )
+            }
+          }
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
         ContentBodyStoragePolicy
           .hydrate(id, record)
-          .flatMap(
-            revisionbinding.snapshot(_)(
-              EntityPersistent._decode_store_record(
-                persistent,
-                id.collection,
-                _
+          .flatMap { hydrated =>
+            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+              revisionbinding.snapshot(admitted)(
+                EntityPersistent._decode_admitted_store_record(
+                  persistent,
+                  id.collection,
+                  _
+                )
               )
-            )
-          )
+            }
+          }
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }
@@ -3368,28 +3381,32 @@ class StandardEntityStore(
       case EntityVersionedMutationResult.Applied(record) =>
         ContentBodyStoragePolicy
           .hydrate(id, record)
-          .flatMap(
-            revisionbinding.detachedCarrier(_)(
-              EntityPersistent._decode_store_record(
-                persistent,
-                id.collection,
-                _
+          .flatMap { hydrated =>
+            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+              revisionbinding.detachedCarrier(admitted)(
+                EntityPersistent._decode_admitted_store_record(
+                  persistent,
+                  id.collection,
+                  _
+                )
               )
-            )
-          )
+            }
+          }
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
         ContentBodyStoragePolicy
           .hydrate(id, record)
-          .flatMap(
-            revisionbinding.detachedCarrier(_)(
-              EntityPersistent._decode_store_record(
-                persistent,
-                id.collection,
-                _
+          .flatMap { hydrated =>
+            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+              revisionbinding.detachedCarrier(admitted)(
+                EntityPersistent._decode_admitted_store_record(
+                  persistent,
+                  id.collection,
+                  _
+                )
               )
-            )
-          )
+            }
+          }
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }
