@@ -233,6 +233,7 @@ object RuntimeConfig {
   val runtimeComponentVersionKey = "textus.runtime.component.version"
   val componentDependenciesResolveEnabledKey = "textus.component.dependencies.resolve.enabled"
   val runtimeComponentDependenciesResolveEnabledKey = "textus.runtime.component.dependencies.resolve.enabled"
+  val componentDependenciesOfflineKey = "textus.component.dependencies.offline"
   val componentDependenciesCacheDirKey = "textus.component.dependencies.cache.dir"
   val runtimeComponentDependenciesCacheDirKey = "textus.runtime.component.dependencies.cache.dir"
   val componentDependenciesSharedEnabledKey = "textus.component.dependencies.shared.enabled"

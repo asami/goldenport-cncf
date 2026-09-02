@@ -94,6 +94,7 @@ object ComponentDependencyManifest {
 
 final case class ComponentDependencyConfig(
   resolveEnabled: Boolean = true,
+  offline: Boolean = false,
   sharedEnabled: Boolean = true,
   localOverrideEnabled: Boolean = true,
   cacheDir: Option[Path] = None,
@@ -103,6 +104,7 @@ final case class ComponentDependencyConfig(
 
 object ComponentDependencyConfig {
   val RESOLVE_ENABLED_KEY = RuntimeConfig.componentDependenciesResolveEnabledKey
+  val OFFLINE_KEY = RuntimeConfig.componentDependenciesOfflineKey
   val CACHE_DIR_KEY = RuntimeConfig.componentDependenciesCacheDirKey
   val SHARED_ENABLED_KEY = RuntimeConfig.componentDependenciesSharedEnabledKey
   val LOCAL_OVERRIDE_ENABLED_KEY = RuntimeConfig.componentDependenciesLocalOverrideEnabledKey
@@ -112,6 +114,7 @@ object ComponentDependencyConfig {
   def from(configuration: ResolvedConfiguration): ComponentDependencyConfig =
     ComponentDependencyConfig(
       resolveEnabled = _boolean(configuration, RESOLVE_ENABLED_KEY).getOrElse(true),
+      offline = _boolean(configuration, OFFLINE_KEY).getOrElse(false),
       sharedEnabled = _boolean(configuration, SHARED_ENABLED_KEY).getOrElse(true),
       localOverrideEnabled = _boolean(configuration, LOCAL_OVERRIDE_ENABLED_KEY).getOrElse(true),
       cacheDir = RuntimeConfig.getString(configuration, CACHE_DIR_KEY).map(Paths.get(_).normalize),
@@ -344,11 +347,7 @@ object CoursierComponentDependencyResolver {
       Consequence.success(Vector.empty)
     else
       Consequence {
-        val command =
-          Vector(config.coursierCommand, "fetch", "--classpath") ++
-            config.cacheDir.toVector.flatMap(path => Vector("--cache", path.toString)) ++
-            repositories.flatMap(_repository_args) ++
-            coordinates
+        val command = classpathCommand(coordinates, repositories, config)
         val output = command.!!
         output
           .trim
@@ -369,13 +368,31 @@ object CoursierComponentDependencyResolver {
       Consequence.success(Vector.empty)
     else
       Consequence {
-        val command =
-          Vector(config.coursierCommand, "resolve") ++
-            config.cacheDir.toVector.flatMap(path => Vector("--cache", path.toString)) ++
-            repositories.flatMap(_repository_args) ++
-            coordinates
+        val command = moduleResolutionCommand(coordinates, repositories, config)
         parseResolvedModules(command.!!)
       }
+
+  private[component] def classpathCommand(
+    coordinates: Vector[String],
+    repositories: Vector[String],
+    config: ComponentDependencyConfig
+  ): Vector[String] =
+    Vector(config.coursierCommand, "fetch", "--classpath") ++
+      config.cacheDir.toVector.flatMap(path => Vector("--cache", path.toString)) ++
+      repositories.flatMap(_repository_args) ++
+      _offline_args(config) ++
+      coordinates
+
+  private[component] def moduleResolutionCommand(
+    coordinates: Vector[String],
+    repositories: Vector[String],
+    config: ComponentDependencyConfig
+  ): Vector[String] =
+    Vector(config.coursierCommand, "resolve") ++
+      config.cacheDir.toVector.flatMap(path => Vector("--cache", path.toString)) ++
+      repositories.flatMap(_repository_args) ++
+      _offline_args(config) ++
+      coordinates
 
   private[component] def parseResolvedModules(text: String): Vector[ResolvedModule] =
     text.linesIterator.toVector.flatMap { line =>
@@ -398,6 +415,9 @@ object CoursierComponentDependencyResolver {
     else
       Vector("--repository", value)
   }
+
+  private def _offline_args(config: ComponentDependencyConfig): Vector[String] =
+    if (config.offline) Vector("--mode", "offline") else Vector.empty
 }
 
 final class ComponentLocalFirstClassLoader(
