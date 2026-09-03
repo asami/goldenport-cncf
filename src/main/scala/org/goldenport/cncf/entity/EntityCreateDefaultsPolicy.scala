@@ -13,7 +13,8 @@ import org.goldenport.datatype.{Identifier, ObjectId}
  * This is CNCF runtime policy, not a simplemodeling-model concern.
  *
  * @since   Apr. 13, 2026
- * @version May.  2, 2026
+ *  version May.  2, 2026
+ * @version Sep.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityCreateDefaultsPolicy {
@@ -226,7 +227,10 @@ object EntityCreateDefaultsPolicy {
 
       val defaultvalues = defaults.result()
       val base = SimpleEntityStorageShapePolicy.withoutManagedFields(record)
-      Record.dataAuto((base.asMap ++ defaultvalues.toMap).toSeq*)
+      // Preserve values already admitted by the caller, including an explicit
+      // empty nested Record.  `dataAuto` treats it as an absent value, which
+      // changes the meaning of required structured fields during create.
+      Record.createFull((base.asMap ++ defaultvalues.toMap).toSeq)
     }
 
     private def _default_security_attributes(

@@ -433,6 +433,11 @@ value = 3
 
 ##### transition
 
+on = update
+to = imported
+
+##### transition
+
 on = selectResolution
 to = ready_for_confirmation
 
@@ -444,6 +449,11 @@ to = rejected
 #### ready_for_confirmation
 
 value = 4
+
+##### transition
+
+on = update
+to = imported
 
 ##### transition
 

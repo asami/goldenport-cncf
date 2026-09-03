@@ -38,7 +38,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
  * Component-owned EntityStore repository for generated Information roots.
  *
  * @since   Aug. 31, 2026
- * @version Sep.  1, 2026
+ * @version Sep.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[information] final class InformationEntityRepository(
@@ -296,12 +296,12 @@ private[information] object InformationEntityRepository {
       InformationPersistenceMigration.canonicalRecordC(record)
 
     override def fromStoreRecord(record: Record): Consequence[Information] =
-      admitStoreRecord(record).flatMap(_generated_persistent.fromStoreRecord)
+      admitStoreRecord(record).flatMap(_generated_persistent.fromRecord)
 
     override private[cncf] def decodeAdmittedStoreRecord(
       record: Record
     ): Consequence[Information] =
-      _generated_persistent.fromStoreRecord(record)
+      _generated_persistent.fromRecord(record)
   }
 
   val informationPersistentCreate: EntityPersistentCreate[Information] =
@@ -322,19 +322,26 @@ private[information] object InformationEntityRepository {
     }
 
   private def _normalized_store_record(information: Information): Record = {
-    val keys = Set("identityBindings", "resolutionCandidates")
+    val keys = Set(
+      "identityBindings",
+      "rawData",
+      "resolutionCandidates",
+      "workingData"
+    )
     Record(
       _generated_persistent.toStoreRecord(information).fields.filterNot { field =>
         keys.contains(field.key)
       }
     ) ++ Record.createFull(
       Vector(
+        "rawData" -> information.rawData,
         "identityBindings" -> information.identityBindings.map(
           _binding_store_record
         ),
         "resolutionCandidates" -> information.resolutionCandidates.map(
           _candidate_store_record
-        )
+        ),
+        "workingData" -> information.workingData
       )
     )
   }

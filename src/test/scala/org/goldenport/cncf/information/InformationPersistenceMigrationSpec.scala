@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 1, 2026
- * @version Sep. 1, 2026
+ * @version Sep.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationPersistenceMigrationSpec
@@ -137,6 +137,46 @@ final class InformationPersistenceMigrationSpec
       Then("the complete generated audit representation is canonical and all values remain equal")
       preview shouldBe InformationPersistenceMigration.Preview.Canonical(canonical)
       decoded shouldBe _information
+    }
+
+    "retain complete canonical Information through EntityStore create and InformationSpace reload" in {
+      Given("one canonical Information whose raw data, working data, and lifecycle state differ")
+      given ExecutionContext = _context(DataStore.inMemorySearchable())
+      val repository = new InformationEntityRepository(None)
+      val collectionid = _success(repository.collectionIdC)
+      val information = _information.copy(
+        id = _information.id.copy(collection = collectionid)
+      )
+
+      When("the repository creates it and a fresh InformationSpace reloads its EntityStore collection")
+      val created = _success(repository.create(information))
+      val reloaded = _success(new InformationSpace().snapshotC).information
+
+      Then("the complete canonical Information is decoded instead of a sparse store projection")
+      created.rawData shouldBe information.rawData
+      created.workingData shouldBe information.workingData
+      created.state shouldBe information.state
+      reloaded should have size 1
+      reloaded.head.rawData shouldBe information.rawData
+      reloaded.head.workingData shouldBe information.workingData
+      reloaded.head.state shouldBe information.state
+    }
+
+    "retain empty raw and working data through InformationSpace registration and reload" in {
+      Given("an Information registration with empty raw and working data")
+      given ExecutionContext = _context(DataStore.inMemorySearchable())
+      val space = new InformationSpace()
+
+      When("the Information is registered and a fresh InformationSpace reloads it")
+      val registered = _success(space.registerInformation("book", Vector(Record.empty))).head
+      val reloaded = _success(new InformationSpace().snapshotC).information
+
+      Then("both required empty records remain present in the persisted representation")
+      registered.rawData shouldBe Record.empty
+      registered.workingData shouldBe Record.empty
+      reloaded should have size 1
+      reloaded.head.rawData shouldBe Record.empty
+      reloaded.head.workingData shouldBe Record.empty
     }
 
     "accept only complete grouped lifecycle evidence when revision is present" in {

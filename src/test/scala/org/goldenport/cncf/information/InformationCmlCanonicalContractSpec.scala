@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 30, 2026
- * @version Aug. 30, 2026
+ * @version Sep.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationCmlCanonicalContractSpec
@@ -314,8 +314,10 @@ final class InformationCmlCanonicalContractSpec
         ("imported", Some("reject"), "rejected"),
         ("invalid", Some("update"), "imported"),
         ("invalid", Some("reject"), "rejected"),
+        ("needs_resolution", Some("update"), "imported"),
         ("needs_resolution", Some("selectResolution"), "ready_for_confirmation"),
         ("needs_resolution", Some("reject"), "rejected"),
+        ("ready_for_confirmation", Some("update"), "imported"),
         ("ready_for_confirmation", Some("confirm"), "confirmed"),
         ("ready_for_confirmation", Some("reject"), "rejected"),
         ("confirmed", Some("publish"), "published"),
