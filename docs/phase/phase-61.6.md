@@ -22,8 +22,9 @@ Phase Plan Gate: PROCEED
 - profile_cost_role: lower-cost execution
 - expensive_reasoning_kernel: none
 - frozen_profile_transition_handoff: accepted Phase 61.5 persisted-state
-  migration plus the qualified Phase 61.5.1 IC-07B evidence; broad profile,
-  multi-CAR runtime, and final full-suite outcomes are not implied
+  migration plus the qualified Phase 61.5.1 IC-07B evidence; the residual
+  CAR-owned verification is assigned to SIE Phase 7, Textus BoK Phase 7.5,
+  and Textus Knowledge Editor Phase 1 and is outside this Phase
 - parent_reasoning_mode_policy: standard
 - estimated_at_recommended_profile: 5--6h
 - merge_attempts_for_every_sub_4h_child: none
@@ -61,5 +62,8 @@ Phase 62 Web-session work.
 ## Current Status
 
 Planned. This Phase starts only by explicit invocation after the qualified
-Phase 61.5.1 closure. It may consume the recorded accepted evidence but must
-not infer the outcomes explicitly left unclaimed by that closure.
+Phase 61.5.1 closure. It may consume only the recorded accepted evidence.
+Residual CAR verification is owned by [SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md),
+[Textus BoK Phase 7.5](../../../../dev2026/textus-bok/docs/phase/phase-7.5.md),
+and [Textus Knowledge Editor Phase 1](../../../../dev2026/textus-knowledge-editor/docs/phase/phase-1.md);
+it is neither this Phase's scope nor a hidden entry gate.

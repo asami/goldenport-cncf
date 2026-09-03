@@ -9,6 +9,7 @@ successor=[Phase 61.6](phase-61.6.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 61.5.1 Checklist](phase-61.5.1-checklist.md)
 consumes_handoff=accepted IC-07A persisted-state migration dossier, focused evidence, and Phase 61.5 release closure
+residual_verification_handoffs=[SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md), [Textus BoK Phase 7.5](../../../../dev2026/textus-bok/docs/phase/phase-7.5.md), [Textus Knowledge Editor Phase 1](../../../../dev2026/textus-knowledge-editor/docs/phase/phase-1.md)
 
 ## Goal
 
@@ -56,8 +57,13 @@ Phase 61.5.1 closes with a qualified IC-07B handoff. The accepted evidence
 covers development coordinates, canonical dependency identity, representative
 SIE consumers, typed descriptor-configuration propagation, the canonical BoK
 SAR profile binding, and the static/lightweight packaged-runtime boundaries
-recorded below. It does not claim the deferred broad Knowledge Editor/profile,
-multi-CAR packaged-runtime, or end-to-end smoke outcomes.
+recorded below. The originally deferred verification outcomes are now owned by
+three CAR-local planned Phases: SIE Phase 7 owns the bounded packaged-runtime
+composition and its Help/API acceptance; Textus BoK Phase 7.5 owns the
+remaining representative profile verification; and Textus Knowledge Editor
+Phase 1 owns list/detail/edit/lifecycle plus Tag/local-Knowledge verification.
+They are not open work in this closed Phase and are not implicit prerequisites
+of CNCF Phase 61.6.
 
 The user explicitly directed this Phase to be committed and closed on
 2026-09-03 rather than extending the workflow with another Phase-specific
@@ -89,6 +95,18 @@ canonical SAR binding. It does not claim a multi-CAR runtime execution.
 This Phase started after Phase 61.5
 closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
 
+## Residual Verification Relocation
+
+- `decision_id=P61.5.1-DEC-RELOCATION-002`
+- `resolved_by=user`, `resolved_at=2026-09-03`
+- `decision=Move the residual IC-07B verification to CAR-owned planned Phases
+  rather than retaining it as recurring CNCF Phase 61.5.1 non-claims.`
+- `targets=[SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md),
+  [Textus BoK Phase 7.5](../../../../dev2026/textus-bok/docs/phase/phase-7.5.md),
+  [Textus Knowledge Editor Phase 1](../../../../dev2026/textus-knowledge-editor/docs/phase/phase-1.md)`
+- `invariant=Phase 61.5.1 remains CLOSED. The relocation adds no new
+  acceptance claim and does not make the deferred CAR work a Phase 61.6 gate.`
+
 ## Qualified Closure Decision
 
 - `decision_id=P61.5.1-DEC-QUALIFIED-CLOSE-001`
@@ -100,10 +118,9 @@ closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
   validation and re-review receipts recorded in this document.`
 - `validation_waiver=Final Phase-wide full validation is explicitly waived;
   no full-suite success is asserted by this closure.`
-- `non_claims=Broad Knowledge Editor/profile coverage, a multi-CAR packaged
-  runtime session, packaged end-to-end Help/API compatibility, and the
-  representative end-to-end smoke remain unverified and are not silently
-  transferred into the accepted contract.`
+- `relocated_work=The former Knowledge Editor/profile, packaged-runtime,
+  Help/API, and end-to-end verification work is explicitly assigned by
+  P61.5.1-DEC-RELOCATION-002. The Phase retains no open validation item.`
 
 ## Decision Resolution — Validation Worktree Collision
 

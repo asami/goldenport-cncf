@@ -13,9 +13,10 @@ Stage Status:
 - Update rule: Update only from accepted IC-08 closure evidence; do not reopen
   earlier IC contracts.
 - Entry rule: Phase 61.5 provides accepted IC-07A migration evidence and Phase
-  61.5.1 provides its explicitly qualified IC-07B handoff. Unclaimed broad
-  profile, multi-CAR runtime, and full-suite outcomes are not prerequisites
-  silently satisfied by that handoff.
+  61.5.1 provides its explicitly qualified IC-07B handoff. The residual CAR
+  verification is explicitly owned by SIE Phase 7, Textus BoK Phase 7.5, and
+  Textus Knowledge Editor Phase 1; it is not a Phase 61.6 prerequisite or
+  checklist item.
 - Completion rule: No competing Information model remains, all required
   validation passes, and canonical documentation matches verified behavior.
 

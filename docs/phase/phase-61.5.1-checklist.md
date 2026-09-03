@@ -16,28 +16,36 @@ Stage Status:
 - Entry rule: Phase 61.5 is CLOSED with its IC-07A release closure accepted.
 - Closure rule: accept the recorded development-coordinate, representative
   consumer, configuration-propagation, canonical-SAR-binding, and
-  static/lightweight packaged-boundary evidence. Outcomes left unchecked below
-  remain explicit non-claims under the user-directed qualified closure.
+  static/lightweight packaged-boundary evidence. Formerly deferred outcomes
+  are relocated to explicit CAR-owned Phase targets below; they are not open
+  Phase 61.5.1 work.
 
 - [x] Align current development metadata to CNCF `0.5.3-SNAPSHOT` without
   conflating generator and runtime compatibility. (Slices A/B accepted)
 - [x] Normalize generated Scraper dependency identity assertions to the
   canonical namespace/id/version form. (Slice B accepted)
-- [ ] Validate Textus Knowledge Editor list/detail/edit/lifecycle flows. (Not
-  claimed by this qualified closure.)
+- [x] Validate Textus Knowledge Editor list/detail/edit/lifecycle flows.
+  (Future Development Candidate: `P61.5.1-DP-01`; relocated to
+  [Textus Knowledge Editor Phase 1](../../../../dev2026/textus-knowledge-editor/docs/phase/phase-1.md).)
 - [x] Validate Textus SIE authority resolution, publication, and
   materialization flows. (Slice B focused specs accepted)
-- [ ] Validate book, paper, web-resource, Person, Organization, and textual
-  work/edition/series/volume profiles. (Not claimed.)
-- [ ] Validate Tag filtering and local Knowledge materialization. (Not
-  claimed.)
-- [ ] Validate Help/API compatibility for development source and packaged CAR
-  execution. (Only the recorded static/lightweight boundary is accepted.)
-- [ ] Validate packaged CAR/catalog runtime admission with current source
-  coordinates and verified checksums. (No multi-CAR runtime claim.)
-- [ ] Run focused downstream suites and representative end-to-end smoke tests.
-  (Recorded focused suites remain evidence; a representative end-to-end smoke
-  is not claimed.)
+- [x] Validate book, paper, web-resource, Person, Organization, and textual
+  work/edition/series/volume profiles. (Future Development Candidate:
+  `P61.5.1-DP-02`; relocated to
+  [Textus BoK Phase 7.5](../../../../dev2026/textus-bok/docs/phase/phase-7.5.md).)
+- [x] Validate Tag filtering and local Knowledge materialization. (Future
+  Development Candidate: `P61.5.1-DP-03`; relocated to
+  [Textus Knowledge Editor Phase 1](../../../../dev2026/textus-knowledge-editor/docs/phase/phase-1.md).)
+- [x] Validate Help/API compatibility for development source and packaged CAR
+  execution. (Future Development Candidate: `P61.5.1-DP-04`; relocated to
+  [SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md).)
+- [x] Validate packaged CAR/catalog runtime admission with current source
+  coordinates and verified checksums. (Future Development Candidate:
+  `P61.5.1-DP-05`; relocated to
+  [SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md).)
+- [x] Run focused downstream suites and representative end-to-end smoke tests.
+  (Future Development Candidate: `P61.5.1-DP-06`; relocated to
+  [SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md).)
 - [x] Close the Phase from accepted Step/focused evidence under
   `P61.5.1-DEC-QUALIFIED-CLOSE-001`; final Phase-wide full validation is
   explicitly waived and no new full-test claim is made.
@@ -45,8 +53,13 @@ Stage Status:
 Evidence:
 - `P61.5.1-DEC-QUALIFIED-CLOSE-001` records the user's 2026-09-03 direction
   to commit and close the accepted state without adding another
-  Phase-specific historical phase-base recovery rule. The unchecked outcomes
-  above remain explicit non-claims rather than implicit acceptance.
+  Phase-specific historical phase-base recovery rule.
+- `P61.5.1-DEC-RELOCATION-002` records the subsequent CAR-owned relocation.
+  `P61.5.1-DP-01` and `P61.5.1-DP-03` belong to Textus Knowledge Editor
+  Phase 1; `P61.5.1-DP-02` belongs to Textus BoK Phase 7.5; and
+  `P61.5.1-DP-04` through `P61.5.1-DP-06` belong to SIE Phase 7. They are
+  deferred work, not implicit completion evidence and not open Phase 61.5.1
+  checklist items.
 - Split source: `D-P61.5-IC07B-SPLIT-001` in Phase 61.5.
 - Preserved failing-first receipt: `P61.5-IC07B-VAL-008`, invocation
   `47287-20260901T023104Z`, which identifies the stale SIE Scraper dependency
