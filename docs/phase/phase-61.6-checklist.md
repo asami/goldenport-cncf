@@ -2,17 +2,20 @@
 
 status=planned
 phase=[Phase 61.6 - Information Canonical Closure](phase-61.6.md)
-predecessor=[Phase 61.5 Checklist](phase-61.5-checklist.md)
+predecessor=[Phase 61.5.1 Checklist](phase-61.5.1-checklist.md)
 successor=[Phase 62 Checklist](phase-62-checklist.md)
 
 ## IC-08: Duplicate Removal and Canonical Closure
 
 Stage Status:
-- Current status: OPEN
+- Current status: PLANNED
 - Owner: CNCF and affected downstream maintainers
 - Update rule: Update only from accepted IC-08 closure evidence; do not reopen
   earlier IC contracts.
-- Entry rule: IC-07 is DONE in Phase 61.5.
+- Entry rule: Phase 61.5 provides accepted IC-07A migration evidence and Phase
+  61.5.1 provides its explicitly qualified IC-07B handoff. Unclaimed broad
+  profile, multi-CAR runtime, and full-suite outcomes are not prerequisites
+  silently satisfied by that handoff.
 - Completion rule: No competing Information model remains, all required
   validation passes, and canonical documentation matches verified behavior.
 

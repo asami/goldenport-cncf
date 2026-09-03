@@ -3657,8 +3657,9 @@ delivery unit independently closable in the preferred 4--8 hour band.
 | [61.2](../phase/phase-61.2.md) | Closed: IC-04 InformationSpace Entity persistence and OCC. | Phase 61.1 |
 | [61.3](../phase/phase-61.3.md) | Closed: IC-05 curation and Knowledge lifecycle parity. | Phase 61.2 |
 | [61.4](../phase/phase-61.4.md) | Closed: IC-06 canonical Information access-surface projections. | Phase 61.3 |
-| [61.5](../phase/phase-61.5.md) | IC-07 persisted-state and downstream migration acceptance. | Phase 61.4 |
-| [61.6](../phase/phase-61.6.md) | IC-08 duplicate removal and canonical closure. | Phase 61.5 |
+| [61.5](../phase/phase-61.5.md) | Closed: IC-07A persisted-state migration admission. | Phase 61.4 |
+| [61.5.1](../phase/phase-61.5.1.md) | Closed with qualified IC-07B development-coordinate, representative-consumer, configuration, SAR-binding, and static packaged-boundary evidence; broad runtime outcomes are not claimed. | Phase 61.5 |
+| [61.6](../phase/phase-61.6.md) | IC-08 duplicate removal and canonical closure. | Phase 61.5.1 |
 
 Phase 61 produced the accepted CML/generator handoff and is closed under
 `phase61-clb-ic02-20260831`. Its mandatory full review found the Phase 62
@@ -3690,7 +3691,17 @@ Admin Information HTTP/Web surface provides the only applicable transport
 projection. Help, generic HTTP JSON/YAML/XML/Form, schema, OpenAPI, and MCP
 have no Information seam and are explicitly inapplicable. Sanitized output,
 structured stale-write metadata, and authorization isolation are accepted by
-the focused closure review. Phase 61.5 remains planned and unstarted.
+the focused closure review. Phase 61.5 is closed with accepted IC-07A
+persisted-state migration admission. On 2026-09-01, approved decision
+`D-P61.5-IC07B-SPLIT-001` inserted Phase 61.5.1 between Phases 61.5 and 61.6:
+it owns every unfinished IC-07B downstream runtime-coordinate, generated
+dependency-identity, packaged CAR/catalog, and consumer-acceptance outcome.
+This dated correction preserves the historical Phase 61 split record. Phase
+61.5.1 subsequently closed on 2026-09-03 under
+`P61.5.1-DEC-QUALIFIED-CLOSE-001`: recorded focused/Step evidence is accepted,
+final Phase-wide full validation is explicitly waived, and broad profile,
+multi-CAR runtime, and end-to-end outcomes are not claimed. Phase 61.6 may
+consume only that qualified handoff.
 
 Planning references:
 - `docs/phase/phase-60.md` through `docs/phase/phase-60.8.md`;

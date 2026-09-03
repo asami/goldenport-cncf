@@ -37,8 +37,14 @@ Current baseline:
   `phase61.4-clb-ic06-20260901`: IC-06 projects the canonical Information
   Entity through the protected DSL, editor, and applicable System Admin
   Information HTTP/Web surface with sanitized output, structured stale-write
-  metadata, and authorization isolation. Phases 61.5 and 61.6 remain planned
-  sequential successors and have not started.
+  metadata, and authorization isolation. Phase 61.5 is closed with IC-07A
+  persisted-state migration admission. Phase 61.5.1 is closed with the
+  qualified IC-07B development-coordinate, representative-consumer,
+  configuration-propagation, canonical-SAR-binding, and static packaged
+  boundary recorded in `P61.5.1-DEC-QUALIFIED-CLOSE-001`; it makes no broad
+  profile, multi-CAR runtime, or final full-suite claim. Phase 61.6 remains the
+  planned canonical-closure successor and may consume only that qualified
+  handoff.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
@@ -53,9 +59,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. Phase 61.5 is planned and
+- Active phase in the current CNCF sequence: none. Phase 61.6 is planned and
   requires its own explicit start.
-- Latest closed checklist: `phase-61.4-checklist.md`.
+- Latest closed checklist: `phase-61.5.1-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -114,8 +120,10 @@ Current baseline:
   - `phase-61.2.md`
   - `phase-61.3.md`
   - `phase-61.4.md`
+  - `phase-61.5.md`
+  - `phase-61.5.1.md`
 - Active phase set currently includes:
-  - none; `phase-61.5.md` is the next planned Phase
+  - none; `phase-61.6.md` is the next planned Phase
 
 ## Related Rules
 

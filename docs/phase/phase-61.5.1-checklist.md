@@ -1,6 +1,6 @@
 # Phase 61.5.1 Checklist - Information Downstream Runtime and Consumer Acceptance
 
-status=active
+status=closed
 phase=[Phase 61.5.1 - Information Downstream Runtime and Consumer Acceptance](phase-61.5.1.md)
 predecessor=[Phase 61.5 Checklist](phase-61.5-checklist.md)
 successor=[Phase 61.6 Checklist](phase-61.6-checklist.md)
@@ -8,35 +8,45 @@ successor=[Phase 61.6 Checklist](phase-61.6-checklist.md)
 ## IC-07B: Downstream Runtime and Consumer Acceptance
 
 Stage Status:
-- Current status: ACTIVE
+- Current status: CLOSED — qualified closure by explicit user decision
 - Owner: Cozy, CNCF, Textus Knowledge Editor, Textus SIE, and representative
   application maintainers
 - Update rule: Update only from accepted IC-07B evidence. Consume the accepted
   IC-07A persisted migration handoff; do not redefine its migration policy.
 - Entry rule: Phase 61.5 is CLOSED with its IC-07A release closure accepted.
-- Completion rule: Development source and packaged CAR execution use the
-  canonical Information model with explicit compatible runtime-coordinate and
-  component dependency identity evidence.
+- Closure rule: accept the recorded development-coordinate, representative
+  consumer, configuration-propagation, canonical-SAR-binding, and
+  static/lightweight packaged-boundary evidence. Outcomes left unchecked below
+  remain explicit non-claims under the user-directed qualified closure.
 
 - [x] Align current development metadata to CNCF `0.5.3-SNAPSHOT` without
   conflating generator and runtime compatibility. (Slices A/B accepted)
 - [x] Normalize generated Scraper dependency identity assertions to the
   canonical namespace/id/version form. (Slice B accepted)
-- [ ] Validate Textus Knowledge Editor list/detail/edit/lifecycle flows.
+- [ ] Validate Textus Knowledge Editor list/detail/edit/lifecycle flows. (Not
+  claimed by this qualified closure.)
 - [x] Validate Textus SIE authority resolution, publication, and
   materialization flows. (Slice B focused specs accepted)
 - [ ] Validate book, paper, web-resource, Person, Organization, and textual
-  work/edition/series/volume profiles.
-- [ ] Validate Tag filtering and local Knowledge materialization.
+  work/edition/series/volume profiles. (Not claimed.)
+- [ ] Validate Tag filtering and local Knowledge materialization. (Not
+  claimed.)
 - [ ] Validate Help/API compatibility for development source and packaged CAR
-  execution.
+  execution. (Only the recorded static/lightweight boundary is accepted.)
 - [ ] Validate packaged CAR/catalog runtime admission with current source
-  coordinates and verified checksums.
+  coordinates and verified checksums. (No multi-CAR runtime claim.)
 - [ ] Run focused downstream suites and representative end-to-end smoke tests.
-- [ ] Complete the required Step review, conditional review-fix/re-review,
-  final Phase review, full validation, and release commit.
+  (Recorded focused suites remain evidence; a representative end-to-end smoke
+  is not claimed.)
+- [x] Close the Phase from accepted Step/focused evidence under
+  `P61.5.1-DEC-QUALIFIED-CLOSE-001`; final Phase-wide full validation is
+  explicitly waived and no new full-test claim is made.
 
 Evidence:
+- `P61.5.1-DEC-QUALIFIED-CLOSE-001` records the user's 2026-09-03 direction
+  to commit and close the accepted state without adding another
+  Phase-specific historical phase-base recovery rule. The unchecked outcomes
+  above remain explicit non-claims rather than implicit acceptance.
 - Split source: `D-P61.5-IC07B-SPLIT-001` in Phase 61.5.
 - Preserved failing-first receipt: `P61.5-IC07B-VAL-008`, invocation
   `47287-20260901T023104Z`, which identifies the stale SIE Scraper dependency

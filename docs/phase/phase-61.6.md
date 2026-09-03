@@ -3,11 +3,11 @@
 status=planned
 planned_at=2026-08-30
 split_from=[Phase 61](phase-61.md)
-depends_on=[Phase 61.5](phase-61.5.md)
+depends_on=[Phase 61.5.1](phase-61.5.1.md)
 successor=[Phase 62](phase-62.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 61.6 Checklist](phase-61.6-checklist.md)
-consumes_handoff=accepted IC-07 downstream and persisted-state migration evidence
+consumes_handoff=accepted Phase 61.5 persisted-state migration plus the qualified Phase 61.5.1 IC-07B handoff
 
 ## Goal
 
@@ -21,8 +21,9 @@ Phase Plan Gate: PROCEED
 - recommended_parent_profile: gpt-5.6-terra / high
 - profile_cost_role: lower-cost execution
 - expensive_reasoning_kernel: none
-- frozen_profile_transition_handoff: accepted Phase 61.5 persisted-state and
-  downstream migration acceptance evidence
+- frozen_profile_transition_handoff: accepted Phase 61.5 persisted-state
+  migration plus the qualified Phase 61.5.1 IC-07B evidence; broad profile,
+  multi-CAR runtime, and final full-suite outcomes are not implied
 - parent_reasoning_mode_policy: standard
 - estimated_at_recommended_profile: 5--6h
 - merge_attempts_for_every_sub_4h_child: none
@@ -59,4 +60,6 @@ Phase 62 Web-session work.
 
 ## Current Status
 
-Planned. This Phase starts only after Phase 61.5 accepts IC-07.
+Planned. This Phase starts only by explicit invocation after the qualified
+Phase 61.5.1 closure. It may consume the recorded accepted evidence but must
+not infer the outcomes explicitly left unclaimed by that closure.

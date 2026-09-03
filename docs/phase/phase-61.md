@@ -21,6 +21,14 @@ The split adds planning, handoff, validation, review, and release overhead,
 but keeps each unit in the preferred 4--8 hour band. The split does not begin
 any child Phase.
 
+Nested split correction (2026-09-01): approved decision
+`D-P61.5-IC07B-SPLIT-001` subdivides the unfinished IC-07 work as
+`Phase 61.5 -> Phase 61.5.1 -> Phase 61.6`. Phase 61.5 retains accepted
+IC-07A persisted-state migration admission; Phase 61.5.1 owns the downstream
+runtime/CAR and consumer-acceptance remainder; Phase 61.6 remains the
+canonical-closure boundary. This correction preserves the original split
+history and starts no child Phase.
+
 Profile-transition handoff: this Phase turns the IC-01 inventory into an
 accepted canonical CML and generator contract. Each later Phase consumes the
 accepted predecessor handoff and must not redefine the generated model,

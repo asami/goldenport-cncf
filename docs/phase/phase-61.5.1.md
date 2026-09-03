@@ -1,6 +1,7 @@
 # Phase 61.5.1 - Information Downstream Runtime and Consumer Acceptance
 
-status=active
+status=closed
+closed_at=2026-09-03
 planned_at=2026-09-01
 split_from=[Phase 61.5](phase-61.5.md)
 depends_on=[Phase 61.5](phase-61.5.md)
@@ -51,10 +52,20 @@ Phase Plan Gate: PROCEED
 
 ## Closure
 
-The complete IC-07 downstream acceptance evidence proves that generated source
-and packaged CAR execution consume the canonical Information model with no
-silent coordinate, identity, or compatibility ambiguity. Phase 61.6 consumes
-that complete IC-07 handoff for duplicate removal and canonical closure.
+Phase 61.5.1 closes with a qualified IC-07B handoff. The accepted evidence
+covers development coordinates, canonical dependency identity, representative
+SIE consumers, typed descriptor-configuration propagation, the canonical BoK
+SAR profile binding, and the static/lightweight packaged-runtime boundaries
+recorded below. It does not claim the deferred broad Knowledge Editor/profile,
+multi-CAR packaged-runtime, or end-to-end smoke outcomes.
+
+The user explicitly directed this Phase to be committed and closed on
+2026-09-03 rather than extending the workflow with another Phase-specific
+historical phase-base recovery. Final Phase-wide full validation is therefore
+waived; no new full-test claim is made. Closure relies on the recorded focused
+validation, Step acceptance, and focused re-review evidence. Phase 61.6 may
+consume only this qualified handoff and must not infer the non-claimed runtime
+outcomes.
 
 ## Non-Goals
 
@@ -64,18 +75,35 @@ Phase 62 work.
 
 ## Current Status
 
-Active. Slice A (Textus Knowledge Editor) and Slice B (Textus SIE development
+Closed with the qualified scope stated above. Slice A (Textus Knowledge Editor) and Slice B (Textus SIE development
 metadata and representative consumers) are accepted into the IC-07B Step
 accumulator. Cozy remains an IC-07B validation input at its current
 `0.3.3-SNAPSHOT`/`0.5.3-SNAPSHOT` coordinates; its unrelated dirty worktree is
 preserved and is not owned by this Phase. Textus SIE `3d4c402` remains the
-packaged-admission checkpoint input, while the current one-file Slice B repair
-is uncommitted accepted Step evidence. C3 — Sealed Launcher, Offline
+packaged-admission checkpoint input; its Slice B acceptance record is
+`30a5bec`. The later C3 checkpoint `d8818c6` has its own acceptance record
+`8f601f7`. C3 — Sealed Launcher, Offline
 Dependency, and SAR Binding Structural Closure — is accepted only for its
 static/lightweight structural contracts, typed configuration propagation, and
 canonical SAR binding. It does not claim a multi-CAR runtime execution.
 This Phase started after Phase 61.5
 closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
+
+## Qualified Closure Decision
+
+- `decision_id=P61.5.1-DEC-QUALIFIED-CLOSE-001`
+- `resolved_by=user`, `resolved_at=2026-09-03`
+- `decision=Commit the accepted state and close Phase 61.5.1 without adding a
+  Phase-specific historical phase-base recovery rule.`
+- `accepted_evidence=Framework b7dd1844 and 494bdaa5; cncf-launcher 7aca1f4;
+  Textus SIE 8f601f7 and 30a5bec; Textus BoK b8ab4a4; plus the focused
+  validation and re-review receipts recorded in this document.`
+- `validation_waiver=Final Phase-wide full validation is explicitly waived;
+  no full-suite success is asserted by this closure.`
+- `non_claims=Broad Knowledge Editor/profile coverage, a multi-CAR packaged
+  runtime session, packaged end-to-end Help/API compatibility, and the
+  representative end-to-end smoke remain unverified and are not silently
+  transferred into the accepted contract.`
 
 ## Decision Resolution — Validation Worktree Collision
 
