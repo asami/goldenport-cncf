@@ -605,7 +605,8 @@ object GenericSubsystemFactory {
     }
     val admissionreport = _or_raise(SubsystemAssemblyAdmission.evaluateC(admitteddescriptor))
     val componentdescriptors = admitteddescriptor.toComponentDescriptors
-    val runtimeconfig = RuntimeConfig.from(configuration)
+    val effectiveconfiguration = _effective_configuration(admitteddescriptor, configuration)
+    val runtimeconfig = RuntimeConfig.from(effectiveconfiguration)
     val runmode = mode.getOrElse(runtimeconfig.mode)
     val subsystem =
       Subsystem(
@@ -627,7 +628,7 @@ object GenericSubsystemFactory {
           }
         ),
         httpDriver = Some(runtimeconfig.httpDriver),
-        configuration = configuration,
+        configuration = effectiveconfiguration,
         aliasResolver = aliasresolver,
         runMode = runmode
       ).withDescriptor(admitteddescriptor)
@@ -662,6 +663,15 @@ object GenericSubsystemFactory {
       subsystem
     }
   }
+
+  private def _effective_configuration(
+    descriptor: GenericSubsystemDescriptor,
+    supplied: ResolvedConfiguration
+  ): ResolvedConfiguration =
+    ResolvedConfiguration(
+      Configuration(descriptor.configuration.values ++ supplied.configuration.values),
+      supplied.trace
+    )
 
   private def _activate_tool_runtimes_or_raise(
     subsystem: Subsystem,

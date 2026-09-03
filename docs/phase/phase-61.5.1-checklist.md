@@ -64,31 +64,34 @@ Evidence:
   launcher-channel composition. C3 supersedes it only for the packaged runtime
   path with a sealed direct launcher closure and offline component cache; C2's
   retained static source input uses local Ivy, not Maven.
-- `D-P61.5.1-IC07B-CLOSED-RUNTIME-INPUT-004` records the user-approved four
-  mutation/commit repositories, the thin-launcher/jsoup readiness-timeout root
-  cause, and the selected sealed-launcher plus offline component-cache design.
-  C3 is currently REPLAN with M2 ledger
-  `CB-P61.5.1-IC07B-C3-001` through `CB-P61.5.1-IC07B-C3-004`: standalone
-  launcher closure, complete cache sealing, symmetric input-root exclusion,
-  and semantic executable-probe scenarios. The fresh focused re-review sealed
-  those four findings but added `CB-P61.5.1-IC07B-C3-RR2-001`: the runtime
-  bundle must reject lib and component.d CAR/SAR symlink escape before runtime
-  ownership. The frozen containment repair remains inside the approved C3
-  boundary, but the review verdict requires a full Phase review after repair.
-  The full C3 review's classpath-JAR, warehouse source/target, and BoK fixture
-  findings are now sealed. The resulting focused closure re-review found two
-  further local SIE inputs: the runtime-bundle root must undergo task-private
-  source/shared-root exclusion, and the project-metadata-derived CAR path must
-  be canonically contained by the task-private warehouse. Cycle 2 is limited
-  to those two admissions and their static probe scenarios. C3 remains
-  unaccepted; no live packaged acceptance is claimed. Cycle 2 passed its
-  static probe, syntax/diff gate, CAR lint with no current FAIL, and typed
-  focused closure re-review. The next separate gate is task-private local
-  package preparation followed by the prebuilt-only packaged-runtime session.
+- `D-P61.5.1-IC07B-CLOSED-RUNTIME-INPUT-004` is retained as historical sealed
+  bundle, offline cache, and input-containment evidence. For C3R16-R, the
+  user-approved responsibility split limits C3 closure to static/lightweight
+  structural contracts plus typed framework configuration propagation and the
+  canonical BoK SAR profile binding.
+- `C3R16-R root cause`: scalar-only descriptor config lost object/list values;
+  descriptor/default values must therefore retain their typed structure and
+  supplied runtime configuration must win for an identical key. The absent
+  BoK `official` binding is recorded as a descriptor configuration defect,
+  rather than a C3 runtime-execution failure.
+- `C3R16-R validation`: `P61.5.1-IC07B-C3R16-VAL-006` through
+  `P61.5.1-IC07B-C3R16-VAL-008` are historical pre-repair evidence: the
+  Framework structured-propagation specification, its derived local SNAPSHOT
+  refresh, and the BoK canonical-SAR binding specification, respectively.
+  Current final-tree evidence is `P61.5.1-IC07B-C3R16-VAL-009` Framework
+  focused test, `P61.5.1-IC07B-C3R16-VAL-010` derived local Framework SNAPSHOT
+  refresh, and `P61.5.1-IC07B-C3R16-VAL-011` BoK focused binding test;
+  `P61.5.1-IC07B-C3R16-VAL-012` is the final current-tree Framework focused
+  test (1 succeeded, 0 failed).
+  `P61.5.1-IC07B-C3R16-ACCEPT-001` accepts only this structural/configuration
+  boundary after lightweight review and focused re-review; it is not CAR
+  startup or multi-CAR runtime evidence.
+- Component CAR startup/operation evidence is component-owned. Multi-CAR
+  isolated Docker startup is release-preparation or explicit
+  integration-validation scope, and is not a C3 acceptance gate.
 - Transparency note: the prior PLAN agent-use disclosure omitted required
   fields. It is incomplete and is not acceptance, validation, or authority
   evidence for C3.
 - `P61.5.1-IC07B-01B-ACCEPT-001` accepts the SIE development metadata and
-  representative consumer boundary after final focused validation and typed
-  re-review. It does not replace the pending isolated packaged runtime
-  admission in Slice C.
+  representative consumer boundary. Component runtime evidence remains
+  component-owned and is not replaced by C3R16-R structural closure.

@@ -70,9 +70,11 @@ accumulator. Cozy remains an IC-07B validation input at its current
 `0.3.3-SNAPSHOT`/`0.5.3-SNAPSHOT` coordinates; its unrelated dirty worktree is
 preserved and is not owned by this Phase. Textus SIE `3d4c402` remains the
 packaged-admission checkpoint input, while the current one-file Slice B repair
-is uncommitted accepted Step evidence. C3 — Sealed Launcher and Offline
-Component Dependency Closure — is allocated in IMPLEMENT for the isolated
-packaged CAR/catalog runtime pathway. This Phase started after Phase 61.5
+is uncommitted accepted Step evidence. C3 — Sealed Launcher, Offline
+Dependency, and SAR Binding Structural Closure — is accepted only for its
+static/lightweight structural contracts, typed configuration propagation, and
+canonical SAR binding. It does not claim a multi-CAR runtime execution.
+This Phase started after Phase 61.5
 closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
 
 ## Decision Resolution — Validation Worktree Collision
@@ -170,81 +172,47 @@ closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
   dependency-resolution fallback.`
 - `authorized_next_state=IMPLEMENT`
 - `consumed=true`
+- `current_c3_authority=For C3R16-R, this historical decision is superseded
+  only as to implementation ownership: cncf-launcher and Textus SIE remain
+  evidence/validation repositories, while framework configuration propagation
+  and the canonical BoK SAR binding are the mutation boundary.`
 
-## Slice C3 — Sealed Launcher and Offline Component Dependency Closure
+## Slice C3 — Structural Closure and Canonical SAR Binding
 
-- `state=REPLAN`; `acceptance=NOT_YET_CLAIMED`; `repair_class=M2`
-- `scope=Framework offline command construction, sealed launcher preparation,
-  task-private Scraper jsoup cache, SIE preflight/compose runtime, and the
-  corresponding static executable specifications.`
-- `supersession=C3 supersedes C2 only for the packaged runtime pathway. C2's
-  static source input boundary remains preserved and uses local Ivy, not
-  Maven.`
-- `preservation=The BoK canonical standalone/security descriptor remains the
-  phase-owned validation input with no C3 content change. C1 bundle behavior,
-  C2 static input boundary, and all unrelated dirty paths remain preserved.`
-- `transparency=The prior PLAN agent-use disclosure omitted required fields.
-  That disclosure is incomplete and is not used as authority, acceptance, or
-  validation evidence for C3.`
-- `review_blocker_ledger=CB-P61.5.1-IC07B-C3-001 (thin launcher closure),
-  CB-P61.5.1-IC07B-C3-002 (incomplete component-cache sealing),
-  CB-P61.5.1-IC07B-C3-003 (asymmetric input-root exclusion), and
-  CB-P61.5.1-IC07B-C3-004 (non-semantic executable-probe scenarios), and
-  CB-P61.5.1-IC07B-C3-RR2-001 (prebuilt runtime bundle path escape),
-  CB-P61.5.1-IC07B-C3-FR-001 (runtime-classpath JAR preflight),
-  CB-P61.5.1-IC07B-C3-FR-002 (inherited BoK source-fixture mount), and
-  CB-P61.5.1-IC07B-C3-FR-003 (warehouse source/target overlap),
-  CB-P61.5.1-IC07B-C3-RR3-001 (runtime-bundle root provenance), and
-  CB-P61.5.1-IC07B-C3-RR3-002 (derived warehouse CAR containment).`
-- `re_review_outcome=The focused C3 re-review sealed CB-P61.5.1-IC07B-C3-001
-  through -004, then found that a runtime-bundle lib symlink can escape the
-  bundle and that SIE preflight does not contain component.d CAR/SAR symlink
-  targets. This directly violates the sealed-runtime no-source/shared-fallback
-  invariant and requires a full Phase review after repair.`
-- `repair_boundary=The repair is limited to CncfRuntimeBundle containment and
-  its executable specification, plus SIE preflight containment and its
-  executable preflight scenarios. These are existing C1/C3 interfaces in the
-  already approved framework, launcher, and SIE repositories; no API,
-  coordinate, repository, or design expansion is admitted.`
-- `full_review=The required full review found that preflight does not contain
-  classpath JAR entries before Docker, inherited compose still mounts a BoK
-  source checkout, and the task-private warehouse can overlap a source or
-  target root. C3 remains unaccepted.`
-- `replan=The BoK fixture is a sealed child of the already admitted
-  task-private runtime bundle, not a new mount root or source-checkout runtime
-  input. Preparation copies it into `bok-fixture/` and emits a complete
-  fixture manifest whose SHA-256 is an explicit prebuilt admission input.
-  Preflight verifies every classpath JAR, the fixture manifest, warehouse
-  source/target exclusion, and the merged compose replacement before Docker.
-  The prebuilt compose route mounts only the bundle-contained fixture at
-  `/workspace/bok-fixture`; it never mounts the BoK checkout.`
-- `cycle_1_result=The full-review repair sealed FR-001 through FR-003, but the
-  required focused closure re-review found two local SIE provenance gaps:
-  `TEXTUS_SIE_PREBUILT_RUNTIME_BUNDLE` was not subjected to the same
-  task-private source/shared-root exclusion, and project metadata could derive
-  a CAR path outside the canonical task-private warehouse. The C3 baseline,
-  interfaces, repositories, and public contract are unchanged; no additional
-  full review is required.`
-- `cycle_2_replan=Apply one bounded SIE-only repair. Canonicalize and admit the
-  runtime-bundle root with the prebuilt-input-root policy before any compose
-  mount. Canonicalize the project-metadata-derived CAR path and require it to
-  remain under the canonical warehouse root. Extend the static contract probe
-  with shared-root/runtime-bundle rejection and metadata-path traversal
-  rejection scenarios.`
-- `next=Run the focused static validation, diff verification, and CAR lint for
-  the exact cycle-2 repair, then perform one typed focused closure re-review.
-  Do not start a packaged runtime session until that review passes. No passing
-  acceptance evidence is claimed by this record.`
-- `cycle_2_result=The typed focused closure re-review passed. Runtime-bundle
-  roots now use task-private source/shared-root exclusion before bundle
-  consumption, and metadata-derived CAR paths are canonicalized and contained
-  under `repository/car` before checksum access. The static probe, `bash -n`,
-  `git diff --check`, and CAR lint have no C3 failure; C3-external CAR lint
-  warnings remain preserved.`
-- `next_runtime_gate=The local-recursive workflow may now create its own
-  task-private packages and run the prebuilt-only packaged-runtime admission
-  session. This static closure is not itself a live runtime receipt, and it
-  authorizes neither publication nor commit.`
+- `state=ACCEPTED`; `acceptance=P61.5.1-IC07B-C3R16-ACCEPT-001`
+- `responsibility=CNCF/launcher C3 owns sealed-bundle, offline
+  dependency-cache, and input-containment structural contracts through
+  static/lightweight specifications. The framework owns typed descriptor
+  configuration propagation, and BoK owns canonical SAR
+  descriptor/profile-binding validation.`
+- `root_cause=The scalar-only descriptor config view omitted object and list
+  values, so a SAR-owned profile-registry object could not reach component
+  initialization as typed configuration. The missing `official` profile
+  binding in the BoK SAR descriptor is a configuration defect, not a
+  component-runtime failure.`
+- `invariant=Descriptor/default configuration is applied before supplied
+  runtime configuration; a supplied key always wins over the same descriptor
+  key. Scalar, object, and list values retain their typed structure.`
+- `validation=Historical pre-repair evidence comprises the Framework focused
+  specification (1 succeeded, 0 failed; `P61.5.1-IC07B-C3R16-VAL-006`), the
+  derived local Framework SNAPSHOT refresh
+  (`P61.5.1-IC07B-C3R16-VAL-007`), and the BoK focused canonical-SAR
+  specification (1 succeeded, 0 failed;
+  `P61.5.1-IC07B-C3R16-VAL-008`). Current final-tree evidence is the Framework
+  focused test (`P61.5.1-IC07B-C3R16-VAL-009`), the derived local Framework
+  SNAPSHOT refresh (`P61.5.1-IC07B-C3R16-VAL-010`), and the BoK focused binding
+  test (`P61.5.1-IC07B-C3R16-VAL-011`). The final current-tree Framework
+  focused test is `P61.5.1-IC07B-C3R16-VAL-012` (1 succeeded, 0 failed). The
+  lightweight review and its focused re-review closed the private
+  implementation-name and evidence-chronology findings without outstanding C3
+  blockers.`
+- `responsibility_split=Each component owns its CAR startup/operation test or
+  operational smoke. Multi-CAR isolated Docker startup belongs only to release
+  preparation or an explicit integration-validation Phase; it is not a C3
+  completion or acceptance gate.`
+- `preservation=C1/C2 evidence, cncf-launcher, Textus SIE, and all unrelated
+  dirty paths remain preserved. This slice changes neither component profile
+  selection semantics nor runtime orchestration.`
 
 ## Packaged Admission Preflight — Runner-Safe Smoke Required
 
@@ -260,9 +228,9 @@ closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
 - `preservation=No isolated worktree, warehouse, build output, runtime,
   container, port, session, or dataset was created; only the rejection receipt
   was retained.`
-- `next_slice=IC-07B-01C adds a project-owned prebuilt/runtime-only smoke
-  boundary. It must use only task-private packaged inputs and reject all
-  source-classpath and shared/public-warehouse fallback.`
+- `next_slice=This historical preflight remains evidence of its rejected
+  entrypoint. C3R16-R instead closes static/lightweight structural and SAR
+  binding contracts under the responsibility split.`
 
 ## Slice C Acceptance — Prebuilt Packaged Smoke Boundary
 
@@ -281,12 +249,9 @@ closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
   runtime session was started.`
 - `review=Sol full review plus two typed Luna xhigh focused re-reviews; final
   cycle=PASS.`
-- `remaining=The local-recursive workflow may now perform its own isolated
-  package/build preparation and then invoke this prebuilt-only smoke. Static
-  acceptance is not a packaged-runtime admission receipt.`
-- `runtime_supersession=C3 replaces the C2 launcher-install runtime input only.
-  This C static-boundary receipt remains historical admission evidence and does
-  not authorize the obsolete launcher warehouse at runtime.`
+- `remaining=This is historical static-boundary evidence. C3R16-R does not
+  require a packaged runtime session; it records the separate static/lightweight
+  structural and SAR binding responsibilities.`
 
 ## Slice C1 Acceptance — Formal Prebuilt Runtime-Bundle Interface
 
@@ -306,9 +271,9 @@ closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
   The focused repair lineage was limited to its new executable specification.`
 - `preservation=Seven pre-existing cncf-launcher dirty paths, including
   build.sbt, remain unowned and unchanged by this Phase.`
-- `remaining=C2 preserves its static local-Ivy source boundary. C3 now owns
-  the runtime executable closure and offline component-cache path that must
-  obtain the later live packaged runtime receipt.`
+- `remaining=C2 preserves its static local-Ivy source boundary. C3R16-R keeps
+  sealed-bundle and offline-cache structure as static/lightweight evidence,
+  while component runtime evidence remains component-owned.`
 
 ## Slice C2 Static Acceptance — Packaged Launcher Consumer Route
 
@@ -325,8 +290,8 @@ closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
   remain unchanged.`
 - `validation=SIE_PREBUILT_PACKAGED_CONTRACT_OK, bash -n, and git diff --check
   all passed. No Docker session was started by this static gate.`
-- `remaining=C3 supersedes this C2 installation route only for the runtime
-  pathway. C2 remains the preserved static source boundary; its prior
+- `remaining=C3R16-R does not make this route a runtime acceptance gate. C2
+  remains the preserved static source boundary; its prior
   task-private local-Ivy artifact attempt is excluded from acceptance because
   the command runner did not propagate its declared local publish destination
   and wrote existing default local outputs instead. Those outputs are
@@ -351,8 +316,9 @@ closed and the user explicitly invoked `$cncf-goal-phase 61.5.1`.
   sbt-cozy, nominal CML wrappers, and manual/user-guide gaps), the stale
   README coordinate note, and all successor planning paths remain separate and
   unmodified by this Slice.`
-- `remaining=Slice C isolated packaged CAR/catalog admission is still required;
-  this acceptance does not claim a packaged runtime execution receipt.`
+- `remaining=Component-owned CAR startup/operation evidence remains separate.
+  C3R16-R closes only its framework/launcher structural and SAR binding
+  boundary, not a multi-component runtime execution.`
 
 ## Split Provenance
 

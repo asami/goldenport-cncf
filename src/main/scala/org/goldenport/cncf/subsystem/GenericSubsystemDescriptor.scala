@@ -11,6 +11,7 @@ import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.component.{ComponentDescriptor, ComponentId, ComponentInstanceId, ComponentInstanceMetadata, SubsystemCapabilityId}
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
+import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.rule.{RuleSet, RuleSetDescriptor}
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, OperationAuthorizationRule, SecurityRoleDefinition, SecuritySubject}
@@ -250,8 +251,20 @@ final case class GenericSubsystemDescriptor(
   ruleSets: Vector[RuleSet] = Vector.empty,
   subsystemCapabilityProviders: Vector[GenericSubsystemCapabilityProviderBinding] = Vector.empty,
   componentDescriptorOverrides: Vector[ComponentDescriptor] = Vector.empty,
-  implicitRootComponentName: Option[String] = None
+  implicitRootComponentName: Option[String] = None,
+  private val _config_projection: Configuration = Configuration.empty
 ) {
+  /**
+   * The descriptor-owned configuration in its original scalar/object/list
+   * shape.  `config` remains the compatible scalar-only view.
+   */
+  def configuration: Configuration =
+    Configuration(
+      config.iterator.map { case (key, value) =>
+        key -> ConfigurationValue.StringValue(value)
+      }.toMap ++ _config_projection.values
+    )
+
   def componentVersion: Option[String] =
     version.orElse(componentBindings.headOption.flatMap(_.componentVersion))
 
@@ -348,6 +361,9 @@ object GenericSubsystemDescriptor {
       componentBindings = _merge_component_bindings(defaults.componentBindings, overrideDescriptor.componentBindings),
       extensions = defaults.extensions ++ overrideDescriptor.extensions,
       config = defaults.config ++ overrideDescriptor.config,
+      _config_projection = Configuration(
+        defaults._config_projection.values ++ overrideDescriptor._config_projection.values
+      ),
       wiring = _merge_record(defaults.wiring, overrideDescriptor.wiring),
       runtime = _merge_runtime(defaults.runtime, overrideDescriptor.runtime),
       security = _merge_security(defaults.security, overrideDescriptor.security),
@@ -369,6 +385,7 @@ object GenericSubsystemDescriptor {
     source: GenericSubsystemAssemblyDescriptorSource
   ): Consequence[GenericSubsystemDescriptor] = {
     val rec = source.record
+    val configprojection = _configuration_value(rec, List("config"))
     _override_bindings_from_record_c(rec).flatMap { bindings =>
       for {
         runtime <- _optional_runtime_c(rec)
@@ -383,6 +400,9 @@ object GenericSubsystemDescriptor {
           componentBindings = if (bindings.nonEmpty) bindings else descriptor.componentBindings,
           extensions = descriptor.extensions ++ _string_map_value(rec, List("extension", "extensions")),
           config = descriptor.config ++ _string_map_value(rec, List("config")),
+          _config_projection = Configuration(
+            descriptor._config_projection.values ++ configprojection.values
+          ),
           wiring = _merge_record(descriptor.wiring, _wiring_value(rec)),
           runtime = _merge_runtime(descriptor.runtime, runtime),
           security = _merge_security(descriptor.security, security),
@@ -814,6 +834,8 @@ object GenericSubsystemDescriptor {
                 componentBindings = bindings,
                 extensions = descriptor.extensions ++ shape.map(_.extensions).getOrElse(Map.empty),
                 config = shape.map(_.config).getOrElse(Map.empty),
+                _config_projection = assembly.map(source => _configuration_value(source.record, List("config")))
+                  .getOrElse(Configuration.empty),
                 wiring = shape.map(_.wiring).getOrElse(Record.empty),
                 assemblyDescriptor = assembly,
                 runtime = shape.flatMap(_.runtime),
@@ -1104,6 +1126,7 @@ object GenericSubsystemDescriptor {
         componentBindings = s.componentBindings,
         extensions = s.extensions,
         config = s.config,
+        _config_projection = _configuration_value(rec, List("config")),
         wiring = s.wiring,
         assemblyDescriptor = assemblydescriptor0,
         runtime = s.runtime,
@@ -1434,6 +1457,39 @@ object GenericSubsystemDescriptor {
     _record_value(rec, keys).map(_.asMap.flatMap { case (key, value) =>
       _config_scalar_string(value).map(key -> _)
     }).getOrElse(Map.empty)
+
+  private def _configuration_value(rec: Record, keys: List[String]): Configuration =
+    _record_value(rec, keys).map(_configuration).getOrElse(Configuration.empty)
+
+  private def _configuration(record: Record): Configuration =
+    Configuration(record.fields.iterator.map { field =>
+      field.key -> _configuration_value(field.value.single)
+    }.toMap)
+
+  private def _configuration_value(value: Any): ConfigurationValue =
+    value match {
+      case null => ConfigurationValue.NullValue
+      case x: String => ConfigurationValue.StringValue(x)
+      case x: Boolean => ConfigurationValue.BooleanValue(x)
+      case x: Byte => ConfigurationValue.NumberValue(BigDecimal(x))
+      case x: Short => ConfigurationValue.NumberValue(BigDecimal(x))
+      case x: Int => ConfigurationValue.NumberValue(BigDecimal(x))
+      case x: Long => ConfigurationValue.NumberValue(BigDecimal(x))
+      case x: Float => ConfigurationValue.NumberValue(BigDecimal.decimal(x))
+      case x: Double => ConfigurationValue.NumberValue(BigDecimal(x))
+      case x: BigDecimal => ConfigurationValue.NumberValue(x)
+      case x: java.math.BigDecimal => ConfigurationValue.NumberValue(BigDecimal(x))
+      case x: Record => ConfigurationValue.ObjectValue(_configuration(x).values)
+      case x: Map[?, ?] => ConfigurationValue.ObjectValue(
+        x.iterator.map { case (key, entry) => key.toString -> _configuration_value(entry) }.toMap
+      )
+      case x: java.util.Map[?, ?] => ConfigurationValue.ObjectValue(
+        x.asScala.iterator.map { case (key, entry) => key.toString -> _configuration_value(entry) }.toMap
+      )
+      case x: Seq[?] => ConfigurationValue.ListValue(x.toList.map(_configuration_value))
+      case x: java.util.List[?] => ConfigurationValue.ListValue(x.asScala.toList.map(_configuration_value))
+      case x => ConfigurationValue.StringValue(x.toString)
+    }
 
   private def _config_scalar_string(p: Any): Option[String] =
     p match {
