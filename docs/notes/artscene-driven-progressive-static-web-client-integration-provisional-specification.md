@@ -4,6 +4,14 @@ Status: provisional planning contract for CNCF Phase 62.1 and ArtScene Phase
 13. Exact JavaScript names and wire fields remain subject to Phase 62
 verification; this note does not override a promoted `docs/spec` contract.
 
+The formal candidate meanings and hierarchy of **Progressive Static Web
+Application**, **Progressive Static Web Site**, and **Progressive Static Web
+Page** are defined in
+`docs/notes/progressive-static-web-architecture-provisional-specification.md`.
+This integration note applies that vocabulary: ArtScene is the Application,
+its visible ArtScene Web surface is the Site, and Timeline/List responses are
+Pages with bounded interaction regions. The terms are not interchangeable.
+
 ## 1. Sequencing Contract
 
 1. CNCF Phase 62 closes using CNCF-owned fixtures and publishes a consumable
@@ -73,7 +81,7 @@ ArtScene can suppress obsolete-request feedback.
 
 ## 5. ArtScene Interaction Contract
 
-ArtScene owns one controller per bounded page region. It may use caller-owned
+ArtScene owns one controller per bounded Page region. It may use caller-owned
 abort or request-generation state to ensure only the newest applicable response
 updates that region. Initial enhancement uses the embedded page View without a
 network call. Review and follow actions continue through authoritative
@@ -81,6 +89,15 @@ REST v1 Operations, and ordinary links/forms remain the no-JavaScript fallback.
 Timeline/List refresh also uses REST Operation execution. Form API is called
 only when ArtScene needs dynamic Web input definition or optional admission
 validation; it is not an obligatory preflight for every REST action.
+
+ArtScene's exhibition interaction history is also retained as a negative
+acceptance case. Browser REST hydration that constructs the initial Timeline or
+List is not a Progressive Static Web Page. Conversely, replacing the required
+direct per-exhibition planning-state controls only with a detail-page `Review`
+link may preserve a minimal Page fallback but still regress the Progressive
+Static Web Application. The accepted interaction must preserve both the
+server-rendered first document and the direct, bounded JavaScript-enhanced
+planning-state journey.
 
 ## 6. Evidence Contract
 
