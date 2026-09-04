@@ -3,6 +3,14 @@ package org.goldenport.cncf.information
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeFrameId, RdfNodeName}
+import org.goldenport.cncf.information.value.{
+  InformationBindingStatus,
+  InformationConflictState,
+  InformationIdentityBinding,
+  InformationLifecycleState,
+  InformationPublicationState,
+  InformationSpaceCounts
+}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
@@ -29,7 +37,7 @@ final class InformationSpaceSpec
       val malformed = "information-1"
 
       When("the canonical Information ID constructor is used")
-      val parsed = InformationId.createC(malformed)
+      val parsed = EntityId.parse(malformed.trim)
 
       Then("it returns a deterministic failure rather than a generated identity")
       parsed shouldBe a[Consequence.Failure[_]]
@@ -40,7 +48,9 @@ final class InformationSpaceSpec
       val malformed: String = null
 
       When("the canonical Information ID constructor is used")
-      val parsed = InformationId.createC(malformed)
+      val parsed = Option(malformed)
+        .map(value => EntityId.parse(value.trim))
+        .getOrElse(Consequence.valueInvalid("Invalid EntityId value: null"))
 
       Then("it returns a deterministic failure")
       parsed shouldBe a[Consequence.Failure[_]]
@@ -76,7 +86,7 @@ final class InformationSpaceSpec
       val validated = _success(space.validateInformation(recordid))
 
       Then("the record becomes ready for confirmation")
-      validated.state shouldBe InformationLifecycleState.readyForConfirmation
+      validated.state shouldBe InformationLifecycleState.ready_for_confirmation
       space.validationIssues(recordid) shouldBe Vector.empty
 
       When("the ready record is confirmed")
@@ -98,7 +108,7 @@ final class InformationSpaceSpec
       _success(space.clear())
 
       Then("its lifecycle records are removed")
-      space.counts shouldBe InformationSpaceCounts()
+      space.counts shouldBe InformationSpaceCounts(0, 0, 0, 0, 0, 0)
     }
 
     "record failed publication status without publishing the item" in {
@@ -150,7 +160,7 @@ final class InformationSpaceSpec
       val item = _success(space.confirmInformation(recordid))
 
       Then("the title-only paper reaches the confirmed lifecycle")
-      validated.state shouldBe InformationLifecycleState.readyForConfirmation
+      validated.state shouldBe InformationLifecycleState.ready_for_confirmation
       item.domain shouldBe "paper"
     }
 
@@ -178,7 +188,7 @@ final class InformationSpaceSpec
       val item = _success(space.confirmInformation(validid))
 
       Then("it reaches the confirmed lifecycle")
-      validated.state shouldBe InformationLifecycleState.readyForConfirmation
+      validated.state shouldBe InformationLifecycleState.ready_for_confirmation
       item.domain shouldBe "web-resource"
     }
 
@@ -231,8 +241,11 @@ final class InformationSpaceSpec
         InformationIdentityBinding(
           rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "https://dbpedia.org/resource/Knowledge_graph", Some("resource"))),
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
           authority = Some("dbpedia"),
-          confidence = Some(0.72)
+          confidence = Some(0.72),
+          status = InformationBindingStatus.candidate
         ),
         Some(0.72),
         Some("dbpedia lookup")
@@ -244,7 +257,7 @@ final class InformationSpaceSpec
       Then("the candidate and binding are visible in the CML needs-resolution state before removal")
       space.counts.resolutionCandidateCount shouldBe 1
       space.counts.identityBindingCount shouldBe 1
-      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.needsResolution)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.needs_resolution)
 
       When("the candidate is cleared before confirmation")
       val removed = _success(space.clearResolutionCandidate(recordid, candidate.candidateKey))
@@ -254,7 +267,7 @@ final class InformationSpaceSpec
       space.resolutionCandidates(recordid) shouldBe Vector.empty
       space.counts.resolutionCandidateCount shouldBe 0
       space.counts.identityBindingCount shouldBe 0
-      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.needsResolution)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.needs_resolution)
       space.getInformation(recordid).map(_.resolutionCandidates) shouldBe Some(Vector.empty)
       space.getInformation(recordid).map(_.identityBindings) shouldBe Some(Vector.empty)
     }
@@ -272,8 +285,11 @@ final class InformationSpaceSpec
         InformationIdentityBinding(
           rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "https://dbpedia.org/resource/Knowledge_graph", Some("resource"))),
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
           authority = Some("dbpedia"),
-          confidence = Some(0.72)
+          confidence = Some(0.72),
+          status = InformationBindingStatus.candidate
         ),
         Some(0.72),
         Some("dbpedia lookup")

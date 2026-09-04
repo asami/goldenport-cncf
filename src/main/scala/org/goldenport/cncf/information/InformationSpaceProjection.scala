@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentIdentityCompatibilityAdapter
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.information.value.{InformationSpaceCounts, InformationSpaceSnapshot}
 
 /*
  * @since   May. 20, 2026

@@ -4,6 +4,7 @@ import java.time.{Clock, Instant, ZoneId, ZoneOffset}
 import java.util.concurrent.atomic.AtomicReference
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.information.value.{InformationBindingStatus, InformationIdentityBinding}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -62,34 +63,22 @@ final class GeneratedInformationRuntimeAdoptionSpec
       updated.revision.value shouldBe 2L
     }
 
-    "E2 default an omitted binding status, preserve an explicit status, and reject alias conflicts" must _e2 {
-      Given("a binding payload using the admitted snake-case aliases")
-      val aliases = Record.data(
-        "rdf_subject" -> "https://example.org/information/legacy",
-        "knowledge_node_id" -> "legacy-node"
+    "E2 decode canonical binding records through the generated value codec" must _e2 {
+      Given("a binding payload using canonical generated field spellings and an explicit status")
+      val canonical = Record.data(
+        "rdfSubject" -> "https://example.org/information/canonical",
+        "knowledgeNodeId" -> "generated-node",
+        "status" -> InformationBindingStatus.selected
       )
 
-      When("the compatibility adapter decodes the payload")
-      val decoded = _success(InformationIdentityBinding.createC(aliases))
-      val explicit = _success(InformationIdentityBinding.createC(Record.data(
-        "status" -> InformationBindingStatus.selected
-      )))
-      val conflicting = InformationIdentityBinding.createC(Record.data(
-        "rdfSubject" -> "https://example.org/information/canonical",
-        "rdf_subject" -> "https://example.org/information/conflict"
-      ))
-      val unnamed = _success(InformationIdentityBinding.createC(Record.data(
-        "rdf-subject" -> "https://example.org/information/not-an-alias"
-      )))
+      When("the generated value codec decodes the canonical payload")
+      val decoded = _success(InformationIdentityBinding.createC(canonical))
 
-      Then("the aliases project to generated fields and differing duplicates fail deterministically")
+      Then("the generated codec preserves canonical fields")
       decoded shouldBe a[org.goldenport.cncf.information.value.InformationIdentityBinding]
-      decoded.rdfSubject.map(_.print) shouldBe Some("https://example.org/information/legacy")
-      decoded.knowledgeNodeId.map(_.print) shouldBe Some("legacy-node")
-      decoded.status shouldBe InformationBindingStatus.candidate
-      explicit.status shouldBe InformationBindingStatus.selected
-      conflicting shouldBe a[Consequence.Failure[_]]
-      unnamed.rdfSubject shouldBe None
+      decoded.rdfSubject.map(_.print) shouldBe Some("https://example.org/information/canonical")
+      decoded.knowledgeNodeId.map(_.print) shouldBe Some("generated-node")
+      decoded.status shouldBe InformationBindingStatus.selected
     }
   }
 

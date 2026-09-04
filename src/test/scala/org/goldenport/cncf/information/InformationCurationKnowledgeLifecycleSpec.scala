@@ -3,6 +3,17 @@ package org.goldenport.cncf.information
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.information.entity.Information
+import org.goldenport.cncf.information.value.{
+  InformationBindingStatus,
+  InformationConflictState,
+  InformationFieldEvent,
+  InformationFieldState,
+  InformationIdentityBinding,
+  InformationLifecycleState,
+  InformationPublicationState,
+  InformationSpaceCounts
+}
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeFrameId, RdfNodeName}
 import org.goldenport.observation.Taxonomy
 import org.goldenport.record.Record
@@ -37,9 +48,14 @@ final class InformationCurationKnowledgeLifecycleSpec
         state = InformationFieldState.editing,
         source = "curator",
         operation = Some("edit"),
+        provider = None,
+        transformation = None,
         valueBefore = Some("Imported title"),
         valueAfter = Some("Curated title"),
-        occurredAt = Instant.EPOCH
+        evidence = None,
+        note = None,
+        occurredAt = Instant.EPOCH,
+        actor = None
       )
 
       When("the working record is edited")
@@ -55,7 +71,7 @@ final class InformationCurationKnowledgeLifecycleSpec
 
       Then("snapshots, counts, and information queries expose the deterministic imported set")
       space.snapshot.information.map(_.id).toSet shouldBe imported.map(_.id).toSet
-      space.counts shouldBe InformationSpaceCounts(informationCount = 2)
+      space.counts shouldBe InformationSpaceCounts(2, 0, 0, 0, 0, 0)
       space.getInformation(first.id) shouldBe Some(audited)
       space.searchInformation(Some("paper")).map(_.id).toSet shouldBe imported.map(_.id).toSet
       space.searchInformation(Some("web-resource")) shouldBe Vector.empty
@@ -86,7 +102,7 @@ final class InformationCurationKnowledgeLifecycleSpec
       val unresolvedvalidated = _success(space.validateInformation(unresolved.id))
 
       Then("validation marks the unresolved record as needing resolution")
-      unresolvedvalidated.state shouldBe InformationLifecycleState.needsResolution
+      unresolvedvalidated.state shouldBe InformationLifecycleState.needs_resolution
 
       When("the resolution candidate is selected")
       val selected = _success(space.selectResolutionCandidate(unresolved.id, candidate.candidateKey))
@@ -96,7 +112,7 @@ final class InformationCurationKnowledgeLifecycleSpec
       selected.binding.status shouldBe InformationBindingStatus.selected
       space.getInformation(unresolved.id).map(_.identityBindings.map(_.status)) shouldBe
         Some(Vector(InformationBindingStatus.selected))
-      space.getInformation(unresolved.id).map(_.state) shouldBe Some(InformationLifecycleState.readyForConfirmation)
+      space.getInformation(unresolved.id).map(_.state) shouldBe Some(InformationLifecycleState.ready_for_confirmation)
 
       When("the selected resolution candidate is cleared")
       val cleared = _success(space.clearResolutionCandidate(unresolved.id, candidate.candidateKey))
@@ -105,15 +121,15 @@ final class InformationCurationKnowledgeLifecycleSpec
       cleared shouldBe selected
       space.resolutionCandidates(unresolved.id) shouldBe Vector.empty
       space.getInformation(unresolved.id).map(_.identityBindings) shouldBe Some(Vector.empty)
-      space.getInformation(unresolved.id).map(_.state) shouldBe Some(InformationLifecycleState.readyForConfirmation)
+      space.getInformation(unresolved.id).map(_.state) shouldBe Some(InformationLifecycleState.ready_for_confirmation)
     }
 
     "reject each CML-permitted source-state facet" in {
       Vector(
         InformationLifecycleState.imported,
         InformationLifecycleState.invalid,
-        InformationLifecycleState.needsResolution,
-        InformationLifecycleState.readyForConfirmation
+        InformationLifecycleState.needs_resolution,
+        InformationLifecycleState.ready_for_confirmation
       ).foreach { sourcestate =>
         Given(s"an Information record in the $sourcestate lifecycle source state")
         val space = new InformationSpace
@@ -179,8 +195,8 @@ final class InformationCurationKnowledgeLifecycleSpec
       Vector(
         InformationLifecycleState.imported,
         InformationLifecycleState.invalid,
-        InformationLifecycleState.needsResolution,
-        InformationLifecycleState.readyForConfirmation,
+        InformationLifecycleState.needs_resolution,
+        InformationLifecycleState.ready_for_confirmation,
         InformationLifecycleState.published,
         InformationLifecycleState.conflict
       ).foreach { sourcestate =>
@@ -249,11 +265,11 @@ final class InformationCurationKnowledgeLifecycleSpec
       space.counts.conflictCount shouldBe 1
     }
 
-    "admit the invalid update route and deny undeclared validation and update moves without mutation" in {
+    "admit declared update routes and deny undeclared validation without mutation" in {
       Given("an invalid Information record and a ready-for-confirmation Information record")
       val space = new InformationSpace
       val invalid = _information_in_state(space, InformationLifecycleState.invalid)
-      val ready = _information_in_state(space, InformationLifecycleState.readyForConfirmation)
+      val ready = _information_in_state(space, InformationLifecycleState.ready_for_confirmation)
 
       Given("the invalid record and its persisted and cached values before revalidation")
       val invalidbefore = space.getInformation(invalid.id)
@@ -276,19 +292,14 @@ final class InformationCurationKnowledgeLifecycleSpec
       updated.state shouldBe InformationLifecycleState.imported
       updated.revision.value should be > invalid.revision.value
 
-      Given("the ready record and its persisted and cached values before an edit that would reopen it")
-      val readybefore = space.getInformation(ready.id)
-      val readysnapshotbefore = space.snapshot
+      Given("the ready record before an edit that advances it")
 
       When("the ready record is edited")
-      val readyupdate = space.updateInformation(ready.id, Record.data("title" -> "Changed ready title"))
+      val readyupdated = _success(space.updateInformation(ready.id, Record.data("title" -> "Changed ready title")))
 
-      Then("the undeclared ready-to-imported update is rejected without persisted, revision, snapshot, or cache mutation")
-      _argument_invalid(readyupdate)
-      space.getInformation(ready.id) shouldBe readybefore
-      space.getInformation(ready.id).map(_.revision) shouldBe readybefore.map(_.revision)
-      space.snapshot shouldBe readysnapshotbefore
-      _success(space.getInformationC(ready.id)) shouldBe Some(readybefore.getOrElse(fail("persisted Information is missing")))
+      Then("the declared ready-to-imported update route is admitted")
+      readyupdated.state shouldBe InformationLifecycleState.imported
+      readyupdated.revision.value should be > ready.revision.value
     }
 
     "resolve a published-origin conflict to confirmed rather than restoring published" in {
@@ -321,15 +332,15 @@ final class InformationCurationKnowledgeLifecycleSpec
       case InformationLifecycleState.invalid =>
         val information = _registered(space, "")
         _success(space.validateInformation(information.id))
-      case InformationLifecycleState.needsResolution =>
+      case InformationLifecycleState.needs_resolution =>
         val information = _registered(space, "Needs resolution")
         _success(space.addResolutionCandidate(information.id, "rdfSubject", "Candidate", _binding))
         _success(space.validateInformation(information.id))
-      case InformationLifecycleState.readyForConfirmation =>
+      case InformationLifecycleState.ready_for_confirmation =>
         val information = _registered(space, "Ready")
         _success(space.validateInformation(information.id))
       case InformationLifecycleState.confirmed =>
-        val information = _information_in_state(space, InformationLifecycleState.readyForConfirmation)
+        val information = _information_in_state(space, InformationLifecycleState.ready_for_confirmation)
         _success(space.confirmInformation(information.id))
       case InformationLifecycleState.published =>
         val information = _information_in_state(space, InformationLifecycleState.confirmed)
@@ -360,7 +371,11 @@ final class InformationCurationKnowledgeLifecycleSpec
     InformationIdentityBinding(
       rdfSubject = Some(RdfNodeName("https://example.org/resource/resolvable")),
       externalIdentifiers = Vector(ExternalKnowledgeIdentifier("example", "resolvable", Some("resource"))),
-      authority = Some("example")
+      entityBindings = Vector.empty,
+      knowledgeNodeId = None,
+      authority = Some("example"),
+      confidence = None,
+      status = InformationBindingStatus.candidate
     )
 
   private def _success[A](result: Consequence[A]): A =

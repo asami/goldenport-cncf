@@ -4,10 +4,24 @@ import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.information.entity.Information
+import org.goldenport.cncf.information.value.{
+  InformationBindingStatus,
+  InformationConflict,
+  InformationConflictState,
+  InformationFieldEvent,
+  InformationFieldState,
+  InformationIdentityBinding,
+  InformationLifecycleState,
+  InformationPublicationState,
+  InformationPublicationStatus,
+  InformationResolutionCandidate,
+  InformationValidationIssue
+}
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeEntityBinding, KnowledgeNodeId, RdfNodeName}
 import org.goldenport.record.Record
 import org.goldenport.cncf.unitofwork.CommitRecorder
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -298,60 +312,73 @@ final class InformationPersistenceMigrationSpec
     entityBindings = Vector(KnowledgeEntityBinding("Paper", "legacy-paper-1", Some("v0"), Some("catalog"))),
     knowledgeNodeId = Some(KnowledgeNodeId("knowledge:legacy:paper")),
     authority = Some("openlibrary"),
-    confidence = Some(0.91)
+    confidence = Some(0.91),
+    status = InformationBindingStatus.candidate
   )
-  private val _information = Information(
-    id = _information_id,
-    domain = "paper",
-    rawData = Record.data("title" -> "Legacy raw title", "source" -> "v0"),
-    workingData = Record.data("title" -> "Legacy working title", "subject" -> "migration"),
-    state = InformationLifecycleState.needsResolution,
-    importContext = Some(org.goldenport.cncf.information.value.InformationImportContext(
-      "catalog",
-      Some("legacy-source"),
-      Some("https://example.test/legacy"),
-      Some("import"),
-      Some("job-1"),
-      Some("saga-1"),
-      Some("task-1"),
-      Some(_updated_at),
-      Some("legacy-user")
-    )),
-    validationIssues = Vector(InformationValidationIssue("title", "warning", "legacy title needs review")),
-    resolutionCandidates = Vector(InformationResolutionCandidate(
-      "candidate-1",
-      "title",
-      "Legacy working title",
-      _binding,
-      Some(0.91),
-      Some("legacy candidate"),
-      selected = false
-    )),
-    identityBindings = Vector(_binding),
-    publicationStatuses = Vector(InformationPublicationStatus(
-      "publication-1",
-      InformationPublicationState.published,
-      "knowledge",
-      Some("published before migration"),
-      None,
-      Some(_updated_at)
-    )),
-    conflicts = Vector(InformationConflict(
-      "conflict-1",
-      "title",
-      "Legacy working title",
-      "Canonical title"
-    )),
-    fieldEvents = Vector(InformationFieldEvent(
-      "title",
-      InformationFieldState.imported,
-      "catalog",
-      operation = Some("import"),
-      occurredAt = _updated_at,
-      actor = Some("legacy-user")
-    )),
-    confirmedAt = Some(_updated_at),
-    updatedAt = _updated_at
+  private val _information = _success(
+    Information.Builder()
+      .withId(_information_id)
+      .withRevision(EntityRevision.INITIAL)
+      .withLifecycleAttributes(InformationLifecycleSupport.lifecycleAttributes(_updated_at))
+      .withDomain("paper")
+      .withRawData(Record.data("title" -> "Legacy raw title", "source" -> "v0"))
+      .withWorkingData(Record.data("title" -> "Legacy working title", "subject" -> "migration"))
+      .withState(InformationLifecycleState.needs_resolution)
+      .withImportContext(Some(org.goldenport.cncf.information.value.InformationImportContext(
+        "catalog",
+        Some("legacy-source"),
+        Some("https://example.test/legacy"),
+        Some("import"),
+        Some("job-1"),
+        Some("saga-1"),
+        Some("task-1"),
+        Some(_updated_at),
+        Some("legacy-user")
+      )))
+      .withValidationIssues(Vector(InformationValidationIssue("title", "warning", "legacy title needs review")))
+      .withResolutionCandidates(Vector(InformationResolutionCandidate(
+        "candidate-1",
+        "title",
+        "Legacy working title",
+        _binding,
+        Some(0.91),
+        Some("legacy candidate"),
+        selected = false
+      )))
+      .withIdentityBindings(Vector(_binding))
+      .withPublicationStatuses(Vector(InformationPublicationStatus(
+        "publication-1",
+        InformationPublicationState.published,
+        "knowledge",
+        Some("published before migration"),
+        None,
+        Some(_updated_at)
+      )))
+      .withConflicts(Vector(InformationConflict(
+        "conflict-1",
+        "title",
+        "Legacy working title",
+        "Canonical title",
+        "warning",
+        InformationConflictState.open,
+        None
+      )))
+      .withFieldEvents(Vector(InformationFieldEvent(
+        "title",
+        InformationFieldState.imported,
+        "catalog",
+        Some("import"),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        _updated_at,
+        Some("legacy-user")
+      )))
+      .withConfirmedAt(Some(_updated_at))
+      .buildC()
   )
 
   private def _legacy_binding_record: Record =

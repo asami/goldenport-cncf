@@ -6,6 +6,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, TimeUnit}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
+import org.goldenport.cncf.information.entity.Information
 import org.goldenport.cncf.datastore.{
   DataStore,
   EntityVersionedMutationCheckpoint,
@@ -17,6 +18,7 @@ import org.goldenport.cncf.datastore.{
 import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.cncf.entity.{EntityRevisionRepresentation, EntityStore}
 import org.goldenport.cncf.entity.runtime.EntityMemoryPolicy
+import org.goldenport.cncf.information.value.{InformationBindingStatus, InformationIdentityBinding, InformationSpaceSnapshot}
 import org.goldenport.cncf.knowledge.{
   ExternalKnowledgeIdentifier,
   KnowledgeEntityBinding,
@@ -26,6 +28,7 @@ import org.goldenport.cncf.knowledge.{
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.goldenport.cncf.unitofwork.CommitRecorder
+import org.simplemodeling.model.datatype.EntityId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -182,8 +185,13 @@ final class InformationSpaceEntityPersistenceSpec
           Vector(Record.data("title" -> "Persistent candidate"))
         )).head
         val binding = InformationIdentityBinding(
+          rdfSubject = None,
+          externalIdentifiers = Vector.empty,
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
           authority = Some("openlibrary"),
-          confidence = Some(0.91)
+          confidence = Some(0.91),
+          status = InformationBindingStatus.candidate
         )
         val candidate = _success(component.informationSpace.addResolutionCandidate(
           registered.id,
@@ -205,7 +213,7 @@ final class InformationSpaceEntityPersistenceSpec
         reloaded.revision shouldBe updated.revision
         reloaded.resolutionCandidates.map(_.candidateKey) shouldBe Vector(candidate.candidateKey)
         reloaded.resolutionCandidates.map(_.fieldPath) shouldBe Vector("title")
-        reloaded.resolutionCandidates.map(_.label) shouldBe Vector("Persistent candidate")
+        reloaded.resolutionCandidates.map(_.candidateLabel) shouldBe Vector("Persistent candidate")
         reloaded.resolutionCandidates.map(_.binding.authority) shouldBe Vector(Some("openlibrary"))
         reloaded.resolutionCandidates.map(_.binding.confidence) shouldBe Vector(Some(0.91))
         reloaded.identityBindings.map(_.authority) shouldBe Vector(Some("openlibrary"))
@@ -418,7 +426,15 @@ final class InformationSpaceEntityPersistenceSpec
           registered.id,
           "title",
           "Rejected candidate",
-          InformationIdentityBinding(authority = Some("openlibrary")),
+          InformationIdentityBinding(
+            rdfSubject = None,
+            externalIdentifiers = Vector.empty,
+            entityBindings = Vector.empty,
+            knowledgeNodeId = None,
+            authority = Some("openlibrary"),
+            confidence = None,
+            status = InformationBindingStatus.candidate
+          ),
           Some(0.85),
           Some("injected provider failure")
         )
@@ -468,8 +484,8 @@ final class InformationSpaceEntityPersistenceSpec
         searched.map(_.id) shouldBe Vector(registered.id)
         counts.informationCount shouldBe 1
         snapshot.information.map(_.id) shouldBe Vector(registered.id)
-        restarted.snapshot shouldBe InformationSpaceSnapshot()
-        remaining shouldBe InformationSpaceSnapshot()
+        restarted.snapshot shouldBe InformationSpaceSnapshot(Vector.empty)
+        remaining shouldBe InformationSpaceSnapshot(Vector.empty)
       }
     }
 
@@ -585,8 +601,8 @@ final class InformationSpaceEntityPersistenceSpec
 
         Then("the refresh failure is retained while local and recreated authoritative snapshots are empty")
         failed shouldBe a[Consequence.Failure[?]]
-        space.snapshot shouldBe InformationSpaceSnapshot()
-        authoritative shouldBe InformationSpaceSnapshot()
+        space.snapshot shouldBe InformationSpaceSnapshot(Vector.empty)
+        authoritative shouldBe InformationSpaceSnapshot(Vector.empty)
       }
     }
 
@@ -891,8 +907,8 @@ final class InformationSpaceEntityPersistenceSpec
 
   private final case class OrderingEvidence(
     provider: String,
-    expectedids: Vector[InformationId],
-    snapshotids: Vector[InformationId]
+    expectedids: Vector[EntityId],
+    snapshotids: Vector[EntityId]
   )
 
   private final class FailingBeforePublishDataStore

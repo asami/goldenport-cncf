@@ -4,6 +4,12 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeNodeId, KnowledgeRelationshipKind, KnowledgeTagBinding, KnowledgeWorkingSet, RdfNodeName}
 import org.goldenport.cncf.tag.{TagCreate, TagRepository}
+import org.goldenport.cncf.information.value.{
+  InformationBindingStatus,
+  InformationFieldEvent,
+  InformationFieldState,
+  InformationIdentityBinding
+}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -120,8 +126,11 @@ final class InformationToKnowledgeProjectionSpec
         InformationIdentityBinding(
           rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Murasaki_Shikibu")),
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "http://dbpedia.org/resource/Murasaki_Shikibu", Some("person"))),
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
           authority = Some("dbpedia"),
-          confidence = Some(0.82)
+          confidence = Some(0.82),
+          status = InformationBindingStatus.candidate
         ),
         Some(0.82),
         Some("author name match")
@@ -133,8 +142,11 @@ final class InformationToKnowledgeProjectionSpec
         InformationIdentityBinding(
           rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Iwanami_Shoten")),
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "http://dbpedia.org/resource/Iwanami_Shoten", Some("organization"))),
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
           authority = Some("dbpedia"),
-          confidence = Some(0.80)
+          confidence = Some(0.80),
+          status = InformationBindingStatus.candidate
         ),
         Some(0.80),
         Some("publisher name match")
@@ -180,8 +192,13 @@ final class InformationToKnowledgeProjectionSpec
         "authors",
         "Alice Example",
         InformationIdentityBinding(
+          rdfSubject = None,
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("local", "alice-example", Some("person"))),
-          authority = Some("local")
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
+          authority = Some("local"),
+          confidence = None,
+          status = InformationBindingStatus.candidate
         ),
         Some(0.90),
         Some("selected author evidence")
@@ -191,8 +208,13 @@ final class InformationToKnowledgeProjectionSpec
         "authors",
         "Alice E.",
         InformationIdentityBinding(
+          rdfSubject = None,
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("local", "alice-e", Some("person"))),
-          authority = Some("local")
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
+          authority = Some("local"),
+          confidence = None,
+          status = InformationBindingStatus.candidate
         ),
         Some(0.70),
         Some("superseded author evidence")
@@ -202,8 +224,13 @@ final class InformationToKnowledgeProjectionSpec
         "publisher",
         "Example Press",
         InformationIdentityBinding(
+          rdfSubject = None,
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("local", "example-press", Some("organization"))),
-          authority = Some("local")
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
+          authority = Some("local"),
+          confidence = None,
+          status = InformationBindingStatus.candidate
         ),
         Some(0.70),
         Some("rejected publisher evidence")
@@ -261,7 +288,15 @@ final class InformationToKnowledgeProjectionSpec
         informationid,
         "authors",
         "Murasaki Shikibu",
-        InformationIdentityBinding(authority = Some("openlibrary"), confidence = Some(0.75)),
+        InformationIdentityBinding(
+          rdfSubject = None,
+          externalIdentifiers = Vector.empty,
+          entityBindings = Vector.empty,
+          knowledgeNodeId = None,
+          authority = Some("openlibrary"),
+          confidence = Some(0.75),
+          status = InformationBindingStatus.candidate
+        ),
         Some(0.75),
         Some("author source evidence")
       ))
@@ -271,20 +306,28 @@ final class InformationToKnowledgeProjectionSpec
         state = InformationFieldState.stable,
         source = "manual",
         operation = Some("saveBook"),
+        provider = None,
         transformation = Some("information-link-review"),
+        valueBefore = None,
         valueAfter = Some("authored-by"),
         evidence = Some(s"linkKey=association:${author.candidateKey}; kind=authored-by; rdfPredicate=schema:author; order=1; role=author; confidence=0.95; source=openlibrary; evidenceSummary=reviewed%20author%3B%20source%20fragment"),
-        occurredAt = summon[ExecutionContext].clock.instant()
+        note = None,
+        occurredAt = summon[ExecutionContext].clock.instant(),
+        actor = None
       )))
       _success(space.appendFieldEvent(informationid, InformationFieldEvent(
         fieldPath = "informationLinks",
         state = InformationFieldState.stable,
         source = "manual",
         operation = Some("saveBook"),
+        provider = None,
         transformation = Some("information-link-review"),
+        valueBefore = None,
         valueAfter = Some("not-a-relationship-kind"),
         evidence = Some(s"linkKey=association:${author.candidateKey}; kind=not-a-relationship-kind; order=99"),
-        occurredAt = summon[ExecutionContext].clock.instant()
+        note = None,
+        occurredAt = summon[ExecutionContext].clock.instant(),
+        actor = None
       )))
       _success(space.validateInformation(informationid))
       val information = _success(space.confirmInformation(informationid))

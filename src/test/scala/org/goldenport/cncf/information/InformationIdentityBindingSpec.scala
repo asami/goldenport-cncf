@@ -2,6 +2,7 @@ package org.goldenport.cncf.information
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.information.value.{InformationBindingStatus, InformationIdentityBinding}
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeEntityBinding, KnowledgeNodeId, RdfNodeName}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -33,7 +34,8 @@ final class InformationIdentityBindingSpec
         entityBindings = Vector(KnowledgeEntityBinding("paper", "paper-1")),
         knowledgeNodeId = Some(KnowledgeNodeId("node-paper-1")),
         authority = Some("resolver"),
-        confidence = Some(0.9)
+        confidence = Some(0.9),
+        status = InformationBindingStatus.candidate
       )
 
       When("the binding candidate is selected and the Information is confirmed")

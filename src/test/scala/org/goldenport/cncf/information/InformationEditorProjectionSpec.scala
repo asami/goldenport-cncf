@@ -6,8 +6,17 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, RdfNodeName}
 import org.goldenport.cncf.tag.{TagCreate, TagRepository}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.information.value.{
+  InformationBindingStatus,
+  InformationFieldEvent,
+  InformationFieldState,
+  InformationIdentityBinding,
+  InformationLifecycleState,
+  InformationPublicationState
+}
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.EntityId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -98,8 +107,11 @@ final class InformationEditorProjectionSpec
       val binding = InformationIdentityBinding(
         rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Domain-driven_design")),
         externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "http://dbpedia.org/resource/Domain-driven_design", Some("book"))),
+        entityBindings = Vector.empty,
+        knowledgeNodeId = None,
         authority = Some("dbpedia"),
-        confidence = Some(0.85)
+        confidence = Some(0.85),
+        status = InformationBindingStatus.candidate
       )
       _success(component.informationSpace.addResolutionCandidate(recordid, "dbpediaUri", "Domain-driven design", binding, Some(0.85), Some("title match")))
       _success(component.informationSpace.validateInformation(recordid))
@@ -110,21 +122,26 @@ final class InformationEditorProjectionSpec
         operation = Some("resolveBook"),
         provider = Some("provider:dbpedia.book.lookup"),
         transformation = Some("label-normalized"),
+        valueBefore = None,
         valueAfter = Some("Domain-Driven Design"),
         evidence = Some("title match"),
         note = Some("Imported from resolver."),
-        occurredAt = summon[ExecutionContext].clock.instant()
+        occurredAt = summon[ExecutionContext].clock.instant(),
+        actor = None
       )))
       _success(component.informationSpace.appendFieldEvent(recordid, InformationFieldEvent(
         fieldPath = "language",
         state = InformationFieldState.inferred,
         source = "domain-rule",
         operation = Some("seedBook"),
+        provider = None,
         transformation = Some("isbn-language-inference"),
+        valueBefore = None,
         valueAfter = Some("en"),
         evidence = Some("isbn13=9780134685991; isbnGroup=0; language=en"),
         note = Some("Language inferred from ISBN registration group."),
-        occurredAt = summon[ExecutionContext].clock.instant()
+        occurredAt = summon[ExecutionContext].clock.instant(),
+        actor = None
       )))
 
       When("the component editor state is projected")
@@ -138,7 +155,7 @@ final class InformationEditorProjectionSpec
       projection.componentName shouldBe component.name
       projection.domain shouldBe "book"
       record.informationIdString shouldBe recordid.print
-      record.state shouldBe InformationLifecycleState.needsResolution
+      record.state shouldBe InformationLifecycleState.needs_resolution
       record.actions.find(_.name == "resolve").map(_.enabled) shouldBe Some(true)
       title.value shouldBe Some("Domain-Driven Design")
       title.status.map(_.state) shouldBe Some(InformationFieldState.imported)
@@ -146,7 +163,7 @@ final class InformationEditorProjectionSpec
       title.events.headOption.flatMap(_.transformation) shouldBe Some("label-normalized")
       language.status.map(_.state) shouldBe Some(InformationFieldState.inferred)
       language.events.headOption.flatMap(_.transformation) shouldBe Some("isbn-language-inference")
-      dbpedia.resolutionCandidates.map(_.label) shouldBe Vector("Domain-driven design")
+      dbpedia.resolutionCandidates.map(_.candidateLabel) shouldBe Vector("Domain-driven design")
     }
 
     "E1 project the canonical output and conditional-update boundaries" must _ic06e1 {
@@ -297,8 +314,11 @@ final class InformationEditorProjectionSpec
       val binding = InformationIdentityBinding(
         rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Knowledge_graph")),
         externalIdentifiers = Vector(ExternalKnowledgeIdentifier("doi", "10.1000/paper", Some("paper"))),
+        entityBindings = Vector.empty,
+        knowledgeNodeId = None,
         authority = Some("local"),
-        confidence = Some(0.80)
+        confidence = Some(0.80),
+        status = InformationBindingStatus.candidate
       )
       _success(component.informationSpace.addResolutionCandidate(recordid, "doi", "Knowledge Editing with InformationSpace", binding, Some(0.80), Some("local identifier")))
       _success(component.informationSpace.validateInformation(recordid))
@@ -310,9 +330,9 @@ final class InformationEditorProjectionSpec
 
       Then("the record and DOI field expose the candidate and lifecycle")
       projection.domain shouldBe "paper"
-      record.state shouldBe InformationLifecycleState.needsResolution
+      record.state shouldBe InformationLifecycleState.needs_resolution
       record.title shouldBe Some("Knowledge Editing with InformationSpace")
-      doi.resolutionCandidates.map(_.label) shouldBe Vector("Knowledge Editing with InformationSpace")
+      doi.resolutionCandidates.map(_.candidateLabel) shouldBe Vector("Knowledge Editing with InformationSpace")
     }
 
     "provide web resource field descriptors and knowledge mapping metadata" in {
@@ -355,8 +375,11 @@ final class InformationEditorProjectionSpec
       val binding = InformationIdentityBinding(
         rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
         externalIdentifiers = Vector(ExternalKnowledgeIdentifier("url", "https://example.org/knowledge", Some("web-resource"))),
+        entityBindings = Vector.empty,
+        knowledgeNodeId = None,
         authority = Some("local"),
-        confidence = Some(0.80)
+        confidence = Some(0.80),
+        status = InformationBindingStatus.candidate
       )
       _success(component.informationSpace.addResolutionCandidate(recordid, "url", "KnowledgeSpace Web Resource", binding, Some(0.80), Some("local URL")))
       _success(component.informationSpace.validateInformation(recordid))
@@ -368,9 +391,9 @@ final class InformationEditorProjectionSpec
 
       Then("the record and URL field expose the candidate and lifecycle")
       projection.domain shouldBe "web-resource"
-      record.state shouldBe InformationLifecycleState.needsResolution
+      record.state shouldBe InformationLifecycleState.needs_resolution
       record.title shouldBe Some("KnowledgeSpace Web Resource")
-      url.resolutionCandidates.map(_.label) shouldBe Vector("KnowledgeSpace Web Resource")
+      url.resolutionCandidates.map(_.candidateLabel) shouldBe Vector("KnowledgeSpace Web Resource")
     }
 
     "project Information tags from the dedicated information tag space" in {
@@ -426,7 +449,7 @@ final class InformationEditorProjectionSpec
         .information
         .map(record => record.informationId -> record)
         .toMap
-      def _enabled_(informationid: InformationId, action: String): Option[Boolean] =
+      def _enabled_(informationid: EntityId, action: String): Option[Boolean] =
         records.get(informationid).flatMap(_.actions.find(_.name == action)).map(_.enabled)
 
       Then("save and validate remain available only for accepted imported or update paths")
@@ -434,7 +457,7 @@ final class InformationEditorProjectionSpec
       _enabled_(imported.id, "validate") shouldBe Some(true)
       _enabled_(invalid.id, "save") shouldBe Some(true)
       _enabled_(invalid.id, "validate") shouldBe Some(false)
-      _enabled_(ready.id, "save") shouldBe Some(false)
+      _enabled_(ready.id, "save") shouldBe Some(true)
       _enabled_(ready.id, "validate") shouldBe Some(false)
       _enabled_(confirmed.id, "save") shouldBe Some(false)
       _enabled_(confirmed.id, "validate") shouldBe Some(false)

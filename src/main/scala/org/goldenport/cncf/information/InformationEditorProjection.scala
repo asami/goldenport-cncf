@@ -7,7 +7,18 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.tag.{Tag, TaggingWorkflow}
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.EntityRevision
+import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
+import org.goldenport.cncf.information.entity.Information
+import org.goldenport.cncf.information.value.{
+  InformationConflict,
+  InformationFieldEvent,
+  InformationFieldState,
+  InformationLifecycleState,
+  InformationPublicationStatus,
+  InformationResolutionCandidate,
+  InformationSpaceSnapshot,
+  InformationValidationIssue
+}
 
 /*
  * @since   May. 21, 2026
@@ -69,7 +80,7 @@ final case class InformationEditorFieldProjection(
 )
 
 final case class InformationEditorRecordProjection(
-  informationId: InformationId,
+  informationId: EntityId,
   revision: EntityRevision,
   domain: String,
   state: InformationLifecycleState,
@@ -1147,7 +1158,7 @@ object InformationSpaceEditorProjection {
   ): Vector[InformationEditorRecordProjection] =
     snapshot.information
       .filter(_.domain == profile.domain)
-      .sortBy(_.updatedAt.toEpochMilli)
+      .sortBy(_.lifecycleAttributes.updatedAt.toEpochMilli)
       .reverse
       .map { information =>
         InformationEditorRecordProjection(
@@ -1156,7 +1167,7 @@ object InformationSpaceEditorProjection {
           domain = information.domain,
           state = information.state,
           title = _title(information.workingData),
-          updatedAt = information.updatedAt,
+          updatedAt = information.lifecycleAttributes.updatedAt,
           tags = tags.getOrElse(information.id.print, Vector.empty),
           fields = profile.fields.map(field => _information_field_projection(field, information)),
           publication = information.publicationStatuses.headOption,
@@ -1188,7 +1199,7 @@ object InformationSpaceEditorProjection {
     Vector(
       _action("save", "Save", _save_available(information), None),
       _action("validate", "Validate", _validate_available(information), None),
-      _action("resolve", "Resolve", information.resolutionCandidates.nonEmpty && _permits_transition(information, "selectResolution", InformationLifecycleState.readyForConfirmation), Some("available when unresolved candidates exist")),
+      _action("resolve", "Resolve", information.resolutionCandidates.nonEmpty && _permits_transition(information, "selectResolution", InformationLifecycleState.ready_for_confirmation), Some("available when unresolved candidates exist")),
       _action("confirm", "Confirm", _confirm_available(information), Some("requires valid and resolved information")),
       _action("reject", "Reject", _permits_transition(information, "reject", InformationLifecycleState.rejected), None),
       _action("reopen", "Reopen", _permits_transition(information, "reopen", InformationLifecycleState.imported), None),
@@ -1205,9 +1216,9 @@ object InformationSpaceEditorProjection {
       if (InformationSpace.validate(information).nonEmpty)
         "validateInvalid" -> InformationLifecycleState.invalid
       else if (information.resolutionCandidates.exists(!_.selected))
-        "validateNeedsResolution" -> InformationLifecycleState.needsResolution
+        "validateNeedsResolution" -> InformationLifecycleState.needs_resolution
       else
-        "validateReady" -> InformationLifecycleState.readyForConfirmation
+        "validateReady" -> InformationLifecycleState.ready_for_confirmation
     _permits_transition(information, event, state)
   }
 

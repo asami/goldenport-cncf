@@ -2,6 +2,8 @@ package org.goldenport.cncf.information
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.knowledge.KnowledgeWorkingSetSnapshot
+import org.goldenport.cncf.information.entity.Information
+import org.goldenport.cncf.information.value.{InformationPublicationStatus, InformationResolutionCandidate}
 
 /*
  * @since   May. 20, 2026

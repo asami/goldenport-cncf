@@ -3,6 +3,7 @@ package org.goldenport.cncf.information
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.information.value.{InformationFieldEvent, InformationFieldState}
 import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -34,7 +35,15 @@ final class InformationSpaceDeterminismSpec
           fieldPath = "title",
           state = InformationFieldState.stable,
           source = "executable-spec",
-          occurredAt = summon[ExecutionContext].clock.instant()
+          operation = None,
+          provider = None,
+          transformation = None,
+          valueBefore = None,
+          valueAfter = None,
+          evidence = None,
+          note = None,
+          occurredAt = summon[ExecutionContext].clock.instant(),
+          actor = None
         )
         val withfield = _success(space.appendFieldEvent(registered.id, fieldevent))
         val validated = _success(space.validateInformation(registered.id))
@@ -45,14 +54,14 @@ final class InformationSpaceDeterminismSpec
         )
         val materialized = InformationSpace.materializeInformation(published)
 
-        registered.updatedAt == instant &&
+        registered.lifecycleAttributes.updatedAt == instant &&
           fieldevent.occurredAt == instant &&
-          withfield.updatedAt == instant &&
-          validated.updatedAt == instant &&
+          withfield.lifecycleAttributes.updatedAt == instant &&
+          validated.lifecycleAttributes.updatedAt == instant &&
           confirmed.confirmedAt.contains(instant) &&
-          confirmed.updatedAt == instant &&
+          confirmed.lifecycleAttributes.updatedAt == instant &&
           publication.publishedAt.contains(instant) &&
-          published.updatedAt == instant &&
+          published.lifecycleAttributes.updatedAt == instant &&
           materialized.frames.nonEmpty &&
           materialized.frames.forall(_.materializedAt.contains(instant))
       }

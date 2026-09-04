@@ -6,9 +6,11 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceI
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter}
+import org.goldenport.cncf.information.entity.Information
 import org.goldenport.observation.Descriptor
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.EntityId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -175,7 +177,7 @@ final class InformationProjectionCompatibilitySpec
     val behaviorCore: Behavior.Core
   ) extends Behavior {
     def updateObserved(
-      informationId: InformationId,
+      informationId: EntityId,
       workingData: Record,
       observedRevision: org.simplemodeling.model.datatype.EntityRevision
     ): Consequence[Information] =

@@ -33,6 +33,8 @@ import org.goldenport.cncf.entity.runtime.{
 }
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
+import org.goldenport.cncf.information.entity.Information
+import org.goldenport.cncf.information.value.{InformationIdentityBinding, InformationResolutionCandidate}
 
 /*
  * Component-owned EntityStore repository for generated Information roots.
@@ -80,7 +82,7 @@ private[information] final class InformationEntityRepository(
     } yield value
 
   def load(
-    informationid: InformationId
+    informationid: EntityId
   )(using ctx: ExecutionContext): Consequence[Option[Information]] =
     for {
       collectionid <- _ensure_collection()
@@ -259,7 +261,7 @@ private[information] final class InformationEntityRepository(
   }
 
   private def _require_collection(
-    informationid: InformationId,
+    informationid: EntityId,
     collectionid: EntityCollectionId
   ): Consequence[Unit] =
     if (informationid.collection == collectionid)

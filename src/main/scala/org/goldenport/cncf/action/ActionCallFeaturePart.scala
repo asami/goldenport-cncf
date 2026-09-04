@@ -103,16 +103,14 @@ import org.goldenport.cncf.entity.aggregate.{
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.AggregateBehavior
-import org.goldenport.cncf.information.{
+import org.goldenport.cncf.information.InformationSpace
+import org.goldenport.cncf.information.entity.Information
+import org.goldenport.cncf.information.value.{
   InformationConflict,
   InformationFieldEvent,
-  InformationFieldState,
-  Information,
-  InformationId,
   InformationIdentityBinding,
   InformationPublicationStatus,
   InformationResolutionCandidate,
-  InformationSpace,
   InformationValidationIssue
 }
 import org.goldenport.cncf.knowledge.{KnowledgeFrameId, KnowledgeWorkingSetSnapshot}
@@ -2162,7 +2160,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_update(
-    informationid: InformationId,
+    informationid: EntityId,
     workingdata: Record
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:update", _information_attributes("update", informationid)) {
@@ -2171,7 +2169,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_update_observed(
-    informationId: InformationId,
+    informationId: EntityId,
     workingData: Record,
     observedRevision: EntityRevision
   ): ExecUowM[Information] =
@@ -2187,7 +2185,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_append_field_event(
-    informationid: InformationId,
+    informationid: EntityId,
     event: InformationFieldEvent
   ): ExecUowM[Information] =
     exec_from_calltree(
@@ -2199,7 +2197,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_append_field_events(
-    informationid: InformationId,
+    informationid: EntityId,
     events: Vector[InformationFieldEvent]
   ): ExecUowM[Unit] =
     events.foldLeft(exec_pure(())) { (z, event) =>
@@ -2209,7 +2207,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_validate(
-    informationid: InformationId
+    informationid: EntityId
   ): ExecUowM[Information] =
     exec_from_calltree(
       "uow:information:validate",
@@ -2219,7 +2217,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_confirm(
-    informationid: InformationId
+    informationid: EntityId
   ): ExecUowM[Information] =
     exec_from_calltree(
       "uow:information:confirm",
@@ -2229,7 +2227,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_reject(
-    informationid: InformationId,
+    informationid: EntityId,
     reason: String
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:reject", _information_attributes("reject", informationid)) {
@@ -2238,14 +2236,14 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_reopen(
-    informationid: InformationId
+    informationid: EntityId
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:reopen", _information_attributes("reopen", informationid)) {
       _information_space.flatMap(_.reopenInformation(informationid)(using execution_context))
     }
 
   protected final def information_publish(
-    informationid: InformationId,
+    informationid: EntityId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
@@ -2263,7 +2261,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_fail_publication(
-    informationid: InformationId,
+    informationid: EntityId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
@@ -2281,7 +2279,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_add_resolution_candidate(
-    informationid: InformationId,
+    informationid: EntityId,
     fieldpath: String,
     candidatelabel: String,
     binding: InformationIdentityBinding,
@@ -2303,7 +2301,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_select_resolution_candidate(
-    informationid: InformationId,
+    informationid: EntityId,
     candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
     exec_from_calltree(
@@ -2315,7 +2313,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_clear_resolution_candidate(
-    informationid: InformationId,
+    informationid: EntityId,
     candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
     exec_from_calltree(
@@ -2338,14 +2336,14 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_option(
-    informationid: InformationId
+    informationid: EntityId
   ): ExecUowM[Option[Information]] =
     exec_from_calltree("uow:information:option", _information_attributes("option", informationid)) {
       _information_space.flatMap(_.getInformationC(informationid)(using execution_context))
     }
 
   protected final def information_validation_issues(
-    informationid: InformationId
+    informationid: EntityId
   ): ExecUowM[Vector[InformationValidationIssue]] =
     exec_from_calltree(
       "uow:information:validation-issues",
@@ -2355,7 +2353,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_add_conflict(
-    informationid: InformationId,
+    informationid: EntityId,
     fieldpath: String,
     informationvalue: String,
     rdfvalue: String,
@@ -2375,7 +2373,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     }
 
   protected final def information_resolve_conflict(
-    informationid: InformationId,
+    informationid: EntityId,
     conflictkey: String,
     decision: String
   ): ExecUowM[InformationConflict] =
@@ -2406,13 +2404,13 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
 
   private def _information_attributes(
     operation: String,
-    informationid: InformationId
+    informationid: EntityId
   ): Map[String, String] =
     Map("operation" -> operation, "information_id" -> informationid.print)
 
   private def _information_candidate_attributes(
     operation: String,
-    informationid: InformationId,
+    informationid: EntityId,
     candidatekey: String
   ): Map[String, String] =
     Map(

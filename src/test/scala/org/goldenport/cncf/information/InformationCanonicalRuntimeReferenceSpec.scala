@@ -42,6 +42,10 @@ final class InformationCanonicalRuntimeReferenceSpec
           case Consequence.Failure(conclusion) => fail(conclusion.toString)
         }
         registered shouldBe a[org.goldenport.cncf.information.entity.Information]
+        registered.getClass shouldBe classOf[org.goldenport.cncf.information.entity.Information]
+        an[ClassNotFoundException] should be thrownBy {
+          Class.forName("org.goldenport.cncf.information.InformationModel$package$Information$")
+        }
       }
     }
   }

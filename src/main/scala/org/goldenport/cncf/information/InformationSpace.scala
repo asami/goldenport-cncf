@@ -3,7 +3,22 @@ package org.goldenport.cncf.information
 import java.time.Instant
 import domain.statemachine.informationLifecycle
 import org.goldenport.Consequence
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
+import org.goldenport.cncf.information.entity.Information
+import org.goldenport.cncf.information.value.{
+  InformationBindingStatus,
+  InformationConflict,
+  InformationConflictState,
+  InformationFieldEvent,
+  InformationIdentityBinding,
+  InformationLifecycleState,
+  InformationPublicationState,
+  InformationPublicationStatus,
+  InformationResolutionCandidate,
+  InformationSpaceCounts,
+  InformationSpaceSnapshot,
+  InformationValidationIssue
+}
 import org.goldenport.cncf.knowledge.{
   ExternalKnowledgeIdentifier,
   KnowledgeAttributes,
@@ -54,7 +69,7 @@ final class InformationSpace(
   def this(component: Component) =
     this(Some(component))
 
-  private var _snapshot: InformationSpaceSnapshot = InformationSpaceSnapshot()
+  private var _snapshot: InformationSpaceSnapshot = InformationSpaceSnapshot(Vector.empty)
   private val _repository = new InformationEntityRepository(owner)
 
   def snapshot: InformationSpaceSnapshot =
@@ -81,7 +96,7 @@ final class InformationSpace(
         _cache_information_values(information)
         failure
       case (Consequence.Success(_), Consequence.Failure(searchfailure)) =>
-        _snapshot = InformationSpaceSnapshot()
+        _snapshot = InformationSpaceSnapshot(Vector.empty)
         Consequence.Failure(searchfailure)
       case (Consequence.Failure(clearfailure), Consequence.Failure(searchfailure)) =>
         Consequence.Failure(clearfailure ++ searchfailure)
@@ -100,16 +115,20 @@ final class InformationSpace(
         records.zipWithIndex.foldLeft(Consequence.success(Vector.empty[Information])) {
           case (z, (record, index)) =>
             z.flatMap { values =>
-              val information = Information(
-                id = ctx.idGeneration.entityId(
+              val now = ctx.clock.instant()
+              val information = Information.Builder()
+                .withId(ctx.idGeneration.entityId(
                   collectionid,
                   s"information.register.${index + 1}"
-                ),
-                domain = domain,
-                rawData = record,
-                workingData = record,
-                updatedAt = ctx.clock.instant()
-              )
+                ))
+                .withRevision(EntityRevision.INITIAL)
+                .withLifecycleAttributes(InformationLifecycleSupport.lifecycleAttributes(now))
+                .withDomain(domain)
+                .withRawData(record)
+                .withWorkingData(record)
+                .withState(InformationLifecycleState.imported)
+                .buildC()
+                .TAKE
               _repository.create(information).map { persisted =>
                 _cache_information(persisted)
                 values :+ persisted
@@ -119,10 +138,10 @@ final class InformationSpace(
       }
     }
 
-  def getInformation(id: InformationId): Option[Information] =
+  def getInformation(id: EntityId): Option[Information] =
     _snapshot.information.find(_.id == id)
   def getInformationC(
-    informationId: InformationId
+    informationId: EntityId
   )(using ctx: ExecutionContext): Consequence[Option[Information]] =
     _repository.load(informationId).map { information =>
       information match {
@@ -135,7 +154,7 @@ final class InformationSpace(
       information
     }
   def updateInformation(
-    informationid: InformationId,
+    informationid: EntityId,
     workingdata: Record
   )(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
@@ -143,7 +162,7 @@ final class InformationSpace(
         workingData = workingdata,
         state = InformationLifecycleState.imported,
         validationIssues = Vector.empty,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       )
       _save_information_transition(
         information,
@@ -160,7 +179,7 @@ final class InformationSpace(
    * route selects the standard observed-revision policy.
   */
   def updateInformationObserved(
-    informationId: InformationId,
+    informationId: EntityId,
     workingData: Record,
     observedRevision: EntityRevision
   )(using ctx: ExecutionContext): Consequence[Information] =
@@ -169,7 +188,7 @@ final class InformationSpace(
         workingData = workingData,
         state = InformationLifecycleState.imported,
         validationIssues = Vector.empty,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       )
       _save_information_transition_observed(
         information,
@@ -180,54 +199,54 @@ final class InformationSpace(
     }
 
   def appendFieldEvent(
-    informationid: InformationId,
+    informationid: EntityId,
     event: InformationFieldEvent
   )(using ctx: ExecutionContext): Consequence[Information] =
     _update_information(informationid) { information =>
       information.copy(
         fieldEvents = information.fieldEvents :+ event,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       )
     }
 
   def appendFieldEvents(
-    informationid: InformationId,
+    informationid: EntityId,
     events: Vector[InformationFieldEvent]
   )(using ctx: ExecutionContext): Consequence[Information] =
     _update_information(informationid) { information =>
       information.copy(
         fieldEvents = information.fieldEvents ++ events,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       )
     }
 
-  def validateInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
+  def validateInformation(informationid: EntityId)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
       val issues = InformationSpace.validate(information)
       val (event, state) =
         if (issues.nonEmpty)
           "validateInvalid" -> InformationLifecycleState.invalid
         else if (information.resolutionCandidates.exists(!_.selected))
-          "validateNeedsResolution" -> InformationLifecycleState.needsResolution
+          "validateNeedsResolution" -> InformationLifecycleState.needs_resolution
         else
-          "validateReady" -> InformationLifecycleState.readyForConfirmation
+          "validateReady" -> InformationLifecycleState.ready_for_confirmation
       _save_information_transition(information, Some(event), information.copy(
         state = state,
         validationIssues = issues,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       ))
     }
 
-  def validationIssues(informationid: InformationId): Vector[InformationValidationIssue] =
+  def validationIssues(informationid: EntityId): Vector[InformationValidationIssue] =
     getInformation(informationid).map(_.validationIssues).getOrElse(Vector.empty)
 
   def validationIssuesC(
-    informationId: InformationId
+    informationId: EntityId
   )(using ctx: ExecutionContext): Consequence[Vector[InformationValidationIssue]] =
     getInformationC(informationId).map(_.map(_.validationIssues).getOrElse(Vector.empty))
 
   def addResolutionCandidate(
-    informationid: InformationId,
+    informationid: EntityId,
     fieldpath: String,
     label: String,
     binding: InformationIdentityBinding,
@@ -237,19 +256,19 @@ final class InformationSpace(
     _with_information(informationid) { information =>
       val key = _next_key("candidate", information.resolutionCandidates.size + 1)
       val nextbinding = binding.copy(status = InformationBindingStatus.candidate)
-      val candidate = InformationResolutionCandidate(key, fieldpath, label, nextbinding, confidence, evidence)
+      val candidate = InformationResolutionCandidate(key, fieldpath, label, nextbinding, confidence, evidence, selected = false)
       _save_information_transition(information, None, information.copy(
         resolutionCandidates = information.resolutionCandidates :+ candidate,
         identityBindings = information.identityBindings :+ nextbinding,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       )).map(_ => candidate)
     }
 
-  def resolutionCandidates(informationid: InformationId): Vector[InformationResolutionCandidate] =
+  def resolutionCandidates(informationid: EntityId): Vector[InformationResolutionCandidate] =
     getInformation(informationid).map(_.resolutionCandidates).getOrElse(Vector.empty)
 
   def selectResolutionCandidate(
-    informationid: InformationId,
+    informationid: EntityId,
     candidatekey: String
   )(using ctx: ExecutionContext): Consequence[InformationResolutionCandidate] =
     _with_information(informationid) { information =>
@@ -269,7 +288,7 @@ final class InformationSpace(
               state = state,
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+              lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
             )
           ).map(_ => selected)
         case None =>
@@ -278,7 +297,7 @@ final class InformationSpace(
     }
 
   def clearResolutionCandidate(
-    informationid: InformationId,
+    informationid: EntityId,
     candidatekey: String
   )(using ctx: ExecutionContext): Consequence[InformationResolutionCandidate] =
     _with_information(informationid) { information =>
@@ -292,7 +311,7 @@ final class InformationSpace(
             _save_information_transition(information, None, information.copy(
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+              lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
             )).map(_ => candidate)
           case None =>
             Consequence.argumentInvalid(s"information resolution candidate not found: $candidatekey")
@@ -301,7 +320,7 @@ final class InformationSpace(
     }
 
   def updateResolutionCandidateStatus(
-    informationid: InformationId,
+    informationid: EntityId,
     candidatekey: String,
     status: InformationBindingStatus,
     selected: Option[Boolean] = None
@@ -319,28 +338,28 @@ final class InformationSpace(
           _save_information_transition(information, None, information.copy(
             resolutionCandidates = candidates,
             identityBindings = bindings,
-            lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+            lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
           )).map(_ => nextcandidate)
         case None =>
           Consequence.argumentInvalid(s"information resolution candidate not found: $candidatekey")
       }
     }
 
-  def confirmInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
+  def confirmInformation(informationid: EntityId)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
-      if (information.state != InformationLifecycleState.readyForConfirmation && information.state != InformationLifecycleState.confirmed) {
+      if (information.state != InformationLifecycleState.ready_for_confirmation && information.state != InformationLifecycleState.confirmed) {
         Consequence.argumentInvalid(s"information is not ready for confirmation: ${informationid.print}")
       } else {
         val now = ctx.clock.instant()
         val bindings = information.identityBindings.map(_.copy(status = InformationBindingStatus.confirmed))
         _save_information_transition(
           information,
-          if (information.state == InformationLifecycleState.readyForConfirmation) Some("confirm") else None,
+          if (information.state == InformationLifecycleState.ready_for_confirmation) Some("confirm") else None,
           information.copy(
             state = InformationLifecycleState.confirmed,
             identityBindings = bindings,
             confirmedAt = information.confirmedAt.orElse(Some(now)),
-            lifecycleAttributes = Information.updatedLifecycleAttributes(information, now)
+            lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, now)
           )
         )
       }
@@ -363,26 +382,26 @@ final class InformationSpace(
     }
 
   def rejectInformation(
-    informationid: InformationId,
+    informationid: EntityId,
     reason: String
   )(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
       _save_information_transition(information, Some("reject"), information.copy(
           state = InformationLifecycleState.rejected,
-          lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+          lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       ))
     }
 
-  def reopenInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
+  def reopenInformation(informationid: EntityId)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
       _save_information_transition(information, Some("reopen"), information.copy(
           state = InformationLifecycleState.imported,
-          lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+          lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       ))
     }
 
   def publishInformation(
-    informationid: InformationId,
+    informationid: EntityId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
@@ -405,7 +424,7 @@ final class InformationSpace(
           information.copy(
             state = InformationLifecycleState.published,
             publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
-            lifecycleAttributes = Information.updatedLifecycleAttributes(information, now)
+            lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, now)
           )
         ).map(_ => publication)
       } else {
@@ -414,7 +433,7 @@ final class InformationSpace(
     }
 
   def failInformationPublication(
-    informationid: InformationId,
+    informationid: EntityId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
@@ -433,7 +452,7 @@ final class InformationSpace(
         )
         _save_information(information.copy(
           publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
-          lifecycleAttributes = Information.updatedLifecycleAttributes(information, now)
+          lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, now)
         )).map(_ => publication)
       } else {
         Consequence.argumentInvalid(s"information is not confirmed: ${informationid.print}")
@@ -441,13 +460,13 @@ final class InformationSpace(
     }
 
   def publicationStatusOption(
-    informationid: InformationId,
+    informationid: EntityId,
     publicationkey: String
   ): Option[InformationPublicationStatus] =
     getInformation(informationid).flatMap(_.publicationStatuses.find(_.publicationKey == publicationkey))
 
   def recordConflict(
-    informationid: InformationId,
+    informationid: EntityId,
     fieldpath: String,
     informationvalue: String,
     rdfvalue: String,
@@ -459,12 +478,14 @@ final class InformationSpace(
         fieldPath = fieldpath,
         informationValue = informationvalue,
         rdfValue = rdfvalue,
-        severity = severity
+        severity = severity,
+        state = InformationConflictState.open,
+        resolution = None
       )
       _save_information_transition(information, Some("detectConflict"), information.copy(
         state = InformationLifecycleState.conflict,
         conflicts = information.conflicts :+ conflict,
-        lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+        lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
       )).map(_ => conflict)
     }
 
@@ -477,7 +498,7 @@ final class InformationSpace(
   }
 
   def resolveConflict(
-    informationid: InformationId,
+    informationid: EntityId,
     conflictkey: String,
     decision: String
   )(using ctx: ExecutionContext): Consequence[InformationConflict] =
@@ -500,7 +521,7 @@ final class InformationSpace(
             information.copy(
               state = state,
               conflicts = conflicts,
-              lifecycleAttributes = Information.updatedLifecycleAttributes(information, ctx.clock.instant())
+              lifecycleAttributes = InformationLifecycleSupport.updatedLifecycleAttributes(information, ctx.clock.instant())
             )
           ).map(_ => resolved)
         case None =>
@@ -508,7 +529,7 @@ final class InformationSpace(
       }
     }
 
-  def materializeInformation(informationid: InformationId)(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
+  def materializeInformation(informationid: EntityId)(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
     _with_information(informationid) { information =>
       if (information.state == InformationLifecycleState.confirmed || information.state == InformationLifecycleState.published) {
         _repository.search().map { related =>
@@ -521,14 +542,14 @@ final class InformationSpace(
     }
 
   private def _update_information(
-    informationid: InformationId
+    informationid: EntityId
   )(f: Information => Information)(using ctx: ExecutionContext): Consequence[Information] =
     _with_information(informationid) { information =>
       _save_information_transition(information, None, f(information))
     }
 
   private def _with_information[A](
-    informationid: InformationId
+    informationid: EntityId
   )(
     f: Information => Consequence[A]
   )(using ctx: ExecutionContext): Consequence[A] =
@@ -626,11 +647,11 @@ final class InformationSpace(
     candidates: Vector[InformationResolutionCandidate]
   ): InformationLifecycleState =
     if (
-      information.state == InformationLifecycleState.needsResolution &&
+      information.state == InformationLifecycleState.needs_resolution &&
       candidates.nonEmpty &&
       candidates.forall(_.selected)
     )
-      InformationLifecycleState.readyForConfirmation
+      InformationLifecycleState.ready_for_confirmation
     else
       information.state
 
@@ -732,7 +753,7 @@ object InformationTagging {
     TaggingWorkflow(tagSpace = tagspace)
 
   def knowledgeTagBindings(
-    informationid: InformationId,
+    informationid: EntityId,
     tagspace: String = TagSpace
   )(using ExecutionContext): Consequence[Vector[KnowledgeTagBinding]] =
     workflow(tagspace).listEntityTags(informationid.print, Some(Role)).map { summary =>
@@ -788,7 +809,7 @@ final case class InformationRdfNodeNaming(
     namespaces.map(_.normalized).find(_.prefix == key).map(_.namespaceUri)
   }
 
-  def shortInformationId(informationid: InformationId): String =
+  def shortInformationId(informationid: EntityId): String =
     informationid.entropy.getOrElse {
       val normalized = informationid.print.trim
       if (normalized.length <= 20)
@@ -1029,7 +1050,7 @@ object InformationToKnowledgeProjection {
       KnowledgeEvidenceId(s"ev-${information.id.print}"),
       "information",
       KnowledgeSourceRef("information", information.id.print),
-      information.data.getString("title"),
+      information.workingData.getString("title"),
       Some(provenance.id)
     )
     val booklayers = _book_knowledge_layers(information, KnowledgeNodeId(s"information-${information.id.print}"), relatedInformation)
@@ -1040,7 +1061,7 @@ object InformationToKnowledgeProjection {
         rdfNode = Some(naming.rdfNodeName(information)),
         externalIdentifiers = Vector(ExternalKnowledgeIdentifier("cncf.information", information.id.print, Some(information.domain)))
       ),
-      presentation = KnowledgeNodePresentation.label(information.data.getString("title").getOrElse(information.id.print)),
+      presentation = KnowledgeNodePresentation.label(information.workingData.getString("title").getOrElse(information.id.print)),
       sources = KnowledgeNodeSources(
         evidenceIds = Vector(evidence.id),
         provenanceIds = Vector(provenance.id)
@@ -1058,7 +1079,7 @@ object InformationToKnowledgeProjection {
       kind = KnowledgeFactKind.EntityDerived,
       subjectNodeId = Some(node.id),
       predicate = Some("information.title"),
-      value = information.data.getString("title"),
+      value = information.workingData.getString("title"),
       evidenceIds = Vector(evidence.id),
       provenanceId = Some(provenance.id)
     )
@@ -1257,9 +1278,9 @@ object InformationToKnowledgeProjection {
     relatedInformation: Vector[Information] = Vector.empty
   ): BookCulturalResourceLayers = {
     val textualworktitle = _book_textual_work_title(information)
-    val textualworkid = information.data.getString("textualWorkInformationId").map(_.trim).filter(_.nonEmpty)
-    val textualeditionid = information.data.getString("textualEditionInformationId").map(_.trim).filter(_.nonEmpty)
-    val textualvolumeid = information.data.getString("textualVolumeInformationId").map(_.trim).filter(_.nonEmpty)
+    val textualworkid = information.workingData.getString("textualWorkInformationId").map(_.trim).filter(_.nonEmpty)
+    val textualeditionid = information.workingData.getString("textualEditionInformationId").map(_.trim).filter(_.nonEmpty)
+    val textualvolumeid = information.workingData.getString("textualVolumeInformationId").map(_.trim).filter(_.nonEmpty)
     val editiontitle = _book_edition_title(information, textualworktitle)
     val volume = _book_volume(information)
     val relatedbyid = relatedInformation.map(x => x.id.print -> x).toMap
@@ -1281,21 +1302,21 @@ object InformationToKnowledgeProjection {
   }
 
   private def _book_textual_work_title(information: Information): Option[String] =
-    information.data.getString("workTitle").map(_.trim).filter(_.nonEmpty).
-      orElse(information.data.getString("title").map(_.trim).filter(_.nonEmpty))
+    information.workingData.getString("workTitle").map(_.trim).filter(_.nonEmpty).
+      orElse(information.workingData.getString("title").map(_.trim).filter(_.nonEmpty))
 
   private def _book_edition_title(
     information: Information,
     textualworktitle: Option[String]
   ): Option[String] =
-    information.data.getString("editionTitle").map(_.trim).filter(_.nonEmpty).
-      orElse(information.data.getString("series").map(_.trim).filter(_.nonEmpty)).
-      orElse(information.data.getString("edition").map(_.trim).filter(_.nonEmpty)).
-      orElse(information.data.getString("title").map(_.trim).filter(_.nonEmpty).filterNot(title => textualworktitle.contains(title)))
+    information.workingData.getString("editionTitle").map(_.trim).filter(_.nonEmpty).
+      orElse(information.workingData.getString("series").map(_.trim).filter(_.nonEmpty)).
+      orElse(information.workingData.getString("edition").map(_.trim).filter(_.nonEmpty)).
+      orElse(information.workingData.getString("title").map(_.trim).filter(_.nonEmpty).filterNot(title => textualworktitle.contains(title)))
 
   private def _book_volume(information: Information): Option[String] =
-    information.data.getString("volume").map(_.trim).filter(_.nonEmpty).
-      orElse(information.data.getString("volumeNumber").map(_.trim).filter(_.nonEmpty))
+    information.workingData.getString("volume").map(_.trim).filter(_.nonEmpty).
+      orElse(information.workingData.getString("volumeNumber").map(_.trim).filter(_.nonEmpty))
 
   private def _book_layer_nodes_and_relationships(
     information: Information,
@@ -1307,7 +1328,7 @@ object InformationToKnowledgeProjection {
     val textualworktitle = _book_textual_work_title(information)
     val editiontitle = _book_edition_title(information, textualworktitle)
     val volume = _book_volume(information)
-    val volumetitle = information.data.getString("volumeTitle").map(_.trim).filter(_.nonEmpty).
+    val volumetitle = information.workingData.getString("volumeTitle").map(_.trim).filter(_.nonEmpty).
       orElse(volume.map(v => Vector(textualworktitle.getOrElse("Volume"), v).mkString(" ")))
     val textualwork = for {
       nodeid <- layers.textualWorkNodeId
@@ -1393,10 +1414,10 @@ object InformationToKnowledgeProjection {
     )
 
   private def _information_label(information: Information): Option[String] =
-    information.data.getString("title").map(_.trim).filter(_.nonEmpty).
-      orElse(information.data.getString("displayTitle").map(_.trim).filter(_.nonEmpty)).
-      orElse(information.data.getString("label").map(_.trim).filter(_.nonEmpty)).
-      orElse(information.data.getString("name").map(_.trim).filter(_.nonEmpty))
+    information.workingData.getString("title").map(_.trim).filter(_.nonEmpty).
+      orElse(information.workingData.getString("displayTitle").map(_.trim).filter(_.nonEmpty)).
+      orElse(information.workingData.getString("label").map(_.trim).filter(_.nonEmpty)).
+      orElse(information.workingData.getString("name").map(_.trim).filter(_.nonEmpty))
 
   private def _cultural_resource_attributes(
     kind: String,
@@ -1464,7 +1485,7 @@ object InformationToKnowledgeProjection {
               rdfNode = candidate.binding.rdfSubject,
               externalIdentifiers = candidate.binding.externalIdentifiers
             ),
-            presentation = KnowledgeNodePresentation.label(candidate.label),
+            presentation = KnowledgeNodePresentation.label(candidate.candidateLabel),
             sources = KnowledgeNodeSources(
               evidenceIds = Vector(evidenceid),
               provenanceIds = Vector(provenanceid)
@@ -1509,7 +1530,7 @@ object InformationToKnowledgeProjection {
       ("publisherInformationIds", "organization", "published-by")
     ).flatMap { case (fieldpath, domain, relationship) =>
       val sourcenodeid = _book_association_source_node(layers, fieldpath)
-      _line_values(information.data.getString(fieldpath).getOrElse("")).zipWithIndex.map { case (targetinformationid, index) =>
+      _line_values(information.workingData.getString(fieldpath).getOrElse("")).zipWithIndex.map { case (targetinformationid, index) =>
         val suffix = _safe_key(targetinformationid, index)
         val targetnodeid = KnowledgeNodeId(s"information-${information.id.print}-${domain}-information-$suffix")
         val node = KnowledgeNode(
@@ -1616,7 +1637,7 @@ object InformationToKnowledgeProjection {
     }
 
   private def _book_classification_entries(information: Information): Vector[BookClassificationEntry] =
-    information.data.getString("classificationEntries").toVector.flatMap { value =>
+    information.workingData.getString("classificationEntries").toVector.flatMap { value =>
       value.linesIterator.toVector.flatMap(_book_classification_entry)
     }
 

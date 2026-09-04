@@ -6,6 +6,7 @@ import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityRevision
 import org.simplemodeling.model.value.given_ValueReader_Instant
 import org.simplemodeling.model.value.LifecycleAttributes
+import org.goldenport.cncf.information.value.{InformationBindingStatus, InformationIdentityBinding}
 
 /*
  * Explicit persisted-record admission for Information roots predating the
@@ -144,7 +145,7 @@ private[information] object InformationPersistenceMigration {
     Record(record.fields.filterNot(_.key == "updatedAt")) ++
       Record.dataAuto(
         "revision" -> EntityRevision.INITIAL,
-        "lifecycleAttributes" -> Information.lifecycleAttributes(updatedat)
+        "lifecycleAttributes" -> InformationLifecycleSupport.lifecycleAttributes(updatedat)
       )
 
   private def _canonicalize_legacy_bindings(record: Record): Consequence[Record] =
