@@ -12,6 +12,7 @@ Current Web/widget specs:
 
 Current runtime/I18N specs:
 
+- `information-canonical-model.md`
 - `component-subcomponent-architecture.md`
 - `component-resource-subcomponent.md`
 - `component-documentation-knowledge-package.md`

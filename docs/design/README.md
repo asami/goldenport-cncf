@@ -42,6 +42,10 @@ Current component persistence design:
 - `component-local-datastore-layout.md` (non-normative rationale; see
   `docs/spec/component-local-datastore-layout.md` for the contract)
 
+Current Information canonical model design:
+
+- `information-canonical-model.md`
+
 Current operation contract design:
 
 - `predefined-result-catalog.md`
