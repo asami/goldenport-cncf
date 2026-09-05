@@ -1,4 +1,4 @@
-# Phase 64 - CML Workflow Runtime Integration
+# Phase 64 - CML Composite StateMachine / Workflow Runtime Integration
 
 status=planned
 planned_at=2026-08-12
@@ -9,11 +9,31 @@ checklist=[Phase 64 Checklist](phase-64-checklist.md)
 
 ## Purpose
 
-Complete the executable path from a CML Workflow declaration to CNCF Workflow
-runtime execution, preserving direct continuity with Phase 63's CML
-StateMachine runtime path.
+Extend the Phase 63 CML StateMachine path into Composite StateMachine and
+Workflow execution while preserving one continuous CML -> generated model ->
+CNCF runtime architecture.
 
-The canonical end-to-end shape is:
+The selected modeling direction is:
+
+```text
+StateMachine
+  |
+  +-- simple / local StateMachine
+  |
+  +-- Composite StateMachine
+        |
+        +-- Workflow
+             + workflow-specific mandatory semantics only
+```
+
+Workflow is therefore not designed as an unrelated orchestration language.
+Its first design obligation is to reuse Composite StateMachine structure as far
+as possible. A semantic or runtime concept is Workflow-specific only when it
+cannot be represented cleanly as a general Composite StateMachine capability.
+
+## Continuity with Phase 63
+
+The canonical paths are:
 
 ```text
 CML StateMachine
@@ -24,196 +44,141 @@ CML StateMachine
   -> CNCF StateMachine Runtime
   -> CommittedTransition
 
-CML Workflow
+CML Composite StateMachine / Workflow
   -> parse / normalize
   -> SimpleModeler generation
   -> typed generated definition
   -> ComponentFactory bootstrap
-  -> CNCF Workflow Runtime
-  -> WorkflowInstance
-  -> Operation / Job
-  -> StateMachine
+  -> CNCF composite/workflow runtime
+  -> durable composite progression
+  -> Operation / Job where declared
+  -> constituent StateMachine transition
   -> CommittedTransition
 ```
 
-CML owns the Workflow model and its declared semantics. CNCF does not introduce
-an independent Workflow language or infer workflow structure from runtime
-names. CNCF owns execution semantics: WorkflowInstance lifecycle, trigger
-admission, durable progression, invocation, Job linkage, persistence,
-recovery, authorization integration, and observability.
-
-The reference model is a `SalesOrder` entity whose `SalesStatus` StateMachine
-governs local domain validity and whose CML-declared `SalesOrderWorkflow`
-orchestrates the next Operation or Job after a committed transition.
-
-## Dependency
-
-Phase 64 begins after Phase 63 closes.
-
-It consumes Phase 63's canonical CML-to-runtime path and `CommittedTransition`
-envelope. It also reconciles and supersedes the parts of Phase 14's lightweight
-event-triggered, entity-status-based Workflow baseline that conflict with the
-CML-authoritative model.
+CML owns model semantics. CNCF owns execution semantics. CNCF must not invent a
+second Workflow DSL or reconstruct model meaning through names/status fields.
 
 ## Selected Direction
 
-- CML is the canonical declaration surface for built-in Workflow semantics,
-  just as it is for StateMachine semantics.
-- StateMachine and Workflow use the same architectural pipeline: CML ->
-  normalization -> generated typed definition -> ComponentFactory bootstrap ->
-  CNCF runtime.
-- A hand-written WorkflowDefinition or manually injected provider may be useful
-  for focused unit tests, but it is not sufficient end-to-end acceptance
-  evidence.
-- CNCF must not define a second Workflow DSL or reconstruct CML Workflow
-  semantics through name/status matching.
-- StateMachine owns local Entity/Aggregate transition semantics and never
-  becomes a Workflow engine.
-- Workflow owns cross-Operation/process progression and never writes domain
-  entity status directly.
+- Composite StateMachine is the primary abstraction added above Phase 63.
+- Workflow is initially treated as a specialization/profile of Composite
+  StateMachine, not as a separate modeling universe.
+- Workflow should reuse State, Transition, Trigger/Event, Guard/Predicate,
+  Action/Effect, hierarchy/history, identity, and other admitted StateMachine
+  semantics whenever they apply.
+- Phase 64 must inventory every proposed Workflow concept and classify it as:
+  1. existing StateMachine semantics;
+  2. general Composite StateMachine semantics;
+  3. truly mandatory Workflow-specific semantics; or
+  4. runtime policy/infrastructure rather than model semantics.
+- Workflow-specific semantics are added only after this classification proves
+  they cannot live cleanly in Composite StateMachine.
+- A Composite StateMachine may coordinate multiple constituent StateMachines
+  while presenting one higher-level machine boundary.
+- Constituent machines retain their own local domain authority; composition
+  does not authorize direct mutation that bypasses their transition contract.
+- StateMachine and Workflow use the same CML-first generation/bootstrap
+  architecture.
+- A hand-written WorkflowDefinition or manually injected provider may support
+  focused tests but is not valid end-to-end acceptance evidence.
 - JobEngine remains the execution substrate for asynchronous work.
-- A Workflow advances only from a committed transition or another explicitly
-  CML-admitted trigger; an attempted or rolled-back transition cannot advance
-  it.
-- CML carries explicit typed references among Entity, StateMachine,
-  transition/trigger, Workflow, step, and Operation identities.
-- `SalesStatus` and `WorkflowInstance.status` are separate state spaces with
-  separate persistence, history, and recovery contracts.
-- Workflow invokes the next Operation through the generic CNCF invocation and
-  authorization boundary; that Operation may request the next Entity
-  transition through Phase 63.
-- Trigger handling is idempotent and duplicate-delivery-safe through stable
-  transition, Workflow definition, WorkflowInstance, and step-occurrence
-  identities. This does not imply Temporal-style deterministic code replay.
-- CNCF implements the executable subset declared by the accepted CML Workflow
-  contract. CNCF must not independently grow workflow-language features ahead
-  of CML semantics.
-- Specialist workflow engines remain an explicit integration boundary for
-  orchestration semantics outside the accepted CML/CNCF built-in contract.
+- Operation invocation, authorization, idempotency, persistence, recovery, and
+  observability remain CNCF runtime responsibilities.
+- Runtime capabilities must follow accepted CML Composite StateMachine/Workflow
+  semantics rather than independently defining a richer workflow language.
+
+## Primary Design Question
+
+Phase 64 does not assume in advance which semantics are uniquely required by
+Workflow.
+
+Candidate concerns such as process-instance identity, correlation across
+multiple subjects, durable waiting/progression, pending work, completion, and
+history must first be tested against the more general Composite StateMachine
+model.
+
+The governing rule is:
+
+> Maximize reuse of Composite StateMachine semantics; introduce
+> Workflow-specific semantics only when they are required for Workflow to exist
+> and cannot be expressed cleanly as general Composite StateMachine behavior.
 
 ## Work Stack
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| SWF-01 | CML/runtime inventory and responsibility freeze | Existing CML Workflow semantics, Phase 14 runtime behavior, Phase 63 pipeline, and ownership boundaries are frozen by failing-first evidence. | planned |
-| SWF-02 | Canonical CML Workflow runtime model | CML Workflow identity, triggers, steps, conditions, Operation references, terminal outcomes, and StateMachine bindings normalize into one canonical typed model. | planned |
-| SWF-03 | Committed-transition and trigger contract | Phase 63 `CommittedTransition` and other explicitly admitted CML triggers map to Workflow entries with stable correlation/idempotency semantics. | planned |
-| SWF-04 | Generation, ABI, and bootstrap propagation | SimpleModeler emits stable typed Workflow definitions/metadata and ComponentFactory automatically registers them without required hand-written runtime definitions. | planned |
-| SWF-05 | CNCF Workflow execution | Workflow runtime consumes generated definitions, advances WorkflowInstance, and delegates Operations/Jobs without direct domain mutation. | planned |
-| SWF-06 | WorkflowInstance persistence and recovery | Instance state, history, step occurrence, Job links, duplicate delivery, retry, recovery, and concurrency are authoritative and durable. | planned |
-| SWF-07 | Observability and compatibility | CML source identity, generated/runtime identity, domain/workflow state, security, diagnostics, and explicit Phase 14 compatibility are visible without semantic inference. | planned |
-| SWF-08 | CML-first cross-repository acceptance and promotion | A generated SalesOrder/SalesStatus/SalesOrderWorkflow scenario proves the complete CML -> Cozy/SimpleModeler -> CNCF path and promotes verified contracts. | planned |
+| SWF-01 | StateMachine/Workflow semantic inventory | Existing CML StateMachine, proposed Workflow, Phase 14 Workflow, and runtime concepts are classified into StateMachine, Composite StateMachine, Workflow-specific, and runtime-only concerns. | planned |
+| SWF-02 | Composite StateMachine model | Constituent-machine composition, higher-level state/configuration, transition/trigger coordination, identity, hierarchy, and projection semantics are frozen without Workflow-specific assumptions. | planned |
+| SWF-03 | Minimal Workflow specialization | Only semantics proven mandatory beyond Composite StateMachine are added as Workflow specialization/profile. | planned |
+| SWF-04 | CML normalization and generated ABI | Cozy/SimpleModeler emits stable typed Composite StateMachine and Workflow definitions with explicit constituent-machine/model references. | planned |
+| SWF-05 | CNCF composite execution | CNCF executes admitted generated composite definitions while preserving constituent StateMachine authority and Phase 63 transition rules. | planned |
+| SWF-06 | Durable instance/progression | Runtime state, correlation, persistence, recovery, idempotency, Operation/Job linkage, and crash-window rules are made authoritative where required. | planned |
+| SWF-07 | Observability and compatibility | Composite configuration, constituent state, Workflow specialization, source identity, compatibility adapters, and failure evidence are visible and distinct. | planned |
+| SWF-08 | CML-first cross-repository acceptance | A real CML example proves composite machine structure, Workflow specialization, generation, bootstrap, CNCF execution, and return through Phase 63. | planned |
 
 ## Acceptance
 
-- One CML Workflow declaration yields one canonical generated Workflow
-  definition consumed by CNCF runtime.
-- The representative acceptance begins with CML source and crosses parser,
-  normalization, SimpleModeler generation, generated provider/metadata,
-  ComponentFactory automatic bootstrap, and the real CNCF Workflow runtime.
-- A hand-written WorkflowDefinition or manually injected registration cannot
-  substitute for that acceptance path.
-- A committed `SalesOrder`/`SalesStatus` transition can start or advance the
-  explicitly bound CML `SalesOrderWorkflow`.
-- A failed, rejected, non-matching, or rolled-back transition cannot advance a
-  WorkflowInstance.
-- Workflow selects the next CML-declared Operation and delegates through
-  CNCF/JobEngine; it never directly mutates `SalesOrder.status`.
-- The invoked Operation follows normal authorization, idempotency, UnitOfWork,
-  StateMachine, error, and observability boundaries.
-- Any domain transition caused by a Workflow-selected Operation returns through
-  Phase 63 and may produce the next `CommittedTransition`.
-- Domain state and WorkflowInstance state remain distinct in storage,
-  projection, history, diagnostics, and recovery.
-- Duplicate trigger delivery and recovery do not create duplicate progression
-  or duplicate logical Operation/Job submission.
-- Transition definition identity and transition occurrence identity remain
-  distinct and correlated with CML Workflow/step/Operation identities.
-- Unknown or unsupported CML Workflow semantics fail generation/admission; they
-  do not degrade to raw strings, name matching, or silently different runtime
-  behavior.
-- Legacy Phase 14 raw-event/status-field triggers are mapped through an explicit
-  compatibility adapter or rejected.
+- One CML Composite StateMachine/Workflow source yields one deterministic typed
+  generated runtime definition.
+- The end-to-end path starts from CML and crosses Cozy normalization,
+  SimpleModeler generation, ComponentFactory bootstrap, and CNCF runtime.
+- A Composite StateMachine can coordinate multiple constituent StateMachines
+  without erasing their individual identity or transition authority.
+- Higher-level composite progression and constituent machine state remain
+  traceably related but are not conflated.
+- Workflow uses Composite StateMachine semantics wherever possible.
+- Every Workflow-only field/type/behavior introduced by Phase 64 has explicit
+  evidence that it is mandatory and cannot reasonably be generalized to
+  Composite StateMachine.
+- State/transition/guard/action concepts are not duplicated merely because the
+  containing model is a Workflow.
+- Workflow/composite execution never directly bypasses Phase 63 local
+  StateMachine enforcement.
+- Operations and Jobs are invoked through normal CNCF boundaries.
+- Duplicate trigger delivery and recovery do not duplicate logical progression.
+- Unknown or unsupported CML semantics fail generation/admission rather than
+  degrading into raw strings or inferred runtime behavior.
 
 ## Non-Goals
 
-- Defining a CNCF-specific Workflow language independent of CML.
-- Reconstructing Workflow semantics from coincidental Entity, state, event,
-  Workflow, step, or Operation names.
-- Moving local domain invariants or transition ownership into Workflow.
-- Direct Workflow mutation of Entity or Aggregate state.
-- Merging domain StateMachine state and WorkflowInstance state.
-- Implementing orchestration constructs that are not part of the accepted CML
-  Workflow contract merely because the CNCF runtime could support them.
-- Replacing JobEngine, Event, generic Operation invocation, or external
-  specialist workflow engines.
+- Defining Workflow first and retrofitting StateMachine concepts afterward.
+- Creating a CNCF-specific Workflow language independent of CML.
+- Treating Activity, Guard, Event, Action, Timer, or another concept as
+  Workflow-specific solely because workflow systems commonly expose it.
+- Assuming UML orthogonal regions, BPMN, DAG, human-task, compensation, or rich
+  connector semantics are required for the initial Composite StateMachine.
+- Moving local domain invariants or transition ownership out of constituent
+  StateMachines.
 - Executable DbC, which follows in Phase 65.
-- Generic Event/JCL expansion, distributed runtime, or Saga Management retained
-  by their existing development candidates.
-
-## StateMachine Continuity Rule
-
-Phase 64 deliberately mirrors Phase 63.
-
-```text
-CML model declaration
-       |
-       v
-canonical normalized model
-       |
-       v
-generated typed definition / ABI
-       |
-       v
-ComponentFactory automatic bootstrap
-       |
-       v
-CNCF execution runtime
-       |
-       v
-observable durable outcome
-```
-
-For StateMachine the durable domain outcome is a committed Entity transition and
-`CommittedTransition`. For Workflow it is authoritative WorkflowInstance
-progression plus correlated Operation/Job linkage.
-
-Neither runtime owns the source modeling language. Neither end-to-end acceptance
-may bypass CML generation.
 
 ## Cozy Coordination
 
-Phase 64 is a cross-repository contract with Cozy/SimpleModeler.
+Cozy is expected to introduce/refine the CML Composite StateMachine model before
+CNCF freezes runtime-only abstractions.
 
-Cozy must provide or preserve:
+The producer-side work must determine:
 
-- CML Workflow parsing and semantic validation;
-- stable Workflow, trigger, step, condition, and referenced model-element ids;
-- explicit StateMachine/transition-to-Workflow binding;
-- explicit Operation references;
-- deterministic normalization;
-- generated typed Workflow definitions and metadata;
-- source-location diagnostics;
-- ABI/version information needed by CNCF admission; and
-- cross-repository acceptance fixtures starting from CML source.
+- how one StateMachine composes/references constituent StateMachines;
+- how composite identity and constituent role/identity are represented;
+- how higher-level states/transitions relate to constituent-machine
+  transitions;
+- which existing StateMachine grammar/model elements are reused unchanged;
+- which semantics belong to general Composite StateMachine;
+- which semantics, if any, are truly mandatory only for Workflow;
+- stable generated ids/source locations/ABI metadata; and
+- how CML Workflow is represented as a specialization/profile of the composite
+  model.
 
-CNCF consumes these generated contracts. It does not compensate for missing CML
-semantics by inventing runtime-only Workflow definitions.
-
-## Development Candidate Alignment
-
-Existing related development candidates remain independently owned. Phase 64
-consumes only the portions required to execute the accepted CML Workflow model.
-In particular, generic event expansion, rich compensation, distributed
-coordination, general Job UX, transport idempotency, and specialist workflow
-features are not implicitly absorbed.
+CNCF consumes the resulting typed contracts and must preserve that modeling
+structure through runtime execution and projection.
 
 ## Planning References
 
 - [Phase 64 Checklist](phase-64-checklist.md)
 - [Provisional Specification](../notes/statemachine-workflow-alignment-provisional-specification.md)
-- [Sequencing Record](../journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md)
 - [Phase 63](phase-63.md)
 - [Phase 14](phase-14.md)
 - [State Machine Boundary Contract](../design/statemachine-boundary-contract.md)
 - [Execution Platform Boundary](../design/execution-platform-boundary.md)
+- [Composite StateMachine / Workflow Decision](../journal/2026/09/2026-09-05-composite-statemachine-workflow-direction.md)
