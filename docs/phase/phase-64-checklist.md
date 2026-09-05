@@ -1,11 +1,10 @@
-# Phase 64 Checklist - CML Workflow Runtime Integration
+# Phase 64 Checklist - CML Composite StateMachine / Workflow Runtime Integration
 
 status=planned
-phase=[Phase 64 - CML Workflow Runtime Integration](phase-64.md)
+phase=[Phase 64 - CML Composite StateMachine / Workflow Runtime Integration](phase-64.md)
 
 This checklist is the authoritative Phase 64 state ledger after Phase 64
-starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 63 closes.
+starts. No stage starts before Phase 63 closes.
 
 The acceptance path must preserve continuity with Phase 63:
 
@@ -13,130 +12,104 @@ The acceptance path must preserve continuity with Phase 63:
 CML -> normalize -> generate -> ComponentFactory -> CNCF runtime
 ```
 
-A hand-written WorkflowDefinition or manually injected runtime registration is
-not sufficient end-to-end evidence.
+## SWF-01: StateMachine / Workflow Semantic Inventory
 
-## SWF-01: CML/Runtime Inventory and Responsibility Freeze
+- [ ] Inventory existing CML StateMachine grammar/model/generation/runtime.
+- [ ] Inventory current CML Workflow syntax/model, if any.
+- [ ] Inventory Phase 14 runtime Workflow concepts.
+- [ ] Classify every proposed Workflow concept as:
+  - existing StateMachine semantic;
+  - general Composite StateMachine semantic;
+  - mandatory Workflow specialization; or
+  - runtime policy/infrastructure.
+- [ ] Reject duplicate Workflow concepts that already exist in StateMachine.
+- [ ] Register failing-first cross-repository acceptance specs.
 
-- [ ] Inventory the accepted CML Workflow grammar/model and its existing Cozy
-  parser/modeler behavior.
-- [ ] Inventory Phase 14 WorkflowDefinition, registration, trigger,
-  WorkflowInstance, history, next-action, Job linkage, retry, and projection.
-- [ ] Inventory Phase 63 CML-to-runtime pipeline and `CommittedTransition`.
-- [ ] Freeze CML as owner of Workflow declaration semantics and CNCF as owner of
-  Workflow execution semantics.
-- [ ] Freeze StateMachine as local domain-transition owner, Workflow as
-  cross-Operation progression owner, and JobEngine as async execution owner.
-- [ ] Identify every runtime-only Workflow semantic that is not represented by
-  CML and classify it as compatibility, implementation detail, candidate CML
-  addition, or removal.
-- [ ] Register failing-first cross-repository specifications.
+## SWF-02: Composite StateMachine Contract
 
-## SWF-02: Canonical CML Workflow Runtime Model
+- [ ] Freeze Composite StateMachine identity/version.
+- [ ] Define constituent-machine binding with stable role and machine identity.
+- [ ] Distinguish constituent reference/coordination from ownership.
+- [ ] Define higher-level composite state/configuration.
+- [ ] Define how committed constituent transitions participate in composite
+  progression.
+- [ ] Reuse existing transition, trigger, predicate, and action/effect contracts
+  wherever applicable.
+- [ ] Define nesting and source-location semantics.
 
-- [ ] Freeze stable Workflow definition identity and version.
-- [ ] Freeze trigger/entry, step, condition, Operation reference, and terminal
-  outcome identities represented by CML.
-- [ ] Freeze explicit StateMachine/transition-to-Workflow binding.
-- [ ] Reuse the closed typed predicate model where CML Workflow conditions need
-  it; do not introduce a second expression language.
-- [ ] Reject unknown model references and unsupported constructs during
-  normalization/generation.
-- [ ] Ensure no runtime behavior depends on coincidental name matching.
-- [ ] Preserve source-location information for diagnostics.
+## SWF-03: Minimal Workflow Specialization
 
-## SWF-03: Committed-Transition and Trigger Contract
-
-- [ ] Adopt Phase 63 `CommittedTransition` without redefining its semantic
-  identity.
-- [ ] Keep transition definition identity distinct from transition occurrence
-  identity.
-- [ ] Map the CML-declared binding to one typed Workflow entry.
-- [ ] Define stable Workflow trigger/step-occurrence correlation and duplicate
-  delivery semantics.
-- [ ] Define commit-before-delivery and no-delivery-on-rollback behavior.
-- [ ] Define other Workflow trigger kinds only when explicitly admitted by the
-  accepted CML Workflow model.
-- [ ] Use precise terms for duplicate delivery/recovery; do not imply
-  Temporal-style deterministic code replay unless such a contract is actually
-  introduced.
-
-## SWF-04: SimpleModeler Generation, ABI, and Bootstrap
-
-- [ ] Generate typed Workflow definitions directly from CML.
-- [ ] Generate explicit trigger, StateMachine/transition, step, condition,
-  Operation, terminal-outcome, and source identities required by runtime.
-- [ ] Preserve deterministic ordering and stable ABI/version metadata.
-- [ ] Generate typed predicates/bindings rather than required raw runtime
-  strings.
-- [ ] Make generated Workflow definitions available through the normal
-  generated component/provider surface.
-- [ ] Make ComponentFactory automatically discover/register generated Workflow
-  definitions.
-- [ ] Reject unknown required ABI versions or unrepresentable CML semantics.
-- [ ] Add deterministic source, metadata, ABI, compilation, bootstrap, Record,
-  and JSON specifications.
-
-## SWF-05: CNCF Workflow Execution
-
-- [ ] Consume only admitted generated Workflow definitions for the canonical
-  path.
-- [ ] Load or create the independent WorkflowInstance.
-- [ ] Evaluate the CML-declared trigger/step condition deterministically.
-- [ ] Select the CML-declared next Operation or terminal outcome.
-- [ ] Delegate through generic CNCF invocation and normal authorization,
-  idempotency, and correlation boundaries.
-- [ ] Delegate asynchronous execution to JobEngine and record Job linkage.
-- [ ] Prohibit direct Workflow writes to Entity/Aggregate domain state.
-- [ ] Ensure any next domain transition returns through Phase 63 StateMachine
-  enforcement.
-- [ ] Do not add runtime-only Workflow language features ahead of accepted CML
+- [ ] Evaluate process-instance identity against general composite instance
   semantics.
+- [ ] Evaluate multi-subject correlation against general constituent binding.
+- [ ] Evaluate durable waiting/progression against general composite semantics
+  and runtime policy.
+- [ ] Evaluate pending work, completion/cancellation, and process history.
+- [ ] Add only semantics proven mandatory for Workflow and non-generalizable.
+- [ ] Document the evidence for every Workflow-only addition.
 
-## SWF-06: WorkflowInstance Persistence and Recovery
+## SWF-04: CML Generation, ABI, and Bootstrap
 
-- [ ] Define WorkflowInstance state independently of domain StateMachine state.
-- [ ] Persist definition/version, current step/progression, consumed trigger
-  occurrences, step occurrences, selected Operations, Job ids, history,
-  correlation, and terminal outcome as required.
-- [ ] Define progression serialization/concurrency.
-- [ ] Freeze the crash window between progression decision, Operation/Job
-  submission, and history persistence.
-- [ ] Give each logical step execution a stable occurrence/idempotency identity
-  so recovery cannot duplicate logical Operation/Job submission.
-- [ ] Define retry, duplicate delivery, resume/recovery, retention, and version
-  migration semantics.
-- [ ] Keep WorkflowInstance, domain Entity, and Job as separate authorities.
+- [ ] Consume Cozy/SimpleModeler generated Composite StateMachine definitions.
+- [ ] Preserve composite id/version and constituent role/machine refs.
+- [ ] Preserve composite state/configuration and transition/trigger identity.
+- [ ] Preserve explicit constituent-transition bindings.
+- [ ] Preserve Workflow specialization metadata only where required.
+- [ ] Preserve source locations and ABI/version metadata.
+- [ ] Bootstrap generated composite/workflow definitions automatically through
+  ComponentFactory.
+- [ ] Fail unsupported required semantics rather than infer runtime behavior.
 
-## SWF-07: Observability, Security, and Compatibility
+## SWF-05: CNCF Composite Execution
 
-- [ ] Correlate CML source/model identity, generated Workflow definition,
-  trigger occurrence, WorkflowInstance, step occurrence, Operation, Job,
-  StateMachine transition, trace/span, subject, and tenant.
-- [ ] Project domain state and WorkflowInstance state separately.
-- [ ] Preserve normal authorization for delegated Operations without privilege
-  amplification.
-- [ ] Keep payloads, credentials, secrets, and predicate values out of public
-  diagnostics.
-- [ ] Map Phase 14 raw-event/status-field behavior through explicit adapters or
-  reject it; never silently reinterpret it as canonical CML Workflow behavior.
+- [ ] Execute only admitted generated composite definitions on the canonical
+  path.
+- [ ] Observe constituent committed transitions without bypassing Phase 63.
+- [ ] Advance composite state/configuration deterministically.
+- [ ] Invoke declared Operations through normal CNCF authorization and
+  idempotency boundaries.
+- [ ] Delegate asynchronous work to JobEngine.
+- [ ] Ensure further domain mutation re-enters constituent StateMachine
+  enforcement.
+- [ ] Do not grow runtime-only Workflow language features ahead of CML.
+
+## SWF-06: Durable Instance / Recovery
+
+- [ ] Determine the general `CompositeStateMachineInstance` contract.
+- [ ] Add `WorkflowInstance` specialization only if required by proven
+  Workflow-only semantics.
+- [ ] Define durable progression/history and constituent bindings.
+- [ ] Define concurrency and duplicate-delivery handling.
+- [ ] Close the crash window around progression decision and Operation/Job
+  submission.
+- [ ] Use stable logical occurrence/idempotency identities.
+- [ ] Define recovery/resume and version migration.
+
+## SWF-07: Observability and Compatibility
+
+- [ ] Correlate CML source, composite definition, constituent machine,
+  `CommittedTransition`, composite occurrence, Operation, Job, and trace.
+- [ ] Project higher-level composite state and constituent states separately.
+- [ ] Preserve definition identity versus runtime occurrence identity.
+- [ ] Preserve normal authorization without privilege amplification.
+- [ ] Map Phase 14 raw-event/status-field behavior only through explicit
+  compatibility adapters.
 - [ ] Keep specialist workflow-engine integration explicit.
 
-## SWF-08: CML-First Cross-Repository Acceptance and Promotion
+## SWF-08: CML-First Cross-Repository Acceptance
 
-- [ ] Define `SalesOrder`, `SalesStatus`, and `SalesOrderWorkflow` in real CML.
-- [ ] Start acceptance from the CML source, not a hand-written runtime fixture.
-- [ ] Parse and normalize the Workflow through Cozy.
-- [ ] Generate the typed Workflow definition/metadata through SimpleModeler.
-- [ ] Bootstrap it automatically through ComponentFactory.
-- [ ] Prove a committed SalesStatus transition starts/advances the explicitly
-  bound CML WorkflowInstance.
-- [ ] Prove Workflow delegates the CML-declared next Operation without direct
-  domain mutation.
-- [ ] Prove the next Operation returns to Phase 63 StateMachine enforcement.
-- [ ] Prove rollback/no-match/failure does not advance Workflow.
-- [ ] Prove duplicate delivery, crash recovery, concurrency, Job linkage,
-  authorization, observability, and non-leakage behavior.
-- [ ] Validate the generated CAR/sample path where applicable.
-- [ ] Promote verified contracts from notes into design/spec documentation.
-- [ ] Record exact Cozy, SimpleModeler, and CNCF revisions used by acceptance.
+- [ ] Start from a real CML Composite StateMachine containing multiple
+  constituent StateMachines.
+- [ ] Include a Workflow specialization using primarily the same composite
+  structure.
+- [ ] Parse/normalize through Cozy and generate through SimpleModeler.
+- [ ] Bootstrap through ComponentFactory without hand-written canonical runtime
+  definitions.
+- [ ] Prove constituent committed transitions cause valid composite
+  progression.
+- [ ] Prove composite execution cannot bypass constituent StateMachine
+  authority.
+- [ ] Prove any Workflow-only element is both mandatory and non-generalizable.
+- [ ] Prove Operation/Job delegation, duplicate handling, crash recovery,
+  observability, and compatibility.
+- [ ] Record exact Cozy, generated ABI, and CNCF revisions.
