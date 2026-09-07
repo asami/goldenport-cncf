@@ -42,9 +42,11 @@ Current baseline:
   qualified IC-07B development-coordinate, representative-consumer,
   configuration-propagation, canonical-SAR-binding, and static packaged
   boundary recorded in `P61.5.1-DEC-QUALIFIED-CLOSE-001`; it makes no broad
-  profile, multi-CAR runtime, or final full-suite claim. Phase 61.6 remains the
-  planned canonical-closure successor and may consume only that qualified
-  handoff.
+  profile, multi-CAR runtime, or final full-suite claim. Phase 61.6 closes the
+  Phase 61 series with IC-08 canonical duplicate removal, the accepted full
+  review, and the CNCF, Textus Knowledge Editor, and Textus SIE final
+  full-suite matrix. It consumes only that qualified handoff and does not claim
+  the separately owned CAR runtime outcomes.
 - Phase 59.5 persists `HYG-P595-PHASE-001` as nonblocking Hygiene and accepts
   no Development Candidate.
 - Phase 59.6 persists `HYG-P596-001` as nonblocking Hygiene and
@@ -59,9 +61,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. Phase 61.6 is planned and
-  requires its own explicit start.
-- Latest closed checklist: `phase-61.5.1-checklist.md`.
+- Active phase in the current CNCF sequence: none. Phase 62 is eligible and
+  remains planned; it is not started by the Phase 61.6 closure.
+- Latest closed checklist: `phase-61.6-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -122,8 +124,8 @@ Current baseline:
   - `phase-61.4.md`
   - `phase-61.5.md`
   - `phase-61.5.1.md`
-- Active phase set currently includes:
-  - none; `phase-61.6.md` is the next planned Phase
+  - `phase-61.6.md`
+- Active phase set currently includes no Phase. Phase 62 remains planned.
 
 ## Related Rules
 

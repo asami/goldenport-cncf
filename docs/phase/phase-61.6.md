@@ -1,6 +1,7 @@
 # Phase 61.6 - Information Canonical Closure
 
-status=planned
+status=closed
+closed_at=2026-09-07
 planned_at=2026-08-30
 split_from=[Phase 61](phase-61.md)
 depends_on=[Phase 61.5.1](phase-61.5.1.md)
@@ -61,9 +62,31 @@ Phase 62 Web-session work.
 
 ## Current Status
 
-Planned. This Phase starts only by explicit invocation after the qualified
-Phase 61.5.1 closure. It may consume only the recorded accepted evidence.
-Residual CAR verification is owned by [SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md),
+Closed. CNCF Step B (`86da1b6`), CNCF Step C (`2e85adc`), SIE canonical-status
+repair (`42b9770`), and the user-authorized TKE runtime metadata Step
+(`c8e2e75`) are accepted. The mandatory full review resolved
+`CB-P61.6-001` and `CB-P61.6-002`; the accepted complete-tree identity is
+`53e5288217171052c3d9953c95c3bf1a536bdb7573908ba3450cc111483fb359`.
+
+The final-validation repair work is accepted separately: CNCF preserves
+supplied runtime component configuration (`bcd7128`), and SIE completes the
+paper-flow lifecycle without revalidating an already-ready Information record
+(`dbed409`). Their focused re-reviews are clean.
+
+The serialized final `sbt --batch test` matrix is complete: CNCF
+`P61.6-RELEASE-VAL-CNCF-001` (invocation `76036-20260907T045854Z`, 3,533
+passed, 0 failed), Textus Knowledge Editor `P61.6-RELEASE-VAL-TKE-001`
+(invocation `83696-20260907T050658Z`, 128 passed, 0 failed), and Textus SIE
+`P61.6-RELEASE-VAL-SIE-003` (invocation `20004-20260907T055514Z`, 142 passed,
+0 failed, one provider-backed profile canceled). The CNCF snapshot used by the
+downstream validation was refreshed by invocation `82081-20260907T050521Z`.
+
+Residual CAR verification remains owned by
+[SIE Phase 7](../../../../dev2026/textus-semantic-integration-engine/docs/phase/phase-7.md),
 [Textus BoK Phase 7.5](../../../../dev2026/textus-bok/docs/phase/phase-7.5.md),
 and [Textus Knowledge Editor Phase 1](../../../../dev2026/textus-knowledge-editor/docs/phase/phase-1.md);
-it is neither this Phase's scope nor a hidden entry gate.
+it is neither this Phase's scope nor a hidden entry gate. The sealed closure
+ledger records [HYG-P61.6-001](../journal/2026/09/2026-09-07-phase-61.6-hygiene-follow-up.md)
+and [DEV-P61.6-001](../journal/2026/09/2026-09-07-phase-61.6-development-candidate-follow-up.md)
+as nonblocking, separately owned follow-up. Phase 62 is eligible but is not
+started here.

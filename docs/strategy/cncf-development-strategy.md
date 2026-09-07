@@ -3659,7 +3659,7 @@ delivery unit independently closable in the preferred 4--8 hour band.
 | [61.4](../phase/phase-61.4.md) | Closed: IC-06 canonical Information access-surface projections. | Phase 61.3 |
 | [61.5](../phase/phase-61.5.md) | Closed: IC-07A persisted-state migration admission. | Phase 61.4 |
 | [61.5.1](../phase/phase-61.5.1.md) | Closed with qualified IC-07B development-coordinate, representative-consumer, configuration, SAR-binding, and static packaged-boundary evidence; broad runtime outcomes are not claimed. | Phase 61.5 |
-| [61.6](../phase/phase-61.6.md) | IC-08 duplicate removal and canonical closure. | Phase 61.5.1 |
+| [61.6](../phase/phase-61.6.md) | Closed: IC-08 duplicate removal and canonical closure after final CNCF, Textus Knowledge Editor, and Textus SIE full-suite evidence. | Phase 61.5.1 |
 
 Phase 61 produced the accepted CML/generator handoff and is closed under
 `phase61-clb-ic02-20260831`. Its mandatory full review found the Phase 62
@@ -3700,8 +3700,13 @@ This dated correction preserves the historical Phase 61 split record. Phase
 61.5.1 subsequently closed on 2026-09-03 under
 `P61.5.1-DEC-QUALIFIED-CLOSE-001`: recorded focused/Step evidence is accepted,
 final Phase-wide full validation is explicitly waived, and broad profile,
-multi-CAR runtime, and end-to-end outcomes are not claimed. Phase 61.6 may
-consume only that qualified handoff.
+multi-CAR runtime, and end-to-end outcomes are not claimed. Phase 61.6
+consumed only that qualified handoff and is closed: canonical model
+implementation, downstream coordinate alignment, design/specification
+promotion, mandatory full review, and the CNCF, Textus Knowledge Editor, and
+Textus SIE final full-suite matrix are accepted. The separately owned
+CAR-runtime follow-up remains outside the closed Phase. Phase 62 is eligible
+but is not started by this closure.
 
 Planning references:
 - `docs/phase/phase-60.md` through `docs/phase/phase-60.8.md`;
