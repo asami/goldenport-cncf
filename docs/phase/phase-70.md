@@ -1,11 +1,125 @@
 # Phase 70 - Post-Assembly Component Activation
 
-status=planned
+status=in_progress
+current_stage=CA70-01
+current_slice=CA70-01A
 planned_at=2026-08-16
 depends_on=[Phase 55](phase-55.md)
+successor=[Phase 70.1](phase-70.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 70 Checklist](phase-70-checklist.md)
+contract=[Component Activation Lifecycle Specification](../spec/component-activation-lifecycle.md)
 consumer=textus-bok Phase 8
+
+## Status Update Rule
+
+The `status`, `current_stage`, and `current_slice` fields change only for
+evidence-backed stable work-item state changes. No completion may be recorded
+before independent review and all required evidence.
+
+## CA70-01A Contract Evidence
+
+CA70-01A is the frozen R1-R9 contract candidate for Phase 70:
+`docs/spec/component-activation-lifecycle.md` records the opt-in capability,
+framework-owned context, post-assembly placement, deterministic once-only
+ordering, component-boundary-only work, mode isolation and controlled-test
+admission, timeout/cancellation/failure/readiness/cleanup/redaction,
+compatibility boundaries, and the consumer-neutral Textus BoK handoff.
+
+CA70-01 remains IN_PROGRESS; independent review, acceptance, and downstream
+consumer acceptance remain pending.
+
+## Decision P70-CA70-01B-FULL-REVIEW-001
+
+The admitted CA70-01B focused re-review returned `FULL_REVIEW_REQUIRED` for
+two incomplete evidence obligations: it did not prove that each exercised
+runtime mode had admitted the component before asserting no activation, and it
+did not recursively inspect public failure conclusion/diagnostic exception
+payloads for raw `Throwable` leakage. The CAR-lint evidence-only exception is
+not applicable.
+
+The developer selected `acceptance-change` through a direct user message. The
+verified decision binds request identity
+`a1985f664ba2c59dc3c27dc0037e752f58230a1120b7914f078536cee1896191`, source
+message SHA-256
+`f8d3cbb7f577dbadc3e35847645c0b68dde25b5bc1131ad1629c7d25f3047dad`, and
+answer-evidence SHA-256
+`f2a812c1a5b92d577ced64dbb8b0ec2e33559248a755cbd90215ea45c219e31f`.
+
+This changes the CA70-01B acceptance/review boundary only as follows:
+
+- every runtime-mode executable scenario must retain the selected component
+  identity and prove its admission to that fully assembled mode before making a
+  no-activation assertion; and
+- failure scenarios must inspect the public conclusion/diagnostic exception
+  accessors recursively, including structured nested payloads, and prove that
+  raw `Throwable` data and private locators are absent.
+
+The R1--R9 lifecycle design, runtime implementation scope, Textus BoK consumer
+scope, and the closed repair-cycle budget remain unchanged. This decision does
+not authorize another focused or full review, a repair, implementation, test,
+or commit. The authorized next state is `PARENT_CAPABILITY_CHECK`, followed by
+a fresh CA70-01B plan if that gate permits it.
+
+## Decision P70-CA70-02A-PROTECTED-REPLAN-001
+
+The developer selected `replan-protected-step` through a direct user message.
+The decision request identity is
+`620f487811f034ca0d1094edf86d90438a9d1c71257633da6fa470067b678758`; its
+resolved classifier is `continue-resolved-decision`.
+
+The unaccepted activation delta is therefore one protected Step named
+`P70-ACTIVATION-CORE`, with `CA70-02A` as its runtime-activation Slice. It
+contains the public `ComponentActivation` capability/context, server-startup
+gate, activation ownership, scheduling/cancellation, cleanup, failure
+observability, and their executable specifications. No file in that
+accumulator is accepted or committed merely by this re-plan.
+
+The protected-Step plan adds these completion obligations without changing the
+frozen R1--R9 API or moving Textus BoK source into this Phase:
+
+- prove required activation failure is terminal before managed-server
+  readiness or bound-URL publication, while command and client execution
+  remain activation-free;
+- prove the runtime-visible failure conclusion/diagnostic is structured,
+  redacted, bounded, and does not retain a raw `Throwable`; and
+- retain a supplier-only Textus BoK handoff: this Phase provides the stable
+  component capability and lifecycle evidence, while Phase 8 remains its
+  separately owned consumer implementation.
+
+The Step Review Stop Gate remains binding. A public API, lifecycle, scheduler,
+and failure-observability delta must not be passed through a stronger
+lightweight Step reviewer. The re-plan permits bounded implementation and
+validation against these obligations; it does not silently authorize review,
+acceptance, or a release path that bypasses the required protected-boundary
+decision gates.
+
+## Split Record P70-ACTIVATION-SPLIT-001
+
+The user selected `phase-split` and then selected `new-phase-70.1` through
+the direct answer `phase 70.1にして。`. The binding target decision is
+`P70-ACTIVATION-SPLIT-TARGET-002`, request identity
+`fe4ba4860e492c68867d5690dc5776fe5131d665a16e11801623749c6b66173c`,
+resolved-request SHA-256
+`44868d7a2dda29d352489acc3f5a68cdf2041aa2515546635c4835efe517464c`,
+and answer-evidence SHA-256
+`9e5f38aa54608d0282774ae43af819ccf4c35e8f0eaf17ee667f74e5eec51b53`.
+
+Phase 70 retains the CA70-01A contract candidate and supplier handoff. New
+Phase 70.1 owns the protected runtime activation accumulator and its future
+independent acceptance route. The transferred, still-unaccepted files are:
+
+- `src/main/scala/org/goldenport/cncf/component/ComponentActivation.scala`;
+- `src/main/scala/org/goldenport/cncf/cli/ServerOperation.scala`;
+- `src/main/scala/org/goldenport/cncf/cli/CncfRuntimeInstanceClientPart.scala`;
+- `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala`;
+- `src/test/scala/org/goldenport/cncf/component/ComponentActivationLifecycleSpec.scala`; and
+- `src/test/scala/org/goldenport/cncf/cli/ServerOperationActivationSpec.scala`.
+
+The focused validation receipt `P70-CA70-02A-VAL-014` transfers as provenance
+only; it is not an acceptance or release receipt. Textus BoK Phase 8 remains
+a separately owned consumer and no BoK source change is admitted by this
+split.
 
 ## Phase Plan Gate
 
@@ -18,12 +132,13 @@ Phase Plan Gate: PROCEED
 
 ## Purpose
 
-Provide one explicit component activation lifecycle after complete Subsystem
-assembly and runtime-service binding but before managed server readiness.
-Components with startup work that depends on other installed components must
-not perform that work during `Component.initialize`, infer readiness from
-construction order, or require an external HTTP call after the server becomes
-visible.
+Freeze the explicit component activation lifecycle contract after complete
+Subsystem assembly and runtime-service binding but before managed server
+readiness. The protected runtime delivery is owned by Phase 70.1; this parent
+does not implement or accept that delta. Components with startup work that
+depends on other installed components must not perform that work during
+`Component.initialize`, infer readiness from construction order, or require an
+external HTTP call after the server becomes visible.
 
 Textus BoK Phase 8 is the first consumer. It requires SIE and the complete
 component graph before it can publish configured KnowledgeSource generations,
@@ -71,16 +186,18 @@ structured diagnostic contracts. It does not reopen their accepted semantics.
 ## Scope
 
 1. Freeze activation lifecycle states, callback/API shape, execution modes,
-   ordering, timeout, failure, readiness, observability, and cleanup contracts.
-2. Insert activation after `_prepare_components_c` has bootstrapped/injected
-   components and bound runtime services, at the final managed assembly point
-   before server readiness.
-3. Add structured activation result/diagnostic evidence with safe component,
-   phase, status, duration, and conclusion facets.
-4. Prove normal success, multiple-component order, dependency access,
-   once-only behavior, no-opt-in compatibility, failure, timeout, cleanup,
-   server readiness, direct-command exclusion, and controlled-test behavior.
-5. Validate Textus BoK Phase 8 as the representative downstream consumer.
+   ordering, timeout, failure, readiness, observability, cleanup, and
+   supplier-only consumer contracts.
+2. Record the required insertion point after `_prepare_components_c` has
+   bootstrapped/injected components and bound runtime services, at the final
+   managed assembly point before server readiness.
+3. Record the structured activation result/diagnostic constraints and exact
+   executable evidence matrix that Phase 70.1 must re-baseline.
+4. Transfer the unaccepted protected runtime source/test accumulator and its
+   focused validation provenance to Phase 70.1 without treating either as an
+   accepted parent deliverable.
+5. Record Textus BoK Phase 8 as the separately owned representative consumer
+   and prohibit a source edit or consumer acceptance claim in this parent.
 
 ## Non-goals
 
@@ -99,36 +216,34 @@ structured diagnostic contracts. It does not reopen their accepted semantics.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| CA70-01 | Contract and failing-first evidence | Exact lifecycle point, API, ordering, mode, readiness, timeout, failure, cleanup, and diagnostics are frozen. | planned |
-| CA70-02 | Runtime implementation | Opt-in components activate once after assembly/runtime binding and before readiness through normal component boundaries. | planned |
-| CA70-03 | Managed runtime and consumer acceptance | Server success/failure/cleanup plus Textus BoK startup bootstrap acceptance pass without command-mode regression. | planned |
-| CA70-04 | Validation and closure | Focused/full tests, documentation, review, version evidence, and release commit converge. | planned |
+| CA70-01 | Contract and supplier handoff | Exact lifecycle point, API, ordering, mode, readiness, timeout, failure, cleanup, diagnostics, and consumer boundary are frozen for independent review. Current slice: CA70-01A. | IN_PROGRESS |
+| CA70-02 | Runtime implementation | Transferred to Phase 70.1 as protected runtime activation work. | transferred |
+| CA70-03 | Managed runtime and consumer acceptance | Transferred to Phase 70.1; BoK consumer implementation remains separately owned by Textus BoK Phase 8. | transferred |
+| CA70-04 | Parent validation and closure | Review the retained contract/handoff and close only that parent boundary; it does not accept the transferred runtime delta. | planned |
 
 ## Acceptance
 
-- A representative component can resolve and call another admitted component
-  through its public CNCF boundary during activation.
-- Activation cannot run before the complete component set is assembled and
-  runtime services are bound.
-- Required activation completes exactly once before the managed server becomes
-  ready; failed or timed-out activation prevents readiness and triggers cleanup.
-- Two activating components run in deterministic order with bounded diagnostic
-  evidence and no detached task or duplicate callback.
-- Existing non-activating components and direct command/client execution retain
-  their current behavior.
-- Controlled tests can explicitly admit activation without weakening runtime
-  test descriptors, fixed-user/authenticated-user wiring, or production
-  security.
-- Textus BoK can publish an explicitly configured development KnowledgeSource
-  through SIE before control-center observes readiness, and invalid metadata
-  produces a structured startup failure.
-- Focused/full CNCF and representative downstream validation, documentation,
-  independent review, repair/re-review when needed, version evidence, and the
-  Phase release commit complete before closure.
+- The R1--R9 contract fixes the public capability/context boundary, precise
+  post-assembly placement, deterministic once-only behavior, execution-mode
+  isolation, terminal failure semantics, cleanup, and redaction rules without
+  adding a runtime implementation.
+- The contract defines the representative dependency, readiness, timeout,
+  command/client, controlled-test, and diagnostic evidence that Phase 70.1
+  must independently provide.
+- The parent records the exact transferred source/test accumulator and clearly
+  labels every inherited validation receipt as non-acceptance provenance.
+- The supplier handoff identifies Textus BoK Phase 8 without importing its
+  source, configuration, profile selection, or publication ownership.
+- The parent contract/handoff receives independent review and is accepted
+  without accepting the transferred runtime delta.
+- Phase 70.1 independently re-baselines, validates, reviews, and accepts the
+  protected runtime activation work before any Textus BoK Phase 8 consumer can
+  claim end-to-end startup acceptance.
 
 ## Planning references
 
 - [Phase 70 Checklist](phase-70-checklist.md)
+- [Phase 70.1 Protected Component Activation Lifecycle](phase-70.1.md)
 - [CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 - [Phase 53 ComponentStyle and Capability Resolution](phase-53.md)
 - [Phase 55 Typed Configuration Binding](phase-55.md)
