@@ -1,8 +1,8 @@
 # Phase 70 - Post-Assembly Component Activation
 
 status=in_progress
-current_stage=CA70-01
-current_slice=CA70-01A
+current_stage=CA70-04
+current_slice=CA70-04A
 planned_at=2026-08-16
 depends_on=[Phase 55](phase-55.md)
 successor=[Phase 70.1](phase-70.1.md)
@@ -26,8 +26,18 @@ ordering, component-boundary-only work, mode isolation and controlled-test
 admission, timeout/cancellation/failure/readiness/cleanup/redaction,
 compatibility boundaries, and the consumer-neutral Textus BoK handoff.
 
-CA70-01 remains IN_PROGRESS; independent review, acceptance, and downstream
-consumer acceptance remain pending.
+CA70-01A received an independent Step Review PASS for the retained parent
+contract and supplier handoff. The exact review receipt is
+`/private/tmp/cncf-p70-ca7001a-step-review.md`; its scope is explicitly
+`PASS — parent documentation boundary only`. The receipt does not claim a
+Phase review, runtime validation, Phase 70.1 child acceptance, or Textus BoK
+consumer acceptance. It confirms that `P70-CA70-02A-VAL-014` remains
+provenance only and that the transferred runtime and separately owned BoK
+consumer boundaries are preserved.
+
+CA70-01 is complete for the retained parent contract and supplier handoff
+only. Phase 70 remains non-terminal and `status=in_progress`; separate full
+Phase review, full validation, and release bookkeeping are still required.
 
 ## Decision P70-CA70-01B-FULL-REVIEW-001
 
@@ -216,10 +226,10 @@ structured diagnostic contracts. It does not reopen their accepted semantics.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| CA70-01 | Contract and supplier handoff | Exact lifecycle point, API, ordering, mode, readiness, timeout, failure, cleanup, diagnostics, and consumer boundary are frozen for independent review. Current slice: CA70-01A. | IN_PROGRESS |
+| CA70-01 | Contract and supplier handoff | Exact lifecycle point, API, ordering, mode, readiness, timeout, failure, cleanup, diagnostics, and consumer boundary are frozen and independently reviewed for the retained parent handoff only; the transferred runtime delta remains unaccepted. | done |
 | CA70-02 | Runtime implementation | Transferred to Phase 70.1 as protected runtime activation work. | transferred |
 | CA70-03 | Managed runtime and consumer acceptance | Transferred to Phase 70.1; BoK consumer implementation remains separately owned by Textus BoK Phase 8. | transferred |
-| CA70-04 | Parent validation and closure | Review the retained contract/handoff and close only that parent boundary; it does not accept the transferred runtime delta. | planned |
+| CA70-04 | Parent validation and closure | Close the reviewed retained contract/handoff boundary only; CA70-04A does not accept the transferred runtime delta or separately owned Textus BoK consumer. | IN_PROGRESS |
 
 ## Acceptance
 

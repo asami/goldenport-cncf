@@ -1,8 +1,8 @@
 # Phase 70 Checklist - Post-Assembly Component Activation
 
 status=in_progress
-current_stage=CA70-01
-current_slice=CA70-01A
+current_stage=CA70-04
+current_slice=CA70-04A
 phase=[Phase 70 - Post-Assembly Component Activation](phase-70.md)
 successor=[Phase 70.1 - Protected Component Activation Lifecycle](phase-70.1.md)
 contract=[Component Activation Lifecycle Specification](../spec/component-activation-lifecycle.md)
@@ -15,23 +15,28 @@ Phase is active.
 ## CA70-01: Contract and Failing-First Evidence
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
+- Completion scope: retained parent contract and supplier handoff only.
 - Current slice: CA70-01A
 - Owner: CNCF Component, Subsystem assembly, server lifecycle, readiness, configuration, and diagnostics maintainers
 - Entry rule: Phase 55 is closed and no other CNCF Phase is active.
 - Update rule: The Phase status/current-stage/current-slice fields and this checklist change only for evidence-backed stable work-item state changes; no completion may be recorded before independent review and all required evidence.
 - Completion rule: API, lifecycle point, modes, ordering, timeout, readiness, failure, cleanup, and diagnostic contracts are frozen.
 
-CA70-01A disposition: FROZEN_CANDIDATE. The normative component activation
-specification records the complete R1-R9 contract candidate, including the
-public opt-in/context boundary, post-assembly placement, deterministic
-once-only ordering, component-boundary-only dependency access, mode isolation,
-controlled-test admission, timeout/cancellation, failure/readiness/cleanup,
-redaction, compatibility, and consumer-neutral handoff boundaries.
+CA70-01A disposition: COMPLETE for the retained parent contract and supplier
+handoff only. The normative component activation specification records the
+complete R1-R9 contract candidate, including the public opt-in/context
+boundary, post-assembly placement, deterministic once-only ordering,
+component-boundary-only dependency access, mode isolation, controlled-test
+admission, timeout/cancellation, failure/readiness/cleanup, redaction,
+compatibility, and consumer-neutral handoff boundaries. The independent Step
+Review receipt `/private/tmp/cncf-p70-ca7001a-step-review.md` records
+`PASS — parent documentation boundary only`; it is not a Phase review, runtime
+validation, Phase 70.1 child acceptance, or Textus BoK consumer acceptance.
 
 CA70-01B and the protected runtime accumulator are transferred to Phase 70.1.
-CA70-01 remains IN_PROGRESS until the retained contract/handoff receives its
-own independent review and acceptance.
+CA70-01 is complete for the retained parent contract and supplier handoff only;
+the transferred runtime accumulator remains unaccepted.
 
 Decision `P70-CA70-01B-FULL-REVIEW-001`: the developer selected
 `acceptance-change` after `FULL_REVIEW_REQUIRED`. Before CA70-01B can complete,
@@ -62,17 +67,17 @@ The unaccepted runtime source/test accumulator and receipt
 as validation provenance only. Phase 70 retains CA70-01A's contract/handoff;
 it neither accepts the runtime delta nor changes Textus BoK Phase 8 ownership.
 
-- [ ] Inventory component creation, bootstrap, context injection,
+- [x] Inventory component creation, bootstrap, context injection,
       runtime-service binding, server listener/readiness, and shutdown order.
-- [ ] Prove that `Component.initialize` occurs before the complete consumer
+- [x] Prove that `Component.initialize` occurs before the complete consumer
       dependency graph is safely available.
-- [ ] Freeze the opt-in capability/API and prohibit arbitrary configured
+- [x] Freeze the opt-in capability/API and prohibit arbitrary configured
       startup Operation dispatch.
-- [ ] Freeze managed server, command, client, emulator, and controlled-test
+- [x] Freeze managed server, command, client, emulator, and controlled-test
       execution-mode behavior.
-- [ ] Freeze deterministic order, once-only identity, timeout/cancellation,
+- [x] Freeze deterministic order, once-only identity, timeout/cancellation,
       structured failure, readiness, cleanup, and diagnostic redaction.
-- [ ] Record the executable-evidence matrix and consumer handoff boundary that
+- [x] Record the executable-evidence matrix and consumer handoff boundary that
       Phase 70.1 must re-baseline without treating its runtime evidence as a
       parent acceptance.
 
@@ -130,7 +135,8 @@ Evidence:
 ## CA70-04: Validation and Closure
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
+- Current slice: CA70-04A
 - Owner: CNCF contract and supplier-handoff maintainers
 - Entry rule: CA70-01A receives independent review.
 - Update rule: Update this stage only when the retained contract/handoff
@@ -139,12 +145,21 @@ Stage Status:
 - Completion rule: Parent contract/handoff evidence converges without accepting
   the transferred Phase 70.1 runtime delta.
 
-- [ ] Complete independent review of the retained lifecycle contract and
+- [x] Complete independent review of the retained lifecycle contract and
       supplier-only Textus BoK handoff.
-- [ ] Record the Phase 70.1 transfer boundary and ensure no parent receipt is
+- [x] Record the Phase 70.1 transfer boundary and ensure no parent receipt is
       represented as runtime or consumer acceptance.
-- [ ] Close the parent documentation boundary only after its required review
-      and repository evidence; do not imply Phase 70.1 completion.
+- [x] Close the parent documentation boundary for this CA70-04A slice only
+      after its required review and repository evidence; do not imply Phase
+      70.1 completion.
 
 Evidence:
-- Pending.
+- Independent Step Review receipt:
+  `/private/tmp/cncf-p70-ca7001a-step-review.md` — PASS for the parent
+  documentation boundary only. The receipt explicitly excludes Phase 70.1
+  runtime source/tests and child acceptance, and keeps Textus BoK Phase 8 as a
+  separately owned supplier consumer; it is not runtime validation or Textus
+  BoK consumer acceptance. `P70-CA70-02A-VAL-014` remains provenance only.
+- CA70-04A advances the parent ledger but does not make Phase 70 terminal.
+  Separate full Phase review, full validation, and release bookkeeping remain
+  required.
