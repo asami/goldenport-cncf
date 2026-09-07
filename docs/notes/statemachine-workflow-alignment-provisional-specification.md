@@ -1,312 +1,487 @@
-# StateMachine-Workflow Alignment Provisional Specification
+# Composite StateMachine / Workflow Runtime Provisional Specification
 
 status = proposed, non-normative
-date = 2026-08-12
+date = 2026-09-05
 target_phase = 64
 
 ## Status and Authority
 
-This note records the provisional Phase 64 contract. It does not override the
-closed Phase 14 Workflow baseline, Phase 63's future verified StateMachine
-contract, source code, generated ABI, or Executable Specifications. Accepted
-behavior must move to `docs/design` and `docs/spec` after verification.
+This note records the provisional Phase 64 contract after the decision to treat
+Workflow as a specialization of Composite StateMachine and to maximize reuse of
+StateMachine semantics.
 
-## Reference Scenario
+It does not override verified StateMachine behavior, generated ABI, source code,
+or Executable Specifications. Accepted behavior moves to `docs/design` and
+`docs/spec` after cross-repository verification.
 
-The design is anchored in this model:
+## Core Model
+
+The working classification is:
 
 ```text
-SalesOrder entity
-  owns SalesStatus state
-  governed by SalesOrder StateMachine
-
-SalesOrderWorkflow
-  observes committed SalesStatus transitions
-  chooses the next SalesOrder Operation
-  delegates execution through CNCF/JobEngine
+StateMachine
+  +-- local/simple StateMachine
+  +-- Composite StateMachine
+        +-- Workflow
+             + workflow-specific mandatory semantics only
 ```
 
-For example, a committed transition from `Draft` to `Submitted` may advance a
-WorkflowInstance and select `authorizePayment`. The Workflow never sets
-`SalesOrder.status = Paid`. The `capturePayment` or equivalent next Operation
-requests the transition, and Phase 63 enforces it.
+The model intentionally avoids assuming that common workflow-system concepts
+are Workflow-specific. State, transition, trigger/event, guard/predicate,
+action/effect, timer, hierarchy/history, and similar concepts must first be
+considered StateMachine or Composite StateMachine capabilities.
 
-## Two-Layer Responsibility
+## Composite StateMachine
 
-| Concern | StateMachine | Workflow |
-| --- | --- | --- |
-| Scope | One entity/Aggregate's local lifecycle | Cross-Operation/process progression |
-| State | `SalesStatus` or equivalent domain state | Independent `WorkflowInstance.status` |
-| Decision | Is this local transition admitted? | What Operation should run next? |
-| Mutation | Candidate domain state inside UnitOfWork | WorkflowInstance/history only |
-| Trigger output/input | Produces `CommittedTransition` | Consumes committed triggers |
-| Execution | Local admitted effects | Generic Operation invocation / JobEngine |
-| Failure | Transition/guard/action/persistence outcome | Step/submission/retry/terminal outcome |
+A Composite StateMachine coordinates one or more constituent StateMachines and
+presents a higher-level machine boundary.
 
-Neither layer is a substitute for the other. A StateMachine alone can realize
-a small local lifecycle. The external Workflow becomes valuable when progress
-crosses Operations, components, Jobs, retry/recovery, or process-level history.
-
-## Entity Kind Terminology
-
-Existing CNCF descriptor/specification vocabulary classifies `SalesOrder` as
-`entityKind=workflow` because it is a stateful business Entity with explicit
-transitions. That classification does not make `SalesOrder` an instance of
-WorkflowEngine and does not merge its state with `WorkflowInstance`.
-
-In this specification:
-
-- `SalesOrder` remains the domain Entity and may retain
-  `entityKind=workflow`;
-- `SalesStatus` remains its StateMachine-governed domain state;
-- `SalesOrderWorkflow` is a Workflow definition; and
-- `WorkflowInstance` is a separate orchestration record with its own status.
-
-SWF-01/SWF-06 must freeze how WorkflowInstance itself is persisted and
-classified. Its Working Set policy cannot be inferred from the word
-`workflow`, from SalesOrder's classification, or from SalesStatus.
-
-## Trigger Contract
-
-The preferred trigger is Phase 63's typed `CommittedTransition` envelope. It
-must be available only after commit and must carry stable transition occurrence
-identity for deduplication and replay.
-
-Phase 14 raw event plus status-field matching becomes an explicit legacy
-compatibility surface. Phase 64 must either map such a trigger through a named
-adapter with stated weaker guarantees or reject it for definitions requiring
-committed-transition semantics. It must not silently infer commit success from
-the current status field.
-
-JCL synthetic start remains a separate explicit Workflow entry trigger; it is
-not presented as a domain transition.
-
-## Provisional Workflow Model
+Conceptually:
 
 ```text
-WorkflowDefinition(
+CompositeStateMachineDefinition(
   id,
   version,
-  registrations,
-  steps
+  constituents,
+  configurationSchema,
+  compositeStateRules,
+  derivedTransitions,
+  actions
 )
 
-CommittedTransitionRegistration(
-  id,
-  entityType,
-  machineId,
-  transitionId | source/target selector,
-  predicate?,
-  entryStep
-)
-
-WorkflowStep(
-  id,
-  condition?,
-  nextOperation | terminalOutcome
+ConstituentStateMachineBinding(
+  role,
+  machineRef,
+  subjectBinding?,
+  sourceLocation
 )
 ```
 
-Conditions reuse Phase 63's closed `PredicateProgram`. They operate on bounded
-trigger/workflow context and cannot read providers or arbitrary entity state.
+Exact CML syntax is owned by Cozy and remains subject to producer-side design.
+The runtime contract should not freeze syntax before the CML model is stable.
 
-Candidate CML shape, subject to SWF-01/SWF-03:
+Constituent StateMachines retain their own domain identity, state, guard, and
+transition authority. A composite transition may coordinate or react to their
+committed transitions but must not bypass the local transition boundary.
+
+## Derived Composite State
+
+The preferred runtime/model contract is that the constituent state
+configuration is authoritative and the higher-level composite state is derived
+from explicit pure rules.
 
 ```text
-## WORKFLOW SalesOrderWorkflow
-
-### ON COMMITTED TRANSITION submitOrder
-ENTITY SalesOrder
-MACHINE OrderStatus
-TRANSITION DraftToSubmitted
-NEXT OPERATION authorizePayment
+constituent state configuration
+        |
+        v
+CompositeStateRule evaluation
+        |
+        v
+CompositeState
 ```
 
-Bindings are explicit. Matching by coincidental Workflow, state, event, or
-Operation names is not permitted.
-
-## WorkflowInstance Contract
-
-WorkflowInstance is not the SalesOrder and is not a Job.
+For example:
 
 ```text
-WorkflowInstance(
-  id,
-  definitionId,
-  definitionVersion,
-  businessKey,
-  status,
-  currentStep,
-  consumedTriggerIds,
-  selectedOperationIds,
-  jobIds,
-  history,
-  correlationId,
-  subjectScope,
-  version
-)
+order    = Accepted
+payment  = Authorized
+shipment = Waiting
+        |
+        v
+ReadyToShip
 ```
 
-The instance has its own concurrency, persistence, retention, retry, replay,
-and terminal-state behavior. Domain status and WorkflowInstance status must be
-projected separately so an operator can distinguish, for example,
-`SalesStatus=Submitted` from `WorkflowStatus=WaitingForPaymentJob`.
+CNCF must not maintain an independently mutable copy of the same business
+progress state when it is derivable from the constituent configuration.
 
-## Provisional Runtime Order
-
-1. Phase 63 commits a SalesOrder transition.
-2. The commit exposes one `CommittedTransition` occurrence.
-3. Event/Workflow delivery supplies it at least once.
-4. WorkflowEngine admits version, tenant/subject scope, and registration.
-5. It deduplicates by transition occurrence plus registration/instance key.
-6. It loads or creates the independent WorkflowInstance.
-7. It evaluates the bounded trigger/step condition.
-8. It records one deterministic next-Operation or terminal decision.
-9. It invokes/submits the Operation through generic CNCF/JobEngine paths.
-10. It records Operation/Job linkage and Workflow history.
-11. Any resulting entity transition returns through Phase 63 and may produce
-    the next committed trigger.
-
-An implementation must freeze crash windows between steps 8-10 so retry cannot
-duplicate an Operation or Job.
-
-## Invocation and Security
-
-Workflow is an orchestrator, not a privileged direct method call.
-
-- The next Operation follows normal component/service/operation resolution.
-- Authorization and capability checks remain mandatory.
-- Subject/tenant propagation and service authority must be explicit.
-- Idempotency and correlation survive synchronous and Job execution.
-- Workflow cannot obtain a provider handle that lets it mutate domain state.
-- Any state change occurs through the invoked Operation and Phase 63
-  StateMachine/UnitOfWork boundary.
-
-## Failure and Recovery
-
-Keep these outcomes distinct:
-
-- trigger incompatibility/admission failure;
-- duplicate already consumed;
-- no registration or condition non-match;
-- ambiguous next-step decision;
-- WorkflowInstance concurrency/persistence failure;
-- Operation resolution/authorization failure;
-- Operation/Job submission failure;
-- downstream Operation failure;
-- retry exhaustion and poison/dead-letter; and
-- operator recovery/replay outcome.
-
-A failed Workflow step does not undo the already committed SalesOrder
-transition. Compensation, if needed, is a separate explicitly modeled
-Operation/transition or an external specialist workflow concern.
-
-## Idempotency and Replay
-
-- A committed transition occurrence may be delivered more than once.
-- The pair of trigger occurrence and Workflow registration/instance scope must
-  identify one progression decision.
-- Retrying after partial failure must reuse the same Operation/Job idempotency
-  identity.
-- Replay must be explicit, observable, version-aware, and unable to re-run an
-  already completed step unintentionally.
-- Concurrent triggers for one instance require optimistic concurrency or an
-  equivalent serialization rule.
-
-## Observability and Projection
-
-One trace/correlation path should connect:
+The generated rule IR must be deterministic and inspectable. The normal
+admission expectation is:
 
 ```text
-CommittedTransition
-  -> Workflow registration and instance
-  -> step/decision
-  -> Operation invocation
-  -> Job (when asynchronous)
-  -> next committed transition or terminal failure
+0 matching rules  -> structured unmapped-configuration outcome
+1 matching rule   -> derived composite state
+2+ matching rules -> structured ambiguity outcome
 ```
 
-Safe identity includes machine, transition occurrence, entity type/id,
-Workflow definition/instance/step, Operation, Job, event, trace/span,
-subject/tenant scope, retry, and failure category. Entity/event/Operation
-payloads, credentials, secrets, and predicate values remain excluded.
+Any intentionally partial mapping must be explicit in the generated contract.
 
-Admin/Help/Record/JSON surfaces must show domain and WorkflowInstance state as
-separate concepts and preserve links between them.
+## Derived Composite Transition
 
-## Built-In and External Workflow Boundary
+A constituent transition first commits under the ordinary StateMachine and
+UnitOfWork rules. Only then can the Composite StateMachine evaluate the new
+configuration.
 
-The built-in Workflow remains deliberately small:
+```text
+constituent transition
+  -> constituent commit
+  -> CommittedTransition
+  -> recompute configuration
+  -> derive old/new composite state
+  -> derive composite transition when the composite state changed
+```
 
-- event/committed-transition triggered;
-- entity-aware;
-- sequential next-Operation decisions;
-- WorkflowInstance/history/Job linkage;
-- retry/dead-letter/recovery; and
-- inspection/observability.
+The composite transition graph should normally be generated/analyzed from the
+constituent transition graphs plus the CML composite-state rules rather than
+invented independently inside CNCF.
 
-Branch/loop/parallel graphs, rich timers, human tasks, long compensation
-protocols, connector catalogs, visual BPMN, and cross-organization processes
-belong to a specialist engine. Integration should use committed events and
-normal CNCF Operation ingress rather than shared database writes.
+CNCF consumes the generated graph/rule metadata and verifies runtime occurrences
+against the admitted definition.
 
-## Development Candidate Alignment
+## Static Analysis Contract
 
-Phase 64 narrows its use of related future candidates as follows:
+Most completeness and ambiguity checks belong to Cozy/SimpleModeler before
+runtime. CNCF should receive the verified typed result and enough metadata for
+runtime admission/diagnostics.
 
-- Strategy 9.2 retains generic event lanes/reception/JCL event behavior; Phase
-  64 consumes the typed committed-transition path only.
-- Strategy 9.9 retains explicit ServiceCall fallback policy. Workflow retry or
-  next-step choice is not an implicit fallback.
-- Strategy 9.10 retains compensation recovery events and human recovery.
-  Phase 64 supports only explicit compensating Operations/transitions.
-- Strategy 9.11 applies to stateful `entityKind=workflow` business Entities and
-  may later apply separately to a persisted WorkflowInstance representation.
-  Phase 64 defines both lifecycles, but active memory residency and eviction
-  remain outside this phase.
-- Strategy 9.13 and 9.15 retain clustered ownership, fencing, remote delivery,
-  distributed retry/compensation, and Saga persistence. Phase 64 is local.
-- Strategy 9.14 retains JCL flow/events, JobDefinition rollout, durable task
-  history, CompositeQuery v2, and general Job UX. Phase 64 reuses only the
-  existing Job execution/linkage contract.
-- Strategy 9.43 retains REST/Web Form request idempotency. Workflow uses
-  transition/step occurrence identity, not a transport idempotency key.
+Useful producer-side findings include:
+
+- uncovered reachable configurations;
+- overlapping rules;
+- impossible/redundant rules;
+- unreachable/dead composite states;
+- unexpected derived transitions; and
+- excessive configuration complexity.
+
+CNCF should still fail structurally if a runtime configuration violates the
+admitted contract. It must not choose an arbitrary rule or priority fallback
+unless such behavior is explicitly part of the generated model.
+
+## Actions at Constituent and Composite Levels
+
+Actions may exist at both StateMachine levels and coexist.
+
+```text
+constituent transition
+  action A
+      |
+      v
+constituent commit
+      |
+      v
+derived composite transition
+  action B
+```
+
+Action A and Action B have distinct model provenance and semantics. CNCF should
+not flatten them into one opaque callback or discard their ordering identity.
+
+The default causal order is:
+
+1. select constituent transition;
+2. construct constituent local action program;
+3. commit admitted constituent local effects;
+4. publish/observe the committed constituent transition;
+5. derive the new composite state/transition;
+6. construct composite action program; and
+7. interpret the admitted composite program under CNCF execution policy.
+
+The exact boundary may be refined where purely local composite effects can be
+planned atomically, but no external effect may be executed before the commit
+whose fact triggers it.
+
+## Typed Action Algebra / Free Program
+
+The canonical generated action contract should be a typed logical program, not
+an arbitrary Scala function or provider callback.
+
+Conceptually:
+
+```text
+CML action declaration
+   -> generated ActionOp algebra
+   -> Free Action Program
+   -> CNCF planner/interpreter
+   -> runtime effects
+```
+
+The implementation may use `Free[F, A]` or an equivalent free-program
+representation. The contract depends on these properties:
+
+- pure composability before execution;
+- deterministic ordering;
+- inspectability;
+- no embedded datastore/provider handles;
+- multiple interpreters for production/test/simulation/review;
+- typed logical effect identity where possible; and
+- explicit failure when a required action has no admitted interpreter/binding.
+
+A practical algebra may be factored into reusable effect families such as:
+
+```text
+EntityAction
+EventAction
+OperationAction
+JobAction
+RuntimeAction
+```
+
+The exact sum/coproduct encoding remains an implementation decision.
+
+## Action Composition
+
+Constituent and composite programs should compose through one mechanism.
+Conceptually:
+
+```text
+constituentProgram *> compositeProgram
+```
+
+The composed logical plan must preserve provenance so observability and review
+can still identify which operations originated from the constituent transition
+and which from the derived composite transition.
+
+Where multiple composite levels exist, composition follows the causal chain
+from the innermost committed transition toward enclosing derived transitions.
+Cycle detection and bounded progression are required before any implementation
+admits recursive composite triggering.
+
+## Effect Planning and Interpreter Boundary
+
+A Free program is not itself a transaction. CNCF owns effect planning and
+interpretation.
+
+The interpreter/planner must classify admitted operations into execution
+boundaries such as:
+
+```text
+Local / UnitOfWork effects
+After-commit effects
+```
+
+Typical examples:
+
+- Entity/Aggregate mutation may be a local effect when it participates in the
+  admitted UnitOfWork contract.
+- Event publication, generic Operation invocation, Job submission, external
+  service/process calls, and other externally observable work are after-commit
+  unless an existing CNCF contract explicitly states otherwise.
+
+CML should not carry datastore transaction mechanics. The generated action
+algebra carries logical intent; CNCF maps that intent to runtime policy.
+
+## Action Analysis
+
+Because action programs are typed and inspectable, CNCF and upstream review
+surfaces may detect or reject issues such as:
+
+- duplicate logical external operations produced at multiple abstraction
+  levels;
+- conflicting local mutations;
+- unsupported effect ordering;
+- external effects attempted in a local-only phase;
+- missing action interpreter/provider binding; and
+- retry/idempotency hazards when sufficient metadata exists.
+
+These checks complement, rather than replace, Composite StateMachine rule
+analysis.
+
+## Workflow Specialization
+
+Workflow is a Composite StateMachine specialization/profile.
+
+The initial design rule is not to predeclare a large Workflow-specific model.
+Instead, each proposed Workflow concept must be classified as one of:
+
+1. existing StateMachine semantics;
+2. general Composite StateMachine semantics;
+3. mandatory Workflow specialization;
+4. runtime infrastructure/policy.
+
+Only class (3) becomes Workflow-specific CML semantics.
+
+Candidate concerns that require investigation include:
+
+- independent process-instance identity;
+- correlation across multiple subjects;
+- durable progression/wait semantics;
+- pending-work semantics;
+- process completion/cancellation semantics;
+- process-oriented history.
+
+None is automatically accepted as Workflow-specific until Composite
+StateMachine generalization has been evaluated.
+
+## CML-First Continuity
+
+StateMachine and Workflow share one source-to-runtime architecture:
+
+```text
+CML
+ -> parse / normalize
+ -> static composite analysis
+ -> SimpleModeler generation
+ -> typed generated definition + Action Program
+ -> ComponentFactory automatic bootstrap
+ -> CNCF runtime + Action Interpreter
+```
+
+For Composite StateMachine/Workflow the generated contract must preserve:
+
+- composite definition identity/version;
+- constituent machine identity and role;
+- referenced Entity/Aggregate/subject identity where applicable;
+- configuration schema;
+- pure typed composite-state derivation rules;
+- derived composite state/transition identity;
+- explicit relation to constituent committed transitions;
+- action program and action provenance;
+- Workflow specialization marker/metadata when applicable;
+- Operation references where represented by the action algebra;
+- source-location diagnostics; and
+- ABI/version admission metadata.
+
+No coincidental name matching or opaque runtime callback substitution is
+permitted for required semantics.
+
+## Runtime Boundary
+
+CNCF owns execution concerns including:
+
+- instance lifecycle and persistence where needed;
+- constituent transition observation/admission;
+- composite configuration evaluation;
+- derived composite progression;
+- action planning and interpretation;
+- concurrency/idempotency;
+- durable recovery;
+- Operation invocation;
+- JobEngine linkage;
+- authorization/context propagation;
+- correlation and observability.
+
+These runtime concerns do not automatically imply new CML syntax. A concept
+belongs in CML only when it is part of the model's meaning rather than runtime
+implementation policy.
+
+## StateMachine Authority
+
+A committed constituent transition is the safe coordination fact.
+
+```text
+Constituent StateMachine
+  -> local transition selection
+  -> UnitOfWork commit
+  -> CommittedTransition
+  -> Composite StateMachine / Workflow derivation
+```
+
+A composite/workflow execution that needs another domain change invokes the
+normal Operation/StateMachine path:
+
+```text
+Composite / Workflow Action Program
+  -> CNCF Interpreter
+  -> Operation / Job
+  -> constituent StateMachine
+  -> CommittedTransition
+  -> composite derivation
+```
+
+The composite layer never writes constituent domain status directly outside the
+ordinary admitted action/StateMachine boundaries.
+
+## Instance Semantics
+
+A durable composite/workflow instance should be introduced only for information
+that cannot be derived from constituent states/configuration and durable runtime
+history.
+
+The exact distinction between a general `CompositeStateMachineInstance` and a
+Workflow-specific `WorkflowInstance` remains a Phase 64 question.
+
+Do not persist a duplicate composite business status merely for convenience if
+it is deterministically derivable. Persisting configuration correlation,
+consumed transition occurrences, pending after-commit action work, history, and
+recovery metadata may still be required.
+
+## Idempotency and Recovery
+
+- committed transition occurrences may be delivered more than once;
+- one logical composite progression must have a stable occurrence identity;
+- one logical interpreted action program must retain stable correlation;
+- retry after partial failure must reuse stable logical Operation/Job identity;
+- crash windows between derivation, action planning, submission, and persistence
+  must be closed or explicitly recoverable;
+- duplicate-delivery safety does not imply deterministic code-history replay;
+- concurrent progression requires optimistic concurrency or another explicit
+  serialization mechanism.
+
+## Observability
+
+One correlation path should expose:
+
+```text
+CML composite/workflow definition
+  -> constituent machine / CommittedTransition
+  -> configuration + matched composite rule
+  -> derived composite transition
+  -> generated Action Program
+  -> interpreted local/after-commit actions
+  -> Operation / Job
+  -> next constituent transition
+```
+
+Definition identities and occurrence identities remain distinct.
 
 ## Compatibility
 
-- Preserve Phase 14 definitions through explicit versioned adapters where
-  their semantics are known.
-- Do not claim raw event/status-field matching has commit-coupled guarantees.
-- Preserve JCL's submission-only role and explicit synthetic Workflow start.
-- Preserve WorkflowInstance and Job as separate authorities.
-- Unknown required binding versions fail admission; they do not run silently.
+Phase 14 Workflow behavior is a compatibility input, not the semantic authority
+for the new model.
+
+Legacy raw event/status-field matching must be explicitly mapped or rejected.
+It must not silently define Composite StateMachine/Workflow semantics.
 
 ## Executable Specification Matrix
 
-Phase 64 evidence should cover:
+Evidence should cover:
 
-- commit-before-trigger and no trigger on rollback;
-- exact CML/generated binding and unknown-reference rejection;
-- deterministic registration/step decision;
-- duplicate delivery, replay, concurrency, and crash-window recovery;
-- independent domain and WorkflowInstance state/history;
-- generic Operation authorization and idempotent Job submission;
-- no direct entity mutation by Workflow;
-- downstream Operation returning through Phase 63;
-- structured failure/retry/dead-letter and non-leakage projections;
-- explicit Phase 14/JCL compatibility; and
-- a generated SalesOrder/SalesStatus/SalesOrderWorkflow end-to-end slice.
+- CML-first generation/bootstrap;
+- deterministic constituent binding;
+- multiple constituent StateMachines;
+- rule coverage and ambiguity admission;
+- derived composite state/transition behavior;
+- committed-transition-only derivation where required;
+- coexistence and deterministic ordering of constituent/composite actions;
+- generated typed Free/action programs;
+- production and test interpreter behavior;
+- UnitOfWork versus after-commit effect classification;
+- no bypass of constituent transition authority;
+- classification of every Workflow-specific addition;
+- duplicate delivery and crash-window handling;
+- Operation/Job delegation through ordinary authorization boundaries;
+- observability linking CML source, rules, action provenance, runtime occurrence,
+  Operation, and Job; and
+- representative end-to-end CML acceptance.
 
 ## Open Decisions
 
-1. Exact CML Workflow declaration and binding syntax.
-2. Business-key and WorkflowInstance identity derivation.
-3. Exact transactional/outbox delivery between transition commit and Workflow.
-4. Workflow decision/submission/history crash-window mechanism.
-5. Subject/service-authority propagation for automatic next Operations.
-6. Retention and replay policy for transition triggers and Workflow history.
-7. Compatibility lifetime for raw status-field triggers.
-8. External-engine adapter envelope and acknowledgment semantics.
+1. Exact CML syntax for Composite StateMachine composition.
+2. Exact CML rule syntax for derived composite states.
+3. Total versus explicit partial mapping policy.
+4. Configuration enumeration limits and symbolic-analysis fallback.
+5. Representation/identity of a derived composite transition.
+6. Exact generated ActionOp algebra and Free-program ABI.
+7. Interpreter binding/discovery through ComponentFactory.
+8. Whether any local composite actions can join the same root UnitOfWork rather
+   than executing after constituent commit.
+9. Recursion/nesting limits and causal ordering for nested composites.
+10. Which instance semantics are general Composite StateMachine semantics.
+11. Which, if any, semantics are mandatory only for Workflow.
+12. Durable waiting/timer/correlation semantics and whether each belongs to
+    Composite StateMachine, Workflow specialization, or runtime policy.
+13. Phase 14 compatibility lifetime.
+
+## Governing Principles
+
+> Maximize reuse of Composite StateMachine semantics; introduce
+> Workflow-specific semantics only when they are required for Workflow to exist
+> and cannot be expressed cleanly as general Composite StateMachine behavior.
+
+> Constituent states are the business-state authority; derive the composite
+> state from explicit rules whenever possible.
+
+> Model actions as typed composable programs and execute effects only through
+> CNCF interpreters.
 
 ## Related Documents
 
@@ -314,9 +489,6 @@ Phase 64 evidence should cover:
 - `docs/phase/phase-64-checklist.md`
 - `docs/phase/phase-63.md`
 - `docs/phase/phase-14.md`
-- `docs/notes/cml-statemachine-runtime-completion-provisional-specification.md`
-- `docs/notes/entity-kind-and-working-set-policy.md`
-- `docs/spec/component-descriptor-entity-classification-examples.md`
+- `docs/journal/2026/09/2026-09-05-composite-statemachine-workflow-direction.md`
 - `docs/design/statemachine-boundary-contract.md`
 - `docs/design/execution-platform-boundary.md`
-- `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md`
