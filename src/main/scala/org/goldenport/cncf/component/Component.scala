@@ -62,7 +62,8 @@ import org.goldenport.schema.{DataType, XString}
  *  version May. 20, 2026
  *  version Jun. 18, 2026
  *  version Aug. 13, 2026
- * @version Aug. 31, 2026
+ *  version Aug. 31, 2026
+ * @version Sep.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -2198,14 +2199,23 @@ object ComponentLocator {
 }
 
 private[cncf] final class ComponentAssemblyContext private (
-  private val _subsystem: Subsystem
+  private val _subsystem: Subsystem,
+  private val _runtime_configuration: ResolvedConfiguration
 ) {
   private[cncf] def subsystem: Subsystem = _subsystem
+
+  private[cncf] def runtimeConfiguration: ResolvedConfiguration = _runtime_configuration
 }
 
 private[cncf] object ComponentAssemblyContext {
   def apply(subsystem: Subsystem): ComponentAssemblyContext =
-    new ComponentAssemblyContext(subsystem)
+    apply(subsystem, subsystem.configuration)
+
+  def apply(
+    subsystem: Subsystem,
+    runtimeconfiguration: ResolvedConfiguration
+  ): ComponentAssemblyContext =
+    new ComponentAssemblyContext(subsystem, runtimeconfiguration)
 }
 
 /**
@@ -2221,6 +2231,8 @@ final case class ComponentCreate(
 ) {
   private[cncf] def subsystem: Subsystem = assembly.subsystem
 
+  private[cncf] def runtimeConfiguration: ResolvedConfiguration = assembly.runtimeConfiguration
+
   /** Read-only runtime configuration available to external component factories. */
   def configuration: ResolvedConfiguration = assembly.subsystem.configuration
 
@@ -2234,6 +2246,9 @@ final case class ComponentCreate(
 
   def withAssemblyApiClassLoader(p: ClassLoader) =
     copy(assemblyApiClassLoader = Some(p))
+
+  private[cncf] def withRuntimeConfiguration(p: ResolvedConfiguration) =
+    copy(assembly = ComponentAssemblyContext(subsystem, p))
 
   def toInit(core: Component.Core): ComponentInit =
     ComponentInit(assembly, core, origin, componentDescriptors, instanceMetadata = instanceMetadata)

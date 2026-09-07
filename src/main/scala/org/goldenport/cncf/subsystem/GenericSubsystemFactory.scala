@@ -18,7 +18,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Aug. 15, 2026
+ *  version Aug. 15, 2026
+ * @version Sep.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -471,6 +472,7 @@ object GenericSubsystemFactory {
       )
     Subsystem.withStartupCleanup(subsystem) {
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
+        .withRuntimeConfiguration(configuration)
       val repositories = repos.map(_.build(params)).toVector
       val components0 =
         ComponentRepository.discoverAssembly(repositories)
@@ -638,7 +640,7 @@ object GenericSubsystemFactory {
         subsystem,
         ComponentOrigin.Repository("subsystem-descriptor"),
         componentdescriptors
-      )
+      ).withRuntimeConfiguration(configuration)
       val developmentclaims = ComponentRepository.developmentComponentClaims(repositoryspecs)
       val components0 = _or_raise(
         GenericSubsystemComponentDiscovery.discoverC(

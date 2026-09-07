@@ -44,7 +44,8 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Jul. 22, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationBootstrapSpec
@@ -285,6 +286,13 @@ final class ComponentInitializationBootstrapSpec
             )),
             ConfigurationTrace.empty
           )
+          val runtimeconfiguration = ResolvedConfiguration(
+            Configuration(Map(
+              RuntimeConfig.componentDevDirKey -> ConfigurationValue.StringValue(repositorydir.toString),
+              "provider.limit" -> ConfigurationValue.StringValue("33")
+            )),
+            ConfigurationTrace.empty
+          )
           val assemblydescriptor = GenericSubsystemDescriptor(
             path = repositorydir,
             subsystemName = "repository-assembly-parameter",
@@ -324,16 +332,40 @@ final class ComponentInitializationBootstrapSpec
                 component.instanceMetadata.exists(_.instance == "configured")
             )
             .value
+          val runtimecomponent = GenericSubsystemFactory
+            .default(instancedescriptor, configuration = runtimeconfiguration)
+            .components
+            .find(component =>
+              component.name == "org.goldenport.cncf.test.RepositoryParameterProbe" &&
+                component.instanceMetadata.exists(_.instance == "configured")
+            )
+            .value
 
-          Then("assembly defaults are available before discovery and instance settings override them")
+          Then("assembly defaults are available before discovery, instance settings override them, and supplied runtime settings retain precedence when their value coincides with an assembly default")
           assemblycomponent.initializationParameters
             .resolve(RepositoryParameterProbeFactory.limitKey)
             .toOption
             .flatMap(_.value) shouldBe Some(33)
+          assemblycomponent.initializationParameters
+            .resolve(RepositoryParameterProbeFactory.limitKey)
+            .toOption
+            .map(_.provenance) shouldBe Some(ComponentParameterProvenance.AssemblyDefault)
           instancecomponent.initializationParameters
             .resolve(RepositoryParameterProbeFactory.limitKey)
             .toOption
             .flatMap(_.value) shouldBe Some(44)
+          instancecomponent.initializationParameters
+            .resolve(RepositoryParameterProbeFactory.limitKey)
+            .toOption
+            .map(_.provenance) shouldBe Some(ComponentParameterProvenance.SubsystemInstance)
+          runtimecomponent.initializationParameters
+            .resolve(RepositoryParameterProbeFactory.limitKey)
+            .toOption
+            .flatMap(_.value) shouldBe Some(33)
+          runtimecomponent.initializationParameters
+            .resolve(RepositoryParameterProbeFactory.limitKey)
+            .toOption
+            .map(_.provenance) shouldBe Some(ComponentParameterProvenance.RuntimeConfiguration)
           instancecomponent.instanceMetadata.map(_.instance) shouldBe Some("configured")
         }
       }

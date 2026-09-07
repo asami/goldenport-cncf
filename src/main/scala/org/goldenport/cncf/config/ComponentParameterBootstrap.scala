@@ -13,7 +13,8 @@ import org.goldenport.cncf.observability.ComponentParameterBootstrapObservation
 
 /*
  * @since   Jul. 22, 2026
- * @version Aug.  8, 2026
+ *  version Aug.  8, 2026
+ * @version Sep.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object ComponentParameterBootstrap {
@@ -39,7 +40,7 @@ private[cncf] object ComponentParameterBootstrap {
           )
           testdescriptor <- RuntimeTestDescriptor.load(create.subsystem.configuration)
           runtimeprojection = ComponentRuntimeParameterProjection.create(
-            create.subsystem.configuration,
+            create.runtimeConfiguration,
             testdescriptor
           )
           layers = ComponentParameterResolutionLayers.create(
