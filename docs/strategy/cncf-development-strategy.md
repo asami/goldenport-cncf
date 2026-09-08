@@ -4987,7 +4987,13 @@ technical foundations.
   - `docs/journal/2026/08/2026-08-15-mcp-dual-era-protocol-support-direction.md`.
 
 ### 9.59 Post-Assembly Component Activation
-Planned for Phase 70 as a separately selectable supplier branch after Phase 55.
+Phase 70 is the accepted supplier implementation for post-assembly component
+activation. It is closed under the accepted implementation and release commit
+`a7ce382245e20d52b517b323200805927e8045c0`. Phase 70.1 is a superseded
+duplicate implementation plan and is being retired under
+`retire-superseded`, pending its own documentation review and release closure.
+Textus BoK Phase 8 remains a separately owned consumer boundary and is not
+accepted by either CNCF phase.
 
 - Historical basis:
   - `Component.initialize` currently occurs during per-component bootstrap,
@@ -5015,11 +5021,13 @@ Planned for Phase 70 as a separately selectable supplier branch after Phase 55.
   - application-specific KnowledgeSource, SIE, profile, or Glossary semantics
     remain in Textus BoK.
 - Initial scope:
-  - activation capability/context and exact lifecycle insertion point;
-  - deterministic order, once-only identity, timeout/cancellation, readiness,
-    failure, cleanup, and redacted diagnostics;
-  - server, non-opt-in, command/client, emulator/test behavior; and
-  - Textus BoK Phase 8 consumer acceptance plus focused/full framework closure.
+  - Phase 70: the accepted activation contract/context, exact lifecycle
+    insertion point, protected runtime implementation, executable evidence,
+    and supplier-only Textus BoK Phase 8 handoff;
+  - Phase 70.1: retirement of the superseded duplicate plan and its
+    documentation-only review/release closure; and
+  - a separately evidenced Textus BoK Phase 8 consumer acceptance owned by
+    Textus BoK, not inferred from CNCF evidence.
 - Deferred scope:
   - arbitrary startup Operation configuration, Workflow/Job orchestration,
     file watching, hot reload, restart/deployment control, distributed
@@ -5027,6 +5035,8 @@ Planned for Phase 70 as a separately selectable supplier branch after Phase 55.
 - Planning references:
   - `docs/phase/phase-70.md`;
   - `docs/phase/phase-70-checklist.md`;
+  - `docs/phase/phase-70.1.md`;
+  - `docs/phase/phase-70.1-checklist.md`;
   - `src/main/scala/org/goldenport/cncf/component/Component.scala`;
   - `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala`; and
   - `textus-bok:docs/phase/phase-8.md`.

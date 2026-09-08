@@ -19,6 +19,10 @@ Current baseline:
   documentation and Phase 60 series closure. It is closed under
   `phase60.8-clb-adm09-20260828` after the accepted Step, focused re-review,
   and mandatory full Phase review.
+- Phase 70 is closed with the accepted protected component activation
+  implementation. Phase 70.1's superseded duplicate plan is being retired
+  pending its own documentation review/release; Textus BoK Phase 8 remains a
+  separate consumer boundary.
 - Latest closed Phase 59-series phase: `phase-59.10.md` - DOC-10 canonical
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
