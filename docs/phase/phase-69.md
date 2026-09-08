@@ -1,6 +1,6 @@
 # Phase 69 - Durable Job and Task Contract Foundation
 
-status=in_progress
+status=closed
 planned_at=2026-08-15
 split_at=2026-09-09
 depends_on=[Phase 22](phase-22.md)
@@ -23,9 +23,10 @@ Job/Task execution-record contract that all later Phase 69 children consume.
 
 ## Dependency and Closure
 
-Phase 22 is closed. Phase 69.1 may start only after both stages close with a
-frozen durable-contract handoff. No later Job Management implementation is
-owned here.
+Phase 22 is closed. `JM69-01` and `JM69-02` are closed with the frozen
+durable-contract handoff. Phase 69.1 may begin only as its separately selected
+storage and recovery work; no later Job Management implementation is owned
+here.
 
 ## Approved Split
 
@@ -41,7 +42,17 @@ not the current gate.
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | JM69-01 | Inventory and contract reconciliation | The admitted contracts, gaps, consumers, exclusions, and failing-first evidence are frozen. | done |
-| JM69-02 | Durable Job/Task execution-record model | One versioned, authorized durable-record contract is frozen for later storage and recovery work. | planned |
+| JM69-02 | Durable Job/Task execution-record model | One versioned, authorized durable-record contract is frozen for later storage and recovery work. | done |
+
+## Closure Evidence
+
+- [Durable Job Record Contract](../spec/durable-job-record-contract.md) is the
+  normative `cncf.durable-job-record/v1` handoff for provider persistence and
+  recovery work.
+- `DurableJobRecordSpec` passed its focused suite (6 tests) and the accepted
+  Step commit is `cfd0cecbd4692df1fad6172c64d973bc1c111e79`.
+- The one required Phase full review, `P69-FULL-REVIEW-001`, found no Current
+  Phase Blockers, Hygiene, or Development Candidates.
 
 ## Phase Plan Gate: PROCEED
 

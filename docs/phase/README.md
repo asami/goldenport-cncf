@@ -63,9 +63,10 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: Phase 69 (`JM69-01` is done and
-  `JM69-02` is planned). Phase 62 remains planned and is not started by the Phase 70.1
-  closure. Phase 69.1 through Phase 69.7 remain planned and not started:
+- Phase 69 is closed: `JM69-01` inventory reconciliation and `JM69-02`'s
+  provider-neutral durable Job/Task record contract are accepted. Phase 62
+  remains planned and is not started by this closure. Phase 69.1 through Phase
+  69.7 remain planned and not started:
   - `phase-69.md` / `phase-69-checklist.md`
   - `phase-69.1.md` / `phase-69.1-checklist.md`
   - `phase-69.2.md` / `phase-69.2-checklist.md`
@@ -74,7 +75,7 @@ Current baseline:
   - `phase-69.5.md` / `phase-69.5-checklist.md`
   - `phase-69.6.md` / `phase-69.6-checklist.md`
   - `phase-69.7.md` / `phase-69.7-checklist.md`
-- Latest closed checklist: `phase-70.1-checklist.md`.
+- Latest closed checklist: `phase-69-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -136,10 +137,11 @@ Current baseline:
   - `phase-61.5.md`
   - `phase-61.5.1.md`
   - `phase-61.6.md`
+  - `phase-69.md`
   - `phase-70.md`
   - `phase-70.1.md`
-- Active phase set currently includes Phase 69. Phase 62 and Phase 69.1 through
-  Phase 69.7 remain planned and not started.
+- No CNCF phase is selected as active by the Phase 69 closure. Phase 62 and
+  Phase 69.1 through Phase 69.7 remain planned and not started.
 
 ## Related Rules
 
