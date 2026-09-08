@@ -4,7 +4,8 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Aug. 14, 2026
+ *  version Aug. 14, 2026
+ * @version Sep.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -72,7 +73,8 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Aug. 15, 2026
+ *  version Aug. 15, 2026
+ * @version Sep.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -7682,6 +7684,42 @@ final class Http4sHttpServer(
 }
 
 object Http4sHttpServer {
+  private val _runtime_start_test_adapter = new ThreadLocal[RuntimeStartTestAdapter]()
+
+  private[cncf] final class RuntimeStartTestAdapter {
+    private var _fiber: Option[cats.effect.Fiber[IO, Throwable, Unit]] = None
+
+    private[cncf] def start(program: IO[Unit]): Unit = synchronized {
+      require(_fiber.isEmpty, "runtime start adapter already owns a server program")
+      _fiber = Some(program.start.unsafeRunSync())
+    }
+
+    private[cncf] def cancelAndAwait(): Unit = synchronized {
+      _fiber.foreach(_.cancel.unsafeRunSync())
+      _fiber = None
+    }
+  }
+
+  private[cncf] def withRuntimeStartTestAdapter[A](
+    adapter: RuntimeStartTestAdapter
+  )(body: => A): A = {
+    val previous = _runtime_start_test_adapter.get()
+    _runtime_start_test_adapter.set(adapter)
+    try body
+    finally {
+      if (previous == null)
+        _runtime_start_test_adapter.remove()
+      else
+        _runtime_start_test_adapter.set(previous)
+    }
+  }
+
+  private[cncf] def startRuntime(server: Http4sHttpServer, args: Array[String]): Unit =
+    Option(_runtime_start_test_adapter.get()) match {
+      case Some(adapter) => adapter.start(server._server())
+      case None => server.start(args)
+    }
+
   final case class DownloadPayload(
     bytes: Array[Byte],
     text: Boolean

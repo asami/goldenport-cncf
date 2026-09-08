@@ -71,7 +71,8 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Aug. 15, 2026
+ *  version Aug. 15, 2026
+ * @version Sep.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -364,6 +365,8 @@ final class Subsystem(
     _controlled_test_execution = true
     this
   }
+
+  private[cncf] def controlledTestExecutionEnabled: Boolean = _controlled_test_execution
 
   def directComponentProvides(capability: String): Boolean =
     ComponentCapabilityId.parseC(capability).toOption.exists { expected =>

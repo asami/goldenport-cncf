@@ -5,15 +5,16 @@ Status: normative
 ## Authority and scope
 
 This specification freezes the Phase 70 post-assembly activation contract for
-CA70-01A. The requirements in this document are normative. They define the
-future public activation boundary; this documentation-only slice does not add
-an API, alter assembly, or change runtime behavior.
+CA70-01A and the admitted CA70-02 / CA70-02A accumulator. The requirements in
+this document are normative. The ten-path accumulator is owned by Phase 70
+under `P70-DEC-ACCUMULATOR-ADMISSION-003`; its implementation and executable
+specifications remain subject to the required review and release evidence.
 
-Phase 70 retains this contract and its supplier-only consumer handoff. Phase
-70.1 owns the protected runtime implementation, executable re-baseline, and
-managed-server acceptance. Neither the split nor an inherited validation
-receipt accepts an API or runtime change without the child Phase's separate
-review and release evidence.
+The earlier Phase 70.1 transfer is superseded for those ten paths. Its
+untracked planning files remain preserved without source, implementation,
+validation, or acceptance authority. Phase 70 retains the supplier-only
+consumer handoff. No Textus BoK source or consumer behavior is accepted by
+this specification or by an inherited validation receipt.
 
 An **assembly** is one managed construction of a `Subsystem` for a selected
 run mode. A **managed server assembly** is an assembly selected for
@@ -55,7 +56,7 @@ implementation escape hatch.
 
 ### R3 Post-assembly placement
 
-The future activation coordinator MUST begin only after all of the following
+The activation coordinator MUST begin only after all of the following
 have completed successfully for the assembly:
 
 1. `ComponentFactory` bootstrap;
@@ -70,6 +71,14 @@ dispatch `ServerOperation`, and before `Http4sHttpServer` publishes readiness
 or bound URLs. No activation callback may observe a partially assembled
 component graph as a successful managed-server state.
 
+Decision `P70-DEC-R3-LIFECYCLE-DISPATCH-004` records the verified direct
+selection of `add-lifecycle-dispatch-path`: the canonical Server branch in
+`CncfRuntimeInstanceLifecyclePart._run` owns this gate after completed
+assembly and before `ServerOperation` construction or dispatch. A failed gate
+uses the ordinary CLI failure rendering. The direct legacy `startServer` path
+retains its explicit compatibility gate, while `ServerOperation` does not
+perform a duplicate post-dispatch activation.
+
 ### R4 Deterministic, sequential, once-only execution
 
 The final `ComponentSpace.components` admission/upsert order is the
@@ -78,12 +87,14 @@ select opted-in Components from it, and invoke their callbacks sequentially.
 It MUST not begin a later callback before the preceding callback has completed
 successfully.
 
-On a successful managed server assembly, each eligible Component runs exactly
-once. A terminal result under R7 prevents later callbacks; it does not make a
-previously completed callback repeat. Component creation, initialization,
-discover/bootstrap, direct add/upsert, and repeated coordinator requests do
-not authorize another callback. A repeat coordinator request MUST NOT invoke
-any callback again.
+On an initial accepted managed server assembly, each eligible Component runs
+exactly once. The initial request preserves the final admission/upsert order.
+Once that request reaches either a successful or failing terminal result, the
+per-Subsystem coordinator retains that exact terminal result. Every repeat
+MUST return it without invoking a completed, failing, later, or newly upserted
+callback. Component creation, initialization, discover/bootstrap, direct
+add/upsert, and repeated coordinator requests do not authorize another
+callback.
 
 ### R5 Component-boundary-only work
 
@@ -112,6 +123,13 @@ activation callback, initiate managed Subsystem cleanup, keep readiness and
 bound URLs unpublished, and return one bounded structured failure. A callback
 that completes after timeout or cancellation MUST NOT convert that assembly to
 ready state.
+
+The coordinator MUST execute callbacks sequentially through an internal
+daemon-capable bounded worker. At terminality it MUST cancel and interrupt the
+outstanding callback work without waiting for a noncooperative callback to
+finish, so the caller receives the terminal result by the deadline and no
+later callback begins. This internal policy adds no public timeout or
+cancellation API, global fallback, or shadow state store.
 
 An ordinary activation failure has the same readiness and managed-cleanup
 outcome: the server is not ready and no later callback begins. The returned
@@ -149,13 +167,14 @@ their consumer diagnostics remain owned by Textus BoK Phase 8.
 
 ## Executable evidence matrix
 
-Phase 70.1 MUST re-baseline failing-first executable specifications for every
-row below, implement the contract those specifications describe, and provide
-the managed-runtime acceptance indicated below. The supplier handoff to Textus
-BoK remains separate from BoK source or end-to-end consumer acceptance. This
-CA70-01A documentation slice adds no executable evidence.
+The active Phase 70 accumulator MUST maintain failing-first executable
+specifications for every row below, implement the contract those
+specifications describe, and provide the managed-runtime evidence indicated
+below. The supplier handoff to Textus BoK remains separate from BoK source or
+end-to-end consumer acceptance. The inherited CA70-01A review receipt adds no
+runtime or consumer acceptance evidence.
 
-| Evidence group | Phase 70.1 failing-first specification | Phase 70.1 implementation evidence | Phase 70.1 managed/consumer handoff |
+| Evidence group | Phase 70 failing-first specification | Phase 70 implementation evidence | Managed/consumer handoff |
 | --- | --- | --- | --- |
 | No-opt-in compatibility | An ordinary Component has no callback, behavior, or readiness change. | Preserve that absence while adding the opt-in capability. | Regress existing non-activating server behavior. |
 | Complete-graph dependency | An opted-in Component can use an already-admitted public Component/API dependency only after complete assembly. | Place the coordinator after the R3 boundary. | Demonstrate the dependency during managed server startup. |
@@ -169,8 +188,8 @@ CA70-01A documentation slice adds no executable evidence.
 
 ## Source alignment
 
-The current source establishes the placement and compatibility anchors for
-this contract, not an existing activation implementation:
+The admitted source accumulator establishes the placement and compatibility
+anchors for this contract:
 
 - `Component.initializeC` consumes `ComponentInit` during initialization.
 - `Subsystem._prepare_components_c` bootstraps Components, injects context,
@@ -191,8 +210,9 @@ this contract, not an existing activation implementation:
 - [Document Lifecycle](../rules/document-lifecycle.md)
 - [Phase 70](../phase/phase-70.md)
 - [Phase 70 Checklist](../phase/phase-70-checklist.md)
-- [Phase 70.1](../phase/phase-70.1.md)
-- [Phase 70.1 Checklist](../phase/phase-70.1-checklist.md)
+- Phase 70.1 (preserved untracked planning artifact; no acceptance authority)
+- Phase 70.1 Checklist (preserved untracked planning artifact; no acceptance
+  authority)
 - `src/main/scala/org/goldenport/cncf/component/Component.scala`
 - `src/main/scala/org/goldenport/cncf/component/ComponentSpace.scala`
 - `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala`

@@ -7,6 +7,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
+import org.goldenport.cncf.component.ComponentActivation
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.GetQuery
 import org.goldenport.cncf.component.builtin.client.PostCommand
@@ -42,7 +43,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Sep.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceClientPart {
@@ -50,11 +52,12 @@ private[cli] trait CncfRuntimeInstanceClientPart {
   def startServer(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)
     (for {
+      _ <- ComponentActivation.activateForServerRuntimeC(subsystem)
       endpoint <- _server_endpoint(subsystem)
       engine <- HttpExecutionEngine.Factory.forRuntime(subsystem)
     } yield {
       val server = Http4sHttpServer.forEndpoint(engine, endpoint)
-      server.start(args)
+      Http4sHttpServer.startRuntime(server, args)
       0
     }) match {
       case Consequence.Success(exitcode) =>
@@ -67,11 +70,12 @@ private[cli] trait CncfRuntimeInstanceClientPart {
 
   def startServer(subsystem: Subsystem, args: Array[String]): Unit = {
     (for {
+      _ <- ComponentActivation.activateForServerRuntimeC(subsystem)
       endpoint <- _server_endpoint(subsystem)
       engine <- HttpExecutionEngine.Factory.forRuntime(subsystem)
     } yield {
       val server = Http4sHttpServer.forEndpoint(engine, endpoint)
-      server.start(args)
+      Http4sHttpServer.startRuntime(server, args)
     }) match {
       case Consequence.Success(_) =>
         ()

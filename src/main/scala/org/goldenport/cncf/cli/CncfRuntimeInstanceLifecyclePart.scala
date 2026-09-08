@@ -60,6 +60,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.bootstrap.BootstrapConfig
 import org.goldenport.cncf.bootstrap.CncfHandle
 import org.goldenport.cncf.component.ComponentFactory
+import org.goldenport.cncf.component.ComponentActivation
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.importer.StartupImport
 import org.goldenport.cncf.path.AliasLoader
@@ -83,7 +84,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Sep.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -948,7 +950,13 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
       case Consequence.Success(s) =>
         val req = s.request
         req.operation match {
-          case RunMode.Server.`name` => ServerOperation(subsystem).execute(req)
+          case RunMode.Server.`name` =>
+            ComponentActivation.activateForServerRuntimeC(subsystem) match {
+              case Consequence.Success(_) => ServerOperation(subsystem).execute(req)
+              case Consequence.Failure(conclusion) =>
+                _print_error(conclusion)
+                _exit_code(Consequence.Failure(conclusion))
+            }
           case RunMode.Client.`name` => ClientOperation(subsystem).execute(req)
           case RunMode.Command.`name` => executeCommand(subsystem, req)
           case RunMode.ServerEmulator.`name` => ServerEmulatorOperation(subsystem).execute(req)

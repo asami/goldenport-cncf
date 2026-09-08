@@ -9,7 +9,8 @@ import org.goldenport.cncf.http.{HttpExecutionEngine, Http4sHttpServer, ServerEn
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Aug. 10, 2026
+ *  version Aug. 10, 2026
+ * @version Sep.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class ServerOperation(val subsystem: Subsystem) extends CliOperation {
@@ -23,7 +24,7 @@ class ServerOperation(val subsystem: Subsystem) extends CliOperation {
     } yield (endpoint, engine)) match {
       case Consequence.Success((endpoint, engine)) =>
         val server = Http4sHttpServer.forEndpoint(engine, endpoint)
-        server.start(args)
+        Http4sHttpServer.startRuntime(server, args)
         exit_success
       case Consequence.Failure(conclusion) =>
         print_error(conclusion)
