@@ -123,3 +123,12 @@ This experiment reinforces the existing Phase 69 scope:
 - If CBD Support later adopts the capability, design it against the completed
   CNCF asynchronous and restart-safe contracts rather than reviving the
   compatibility adapter.
+
+## 2026-09-09 Split Ownership Note
+
+This immutable spike predates the approved Phase 69 split. Its historical
+references to “Phase 69” mean the Phase 69 sequence. `JM69-01` retains this
+spike as inventory input; durable execution/result recovery is owned by Phases
+69 and 69.1, exact lookup and cursor enumeration by Phase 69.2, and the fresh
+CBD Support recovery acceptance by Phase 69.7. This note does not change the
+spike disposition or adopt its rejected implementation.

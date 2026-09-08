@@ -1818,7 +1818,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
 | `2026/01/phase-3.1-fact-reconstruction.md` | Docker/external execution, Antora integration, CML-to-Component generation, AI Agent Hub, and performance work excluded from the early Fat JAR baseline. | Retained as the broader Phase 3 execution-model programme. No new Phase is selected because the journal does not freeze a consumer, runtime boundary, or acceptance driver; it must not be smuggled into CAR packaging, MCP migration, or Phase 71. |
-| `2026/01/phase-3.1-fatjar-component.md` | Retry semantics, failure aggregation, cross-operation compensation, and distributed failure handling. | [Phase 69](../phase/phase-69.md) may consume only Job-local retry and non-distributed failure aggregation. Retained result history and recovery remain independent Phase 69 / 9.14 commitments. Generic event/reception and outcome lanes remain [9.2](#92-event-mechanism-follow-ups); compensation remains [9.10](#910-compensation-recovery-events); distributed failure ownership remains [9.13](#913-distributed-component-runtime) and [9.15](#915-saga-management). |
+| `2026/01/phase-3.1-fatjar-component.md` | Retry semantics, failure aggregation, cross-operation compensation, and distributed failure handling. | The [Phase 69 sequence](../phase/phase-69.md) may consume only Job-local retry and non-distributed failure aggregation. Retained result history and recovery remain independent Phase 69.1 / 9.14 commitments. Generic event/reception and outcome lanes remain [9.2](#92-event-mechanism-follow-ups); compensation remains [9.10](#910-compensation-recovery-events); distributed failure ownership remains [9.13](#913-distributed-component-runtime) and [9.15](#915-saga-management). |
 | `2026/04/view-projection-design-note.md` | Custom, inherited, dynamic, and GraphQL-style view projections. | Retained by [9.16](#916-persistent-materialized-view-store); no Phase is selected because the journal supplies no consumer or persistence/rebuild contract. |
 | `2026/05/knowledge-space-operational-semantic-structure-note.md` and Phase 27 knowledge journals | Incremental/streaming KnowledgeSpace updates, provider lifecycle, graph/projection expansion, and live external authority lookup. | Retained by [9.5](#95-knowledge-structure-follow-ups). Provider-specific live lookup remains application-owned by `textus-knowledge-editor`; it does not create a CNCF provider dependency or a new CNCF Phase. |
 | `2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Descriptor snapshot, declared style/capability metadata, and development/packaged parity. | Merged into the [Phase 58 series](../phase/phase-58.9.md) only for parent/Subcomponent CAR description, packaging, and resolution parity. Generic capability-definition validation and Metadata Factory contribution remain [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution). |
@@ -2317,9 +2317,9 @@ Alignment with Phase 64:
   with this candidate and Saga Management.
 
 ### 9.14 Job Management Follow-ups
-Planned as the comprehensive Phase 69 Job Management completion program after
-the Phase 22 baseline. Phase 69 is a separately selectable planning branch and
-is not the active Phase.
+Planned as the eight-Phase 69 Job Management completion sequence after the
+Phase 22 baseline. The sequence is separately selectable and no child is the
+active Phase.
 
 Phase 22 closed the baseline Job Management scope. Completed behavior is
 recorded in section 8.12 and the closed Phase 22 documents:
@@ -2327,7 +2327,19 @@ recorded in section 8.12 and the closed Phase 22 documents:
 - Dashboard: `docs/phase/phase-22.md`
 - Checklist: `docs/phase/phase-22-checklist.md`
 
-Phase 69 scope:
+Phase 69 sequence scope:
+
+The approved 2026-09-09 split assigns every unfinished stage exactly once:
+
+- Phase 69: inventory and durable Job/Task contract (`JM69-01/02`).
+- Phase 69.1: durable storage and process recovery (`JM69-03`).
+- Phase 69.2: query, pagination, result, and control (`JM69-04`).
+- Phase 69.3: executable JCL (`JM69-05`).
+- Phase 69.4: JobDefinition governance and rollout (`JM69-06`).
+- Phase 69.5: CompositeQuery v2 (`JM69-07`).
+- Phase 69.6: user and operator Job experience (`JM69-08`).
+- Phase 69.7: security, retention, operations, downstream acceptance, and
+  Phase 69 release (`JM69-09/10`).
 
 - Implement executable JCL runtime for procedural `flow` and Event-driven
   `events` / `onEvent` sections. Phase 22 stores and documents those sections
@@ -2364,6 +2376,13 @@ Phase 69 planning references:
 
 - `docs/phase/phase-69.md`
 - `docs/phase/phase-69-checklist.md`
+- `docs/phase/phase-69.1.md` / `docs/phase/phase-69.1-checklist.md`
+- `docs/phase/phase-69.2.md` / `docs/phase/phase-69.2-checklist.md`
+- `docs/phase/phase-69.3.md` / `docs/phase/phase-69.3-checklist.md`
+- `docs/phase/phase-69.4.md` / `docs/phase/phase-69.4-checklist.md`
+- `docs/phase/phase-69.5.md` / `docs/phase/phase-69.5-checklist.md`
+- `docs/phase/phase-69.6.md` / `docs/phase/phase-69.6-checklist.md`
+- `docs/phase/phase-69.7.md` / `docs/phase/phase-69.7-checklist.md`
 - `docs/design/job-management.md`
 - `docs/journal/2026/03/job-task-execution-persistence-design.md`
 
@@ -2374,7 +2393,7 @@ Alignment with Phase 64:
 - It may add only the correlation/idempotency evidence required for that path;
   executable JCL flow/events, JobDefinition rollout, durable Task Execution
   Tree/history, CompositeQuery v2, and general Job UX remain owned by the
-  planned Phase 69 program.
+  planned Phase 69 sequence.
 
 ### 9.15 Saga Management
 Future distributed-collaboration development item.
