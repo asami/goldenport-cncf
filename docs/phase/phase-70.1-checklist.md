@@ -1,8 +1,8 @@
 # Phase 70.1 Checklist - Superseded Documentation Retirement
 
-status=in_progress
+status=closed
 disposition=retire-superseded
-current_stage=ACT70.1-04
+closed_at=2026-09-08
 phase=[Phase 70.1 - Superseded Documentation Retirement](phase-70.1.md)
 predecessor=[Phase 70](phase-70.md)
 contract=[Component Activation Lifecycle Specification](../spec/component-activation-lifecycle.md)
@@ -16,9 +16,9 @@ implementation. Phase 70 remains closed and authoritative. Textus BoK Phase 8
 remains a separately owned consumer and is not accepted here.
 
 The former implementation and acceptance entries remain present below with
-explicit stable dispositions. ACT70.1-04 remains in progress only for this
-documentation boundary's mandatory independent full review and release
-closure; its final items remain unchecked.
+explicit stable dispositions. ACT70.1-04 is closed by this documentation
+boundary's mandatory independent full review, admitted M0 repair, and distinct
+release closure.
 
 ## ACT70.1-01: Parent Handoff and Re-baseline
 
@@ -106,27 +106,33 @@ Evidence:
 ## ACT70.1-04: Consumer Handoff and Closure
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: CLOSED
+- Current step: CLOSED — the documentation review, admitted M0 projection
+  repair, and distinct release closure are complete.
 - Owner: Phase 70.1 documentation closure; Textus BoK Phase 8 remains a
   separate consumer owner
 - Entry rule: the superseded implementation plan is reconciled across the
   four owned documents.
-- Update rule: keep this stage IN_PROGRESS until its documentation-boundary
-  review and release closure are complete; do not claim child implementation.
+- Update rule: keep this stage CLOSED with its `retire-superseded`
+  disposition; do not claim child implementation or consumer acceptance.
 - Completion rule: mandatory independent full review and release evidence for
-  this documentation boundary are complete; no final closure is claimed yet.
+  this documentation boundary are complete.
 
 - [x] Record the exact consumer-neutral handoff: Phase 70 supplies the
       accepted CNCF capability and lifecycle evidence, while Textus BoK Phase 8
       remains separately owned and separately evidenced.
-- [ ] Perform the mandatory independent full review of this Phase 70.1
-      documentation retirement boundary.
-- [ ] Complete only repair/re-review admitted by that review and record the
-      documentation-boundary release evidence.
-- [ ] Close this child only after its own review and release closure; do not
+- [x] Perform the mandatory independent full review of this Phase 70.1
+      documentation retirement boundary. (`P70.1-FULL-REVIEW-001`)
+- [x] Complete only repair/re-review admitted by that review and record the
+      documentation-boundary release evidence. (`CPB-P70.1-001` was closed by
+      an exact M0 current-projection repair; no re-review was required.)
+- [x] Close this child only after its own review and release closure; do not
       mark Phase 70 or Textus BoK Phase 8 complete by implication.
 
 Evidence:
 - Phase 70 accepted/released the protected implementation at commit
   `a7ce382245e20d52b517b323200805927e8045c0`.
 - Historical split and focused validation references are provenance only.
+- The distinct release commit carrying
+  `Phase-Closure-Binding: PHASE-70.1` binds this closed checklist and the
+  empty Phase Hygiene and Development Candidate ledgers.

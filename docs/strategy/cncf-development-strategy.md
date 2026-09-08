@@ -4990,8 +4990,8 @@ technical foundations.
 Phase 70 is the accepted supplier implementation for post-assembly component
 activation. It is closed under the accepted implementation and release commit
 `a7ce382245e20d52b517b323200805927e8045c0`. Phase 70.1 is a superseded
-duplicate implementation plan and is being retired under
-`retire-superseded`, pending its own documentation review and release closure.
+duplicate implementation plan closed under `retire-superseded` after its own
+documentation review and M0 current-projection repair.
 Textus BoK Phase 8 remains a separately owned consumer boundary and is not
 accepted by either CNCF phase.
 

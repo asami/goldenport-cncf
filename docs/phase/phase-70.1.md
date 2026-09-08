@@ -1,9 +1,8 @@
 # Phase 70.1 - Superseded Documentation Retirement
 
-status=in_progress
+status=closed
 disposition=retire-superseded
-current_stage=ACT70.1-04
-current_slice=superseded-documentation closure
+closed_at=2026-09-08
 planned_at=2026-09-08
 split_from=[Phase 70](phase-70.md)
 depends_on=[Phase 70](phase-70.md)
@@ -28,9 +27,11 @@ are closed historical anchors and are not edited by this Phase. Textus BoK
 Phase 8 remains a separately owned consumer and is neither implemented nor
 accepted by this documentation boundary.
 
-This Phase remains `status=in_progress` while its own documentation boundary
-awaits mandatory independent full review and release closure. No final Phase
-70.1 closure is claimed by this record.
+This Phase is closed as a documentation-only retirement. Its mandatory full
+review found one README current-projection blocker, `CPB-P70.1-001`; the exact
+closure-document repair passed the M0 static waiver gate without changing any
+runtime or acceptance meaning. The distinct Phase release commit carrying
+`Phase-Closure-Binding: PHASE-70.1` binds this final record.
 
 ## Historical Split Authority
 
@@ -59,15 +60,15 @@ for CNCF; no parent receipt is treated as Textus BoK Phase 8 acceptance.
 
 ## Closure Boundary
 
-The only remaining Phase 70.1 work is documentation reconciliation and its
+The completed Phase 70.1 work is documentation reconciliation and its
 independent closure gate:
 
 - preserve the `ACT70.1-01` through `ACT70.1-03` identities and ledger entries
   as explicit `NOT APPLICABLE — superseded by Phase 70` dispositions;
 - record the exact separation between Phase 70's accepted supplier
   implementation and the separately owned Textus BoK Phase 8 consumer; and
-- keep `ACT70.1-04` in progress until the mandatory independent full review,
-  any admitted repair/re-review, and this Phase's release closure are complete.
+- close `ACT70.1-04` after the mandatory independent full review, the admitted
+  M0 projection repair, and this Phase's release closure are complete.
 
 No source, test, runtime, validation, ABI, configuration, or consumer change
 is in scope. No Phase 70 historical anchor, lifecycle specification, or Textus
@@ -75,12 +76,12 @@ BoK artifact is edited by this Phase.
 
 ## Acceptance and Exit Conditions
 
-Phase 70.1 can close only after its four owned documents agree that the former
+Phase 70.1 is closed because its four owned documents agree that the former
 implementation plan is superseded, all transferred implementation entries are
 explicitly not applicable, the separate Textus BoK boundary is preserved, and
-the mandatory independent full review and release evidence for this
-documentation boundary are complete. Until then, this Phase is visibly on the
-`retire-superseded` path and remains pre-release.
+the mandatory independent full review plus M0 repair evidence are complete.
+No source, test, runtime, validation, or Textus BoK consumer acceptance is
+claimed by this closure.
 
 ## References
 

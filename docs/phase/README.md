@@ -15,14 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed phase: `phase-60.8.md` - ADM-09 Component Admin canonical
-  documentation and Phase 60 series closure. It is closed under
-  `phase60.8-clb-adm09-20260828` after the accepted Step, focused re-review,
-  and mandatory full Phase review.
+- Latest closed phase: `phase-70.1.md` - documentation-only retirement of the
+  superseded duplicate activation plan. Phase 70 remains the authoritative
+  accepted implementation.
 - Phase 70 is closed with the accepted protected component activation
-  implementation. Phase 70.1's superseded duplicate plan is being retired
-  pending its own documentation review/release; Textus BoK Phase 8 remains a
-  separate consumer boundary.
+  implementation. Phase 70.1 is closed under `retire-superseded`; Textus BoK
+  Phase 8 remains a separate consumer boundary.
 - Latest closed Phase 59-series phase: `phase-59.10.md` - DOC-10 canonical
   documentation and Phase 59 series closure. It is closed under
   `phase59.10-clb-doc10-20260827`, consuming the accepted DOC-09 security,
@@ -65,9 +63,9 @@ Current baseline:
 - Phase 58.9 checklist: `phase-58.9-checklist.md` is closed. It accepted no
   new Phase Hygiene or Development Candidate record.
 
-- Active phase in the current CNCF sequence: none. Phase 62 is eligible and
-  remains planned; it is not started by the Phase 61.6 closure.
-- Latest closed checklist: `phase-61.6-checklist.md`.
+- Active phase in the current CNCF sequence: none. Phase 62 remains planned
+  and is not started by the Phase 70.1 closure.
+- Latest closed checklist: `phase-70.1-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -129,6 +127,8 @@ Current baseline:
   - `phase-61.5.md`
   - `phase-61.5.1.md`
   - `phase-61.6.md`
+  - `phase-70.md`
+  - `phase-70.1.md`
 - Active phase set currently includes no Phase. Phase 62 remains planned.
 
 ## Related Rules
