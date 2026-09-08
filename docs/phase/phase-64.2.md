@@ -2,9 +2,9 @@
 
 status=planned
 planned_at=2026-09-05
-revised_at=2026-09-05
+revised_at=2026-09-08
 depends_on=[Phase 64.1](phase-64.1.md)
-producer=asami/cozy Phase 33.2
+producer=asami/cozy Phase 47.2 sequence (47.2, 47.2.1, 47.2.2)
 
 ## Purpose
 
@@ -28,6 +28,23 @@ CML StateMachine / Composite StateMachine / Workflow
 ```
 
 `UnitOfWorkOp[A]` remains the single source of truth for executable intents.
+
+## Cozy Phase 47.2 split coordination — 2026-09-08
+
+Cozy's former combined Phase 47.2 plan was approved as the ordered
+`47.2 -> 47.2.1 -> 47.2.2` sequence. This Phase remains the CNCF-owned
+consumer-runtime ledger; the split only gives each unfinished UTP item one
+cross-repository delivery boundary:
+
+| Cozy delivery unit | CNCF Phase 64.2 items | Frozen handoff |
+| --- | --- | --- |
+| Phase 47.2 | UTP-01, UTP-03, UTP-04, UTP-05 | Consumer inventory, classification, planner, and deterministic-test foundation |
+| Phase 47.2.1 | UTP-02 | Versioned Cozy logical-action compiler/generated ABI admitted by CNCF |
+| Phase 47.2.2 | UTP-06, UTP-07, UTP-08, UTP-09 | Frozen compiler/ABI exercised through composed fixture acceptance |
+
+The UTP identifiers and their execution authority remain in this CNCF Phase.
+No row authorizes Cozy to prove CNCF runtime behavior, and no row introduces a
+parallel StateMachine/Workflow action algebra.
 
 ## Existing Runtime Authority
 
@@ -267,7 +284,8 @@ No single property-test library is mandated.
 
 ## Representative Acceptance
 
-Use the shared Order/Payment/Shipment CML fixture from Cozy Phase 33.2.
+Use the shared Order/Payment/Shipment CML fixture from Cozy Phase 47.2.2 after
+the Phase 47.2.1 compiler/ABI handoff.
 
 Acceptance must prove at least:
 
@@ -289,7 +307,7 @@ Acceptance must prove at least:
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | UTP-01 | Existing Free/UoW inventory | `UnitOfWorkOp`, `ExecProgram`, `ExecUowM`, direct/declarative DSLs, interpreter/drivers, metadata, and current tests are inventoried. | planned |
-| UTP-02 | CML compilation ABI | Cozy Phase 33.2 logical-action binding/compilation contract to `ExecProgram` is admitted/versioned. | planned |
+| UTP-02 | CML compilation ABI | Cozy Phase 47.2.1 logical-action binding/compilation contract to `ExecProgram` is admitted/versioned. | planned |
 | UTP-03 | Operation effect classification | Existing `UnitOfWorkOp` cases are classified for local/2PC/after-commit/compensatable/irreversible planning where relevant. | planned |
 | UTP-04 | Planner model | Explicit segment planning, ordering, capability admission, idempotency, and compensation planning are frozen. | planned |
 | UTP-05 | Deterministic test runtime | Program inspection, fake drivers, typed result stubbing, and failure injection are defined/implemented. | planned |
@@ -328,5 +346,8 @@ Acceptance must prove at least:
 - `../design/free-unitofwork-execution-model.md`
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala`
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/types.scala`
+- `../design/unitofwork-program-planning.md`
 - `../notes/action-transaction-compensation-runtime-provisional-specification.md`
-- `asami/cozy/docs/phase/phase-33.2.md`
+- `asami/cozy/docs/phase/phase-47.2.md`
+- `asami/cozy/docs/phase/phase-47.2.1.md`
+- `asami/cozy/docs/phase/phase-47.2.2.md`
