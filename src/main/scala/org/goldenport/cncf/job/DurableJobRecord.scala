@@ -29,6 +29,7 @@ object DurableRecordFormat {
   val SCHEMA_ID = "cncf.durable-job-record"
   val V0 = DurableRecordFormat(SCHEMA_ID, 0)
   val V1 = DurableRecordFormat(SCHEMA_ID, 1)
+  val V2 = DurableRecordFormat(SCHEMA_ID, 2)
 }
 
 final case class DurableJobIdentity(
@@ -289,6 +290,7 @@ final case class DurableInputReference(name: String, value: DurableValue)
 sealed trait DurableResultOutcome
 
 object DurableResultOutcome {
+  case object Pending extends DurableResultOutcome
   final case class Succeeded(value: DurableValue) extends DurableResultOutcome
   final case class Failed(failure: DurableFailureSummary) extends DurableResultOutcome
   final case class Cancelled(summary: Option[DurableFailureSummary]) extends DurableResultOutcome
@@ -377,6 +379,12 @@ final case class DurableJobRecord(
 object DurableJobRecord {
   def create(body: DurableJobRecordBody): Consequence[DurableJobRecord] =
     DurableJobRecordCodec.sign(body)
+
+  def createV2(body: DurableJobRecordBody): Consequence[DurableJobRecord] =
+    DurableJobRecordCodec.signV2(body)
+
+  def migrateV1ToV2(record: DurableJobRecord): Consequence[DurableJobRecord] =
+    DurableJobRecordCodec.migrateV1ToV2(record)
 }
 
 final case class DurablePublicValue(
@@ -407,14 +415,36 @@ final case class DurableJobPublicProjection(
   retention: DurableRetentionState
 )
 
+/*
+ * Closed startup admission fact.  It intentionally exposes neither a decode
+ * failure nor an authorization detail across the recovery boundary.
+ */
+private[job] enum DurableJobRecordStartupAdmission {
+  case Admitted(record: DurableJobRecord)
+  case Refused
+  case Corrupt
+}
+
 object DurableJobRecordCodec {
   val SCHEMA_ID: String = DurableRecordFormat.SCHEMA_ID
   val V1: DurableRecordFormat = DurableRecordFormat.V1
+  val V2: DurableRecordFormat = DurableRecordFormat.V2
   val V1_SCHEMA_VALUE: String = s"$SCHEMA_ID/v${V1.version}"
+  val V2_SCHEMA_VALUE: String = s"$SCHEMA_ID/v${V2.version}"
   val SHA256_ALGORITHM = "sha-256"
 
   def sign(body: DurableJobRecordBody): Consequence[DurableJobRecord] =
-    _from_either(_sign(body))
+    _from_either(_sign(V1, body))
+
+  def signV2(body: DurableJobRecordBody): Consequence[DurableJobRecord] =
+    _from_either(_sign(V2, body))
+
+  def migrateV1ToV2(record: DurableJobRecord): Consequence[DurableJobRecord] =
+    _from_either(for {
+      _ <- Either.cond(record.format == V1, (), "Only an admitted v1 durable record can migrate to v2")
+      _ <- _validate_record(record)
+      migrated <- _sign(V2, record.body)
+    } yield migrated)
 
   def canonicalJson(record: DurableJobRecord): Consequence[String] =
     _from_either(_validate_record(record).map(_ => _signed_json(record).noSpaces))
@@ -437,10 +467,25 @@ object DurableJobRecordCodec {
     }
 
   def canonicalV0Json(body: DurableJobRecordBody): Consequence[String] =
-    _from_either(_validate_body(body).map(_ => _unsigned_json(DurableRecordFormat.V0, body).noSpaces))
+    _from_either(_validate_body(V1, body).map(_ => _unsigned_json(DurableRecordFormat.V0, body).noSpaces))
 
   def decode(text: String, access: DurableJobRecordAccess): Consequence[DurableJobRecord] =
-    _from_either(_safe_decode(text, access))
+    _from_either(_safe_decode_record(text).flatMap { record =>
+      _authorize(record.body.authorization, access).map(_ => record)
+    })
+
+  private[job] def startupAdmission(
+    text: String,
+    access: DurableJobRecordAccess
+  ): DurableJobRecordStartupAdmission =
+    _safe_decode_record(text) match {
+      case Right(record) =>
+        _authorize(record.body.authorization, access) match {
+          case Right(_) => DurableJobRecordStartupAdmission.Admitted(record)
+          case Left(_) => DurableJobRecordStartupAdmission.Refused
+        }
+      case Left(_) => DurableJobRecordStartupAdmission.Corrupt
+    }
 
   def publicProjection(
     record: DurableJobRecord,
@@ -451,13 +496,13 @@ object DurableJobRecordCodec {
       _ <- _authorize(record.body.authorization, access)
     } yield _public_projection(record.body))
 
-  private def _safe_decode(text: String, access: DurableJobRecordAccess): Either[String, DurableJobRecord] =
-    try _decode(text, access)
+  private def _safe_decode_record(text: String): Either[String, DurableJobRecord] =
+    try _decode_record(text)
     catch {
       case NonFatal(error) => Left(s"Malformed durable job record: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}")
     }
 
-  private def _decode(text: String, access: DurableJobRecordAccess): Either[String, DurableJobRecord] =
+  private def _decode_record(text: String): Either[String, DurableJobRecord] =
     for {
       json <- _parse_json(text)
       cursor = json.hcursor
@@ -465,38 +510,42 @@ object DurableJobRecordCodec {
       _ <- _only(cursor, _root_fields(format.version), "record root")
       body <- _body(cursor.downField("record"))
       record <- format.version match {
-        case 0 => _sign(body)
+        case 0 => _sign(V1, body)
         case 1 => for {
+          integrity <- _integrity(cursor.downField("integrity"))
+          candidate = DurableJobRecord(format, body, integrity)
+          _ <- _validate_record(candidate)
+        } yield candidate
+        case 2 => for {
           integrity <- _integrity(cursor.downField("integrity"))
           candidate = DurableJobRecord(format, body, integrity)
           _ <- _validate_record(candidate)
         } yield candidate
         case other => Left(s"Unsupported durable job record version: $other")
       }
-      _ <- _authorize(record.body.authorization, access)
     } yield record
 
   private def _root_fields(version: Int): Set[String] = version match {
     case 0 => Set("format", "record")
-    case 1 => Set("format", "record", "integrity")
+    case 1 | 2 => Set("format", "record", "integrity")
     case _ => Set.empty
   }
 
-  private def _sign(body: DurableJobRecordBody): Either[String, DurableJobRecord] =
+  private def _sign(format: DurableRecordFormat, body: DurableJobRecordBody): Either[String, DurableJobRecord] =
     for {
-      _ <- _validate_body(body)
-      unsigned = _unsigned_json(DurableRecordFormat.V1, body).noSpaces
+      _ <- _validate_body(format, body)
+      unsigned = _unsigned_json(format, body).noSpaces
       digest <- _sha256(unsigned)
     } yield DurableJobRecord(
-      DurableRecordFormat.V1,
+      format,
       body,
       DurableRecordIntegrity(SHA256_ALGORITHM, digest)
     )
 
   private def _validate_record(record: DurableJobRecord): Either[String, Unit] =
     for {
-      _ <- Either.cond(record.format == DurableRecordFormat.V1, (), "Durable record must use the v1 format")
-      _ <- _validate_body(record.body)
+      _ <- Either.cond(record.format == V1 || record.format == V2, (), "Durable record must use the v1 or v2 format")
+      _ <- _validate_body(record.format, record.body)
       _ <- Either.cond(record.integrity.algorithm == SHA256_ALGORITHM, (), s"Unsupported durable integrity algorithm: ${record.integrity.algorithm}")
       _ <- _validate_digest(record.integrity.unsignedBodySha256, "integrity.unsignedBodySha256")
       expected <- _sha256(_unsigned_json(record.format, record.body).noSpaces)
@@ -507,7 +556,7 @@ object DurableJobRecordCodec {
       )
     } yield ()
 
-  private def _validate_body(body: DurableJobRecordBody): Either[String, Unit] =
+  private def _validate_body(format: DurableRecordFormat, body: DurableJobRecordBody): Either[String, Unit] =
     for {
       _ <- _non_empty(body.identity.jobId, "identity.jobId")
       _ <- Either.cond(body.identity.revision >= 1, (), "identity.revision must be positive")
@@ -516,7 +565,7 @@ object DurableJobRecordCodec {
       _ <- _lifecycle_valid(body.lifecycle)
       _ <- _tasks_valid(body.tasks)
       _ <- _inputs_valid(body.inputs)
-      _ <- _result_valid(body.result)
+      _ <- _result_valid(format, body.lifecycle.status, body.result)
       _ <- _timeline_valid(body.timeline, body.tasks.map(_.taskId).toSet)
       _ <- _diagnostics_valid(body.diagnostics)
       _ <- _reference_optional_valid(body.calltreeReference, "calltreeReference")
@@ -675,11 +724,26 @@ object DurableJobRecordCodec {
   private def _reference_optional_valid(value: Option[DurableExternalReference], context: String): Either[String, Unit] =
     value.map(_reference_valid(_, context)).getOrElse(Right(()))
 
-  private def _result_valid(value: DurableResultOutcome): Either[String, Unit] = value match {
-    case DurableResultOutcome.Succeeded(result) => _value_valid(result, "result.value")
-    case DurableResultOutcome.Failed(failure) => _failure_valid(failure, "result.failure")
-    case DurableResultOutcome.Cancelled(summary) => _failure_optional_valid(summary, "result.summary")
-  }
+  private def _result_valid(
+    format: DurableRecordFormat,
+    lifecycle: DurableJobLifecycleStatus,
+    value: DurableResultOutcome
+  ): Either[String, Unit] =
+    (format, lifecycle, value) match {
+      case (V2, status, DurableResultOutcome.Pending) if _is_pending_lifecycle(status) => Right(())
+      case (_, DurableJobLifecycleStatus.Succeeded, DurableResultOutcome.Succeeded(result)) => _value_valid(result, "result.value")
+      case (_, DurableJobLifecycleStatus.Failed, DurableResultOutcome.Failed(failure)) => _failure_valid(failure, "result.failure")
+      case (_, DurableJobLifecycleStatus.Cancelled, DurableResultOutcome.Cancelled(summary)) => _failure_optional_valid(summary, "result.summary")
+      case (V1, _, DurableResultOutcome.Pending) => Left("v1 durable records cannot carry a pending result")
+      case (_, status, _) if _is_pending_lifecycle(status) =>
+        Left("Non-terminal durable lifecycle statuses require a v2 pending result")
+      case _ => Left("Durable lifecycle status and result outcome must match")
+    }
+
+  private def _is_pending_lifecycle(value: DurableJobLifecycleStatus): Boolean =
+    value == DurableJobLifecycleStatus.Submitted ||
+      value == DurableJobLifecycleStatus.Running ||
+      value == DurableJobLifecycleStatus.Suspended
 
   private def _failure_optional_valid(value: Option[DurableFailureSummary], context: String): Either[String, Unit] =
     value.map(_failure_valid(_, context)).getOrElse(Right(()))
@@ -800,6 +864,7 @@ object DurableJobRecordCodec {
   }
 
   private def _public_result(value: DurableResultOutcome): DurablePublicResult = value match {
+    case DurableResultOutcome.Pending => DurablePublicResult("pending", None, None)
     case DurableResultOutcome.Succeeded(result) => DurablePublicResult("succeeded", Some(_public_value(result)), None)
     case DurableResultOutcome.Failed(failure) => DurablePublicResult("failed", None, Some(failure))
     case DurableResultOutcome.Cancelled(summary) => DurablePublicResult("cancelled", None, summary)
@@ -811,7 +876,7 @@ object DurableJobRecordCodec {
       schemaid <- _required[String](cursor, "schemaId", "format")
       version <- _required[Int](cursor, "version", "format")
       _ <- Either.cond(schemaid == SCHEMA_ID, (), s"Unsupported durable job schema: $schemaid")
-      _ <- Either.cond(version == 0 || version == 1, (), s"Unsupported durable job record version: $version")
+      _ <- Either.cond(version == 0 || version == 1 || version == 2, (), s"Unsupported durable job record version: $version")
     } yield DurableRecordFormat(schemaid, version)
 
   private def _body(cursor: ACursor): Either[String, DurableJobRecordBody] =
@@ -1004,6 +1069,7 @@ object DurableJobRecordCodec {
       value <- _optional_nested(cursor, "value", "result")(_value)
       failure <- _optional_nested(cursor, "failure", "result")(_failure_summary)
       result <- (outcome, value, failure) match {
+        case ("pending", None, None) => Right(DurableResultOutcome.Pending)
         case ("succeeded", Some(admitted), None) => Right(DurableResultOutcome.Succeeded(admitted))
         case ("failed", None, Some(summary)) => Right(DurableResultOutcome.Failed(summary))
         case ("cancelled", None, summary) => Right(DurableResultOutcome.Cancelled(summary))
@@ -1248,6 +1314,11 @@ object DurableJobRecordCodec {
     )
 
   private def _result_json(value: DurableResultOutcome): Json = value match {
+    case DurableResultOutcome.Pending => Json.obj(
+      "outcome" -> Json.fromString("pending"),
+      "value" -> Json.Null,
+      "failure" -> Json.Null
+    )
     case DurableResultOutcome.Succeeded(result) => Json.obj(
       "outcome" -> Json.fromString("succeeded"),
       "value" -> _value_json(result),

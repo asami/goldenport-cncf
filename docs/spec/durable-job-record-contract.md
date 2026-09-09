@@ -1,10 +1,10 @@
 # Durable Job Record Contract
 
 status=normative
-phase=JM69-02
-schema=`cncf.durable-job-record/v1`
+phase=JM69-03C
+schema=`cncf.durable-job-record/v2`
 
-This is the normative durable execution-record contract for `JM69-02`.
+This is the normative durable execution-record contract for `JM69-03C`.
 It defines the provider-neutral value that a later durable provider may write
 and that a later process-recovery implementation may consume. It is not a
 provider API, recovery implementation, live-execution serialization format, or
@@ -28,9 +28,9 @@ process recovery. A provider must not be inferred from an opaque reference.
 
 ## Closed record shape
 
-The v1 wire root has exactly `format`, `record`, and `integrity`. The `format`
-has `schemaId = cncf.durable-job-record` and `version = 1`. Unknown fields are
-refused at the root and every nested object level.
+The v1 and v2 wire roots have exactly `format`, `record`, and `integrity`. The
+`format` has `schemaId = cncf.durable-job-record` and its admitted version.
+Unknown fields are refused at the root and every nested object level.
 
 `record` contains the following complete field groups:
 
@@ -63,7 +63,25 @@ refused at the root and every nested object level.
 
 `integrity` contains the fixed `sha-256` algorithm and lowercase SHA-256 digest
 of the canonical unsigned body. The unsigned body is the explicit ordered JSON
-object containing `format` and `record`, without `integrity`.
+object containing `format` and `record`, without `integrity`. The format is
+therefore part of every digest boundary: a v1 and v2 record with the same body
+have distinct integrity digests.
+
+## V2 pending result
+
+V2 adds exactly one result outcome, `pending`. It has no value and no failure
+payload. It is admitted only when lifecycle status is `submitted`, `running`,
+or `suspended`. Terminal lifecycle statuses remain paired with their matching
+terminal result: `succeeded`, `failed`, or `cancelled`.
+
+V1 remains terminal-only. It cannot carry `pending`; its canonical text,
+integrity calculation, redaction boundary, and terminal decoding behavior are
+retained. The metadata-only public projection exposes a V2 pending result as
+`outcome = pending`, with no public value or failure detail.
+
+`DurableJobRecord.create` remains the legacy V1 terminal-only constructor.
+`DurableJobRecord.createV2` is the explicit V2 constructor, and
+`DurableJobRecord.migrateV1ToV2` is the explicit one-way migration.
 
 No durable model or codec API admits `JobTask`, `Action`, `ActionEngine`,
 `ExecutionContext`, `Component`, provider instances, `Class`, closures,
@@ -72,7 +90,7 @@ bodies, raw result bodies, or calltree internals.
 
 ## Canonical codec and migration
 
-`DurableJobRecordCodec` is the sole v1 value codec. It produces explicit-field
+`DurableJobRecordCodec` is the sole v1/v2 value codec. It produces explicit-field
 order compact JSON and UTF-8 bytes. Set values are sorted and the only map,
 the declared profile, is key-sorted. Equivalent admitted records therefore
 produce byte-identical canonical text and the same digest.
@@ -80,12 +98,17 @@ produce byte-identical canonical text and the same digest.
 The codec accepts only:
 
 - v1: `format` plus the closed `record` body and valid integrity member; and
+- v2: `format` plus the closed `record` body and valid integrity member, with
+  the V2 pending-result rule; and
 - v0: the identical closed body with `format.version = 0` and no integrity
   member.
 
 v0 decoding is a one-way, explicit `v0 -> v1` migration: the v1 canonical
 unsigned body is rendered and a valid v1 integrity digest is generated. v0 is
-never re-emitted by the v1 codec. No other version is compatible.
+never re-emitted by the codec. An explicit `v1 -> v2` migration re-signs an
+already admitted V1 body under the V2 format. It does not select a provider,
+write storage, automatically migrate a record, or support downgrade. No other
+version is compatible.
 
 ## Refusal categories
 
@@ -111,10 +134,10 @@ no tombstone. Tombstoned records require a deletion time and a tombstone whose
 deletion time matches it. Retention, expiry, deletion, and tombstone are record
 facts; actual cleanup scheduling is provider work owned by Phase 69.1.
 
-Every v1 read verifies the stored integrity digest against the canonical
-unsigned v1 body before authorization is accepted. Every canonical v1 write
-must recalculate the digest; a stale digest is refused rather than repaired in
-place.
+Every v1 or v2 read verifies the stored integrity digest against its canonical
+format-bound unsigned body before authorization is accepted. Every canonical
+write must recalculate the digest; a stale digest is refused rather than
+repaired in place.
 
 ## Isolation and ordinary projection
 

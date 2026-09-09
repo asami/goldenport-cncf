@@ -54,7 +54,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Aug. 12, 2026
+ * @version Sep. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -954,8 +954,20 @@ final class InMemoryJobEngine(
   import InMemoryJobEngine._
   private val _durable_jobs = runtimeState.durableJobs
   private val _runtime_jobs = runtimeState.runtimeJobs
+  private val _durable_terminal_facts =
+    new ConcurrentHashMap[JobId, DurableJobTerminalProjection]()
+  private var _durable_lifecycle_write_bridge =
+    Option.empty[DurableJobLifecycleWriteBridge]
+  private val _durable_lifecycle_write_failures =
+    new ConcurrentHashMap[JobId, DurableJobLifecycleWriteFailure]()
   private var _event_store: Option[EventStore] = None
   private var _event_bus: Option[EventBus] = None
+  private var _durable_startup_recovery_report =
+    Option.empty[DurableJobStartupRecoveryReport]
+  private var _durable_runtime_rehydration_report =
+    Option.empty[DurableJobRuntimeRehydrationReport]
+  private var _durable_terminal_projection_report =
+    Option.empty[DurableJobTerminalProjectionReport]
   private val _scheduler: Option[ScheduledExecutorService] =
     if (timer.isDefined) None else Some(Executors.newSingleThreadScheduledExecutor())
   private val _timer: JobTimer =
@@ -991,6 +1003,78 @@ final class InMemoryJobEngine(
     _event_bus = Some(bus)
     this
   }
+
+  private[job] def bindDurableLifecycleWriteBridge(
+    bridge: DurableJobLifecycleWriteBridge
+  ): Unit =
+    _state_monitor.synchronized {
+      _durable_lifecycle_write_bridge = Option(bridge)
+    }
+
+  private[job] def durableLifecycleWriteFailureFacts: Vector[DurableJobLifecycleWriteFailureFact] = {
+    val entries = _durable_lifecycle_write_failures.entrySet().iterator()
+    val builder = Vector.newBuilder[DurableJobLifecycleWriteFailureFact]
+    while (entries.hasNext) {
+      val entry = entries.next()
+      builder += DurableJobLifecycleWriteFailureFact(entry.getKey, entry.getValue)
+    }
+    builder.result().sortBy(_.jobid.value)
+  }
+
+  private[job] def recoverDurableStartup(
+    source: DurableJobStartupRecoverySource,
+    store: DurableJobStore,
+    maxCandidates: Int
+  )(using ctx: ExecutionContext): Consequence[DurableJobStartupRecoveryReport] =
+    (new DurableJobStartupRecoveryCoordinator(source, store)).recover(maxCandidates).map { report =>
+      _durable_startup_recovery_report = Some(report)
+      report
+    }
+
+  private[job] def durableStartupRecoveryReport: Option[DurableJobStartupRecoveryReport] =
+    _durable_startup_recovery_report
+
+  private[job] def recoverDurableTerminalFacts(
+    source: DurableJobStartupRecoverySource,
+    store: DurableJobStore,
+    maxCandidates: Int
+  )(using ctx: ExecutionContext): Consequence[DurableJobTerminalProjectionReport] =
+    (new DurableJobStartupRecoveryCoordinator(source, store))
+      .recoverTerminal(maxCandidates)(_register_durable_terminal_fact)
+      .map { report =>
+        _durable_terminal_projection_report = Some(report)
+        report
+      }
+
+  private[job] def durableTerminalProjectionReport: Option[DurableJobTerminalProjectionReport] =
+    _durable_terminal_projection_report
+
+  private[job] def durableTerminalProjection(
+    jobId: JobId
+  ): Option[DurableJobTerminalProjection] =
+    Option(_durable_terminal_facts.get(jobId))
+
+  private[job] def durableTerminalProjections: Vector[DurableJobTerminalProjection] =
+    _durable_terminal_facts
+      .values()
+      .toArray(new Array[DurableJobTerminalProjection](0))
+      .toVector
+
+  private[job] def recoverDurableStartup(
+    source: DurableJobStartupRecoverySource,
+    store: DurableJobStore,
+    port: DurableJobRuntimeRehydrationPort,
+    maxCandidates: Int
+  )(using ctx: ExecutionContext): Consequence[DurableJobRuntimeRehydrationReport] =
+    (new DurableJobStartupRecoveryCoordinator(source, store))
+      .recoverRuntime(maxCandidates, port)(_register_durable_runtime_rehydration)
+      .map { report =>
+        _durable_runtime_rehydration_report = Some(report)
+        report
+      }
+
+  private[job] def durableRuntimeRehydrationReport: Option[DurableJobRuntimeRehydrationReport] =
+    _durable_runtime_rehydration_report
 
   override def shutdown(): Unit = {
     quiesce()
@@ -1046,9 +1130,8 @@ final class InMemoryJobEngine(
       _validate_submit_option(option).recoverWith { conclusion =>
         tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
         Consequence.Failure(conclusion)
-      }.map { _ =>
+      }.flatMap { _ =>
         val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
-        _cancellation_scopes.put(jobid, new JobCancellationScope)
         val now = _now()
         val initialdebug = JobDebugInfo(
           requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
@@ -1086,50 +1169,59 @@ final class InMemoryJobEngine(
           debug = initialdebug,
           input = option.input
         )
-        _put_record(record)
-        _append_event(
-          jobid = jobid,
-          name = "job.submitted",
-          payload = Map(
-            "job-id" -> jobid.value,
-            "status" -> JobStatus.Submitted.toString,
-            "request-summary" -> initialdebug.requestSummary.getOrElse("")
+        _admit_durable_lifecycle(record).recoverWith { conclusion =>
+          _record_durable_lifecycle_write_failure(jobid, DurableJobLifecycleWriteFailure.AdmissionRefused)
+          tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
+          Consequence.Failure(conclusion)
+        }.map { _ =>
+          _cancellation_scopes.put(jobid, new JobCancellationScope)
+          _put_record(record)
+          _append_event(
+            jobid = jobid,
+            name = "job.submitted",
+            payload = Map(
+              "job-id" -> jobid.value,
+              "status" -> JobStatus.Submitted.toString,
+              "request-summary" -> initialdebug.requestSummary.getOrElse("")
+            )
           )
-        )
-        option.runMode match {
-          case JobRunMode.Async =>
-            option.scheduledStartAt.filter(_.isAfter(now)) match {
-              case Some(scheduledat) =>
-                _append_timeline(
-                  jobid,
-                  "job.delayed.scheduled",
-                  None,
-                  None,
-                  Some(scheduledat.toString)
-                )
-                _append_event(
-                  jobid = jobid,
-                  name = "job.delayed.scheduled",
-                  payload = Map(
-                    "job-id" -> jobid.value,
-                    "status" -> JobStatus.Submitted.toString,
-                    "scheduled-start-at" -> scheduledat.toString
+          option.runMode match {
+            case JobRunMode.Async =>
+              option.scheduledStartAt.filter(_.isAfter(now)) match {
+                case Some(scheduledat) =>
+                  _append_timeline(
+                    jobid,
+                    "job.delayed.scheduled",
+                    None,
+                    None,
+                    Some(scheduledat.toString)
                   )
-                )
-                _schedule_delayed_start(jobid, scheduledat)
-              case None =>
-                _append_timeline(jobid, "job.async.queued", None, None, None)
-                _enqueue_work(SchedulerWorkItem.JobRun(_next_sequence(), option.priority, jobid))
-            }
-          case JobRunMode.Sync =>
-            _run_job_sync(jobid, tasks, ctx)
+                  _append_event(
+                    jobid = jobid,
+                    name = "job.delayed.scheduled",
+                    payload = Map(
+                      "job-id" -> jobid.value,
+                      "status" -> JobStatus.Submitted.toString,
+                      "scheduled-start-at" -> scheduledat.toString
+                    )
+                  )
+                  _schedule_delayed_start(jobid, scheduledat)
+                case None =>
+                  _append_timeline(jobid, "job.async.queued", None, None, None)
+                  _enqueue_work(SchedulerWorkItem.JobRun(_next_sequence(), option.priority, jobid))
+              }
+            case JobRunMode.Sync =>
+              _run_job_sync(jobid, tasks, ctx)
+          }
+          jobid
         }
-        jobid
       }
     }
 
   def getStatus(jobId: JobId): Option[JobStatus] =
-    _get_record(jobId).map(_.status)
+    _get_record(jobId)
+      .map(_.status)
+      .orElse(durableTerminalProjection(jobId).map(_.queryReadModel.status))
 
   def getResult(jobId: JobId): Option[JobResult] =
     _get_record(jobId).flatMap(_.result)
@@ -1168,7 +1260,9 @@ final class InMemoryJobEngine(
     }
 
   def query(jobId: JobId): Option[JobQueryReadModel] =
-    _get_record(jobId).map(_read_model)
+    _get_record(jobId)
+      .map(_read_model)
+      .orElse(durableTerminalProjection(jobId).map(_.queryReadModel))
 
   override def listJobs(
     limit: Int = 100,
@@ -1178,31 +1272,38 @@ final class InMemoryJobEngine(
     val runtime =
       if (persistentOnly) Vector.empty
       else _runtime_jobs.values().toArray(new Array[JobRecord](0)).toVector
-    (durable ++ runtime)
+    val terminal = durableTerminalProjections.map(_.queryReadModel)
+    (durable.map(_read_model) ++ runtime.map(_read_model) ++ terminal)
       .sortBy(_.updatedAt)
       .reverse
       .take(math.max(0, limit))
-      .map(_read_model)
   }
 
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage] =
-    _get_record(jobId).map(_task_page(_, offset, limit))
+    _get_record(jobId)
+      .map(_task_page(_, offset, limit))
+      .orElse(durableTerminalProjection(jobId).map(projection =>
+        _task_page(projection.queryReadModel.tasks.tasks, offset, limit)
+      ))
 
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage] =
-    _get_record(jobId).map(_timeline_page(_, offset, limit))
+    _get_record(jobId)
+      .map(_timeline_page(_, offset, limit))
+      .orElse(durableTerminalProjection(jobId).map(projection =>
+        _timeline_page(projection.queryReadModel.timeline.events, offset, limit)
+      ))
 
   override def queryTaskExecutionTree(jobId: JobId): Option[JobTraceTree] =
-    _get_record(jobId).map(_trace_tree)
+    query(jobId).map(_.traceTree)
 
   override def queryTaskDetail(jobId: JobId, taskId: TaskId): Option[JobTaskDetail] =
-    _get_record(jobId).flatMap { record =>
-      record.taskReadModels.find(_.taskId == taskId).map { task =>
-        val tree = _trace_tree(record)
+    query(jobId).flatMap { model =>
+      model.tasks.tasks.find(_.taskId == taskId).map { task =>
         JobTaskDetail(
           jobId = jobId,
           task = task,
-          events = record.timeline.filter(_.taskId.contains(taskId)).sortBy(_.sequence),
-          children = tree.roots.flatMap(_find_children(_, taskId))
+          events = model.timeline.events.filter(_.taskId.contains(taskId)).sortBy(_.sequence),
+          children = model.traceTree.roots.flatMap(_find_children(_, taskId))
         )
       }
     }
@@ -1269,9 +1370,12 @@ final class InMemoryJobEngine(
     ctx: ExecutionContext
   ): Consequence[TaskOutcome] =
     _get_record(jobId) match {
+      case Some(_) if _can_run_next_task(jobId) =>
+        _run_same_job_task(jobId, task, ctx).flatMap { outcome =>
+          outcome.result.map(_ => outcome)
+        }
       case Some(_) =>
-        val outcome = _run_same_job_task(jobId, task, ctx)
-        outcome.result.map(_ => outcome)
+        Consequence.stateInvalid(s"job task admission blocked: ${jobId.value}")
       case None =>
         Consequence.operationNotFound(s"job:${jobId.value}")
     }
@@ -1282,7 +1386,7 @@ final class InMemoryJobEngine(
     ctx: ExecutionContext
   ): Consequence[TaskId] =
     _get_record(jobId) match {
-      case Some(_) =>
+      case Some(_) if _can_run_next_task(jobId) =>
         val taskid = TaskId.create("same-job.enqueue", ctx.clock.instant(), ctx.idGeneration)
         _append_same_job_task_queued(jobId, taskid, task, ctx.jobContext.currentTask)
         val priority = _get_record(jobId).map(_.priority).getOrElse(0)
@@ -1295,16 +1399,172 @@ final class InMemoryJobEngine(
           taskid
         ))
         Consequence.success(taskid)
+      case Some(_) =>
+        Consequence.stateInvalid(s"job task admission blocked: ${jobId.value}")
       case None =>
         Consequence.operationNotFound(s"job:${jobId.value}")
     }
+
+  private def _admit_durable_lifecycle(record: JobRecord): Consequence[Unit] =
+    record.persistence match {
+      case JobPersistencePolicy.Persistent =>
+        _durable_lifecycle_write_bridge match {
+          case Some(bridge) => bridge.admit(record)(using record.submittedContext)
+          case None => Consequence.unit
+        }
+      case JobPersistencePolicy.Ephemeral =>
+        Consequence.unit
+    }
+
+  private def _establish_durable_start_intent(jobid: JobId): Boolean =
+    _get_record(jobid).exists(_establish_durable_start_intent)
+
+  private def _establish_durable_start_intent(record: JobRecord): Boolean =
+    record.persistence match {
+      case JobPersistencePolicy.Persistent =>
+        _durable_lifecycle_write_bridge match {
+          case Some(bridge) if bridge.hasAdmittedSnapshot(record.id) =>
+            bridge.establishStartIntent(record)(using record.submittedContext) match {
+              case Consequence.Success(_) => true
+              case Consequence.Failure(_) =>
+                _record_durable_lifecycle_write_failure(
+                  record.id,
+                  DurableJobLifecycleWriteFailure.StartIntentRefused
+                )
+                false
+            }
+          case _ =>
+            true
+        }
+      case JobPersistencePolicy.Ephemeral =>
+        true
+    }
+
+  private def _establish_durable_start_intent_if_required(
+    record: JobRecord,
+    note: Option[String]
+  ): Boolean =
+    if (note.contains("job-run"))
+      _establish_durable_start_intent(record)
+    else
+      true
+
+  private def _establish_durable_running_intent(jobid: JobId): Boolean =
+    _get_record(jobid).exists(_establish_durable_running_intent)
+
+  private def _establish_durable_running_intent(record: JobRecord): Boolean =
+    record.persistence match {
+      case JobPersistencePolicy.Persistent =>
+        _durable_lifecycle_write_bridge match {
+          case Some(bridge) if bridge.hasAdmittedSnapshot(record.id) =>
+            bridge.establishRunningIntent(record)(using record.submittedContext) match {
+              case Consequence.Success(_) => true
+              case Consequence.Failure(_) =>
+                _record_durable_lifecycle_write_failure(
+                  record.id,
+                  DurableJobLifecycleWriteFailure.RunningIntentRefused
+                )
+                false
+            }
+          case _ =>
+            true
+        }
+      case JobPersistencePolicy.Ephemeral =>
+        true
+    }
+
+  private def _establish_durable_running_intent_if_required(
+    record: JobRecord,
+    note: Option[String]
+  ): Boolean =
+    if (note.contains("job-run"))
+      _establish_durable_running_intent(record)
+    else
+      true
+
+  private def _establish_durable_task_start_intent(
+    jobid: JobId,
+    taskid: TaskId,
+    parent: Option[TaskId]
+  ): Consequence[Unit] =
+    _get_record(jobid) match {
+      case Some(record) =>
+        record.persistence match {
+          case JobPersistencePolicy.Persistent =>
+            _durable_lifecycle_write_bridge match {
+              case Some(bridge) if bridge.hasAdmittedSnapshot(record.id) =>
+                val request = DurableJobLifecycleWriteRequest.TaskStartIntent(
+                  record.id,
+                  taskid,
+                  parent,
+                  record.taskReadModels
+                )
+                bridge.establishTaskStart(record, request)(using record.submittedContext).recoverWith {
+                  conclusion =>
+                    _record_durable_lifecycle_write_failure(
+                      record.id,
+                      DurableJobLifecycleWriteFailure.TaskStartIntentRefused
+                    )
+                    Consequence.Failure(conclusion)
+                }
+              case _ =>
+                Consequence.unit
+            }
+          case JobPersistencePolicy.Ephemeral =>
+            Consequence.unit
+        }
+      case None =>
+        Consequence.operationNotFound(s"job:${jobid.value}")
+    }
+
+  private def _establish_durable_task_outcome_checkpoint(
+    jobid: JobId,
+    taskid: TaskId,
+    parent: Option[TaskId]
+  ): Consequence[Unit] =
+    _get_record(jobid) match {
+      case Some(record) =>
+        record.persistence match {
+          case JobPersistencePolicy.Persistent =>
+            _durable_lifecycle_write_bridge match {
+              case Some(bridge) if bridge.hasAdmittedSnapshot(record.id) =>
+                val request = DurableJobLifecycleWriteRequest.TaskOutcomeCheckpoint(
+                  record.id,
+                  taskid,
+                  parent,
+                  record.taskReadModels
+                )
+                bridge.establishTaskOutcome(record, request)(using record.submittedContext).recoverWith {
+                  conclusion =>
+                    _record_durable_lifecycle_write_failure(
+                      record.id,
+                      DurableJobLifecycleWriteFailure.TaskOutcomeCheckpointRefused
+                    )
+                    Consequence.Failure(conclusion)
+                }
+              case _ =>
+                Consequence.unit
+            }
+          case JobPersistencePolicy.Ephemeral =>
+            Consequence.unit
+        }
+      case None =>
+        Consequence.operationNotFound(s"job:${jobid.value}")
+    }
+
+  private def _record_durable_lifecycle_write_failure(
+    jobid: JobId,
+    failure: DurableJobLifecycleWriteFailure
+  ): Unit =
+    _durable_lifecycle_write_failures.put(jobid, failure)
 
   private def _run_job_sync(
     jobid: JobId,
     tasks: List[JobTask],
     ctx: ExecutionContext
   ): Unit =
-    _run_job_body(jobid, tasks, ctx)
+    if (_establish_durable_start_intent(jobid) && _establish_durable_running_intent(jobid))
+      _run_job_body(jobid, tasks, ctx, taskbridgewrites = true)
 
   private def _start_scheduler_workers(): Unit =
     (0 until math.max(1, schedulerConfig.workerCount)).foreach { _ =>
@@ -1350,13 +1610,19 @@ final class InMemoryJobEngine(
     note: Option[String]
   ): Unit =
     _get_record(jobid).foreach { record =>
-      if (_can_run_next_task(jobid)) {
+      if (
+        _can_run_next_task(jobid) &&
+          _establish_durable_start_intent_if_required(record, note) &&
+          _establish_durable_running_intent_if_required(record, note)
+      ) {
         try {
           _append_timeline(jobid, "job.scheduler.started", None, None, note)
+          val taskbridgewrites = note.contains("job-run")
           _run_job_body(
             jobid,
             record.tasks,
-            ExecutionContext.withFreshExecutionResponseCell(record.submittedContext)
+            ExecutionContext.withFreshExecutionResponseCell(record.submittedContext),
+            taskbridgewrites
           )
         } catch {
           case e: Throwable =>
@@ -1426,7 +1692,8 @@ final class InMemoryJobEngine(
   private def _run_job_body(
     jobid: JobId,
     tasks: List[JobTask],
-    ctx: ExecutionContext
+    ctx: ExecutionContext,
+    taskbridgewrites: Boolean
   ): Unit = {
     _append_timeline(jobid, "job.running", None, None, None)
     _update_record(jobid, JobStatus.Running, None)
@@ -1458,8 +1725,10 @@ final class InMemoryJobEngine(
         var committedtasks = Vector.empty[(TaskId, JobTask)]
         var successresponse: Option[OperationResponse] = None
         var completedtasks = Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
+        var taskstartrefused = false
+        var taskoutcomerefused = false
         tasks.foreach { task =>
-          if (failure.isEmpty && _can_run_next_task(jobid)) {
+          if (failure.isEmpty && !taskstartrefused && !taskoutcomerefused && _can_run_next_task(jobid)) {
             if (_await_if_suspended(jobid)) {
               val taskid = TaskId.create("execute", ctx.clock.instant(), ctx.idGeneration)
               val startedat = _now()
@@ -1479,74 +1748,102 @@ final class InMemoryJobEngine(
               )
               val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
               _append_task_running(jobid, taskid, previous, startedat, task)
-              val taskoutcome = task.run(executioncontext)
-              val taskcancelled =
-                executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
-              completedtasks =
-                completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
-              taskoutcome match {
-                case TaskSucceeded(res) =>
-                  _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
-                  successresponse = Some(res)
-                  _append_task_finished(
-                    jobid,
-                    taskid,
-                    previous,
-                    JobTaskStatus.Succeeded,
-                    JobTaskResultSummary(success = true, message = Some("ok")),
-                    _now()
-                  )
-                  _append_timeline(
-                    jobid,
-                    "task.transaction.committed",
-                    Some(taskid),
-                    previous,
-                    None
-                  )
-                  committedtasks = committedtasks :+ (taskid -> task)
-                  previous = Some(taskid)
-                case TaskFailed(c) =>
-                  _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
-                  failure = Some(c)
-                  failedtaskid = Some(taskid)
-                  _append_task_finished(
-                    jobid,
-                    taskid,
-                    previous,
-                    JobTaskStatus.Failed,
-                    JobTaskResultSummary(
-                      success = false,
-                      message = c.observation.getEffectiveMessage
-                    ),
-                    _now()
-                  )
-                  _append_timeline(
-                    jobid,
-                    "task.transaction.failed",
-                    Some(taskid),
-                    previous,
-                    c.observation.getEffectiveMessage
-                  )
+              (if (taskbridgewrites)
+                 _establish_durable_task_start_intent(jobid, taskid, previous)
+               else
+                 Consequence.unit) match {
+                case Consequence.Success(_) =>
+                  val taskoutcome = task.run(executioncontext)
+                  val taskcancelled =
+                    executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
+                  taskoutcome match {
+                    case TaskSucceeded(res) =>
+                      _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
+                      _append_task_finished(
+                        jobid,
+                        taskid,
+                        previous,
+                        JobTaskStatus.Succeeded,
+                        JobTaskResultSummary(success = true, message = Some("ok")),
+                        _now()
+                      )
+                      _append_timeline(
+                        jobid,
+                        "task.transaction.committed",
+                        Some(taskid),
+                        previous,
+                        None
+                      )
+                      (if (taskbridgewrites)
+                         _establish_durable_task_outcome_checkpoint(jobid, taskid, previous)
+                       else
+                         Consequence.unit) match {
+                        case Consequence.Success(_) =>
+                          completedtasks =
+                            completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
+                          successresponse = Some(res)
+                          committedtasks = committedtasks :+ (taskid -> task)
+                          previous = Some(taskid)
+                        case Consequence.Failure(_) =>
+                          taskoutcomerefused = true
+                      }
+                    case TaskFailed(c) =>
+                      _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
+                      _append_task_finished(
+                        jobid,
+                        taskid,
+                        previous,
+                        JobTaskStatus.Failed,
+                        JobTaskResultSummary(
+                          success = false,
+                          message = c.observation.getEffectiveMessage
+                        ),
+                        _now()
+                      )
+                      _append_timeline(
+                        jobid,
+                        "task.transaction.failed",
+                        Some(taskid),
+                        previous,
+                        c.observation.getEffectiveMessage
+                      )
+                      (if (taskbridgewrites)
+                         _establish_durable_task_outcome_checkpoint(jobid, taskid, previous)
+                       else
+                         Consequence.unit) match {
+                        case Consequence.Success(_) =>
+                          completedtasks =
+                            completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
+                          failure = Some(c)
+                          failedtaskid = Some(taskid)
+                        case Consequence.Failure(_) =>
+                          taskoutcomerefused = true
+                      }
+                  }
+                case Consequence.Failure(_) =>
+                  taskstartrefused = true
               }
             }
           }
         }
-        if (failure.nonEmpty)
-          _run_compensations(jobid, failedtaskid, committedtasks.reverse, ctx)
-        val deferred = _get_record(jobid).map(_.status) match {
-          case Some(JobStatus.Cancelled) =>
-            Some(JobResult.Failure(Consequence.stateInvalid[Nothing](
-              "job cancelled",
-              Seq(Descriptor.Facet.State("cancelled"))
-            ).conclusion))
-          case _ =>
-            failure.map(JobResult.Failure.apply).orElse(
-              successresponse.map(JobResult.Success.apply)
-            )
-        }
-        _mark_base_completion(jobid, deferred)
-        completedtasks.foreach { case (task, outcome, executioncontext, taskcancelled) =>
-          _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+        if (!taskstartrefused && !taskoutcomerefused) {
+          if (failure.nonEmpty)
+            _run_compensations(jobid, failedtaskid, committedtasks.reverse, ctx)
+          val deferred = _get_record(jobid).map(_.status) match {
+            case Some(JobStatus.Cancelled) =>
+              Some(JobResult.Failure(Consequence.stateInvalid[Nothing](
+                "job cancelled",
+                Seq(Descriptor.Facet.State("cancelled"))
+              ).conclusion))
+            case _ =>
+              failure.map(JobResult.Failure.apply).orElse(
+                successresponse.map(JobResult.Success.apply)
+              )
+          }
+          _mark_base_completion(jobid, deferred)
+          completedtasks.foreach { case (task, outcome, executioncontext, taskcancelled) =>
+            _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+          }
         }
     }
   }
@@ -1556,7 +1853,7 @@ final class InMemoryJobEngine(
     task: JobTask,
     ctx: ExecutionContext,
       forcedtaskid: Option[TaskId] = None
-  ): TaskOutcome = {
+  ): Consequence[TaskOutcome] = {
     val taskid = forcedtaskid.getOrElse(
       TaskId.create("same-job.execute", ctx.clock.instant(), ctx.idGeneration)
     )
@@ -1584,43 +1881,53 @@ final class InMemoryJobEngine(
       task,
       admittedfromqueue = forcedtaskid.isDefined
     )
-    val outcome = task.run(executioncontext)
-    val taskcancelled = executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
-    outcome match {
-      case TaskSucceeded(res) =>
-        _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
-        _append_task_finished(
-          jobid,
-          taskid,
-          parent,
-          JobTaskStatus.Succeeded,
-          JobTaskResultSummary(success = true, message = Some("ok")),
-          _now()
-        )
-        _append_timeline(jobid, "task.transaction.committed", Some(taskid), parent, None)
-      case TaskFailed(c) =>
-        _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
-        _append_task_finished(
-          jobid,
-          taskid,
-          parent,
-          JobTaskStatus.Failed,
-          JobTaskResultSummary(success = false, message = c.observation.getEffectiveMessage),
-          _now()
-        )
-        _append_timeline(
-          jobid,
-          "task.transaction.failed",
-          Some(taskid),
-          parent,
-          c.observation.getEffectiveMessage
-        )
-        _run_same_job_compensations(jobid, Some(taskid), ctx)
-        _update_deferred_result(jobid, Some(JobResult.Failure(c)))
+    _establish_durable_task_start_intent(jobid, taskid, parent).flatMap { _ =>
+      val outcome = task.run(executioncontext)
+      val taskcancelled = executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
+      outcome match {
+        case TaskSucceeded(res) =>
+          _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
+          _append_task_finished(
+            jobid,
+            taskid,
+            parent,
+            JobTaskStatus.Succeeded,
+            JobTaskResultSummary(success = true, message = Some("ok")),
+            _now()
+          )
+          _append_timeline(jobid, "task.transaction.committed", Some(taskid), parent, None)
+        case TaskFailed(c) =>
+          _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
+          _append_task_finished(
+            jobid,
+            taskid,
+            parent,
+            JobTaskStatus.Failed,
+            JobTaskResultSummary(success = false, message = c.observation.getEffectiveMessage),
+            _now()
+          )
+          _append_timeline(
+            jobid,
+            "task.transaction.failed",
+            Some(taskid),
+            parent,
+            c.observation.getEffectiveMessage
+          )
+          ()
+      }
+      _establish_durable_task_outcome_checkpoint(jobid, taskid, parent).map { _ =>
+        outcome match {
+          case TaskSucceeded(_) =>
+            ()
+          case TaskFailed(c) =>
+            _run_same_job_compensations(jobid, Some(taskid), ctx)
+            _update_deferred_result(jobid, Some(JobResult.Failure(c)))
+        }
+        _settle_if_ready(jobid)
+        _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+        outcome
+      }
     }
-    _settle_if_ready(jobid)
-    _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
-    outcome
   }
 
   private def _observe_task_canonical_outcome(
@@ -1784,6 +2091,8 @@ final class InMemoryJobEngine(
     _get_record(jobid) match {
       case None =>
         _control_failure(s"job not found: ${jobid.value}")
+      case Some(_) if _has_durable_task_checkpoint_refusal(jobid) =>
+        _control_failure(s"job control blocked by durable task checkpoint refusal: ${jobid.value}")
       case Some(record) =>
         _transition_for(request.command, record.status).flatMap { target =>
           request.command match {
@@ -1967,7 +2276,16 @@ final class InMemoryJobEngine(
     }
 
   private def _can_run_next_task(jobid: JobId): Boolean =
-    _get_record(jobid).exists(r => r.status != JobStatus.Cancelled)
+    _get_record(jobid).exists(r =>
+      r.status != JobStatus.Cancelled && !_has_durable_task_checkpoint_refusal(jobid)
+    )
+
+  private def _has_durable_task_checkpoint_refusal(jobid: JobId): Boolean =
+    Option(_durable_lifecycle_write_failures.get(jobid)).exists {
+      case DurableJobLifecycleWriteFailure.TaskStartIntentRefused => true
+      case DurableJobLifecycleWriteFailure.TaskOutcomeCheckpointRefused => true
+      case _ => false
+    }
 
   private def _await_if_suspended(jobid: JobId): Boolean = {
     _state_monitor.synchronized {
@@ -2520,8 +2838,15 @@ final class InMemoryJobEngine(
     record: JobRecord,
     offset: Int,
     limit: Int
+  ): JobTaskPage =
+    _task_page(record.taskReadModels, offset, limit)
+
+  private def _task_page(
+    tasks: Vector[JobTaskReadModel],
+    offset: Int,
+    limit: Int
   ): JobTaskPage = {
-    val sorted = record.taskReadModels
+    val sorted = tasks
       .sortBy(t => (t.startedAt.toEpochMilli, t.taskId.print))
     val page = _page(sorted, offset, limit)
     JobTaskPage(
@@ -2537,8 +2862,15 @@ final class InMemoryJobEngine(
     record: JobRecord,
     offset: Int,
     limit: Int
+  ): JobTimelinePage =
+    _timeline_page(record.timeline, offset, limit)
+
+  private def _timeline_page(
+    timeline: Vector[JobTimelineEvent],
+    offset: Int,
+    limit: Int
   ): JobTimelinePage = {
-    val sorted = record.timeline.sortBy(e => (e.sequence, e.occurredAt.toEpochMilli))
+    val sorted = timeline.sortBy(e => (e.sequence, e.occurredAt.toEpochMilli))
     val page = _page(sorted, offset, limit)
     JobTimelinePage(
       offset = page.offset,
@@ -2784,21 +3116,27 @@ final class InMemoryJobEngine(
       }
     }
 
-  private def _put_record(record: JobRecord): Unit =
+  private def _put_record(
+    record: JobRecord,
+    preserveupdatedatonentitysyncfailure: Boolean = false
+  ): Unit =
     _state_monitor.synchronized {
     record.persistence match {
       case JobPersistencePolicy.Persistent =>
         _durable_jobs.put(record.id, record)
           // Serialize the source JobRecord projection with its Entity revision.
           // Otherwise an older projection can load and reuse a newer revision.
-        _sync_job_entity(record)
+        _sync_job_entity(record, preserveupdatedatonentitysyncfailure)
       case JobPersistencePolicy.Ephemeral =>
         _runtime_jobs.put(record.id, record)
     }
     _signal_state_change()
   }
 
-  private def _sync_job_entity(record: JobRecord): Unit = {
+  private def _sync_job_entity(
+    record: JobRecord,
+    preserveupdatedatonentitysyncfailure: Boolean
+  ): Unit = {
     given ExecutionContext = record.submittedContext
     val entity = JobEntity.from(_read_model(record))
     val store              = EntityStore.standard()
@@ -2820,13 +3158,14 @@ final class InMemoryJobEngine(
       case Consequence.Success(_) =>
         ()
       case Consequence.Failure(conclusion) =>
-        _record_job_entity_sync_failure(record, conclusion)
+        _record_job_entity_sync_failure(record, conclusion, preserveupdatedatonentitysyncfailure)
     }
   }
 
   private def _record_job_entity_sync_failure(
     record: JobRecord,
-    conclusion: Conclusion
+    conclusion: Conclusion,
+    preserveupdatedatonentitysyncfailure: Boolean
   ): Unit = {
     val message = s"job-entity-sync-failed: ${conclusion.show}"
     val annotated = record.copy(
@@ -2838,7 +3177,11 @@ final class InMemoryJobEngine(
           else
             record.debug.executionNotes :+ message
       ),
-      updatedAt = _now()
+      updatedAt =
+        if (preserveupdatedatonentitysyncfailure)
+          record.updatedAt
+        else
+          _now()
     )
     _durable_jobs.put(record.id, annotated)
   }
@@ -3322,6 +3665,166 @@ final class InMemoryJobEngine(
       }
     }
   }
+
+  private def _register_durable_terminal_fact(
+    candidate: DurableJobStartupRecoveryCandidate,
+    snapshot: DurableJobStoreSnapshot,
+    decision: DurableJobRecoveryDecision,
+    projection: DurableJobTerminalProjection
+  ): DurableJobTerminalProjectionFact =
+    _state_monitor.synchronized {
+      val jobid = projection.queryReadModel.jobId
+      if (
+        candidate.jobId != jobid.value ||
+          snapshot.record.body.identity.jobId != jobid.value ||
+          projection.snapshot != snapshot ||
+          projection.decision != decision ||
+          _get_record(jobid).nonEmpty ||
+          _durable_terminal_facts.containsKey(jobid)
+      )
+        DurableJobTerminalProjectionFact.Refused
+      else {
+        _durable_terminal_facts.put(jobid, projection)
+        DurableJobTerminalProjectionFact.Registered
+      }
+    }
+
+  private def _register_durable_runtime_rehydration(
+    candidate: DurableJobStartupRecoveryCandidate,
+    snapshot: DurableJobStoreSnapshot,
+    decision: DurableJobRecoveryDecision,
+    rehydration: DurableJobRuntimeRehydration
+  ): DurableJobRuntimeRehydrationFact =
+    _state_monitor.synchronized {
+      _runtime_rehydrated_record(candidate, snapshot, decision, rehydration) match {
+        case Consequence.Success(record)
+            if _get_record(record.id).isEmpty && !_durable_terminal_facts.containsKey(record.id) =>
+          _put_record(record, preserveupdatedatonentitysyncfailure = true)
+          _register_rehydrated_due_state(record)
+          DurableJobRuntimeRehydrationFact.Registered
+        case _ => DurableJobRuntimeRehydrationFact.Refused
+      }
+    }
+
+  private def _runtime_rehydrated_record(
+    candidate: DurableJobStartupRecoveryCandidate,
+    snapshot: DurableJobStoreSnapshot,
+    decision: DurableJobRecoveryDecision,
+    rehydration: DurableJobRuntimeRehydration
+  ): Consequence[JobRecord] =
+    _validate_runtime_rehydration(candidate, snapshot, decision, rehydration).map { _ =>
+      val lifecycle = snapshot.record.body.lifecycle
+      val definitionsnapshot = rehydration.definitionSnapshot
+      val now = _now()
+      JobRecord(
+        id = rehydration.jobId,
+        tasks = rehydration.tasks,
+        submittedContext = rehydration.context,
+        status = JobStatus.Submitted,
+        result = None,
+        persistence = JobPersistencePolicy.Persistent,
+        runMode = _runtime_run_mode(lifecycle.runMode),
+        priority = lifecycle.priority,
+        scheduledStartAt = lifecycle.schedule.scheduledAt,
+        createdAt = snapshot.record.body.identity.createdAt,
+        updatedAt = snapshot.record.body.identity.updatedAt,
+        taskReadModels = Vector.empty,
+        timeline = Vector(
+          JobTimelineEvent(
+            sequence = 1L,
+            occurredAt = now,
+            kind = "job.runtime-rehydrated",
+            taskId = None,
+            parentTaskId = None,
+            note = None
+          )
+        ),
+        debug = JobDebugInfo(
+          requestSummary = rehydration.tasks.headOption.flatMap(_.requestSummary),
+          parameters = definitionsnapshot.map(_.toParameters).getOrElse(Map.empty),
+          executionNotes = Vector("durable-runtime-rehydrated"),
+          declaredProfile = definitionsnapshot.flatMap(_.profile),
+          jobDefinitionSnapshot = definitionsnapshot
+        ),
+        input = rehydration.input.map(_sanitized_rehydrated_input),
+        retry = _rehydrated_retry_state(lifecycle.retry, decision)
+      )
+    }
+
+  private def _validate_runtime_rehydration(
+    candidate: DurableJobStartupRecoveryCandidate,
+    snapshot: DurableJobStoreSnapshot,
+    decision: DurableJobRecoveryDecision,
+    rehydration: DurableJobRuntimeRehydration
+  ): Consequence[Unit] =
+    if (rehydration == null)
+      Consequence.argumentInvalid("durable runtime rehydration result is missing")
+    else if (rehydration.jobId == null)
+      Consequence.argumentInvalid("durable runtime rehydration result has no Job id")
+    else if (rehydration.tasks == null || rehydration.tasks.isEmpty || rehydration.tasks.exists(_ == null))
+      Consequence.argumentInvalid("durable runtime rehydration result has no live tasks")
+    else if (rehydration.context == null)
+      Consequence.argumentInvalid("durable runtime rehydration result has no execution context")
+    else if (
+      rehydration.input == null ||
+        rehydration.input.exists(_ == null) ||
+        rehydration.definitionSnapshot == null ||
+        rehydration.definitionSnapshot.exists(_ == null)
+    )
+      Consequence.argumentInvalid("durable runtime rehydration result is malformed")
+    else if (candidate.jobId != snapshot.record.body.identity.jobId)
+      Consequence.stateInvalid("durable runtime rehydration candidate identity does not match the admitted record")
+    else if (rehydration.jobId.value != candidate.jobId)
+      Consequence.stateInvalid("durable runtime rehydration Job id does not match the admitted durable id")
+    else
+      Consequence.unit
+
+  private def _runtime_run_mode(runmode: DurableRunMode): JobRunMode =
+    runmode match {
+      case DurableRunMode.Async => JobRunMode.Async
+      case DurableRunMode.Sync => JobRunMode.Sync
+    }
+
+  private def _rehydrated_retry_state(
+    retry: DurableRetryEvidence,
+    decision: DurableJobRecoveryDecision
+  ): JobRetryState =
+    decision.outcome match {
+      case DurableJobRecoveryOutcome.Retryable =>
+        JobRetryState(
+          kind = JobRetryKind.Delayed,
+          attemptCount = retry.attempts.size,
+          maxAttempts = retry.maxAttempts,
+          nextRetryDueAt = retry.nextRetryAt,
+          exhausted = retry.exhausted
+        )
+      case _ =>
+        JobRetryState(
+          attemptCount = retry.attempts.size,
+          maxAttempts = retry.maxAttempts,
+          exhausted = retry.exhausted
+        )
+    }
+
+  private def _sanitized_rehydrated_input(input: JobInput): JobInput =
+    input.copy(payloads = input.payloads.map(_.sanitized))
+
+  private def _register_rehydrated_due_state(record: JobRecord): Unit =
+    record.retry.nextRetryDueAt match {
+      case Some(dueat) if dueat.isAfter(_now()) =>
+        _schedule_delayed_retry(record.id, dueat)
+      case Some(_) =>
+        _run_scheduled_retry(record.id)
+      case None =>
+        record.scheduledStartAt match {
+          case Some(scheduledat) if scheduledat.isAfter(_now()) =>
+            _schedule_delayed_start(record.id, scheduledat)
+          case Some(_) =>
+            _run_scheduled_start(record.id)
+          case None =>
+            _enqueue_work(SchedulerWorkItem.JobRun(_next_sequence(), record.priority, record.id))
+        }
+    }
 }
 
 object InMemoryJobEngine {
