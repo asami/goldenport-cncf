@@ -218,7 +218,8 @@ final case class JobControlResponse(
   jobId: JobId,
   status: JobStatus,
   response: Option[OperationResponse],
-  async: Boolean
+  async: Boolean,
+  changed: Boolean = true
 )
 
 final case class JobMetrics(
@@ -849,6 +850,11 @@ trait JobEngine {
     }
 
   def query(jobId: JobId): Option[JobQueryReadModel]
+  def queryPage(
+    request: JobManagementQuery,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ExecutionContext): Consequence[JobManagementPage] =
+    Consequence.operationInvalid("job.management-query", "page queries are not supported by this engine")
   def listJobs(limit: Int = 100, persistentOnly: Boolean = true): Vector[JobQueryReadModel] =
     Vector.empty
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage]
@@ -867,6 +873,41 @@ trait JobEngine {
         )
       }
     }
+  def queryManagementDetail(
+    jobId: JobId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ExecutionContext): Consequence[Option[JobManagementDetail]] =
+    Consequence.operationInvalid("job.management-detail", "exact management detail is not supported by this engine")
+  def queryManagementResult(
+    jobId: JobId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ExecutionContext): Consequence[Option[JobManagementResult]] =
+    Consequence.operationInvalid("job.management-result", "exact management result is not supported by this engine")
+  def queryManagementTasks(
+    jobId: JobId,
+    offset: Int = 0,
+    limit: Int = JobManagementQuery.DefaultLimit,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ExecutionContext): Consequence[Option[JobTaskPage]] =
+    Consequence.operationInvalid("job.management-tasks", "exact management tasks are not supported by this engine")
+  def queryManagementTimeline(
+    jobId: JobId,
+    offset: Int = 0,
+    limit: Int = JobManagementQuery.DefaultLimit,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ExecutionContext): Consequence[Option[JobTimelinePage]] =
+    Consequence.operationInvalid("job.management-timeline", "exact management timeline is not supported by this engine")
+  def queryManagementTaskExecutionTree(
+    jobId: JobId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ExecutionContext): Consequence[Option[JobTraceTree]] =
+    Consequence.operationInvalid("job.management-task-tree", "exact management task tree is not supported by this engine")
+  def queryManagementTaskDetail(
+    jobId: JobId,
+    taskId: TaskId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ExecutionContext): Consequence[Option[JobTaskDetail]] =
+    Consequence.operationInvalid("job.management-task-detail", "exact management task detail is not supported by this engine")
   def metrics: Option[JobMetrics] = None
   def annotateJob(
       jobId: JobId,
@@ -1264,6 +1305,50 @@ final class InMemoryJobEngine(
       .map(_read_model)
       .orElse(durableTerminalProjection(jobId).map(_.queryReadModel))
 
+  override def queryPage(
+    request: JobManagementQuery,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ctx: ExecutionContext): Consequence[JobManagementPage] =
+    request.validate.flatMap { _ =>
+      val authorized = _authorized_query_page_models(policy)
+        .filter(request.accepts)
+        .sortWith(_page_model_precedes)
+      val filterfingerprint = request.filterFingerprint
+      val callerfingerprint = JobManagementCursor.callerVisibilityFingerprint(ctx)
+      val snapshotfingerprint = JobManagementCursor.snapshotFingerprint(authorized)
+      request.cursor match {
+        case None =>
+          _job_management_page(
+            authorized,
+            request.limit,
+            0,
+            filterfingerprint,
+            callerfingerprint,
+            snapshotfingerprint
+          )
+        case Some(cursor) =>
+          JobManagementCursor.decode(cursor).flatMap { payload =>
+            if (payload.filterFingerprint != filterfingerprint)
+              _invalid_query_cursor("request filter mismatch")
+            else if (payload.callerVisibilityFingerprint != callerfingerprint)
+              _invalid_query_cursor("caller visibility mismatch")
+            else if (payload.authorizedSnapshotFingerprint != snapshotfingerprint)
+              _expired_query_snapshot()
+            else if (payload.nextOffset >= authorized.size)
+              _invalid_query_cursor("offset out of range")
+            else
+              _job_management_page(
+                authorized,
+                request.limit,
+                payload.nextOffset,
+                filterfingerprint,
+                callerfingerprint,
+                snapshotfingerprint
+              )
+          }
+      }
+    }
+
   override def listJobs(
     limit: Int = 100,
     persistentOnly: Boolean = true
@@ -1278,6 +1363,65 @@ final class InMemoryJobEngine(
       .reverse
       .take(math.max(0, limit))
   }
+
+  private def _authorized_query_page_models(
+    policy: JobQueryPolicy
+  )(using ctx: ExecutionContext): Vector[JobQueryReadModel] = {
+    val candidates = _state_monitor.synchronized {
+      val durable = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector
+      val durableids = durable.map(_.id).toSet
+      val runtime = _runtime_jobs.values().toArray(new Array[JobRecord](0)).toVector
+        .filterNot(record => durableids.contains(record.id))
+      val live = durable.map(_read_model) ++ runtime.map(_read_model)
+      val liveids = live.map(_.jobId).toSet
+      live ++ durableTerminalProjections.map(_.queryReadModel)
+        .filterNot(model => liveids.contains(model.jobId))
+    }
+    candidates.flatMap { model =>
+      policy.authorizeRead(model) match {
+        case Consequence.Success(_) => Some(model)
+        case Consequence.Failure(_) => None
+      }
+    }
+  }
+
+  private def _page_model_precedes(
+    left: JobQueryReadModel,
+    right: JobQueryReadModel
+  ): Boolean =
+    if (left.updatedAt == right.updatedAt)
+      left.jobId.print < right.jobId.print
+    else
+      left.updatedAt.isAfter(right.updatedAt)
+
+  private def _job_management_page(
+    authorized: Vector[JobQueryReadModel],
+    limit: Int,
+    offset: Int,
+    filterfingerprint: String,
+    callerfingerprint: String,
+    snapshotfingerprint: String
+  ): Consequence[JobManagementPage] = {
+    val entries = authorized.slice(offset, offset + limit).map(JobManagementSummary.from)
+    val nextoffset = offset + entries.size
+    val next =
+      if (nextoffset < authorized.size)
+        Some(JobManagementCursor.encode(
+          filterfingerprint,
+          callerfingerprint,
+          snapshotfingerprint,
+          nextoffset
+        ))
+      else
+        None
+    Consequence.success(JobManagementPage(entries, authorized.size, next))
+  }
+
+  private def _invalid_query_cursor[A](detail: String): Consequence[A] =
+    Consequence.operationInvalid("job.management-query.cursor", s"invalid cursor: $detail")
+
+  private def _expired_query_snapshot[A](): Consequence[A] =
+    Consequence.operationInvalid("job.management-query.cursor", "expired snapshot: authorized source changed")
 
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage] =
     _get_record(jobId)
@@ -1307,6 +1451,105 @@ final class InMemoryJobEngine(
         )
       }
     }
+
+  override def queryManagementDetail(
+    jobId: JobId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ctx: ExecutionContext): Consequence[Option[JobManagementDetail]] =
+    _authorized_management_model(jobId, policy).map(_.map(_management_detail))
+
+  override def queryManagementResult(
+    jobId: JobId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ctx: ExecutionContext): Consequence[Option[JobManagementResult]] =
+    _authorized_management_model(jobId, policy).map(_.map(_management_result))
+
+  override def queryManagementTasks(
+    jobId: JobId,
+    offset: Int = 0,
+    limit: Int = JobManagementQuery.DefaultLimit,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ctx: ExecutionContext): Consequence[Option[JobTaskPage]] =
+    _validate_management_page(offset, limit).flatMap { _ =>
+      _authorized_management_model(jobId, policy).map(_.map(model =>
+        _task_page(model.tasks.tasks, offset, limit)
+      ))
+    }
+
+  override def queryManagementTimeline(
+    jobId: JobId,
+    offset: Int = 0,
+    limit: Int = JobManagementQuery.DefaultLimit,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ctx: ExecutionContext): Consequence[Option[JobTimelinePage]] =
+    _validate_management_page(offset, limit).flatMap { _ =>
+      _authorized_management_model(jobId, policy).map(_.map(model =>
+        _timeline_page(model.timeline.events, offset, limit)
+      ))
+    }
+
+  override def queryManagementTaskExecutionTree(
+    jobId: JobId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ctx: ExecutionContext): Consequence[Option[JobTraceTree]] =
+    _authorized_management_model(jobId, policy).map(_.map(_.traceTree))
+
+  override def queryManagementTaskDetail(
+    jobId: JobId,
+    taskId: TaskId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using ctx: ExecutionContext): Consequence[Option[JobTaskDetail]] =
+    _authorized_management_model(jobId, policy).map(_.flatMap { model =>
+      model.tasks.tasks.find(_.taskId == taskId).map { task =>
+        JobTaskDetail(
+          jobId = jobId,
+          task = task,
+          events = model.timeline.events.filter(_.taskId.contains(taskId)).sortBy(_.sequence),
+          children = model.traceTree.roots.flatMap(_find_children(_, taskId))
+        )
+      }
+    })
+
+  private def _authorized_management_model(
+    jobId: JobId,
+    policy: JobQueryPolicy
+  )(using ctx: ExecutionContext): Consequence[Option[JobQueryReadModel]] =
+    query(jobId) match {
+      case Some(model) =>
+        policy.authorizeRead(model) match {
+          case Consequence.Success(_) => Consequence.success(Some(model))
+          case Consequence.Failure(_) => Consequence.success(None)
+        }
+      case None => Consequence.success(None)
+    }
+
+  private def _management_detail(model: JobQueryReadModel): JobManagementDetail =
+    JobManagementDetail(
+      summary = JobManagementSummary.from(model),
+      retry = JobManagementRetrySummary.from(model.retry),
+      resultSummary = model.resultSummary,
+      taskCount = model.tasks.totalCount,
+      timelineCount = model.timeline.totalCount
+    )
+
+  private def _management_result(model: JobQueryReadModel): JobManagementResult =
+    getResult(model.jobId) match {
+      case Some(result) => JobManagementResult.Available(result)
+      case None if durableTerminalProjection(model.jobId).nonEmpty =>
+        JobManagementResult.UnavailableAfterRestart(model.resultSummary)
+      case None => JobManagementResult.Pending(model.resultSummary)
+    }
+
+  private def _validate_management_page(offset: Int, limit: Int): Consequence[Unit] =
+    if (offset < 0)
+      Consequence.operationInvalid("job.management-page", "offset must be zero or greater")
+    else if (limit <= 0 || limit > JobManagementQuery.MaximumLimit)
+      Consequence.operationInvalid(
+        "job.management-page",
+        s"limit must be in 1..${JobManagementQuery.MaximumLimit}"
+      )
+    else
+      Consequence.unit
 
   override def metrics: Option[JobMetrics] = {
     val records = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector ++
@@ -2164,48 +2407,100 @@ final class InMemoryJobEngine(
   private def _control(
     jobid: JobId,
     request: JobControlRequest
+  ): Consequence[JobControlResponse] = {
+    val transition = _state_monitor.synchronized {
+      _get_record(jobid) match {
+        case None =>
+          _control_failure(s"job not found: ${jobid.value}")
+        case Some(_) if _has_durable_task_checkpoint_refusal(jobid) =>
+          _control_failure(s"job control blocked by durable task checkpoint refusal: ${jobid.value}")
+        case Some(record) =>
+          _control_transition_for(request.command, record.status).map {
+            case applied @ ControlTransition.Apply(target) =>
+              request.command match {
+                case JobControlCommand.Retry =>
+                  _retry_job(jobid, record)
+                case _ =>
+                  _append_timelinefor_control(jobid, request.command, target)
+                  _update_record(jobid, target, _control_result_for(target))
+                  if (request.command == JobControlCommand.Cancel)
+                    _cancellation_scope(jobid).cancel()
+                  if (
+                    request.command == JobControlCommand.Cancel &&
+                      _has_eligible_durable_terminal_checkpoint(jobid) &&
+                      _has_no_active_or_pending_local_work(jobid)
+                  )
+                    _mark_base_completion(jobid, _control_result_for(target))
+                  if (
+                    request.command != JobControlCommand.Cancel ||
+                      !_has_eligible_durable_terminal_checkpoint(jobid)
+                  )
+                    _append_eventfor_control(jobid, request.command, target)
+              }
+              applied
+            case replay => replay
+          }
+      }
+    }
+    transition.flatMap {
+      case ControlTransition.Apply(target) =>
+        _control_response(jobid, request, target, changed = true)
+      case ControlTransition.Replay(status) =>
+        _control_replay_response(jobid, request, status)
+    }
+  }
+
+  private def _control_response(
+    jobid: JobId,
+    request: JobControlRequest,
+    target: JobStatus,
+    changed: Boolean
   ): Consequence[JobControlResponse] =
-    _get_record(jobid) match {
-      case None =>
-        _control_failure(s"job not found: ${jobid.value}")
-      case Some(_) if _has_durable_task_checkpoint_refusal(jobid) =>
-        _control_failure(s"job control blocked by durable task checkpoint refusal: ${jobid.value}")
-      case Some(record) =>
-        _transition_for(request.command, record.status).flatMap { target =>
-          request.command match {
-            case JobControlCommand.Retry =>
-              _retry_job(jobid, record)
-            case _ =>
-              _append_timelinefor_control(jobid, request.command, target)
-              _update_record(jobid, target, _control_result_for(target))
-              if (request.command == JobControlCommand.Cancel)
-                _cancellation_scope(jobid).cancel()
-              if (
-                request.command == JobControlCommand.Cancel &&
-                  _has_eligible_durable_terminal_checkpoint(jobid) &&
-                  _has_no_active_or_pending_local_work(jobid)
-              )
-                _mark_base_completion(jobid, _control_result_for(target))
-              if (
-                request.command != JobControlCommand.Cancel ||
-                  !_has_eligible_durable_terminal_checkpoint(jobid)
-              )
-                _append_eventfor_control(jobid, request.command, target)
-          }
-          request.option.mode match {
-            case JobCommandMode.Async =>
-              Consequence.success(
-                JobControlResponse(
-                  jobId = jobid,
-                  status = target,
-                  response = None,
-                  async = true
-                )
-              )
-            case JobCommandMode.Sync =>
-              _await_control_sync(jobid, request, target)
-          }
+    request.option.mode match {
+      case JobCommandMode.Async =>
+        Consequence.success(
+          JobControlResponse(
+            jobId = jobid,
+            status = target,
+            response = None,
+            async = true,
+            changed = changed
+          )
+        )
+      case JobCommandMode.Sync =>
+        _await_control_sync(jobid, request, target, changed)
+    }
+
+  private def _control_replay_response(
+    jobid: JobId,
+    request: JobControlRequest,
+    status: JobStatus
+  ): Consequence[JobControlResponse] =
+    request.option.mode match {
+      case JobCommandMode.Async =>
+        Consequence.success(
+          JobControlResponse(
+            jobId = jobid,
+            status = status,
+            response = None,
+            async = true,
+            changed = false
+          )
+        )
+      case JobCommandMode.Sync =>
+        val response = request.command match {
+          case JobControlCommand.Retry => getResponse(jobid)
+          case _ => Some(OperationResponse.Scalar(status.toString))
         }
+        Consequence.success(
+          JobControlResponse(
+            jobId = jobid,
+            status = status,
+            response = response,
+            async = false,
+            changed = false
+          )
+        )
     }
 
   private def _retry_job(jobid: JobId, record: JobRecord): Unit = {
@@ -2306,7 +2601,8 @@ final class InMemoryJobEngine(
   private def _await_control_sync(
     jobid: JobId,
     request: JobControlRequest,
-    target: JobStatus
+    target: JobStatus,
+    changed: Boolean
   ): Consequence[JobControlResponse] = {
     val deadline = _now().plusMillis(math.max(0L, request.option.timeoutMillis))
     var status = getStatus(jobid).getOrElse(target)
@@ -2335,7 +2631,8 @@ final class InMemoryJobEngine(
           jobId = jobid,
           status = status,
           response = response,
-          async = false
+          async = false,
+          changed = changed
         )
       )
     }
@@ -2347,22 +2644,35 @@ final class InMemoryJobEngine(
       case _ => false
     }
 
-  private def _transition_for(
+  private enum ControlTransition {
+    case Apply(status: JobStatus)
+    case Replay(status: JobStatus)
+  }
+
+  private def _control_transition_for(
     command: JobControlCommand,
     status: JobStatus
-  ): Consequence[JobStatus] =
+  ): Consequence[ControlTransition] =
     (command, status) match {
       case (
             JobControlCommand.Cancel,
             JobStatus.Submitted | JobStatus.Running | JobStatus.Suspended
           ) =>
-        Consequence.success(JobStatus.Cancelled)
+        Consequence.success(ControlTransition.Apply(JobStatus.Cancelled))
+      case (JobControlCommand.Cancel, JobStatus.Cancelled) =>
+        Consequence.success(ControlTransition.Replay(JobStatus.Cancelled))
       case (JobControlCommand.Suspend, JobStatus.Submitted | JobStatus.Running) =>
-        Consequence.success(JobStatus.Suspended)
+        Consequence.success(ControlTransition.Apply(JobStatus.Suspended))
+      case (JobControlCommand.Suspend, JobStatus.Suspended) =>
+        Consequence.success(ControlTransition.Replay(JobStatus.Suspended))
       case (JobControlCommand.Resume, JobStatus.Suspended) =>
-        Consequence.success(JobStatus.Running)
+        Consequence.success(ControlTransition.Apply(JobStatus.Running))
+      case (JobControlCommand.Resume, JobStatus.Running) =>
+        Consequence.success(ControlTransition.Replay(JobStatus.Running))
       case (JobControlCommand.Retry, JobStatus.Failed | JobStatus.Cancelled) =>
-        Consequence.success(JobStatus.Submitted)
+        Consequence.success(ControlTransition.Apply(JobStatus.Submitted))
+      case (JobControlCommand.Retry, JobStatus.Submitted | JobStatus.Running) =>
+        Consequence.success(ControlTransition.Replay(status))
       case _ =>
         _control_invalid_transition(command, status)
     }

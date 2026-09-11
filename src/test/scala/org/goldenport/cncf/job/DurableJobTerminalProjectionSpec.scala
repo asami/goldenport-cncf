@@ -66,6 +66,11 @@ final class DurableJobTerminalProjectionSpec
         val cancelledid = _job(cancelled.body.identity.jobId)
         val firstquery = engine.query(succeededid)
         val secondquery = engine.query(succeededid)
+        val authorizedpolicy = new JobQueryPolicy {
+          def authorizeRead(model: JobQueryReadModel)(using ExecutionContext): Consequence[Unit] =
+            Consequence.unit
+        }
+        val managementresult = _success(engine.queryManagementResult(succeededid, authorizedpolicy))
         val succeededtasks = engine.queryTasks(succeededid, offset = 0, limit = 10)
         val failedtasks = engine.queryTasks(failedid, offset = 0, limit = 10)
         val compensated = succeededtasks.flatMap(_.tasks.find(_.transactionOutcome.contains("compensation-committed")))
@@ -91,6 +96,9 @@ final class DurableJobTerminalProjectionSpec
           Some(JobResultSummary(JobStatus.Succeeded, success = true, message = Some("ok")))
         engine.query(failedid).flatMap(_.result) shouldBe None
         engine.getResult(succeededid) shouldBe None
+        managementresult shouldBe Some(JobManagementResult.UnavailableAfterRestart(
+          JobResultSummary(JobStatus.Succeeded, success = true, message = Some("ok"))
+        ))
         succeededtasks.map(_.fetchedCount) shouldBe Some(2)
         succeededtasks.map(_.tasks.exists(task =>
           task.status == JobTaskStatus.Running && task.finishedAt.nonEmpty

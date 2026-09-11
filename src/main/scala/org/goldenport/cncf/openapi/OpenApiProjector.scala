@@ -12,7 +12,8 @@ import org.slf4j.LoggerFactory
  *  version Jan. 20, 2026
  *  version Apr. 30, 2026
  *  version May.  8, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Sep. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
@@ -81,9 +82,12 @@ object OpenApiProjector {
         val hasmultipartbody = _has_multipart_body(op)
         val hasrequestbody = _has_request_body(op)
         val inferredhttpmethod = _infer_http_method(service.name, op.name).toUpperCase
-        val httpmethod =
-          if (hasrequestbody && inferredhttpmethod == "GET") "POST"
-          else inferredhttpmethod
+        val httpmethod = op match {
+          case projection: OpenApiOperationProjection => projection.openApiHttpMethod.toString
+          case _ =>
+            if (hasrequestbody && inferredhttpmethod == "GET") "POST"
+            else inferredhttpmethod
+        }
         val summary = _operation_summary(componentname, service, op)
         val description = _operation_description(componentname, service, op)
         _log.trace(
