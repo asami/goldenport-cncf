@@ -37,7 +37,9 @@ result, cursor, and control contracts.
 | JM69-04 | Query, pagination, result, and control completion | DONE |
 
 Focused cursor, restart, authorization, control, and compatibility
-specifications are required; full-suite validation remains owned by Phase 69.7.
+specifications are required. This Phase's release is additionally gated on the
+repository full suite; Phase 69.7 retains only its later, separately owned
+system and operational acceptance.
 
 ## Phase Plan Gate: PROCEED
 
@@ -67,11 +69,23 @@ includes query pagination and cursor validity, exact detail/result and
 Task/timeline reads, authorization and guarded controls, restart recovery
 including direct read-model compatibility and terminal unavailable-after-restart
 evidence, compatibility, and generated `job_control` protocol/component/OpenAPI
-projection.
+projection. The source-split repair was then validated by
+`P69.2-JM69-04-PHASE-TEST-FIX-001-VAL-001`, with terminal SBT and wrapper
+success and a released SBT lock.
 
-This was focused acceptance only; no full-suite validation was run for Phase
-69.2. Phase 69.7 retains ownership of full-suite, security, retention,
-operations, publication, and downstream system acceptance.
+The Phase full review recorded CPB-001 through CPB-004: two source-size
+boundary regressions and two version-header defects. The repair moves read
+projections into `JobManagementReader` and protocol parsing/action details into
+`JobManagementProtocol`, corrects the headers, and is closed by the focused
+rereview disposition
+`review-disposition-sha256-74ff56b19c4b686886fc2c3d59a4c05cb7ec7ba0ceccdf9c2bf95a9a78203f09`:
+no Current Boundary Blocker, Hygiene, or Development Candidate remains.
+
+The release commit is permitted only after
+`P69.2-JM69-04-PHASE-RELEASE-FULL-VAL-001` observes a terminal successful
+repository full suite on this final closure tree. Phase 69.7 retains its
+separately owned security, retention, operations, publication, and downstream
+system acceptance; it does not own this source-repository full-suite gate.
 
 The frozen successor handoff is:
 
@@ -83,7 +97,7 @@ The frozen successor handoff is:
   `cancel|retry|suspend|resume` controls as the only UI/operator inputs. It
   must not expose payload, debug, or provider data or replace management
   authority.
-- Phase 69.7 retains the full-suite, security, retention, operations,
+- Phase 69.7 retains its separately owned security, retention, operations,
   publication, and downstream system acceptance ownership.
 
 ## Non-Goals

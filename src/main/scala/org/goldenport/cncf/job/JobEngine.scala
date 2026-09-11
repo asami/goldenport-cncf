@@ -1309,45 +1309,7 @@ final class InMemoryJobEngine(
     request: JobManagementQuery,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[JobManagementPage] =
-    request.validate.flatMap { _ =>
-      val authorized = _authorized_query_page_models(policy)
-        .filter(request.accepts)
-        .sortWith(_page_model_precedes)
-      val filterfingerprint = request.filterFingerprint
-      val callerfingerprint = JobManagementCursor.callerVisibilityFingerprint(ctx)
-      val snapshotfingerprint = JobManagementCursor.snapshotFingerprint(authorized)
-      request.cursor match {
-        case None =>
-          _job_management_page(
-            authorized,
-            request.limit,
-            0,
-            filterfingerprint,
-            callerfingerprint,
-            snapshotfingerprint
-          )
-        case Some(cursor) =>
-          JobManagementCursor.decode(cursor).flatMap { payload =>
-            if (payload.filterFingerprint != filterfingerprint)
-              _invalid_query_cursor("request filter mismatch")
-            else if (payload.callerVisibilityFingerprint != callerfingerprint)
-              _invalid_query_cursor("caller visibility mismatch")
-            else if (payload.authorizedSnapshotFingerprint != snapshotfingerprint)
-              _expired_query_snapshot()
-            else if (payload.nextOffset >= authorized.size)
-              _invalid_query_cursor("offset out of range")
-            else
-              _job_management_page(
-                authorized,
-                request.limit,
-                payload.nextOffset,
-                filterfingerprint,
-                callerfingerprint,
-                snapshotfingerprint
-              )
-          }
-      }
-    }
+    JobManagementReader.queryPage(_management_snapshot, request, policy)
 
   override def listJobs(
     limit: Int = 100,
@@ -1364,64 +1326,24 @@ final class InMemoryJobEngine(
       .take(math.max(0, limit))
   }
 
-  private def _authorized_query_page_models(
-    policy: JobQueryPolicy
-  )(using ctx: ExecutionContext): Vector[JobQueryReadModel] = {
-    val candidates = _state_monitor.synchronized {
+  private def _management_snapshot: JobManagementReader.Snapshot =
+    _state_monitor.synchronized {
       val durable = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector
       val durableids = durable.map(_.id).toSet
       val runtime = _runtime_jobs.values().toArray(new Array[JobRecord](0)).toVector
         .filterNot(record => durableids.contains(record.id))
-      val live = durable.map(_read_model) ++ runtime.map(_read_model)
+      val records = durable ++ runtime
+      val live = records.map(_read_model)
       val liveids = live.map(_.jobId).toSet
-      live ++ durableTerminalProjections.map(_.queryReadModel)
+      val terminalprojections = durableTerminalProjections
+      val terminal = terminalprojections.map(_.queryReadModel)
         .filterNot(model => liveids.contains(model.jobId))
+      JobManagementReader.Snapshot(
+        models = live ++ terminal,
+        results = records.flatMap(record => record.result.map(record.id -> _)).toMap,
+        durableTerminalIds = terminalprojections.map(_.queryReadModel.jobId).toSet
+      )
     }
-    candidates.flatMap { model =>
-      policy.authorizeRead(model) match {
-        case Consequence.Success(_) => Some(model)
-        case Consequence.Failure(_) => None
-      }
-    }
-  }
-
-  private def _page_model_precedes(
-    left: JobQueryReadModel,
-    right: JobQueryReadModel
-  ): Boolean =
-    if (left.updatedAt == right.updatedAt)
-      left.jobId.print < right.jobId.print
-    else
-      left.updatedAt.isAfter(right.updatedAt)
-
-  private def _job_management_page(
-    authorized: Vector[JobQueryReadModel],
-    limit: Int,
-    offset: Int,
-    filterfingerprint: String,
-    callerfingerprint: String,
-    snapshotfingerprint: String
-  ): Consequence[JobManagementPage] = {
-    val entries = authorized.slice(offset, offset + limit).map(JobManagementSummary.from)
-    val nextoffset = offset + entries.size
-    val next =
-      if (nextoffset < authorized.size)
-        Some(JobManagementCursor.encode(
-          filterfingerprint,
-          callerfingerprint,
-          snapshotfingerprint,
-          nextoffset
-        ))
-      else
-        None
-    Consequence.success(JobManagementPage(entries, authorized.size, next))
-  }
-
-  private def _invalid_query_cursor[A](detail: String): Consequence[A] =
-    Consequence.operationInvalid("job.management-query.cursor", s"invalid cursor: $detail")
-
-  private def _expired_query_snapshot[A](): Consequence[A] =
-    Consequence.operationInvalid("job.management-query.cursor", "expired snapshot: authorized source changed")
 
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage] =
     _get_record(jobId)
@@ -1456,13 +1378,13 @@ final class InMemoryJobEngine(
     jobId: JobId,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobManagementDetail]] =
-    _authorized_management_model(jobId, policy).map(_.map(_management_detail))
+    JobManagementReader.queryDetail(_management_snapshot, jobId, policy)
 
   override def queryManagementResult(
     jobId: JobId,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobManagementResult]] =
-    _authorized_management_model(jobId, policy).map(_.map(_management_result))
+    JobManagementReader.queryResult(_management_snapshot, jobId, policy)
 
   override def queryManagementTasks(
     jobId: JobId,
@@ -1470,11 +1392,7 @@ final class InMemoryJobEngine(
     limit: Int = JobManagementQuery.DefaultLimit,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobTaskPage]] =
-    _validate_management_page(offset, limit).flatMap { _ =>
-      _authorized_management_model(jobId, policy).map(_.map(model =>
-        _task_page(model.tasks.tasks, offset, limit)
-      ))
-    }
+    JobManagementReader.queryTasks(_management_snapshot, jobId, offset, limit, policy)
 
   override def queryManagementTimeline(
     jobId: JobId,
@@ -1482,74 +1400,20 @@ final class InMemoryJobEngine(
     limit: Int = JobManagementQuery.DefaultLimit,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobTimelinePage]] =
-    _validate_management_page(offset, limit).flatMap { _ =>
-      _authorized_management_model(jobId, policy).map(_.map(model =>
-        _timeline_page(model.timeline.events, offset, limit)
-      ))
-    }
+    JobManagementReader.queryTimeline(_management_snapshot, jobId, offset, limit, policy)
 
   override def queryManagementTaskExecutionTree(
     jobId: JobId,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobTraceTree]] =
-    _authorized_management_model(jobId, policy).map(_.map(_.traceTree))
+    JobManagementReader.queryTaskExecutionTree(_management_snapshot, jobId, policy)
 
   override def queryManagementTaskDetail(
     jobId: JobId,
     taskId: TaskId,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobTaskDetail]] =
-    _authorized_management_model(jobId, policy).map(_.flatMap { model =>
-      model.tasks.tasks.find(_.taskId == taskId).map { task =>
-        JobTaskDetail(
-          jobId = jobId,
-          task = task,
-          events = model.timeline.events.filter(_.taskId.contains(taskId)).sortBy(_.sequence),
-          children = model.traceTree.roots.flatMap(_find_children(_, taskId))
-        )
-      }
-    })
-
-  private def _authorized_management_model(
-    jobId: JobId,
-    policy: JobQueryPolicy
-  )(using ctx: ExecutionContext): Consequence[Option[JobQueryReadModel]] =
-    query(jobId) match {
-      case Some(model) =>
-        policy.authorizeRead(model) match {
-          case Consequence.Success(_) => Consequence.success(Some(model))
-          case Consequence.Failure(_) => Consequence.success(None)
-        }
-      case None => Consequence.success(None)
-    }
-
-  private def _management_detail(model: JobQueryReadModel): JobManagementDetail =
-    JobManagementDetail(
-      summary = JobManagementSummary.from(model),
-      retry = JobManagementRetrySummary.from(model.retry),
-      resultSummary = model.resultSummary,
-      taskCount = model.tasks.totalCount,
-      timelineCount = model.timeline.totalCount
-    )
-
-  private def _management_result(model: JobQueryReadModel): JobManagementResult =
-    getResult(model.jobId) match {
-      case Some(result) => JobManagementResult.Available(result)
-      case None if durableTerminalProjection(model.jobId).nonEmpty =>
-        JobManagementResult.UnavailableAfterRestart(model.resultSummary)
-      case None => JobManagementResult.Pending(model.resultSummary)
-    }
-
-  private def _validate_management_page(offset: Int, limit: Int): Consequence[Unit] =
-    if (offset < 0)
-      Consequence.operationInvalid("job.management-page", "offset must be zero or greater")
-    else if (limit <= 0 || limit > JobManagementQuery.MaximumLimit)
-      Consequence.operationInvalid(
-        "job.management-page",
-        s"limit must be in 1..${JobManagementQuery.MaximumLimit}"
-      )
-    else
-      Consequence.unit
+    JobManagementReader.queryTaskDetail(_management_snapshot, jobId, taskId, policy)
 
   override def metrics: Option[JobMetrics] = {
     val records = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector ++

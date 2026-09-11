@@ -31,9 +31,18 @@ Evidence:
   retry, restart recovery including direct read-model compatibility and
   terminal unavailable-after-restart evidence, compatibility, and generated
   `job_control` protocol/component/OpenAPI projection.
-- No full-suite validation was run here; Phase 69.7 owns the full-suite,
-  security, retention, operations, publication, and downstream system
-  acceptance gate.
+- `P69.2-JM69-04-PHASE-TEST-FIX-001-VAL-001` validates the post-review
+  source-split repair with the same 12 focused suites, terminal SBT and wrapper
+  success, and `lock=released`.
+- The full review's CPB-001 through CPB-004 are closed by the focused rereview
+  disposition
+  `review-disposition-sha256-74ff56b19c4b686886fc2c3d59a4c05cb7ec7ba0ceccdf9c2bf95a9a78203f09`;
+  it reports no remaining Current Boundary Blocker, Hygiene, or Development
+  Candidate.
+- Final release is gated on the terminal successful repository full-suite
+  receipt `P69.2-JM69-04-PHASE-RELEASE-FULL-VAL-001` for this closure tree.
+  Phase 69.7 retains only its separate security, retention, operations,
+  publication, and downstream-system acceptance scope.
 
 Frozen successor handoff:
 - Phase 69.3 consumes the canonical cursor, exact-read, and control contracts
@@ -43,8 +52,8 @@ Frozen successor handoff:
   result vocabulary `available|pending|unavailable-after-restart`, and
   `cancel|retry|suspend|resume` as the only UI/operator inputs; payload,
   debug, and provider data remain excluded.
-- Phase 69.7 retains full-suite, security, retention, operations, publication,
-  and downstream system acceptance ownership.
+- Phase 69.7 retains its separately owned security, retention, operations,
+  publication, and downstream system acceptance.
 - This closure adds no durable recovery control, retention/expiry/deletion,
   executable JCL implementation, UX implementation, strategy rewrite, or new
   validation scope.
@@ -53,3 +62,7 @@ Frozen successor handoff:
 
 - [x] JM69-04 is DONE with canonical cursor, exact result, authorization, and control evidence.
 - [x] Phases 69.3 and 69.6 receive the frozen management-contract handoff.
+- [x] CPB-001 through CPB-004 are repaired and the focused rereview reports no
+  remaining blocker or follow-up record.
+- [x] The final release is gated on the terminal successful
+  `P69.2-JM69-04-PHASE-RELEASE-FULL-VAL-001` repository full-suite receipt.

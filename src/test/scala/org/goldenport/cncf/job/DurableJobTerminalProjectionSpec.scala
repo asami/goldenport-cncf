@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * this path, and the assertions retain the executable maps as the boundary.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 10, 2026
+ * @version Sep. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobTerminalProjectionSpec

@@ -66,18 +66,18 @@ Current baseline:
 - Phase 69 is closed: `JM69-01` inventory reconciliation and `JM69-02`'s
   provider-neutral durable Job/Task record contract are accepted. Phase 69.1
   is closed: `JM69-03` establishes durable storage and deterministic process
-  recovery, with its final release closure binding the full-suite and Hygiene
-  ledger. Phase 62 remains planned and is not started by these closures. Phase
-  69.2 through Phase 69.7 remain planned and not started:
+  recovery. Phase 69.2 is closed: `JM69-04` establishes canonical authorized
+  cursor and exact management reads, guarded controls, the compatible
+  `listJobs` facade, and the generated `job_control` projection. Phase 62 and
+  Phase 69.3 through Phase 69.7 remain planned and not started:
   - `phase-69.md` / `phase-69-checklist.md`
   - `phase-69.1.md` / `phase-69.1-checklist.md`
-  - `phase-69.2.md` / `phase-69.2-checklist.md`
   - `phase-69.3.md` / `phase-69.3-checklist.md`
   - `phase-69.4.md` / `phase-69.4-checklist.md`
   - `phase-69.5.md` / `phase-69.5-checklist.md`
   - `phase-69.6.md` / `phase-69.6-checklist.md`
   - `phase-69.7.md` / `phase-69.7-checklist.md`
-- Latest closed checklist: `phase-69-checklist.md`.
+- Latest closed checklist: `phase-69.2-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -141,10 +141,11 @@ Current baseline:
   - `phase-61.6.md`
   - `phase-69.md`
   - `phase-69.1.md`
+  - `phase-69.2.md`
   - `phase-70.md`
   - `phase-70.1.md`
-- No CNCF phase is selected as active by the Phase 69.1 closure. Phase 62 and
-  Phase 69.2 through Phase 69.7 remain planned and not started.
+- No CNCF phase is selected as active by the Phase 69.2 closure. Phase 62 and
+  Phase 69.3 through Phase 69.7 remain planned and not started.
 
 ## Related Rules
 
