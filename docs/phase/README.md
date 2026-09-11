@@ -64,9 +64,11 @@ Current baseline:
   new Phase Hygiene or Development Candidate record.
 
 - Phase 69 is closed: `JM69-01` inventory reconciliation and `JM69-02`'s
-  provider-neutral durable Job/Task record contract are accepted. Phase 62
-  remains planned and is not started by this closure. Phase 69.1 through Phase
-  69.7 remain planned and not started:
+  provider-neutral durable Job/Task record contract are accepted. Phase 69.1
+  is closed: `JM69-03` establishes durable storage and deterministic process
+  recovery, with its final release closure binding the full-suite and Hygiene
+  ledger. Phase 62 remains planned and is not started by these closures. Phase
+  69.2 through Phase 69.7 remain planned and not started:
   - `phase-69.md` / `phase-69-checklist.md`
   - `phase-69.1.md` / `phase-69.1-checklist.md`
   - `phase-69.2.md` / `phase-69.2-checklist.md`
@@ -138,10 +140,11 @@ Current baseline:
   - `phase-61.5.1.md`
   - `phase-61.6.md`
   - `phase-69.md`
+  - `phase-69.1.md`
   - `phase-70.md`
   - `phase-70.1.md`
-- No CNCF phase is selected as active by the Phase 69 closure. Phase 62 and
-  Phase 69.1 through Phase 69.7 remain planned and not started.
+- No CNCF phase is selected as active by the Phase 69.1 closure. Phase 62 and
+  Phase 69.2 through Phase 69.7 remain planned and not started.
 
 ## Related Rules
 

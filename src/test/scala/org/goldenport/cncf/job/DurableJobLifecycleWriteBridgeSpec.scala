@@ -5,6 +5,7 @@ import java.time.{Duration, Instant}
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityStore
+import org.goldenport.cncf.event.EventStore
 import org.goldenport.conclusion.Disposition
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen
@@ -17,7 +18,7 @@ import org.scalacheck.{Gen, Prop, Test}
  * checkpointing, and refusal closure.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 10, 2026
+ * @version Sep. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobLifecycleWriteBridgeSpec
@@ -43,7 +44,7 @@ final class DurableJobLifecycleWriteBridgeSpec
     "in spec:durable-job-write-bridge-contract, example:E6, rules:R1,R3,R4,R5,R6, phase:69.1, slice:JM69-03L"
   )
   private val _e7 = afterWord(
-    "in spec:durable-job-write-bridge-contract, example:E7, rules:R1,R3,R5,R6, phase:69.1, slice:JM69-03L"
+    "in spec:durable-job-write-bridge-contract, example:E7, rules:R1,R3,R4,R5,R6, phase:69.1, slice:JM69-03N"
   )
   private val _e8 = afterWord(
     "in spec:durable-job-write-bridge-contract, example:E8, rules:R1,R2,R5, phase:69.1, slice:JM69-03L"
@@ -64,9 +65,17 @@ final class DurableJobLifecycleWriteBridgeSpec
     "in spec:durable-job-write-bridge-contract, example:E13, rules:R1,R2,R6, phase:69.1, slice:JM69-03L"
   )
   private val _e14 = afterWord(
-    "in spec:durable-job-write-bridge-contract, example:E14, rules:R1,R3,R4,R5,R6, phase:69.1, slice:JM69-03L"
+    "in spec:durable-job-write-bridge-contract, example:E14, rules:R1,R3,R4,R5,R6, phase:69.1, slice:JM69-03N"
   )
-
+  private val _e15 = afterWord(
+    "in spec:durable-job-write-bridge-contract, example:E15, rules:R1,R3,R4,R5,R6, phase:69.1, slice:JM69-03L"
+  )
+  private val _e16 = afterWord(
+    "in spec:durable-job-write-bridge-contract, example:E16, rules:R1,R3,R4,R5,R6, phase:69.1, slice:JM69-03L"
+  )
+  private val _e17 = afterWord(
+    "in spec:durable-job-write-bridge-contract, example:E17, rules:R1,R3,R4,R5,R6, phase:69.1, slice:JM69-03O"
+  )
   "DurableJobLifecycleWriteBridge" should {
     "E1 checkpoint a completed asynchronous task after its revision-four TaskStartIntent" must _e1 {
       "when the initial asynchronous dispatch crosses the durable task boundary" in {
@@ -111,7 +120,8 @@ final class DurableJobLifecycleWriteBridgeSpec
         DurableJobLifecycleWriteBoundary.StartIntent,
         DurableJobLifecycleWriteBoundary.RunningIntent,
         DurableJobLifecycleWriteBoundary.TaskStartIntent,
-        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
       )
       task.runCount shouldBe 1
       observed.map(_.record.body.identity.revision) shouldBe Some(4L)
@@ -122,17 +132,22 @@ final class DurableJobLifecycleWriteBridgeSpec
       ).map(_.taskId) shouldBe Some(None)
       observedexecutionevents should contain("job.scheduler.started")
       observedexecutionevents should contain("job.running")
-      stored.record.body.identity.revision shouldBe 5L
-      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Running
+      stored.record.body.identity.revision shouldBe 6L
+      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Succeeded
       stored.record.body.timeline
         .map(_.kind)
         .filter(kind => kind.startsWith("job.durable-") || kind.startsWith("task.durable-")) shouldBe Vector(
           "job.durable-start-intent",
           "job.durable-running-intent",
           "task.durable-start-intent",
-          "task.durable-outcome-checkpoint"
-        )
-      stored.record.body.timeline.last.taskId shouldBe observedtaskid.map(_.value)
+          "task.durable-outcome-checkpoint",
+          "job.durable-terminal-outcome-checkpoint"
+      )
+      stored.record.body.timeline.last.taskId shouldBe None
+      val retainedoutcome = stored.record.body.timeline.find(
+        _.kind == "task.durable-outcome-checkpoint"
+      ).getOrElse(fail("retained task outcome timeline event is missing"))
+      retainedoutcome.taskId shouldBe observedtaskid.map(_.value)
       source.taskStartRequests.map(_.taskid) shouldBe observedtaskid.toVector
       source.taskStartEvidences.head.projection.tasks.map(_.taskId) shouldBe
         source.taskStartRequests.head.taskreadmodels.map(_.taskId.value)
@@ -189,7 +204,8 @@ final class DurableJobLifecycleWriteBridgeSpec
         DurableJobLifecycleWriteBoundary.StartIntent,
         DurableJobLifecycleWriteBoundary.RunningIntent,
         DurableJobLifecycleWriteBoundary.TaskStartIntent,
-        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
       )
       observed.map(_.record.body.identity.revision) shouldBe Some(4L)
       observed.map(_.record.body.lifecycle.status) shouldBe Some(DurableJobLifecycleStatus.Running)
@@ -197,17 +213,22 @@ final class DurableJobLifecycleWriteBridgeSpec
       observedrunningintent.toVector.flatMap(_.record.body.timeline).find(
         _.kind == "job.durable-running-intent"
       ).map(_.taskId) shouldBe Some(None)
-      stored.record.body.identity.revision shouldBe 5L
-      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Running
+      stored.record.body.identity.revision shouldBe 6L
+      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Succeeded
       stored.record.body.timeline
         .map(_.kind)
         .filter(kind => kind.startsWith("job.durable-") || kind.startsWith("task.durable-")) shouldBe Vector(
           "job.durable-start-intent",
           "job.durable-running-intent",
           "task.durable-start-intent",
-          "task.durable-outcome-checkpoint"
-        )
-      stored.record.body.timeline.last.taskId shouldBe observedtaskid.map(_.value)
+          "task.durable-outcome-checkpoint",
+          "job.durable-terminal-outcome-checkpoint"
+      )
+      stored.record.body.timeline.last.taskId shouldBe None
+      val retainedoutcome = stored.record.body.timeline.find(
+        _.kind == "task.durable-outcome-checkpoint"
+      ).getOrElse(fail("retained task outcome timeline event is missing"))
+      retainedoutcome.taskId shouldBe observedtaskid.map(_.value)
       source.taskStartRequests.map(_.taskid) shouldBe observedtaskid.toVector
       source.taskStartEvidences.head.projection.tasks.map(_.taskId) shouldBe
         source.taskStartRequests.head.taskreadmodels.map(_.taskId.value)
@@ -251,15 +272,16 @@ final class DurableJobLifecycleWriteBridgeSpec
         DurableJobLifecycleWriteBoundary.TaskStartIntent,
         DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
         DurableJobLifecycleWriteBoundary.TaskStartIntent,
-        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
       )
       first.runCount shouldBe 1
       second.runCount shouldBe 1
       first.canonicalObservationCount shouldBe 1
       second.canonicalObservationCount shouldBe 1
-      stored.record.body.identity.revision shouldBe 7L
-      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Running
-      stored.record.body.result shouldBe DurableResultOutcome.Pending
+      stored.record.body.identity.revision shouldBe 8L
+      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Succeeded
+      stored.record.body.result shouldBe DurableResultOutcome.Succeeded(DurableValue.Absent)
       stored.record.body.timeline
         .map(_.kind)
         .filter(_.startsWith("task.durable-")) shouldBe Vector(
@@ -409,9 +431,10 @@ final class DurableJobLifecycleWriteBridgeSpec
         DurableJobLifecycleWriteBoundary.StartIntent,
         DurableJobLifecycleWriteBoundary.RunningIntent,
         DurableJobLifecycleWriteBoundary.TaskStartIntent,
-        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
       )
-      stored.record.body.identity.revision shouldBe 5L
+      stored.record.body.identity.revision shouldBe 6L
       stored.record.body.identity.updatedAt.isAfter(localtask.startedAt) shouldBe true
       stored.record.body.identity.updatedAt.isAfter(
         localtask.finishedAt.getOrElse(fail("local task finish is missing"))
@@ -428,9 +451,9 @@ final class DurableJobLifecycleWriteBridgeSpec
       }
     }
 
-    "E7 keep retry execution outside TaskStartIntent and TaskOutcomeCheckpoint durable writes" must _e7 {
+    "E7 checkpoint every in-process retry attempt through TaskStartIntent and TaskOutcomeCheckpoint" must _e7 {
       "when an immediate retry follows the initial durable task checkpoint" in {
-      Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R5,R6; E7; a configured Persistent engine with a task that requests immediate retry before succeeding")
+      Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R4,R5,R6; E7; a configured Persistent engine with a task that requests immediate retry before succeeding")
       val context = ExecutionContext.test()
       given ExecutionContext = context
       val store = new DurableJobStore(EntityStore.standard())
@@ -456,28 +479,354 @@ final class DurableJobLifecycleWriteBridgeSpec
       engine.drainAll() shouldBe 2
       val stored = _success(store.load(jobid.value, _access)).getOrElse(fail("outcome snapshot is missing"))
       val model = engine.query(jobid).getOrElse(fail("runtime record is missing"))
+      val canonical = _success(DurableJobRecordCodec.canonicalJson(stored.record))
+      val taskids = model.tasks.tasks.map(_.taskId)
 
-      Then("the initial run writes its two task checkpoints while retry runs once without another durable task request or event")
+      Then("the failed first attempt and committed final attempt retain ordered exact task-id pairs at terminal revision eight without raw execution data")
       source.boundaries shouldBe Vector(
         DurableJobLifecycleWriteBoundary.Admission,
         DurableJobLifecycleWriteBoundary.StartIntent,
         DurableJobLifecycleWriteBoundary.RunningIntent,
         DurableJobLifecycleWriteBoundary.TaskStartIntent,
-        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TaskStartIntent,
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
       )
-      source.taskStartRequests should have size 1
-      source.taskOutcomeRequests should have size 1
-      stored.record.body.identity.revision shouldBe 5L
+      taskids should have size 2
+      taskids.distinct shouldBe taskids
+      source.taskStartRequests.map(_.taskid) shouldBe taskids
+      source.taskOutcomeRequests.map(_.completedtaskid) shouldBe taskids
+      source.taskStartRequests.map(_.taskreadmodels.map(_.taskId)) shouldBe
+        Vector(taskids.take(1), taskids)
+      source.taskOutcomeRequests.map(_.taskreadmodels.map(_.taskId)) shouldBe
+        Vector(taskids.take(1), taskids)
+      stored.record.body.identity.revision shouldBe 8L
+      stored.record.format shouldBe DurableRecordFormat.V2
+      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Succeeded
+      stored.record.body.result shouldBe DurableResultOutcome.Succeeded(DurableValue.Absent)
+      stored.record.body.tasks.map(_.taskId) shouldBe taskids.map(_.value)
+      stored.record.body.tasks.map(_.transaction.outcome) shouldBe Vector(
+        DurableTransactionOutcome.Failed,
+        DurableTransactionOutcome.Committed
+      )
       stored.record.body.timeline
         .map(_.kind)
         .filter(_.startsWith("task.durable-")) shouldBe Vector(
           "task.durable-start-intent",
+          "task.durable-outcome-checkpoint",
+          "task.durable-start-intent",
           "task.durable-outcome-checkpoint"
+        )
+      stored.record.body.timeline
+        .filter(_.kind.startsWith("task.durable-"))
+        .flatMap(_.taskId) shouldBe taskids.flatMap(taskid => Vector(taskid.value, taskid.value))
+      stored.record.body.timeline.map(_.kind) should contain(
+        "job.durable-terminal-outcome-checkpoint"
       )
       task.runCount shouldBe 2
       model.status shouldBe JobStatus.Succeeded
+      canonical should not include "RAW-TASK-BODY"
+      canonical should not include "RAW-RESULT-BODY"
       engine.durableLifecycleWriteFailureFacts shouldBe empty
       engine.shutdown()
+      }
+    }
+
+    "E17 retain local public control Retry descendants without durable bridge writes" must _e17 {
+      "when configured Persistent terminal failure and cancellation receive control Retry whose descendants request immediate or delayed retry" in {
+      Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R4,R5,R6; E17; configured Persistent failed and cancelled terminal jobs with public control Retry and local RetryNow or RetryLater descendants")
+      val context = ExecutionContext.test()
+      given ExecutionContext = context
+      val store = new DurableJobStore(EntityStore.standard())
+
+      val failedsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L)),
+        terminalresult = _failed_terminal_result
+      )
+      val failedengine = _engine()
+      failedengine.bindDurableLifecycleWriteBridge(
+        new DurableJobLifecycleWriteBridge(store, failedsource)
+      )
+      val failedtask = new RecordingTask(
+        _ => (),
+        outcomes = Some(attempt =>
+          if (attempt == 1)
+            TaskFailed(Consequence.stateInvalid[Nothing]("terminal task failed").conclusion)
+          else if (attempt == 2)
+            TaskFailed(_retry_now_conclusion)
+          else
+            TaskSucceeded(OperationResponse.Scalar("RAW-RESULT-BODY"))
+        )
+      )
+      val failedid = _success(failedengine.submit(List(failedtask), context))
+      failedengine.drainAll() shouldBe 1
+
+      val cancelledsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L)),
+        terminalresult = _cancelled_terminal_result
+      )
+      val cancelledengine = _engine()
+      cancelledengine.bindDurableLifecycleWriteBridge(
+        new DurableJobLifecycleWriteBridge(store, cancelledsource)
+      )
+      var cancelrequested = true
+      val cancelledtask = new RecordingTask(executioncontext =>
+        if (cancelrequested) {
+          cancelrequested = false
+          executioncontext.jobContext.jobId.foreach { jobid =>
+            _success(cancelledengine.control(
+              jobid,
+              JobControlRequest(JobControlCommand.Cancel),
+              _permissive_control_policy
+            )(using executioncontext))
+          }
+        }
+      )
+      val cancelledid = _success(cancelledengine.submit(List(cancelledtask), context))
+      cancelledengine.drainAll() shouldBe 1
+
+      val delayedtime = new ManualJobTimeSource(_instant)
+      val delayedtimer = new InMemoryJobEngine.ManualJobTimer(delayedtime)
+      val delayedsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L)),
+        terminalresult = _failed_terminal_result
+      )
+      val delayedengine = new InMemoryJobEngine(
+        retrySchedule = InMemoryJobEngine.RetrySchedule(Vector(Duration.ofMillis(1L))),
+        schedulerConfig = InMemoryJobEngine.SchedulerConfig(autoStartWorkers = false),
+        timeSource = delayedtime,
+        timer = Some(delayedtimer)
+      )(scala.concurrent.ExecutionContext.global)
+      delayedengine.bindDurableLifecycleWriteBridge(
+        new DurableJobLifecycleWriteBridge(store, delayedsource)
+      )
+      val delayedtask = new RecordingTask(
+        _ => (),
+        outcomes = Some(attempt =>
+          if (attempt == 1)
+            TaskFailed(Consequence.stateInvalid[Nothing]("delayed terminal task failed").conclusion)
+          else if (attempt == 2)
+            TaskFailed(_retry_later_conclusion)
+          else
+            TaskSucceeded(OperationResponse.Scalar("RAW-RESULT-BODY"))
+        )
+      )
+      val delayedid = _success(delayedengine.submit(List(delayedtask), context))
+      delayedengine.drainAll() shouldBe 1
+
+      When("public control Retry drains the terminal jobs and their immediate or delayed local retry descendants")
+      _success(failedengine.control(
+        failedid,
+        JobControlRequest(JobControlCommand.Retry),
+        _permissive_control_policy
+      ))
+      _success(cancelledengine.control(
+        cancelledid,
+        JobControlRequest(JobControlCommand.Retry),
+        _permissive_control_policy
+      ))
+      failedengine.drainAll() shouldBe 2
+      cancelledengine.drainAll() shouldBe 1
+      _success(delayedengine.control(
+        delayedid,
+        JobControlRequest(JobControlCommand.Retry),
+        _permissive_control_policy
+      ))
+      delayedengine.drainAll() shouldBe 1
+      delayedtimer.advanceBy(Duration.ofMillis(1L)) shouldBe 1
+      delayedengine.drainAll() shouldBe 1
+      val failed = _success(store.load(failedid.value, _access)).getOrElse(
+        fail("failed terminal snapshot is missing")
+      )
+      val cancelled = _success(store.load(cancelledid.value, _access)).getOrElse(
+        fail("cancelled terminal snapshot is missing")
+      )
+      val delayed = _success(store.load(delayedid.value, _access)).getOrElse(
+        fail("delayed terminal snapshot is missing")
+      )
+
+      Then("each control Retry and its descendants complete locally without a new durable task or terminal checkpoint against the retained terminal snapshot")
+      val terminalboundaries = Vector(
+        DurableJobLifecycleWriteBoundary.Admission,
+        DurableJobLifecycleWriteBoundary.StartIntent,
+        DurableJobLifecycleWriteBoundary.RunningIntent,
+        DurableJobLifecycleWriteBoundary.TaskStartIntent,
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      )
+      failedsource.boundaries shouldBe terminalboundaries
+      cancelledsource.boundaries shouldBe terminalboundaries
+      delayedsource.boundaries shouldBe terminalboundaries
+      failedtask.runCount shouldBe 3
+      cancelledtask.runCount shouldBe 2
+      delayedtask.runCount shouldBe 3
+      failed.record.body.identity.revision shouldBe 6L
+      cancelled.record.body.identity.revision shouldBe 6L
+      delayed.record.body.identity.revision shouldBe 6L
+      failed.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Failed
+      cancelled.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Cancelled
+      delayed.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Failed
+      failedengine.getStatus(failedid) shouldBe Some(JobStatus.Succeeded)
+      cancelledengine.getStatus(cancelledid) shouldBe Some(JobStatus.Succeeded)
+      delayedengine.getStatus(delayedid) shouldBe Some(JobStatus.Succeeded)
+      failedengine.durableLifecycleWriteFailureFacts shouldBe empty
+      cancelledengine.durableLifecycleWriteFailureFacts shouldBe empty
+      delayedengine.durableLifecycleWriteFailureFacts shouldBe empty
+      failedengine.shutdown()
+      cancelledengine.shutdown()
+      delayedengine.shutdown()
+      }
+    }
+
+    "E17 run a delayed retry rehydrated into a replacement engine without new bridge writes" must _e17 {
+      "when a Persistent delayed retry survives only as runtime state and its replacement engine reaches the due instant" in {
+      Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R4,R5,R6; E17; a configured Persistent delayed-retry record, its retained bridge snapshot, and a replacement manual scheduler")
+      val context = ExecutionContext.test()
+      given ExecutionContext = context
+      val store = new DurableJobStore(EntityStore.standard())
+      val state = InMemoryJobEngine.State()
+      val originaltime = new ManualJobTimeSource(_instant)
+      val originaltimer = new InMemoryJobEngine.ManualJobTimer(originaltime)
+      val source = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L))
+      )
+      val bridge = new DurableJobLifecycleWriteBridge(store, source)
+      val original = new InMemoryJobEngine(
+        runtimeState = state,
+        retrySchedule = InMemoryJobEngine.RetrySchedule(Vector(Duration.ofMillis(1L))),
+        schedulerConfig = InMemoryJobEngine.SchedulerConfig(autoStartWorkers = false),
+        timeSource = originaltime,
+        timer = Some(originaltimer)
+      )(scala.concurrent.ExecutionContext.global)
+      original.bindDurableLifecycleWriteBridge(bridge)
+      val task = new RecordingTask(
+        _ => (),
+        outcomes = Some(attempt =>
+          if (attempt == 1)
+            TaskFailed(_retry_later_conclusion)
+          else
+            TaskSucceeded(OperationResponse.Scalar("RAW-RESULT-BODY"))
+        )
+      )
+
+      When("the first engine reaches the delayed retry boundary, then a replacement engine rehydrates and drains the due retry")
+      val jobid = _success(original.submit(List(task), context))
+      original.drainOne() shouldBe true
+      val boundariesbeforereplacement = source.boundaries
+      original.shutdown()
+      val replacementtime = new ManualJobTimeSource(_instant)
+      val replacementtimer = new InMemoryJobEngine.ManualJobTimer(replacementtime)
+      val replacement = new InMemoryJobEngine(
+        runtimeState = state,
+        retrySchedule = InMemoryJobEngine.RetrySchedule(Vector(Duration.ofMillis(1L))),
+        schedulerConfig = InMemoryJobEngine.SchedulerConfig(autoStartWorkers = false),
+        timeSource = replacementtime,
+        timer = Some(replacementtimer)
+      )(scala.concurrent.ExecutionContext.global)
+      replacement.bindDurableLifecycleWriteBridge(bridge)
+      replacementtimer.advanceBy(Duration.ofMillis(1L)) shouldBe 1
+      replacement.drainAll() shouldBe 1
+
+      Then("the rehydrated body runs locally with no new bridge boundary or refusal")
+      task.runCount shouldBe 2
+      source.boundaries shouldBe boundariesbeforereplacement
+      replacement.getStatus(jobid) shouldBe Some(JobStatus.Succeeded)
+      replacement.durableLifecycleWriteFailureFacts shouldBe empty
+      replacement.shutdown()
+      }
+    }
+
+    "E17 observe compensation only after the terminal checkpoint settles" must _e17 {
+      "when a Persistent failure compensates after successful or refused terminal evidence" in {
+      Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R4,R5,R6; E17; matching and incompatible terminal evidence for two locally compensated Persistent failures")
+      val context = ExecutionContext.test()
+      given ExecutionContext = context
+      val store = new DurableJobStore(EntityStore.standard())
+
+      val acceptedsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L)),
+        terminalresult = _failed_terminal_result
+      )
+      val acceptedengine = _engine()
+      acceptedengine.bindDurableLifecycleWriteBridge(
+        new DurableJobLifecycleWriteBridge(store, acceptedsource)
+      )
+      val acceptedcompensation = new RecordingTask(_ => ())
+      val acceptedfirst = new RecordingTask(
+        _ => (),
+        compensation = Some(acceptedcompensation)
+      )
+      val acceptedsecond = new RecordingTask(
+        _ => (),
+        outcome = TaskFailed(Consequence.stateInvalid[Nothing]("accepted terminal failure").conclusion),
+        relationkind = "child"
+      )
+
+      val refusedsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L))
+      )
+      val refusedengine = _engine()
+      refusedengine.bindDurableLifecycleWriteBridge(
+        new DurableJobLifecycleWriteBridge(store, refusedsource)
+      )
+      val refusedcompensation = new RecordingTask(_ => ())
+      val refusedfirst = new RecordingTask(
+        _ => (),
+        compensation = Some(refusedcompensation)
+      )
+      val refusedsecond = new RecordingTask(
+        _ => (),
+        outcome = TaskFailed(Consequence.stateInvalid[Nothing]("refused terminal failure").conclusion),
+        relationkind = "child"
+      )
+
+      When("both jobs execute their committed task, failure, and local compensation through the terminal durable gate")
+      val acceptedid = _success(acceptedengine.submit(List(acceptedfirst, acceptedsecond), context))
+      acceptedengine.drainAll() shouldBe 1
+      val refusedid = _success(refusedengine.submit(List(refusedfirst, refusedsecond), context))
+      refusedengine.drainAll() shouldBe 1
+
+      Then("only the accepted terminal checkpoint releases the compensation canonical observation, while both compensation bodies remain bridge-free")
+      acceptedfirst.runCount shouldBe 1
+      acceptedsecond.runCount shouldBe 1
+      acceptedsource.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TaskStartIntent) shouldBe 2
+      acceptedsource.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint) shouldBe 2
+      acceptedengine.durableLifecycleWriteFailureFacts shouldBe empty
+      acceptedsource.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      acceptedengine.getStatus(acceptedid) shouldBe Some(JobStatus.Failed)
+      acceptedfirst.canonicalObservationCount shouldBe 1
+      acceptedsecond.canonicalObservationCount shouldBe 1
+      refusedfirst.runCount shouldBe 1
+      refusedsecond.runCount shouldBe 1
+      refusedsource.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TaskStartIntent) shouldBe 2
+      refusedsource.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint) shouldBe 2
+      acceptedcompensation.runCount shouldBe 1
+      acceptedcompensation.canonicalObservationCount shouldBe 1
+      refusedcompensation.runCount shouldBe 1
+      refusedcompensation.canonicalObservationCount shouldBe 0
+      refusedsource.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      refusedengine.durableLifecycleWriteFailureFacts shouldBe Vector(
+        DurableJobLifecycleWriteFailureFact(
+          refusedid,
+          DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused
+        )
+      )
+      refusedengine.getStatus(refusedid) shouldBe Some(JobStatus.Failed)
+      acceptedengine.shutdown()
+      refusedengine.shutdown()
       }
     }
 
@@ -759,6 +1108,160 @@ final class DurableJobLifecycleWriteBridgeSpec
       }
     }
 
+    "E16 refuse a terminal checkpoint without advancing the retained snapshot or observing the terminal outcome" must _e16 {
+      "when terminal evidence disagrees with a locally settled successful Persistent job" in {
+      Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R4,R5,R6; E16; a configured Persistent engine with closed task evidence and incompatible terminal result evidence")
+      val context = ExecutionContext.test()
+      given ExecutionContext = context
+      val store = new DurableJobStore(EntityStore.standard())
+      val source = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L)),
+        terminalresult = _failed_terminal_result
+      )
+      val engine = _engine()
+      engine.bindDurableLifecycleWriteBridge(new DurableJobLifecycleWriteBridge(store, source))
+      val task = new RecordingTask(_ => ())
+
+      When("the final local success reaches the closed terminal durable gate")
+      val jobid = _success(engine.submit(List(task), context))
+      engine.drainAll() shouldBe 1
+      val stored = _success(store.load(jobid.value, _access)).getOrElse(fail("nonterminal snapshot is missing"))
+
+      Then("the retained Running/Pending snapshot remains authoritative and no canonical task outcome is observed")
+      source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      stored.record.body.identity.revision shouldBe 5L
+      stored.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Running
+      stored.record.body.result shouldBe DurableResultOutcome.Pending
+      task.canonicalObservationCount shouldBe 0
+      engine.durableLifecycleWriteFailureFacts shouldBe Vector(
+        DurableJobLifecycleWriteFailureFact(
+          jobid,
+          DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused
+        )
+      )
+      engine.shutdown()
+      }
+    }
+
+    "E15 checkpoint configured Persistent success, terminal failure, and cancellation before fresh-engine terminal recovery" must _e15 {
+      "when three actual engine paths settle with closed terminal evidence" in {
+      Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R4,R5,R6; E15; one shared durable store, three configured Persistent engines, and closed success, failure, and cancellation evidence")
+      val context = ExecutionContext.test()
+      given ExecutionContext = context
+      val store = new DurableJobStore(EntityStore.standard())
+
+      val succeededsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L))
+      )
+      val succeededengine = _engine()
+      succeededengine.bindDurableLifecycleWriteBridge(
+        new DurableJobLifecycleWriteBridge(store, succeededsource)
+      )
+      val succeededid = _success(succeededengine.submit(List(new RecordingTask(_ => ())), context))
+      succeededengine.drainAll() shouldBe 1
+
+      val failedsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L)),
+        terminalresult = _failed_terminal_result
+      )
+      val failedengine = _engine()
+      failedengine.bindDurableLifecycleWriteBridge(new DurableJobLifecycleWriteBridge(store, failedsource))
+      val failedid = _success(failedengine.submit(
+        List(new RecordingTask(
+          _ => (),
+          TaskFailed(Consequence.stateInvalid[Nothing]("terminal task failed").conclusion)
+        )),
+        context
+      ))
+      failedengine.drainAll() shouldBe 1
+
+      val cancelledsource = new EvidenceSource(
+        Consequence.success(_evidence(1L)),
+        Consequence.success(_evidence(2L)),
+        Consequence.success(_evidence(3L)),
+        terminalresult = _cancelled_terminal_result
+      )
+      val cancelledeventstore = EventStore.inMemory
+      val cancelledengine = _engine().withEventStore(cancelledeventstore)
+      cancelledengine.bindDurableLifecycleWriteBridge(
+        new DurableJobLifecycleWriteBridge(store, cancelledsource)
+      )
+      val cancelledtask = new RecordingTask(executioncontext =>
+        executioncontext.jobContext.jobId.foreach { jobid =>
+          _success(cancelledengine.control(
+            jobid,
+            JobControlRequest(JobControlCommand.Cancel),
+            _permissive_control_policy
+          )(using executioncontext))
+        }
+      )
+      val cancelledid = _success(cancelledengine.submit(List(cancelledtask), context))
+      cancelledengine.drainAll() shouldBe 1
+
+      When("a newly created engine receives only the three closed terminal recovery candidates")
+      val freshengine = _engine()
+      val report = _success(freshengine.recoverDurableTerminalFacts(
+        _recovery_source(Vector(succeededid, failedid, cancelledid)),
+        store,
+        3
+      ))
+      val succeeded = _success(store.load(succeededid.value, _access)).getOrElse(fail("success snapshot is missing"))
+      val failed = _success(store.load(failedid.value, _access)).getOrElse(fail("failure snapshot is missing"))
+      val cancelled = _success(store.load(cancelledid.value, _access)).getOrElse(fail("cancellation snapshot is missing"))
+      val cancelledevents = cancelledeventstore.query(EventStore.Query()).toOption.getOrElse(Vector.empty)
+
+      Then("each real settlement leaves a V2 terminal record and fresh recovery registers only non-executable terminal facts")
+      Vector(succeeded, failed, cancelled).foreach { snapshot =>
+        snapshot.record.format shouldBe DurableRecordFormat.V2
+      }
+      succeeded.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Succeeded
+      failed.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Failed
+      cancelled.record.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Cancelled
+      cancelled.record.body.identity.revision shouldBe 6L
+      succeeded.record.body.result shouldBe DurableResultOutcome.Succeeded(DurableValue.Absent)
+      failed.record.body.result shouldBe _failed_terminal_result
+      cancelled.record.body.result shouldBe _cancelled_terminal_result
+      succeededsource.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      failedsource.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      cancelledsource.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      cancelledsource.boundaries shouldBe Vector(
+        DurableJobLifecycleWriteBoundary.Admission,
+        DurableJobLifecycleWriteBoundary.StartIntent,
+        DurableJobLifecycleWriteBoundary.RunningIntent,
+        DurableJobLifecycleWriteBoundary.TaskStartIntent,
+        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+      )
+      cancelledsource.taskStartEvidences.map(_.projection.semanticRevision) shouldBe Vector(4L)
+      cancelledsource.taskOutcomeEvidences.map(_.projection.semanticRevision) shouldBe Vector(5L)
+      cancelled.record.body.timeline
+        .map(_.kind)
+        .filter(_.startsWith("task.durable-")) shouldBe Vector(
+          "task.durable-start-intent",
+          "task.durable-outcome-checkpoint"
+        )
+      cancelledevents.count(_.name == "job.cancelled") shouldBe 1
+      cancelledevents.lastOption.map(_.name) shouldBe Some("job.cancelled")
+      report.candidates.map(_.fact) shouldBe Vector.fill(3)(DurableJobTerminalProjectionFact.Registered)
+      freshengine.getStatus(succeededid) shouldBe Some(JobStatus.Succeeded)
+      freshengine.getStatus(failedid) shouldBe Some(JobStatus.Failed)
+      freshengine.getStatus(cancelledid) shouldBe Some(JobStatus.Cancelled)
+      freshengine.runtimeState.durableJobs.isEmpty shouldBe true
+      freshengine.runtimeState.runtimeJobs.isEmpty shouldBe true
+      freshengine.drainAll() shouldBe 0
+      succeededengine.shutdown()
+      failedengine.shutdown()
+      cancelledengine.shutdown()
+      freshengine.shutdown()
+      }
+    }
+
     "E14 property-check local-time advancement with normal and immediate-retry dispatch" must _e14 {
       "when ScalaCheck varies post-revision-three local time and retry mode" in {
       Given("docs/spec/durable-job-write-bridge-contract.md; R1,R3,R4,R5,R6; E14; generated positive local-time advances and normal or immediate-retry Persistent task dispatch")
@@ -794,20 +1297,52 @@ final class DurableJobLifecycleWriteBridgeSpec
         val drains = engine.drainAll()
         val stored = _success(store.load(jobid.value, _access)).getOrElse(fail("outcome snapshot is missing"))
         val model = engine.query(jobid).getOrElse(fail("runtime record is missing"))
+        val taskids = model.tasks.tasks.map(_.taskId)
         val initialtask = model.tasks.tasks.head
         val taskevents = stored.record.body.timeline.map(_.kind).filter(_.startsWith("task.durable-"))
+        val canonical = _success(DurableJobRecordCodec.canonicalJson(stored.record))
+        val attempts = if (retry) 2 else 1
+        val expectedtaskvectors =
+          if (retry) Vector(taskids.take(1), taskids) else Vector(taskids)
+        val expectedtaskboundaries = Vector.fill(attempts)(Vector(
+          DurableJobLifecycleWriteBoundary.TaskStartIntent,
+          DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint
+        )).flatten
+        val expectedtaskevents = Vector.fill(attempts)(Vector(
+          "task.durable-start-intent",
+          "task.durable-outcome-checkpoint"
+        )).flatten
+        val expectedtaskids = taskids.flatMap(taskid => Vector(taskid.value, taskid.value))
+        val expectedtransactionoutcomes =
+          if (retry)
+            Vector(DurableTransactionOutcome.Failed, DurableTransactionOutcome.Committed)
+          else
+            Vector(DurableTransactionOutcome.Committed)
 
-        Then("each generated run retains contiguous task checkpoints, a monotonic checkpoint timestamp, and exactly one durable task-write pair")
+        Then("each generated normal run has one exact task-id pair while retry history retains ordered failed-first and committed-last pairs without raw execution data")
         val result =
           drains == (if (retry) 2 else 1) &&
-            stored.record.body.identity.revision == 5L &&
+            stored.record.body.identity.revision == (if (retry) 8L else 6L) &&
+            stored.record.body.lifecycle.status == DurableJobLifecycleStatus.Succeeded &&
+            stored.record.body.result == DurableResultOutcome.Succeeded(DurableValue.Absent) &&
+            stored.record.body.tasks.map(_.transaction.outcome) == expectedtransactionoutcomes &&
             stored.record.body.identity.updatedAt.isAfter(initialtask.startedAt) &&
             stored.record.body.identity.updatedAt.isAfter(
               initialtask.finishedAt.getOrElse(fail("initial task finish is missing"))
             ) &&
-            taskevents == Vector("task.durable-start-intent", "task.durable-outcome-checkpoint") &&
-            source.taskStartRequests.size == 1 &&
-            source.taskOutcomeRequests.size == 1 &&
+            source.boundaries == (Vector(
+              DurableJobLifecycleWriteBoundary.Admission,
+              DurableJobLifecycleWriteBoundary.StartIntent,
+              DurableJobLifecycleWriteBoundary.RunningIntent
+            ) ++ expectedtaskboundaries :+ DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint) &&
+            taskevents == expectedtaskevents &&
+            stored.record.body.timeline.filter(_.kind.startsWith("task.durable-")).flatMap(_.taskId) == expectedtaskids &&
+            source.taskStartRequests.map(_.taskid) == taskids &&
+            source.taskOutcomeRequests.map(_.completedtaskid) == taskids &&
+            source.taskStartRequests.map(_.taskreadmodels.map(_.taskId)) == expectedtaskvectors &&
+            source.taskOutcomeRequests.map(_.taskreadmodels.map(_.taskId)) == expectedtaskvectors &&
+            canonical.contains("RAW-TASK-BODY") == false &&
+            canonical.contains("RAW-RESULT-BODY") == false &&
             task.runCount == (if (retry) 2 else 1)
         engine.shutdown()
         result
@@ -825,6 +1360,12 @@ final class DurableJobLifecycleWriteBridgeSpec
   private val _instant = Instant.parse("2026-09-09T01:02:03Z")
   private val _digest = "a" * 64
   private val _access = DurableJobRecordAccess("tenant-a", "subject-a", Set("job.read"))
+  private val _failed_terminal_result = DurableResultOutcome.Failed(
+    DurableFailureSummary("execution", "failed", "failed", retryable = false)
+  )
+  private val _cancelled_terminal_result = DurableResultOutcome.Cancelled(Some(
+    DurableFailureSummary("control", "cancelled", "cancelled", retryable = false)
+  ))
   private val _lifecycle_parameters = for {
     advance <- Gen.choose(1L, 24L)
     retry <- Gen.oneOf(true, false)
@@ -847,7 +1388,8 @@ final class DurableJobLifecycleWriteBridgeSpec
     taskstart: Option[DurableJobLifecycleWriteRequest.TaskStartIntent =>
       Consequence[DurableJobLifecycleWriteEvidence]] = None,
     taskoutcome: Option[DurableJobLifecycleWriteRequest.TaskOutcomeCheckpoint =>
-      Consequence[DurableJobLifecycleWriteEvidence]] = None
+      Consequence[DurableJobLifecycleWriteEvidence]] = None,
+    terminalresult: DurableResultOutcome = DurableResultOutcome.Succeeded(DurableValue.Absent)
   ) extends (DurableJobLifecycleWriteRequest => Consequence[DurableJobLifecycleWriteEvidence]) {
     private var _requests = Vector.empty[DurableJobLifecycleWriteRequest]
     private var _taskstartevidences = Vector.empty[DurableJobLifecycleWriteEvidence]
@@ -865,6 +1407,8 @@ final class DurableJobLifecycleWriteBridgeSpec
           taskoutcome
             .map(_(taskoutcomerequest))
             .getOrElse(_checkpoint_evidence(taskoutcomerequest.taskreadmodels))
+        case terminalrequest: DurableJobLifecycleWriteRequest.TerminalOutcomeCheckpoint =>
+          _terminal_evidence(terminalrequest.taskreadmodels, terminalresult)
       }
       request match {
         case _: DurableJobLifecycleWriteRequest.TaskStartIntent =>
@@ -892,13 +1436,27 @@ final class DurableJobLifecycleWriteBridgeSpec
       taskreadmodels: Vector[JobTaskReadModel]
     ): Consequence[DurableJobLifecycleWriteEvidence] =
       Consequence.success(_evidence(_requests.size.toLong, taskreadmodels.map(_task_descriptor)))
+
+    private def _terminal_evidence(
+      taskreadmodels: Vector[JobTaskReadModel],
+      result: DurableResultOutcome
+    ): Consequence[DurableJobLifecycleWriteEvidence] =
+      Consequence.success(_evidence(
+        _requests.size.toLong,
+        taskreadmodels.map(_terminal_task_descriptor),
+        result,
+        _terminal_retry(result)
+      ))
+
   }
 
   private final class RecordingTask(
     onrun: ExecutionContext => Unit,
     outcome: TaskOutcome = TaskSucceeded(OperationResponse.Scalar("RAW-RESULT-BODY")),
     relationkind: String = "root",
-    outcomes: Option[Int => TaskOutcome] = None
+    outcomes: Option[Int => TaskOutcome] = None,
+    compensation: Option[JobTask] = None,
+    compensationref: Option[String] = None
   ) extends JobTask {
     val actionId: ActionId =
       ActionId("cncf", "action", Some(_instant), Some("RAW-TASK-BODY"))
@@ -911,6 +1469,8 @@ final class DurableJobLifecycleWriteBridgeSpec
     override def relation: Option[String] = Some(relationkind)
     override def transactionRole: Option[String] = Some("own")
     override def transactionScope: Option[String] = Some("per-task")
+    override def compensationTask: Option[JobTask] = compensation
+    override def compensationActionRef: Option[String] = compensationref
     override def componentName: Option[String] = Some("component-a")
     override def operationName: Option[String] = Some("run")
 
@@ -946,9 +1506,64 @@ final class DurableJobLifecycleWriteBridgeSpec
   private def _retry_now_conclusion: Conclusion =
     Conclusion.simple("retry now").copy(disposition = Disposition(Disposition.UserAction.RetryNow))
 
+  private def _retry_later_conclusion: Conclusion =
+    Conclusion.simple("retry later").copy(disposition = Disposition(Disposition.UserAction.RetryLater))
+
+  private def _terminal_retry(result: DurableResultOutcome): DurableRetryEvidence = {
+    val outcome = result match {
+      case DurableResultOutcome.Succeeded(_) => DurableAttemptOutcome.Succeeded
+      case DurableResultOutcome.Failed(_) => DurableAttemptOutcome.Failed
+      case DurableResultOutcome.Cancelled(_) => DurableAttemptOutcome.Cancelled
+      case DurableResultOutcome.Pending => fail("terminal evidence cannot be pending")
+    }
+    val failure = result match {
+      case DurableResultOutcome.Failed(summary) => Some(summary)
+      case _ => None
+    }
+    DurableRetryEvidence(
+      Vector(DurableAttemptEvidence(1, _instant, Some(_instant.plusMillis(1L)), outcome, failure)),
+      3,
+      None,
+      exhausted = false,
+      recoveryRequired = outcome == DurableAttemptOutcome.Failed
+    )
+  }
+
+  private def _recovery_source(jobids: Vector[JobId]): DurableJobStartupRecoverySource =
+    new DurableJobStartupRecoverySource {
+      def candidates(
+        maxCandidates: Int
+      ): Consequence[Vector[DurableJobStartupRecoveryCandidate]] = {
+        val entries = jobids.zipWithIndex.map { case (jobid, index) =>
+          DurableJobStartupRecoveryCandidate(
+            index.toLong,
+            jobid.value,
+            _access,
+            DurableReplayEvidence(
+              idempotency = Some("idempotency-proof"),
+              input = Some("input-proof"),
+              definition = Some("definition-proof"),
+              authorization = Some("authorization-proof"),
+              provider = Some("provider-proof"),
+              compatibility = Some("compatibility-proof")
+            )
+          )
+        }
+        Consequence.success(entries.take(maxCandidates))
+      }
+    }
+
   private def _evidence(
     revision: Long,
-    tasks: Vector[DurableTaskDescriptor] = Vector(_closed_task_descriptor)
+    tasks: Vector[DurableTaskDescriptor] = Vector(_closed_task_descriptor),
+    result: DurableResultOutcome = DurableResultOutcome.Pending,
+    retry: DurableRetryEvidence = DurableRetryEvidence(
+      Vector.empty,
+      3,
+      None,
+      exhausted = false,
+      recoveryRequired = false
+    )
   ): DurableJobLifecycleWriteEvidence = {
     DurableJobLifecycleWriteEvidence(
       projection = DurableJobProjectionEvidence(
@@ -961,8 +1576,8 @@ final class DurableJobLifecycleWriteBridgeSpec
         ),
         tasks = tasks,
         inputs = Vector.empty,
-        result = DurableResultOutcome.Pending,
-        retry = DurableRetryEvidence(Vector.empty, 3, None, exhausted = false, recoveryRequired = false),
+        result = result,
+        retry = retry,
         diagnostics = Vector(DurableDiagnosticSummary("admission", "accepted", "info", "closed evidence")),
         calltreeReference = None,
         definitionSnapshot = DurableDefinitionSnapshot(
@@ -1039,6 +1654,45 @@ final class DurableJobLifecycleWriteBridgeSpec
       ),
       compensation = None
     )
+
+  private def _terminal_task_descriptor(model: JobTaskReadModel): DurableTaskDescriptor = {
+    val normalizedmodel =
+      if (model.relation.contains("compensation"))
+        model.copy(transactionOutcome = model.transactionOutcome.map {
+          case "compensation-committed" | "compensation-failed" => "compensated"
+          case value => value
+        })
+      else
+        model
+    _task_descriptor(normalizedmodel).copy(
+      compensation =
+        if (model.relation.contains("compensation"))
+          Some(DurableCompensationDescriptor(
+            DurableOperationReference(
+              model.component.getOrElse(fail("compensation task component is missing")),
+              model.service,
+              model.compensationActionRef.filter(_.trim.nonEmpty).getOrElse(
+                fail("compensation task action is missing")
+              ),
+              None
+            ),
+            model.compensatesTaskId.map(_.value).filter(_.trim.nonEmpty).getOrElse(
+              fail("compensation task target is missing")
+            ),
+            model.compensationStatus.filter(_.trim.nonEmpty).map(
+              DurableCompensationStatus.parse(_).fold(message => fail(message), identity)
+            ).getOrElse(fail("compensation task status is missing")),
+            model.compensationFailureSummary.map { summary =>
+              if (summary.trim.nonEmpty)
+                DurableFailureSummary("compensation", "failed", summary, retryable = false)
+              else
+                fail("compensation task failure summary is blank")
+            }
+          ))
+        else
+          None
+    )
+  }
 
   private def _success[A](result: Consequence[A]): A =
     result.toOption.getOrElse(fail("expected Consequence.Success"))

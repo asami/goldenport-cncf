@@ -10,7 +10,7 @@ import org.goldenport.Consequence
  * or any other live execution object.
  *
  * @since   Sep.  9, 2026
- * @version Sep.  9, 2026
+ * @version Sep. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobProjectionEvidence(
@@ -181,7 +181,13 @@ private[job] object DurableJobProjection {
       _ <- _positive(evidence.semanticRevision, "semantic revision")
       status <- _status(record.status)
       runmode <- _run_mode(record.runMode)
-      tasks <- _tasks_v2(record.taskReadModels, evidence.tasks, record.status)
+      tasks <- _tasks_v2(
+        record.taskReadModels,
+        evidence.tasks,
+        record.status,
+        record.retry,
+        record.timeline
+      )
       schedule <- if (JobStatus.isTerminal(record.status))
         _schedule(record, record.taskReadModels)
       else
@@ -330,7 +336,9 @@ private[job] object DurableJobProjection {
   private def _tasks_v2(
     live: Vector[JobTaskReadModel],
     supplied: Vector[DurableTaskDescriptor],
-    status: JobStatus
+    status: JobStatus,
+    retry: JobRetryState,
+    timeline: Vector[JobTimelineEvent]
   ): Either[String, Vector[DurableTaskDescriptor]] = {
     val liveids = live.map(_.taskId.value)
     val suppliedids = supplied.map(_.taskId)
@@ -352,7 +360,7 @@ private[job] object DurableJobProjection {
           }
         })
         _ <- if (JobStatus.isTerminal(status))
-          _task_statuses(live, status)
+          _terminal_task_statuses_v2(live, status, retry, timeline)
         else
           _task_statuses_v2(live)
       } yield supplied
@@ -565,6 +573,65 @@ private[job] object DurableJobProjection {
       "task read-model status or transaction outcome is not a structurally valid form"
     )
   }
+
+  private def _terminal_task_statuses_v2(
+    models: Vector[JobTaskReadModel],
+    status: JobStatus,
+    retry: JobRetryState,
+    timeline: Vector[JobTimelineEvent]
+  ): Either[String, Unit] =
+    status match {
+      case JobStatus.Succeeded =>
+        _succeeded_terminal_task_statuses_v2(models, retry, timeline)
+      case JobStatus.Failed | JobStatus.Cancelled =>
+        _task_statuses(models, status)
+      case _ =>
+        Left("terminal task status validation requires a terminal JobStatus")
+    }
+
+  private def _succeeded_terminal_task_statuses_v2(
+    models: Vector[JobTaskReadModel],
+    retry: JobRetryState,
+    timeline: Vector[JobTimelineEvent]
+  ): Either[String, Unit] = {
+    val valid = models.forall { model =>
+      model.status match {
+        case JobTaskStatus.Running => model.finishedAt.isEmpty && model.result.success
+        case JobTaskStatus.Succeeded =>
+          model.finishedAt.nonEmpty &&
+            model.finishedAt.forall(!_.isBefore(model.startedAt)) &&
+            model.result.success
+        case JobTaskStatus.Failed =>
+          model.finishedAt.nonEmpty &&
+            model.finishedAt.forall(!_.isBefore(model.startedAt)) &&
+            !model.result.success
+        case _ => false
+      }
+    }
+    val closed = models.forall(_.status != JobTaskStatus.Running)
+    val ordinarysuccess = models.forall(_.status == JobTaskStatus.Succeeded)
+    val provenretryhistory =
+      retry.attemptCount > 0 &&
+        models.lastOption.exists(_.status == JobTaskStatus.Succeeded) &&
+        models.exists(_.status == JobTaskStatus.Failed) &&
+        _has_durable_task_pairs(models, timeline)
+    Either.cond(
+      valid && closed && (ordinarysuccess || provenretryhistory),
+      (),
+      "succeeded terminal task read-models require all success or proven durable retry history"
+    )
+  }
+
+  private def _has_durable_task_pairs(
+    models: Vector[JobTaskReadModel],
+    timeline: Vector[JobTimelineEvent]
+  ): Boolean =
+    models.filterNot(_.relation.contains("compensation")).forall { model =>
+      val events = timeline.filter(_.taskId.contains(model.taskId))
+      val starts = events.count(_.kind == "task.durable-start-intent")
+      val outcomes = events.count(_.kind == "task.durable-outcome-checkpoint")
+      starts == 1 && outcomes == 1
+    }
 
   private def _schedule(
     record: JobRecord,

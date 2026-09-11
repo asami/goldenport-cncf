@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * this path, and the assertions retain the executable maps as the boundary.
  *
  * @since   Sep.  9, 2026
- * @version Sep.  9, 2026
+ * @version Sep. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobTerminalProjectionSpec
@@ -141,7 +141,7 @@ final class DurableJobTerminalProjectionSpec
         val deep = _record(
           _job_id("DEEP"),
           DurableJobLifecycleStatus.Succeeded,
-          tasks = _deep_tasks(_DEEP_TASK_COUNT)
+          tasks = _deep_tasks(_deep_task_count)
         )
         _create(fixture.store, deep)
         val engine = createManualJobEngine(state = InMemoryJobEngine.State()).engine
@@ -164,7 +164,7 @@ final class DurableJobTerminalProjectionSpec
           depth += 1
           current = current.flatMap(_.children.headOption)
         }
-        depth shouldBe _DEEP_TASK_COUNT
+        depth shouldBe _deep_task_count
       }
     }
 
@@ -360,7 +360,7 @@ final class DurableJobTerminalProjectionSpec
 
   private val _instant = Instant.parse("2026-09-09T01:02:03Z")
   private val _digest = "a" * 64
-  private val _DEEP_TASK_COUNT = 2048
+  private val _deep_task_count = 2048
   private val _access = DurableJobRecordAccess("tenant-a", "subject-a", Set("job.read"))
   private val _complete_evidence = DurableReplayEvidence(
     idempotency = Some("idempotency-proof"),

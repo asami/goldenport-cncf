@@ -54,7 +54,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Sep. 10, 2026
+ * @version Sep. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -1552,6 +1552,55 @@ final class InMemoryJobEngine(
         Consequence.operationNotFound(s"job:${jobid.value}")
     }
 
+  private def _establish_durable_terminal_outcome_checkpoint(
+    jobid: JobId
+  ): Consequence[Unit] =
+    _get_record(jobid) match {
+      case Some(record) =>
+        record.persistence match {
+          case JobPersistencePolicy.Persistent =>
+            _durable_lifecycle_write_bridge match {
+              case Some(bridge)
+                  if bridge.hasAdmittedSnapshot(record.id) &&
+                    record.taskReadModels.nonEmpty =>
+                bridge.establishTerminalOutcome(
+                  record,
+                  DurableJobLifecycleWriteRequest.TerminalOutcomeCheckpoint(
+                    record.id,
+                    record.taskReadModels
+                  )
+                )(using record.submittedContext).recoverWith { conclusion =>
+                  _record_durable_lifecycle_write_failure(
+                    record.id,
+                    DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused
+                  )
+                  Consequence.Failure(conclusion)
+                }
+              case _ =>
+                Consequence.unit
+            }
+          case JobPersistencePolicy.Ephemeral =>
+            Consequence.unit
+        }
+      case None =>
+        Consequence.operationNotFound(s"job:${jobid.value}")
+    }
+
+  private def _terminal_checkpoint_succeeded(jobid: JobId): Boolean =
+    _establish_durable_terminal_outcome_checkpoint(jobid) match {
+      case Consequence.Success(_) => true
+      case Consequence.Failure(_) => false
+    }
+
+  private def _terminal_checkpoint_succeeded(
+    jobid: JobId,
+    taskbridgewrites: Boolean
+  ): Boolean =
+    if (taskbridgewrites)
+      _terminal_checkpoint_succeeded(jobid)
+    else
+      true
+
   private def _record_durable_lifecycle_write_failure(
     jobid: JobId,
     failure: DurableJobLifecycleWriteFailure
@@ -1596,8 +1645,13 @@ final class InMemoryJobEngine(
     work match {
       case SchedulerWorkItem.JobRun(_, _, jobid) =>
         _run_job_record(jobid, Some("job-run"))
-      case SchedulerWorkItem.RetryRun(_, _, jobid) =>
-        _run_job_record(jobid, Some("retry-run"))
+      case SchedulerWorkItem.RetryRun(_, _, jobid, origin) =>
+        _run_job_record(
+          jobid,
+          Some("retry-run"),
+          taskbridgewrites = origin == SchedulerWorkItem.RetryRunOrigin.Automatic,
+          retryorigin = origin
+        )
       case SchedulerWorkItem.SameJobTask(_, _, jobid, task, ctx, forcedTaskId) =>
         _run_queued_same_job_task(jobid, task, ctx, forcedTaskId, Some("same-job-task"))
     }
@@ -1607,7 +1661,9 @@ final class InMemoryJobEngine(
 
   private def _run_job_record(
     jobid: JobId,
-    note: Option[String]
+    note: Option[String],
+    taskbridgewrites: Boolean = true,
+    retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
   ): Unit =
     _get_record(jobid).foreach { record =>
       if (
@@ -1617,12 +1673,12 @@ final class InMemoryJobEngine(
       ) {
         try {
           _append_timeline(jobid, "job.scheduler.started", None, None, note)
-          val taskbridgewrites = note.contains("job-run")
           _run_job_body(
             jobid,
             record.tasks,
             ExecutionContext.withFreshExecutionResponseCell(record.submittedContext),
-            taskbridgewrites
+            taskbridgewrites,
+            retryorigin
           )
         } catch {
           case e: Throwable =>
@@ -1652,6 +1708,14 @@ final class InMemoryJobEngine(
         case e: Throwable =>
           _handle_worker_failure(jobid, e)
       }
+    } else if (_get_record(jobid).exists(_.status == JobStatus.Cancelled)) {
+      _mutate_record(jobid) { record =>
+        record.copy(
+          pendingTaskCount = math.max(0, record.pendingTaskCount - 1),
+          updatedAt = _now()
+        )
+      }
+      _mark_base_completion(jobid, _control_result_for(JobStatus.Cancelled))
     }
 
   private def _handle_worker_failure(
@@ -1693,7 +1757,8 @@ final class InMemoryJobEngine(
     jobid: JobId,
     tasks: List[JobTask],
     ctx: ExecutionContext,
-    taskbridgewrites: Boolean
+    taskbridgewrites: Boolean,
+    retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
   ): Unit = {
     _append_timeline(jobid, "job.running", None, None, None)
     _update_record(jobid, JobStatus.Running, None)
@@ -1827,8 +1892,11 @@ final class InMemoryJobEngine(
           }
         }
         if (!taskstartrefused && !taskoutcomerefused) {
-          if (failure.nonEmpty)
-            _run_compensations(jobid, failedtaskid, committedtasks.reverse, ctx)
+          val compensationobservations =
+            if (failure.nonEmpty)
+              _run_compensations(jobid, failedtaskid, committedtasks.reverse, ctx)
+            else
+              Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
           val deferred = _get_record(jobid).map(_.status) match {
             case Some(JobStatus.Cancelled) =>
               Some(JobResult.Failure(Consequence.stateInvalid[Nothing](
@@ -1840,9 +1908,13 @@ final class InMemoryJobEngine(
                 successresponse.map(JobResult.Success.apply)
               )
           }
-          _mark_base_completion(jobid, deferred)
-          completedtasks.foreach { case (task, outcome, executioncontext, taskcancelled) =>
-            _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+          if (_mark_base_completion(jobid, deferred, taskbridgewrites, retryorigin)) {
+            completedtasks.foreach { case (task, outcome, executioncontext, taskcancelled) =>
+              _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+            }
+            compensationobservations.foreach { case (task, outcome, executioncontext, taskcancelled) =>
+              _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+            }
           }
         }
     }
@@ -1916,15 +1988,20 @@ final class InMemoryJobEngine(
           ()
       }
       _establish_durable_task_outcome_checkpoint(jobid, taskid, parent).map { _ =>
-        outcome match {
+        val compensationobservations = outcome match {
           case TaskSucceeded(_) =>
-            ()
+            Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
           case TaskFailed(c) =>
-            _run_same_job_compensations(jobid, Some(taskid), ctx)
+            val observations = _run_same_job_compensations(jobid, Some(taskid), ctx)
             _update_deferred_result(jobid, Some(JobResult.Failure(c)))
+            observations
         }
-        _settle_if_ready(jobid)
-        _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+        if (_settle_if_ready(jobid)) {
+          _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+          compensationobservations.foreach { case (task, outcome, executioncontext, taskcancelled) =>
+            _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+          }
+        }
         outcome
       }
     }
@@ -2101,9 +2178,19 @@ final class InMemoryJobEngine(
             case _ =>
               _append_timelinefor_control(jobid, request.command, target)
               _update_record(jobid, target, _control_result_for(target))
-              _append_eventfor_control(jobid, request.command, target)
               if (request.command == JobControlCommand.Cancel)
                 _cancellation_scope(jobid).cancel()
+              if (
+                request.command == JobControlCommand.Cancel &&
+                  _has_eligible_durable_terminal_checkpoint(jobid) &&
+                  _has_no_active_or_pending_local_work(jobid)
+              )
+                _mark_base_completion(jobid, _control_result_for(target))
+              if (
+                request.command != JobControlCommand.Cancel ||
+                  !_has_eligible_durable_terminal_checkpoint(jobid)
+              )
+                _append_eventfor_control(jobid, request.command, target)
           }
           request.option.mode match {
             case JobCommandMode.Async =>
@@ -2143,7 +2230,12 @@ final class InMemoryJobEngine(
       )
     )
     _append_timeline(jobid, "job.async.queued", None, None, Some("retry"))
-    _enqueue_work(SchedulerWorkItem.RetryRun(_next_sequence(), record.priority, jobid))
+    _enqueue_work(SchedulerWorkItem.RetryRun(
+      _next_sequence(),
+      record.priority,
+      jobid,
+      SchedulerWorkItem.RetryRunOrigin.Control
+    ))
   }
 
   private def _append_timelinefor_control(
@@ -2280,10 +2372,23 @@ final class InMemoryJobEngine(
       r.status != JobStatus.Cancelled && !_has_durable_task_checkpoint_refusal(jobid)
     )
 
+  private def _has_eligible_durable_terminal_checkpoint(jobid: JobId): Boolean =
+    _get_record(jobid).exists { record =>
+      record.persistence == JobPersistencePolicy.Persistent &&
+        record.taskReadModels.nonEmpty &&
+        _durable_lifecycle_write_bridge.exists(_.hasAdmittedSnapshot(record.id))
+    }
+
+  private def _has_no_active_or_pending_local_work(jobid: JobId): Boolean =
+    _get_record(jobid).exists { record =>
+      record.activeTaskCount == 0 && record.pendingTaskCount == 0
+    }
+
   private def _has_durable_task_checkpoint_refusal(jobid: JobId): Boolean =
     Option(_durable_lifecycle_write_failures.get(jobid)).exists {
       case DurableJobLifecycleWriteFailure.TaskStartIntentRefused => true
       case DurableJobLifecycleWriteFailure.TaskOutcomeCheckpointRefused => true
+      case DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused => true
       case _ => false
     }
 
@@ -2386,6 +2491,12 @@ final class InMemoryJobEngine(
       admittedfromqueue: Boolean = false
   ): Unit =
     _mutate_record(jobid) { record =>
+      val taskrelation = relation.orElse(taskdef.relation)
+      val compensationactionref =
+        if (taskrelation.contains("compensation"))
+          taskdef.compensationActionRef.orElse(taskdef.operationName.filter(_.trim.nonEmpty))
+        else
+          taskdef.compensationActionRef
       val task = JobTaskReadModel(
         taskId = taskid,
         parentTaskId = parent,
@@ -2398,14 +2509,14 @@ final class InMemoryJobEngine(
         operation = taskdef.operationName,
         taskKind = taskdef.taskKind,
         targetKind = taskdef.targetKind,
-        relation = relation.orElse(taskdef.relation),
+        relation = taskrelation,
         transactionRole =
           taskdef.transactionRole.orElse(_task_transaction_role(record.debug.parameters)),
         transactionScope = taskdef.transactionScope.orElse(
           record.debug.parameters.get("command.job-transaction-scope")
         ),
         transactionOutcome = Some(JobTaskTransactionOutcome.Running.print),
-        compensationActionRef = taskdef.compensationActionRef,
+        compensationActionRef = compensationactionref,
         compensatesTaskId = compensatestaskid
       )
       val timeline = _next_timeline(
@@ -2481,8 +2592,10 @@ final class InMemoryJobEngine(
 
   private def _mark_base_completion(
     jobid: JobId,
-    result: Option[JobResult]
-  ): Unit = {
+    result: Option[JobResult],
+    taskbridgewrites: Boolean = true,
+    retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
+  ): Boolean = {
     _mutate_record(jobid) { record =>
       record.copy(
         baseTasksCompleted = true,
@@ -2491,7 +2604,7 @@ final class InMemoryJobEngine(
         updatedAt = _now()
       )
     }
-    _settle_if_ready(jobid)
+    _settle_if_ready(jobid, taskbridgewrites, retryorigin)
   }
 
   private def _update_deferred_result(
@@ -2505,28 +2618,43 @@ final class InMemoryJobEngine(
       )
     }
 
-  private def _settle_if_ready(jobid: JobId): Unit =
+  private def _settle_if_ready(
+    jobid: JobId,
+    taskbridgewrites: Boolean = true,
+    retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
+  ): Boolean =
     _state_monitor.synchronized {
+      var terminalcheckpointed = true
       _get_record(jobid).foreach { record =>
         if (
           record.baseTasksCompleted && record.activeTaskCount == 0 && record.pendingTaskCount == 0
         ) {
           record.deferredResult match {
             case Some(JobResult.Failure(c)) if record.status != JobStatus.Cancelled =>
-              _handle_failed_settlement(jobid, record, c)
+              terminalcheckpointed = _handle_failed_settlement(
+                jobid,
+                record,
+                c,
+                taskbridgewrites,
+                retryorigin
+              )
             case Some(JobResult.Failure(_)) =>
-              () // A cancellation is terminal even when an already-admitted task returns later.
+              terminalcheckpointed = _terminal_checkpoint_succeeded(jobid, taskbridgewrites)
+              if (terminalcheckpointed && _has_eligible_durable_terminal_checkpoint(jobid))
+                _append_eventfor_control(jobid, JobControlCommand.Cancel, JobStatus.Cancelled)
             case Some(success @ JobResult.Success(_)) =>
               _append_timeline(jobid, "job.succeeded", None, None, None)
               _update_record(jobid, JobStatus.Succeeded, Some(success))
-              _append_event(
-                jobid = jobid,
-                name = "job.succeeded",
-                payload = Map(
-                  "job-id" -> jobid.value,
-                  "status" -> JobStatus.Succeeded.toString
+              terminalcheckpointed = _terminal_checkpoint_succeeded(jobid, taskbridgewrites)
+              if (terminalcheckpointed)
+                _append_event(
+                  jobid = jobid,
+                  name = "job.succeeded",
+                  payload = Map(
+                    "job-id" -> jobid.value,
+                    "status" -> JobStatus.Succeeded.toString
+                  )
                 )
-              )
             case None =>
               ()
           }
@@ -2539,6 +2667,7 @@ final class InMemoryJobEngine(
             _cancellation_scopes.remove(jobid)
         }
       }
+      terminalcheckpointed
     }
 
   private def _cancellation_scope(jobid: JobId): JobCancellationScope =
@@ -2549,8 +2678,9 @@ final class InMemoryJobEngine(
       failuretaskid: Option[TaskId],
       committedtasks: Vector[(TaskId, JobTask)],
     ctx: ExecutionContext
-  ): Unit =
+  ): Vector[(JobTask, TaskOutcome, ExecutionContext, Boolean)] =
     if (committedtasks.nonEmpty) {
+      var observations = Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
       _append_timeline(
         jobid,
         "job.compensation.started",
@@ -2669,7 +2799,7 @@ final class InMemoryJobEngine(
                   message
                 )
             }
-            _observe_task_canonical_outcome(
+            observations = observations :+ (
               compensation,
               compensationoutcome,
               executioncontext,
@@ -2695,16 +2825,20 @@ final class InMemoryJobEngine(
         }
       }
       _append_timeline(jobid, "job.compensation.finished", failuretaskid, None, None)
-    }
+      observations
+    } else
+      Vector.empty
 
   private def _run_same_job_compensations(
     jobid: JobId,
       failuretaskid: Option[TaskId],
     ctx: ExecutionContext
-  ): Unit = {
+  ): Vector[(JobTask, TaskOutcome, ExecutionContext, Boolean)] = {
     val committed = _committed_tasks_for_compensation(jobid, failuretaskid)
     if (committed.nonEmpty)
       _run_compensations(jobid, failuretaskid, committed, ctx)
+    else
+      Vector.empty
   }
 
   private def _committed_tasks_for_compensation(
@@ -3290,8 +3424,10 @@ final class InMemoryJobEngine(
   private def _handle_failed_settlement(
     jobid: JobId,
     record: JobRecord,
-    conclusion: Conclusion
-  ): Unit =
+    conclusion: Conclusion,
+    taskbridgewrites: Boolean = true,
+    retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
+  ): Boolean =
     _retry_policy(conclusion, record.retry.attemptCount) match {
       case RetryPolicy.None =>
         val retry = _terminal_retry_state(record.retry, conclusion, poison = true)
@@ -3315,7 +3451,10 @@ final class InMemoryJobEngine(
           Some(JobResult.Failure(conclusion)),
           retry
         )
-        _append_failure_event(jobid, conclusion, retry)
+        val terminalcheckpointed = _terminal_checkpoint_succeeded(jobid, taskbridgewrites)
+        if (terminalcheckpointed)
+          _append_failure_event(jobid, conclusion, retry)
+        terminalcheckpointed
       case RetryPolicy.Immediate(nextattempt, maxAttempts) =>
         _append_timeline(
           jobid,
@@ -3345,7 +3484,13 @@ final class InMemoryJobEngine(
           )
         )
         _append_timeline(jobid, "job.async.queued", None, None, Some("retry-now"))
-        _enqueue_work(SchedulerWorkItem.RetryRun(_next_sequence(), record.priority, jobid))
+        _enqueue_work(SchedulerWorkItem.RetryRun(
+          _next_sequence(),
+          record.priority,
+          jobid,
+          retryorigin
+        ))
+        true
       case RetryPolicy.Delayed(nextattempt, dueat, maxAttempts) =>
         _append_timeline(
           jobid,
@@ -3371,7 +3516,8 @@ final class InMemoryJobEngine(
           lastFailureMessage = conclusion.observation.getEffectiveMessage
         )
         _append_retry_event(jobid, "job.retry.delayed.scheduled", conclusion, scheduled)
-        _schedule_delayed_retry(jobid, dueat)
+        _schedule_delayed_retry(jobid, dueat, retryorigin)
+        true
       case RetryPolicy.Exhausted(kind, attempts, maxAttempts) =>
         val retry = _terminal_retry_state(
           record.retry.copy(
@@ -3403,7 +3549,10 @@ final class InMemoryJobEngine(
           Some(JobResult.Failure(conclusion)),
           retry
         )
-        _append_failure_event(jobid, conclusion, retry)
+        val terminalcheckpointed = _terminal_checkpoint_succeeded(jobid, taskbridgewrites)
+        if (terminalcheckpointed)
+          _append_failure_event(jobid, conclusion, retry)
+        terminalcheckpointed
     }
 
   private def _update_record_for_retry(
@@ -3554,13 +3703,17 @@ final class InMemoryJobEngine(
 
   private def _schedule_delayed_retry(
     jobid: JobId,
-    dueat: Instant
+    dueat: Instant,
+    retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
   ): Unit =
     _timer.schedule(dueat) {
-      _run_scheduled_retry(jobid)
+      _run_scheduled_retry(jobid, retryorigin)
     }
 
-  private def _run_scheduled_retry(jobid: JobId): Unit =
+  private def _run_scheduled_retry(
+    jobid: JobId,
+    retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
+  ): Unit =
     _get_record(jobid).foreach { record =>
       if (
         record.status == JobStatus.Submitted &&
@@ -3596,7 +3749,12 @@ final class InMemoryJobEngine(
             updatedAt = _now()
           )
         )
-        _enqueue_work(SchedulerWorkItem.RetryRun(_next_sequence(), record.priority, jobid))
+        _enqueue_work(SchedulerWorkItem.RetryRun(
+          _next_sequence(),
+          record.priority,
+          jobid,
+          retryorigin
+        ))
       }
     }
 
@@ -3644,7 +3802,11 @@ final class InMemoryJobEngine(
         record.status == JobStatus.Submitted &&
         record.retry.nextRetryDueAt.nonEmpty
       ) {
-        _schedule_delayed_retry(record.id, record.retry.nextRetryDueAt.get)
+        _schedule_delayed_retry(
+          record.id,
+          record.retry.nextRetryDueAt.get,
+          SchedulerWorkItem.RetryRunOrigin.Recovery
+        )
       }
     }
   }
@@ -3812,9 +3974,9 @@ final class InMemoryJobEngine(
   private def _register_rehydrated_due_state(record: JobRecord): Unit =
     record.retry.nextRetryDueAt match {
       case Some(dueat) if dueat.isAfter(_now()) =>
-        _schedule_delayed_retry(record.id, dueat)
+        _schedule_delayed_retry(record.id, dueat, SchedulerWorkItem.RetryRunOrigin.Recovery)
       case Some(_) =>
-        _run_scheduled_retry(record.id)
+        _run_scheduled_retry(record.id, SchedulerWorkItem.RetryRunOrigin.Recovery)
       case None =>
         record.scheduledStartAt match {
           case Some(scheduledat) if scheduledat.isAfter(_now()) =>
@@ -3895,8 +4057,13 @@ object InMemoryJobEngine {
     final case class RetryRun(
       sequence: Long,
       priority: Int,
-      jobId: JobId
+      jobId: JobId,
+      origin: RetryRunOrigin
     ) extends SchedulerWorkItem
+
+    enum RetryRunOrigin {
+      case Automatic, Control, Recovery
+    }
 
     final case class SameJobTask(
       sequence: Long,

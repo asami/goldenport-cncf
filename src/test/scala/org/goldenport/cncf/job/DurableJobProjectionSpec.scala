@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * its fail-closed replay assessment boundary.
  *
  * @since   Sep.  9, 2026
- * @version Sep.  9, 2026
+ * @version Sep. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobProjectionSpec
@@ -295,6 +295,104 @@ final class DurableJobProjectionSpec
       Then("neither mismatch produces a partial v2 record")
       mismatchedResult shouldBe a[Consequence.Failure[_]]
       mismatchedTaskEvidence shouldBe a[Consequence.Failure[_]]
+    }
+
+    "project a v2 succeeded retry history with a closed compensation model but refuse a missing non-compensation durable pair" in {
+      Given("a succeeded persistent retry history with failed and successful bridge-eligible attempts plus a closed local compensation model")
+      val failedid = TaskId("cncf", "task", Some(_instant), Some("task-failed"))
+      val retryid = TaskId("cncf", "task", Some(_instant), Some("task-retry"))
+      val compensationid = TaskId("cncf", "task", Some(_instant), Some("task-compensation"))
+      val base = _record().taskReadModels.head
+      val failed = base.copy(
+        taskId = failedid,
+        status = JobTaskStatus.Failed,
+        startedAt = _instant.plusSeconds(5L),
+        finishedAt = Some(_instant.plusSeconds(10L)),
+        result = JobTaskResultSummary(success = false, message = Some("failed")),
+        transactionOutcome = Some("failed")
+      )
+      val retried = base.copy(
+        taskId = retryid,
+        startedAt = _instant.plusSeconds(15L),
+        finishedAt = Some(_instant.plusSeconds(20L)),
+        transactionOutcome = Some("committed")
+      )
+      val compensation = base.copy(
+        taskId = compensationid,
+        parentTaskId = Some(retryid),
+        startedAt = _instant.plusSeconds(21L),
+        finishedAt = Some(_instant.plusSeconds(25L)),
+        relation = Some("compensation"),
+        transactionOutcome = Some("compensation-committed"),
+        compensationActionRef = Some("compensate"),
+        compensatesTaskId = Some(retryid),
+        compensationStatus = Some("succeeded")
+      )
+      val descriptor = _evidence().tasks.head
+      val compensationdescriptor = descriptor.copy(
+        taskId = compensationid.value,
+        parentTaskId = Some(retryid.value),
+        relation = DurableTaskRelation(DurableTaskRelationKind.Compensation, Some(retryid.value)),
+        transaction = descriptor.transaction.copy(outcome = DurableTransactionOutcome.Compensated),
+        compensation = Some(DurableCompensationDescriptor(
+          DurableOperationReference("component-a", Some("service-a"), "compensate", None),
+          retryid.value,
+          DurableCompensationStatus.Succeeded,
+          None
+        ))
+      )
+      val record = _record().copy(
+        updatedAt = _instant.plusSeconds(30L),
+        taskReadModels = Vector(failed, retried, compensation),
+        timeline = Vector(
+          JobTimelineEvent(1L, _instant, "job.submitted", None, None, None),
+          JobTimelineEvent(2L, _instant.plusSeconds(5L), "task.durable-start-intent", Some(failedid), None, None),
+          JobTimelineEvent(3L, _instant.plusSeconds(10L), "task.durable-outcome-checkpoint", Some(failedid), None, None),
+          JobTimelineEvent(4L, _instant.plusSeconds(15L), "task.durable-start-intent", Some(retryid), None, None),
+          JobTimelineEvent(5L, _instant.plusSeconds(20L), "task.durable-outcome-checkpoint", Some(retryid), None, None),
+          JobTimelineEvent(6L, _instant.plusSeconds(30L), "job.succeeded", None, None, None)
+        ),
+        retry = JobRetryState(attemptCount = 1, maxAttempts = 3)
+      )
+      val evidence = _evidence().copy(
+        tasks = Vector(
+          descriptor.copy(
+            taskId = failedid.value,
+            transaction = descriptor.transaction.copy(outcome = DurableTransactionOutcome.Failed)
+          ),
+          descriptor.copy(taskId = retryid.value),
+          compensationdescriptor
+        ),
+        retry = DurableRetryEvidence(
+          Vector(
+            DurableAttemptEvidence(1, _instant.plusSeconds(5L), Some(_instant.plusSeconds(10L)), DurableAttemptOutcome.Failed, Some(DurableFailureSummary("execution", "failed", "failed", retryable = true))),
+            DurableAttemptEvidence(2, _instant.plusSeconds(15L), Some(_instant.plusSeconds(20L)), DurableAttemptOutcome.Succeeded, None)
+          ),
+          3,
+          None,
+          exhausted = false,
+          recoveryRequired = false
+        )
+      )
+
+      When("the v2 terminal retry history is projected with and without the successful non-compensation outcome pair")
+      val projected = DurableJobProjection.projectV2(record, evidence)
+      val missingnoncompensationpair = DurableJobProjection.projectV2(
+        record.copy(timeline = record.timeline.filterNot(event =>
+          event.taskId.contains(retryid) && event.kind == "task.durable-outcome-checkpoint"
+        )),
+        evidence
+      )
+
+      Then("the compensation remains represented and closed without a bridge pair while every non-compensation model still requires its exact pair")
+      projected shouldBe a[Consequence.Success[_]]
+      projected.toOption.get.body.tasks.map(_.taskId) shouldBe Vector(
+        failedid.value,
+        retryid.value,
+        compensationid.value
+      )
+      projected.toOption.get.body.tasks.last.relation.kind shouldBe DurableTaskRelationKind.Compensation
+      missingnoncompensationpair shouldBe a[Consequence.Failure[_]]
     }
   }
 

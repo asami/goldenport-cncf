@@ -1,6 +1,7 @@
 # Phase 69.1 - Persistent Job Storage and Process Recovery
 
-status=planned
+status=closed
+closed_at=2026-09-11
 planned_at=2026-09-09
 split_from=[Phase 69](phase-69.md)
 depends_on=[Phase 69](phase-69.md)
@@ -54,6 +55,23 @@ full-suite validation remains owned by Phase 69.7.
 - agent_reasoning_mode_policy: default standard; consider pro only at an eligible agent launch when the active interface supports it and frozen quality-first evidence justifies it
 - runtime_suitability: re-evaluate in the Phase execution task
 - source: approved split from Phase 69
+
+## Closure Evidence
+
+`JM69-03` is complete. The accepted Step accumulator is committed at
+`313daad08fd84b9db22f953f7bc309f6bdf55b3d`; it establishes canonical durable
+writes, provider-independent recovery classification, new-process terminal and
+runtime rehydration, delayed due-state recovery, and Ephemeral exclusion.
+
+The mandatory Phase full-review lineage was closed by the accepted bounded
+repair cycle for `CPB-P69.1-JM69-03O-001`. Its focused closure re-review is
+clean at tree identity
+`f22cbe47b27d6d0b694bb9ce52af2c987b9e0b8f7a4f971e00e738c1d73486cc`.
+The separate Phase release commit binds this final status, the complete
+Hygiene ledger, and the repository full-suite validation.
+
+Phase 69.2 receives the frozen durable-record and recovery handoff, but is
+not started by this closure.
 
 ## Non-Goals
 
