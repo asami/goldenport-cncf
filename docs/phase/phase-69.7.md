@@ -6,6 +6,10 @@ split_from=[Phase 69](phase-69.md)
 depends_on=[Phase 69.6](phase-69.6.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 69.7 Checklist](phase-69.7-checklist.md)
+split_full_test_policy=final-only
+validation_ownership=aggregate-final-owner
+aggregate_validation_owner=PHASE-69.7
+aggregate_validation_sequence=["PHASE-69.4","PHASE-69.5","PHASE-69.6","PHASE-69.7"]
 
 ## Purpose
 
@@ -34,8 +38,10 @@ record, including the Textus CBD acceptance result.
 | JM69-09 | Security, retention, observability, and operations | planned |
 | JM69-10 | Cross-process and downstream acceptance | planned |
 
-This child alone runs the Phase 69 full CNCF and required downstream validation,
-review convergence, version checks, release preparation, and release commit.
+This child alone runs the aggregate Phase 69 repository-full CNCF and required
+downstream validation after verifying every deferred predecessor handoff and
+its ancestry. It also owns review convergence, version checks, release
+preparation, and the final release commit.
 
 ## Phase Plan Gate: PROCEED
 

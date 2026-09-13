@@ -7,6 +7,10 @@ depends_on=[Phase 69.3](phase-69.3.md)
 successor=[Phase 69.5](phase-69.5.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 69.4 Checklist](phase-69.4-checklist.md)
+split_full_test_policy=final-only
+validation_ownership=aggregate-deferred
+aggregate_validation_owner=PHASE-69.7
+aggregate_validation_sequence=["PHASE-69.4","PHASE-69.5","PHASE-69.6","PHASE-69.7"]
 
 ## Purpose
 
@@ -32,7 +36,9 @@ snapshots.
 | JM69-06 | JobDefinition governance and rollout | planned |
 
 Focused lifecycle, rollback, authorization, migration, and immutable-snapshot
-specifications are required; full-suite validation remains owned by Phase 69.7.
+specifications are required. The repository full suite is deliberately deferred
+to the declared aggregate final owner, Phase 69.7; this Phase still requires
+focused validation, independent review, and its own release commit.
 
 ## Phase Plan Gate: PROCEED
 
