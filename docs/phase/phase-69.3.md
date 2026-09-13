@@ -1,6 +1,7 @@
 # Phase 69.3 - Executable JCL Runtime
 
-status=in_progress
+status=closed
+closed_at=2026-09-14
 planned_at=2026-09-09
 split_from=[Phase 69](phase-69.md)
 depends_on=[Phase 69.2](phase-69.2.md)
@@ -31,21 +32,30 @@ snapshot handoffs.
 
 | ID | Stage | Status |
 | --- | --- | --- |
-| JM69-05 | Executable JCL runtime | IN_PROGRESS |
+| JM69-05 | Executable JCL runtime | DONE |
 
 Focused grammar, determinism, replay, cancellation, restart, and no-bypass
-specifications are required; full-suite validation remains owned by Phase 69.7.
+specifications are accepted. Repository full-suite validation passed under
+`P69.3-PHASE-RELEASE-VAL-002` before this closure record was sealed.
 
-## Current JM69-05G Compatibility Boundary
+## JM69-05 Closure Evidence
 
 JM69-05G keeps the JobDefinition direct-identity repair local to
 `JobDefinitionEntity`: new records use a versioned lossless key encoding, and
 reads retain only an exact persisted-key legacy fallback. The repair also requires
 safe YAML construction and exactly-one-target semantic validation before either
 Action or Workflow dispatch. It does not migrate records, add store-wide key
-indexing, or decide the deferred EntityId/UniversalId redesign. Focused
-validation and the fresh lightweight Step review remain required before this
-stage can advance.
+indexing, or decide the deferred EntityId/UniversalId redesign.
+
+JM69-05 was accepted in Step commit `835eaa69474bde83e02b5557473b5089d38bae5d`.
+The sole Phase full review identified the release packaging omission for the
+package-private runtime bridge; its focused closure review and the final
+header-only focused re-review found no remaining current-work blocker. The
+final Phase release stages
+`src/main/scala/org/goldenport/cncf/component/builtin/jobcontrol/JclRuntimeBridge.scala`
+with its committed `JobControlComponent.scala` caller so a clean checkout
+retains the required runtime bridge. Phase 69.4 receives this frozen JCL and
+definition-snapshot handoff; it is not started by this closure.
 
 ## Phase Plan Gate: PROCEED
 
