@@ -16,7 +16,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   May.  7, 2026
  *  version May. 31, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -110,7 +111,16 @@ final case class JobDefinitionEntity(
 
 object JobDefinitionEntity {
   def entityId(key: String): EntityId =
-    EntityId("cncf", _entity_id_label(key), JobEntityCollections.JobDefinition)
+    _entity_id(_versioned_entity_id_label(_normalize_key(key)))
+
+  private def _entity_id(label: String): EntityId =
+    EntityId(
+      major = "cncf",
+      minor = label,
+      collection = JobEntityCollections.JobDefinition,
+      timestamp = Some(Instant.EPOCH),
+      entropy = Some(_stable_entropy(label))
+    )
 
   def create(
     key: String,
@@ -235,18 +245,17 @@ object JobDefinitionEntity {
         s"job definition id collection mismatch: expected ${JobEntityCollections.JobDefinition.print}, got ${id.collection.print}"
       )
 
-  private def _entity_id_label(key: String): String = {
-    val normalized = key.trim.map {
-      case c if c.isLetterOrDigit || c == '_' => c
-      case _ => '_'
-    }.mkString
-    val nonempty = if (normalized.nonEmpty) normalized else "jobDefinition"
-    if (nonempty.headOption.exists(_.isLetter)) nonempty else s"j_$nonempty"
+  private def _versioned_entity_id_label(key: String): String = {
+    val units = key.iterator.map(value => f"${value.toInt}%04x").mkString
+    s"v1_${key.length.toHexString}_$units"
   }
+
+  private def _stable_entropy(label: String): String =
+    label.getBytes(StandardCharsets.UTF_8).map(value => f"${value & 0xff}%02x").mkString
 
   private def _required(record: Record, key: String): Consequence[String] =
     record.getString(key).filter(_.trim.nonEmpty) match {
-      case Some(value) => Consequence.success(value.trim)
+      case Some(value) => Consequence.success(value)
       case None => Consequence.argumentMissing(key)
     }
 

@@ -1,15 +1,26 @@
 package org.goldenport.cncf.job
 
+import java.io.StringReader
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+
 import scala.jdk.CollectionConverters.*
+import com.typesafe.config.{ConfigException, ConfigFactory, ConfigIncludeContext, ConfigIncluder, ConfigIncluderClasspath, ConfigIncluderFile, ConfigIncluderURL, ConfigObject, ConfigParseOptions, ConfigValue}
+import io.circe.Json
+import io.circe.parser.parse as parseJson
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordFormat
 import org.goldenport.record.io.RecordSourceLoader
+import org.xml.sax.{EntityResolver, InputSource, SAXException}
+import org.yaml.snakeyaml.{LoaderOptions, Yaml}
+import org.yaml.snakeyaml.constructor.SafeConstructor
 
 /*
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
- * @version Jul.  1, 2026
+ *  version Jul.  1, 2026
+ * @version Sep. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobWorkflowTarget(
@@ -66,11 +77,17 @@ final case class JobDefinition(
   onFailure: Option[JobFailureHook] = None,
   compensation: Option[JobFailureHook] = None,
   profile: Option[JobDeclaredProfile] = None,
-  flow: Option[Record] = None,
-  events: Option[Record] = None,
-  onEvent: Option[Record] = None,
+  flow: Option[JobFlow] = None,
+  events: Option[JobEvents] = None,
+  onEvent: Option[JobOnEvent] = None,
   jobDefinitionRef: Option[String] = None
 ) {
+  def semanticPlan: Consequence[JobSemanticPlan] =
+    JobSemanticCompiler.compile(this)
+
+  def compile: Consequence[JobSemanticPlan] =
+    semanticPlan
+
   def toRecord: Record =
     Record.data(
       "name" -> name,
@@ -82,9 +99,9 @@ final case class JobDefinition(
       "on-failure" -> onFailure.map(_.toRecord).getOrElse(Record.empty),
       "compensation" -> compensation.map(_.toRecord).getOrElse(Record.empty),
       "profile" -> profile.map(_.toRecord).getOrElse(Record.empty),
-      "flow" -> flow.getOrElse(Record.empty),
-      "events" -> events.getOrElse(Record.empty),
-      "onEvent" -> onEvent.getOrElse(Record.empty),
+      "flow" -> flow.map(_.toRecord).getOrElse(Record.empty),
+      "events" -> events.map(_.toRecord).getOrElse(Record.empty),
+      "onEvent" -> onEvent.map(_.toRecord).getOrElse(Record.empty),
       "jobDefinitionRef" -> jobDefinitionRef.getOrElse("")
     )
 }
@@ -98,6 +115,17 @@ final case class JobBatchDefinition(
   jobs: Vector[JobDefinition],
   rootKind: JobJclRootKind = JobJclRootKind.Jobs
 ) {
+  def semanticPlans: Consequence[Vector[JobSemanticPlan]] =
+    jobs.foldLeft(Consequence.success(Vector.empty[JobSemanticPlan])) { (result, job) =>
+      for {
+        plans <- result
+        plan <- job.semanticPlan
+      } yield plans :+ plan
+    }
+
+  def compile: Consequence[Vector[JobSemanticPlan]] =
+    semanticPlans
+
   def toRecord: Record =
     rootKind match {
       case JobJclRootKind.SingleJob =>
@@ -136,11 +164,13 @@ object JobBatchDefinition {
     formatName(DefaultFormat)
 
   def parse(body: String, format: RecordFormat = DefaultFormat): Consequence[JobBatchDefinition] =
-    RecordSourceLoader.load(body, format) match {
-      case Consequence.Success(record) =>
-        _parse_root(record)
-      case Consequence.Failure(conclusion) =>
-        Consequence.argumentInvalid(s"invalid JCL ${formatName(format)}: ${conclusion.show}")
+    _validate_source_boundary(body, format).flatMap { _ =>
+      RecordSourceLoader.load(body, format) match {
+        case Consequence.Success(record) =>
+          _parse_root(record)
+        case Consequence.Failure(conclusion) =>
+          Consequence.argumentInvalid(s"invalid JCL ${formatName(format)}: ${conclusion.show}")
+      }
     }
 
   def parseYaml(body: String): Consequence[JobBatchDefinition] =
@@ -176,11 +206,278 @@ object JobBatchDefinition {
   private val _supported_formats: Set[RecordFormat] =
     Set(RecordFormat.Json, RecordFormat.Yaml, RecordFormat.Xml, RecordFormat.Hocon)
 
+  private val _executable_section_names: Vector[String] =
+    Vector("flow", "events", "onEvent")
+
+  private val _yaml_source_loader_options: LoaderOptions = {
+    val options = new LoaderOptions()
+    options.setMaxAliasesForCollections(50)
+    options.setAllowRecursiveKeys(false)
+    options.setNestingDepthLimit(50)
+    options.setCodePointLimit(3 * 1024 * 1024)
+    options
+  }
+
+  private val _yaml_source_parser: Yaml =
+    new Yaml(new SafeConstructor(_yaml_source_loader_options))
+
+  private object HoconIncludeRejector extends ConfigIncluder
+      with ConfigIncluderClasspath with ConfigIncluderFile with ConfigIncluderURL {
+    override def withFallback(fallback: ConfigIncluder): ConfigIncluder = this
+
+    override def include(context: ConfigIncludeContext, what: String): ConfigObject =
+      _reject_hocon_include(what)
+
+    override def includeResources(context: ConfigIncludeContext, what: String): ConfigObject =
+      _reject_hocon_include(what)
+
+    override def includeFile(context: ConfigIncludeContext, what: java.io.File): ConfigObject =
+      _reject_hocon_include(what.getPath)
+
+    override def includeURL(context: ConfigIncludeContext, what: java.net.URL): ConfigObject =
+      _reject_hocon_include(what.toExternalForm)
+
+    private def _reject_hocon_include(what: String): Nothing =
+      throw new ConfigException.BadValue(
+        "include",
+        s"JCL HOCON includes are not allowed: $what"
+      )
+  }
+
+  private val _safe_hocon_parse_options: ConfigParseOptions =
+    ConfigParseOptions.defaults().setIncluder(HoconIncludeRejector)
+
+  private def _secure_source_xml_factory: Consequence[DocumentBuilderFactory] =
+    Consequence {
+      val factory = DocumentBuilderFactory.newInstance()
+      factory.setNamespaceAware(true)
+      factory.setXIncludeAware(false)
+      factory.setExpandEntityReferences(false)
+      factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+      factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+      factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+      factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+      factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+      factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+      factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+      factory
+    }
+
+  private val _rejecting_xml_entity_resolver: EntityResolver = new EntityResolver {
+    override def resolveEntity(publicId: String, systemId: String): InputSource =
+      throw new SAXException("JCL XML external entities are not allowed")
+  }
+
+  private def _validate_source_boundary(
+    body: String,
+    format: RecordFormat
+  ): Consequence[Unit] =
+    format match {
+      case RecordFormat.Xml | RecordFormat.Hocon =>
+        _source_shape(body, format).flatMap(root => _reject_empty_executable_mappings(root))
+      case _ =>
+        _reject_empty_executable_mappings(body, format)
+    }
+
+  private def _reject_empty_executable_mappings(
+    body: String,
+    format: RecordFormat
+  ): Consequence[Unit] =
+    _source_shape(body, format).flatMap(_reject_empty_executable_mappings)
+
+  private def _reject_empty_executable_mappings(root: Any): Consequence[Unit] =
+    _source_object(root) match {
+      case None => Consequence.unit
+      case Some(mapping) =>
+        val singlejob = mapping.get("job").toVector.flatMap { value =>
+          _source_object(value).map("job" -> _)
+        }
+        val batchjobs = mapping.get("jobs").toVector
+          .flatMap(_source_values)
+          .zipWithIndex
+          .flatMap { case (value, index) =>
+            _source_object(value).map(s"jobs[$index]" -> _)
+          }
+        val jobmaps = singlejob ++ batchjobs
+        val violation = jobmaps.iterator.flatMap { case (path, job) =>
+          _executable_section_names.iterator.collectFirst {
+            case key if job.get(key).exists(_is_empty_source_mapping) => s"$path.$key"
+          }
+        }.toSeq.headOption
+        violation match {
+          case Some(path) => Consequence.argumentInvalid(s"$path must not be empty")
+          case None => Consequence.unit
+        }
+    }
+
+  private def _source_shape(
+    body: String,
+    format: RecordFormat
+  ): Consequence[Any] =
+    format match {
+      case RecordFormat.Json =>
+        Consequence {
+          parseJson(body) match {
+            case Right(value) => _json_source_value(value)
+            case Left(error) => throw error
+          }
+        }
+      case RecordFormat.Yaml =>
+        Consequence {
+          _yaml_source_parser.load[Any](body)
+        }
+      case RecordFormat.Xml =>
+        _secure_source_xml_factory.flatMap { factory =>
+          Consequence {
+            val builder = factory.newDocumentBuilder()
+            builder.setEntityResolver(_rejecting_xml_entity_resolver)
+            val document = builder.parse(new InputSource(new StringReader(body)))
+            _reject_xml_external_constructs(document.getDocumentElement)
+            _xml_source_value(document.getDocumentElement)
+          }
+        }
+      case RecordFormat.Hocon =>
+        Consequence {
+          _hocon_source_value(
+            ConfigFactory.parseString(body, _safe_hocon_parse_options).root()
+          )
+        }
+      case _ =>
+        Consequence.success(())
+    }
+
+  private def _json_source_value(json: Json): Any =
+    json.fold(
+      jsonNull = null,
+      jsonBoolean = identity,
+      jsonNumber = number => number.toBigDecimal.getOrElse(BigDecimal(number.toDouble)),
+      jsonString = identity,
+      jsonArray = values => values.toVector.map(_json_source_value),
+      jsonObject = objectvalue =>
+        objectvalue.toIterable.iterator.map { case (key, value) =>
+          key -> _json_source_value(value)
+        }.toMap
+    )
+
+  private def _hocon_source_value(value: ConfigValue): Any =
+    value match {
+      case objectvalue: ConfigObject =>
+        objectvalue.keySet.asScala.iterator.map { key =>
+          key -> _hocon_source_value(objectvalue.get(key))
+        }.toMap
+      case values: java.util.Collection[?] =>
+        values.asScala.iterator.map {
+          case configvalue: ConfigValue => _hocon_source_value(configvalue)
+          case other => other
+        }.toVector
+      case other =>
+        other.unwrapped()
+    }
+
+  private def _xml_source_value(element: org.w3c.dom.Element): Any = {
+    val children = _xml_source_child_elements(element)
+    val text = _xml_source_text(element)
+    val attributes = _xml_source_attributes(element)
+    if (children.isEmpty) {
+      if (attributes.isEmpty && text.nonEmpty)
+        text
+      else if (text.nonEmpty)
+        attributes.updated("#text", text)
+      else
+        attributes
+    } else {
+      children.map(_xml_source_local_name).distinct.iterator.map { name =>
+        val elements = children.filter(_xml_source_local_name(_) == name)
+        val value =
+          if (elements.size == 1)
+            _xml_source_value(elements.head)
+          else
+            elements.map(_xml_source_value)
+        name -> value
+      }.toMap
+    }
+  }
+
+  private def _reject_xml_external_constructs(element: org.w3c.dom.Element): Unit = {
+    val isxinclude =
+      element.getNamespaceURI == "http://www.w3.org/2001/XInclude" &&
+        element.getLocalName == "include"
+    val hasexternalschema = {
+      val attributes = element.getAttributes
+      (0 until attributes.getLength).exists { index =>
+        val attribute = attributes.item(index)
+        attribute.getNamespaceURI == "http://www.w3.org/2001/XMLSchema-instance" &&
+          Set("schemaLocation", "noNamespaceSchemaLocation").contains(attribute.getLocalName)
+      }
+    }
+    if (isxinclude)
+      throw new SAXException("JCL XML XInclude is not allowed")
+    else if (hasexternalschema)
+      throw new SAXException("JCL XML external schema is not allowed")
+    else
+      _xml_source_child_elements(element).foreach(_reject_xml_external_constructs)
+  }
+
+  private def _xml_source_child_elements(
+    element: org.w3c.dom.Element
+  ): Vector[org.w3c.dom.Element] = {
+    val nodes = element.getChildNodes
+    (0 until nodes.getLength).toVector.map(index => nodes.item(index)).collect {
+      case child: org.w3c.dom.Element => child
+    }
+  }
+
+  private def _xml_source_text(element: org.w3c.dom.Element): String = {
+    val nodes = element.getChildNodes
+    (0 until nodes.getLength).toVector.map(index => nodes.item(index)).collect {
+      case child: org.w3c.dom.CDATASection => child.getData
+      case child: org.w3c.dom.Text => child.getWholeText
+    }.mkString.trim
+  }
+
+  private def _xml_source_attributes(
+    element: org.w3c.dom.Element
+  ): Map[String, Any] = {
+    val attributes = element.getAttributes
+    (0 until attributes.getLength).iterator.map { index =>
+      val node = attributes.item(index)
+      _xml_source_local_name(node) -> node.getNodeValue
+    }.toMap
+  }
+
+  private def _xml_source_local_name(node: org.w3c.dom.Node): String =
+    Option(node.getLocalName).getOrElse(node.getNodeName)
+
+  private def _source_object(value: Any): Option[Map[String, Any]] =
+    value match {
+      case mapping: java.util.Map[?, ?] =>
+        Some(mapping.asScala.iterator.map { case (key, entry) =>
+          key.toString -> entry
+        }.toMap)
+      case mapping: Map[?, ?] =>
+        Some(mapping.iterator.map { case (key, entry) =>
+          key.toString -> entry
+        }.toMap)
+      case _ => None
+    }
+
+  private def _source_values(value: Any): Vector[Any] =
+    value match {
+      case values: java.util.Collection[?] =>
+        values.asScala.iterator.map(entry => entry).toVector
+      case values: Iterable[?] =>
+        values.iterator.map(entry => entry).toVector
+      case _ => Vector.empty
+    }
+
+  private def _is_empty_source_mapping(value: Any): Boolean =
+    _source_object(value).exists(_.isEmpty)
+
   private def _parse_root(p: Any): Consequence[JobBatchDefinition] =
     _object_map(p, "JCL root").flatMap { m =>
       val keys = m.keySet
       if (keys == Set("job"))
-        _job(m("job"), 0, "job").map(job => JobBatchDefinition(Vector(job), JobJclRootKind.SingleJob))
+        _job(m("job"), 0, "job", iscanonicalroot = true).map(job => JobBatchDefinition(Vector(job), JobJclRootKind.SingleJob))
       else if (keys == Set("jobs"))
         _jobs(m("jobs")).map(jobs => JobBatchDefinition(jobs, JobJclRootKind.Jobs))
       else if (keys.contains("job") && keys.contains("jobs"))
@@ -194,17 +491,24 @@ object JobBatchDefinition {
       if (xs.isEmpty)
         Consequence.argumentInvalid("jobs must not be empty")
       else
-        _sequence(xs.zipWithIndex.toVector.map { case (x, i) => _job(x, i) })
+        _sequence(xs.zipWithIndex.toVector.map { case (x, i) => _job(x, i, s"jobs[$i]", iscanonicalroot = false) })
     }
 
-  private def _job(p: Any, index: Int): Consequence[JobDefinition] =
-    _job(p, index, s"jobs[$index]")
-
-  private def _job(p: Any, index: Int, path: String): Consequence[JobDefinition] =
-        _object_map(p, path).flatMap { m =>
+  private def _job(
+    p: Any,
+    index: Int,
+    path: String,
+    iscanonicalroot: Boolean
+  ): Consequence[JobDefinition] =
+    _object_map(p, path).flatMap { m =>
       val allowed = Set("name", "target", "parameters", "submit", "onFailure", "compensation", "profile", "flow", "events", "onEvent", "jobDefinitionRef")
       _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
-        for {
+        val executablepresent = Set("flow", "events", "onEvent").exists(m.contains)
+        if (executablepresent && !iscanonicalroot)
+          Consequence.argumentInvalid(
+            s"$path executable sections require the canonical single-job root"
+          )
+        else for {
           name <- _required_string(m, "name", path)
           target <- _target(m.get("target"), s"$path.target")
           params <- _string_map(m.get("parameters"), s"$path.parameters")
@@ -212,11 +516,13 @@ object JobBatchDefinition {
           onFailure <- _failure_hook(m.get("onFailure"), s"$path.onFailure")
           compensation <- _failure_hook(m.get("compensation"), s"$path.compensation")
           profile <- _profile(m.get("profile"), s"$path.profile")
-          flow <- _inert_record(m.get("flow"), s"$path.flow")
-          events <- _inert_record(m.get("events"), s"$path.events")
-          onEvent <- _inert_record(m.get("onEvent"), s"$path.onEvent")
+          flow <- _flow(m.get("flow"), s"$path.flow")
+          events <- _event_definitions(m.get("events"), s"$path.events")
+          onEvent <- _on_event(m.get("onEvent"), s"$path.onEvent")
           ref <- _optional_string(m.get("jobDefinitionRef"), s"$path.jobDefinitionRef")
-        } yield JobDefinition(name, target, params, submit, onFailure, compensation, profile, flow, events, onEvent, ref)
+          definition = JobDefinition(name, target, params, submit, onFailure, compensation, profile, flow, events, onEvent, ref)
+          _ <- definition.semanticPlan
+        } yield definition
       }
     }
 
@@ -435,31 +741,170 @@ object JobBatchDefinition {
       case Some(value) => _string(value, path).map(Some(_))
     }
 
-  private def _inert_record(
+  private def _flow(
     p: Option[Any],
     path: String
-  ): Consequence[Option[Record]] =
+  ): Consequence[Option[JobFlow]] =
     p match {
       case None => Consequence.success(None)
-      case Some(value) => _any_to_record(value, path).map(Some(_))
+      case Some(value) =>
+        _object_map(value, path).flatMap { m =>
+          _reject_unknown_keys(m.keySet, Set("steps"), path).flatMap { _ =>
+            m.get("steps") match {
+              case None => Consequence.argumentMissing(s"$path.steps")
+              case Some(steps) =>
+                _vector(steps, s"$path.steps").flatMap { xs =>
+                  if (xs.isEmpty)
+                    Consequence.argumentInvalid(s"$path.steps must not be empty")
+                  else if (xs.size > JobSemanticCompiler.MAX_FLOW_STEPS)
+                    Consequence.argumentInvalid(
+                      s"$path.steps must contain at most ${JobSemanticCompiler.MAX_FLOW_STEPS} steps"
+                    )
+                  else
+                    _sequence(xs.zipWithIndex.toVector.map { case (step, i) =>
+                      _flow_step(step, s"$path.steps[$i]")
+                    }).flatMap { parsed =>
+                      if (parsed.exists(_.id == "root"))
+                        Consequence.argumentInvalid(s"$path step id must not be root")
+                      else if (_duplicate_ids(parsed.map(_.id)))
+                        Consequence.argumentInvalid(s"$path step ids must be unique")
+                      else
+                        Consequence.success(Some(JobFlow(parsed)))
+                    }
+                }
+            }
+          }
+        }
     }
 
-  private def _any_to_record(
+  private def _flow_step(
     p: Any,
     path: String
-  ): Consequence[Record] =
-    p match {
-      case m: java.util.Map[?, ?] =>
-        _object_map(m, path).map(m => Record.data(m.toVector.sortBy(_._1)*))
-      case m: Map[?, ?] =>
-        _object_map(m, path).map(m => Record.data(m.toVector.sortBy(_._1)*))
-      case xs: java.util.List[?] =>
-        Consequence.success(Record.data("items" -> xs.asScala.toVector.map(_.toString)))
-      case xs: Seq[?] =>
-        Consequence.success(Record.data("items" -> xs.toVector.map(_.toString)))
-      case other =>
-        Consequence.success(Record.data("value" -> other.toString))
+  ): Consequence[JobFlowStep] =
+    _object_map(p, path).flatMap { m =>
+      _reject_unknown_keys(m.keySet, Set("id", "action", "parameters"), path).flatMap { _ =>
+        for {
+          id <- _required_string(m, "id", path)
+          action <- _required_string(m, "action", path)
+          parameters <- _string_map(m.get("parameters"), s"$path.parameters")
+        } yield JobFlowStep(id, action, parameters)
+      }
     }
+
+  private def _event_definitions(
+    p: Option[Any],
+    path: String
+  ): Consequence[Option[JobEvents]] =
+    p match {
+      case None => Consequence.success(None)
+      case Some(value) =>
+        _object_map(value, path).flatMap { m =>
+          _reject_unknown_keys(m.keySet, Set("emit"), path).flatMap { _ =>
+            m.get("emit") match {
+              case None => Consequence.argumentMissing(s"$path.emit")
+              case Some(emissions) =>
+                _vector(emissions, s"$path.emit").flatMap { xs =>
+                  if (xs.isEmpty)
+                    Consequence.argumentInvalid(s"$path.emit must not be empty")
+                  else if (xs.size > JobSemanticCompiler.MAX_EMITTED_EVENTS)
+                    Consequence.argumentInvalid(
+                      s"$path.emit must contain at most ${JobSemanticCompiler.MAX_EMITTED_EVENTS} emissions"
+                    )
+                  else
+                    _sequence(xs.zipWithIndex.toVector.map { case (event, i) =>
+                      _event_emission(event, s"$path.emit[$i]")
+                    }).flatMap { parsed =>
+                      if (_duplicate_ids(parsed.map(_.id)))
+                        Consequence.argumentInvalid(s"$path.emit ids must be unique")
+                      else
+                        Consequence.success(Some(JobEvents(parsed)))
+                    }
+                }
+            }
+          }
+        }
+    }
+
+  private def _event_emission(
+    p: Any,
+    path: String
+  ): Consequence[JobEventEmission] =
+    _object_map(p, path).flatMap { m =>
+      _reject_unknown_keys(m.keySet, Set("id", "after", "name", "kind", "persistent"), path).flatMap { _ =>
+        for {
+          id <- _required_string(m, "id", path)
+          after <- _required_string(m, "after", path)
+          name <- _required_string(m, "name", path)
+          kind <- _optional_string(m.get("kind"), s"$path.kind")
+          persistent <- _optional_boolean(m.get("persistent"), s"$path.persistent")
+        } yield JobEventEmission(id, after, name, kind, persistent)
+      }
+    }
+
+  private def _on_event(
+    p: Option[Any],
+    path: String
+  ): Consequence[Option[JobOnEvent]] =
+    p match {
+      case None => Consequence.success(None)
+      case Some(value) =>
+        _object_map(value, path).flatMap { m =>
+          _reject_unknown_keys(m.keySet, Set("handlers"), path).flatMap { _ =>
+            m.get("handlers") match {
+              case None => Consequence.argumentMissing(s"$path.handlers")
+              case Some(handlers) =>
+                _vector(handlers, s"$path.handlers").flatMap { xs =>
+                  if (xs.isEmpty)
+                    Consequence.argumentInvalid(s"$path.handlers must not be empty")
+                  else if (xs.size > JobSemanticCompiler.MAX_EVENT_HANDLERS)
+                    Consequence.argumentInvalid(
+                      s"$path.handlers must contain at most ${JobSemanticCompiler.MAX_EVENT_HANDLERS} handlers"
+                    )
+                  else
+                    _sequence(xs.zipWithIndex.toVector.map { case (handler, i) =>
+                      _event_handler(handler, s"$path.handlers[$i]")
+                    }).flatMap { parsed =>
+                      if (_duplicate_ids(parsed.map(_.id)))
+                        Consequence.argumentInvalid(s"$path.handlers ids must be unique")
+                      else
+                        Consequence.success(Some(JobOnEvent(parsed)))
+                    }
+                }
+            }
+          }
+        }
+    }
+
+  private def _event_handler(
+    p: Any,
+    path: String
+  ): Consequence[JobEventHandler] =
+    _object_map(p, path).flatMap { m =>
+      _reject_unknown_keys(m.keySet, Set("id", "event", "action", "parameters"), path).flatMap { _ =>
+        for {
+          id <- _required_string(m, "id", path)
+          event <- _required_string(m, "event", path)
+          action <- _required_string(m, "action", path)
+          parameters <- _string_map(m.get("parameters"), s"$path.parameters")
+        } yield JobEventHandler(id, event, action, parameters)
+      }
+    }
+
+  private def _optional_boolean(
+    p: Option[Any],
+    path: String
+  ): Consequence[Option[Boolean]] =
+    p match {
+      case None => Consequence.success(None)
+      case Some(value) =>
+        value match {
+          case b: Boolean => Consequence.success(Some(b))
+          case _ => Consequence.argumentInvalid(s"$path must be a Boolean")
+        }
+    }
+
+  private def _duplicate_ids(values: Vector[String]): Boolean =
+    values.distinct.size != values.size
 
   private def _reject_unknown_keys(
     actual: Set[String],
@@ -528,9 +973,13 @@ object JobBatchDefinition {
     p: Any,
     path: String
   ): Consequence[String] =
-    Option(p).map(_.toString.trim).filter(_.nonEmpty) match {
-      case Some(value) => Consequence.success(value)
-      case None => Consequence.argumentInvalid(s"$path must be a non-empty string")
+    p match {
+      case value: String =>
+        value.trim match {
+          case "" => Consequence.argumentInvalid(s"$path must be a non-empty string")
+          case normalized => Consequence.success(normalized)
+        }
+      case _ => Consequence.argumentInvalid(s"$path must be a non-empty string")
     }
 
   private def _sequence[A](xs: Vector[Consequence[A]]): Consequence[Vector[A]] =

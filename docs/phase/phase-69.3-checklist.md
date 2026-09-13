@@ -1,6 +1,6 @@
 # Phase 69.3 Checklist - Executable JCL Runtime
 
-status=planned
+status=in_progress
 phase=[Phase 69.3](phase-69.3.md)
 
 Phase 69.2 must be CLOSED before this checklist starts. Only one stage may be
@@ -9,7 +9,8 @@ Phase 69.2 must be CLOSED before this checklist starts. Only one stage may be
 ## JM69-05: Executable JCL Runtime
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
+- Current step: JM69-05G compatibility repair is awaiting focused validation and lightweight Step review.
 - Owner: CNCF JCL, JobDefinition, Action, Event, Operation, Task, Workflow, scheduler, and security maintainers
 - Update rule: Update the status with its checklist; it reaches `DONE` only when every listed criterion is checked, and then records the frozen successor handoff.
 - Entry rule: Phase 69.2 is CLOSED.
@@ -23,7 +24,10 @@ Stage Status:
 - [ ] Preserve immutable accepted JobDefinition snapshots and add positive, negative, determinism, replay, retry, cancellation, restart, and no-bypass specifications.
 
 Evidence:
-- Pending.
+- JM69-05G defines a local versioned JobDefinition direct-ID plus exact-key
+  legacy fallback, safe YAML construction, and typed Action/Workflow target
+  validation. Parent-owned focused specification runs and fresh review remain
+  pending; this checklist does not mark the Step or Phase complete.
 
 ## Phase Completion Gate
 

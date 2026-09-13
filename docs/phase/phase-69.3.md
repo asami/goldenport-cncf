@@ -1,6 +1,6 @@
 # Phase 69.3 - Executable JCL Runtime
 
-status=planned
+status=in_progress
 planned_at=2026-09-09
 split_from=[Phase 69](phase-69.md)
 depends_on=[Phase 69.2](phase-69.2.md)
@@ -31,10 +31,21 @@ snapshot handoffs.
 
 | ID | Stage | Status |
 | --- | --- | --- |
-| JM69-05 | Executable JCL runtime | planned |
+| JM69-05 | Executable JCL runtime | IN_PROGRESS |
 
 Focused grammar, determinism, replay, cancellation, restart, and no-bypass
 specifications are required; full-suite validation remains owned by Phase 69.7.
+
+## Current JM69-05G Compatibility Boundary
+
+JM69-05G keeps the JobDefinition direct-identity repair local to
+`JobDefinitionEntity`: new records use a versioned lossless key encoding, and
+reads retain only an exact persisted-key legacy fallback. The repair also requires
+safe YAML construction and exactly-one-target semantic validation before either
+Action or Workflow dispatch. It does not migrate records, add store-wide key
+indexing, or decide the deferred EntityId/UniversalId redesign. Focused
+validation and the fresh lightweight Step review remain required before this
+stage can advance.
 
 ## Phase Plan Gate: PROCEED
 

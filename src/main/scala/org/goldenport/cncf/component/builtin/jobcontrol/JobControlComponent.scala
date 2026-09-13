@@ -5,9 +5,7 @@ import scala.collection.concurrent.TrieMap
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{
-  Action,
   ActionCall,
-  ActionEngine,
   CommandAction,
   ProcedureActionCall,
   QueryAction
@@ -17,12 +15,17 @@ import org.goldenport.cncf.component.{
   ComponentCreate,
   ComponentDescriptor,
   ComponentId,
-  ComponentInstanceId
+  ComponentInstanceId,
+  EntityRuntimePlanProvider
 }
+import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{
   EntityPersistentCreate,
+  EntityMutationExecutionPolicy,
+  EntityQuery,
   EntityRevisionModelKind,
   EntityRevisionRepresentation,
+  EntitySearchScope,
   EntitySnapshot,
   EntityStore
 }
@@ -31,14 +34,13 @@ import org.goldenport.cncf.entity.runtime.{
   EntityKind,
   EntityMemoryPolicy,
   EntityRuntimeDescriptor,
+  EntityRuntimePlan,
   PartitionStrategy,
   WorkingSetPolicy,
   WorkingSetPolicyEvaluator,
   WorkingSetPolicySource
 }
 import org.goldenport.cncf.job.{
-  ActionId,
-  ActionTask,
   JobBatchDefinition,
   JobBatchSubmissionResult,
   JobControlCommand,
@@ -53,8 +55,6 @@ import org.goldenport.cncf.job.{
   JobProfileComparison,
   JobProfileReconstructor,
   JobResult,
-  JobSubmitOption,
-  JobTask,
   JobTaskDetail,
   JobTraceTree,
   TaskId
@@ -72,10 +72,7 @@ import org.goldenport.cncf.job.{
   JobTaskPage,
   JobTimelinePage
 }
-import org.goldenport.cncf.event.ReceptionDomainEvent
-import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.event.EventStore
-import org.goldenport.cncf.workflow.WorkflowEntrypoint
 import org.goldenport.cncf.openapi.{OpenApiHttpMethod, OpenApiOperationProjection}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -93,13 +90,17 @@ import org.goldenport.value.BaseContent
  *  version Apr. 22, 2026
  *  version May. 31, 2026
  *  version Aug.  8, 2026
- * @version Sep. 11, 2026
+ * @version Sep. 13, 2026
  * @author  ASAMI, Tomoharu
  */
-final class JobControlComponent() extends Component {
+final class JobControlComponent() extends Component with EntityRuntimePlanProvider {
   override def displayName: String = JobControlComponent.name
   override def componentDescriptors: Vector[ComponentDescriptor] =
     super.componentDescriptors ++ JobControlComponent.componentDescriptors
+  override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
+    JobControlComponent.componentDescriptors
+      .flatMap(_.entityRuntimeDescriptors)
+      .map(_.toPlan)
 }
 
 object JobControlComponent {
@@ -232,6 +233,9 @@ object JobControlComponent {
           maxEntitiesPerPartition = 10000,
           entityKind = EntityKind.System,
           entityKindExplicit = true,
+          revisionModelKind = Some(EntityRevisionModelKind.NonSimpleEntity),
+          revisionRepresentation =
+            Some(EntityRevisionRepresentation.Detached),
           workingSetPolicy = Some(WorkingSetPolicy.Custom(
             "active-job-definition",
             ActiveJobDefinitionWorkingSetPolicy
@@ -520,6 +524,7 @@ object JobControlComponent {
   private final class DefaultJobService(component: Component) extends JobService {
     private val _definitions: TrieMap[String, JobDefinitionEntity] =
       TrieMap.empty
+    private val _runtime_bridge = new JclRuntimeBridge(component)
 
     private final case class Submission(
       jobids: Vector[JobId],
@@ -701,12 +706,14 @@ object JobControlComponent {
       format: RecordFormat,
       status: Option[String]
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
-      if (_definitions.contains(_normalize_definition_key(key)))
-        Consequence.stateConflict(s"JobDefinition already exists: $key")
-      else
-        _definition_entity(key, body, format, status.getOrElse("draft")).flatMap { entity =>
-          _create_definition(entity).map(_.toRecord())
-        }
+      _existing_definition_by_ref(key).flatMap {
+        case Some(_) =>
+          Consequence.stateConflict(s"JobDefinition already exists: $key")
+        case None =>
+          _definition_entity(key, body, format, status.getOrElse("draft")).flatMap { entity =>
+            _create_definition(entity).map(_.toRecord())
+          }
+      }
 
     def updateJobDefinition(
       key: String,
@@ -806,12 +813,12 @@ object JobControlComponent {
       hook match {
         case None => Consequence.success((None, None))
         case Some(h) =>
-          _submit_action(
+          _runtime_bridge.submitAction(
             selector = h.action,
             parameters = h.parameters,
-            requestsummary = Some(s"jcl.failure-hook:${h.action}"),
+            requestSummary = Some(s"jcl.failure-hook:${h.action}"),
             persistence = JobPersistencePolicy.Persistent,
-            declaredprofile = None
+            declaredProfile = None
           ).map { case (jobid, response) =>
             response match {
               case Consequence.Success(_) => (Some(jobid), None)
@@ -824,158 +831,33 @@ object JobControlComponent {
       job: JobDefinition,
       snapshot: Option[JobDefinitionSnapshot]
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Submission] =
-      job.target match {
-        case x if x.action.nonEmpty =>
-          _submit_action(
-            selector = x.action.get,
-            parameters = job.parameters,
-            requestsummary = job.submit.requestSummary.orElse(Some(job.name)),
-            persistence = job.submit.persistence,
-            declaredprofile = job.profile,
-            definitionsnapshot = snapshot,
-            compensation = job.compensation
-          ).map { case (jobid, response) =>
-            Submission(Vector(jobid), response)
-          }
-        case x if x.workflow.nonEmpty =>
-          _submit_workflow(
-            entry = x.workflow.get,
-            parameters = job.parameters,
-            requestsummary = job.submit.requestSummary.orElse(Some(job.name)),
-            declaredprofile = job.profile,
-            definitionsnapshot = snapshot
-          )
-        case _ =>
-          Consequence.argumentInvalid("JCL target must contain action or workflow")
-      }
-
-    private def _submit_action(
-      selector: String,
-      parameters: Map[String, String],
-        requestsummary: Option[String],
-      persistence: JobPersistencePolicy,
-        declaredprofile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
-        definitionsnapshot: Option[JobDefinitionSnapshot] = None,
-      compensation: Option[JobFailureHook] = None
-    )(using
-        ctx: org.goldenport.cncf.context.ExecutionContext
-    ): Consequence[(JobId, Consequence[OperationResponse])] =
-      _resolve_target_action(selector, parameters).flatMap { case (target, action) =>
-        _resolve_compensation_task(compensation, parameters).flatMap { comp =>
-          val task = ActionTask(
-            ActionId.create("jcl.submit", ctx.clock.instant(), ctx.idGeneration),
-            action,
-            target.actionEngine,
-            Some(target),
-            compensationActionRef = compensation.map(_.action),
-            compensationTask = comp
-          )
-          val option = JobSubmitOption(
-            persistence = persistence,
-            requestSummary = requestsummary,
-            parameters = parameters ++ Map("jcl.target.action" -> selector) ++ compensation.map(h =>
-              "jcl.compensation.action" -> h.action
-            ),
-            executionNotes = Vector("jcl submission"),
-            declaredProfile = declaredprofile,
-            jobDefinitionSnapshot = definitionsnapshot
-          )
-          _prepare_operation_task(action, task, ctx).flatMap {
-            case (preparedtask, preparedcontext) =>
-            component.jobEngine.submit(List(preparedtask), preparedcontext, option).map { jobid =>
-              (jobid, component.logic.awaitJobResult(jobid))
+      job.semanticPlan.flatMap { plan =>
+        job.target match {
+          case x if x.action.nonEmpty =>
+            _runtime_bridge.submitAction(
+              selector = x.action.get,
+              parameters = job.parameters,
+              requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
+              persistence = job.submit.persistence,
+              declaredProfile = job.profile,
+              definitionSnapshot = snapshot,
+              compensation = job.compensation,
+              plan = plan
+            ).map { case (jobid, response) =>
+              Submission(Vector(jobid), response)
             }
-          }
-        }
-      }
-
-    private def _prepare_operation_task(
-      action: Action,
-      task: ActionTask,
-      context: org.goldenport.cncf.context.ExecutionContext
-    ): Consequence[(JobTask, org.goldenport.cncf.context.ExecutionContext)] =
-      component.subsystem match {
-        case Some(subsystem) => subsystem._prepare_operation_task(action, task, context)
-        case None => Consequence.serviceUnavailable("component subsystem is not available")
-      }
-
-    private def _resolve_compensation_task(
-      compensation: Option[JobFailureHook],
-      parameters: Map[String, String]
-    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Option[JobTask]] =
-      compensation match {
-        case None => Consequence.success(None)
-        case Some(hook) =>
-          _resolve_target_action(hook.action, parameters ++ hook.parameters).flatMap {
-            case (target, action) =>
-            val task = ActionTask(
-              ActionId.create("jcl.compensation", ctx.clock.instant(), ctx.idGeneration),
-              action,
-              target.actionEngine,
-              Some(target)
-            )
-            _prepare_operation_task(action, task, ctx).map(x => Some(x._1))
-          }
-      }
-
-    private def _submit_workflow(
-      entry: org.goldenport.cncf.job.JobWorkflowTarget,
-      parameters: Map[String, String],
-        requestsummary: Option[String],
-        declaredprofile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
-        definitionsnapshot: Option[JobDefinitionSnapshot] = None
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Submission] =
-      _resolve_workflow_entrypoint(entry).flatMap { endpoint =>
-        val event = _workflow_start_event(endpoint, parameters)
-        component.subsystem match {
-          case Some(subsystem) =>
-            subsystem.workflowEngine.handle(endpoint.component.name, event).flatMap { decision =>
-              if (decision.progressed)
-                decision.relatedJobId match {
-                  case Some(jobid) =>
-                    declaredprofile.foreach { profile =>
-                      component.jobEngine.annotateJob(
-                        jobid,
-                        Map(
-                          "jcl.workflow.definition" -> entry.definition,
-                          "jcl.workflow.registration" -> entry.registration
-                        ),
-                        Vector("jcl workflow profile submission")
-                      )
-                      component.jobEngine.annotateJobProfile(jobid, profile)
-                    }
-                    definitionsnapshot.foreach { snapshot =>
-                      component.jobEngine.annotateJob(
-                        jobid,
-                        snapshot.toParameters,
-                        Vector("jcl jobDefinition snapshot attached")
-                      )
-                    }
-                    Consequence.success(
-                      Submission(
-                        Vector(jobid),
-                        Consequence.success(
-                          OperationResponse.Scalar(requestsummary.getOrElse("workflow-started"))
-                        )
-                      )
-                    )
-                  case None =>
-                    Consequence.stateConflict(
-                      s"workflow progressed without managed job: ${entry.definition}/${entry.registration}"
-                    )
-                }
-              else
-                Consequence.success(
-                  Submission(
-                    Vector.empty,
-                    Consequence.argumentInvalid(
-                      s"workflow did not progress: ${decision.reason.getOrElse("unknown")}"
-                    )
-                  )
-                )
+          case x if x.workflow.nonEmpty =>
+            _runtime_bridge.submitWorkflow(
+              entry = x.workflow.get,
+              parameters = job.parameters,
+              requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
+              declaredProfile = job.profile,
+              definitionSnapshot = snapshot
+            ).map { case (jobids, response) =>
+              Submission(jobids, response)
             }
-          case None =>
-            Consequence.serviceUnavailable("subsystem is not available")
+          case _ =>
+            Consequence.argumentInvalid("JCL target must contain action or workflow")
         }
       }
 
@@ -1055,12 +937,13 @@ object JobControlComponent {
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] = {
       val store      = EntityStore.standard()
       val persistent = JobDefinitionEntity.entityPersistent
-      store.save(
+      store.saveDetached(
         entity,
-        expectedrevision
+        Some(expectedrevision),
+        EntityMutationExecutionPolicy.default
       )(using persistent, summon[org.goldenport.cncf.context.ExecutionContext])
-        .map { snapshot =>
-          val saved = snapshot.entity
+        .map { carrier =>
+          val saved = carrier.entity
           _definitions.put(saved.key, saved)
           saved
         }
@@ -1084,40 +967,104 @@ object JobControlComponent {
       }
 
     private def _definition_snapshot_by_ref(
-        ref: String
+      ref: String
     )(using
         org.goldenport.cncf.context.ExecutionContext
-    ): Consequence[EntitySnapshot[JobDefinitionEntity]] = {
-      val id = JobDefinitionEntity.entityId(ref)
-      EntityStore.standard().loadSnapshot[JobDefinitionEntity](id)(
-        using
-        JobDefinitionEntity.entityPersistent,
-        summon[org.goldenport.cncf.context.ExecutionContext]
-      ).flatMap { result =>
-        Consequence.successOrEntityNotFound(result)(id)
-      }.map { snapshot =>
-        _definitions.put(snapshot.entity.key, snapshot.entity)
-        snapshot
-      }
+    ): Consequence[EntitySnapshot[JobDefinitionEntity]] =
+      _load_definition_snapshot_by_ref(ref).flatMap {
+        case Some(snapshot) =>
+          _cache_definition(snapshot.entity)
+          Consequence.success(snapshot)
+        case None =>
+          Consequence.operationNotFound(s"JobDefinition:$ref")
       }
 
     private def _definition_by_ref(
       ref: String
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] =
-      _definitions.get(_normalize_definition_key(ref)) match {
-        case Some(entity) => Consequence.success(entity)
+      _cached_definition_by_ref(ref) match {
+        case Some(entity) =>
+          Consequence.success(entity)
         case None =>
-          EntityStore.standard().load[JobDefinitionEntity](JobDefinitionEntity.entityId(ref))(using
-            JobDefinitionEntity.entityPersistent,
-            summon[org.goldenport.cncf.context.ExecutionContext]
-          ).flatMap {
-            case Some(entity) =>
-              _definitions.put(entity.key, entity)
-              Consequence.success(entity)
+          _load_definition_snapshot_by_ref(ref).flatMap {
+            case Some(snapshot) =>
+              _cache_definition(snapshot.entity)
+              Consequence.success(snapshot.entity)
             case None =>
               Consequence.operationNotFound(s"JobDefinition:$ref")
           }
       }
+
+    private def _existing_definition_by_ref(
+      ref: String
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Option[JobDefinitionEntity]] =
+      _cached_definition_by_ref(ref) match {
+        case Some(entity) => Consequence.success(Some(entity))
+        case None =>
+          _load_definition_snapshot_by_ref(ref).map(_.map { snapshot =>
+            _cache_definition(snapshot.entity)
+            snapshot.entity
+          })
+      }
+
+    private def _cached_definition_by_ref(ref: String): Option[JobDefinitionEntity] = {
+      val requested = _normalize_definition_key(ref)
+      _definitions.get(requested).filter(_has_definition_key(_, requested))
+    }
+
+    private def _load_definition_snapshot_by_ref(
+      ref: String
+    )(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Option[EntitySnapshot[JobDefinitionEntity]]] = {
+      val requested = _normalize_definition_key(ref)
+      _load_definition_snapshot(JobDefinitionEntity.entityId(requested), requested).flatMap {
+        case found @ Some(_) => Consequence.success(found)
+        case None =>
+          _load_legacy_definition_snapshot_by_key(requested)
+      }
+    }
+
+    private def _load_definition_snapshot(
+      id: org.simplemodeling.model.datatype.EntityId,
+      requested: String
+    )(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Option[EntitySnapshot[JobDefinitionEntity]]] =
+      EntityStore.standard().loadDetached[JobDefinitionEntity](id)(
+        using
+        JobDefinitionEntity.entityPersistent,
+        summon[org.goldenport.cncf.context.ExecutionContext]
+      ).map(_.map(carrier =>
+        EntitySnapshot(carrier.entity, carrier.revision)
+      ).filter(snapshot => _has_definition_key(snapshot.entity, requested)))
+
+    private def _load_legacy_definition_snapshot_by_key(
+      requested: String
+    )(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Option[EntitySnapshot[JobDefinitionEntity]]] =
+      EntityStore.standard()
+        .search[JobDefinitionEntity](EntityQuery(
+          collection = JobEntityCollections.JobDefinition,
+          query = Query.plan(Record.empty, where = Query.Eq("key", requested)),
+          scope = EntitySearchScope.Store
+        ))
+        .flatMap { results =>
+          results.data.find(_has_definition_key(_, requested)) match {
+            case Some(entity) => _load_definition_snapshot(entity.id, requested)
+            case None => Consequence.success(None)
+          }
+        }
+
+    private def _has_definition_key(
+      entity: JobDefinitionEntity,
+      requested: String
+    ): Boolean =
+      _normalize_definition_key(entity.key) == _normalize_definition_key(requested)
+
+    private def _cache_definition(entity: JobDefinitionEntity): Unit =
+      _definitions.put(_normalize_definition_key(entity.key), entity)
 
     private def _submit_definition_ref(body: String): Option[String] =
       "(?m)^\\s*jobDefinitionRef\\s*:\\s*([^\\s#]+)\\s*$".r
@@ -1127,89 +1074,6 @@ object JobControlComponent {
     private def _normalize_definition_key(key: String): String =
       key.trim
 
-    private def _resolve_workflow_entrypoint(
-      entry: org.goldenport.cncf.job.JobWorkflowTarget
-    ): Consequence[WorkflowEntrypoint] =
-      component.subsystem match {
-        case Some(subsystem) =>
-          subsystem.workflowEngine.findEntrypoint(entry.definition, entry.registration) match {
-            case Some(endpoint) => Consequence.success(endpoint)
-            case None =>
-              subsystem.workflowEngine.findDefinition(entry.definition) match {
-                case None =>
-                  Consequence.argumentInvalid(
-                    s"unknown JCL workflow definition: ${entry.definition}"
-                  )
-                case Some(_) =>
-                  Consequence.argumentInvalid(
-                    s"unknown JCL workflow registration: ${entry.definition}/${entry.registration}"
-                  )
-              }
-          }
-        case None =>
-          Consequence.serviceUnavailable("subsystem is not available")
-      }
-
-    private def _workflow_start_event(
-      endpoint: WorkflowEntrypoint,
-      parameters: Map[String, String]
-    )(using ctx: org.goldenport.cncf.context.ExecutionContext): ReceptionDomainEvent = {
-      val payload: Map[String, Any] = parameters.toVector.map(x => x._1 -> x._2).toMap
-      val attributes = parameters ++ Map(
-        "entity" -> endpoint.registration.entityCollection,
-        "jcl.workflow.definition" -> endpoint.definition.name,
-        "jcl.workflow.registration" -> endpoint.registration.name,
-        "jcl.synthetic-start" -> "true"
-      )
-      ReceptionDomainEvent(
-        name = endpoint.registration.eventName,
-        kind = "domain-event",
-        payload = payload,
-        attributes = attributes,
-        occurredAt = ctx.clock.instant()
-      )
-    }
-
-    private def _resolve_target_action(
-      selector: String,
-      parameters: Map[String, String]
-    ): Consequence[(Component, Action)] =
-      component.subsystem.map(_.operationResolver.resolve(selector)).getOrElse(
-        OperationResolver.ResolutionResult.Invalid("subsystem is not available")
-      ) match {
-        case OperationResolver.ResolutionResult.Resolved(
-              _,
-              componentName,
-              serviceName,
-              operationName
-            ) =>
-          component.subsystem.flatMap(_.findComponent(componentName)) match {
-            case Some(target) =>
-              val request = Request.of(
-                component = componentName,
-                service = serviceName,
-                operation = operationName,
-                arguments = parameters.toVector.sortBy(_._1).map { case (k, v) =>
-                  org.goldenport.protocol.Argument(k, v)
-                }.toList
-              )
-              target.logic.makeOperationRequest(request).flatMap {
-                case action: Action => Consequence.success((target, action))
-                case _: OperationRequest =>
-                  Consequence.argumentInvalid(s"JCL target is not action: $selector")
-              }
-            case None =>
-              Consequence.operationNotFound(s"JCL target component: $componentName")
-          }
-        case OperationResolver.ResolutionResult.NotFound(_, s) =>
-          Consequence.operationNotFound(s"JCL target action: $s")
-        case OperationResolver.ResolutionResult.Ambiguous(s, candidates) =>
-          Consequence.argumentInvalid(
-            s"ambiguous JCL target action: $s => ${candidates.mkString(",")}"
-          )
-        case OperationResolver.ResolutionResult.Invalid(message) =>
-          Consequence.argumentInvalid(message)
-      }
   }
 
   private final class DefaultJobAdminService(component: Component) extends JobAdminService {
