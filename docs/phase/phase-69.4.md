@@ -1,6 +1,6 @@
 # Phase 69.4 - Lightweight JobDefinition Lifecycle
 
-status=in_progress
+status=closed
 planned_at=2026-09-09
 split_from=[Phase 69](phase-69.md)
 depends_on=[Phase 69.3](phase-69.3.md)
@@ -14,14 +14,15 @@ aggregate_validation_sequence=["PHASE-69.4","PHASE-69.5","PHASE-69.6","PHASE-69.
 
 ## Purpose
 
-Provide the small, usable JobDefinition management lifecycle without changing
-the immutable snapshots bound to running Jobs.
+Provide the small, usable direct JobDefinition management lifecycle without
+changing the immutable snapshots bound to running Jobs.
 
 ## Scope and Closure
 
-Owns `JM69-06`: direct create/update/activate/retire/get/search lifecycle
-behaviour and immutable Job snapshots. It closes with a lightweight definition
-lifecycle for Phase 69.5.
+Owns `JM69-06`: direct create/update/activate/retire/get/search lifecycle,
+immutable Job snapshots, and EntityStore-only internal conditional saves. The
+closed Phase supplies its lightweight direct definition lifecycle contract to
+the still-planned Phase 69.5.
 
 ## Split Provenance
 
@@ -33,12 +34,24 @@ snapshots.
 
 | ID | Stage | Status |
 | --- | --- | --- |
-| JM69-06 | Lightweight JobDefinition lifecycle | IN_PROGRESS |
+| JM69-06 | Lightweight JobDefinition lifecycle | DONE |
 
 Focused lifecycle and immutable-snapshot specifications are required. The
 repository full suite is deliberately deferred to the declared aggregate final
 owner, Phase 69.7; this Phase still requires focused validation, independent
 review, and its own release commit.
+
+## Closure Evidence
+
+- `P69.4-JM69-06-PHASE-TEST-FIX-001-FOCUSED-VAL-002` passed the focused
+  JobControl lifecycle and DurableJobProjection specifications with `sbt_exit=0`
+  and the shared SBT lock released.
+- `FULL_REVIEW-PHASE-69.4-LIGHTWEIGHT-001` found the bounded repair items;
+  `PHASE-69.4 / JM69-06 / PHASE_TEST_FIX-001 / RE_REVIEW-002` closed all of
+  them with no Current Boundary Blocker.
+- This release records `repository_full_suite=deferred-not-run`; Phase 69.7
+  remains the explicit aggregate repository-full-suite owner for the serial
+  Phase 69.4–69.7 delivery chain.
 
 ## Phase Plan Gate: PROCEED
 
@@ -62,8 +75,10 @@ review, and its own release commit.
 ## Non-Goals
 
 - Reopening JCL language/runtime decisions, changing running Job snapshots, or
-  adding review, approval, audit, alternate-revision, digest, or canonical
-  content control.
+  adding governance accept/apply, review, promotion, rollout, rollback, audit,
+  content history, alternate-revision, digest, or canonical-content control.
+  Those capabilities are deliberately retired from the Phase 69 sequence; any
+  future need requires newly authorized Phase work.
 
 ## Planning References
 

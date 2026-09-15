@@ -31,7 +31,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
  *  version Aug. 13, 2026
- * @version Sep. 13, 2026
+ * @version Sep. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -989,15 +989,19 @@ final class JclJobControlComponentSpec
           |          marker: old-handler
           |""".stripMargin
 
-      When("the definition is created, searched, and submitted by ref")
+      When("the draft definition is created, activated, searched, and submitted by ref")
       val created = _execute(
         fixture.subsystem,
         s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
         arguments = List(
           Argument("key", "nightly-ok"),
-          Argument("status", "active"),
           Argument("body", body)
         )
+      )
+      val activated = _execute(
+        fixture.subsystem,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.activate_job_definition",
+        arguments = List(Argument("key", "nightly-ok"))
       )
       val searched = _execute(
         fixture.subsystem,
@@ -1010,12 +1014,18 @@ final class JclJobControlComponentSpec
         arguments = List(Argument("body", "jobDefinitionRef: nightly-ok"))
       )
 
-      Then("the definition is a versioned active management record")
+      Then("the definition is an active lightweight management record")
       val createdrecord = _record(created)
       createdrecord.getString("key") shouldBe Some("nightly-ok")
-      createdrecord.getString("definitionStatus") shouldBe Some("active")
-      createdrecord.getInt("version") shouldBe Some(1)
-      createdrecord.getString("hash").exists(_.nonEmpty) shouldBe true
+      createdrecord.getString("definitionStatus") shouldBe Some("draft")
+      val activatedrecord = _record(activated)
+      activatedrecord.getString("definitionStatus") shouldBe Some("active")
+      createdrecord.getAny("version") shouldBe empty
+      createdrecord.getAny("revision") shouldBe empty
+      createdrecord.getAny("hash") shouldBe empty
+      activatedrecord.getAny("version") shouldBe empty
+      activatedrecord.getAny("revision") shouldBe empty
+      activatedrecord.getAny("hash") shouldBe empty
       createdrecord.getString("flow").exists(_.nonEmpty) shouldBe true
       createdrecord.getString("onEvent").exists(_.nonEmpty) shouldBe true
       _records(_record(searched).asMap("jobDefinitions")).map(_.getString("key")) should contain (Some("nightly-ok"))
@@ -1024,22 +1034,19 @@ final class JclJobControlComponentSpec
       val jobid = _strings(_record(submitted), "submitted-job-ids").head
       val parsedjobid = org.goldenport.cncf.job.JobId.parse(jobid).toOption.get
       val model = fixture.subsystem.jobEngine.queryVisible(parsedjobid).toOption.flatten.getOrElse(fail("job missing"))
-      val initialversion = createdrecord.getInt("version").getOrElse(fail("initial version missing"))
-      val initialrevision = createdrecord.getInt("revision").getOrElse(fail("initial revision missing"))
-      val initialhash = createdrecord.getString("hash").getOrElse(fail("initial hash missing"))
       val initialsource = createdrecord.getString("jclSource").getOrElse(fail("initial source missing"))
       val initialtaskcount = model.tasks.totalCount
       val initialtasks = model.tasks.tasks
       val snapshot = model.debug.jobDefinitionSnapshot.getOrElse(fail("definition snapshot missing"))
       snapshot.id shouldBe createdrecord.getString("id").getOrElse(fail("definition id missing"))
       snapshot.key shouldBe "nightly-ok"
-      snapshot.version shouldBe initialversion
-      snapshot.revision shouldBe initialrevision
-      snapshot.hash shouldBe initialhash
       snapshot.jclSource shouldBe Some(initialsource)
       snapshot.jclFormat shouldBe createdrecord.getString("jclFormat")
       model.debug.parameters.get("jcl.jobDefinition.key") shouldBe Some("nightly-ok")
       model.debug.parameters.get("jcl.jobDefinition.source") shouldBe Some(initialsource)
+      model.debug.parameters.get("jcl.jobDefinition.version") shouldBe empty
+      model.debug.parameters.get("jcl.jobDefinition.revision") shouldBe empty
+      model.debug.parameters.get("jcl.jobDefinition.hash") shouldBe empty
       model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
       model.status shouldBe JobStatus.Succeeded
       initialtaskcount shouldBe 3
@@ -1060,7 +1067,7 @@ final class JclJobControlComponentSpec
       fixture.trace.toVector should not contain "compensate:marker=new-handler"
       fixture.subsystem.eventStore.query(EventStore.Query(name = Some("snapshot.old"))).toOption.getOrElse(Vector.empty) should have size 1
 
-      When("the same active definition is updated to a different valid executable source")
+      When("the same active definition is updated to a different valid executable source, retired, and obtained")
       val replacementbody =
         """job:
           |  name: snapshot-replacement
@@ -1097,17 +1104,33 @@ final class JclJobControlComponentSpec
           Argument("body", replacementbody)
         )
       )
+      val updatedrecord = _record(_execute(
+        fixture.subsystem,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_definition",
+        arguments = List(Argument("key", "nightly-ok"))
+      ))
+      val retiredrecord = _record(_execute(
+        fixture.subsystem,
+        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.retire_job_definition",
+        arguments = List(Argument("key", "nightly-ok"))
+      ))
       val currentrecord = _record(_execute(
         fixture.subsystem,
         s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_definition",
         arguments = List(Argument("key", "nightly-ok"))
       ))
 
-      Then("the current management record advances while the submitted Job remains unchanged")
+      Then("the retired management record preserves its changed definition content while the submitted Job remains unchanged")
+      updatedrecord.getString("definitionStatus") shouldBe Some("active")
+      retiredrecord.getString("definitionStatus") shouldBe Some("retired")
+      retiredrecord.getAny("version") shouldBe empty
+      retiredrecord.getAny("revision") shouldBe empty
+      retiredrecord.getAny("hash") shouldBe empty
       currentrecord.getString("key") shouldBe Some("nightly-ok")
-      currentrecord.getInt("version") shouldBe Some(initialversion + 1)
-      currentrecord.getInt("revision") shouldBe Some(initialrevision + 1)
-      currentrecord.getString("hash").exists(_ != initialhash) shouldBe true
+      currentrecord.getString("definitionStatus") shouldBe Some("retired")
+      currentrecord.getAny("version") shouldBe empty
+      currentrecord.getAny("revision") shouldBe empty
+      currentrecord.getAny("hash") shouldBe empty
       currentrecord.getString("jclSource") shouldBe Some(replacementbody)
       val retained = fixture.subsystem.jobEngine.queryVisible(parsedjobid).toOption.flatten.getOrElse(fail("retained job missing"))
       retained.status shouldBe JobStatus.Succeeded
@@ -1819,7 +1842,7 @@ final class JclJobControlComponentSpec
   ): OperationResponse =
     _execute_result(subsystem, selector, arguments) match {
       case Consequence.Success(response) => response
-      case Consequence.Failure(conclusion) => fail(conclusion.show)
+      case Consequence.Failure(conclusion) => fail(s"$selector: ${conclusion.show}")
     }
 
   private def _execute_result(
@@ -1833,13 +1856,27 @@ final class JclJobControlComponentSpec
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     selector: String,
     arguments: List[Argument]
+  ): Consequence[OperationResponse] =
+    _execute_result(
+      subsystem,
+      selector,
+      arguments,
+      ExecutionContext.test(SecurityContext.Privilege.Internal)
+    )
+
+  private def _execute_result(
+    subsystem: org.goldenport.cncf.subsystem.Subsystem,
+    selector: String,
+    arguments: List[Argument],
+    context: ExecutionContext
   ): Consequence[OperationResponse] = {
     val component = _component_for(subsystem, selector)
     val request = _build_request(subsystem.resolver, selector, arguments)
     component.logic.makeOperationRequest(request).flatMap {
       case action: Action =>
-        val call = component.logic.createActionCall(action)
-        component.logic.execute(call)
+        val base = component.logic.executionContext()
+        val executioncontext = ExecutionContext.withSecurityContext(base, context.security)
+        component.logic.executeAction(action, executioncontext)
       case other =>
         Consequence.operationInvalid(s"unexpected OperationRequest type: ${other.getClass.getName}")
     }

@@ -90,7 +90,7 @@ import org.goldenport.value.BaseContent
  *  version Apr. 22, 2026
  *  version May. 31, 2026
  *  version Aug.  8, 2026
- * @version Sep. 13, 2026
+ * @version Sep. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component with EntityRuntimePlanProvider {
@@ -957,7 +957,6 @@ object JobControlComponent {
         val current = snapshot.entity
         val updated = current.copy(
           status = status,
-          revision = current.revision + 1,
           updatedAt = ctx.clock.instant()
         )
         _save_definition(

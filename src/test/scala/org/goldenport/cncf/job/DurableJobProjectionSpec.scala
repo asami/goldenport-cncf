@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * its fail-closed replay assessment boundary.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 11, 2026
+ * @version Sep. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobProjectionSpec
@@ -440,17 +440,12 @@ final class DurableJobProjectionSpec
         parameters = Map(
           "jcl.jobDefinition.id" -> "definition-001",
           "jcl.jobDefinition.key" -> "daily-job",
-          "jcl.jobDefinition.version" -> "1",
-          "jcl.jobDefinition.revision" -> "2",
-          "jcl.jobDefinition.hash" -> _digest
+          "jcl.jobDefinition.format" -> "jcl"
         ),
         executionNotes = Vector.empty,
         jobDefinitionSnapshot = Some(JobDefinitionSnapshot(
           "definition-001",
           "daily-job",
-          1,
-          2,
-          _digest,
           None,
           None,
           Some("jcl")

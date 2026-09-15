@@ -1,7 +1,6 @@
 package org.goldenport.cncf.job
 
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
@@ -17,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   May.  7, 2026
  *  version May. 31, 2026
  *  version Jul. 30, 2026
- * @version Sep. 13, 2026
+ * @version Sep. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -58,9 +57,6 @@ final case class JobDefinitionEntity(
   flowSource: Option[String],
   eventsSource: Option[String],
   onEventSource: Option[String],
-  version: Int,
-  revision: Int,
-  hash: String,
   status: JobDefinitionStatus,
   targetComponent: Option[String],
   targetService: Option[String],
@@ -84,9 +80,6 @@ final case class JobDefinitionEntity(
       "flow" -> flowSource,
       "events" -> eventsSource,
       "onEvent" -> onEventSource,
-      "version" -> version,
-      "revision" -> revision,
-      "hash" -> hash,
       "definitionStatus" -> status.print,
       "targetComponent" -> targetComponent,
       "targetService" -> targetService,
@@ -100,9 +93,6 @@ final case class JobDefinitionEntity(
     Record.dataAuto(
       "jobDefinitionId" -> id.value,
       "jobDefinitionKey" -> key,
-      "jobDefinitionVersion" -> version,
-      "jobDefinitionRevision" -> revision,
-      "jobDefinitionHash" -> hash,
       "declaredProfile" -> normalizedProfile.map(_.toRecord),
       "jclSource" -> jclSource,
       "jclFormat" -> jclFormat
@@ -143,9 +133,6 @@ object JobDefinitionEntity {
       flowSource = flowSource,
       eventsSource = eventsSource,
       onEventSource = onEventSource,
-      version = 1,
-      revision = 1,
-      hash = hashOf(jclSource),
       status = status,
       targetComponent = targetAction.flatMap(_target_part(_, 0)),
       targetService = targetAction.flatMap(_target_part(_, 1)),
@@ -168,8 +155,6 @@ object JobDefinitionEntity {
     now: Instant
   ): JobDefinitionEntity = {
     val normalizedformat = _normalize_jcl_format(jclformat)
-    val newhash = hashOf(jclSource)
-    val changed = newhash != current.hash || normalizedformat != current.jclFormat
     current.copy(
       jclSource = jclSource,
       jclFormat = normalizedformat,
@@ -177,9 +162,6 @@ object JobDefinitionEntity {
       flowSource = flowSource,
       eventsSource = eventsSource,
       onEventSource = onEventSource,
-      version = if (changed) current.version + 1 else current.version,
-      revision = current.revision + 1,
-      hash = newhash,
       status = status.getOrElse(current.status),
       targetComponent = targetAction.orElse(current.targetAction).flatMap(_target_part(_, 0)),
       targetService = targetAction.orElse(current.targetAction).flatMap(_target_part(_, 1)),
@@ -206,9 +188,6 @@ object JobDefinitionEntity {
       flowSource = record.getString("flow").orElse(parsed.flatMap(_.flow.map(_.show))),
       eventsSource = record.getString("events").orElse(parsed.flatMap(_.events.map(_.show))),
       onEventSource = record.getString("onEvent").orElse(parsed.flatMap(_.onEvent.map(_.show))),
-      version = record.getInt("version").getOrElse(1),
-      revision = record.getInt("revision").getOrElse(1),
-      hash = record.getString("hash").getOrElse(hashOf(jcl)),
       status = status,
       targetComponent = record.getString("targetComponent").orElse(parsed.flatMap(_.target.action).flatMap(_target_part(_, 0))),
       targetService = record.getString("targetService").orElse(parsed.flatMap(_.target.action).flatMap(_target_part(_, 1))),
@@ -217,11 +196,6 @@ object JobDefinitionEntity {
       createdAt = record.getString("createdAt").flatMap(x => scala.util.Try(Instant.parse(x)).toOption).getOrElse(Instant.EPOCH),
       updatedAt = record.getString("updatedAt").flatMap(x => scala.util.Try(Instant.parse(x)).toOption).getOrElse(Instant.EPOCH)
     )
-
-  def hashOf(text: String): String = {
-    val digest = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))
-    digest.map(b => "%02x".format(b & 0xff)).mkString
-  }
 
   given EntityPersistent[JobDefinitionEntity] with {
     def id(e: JobDefinitionEntity): EntityId = e.id
@@ -272,9 +246,6 @@ object JobDefinitionEntity {
 final case class JobDefinitionSnapshot(
   id: String,
   key: String,
-  version: Int,
-  revision: Int,
-  hash: String,
   profile: Option[JobDeclaredProfile],
   jclSource: Option[String],
   jclFormat: Option[String]
@@ -282,10 +253,7 @@ final case class JobDefinitionSnapshot(
   def toParameters: Map[String, String] =
     Map(
       "jcl.jobDefinition.id" -> id,
-      "jcl.jobDefinition.key" -> key,
-      "jcl.jobDefinition.version" -> version.toString,
-      "jcl.jobDefinition.revision" -> revision.toString,
-      "jcl.jobDefinition.hash" -> hash
+      "jcl.jobDefinition.key" -> key
     ) ++ jclSource.map("jcl.jobDefinition.source" -> _) ++ jclFormat.map("jcl.jobDefinition.format" -> _)
 }
 
@@ -294,9 +262,6 @@ object JobDefinitionSnapshot {
     JobDefinitionSnapshot(
       id = entity.id.value,
       key = entity.key,
-      version = entity.version,
-      revision = entity.revision,
-      hash = entity.hash,
       profile = entity.normalizedProfile,
       jclSource = Some(entity.jclSource),
       jclFormat = Some(entity.jclFormat)
@@ -396,9 +361,6 @@ object JobEntity {
       "input" -> model.input.map(_.toRecord(includeraw = false)),
       "jobDefinitionId" -> model.debug.jobDefinitionSnapshot.map(_.id),
       "jobDefinitionKey" -> model.debug.jobDefinitionSnapshot.map(_.key),
-      "jobDefinitionVersion" -> model.debug.jobDefinitionSnapshot.map(_.version),
-      "jobDefinitionRevision" -> model.debug.jobDefinitionSnapshot.map(_.revision),
-      "jobDefinitionHash" -> model.debug.jobDefinitionSnapshot.map(_.hash),
       "debugParameters" -> Record.data(model.debug.parameters.toVector.sortBy(_._1)*),
       "debugExecutionNotes" -> model.debug.executionNotes.mkString("\n"),
       "declaredProfile" -> model.debug.declaredProfile.map(_.toRecord),

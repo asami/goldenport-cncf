@@ -10,7 +10,7 @@ import org.goldenport.Consequence
  * or any other live execution object.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 11, 2026
+ * @version Sep. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobProjectionEvidence(
@@ -754,9 +754,6 @@ private[job] object DurableJobProjection {
       Either.cond(
         live.id == supplied.definitionId &&
           live.key == supplied.key &&
-          live.version == supplied.version &&
-          live.revision.toLong == supplied.revision &&
-          live.hash == supplied.hash &&
           live.jclFormat == supplied.format,
         (),
         "definition snapshot evidence diverges from the live definition snapshot"
@@ -764,11 +761,8 @@ private[job] object DurableJobProjection {
     }.getOrElse(Right(()))
     val parameters = Map(
       "jcl.jobDefinition.id" -> supplied.definitionId,
-      "jcl.jobDefinition.key" -> supplied.key,
-      "jcl.jobDefinition.version" -> supplied.version.toString,
-      "jcl.jobDefinition.revision" -> supplied.revision.toString,
-      "jcl.jobDefinition.hash" -> supplied.hash
-    )
+      "jcl.jobDefinition.key" -> supplied.key
+    ) ++ supplied.format.map("jcl.jobDefinition.format" -> _)
     for {
       _ <- snapshotmatch
       _ <- _sequence(parameters.toVector.map { case (key, expected) =>

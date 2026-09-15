@@ -26,17 +26,22 @@ does not change the existing direct EntityId approach; its UniversalId/EntityId
 contract correction is deferred to Phase 74.
 
 EntityStore owns the entity `revision`. The service reads a snapshot and uses
-that revision for its conditional save, preventing a stale internal read from
-silently overwriting a newer entity. Normal lifecycle requests do not carry an
-expected revision. If a future UI needs edit-conflict handling, it can opt into
-the entity revision as its optimistic-lock token through a separately designed
-API; it does not need a second domain revision or `contentRevision`.
+that revision only for its internal conditional save, preventing a stale
+internal read from silently overwriting a newer entity. Direct JobDefinition
+store records and submitted snapshots carry no domain version, revision, or
+hash. Normal lifecycle requests do not carry an expected revision. If a future
+UI needs edit-conflict handling, it can opt into the entity revision as its
+optimistic-lock token through a separately designed API; it does not need a
+second domain revision or `contentRevision`.
 
 ## Data representation
 
-This Phase adds no digest, canonical-content, or hash-based control. The
-pre-existing persisted representation, including any legacy fields it already
-contains, is not a concurrency or identity mechanism introduced by JM69-06.
+This Phase adds no digest, canonical-content, or hash-based control. Direct
+JobDefinition store records and submitted snapshots carry no legacy domain
+version, revision, or hash exception. Governance accept/apply, review,
+promotion, rollout, rollback, audit, and content-history work is deliberately
+retired from the Phase 69 sequence; a future need requires newly authorized
+Phase work rather than an implicit successor.
 
 ## Validation boundary
 
