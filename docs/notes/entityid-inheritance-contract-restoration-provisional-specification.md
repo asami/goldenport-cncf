@@ -167,14 +167,26 @@ These are behavioral/model contracts, not source-text bans on `EntityId(`,
 publishLocal artifact before dependent validation and bind the exact producer
 bytes/coordinates used by the consumer.
 
+## Historical Record Supersession
+
+The original 2026-09-13 journal remains an immutable contemporaneous
+historical record. Its verified historical facts and contemporaneous
+uncertainty remain unchanged. Its future-tense transition-identification
+promise is superseded only as an EIR-01 Phase-closure obligation.
+
+Exact transition-commit and causality attribution are neither EIR-01
+acceptance evidence nor an obligation of Phase 74.1, 74.2, 74.3, or any
+successor Phase. Any later historical investigation is separate from EIR-01
+and must not change the accepted EntityId contract.
+
 ## Successor-Owned Implementation Detail
 
 EIR-01 settles the semantic boundary and affected paths. The following remain
 implementation details for the named successors and are not open contract
-decisions: the historical transition commit, concrete constructor/factory
-signatures, generic materialization and extractor mechanics after removal of
-case-class base semantics, typed generation/decoder injection at
-`IdGenerationContext` and `EntityPersistent`, generated-consumer edits, and
+decisions: concrete constructor/factory signatures, generic materialization and
+extractor mechanics after removal of case-class base semantics, typed
+generation/decoder injection at `IdGenerationContext` and `EntityPersistent`,
+generated-consumer edits, and
 local artifact/validation order. No successor may weaken the accepted
 hierarchy, exception boundary, canonical encoding, or JobDefinition
 correspondence to resolve those details.

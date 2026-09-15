@@ -1,6 +1,6 @@
 # Phase 74 - EntityId Inheritance Contract Restoration
 
-status=planned
+status=closed
 split_full_test_policy=final-only
 validation_ownership=aggregate-deferred
 aggregate_validation_owner=PHASE-74.3
@@ -10,6 +10,14 @@ split_at=2026-09-16
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md#961-entityid-inheritance-contract-restoration)
 checklist=[Phase 74 Checklist](phase-74-checklist.md)
 successor=[Phase 74.1](phase-74.1.md)
+
+Phase 74 is closed as the EIR-01 authority/inventory handoff. The release
+records the verified aggregate-deferred validation handoff to Phase 74.3; it
+does not run the repository full suite in this intermediate Phase. The
+2026-09-13 journal remains an immutable historical record. Its future-tense
+transition-identification promise is superseded for EIR-01 closure by the
+accepted authority note, without changing the journal's verified facts or
+contemporaneous uncertainty.
 
 ## Purpose
 

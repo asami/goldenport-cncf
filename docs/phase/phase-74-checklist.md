@@ -1,14 +1,17 @@
 # Phase 74 Checklist - EntityId Inheritance Contract Restoration
 
-status=planned
+status=closed
 phase=[Phase 74](phase-74.md)
 
 ## EIR-01: Contract and Consumer Inventory
 
 Stage Status:
-- Current status: ACCEPTED AUTHORITY HANDOFF
+- Current status: CLOSED
 - Owner: CNCF and SimpleModeling maintainers
-- Update rule: Close only from the following inventory and contract evidence.
+- Update rule: Closed from the accepted authority/inventory, independent full
+  review, focused closure re-review, and the aggregate-deferred handoff to
+  Phase 74.3. Historical journal facts remain unchanged; the accepted authority
+  note supersedes only its EIR-01 future-tense closure obligation.
 
 EIR-01 authority is recorded in the [accepted specification](../notes/entityid-inheritance-contract-restoration-provisional-specification.md).
 Authority: Phase 74 base SHA-256 `d563221ab3083423702730d7d15ccfeef0d8bdfc17de1c55a880420e32c74999`; the plan-complete guard is accepted.
@@ -77,8 +80,8 @@ JobDefinition adoption/lookup, and consumer specifications.
 
 ## Split Record
 
-- [ ] `P74-SPLIT-2026-09-16`: the unsplit entry gate's `SPLIT_REQUIRED`
+- [x] `P74-SPLIT-2026-09-16`: the unsplit entry gate's `SPLIT_REQUIRED`
       outcome is retained as pre-split evidence; the current Phase Plan Gate is
       `PROCEED` for EIR-01 only.
-- [ ] EIR-02, EIR-03, and EIR-04 are tracked exclusively in the Phase 74.1,
+- [x] EIR-02, EIR-03, and EIR-04 are tracked exclusively in the Phase 74.1,
       74.2, and 74.3 checklists.
