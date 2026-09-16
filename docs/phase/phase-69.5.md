@@ -27,7 +27,8 @@ handoff for the user/operator experience.
 ## Split Provenance
 
 Split from Phase 69 on 2026-09-09. Predecessor: Phase 69.4. Successor: Phase
-69.6. Consumes governed Job contracts and produces the v2 composition contract.
+69.6. Consumes the Phase 69.4 lightweight direct JobDefinition lifecycle
+contract and produces the v2 composition contract.
 
 ## Work Stack and Validation Boundary
 
@@ -48,7 +49,7 @@ release commit.
 - recommended_parent_profile: gpt-5.6-terra / high
 - profile_cost_role: lower-cost execution
 - expensive_reasoning_kernel: none
-- frozen_profile_transition_handoff: consumes Phase 69.4 governed Job contracts; produces CompositeQuery v2 semantics for Phase 69.6
+- frozen_profile_transition_handoff: consumes the Phase 69.4 lightweight direct JobDefinition lifecycle contract; produces CompositeQuery v2 semantics for Phase 69.6
 - parent_reasoning_mode_policy: standard
 - estimated_at_recommended_profile: 5--7h; within the preferred band
 - merge_attempts_for_every_sub_4h_child: none

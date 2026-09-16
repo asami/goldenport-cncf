@@ -1,6 +1,6 @@
 # Phase 53 - CML ComponentStyle, ExecutionContext, and Capability Resolution
 
-status=in_progress
+status=closed
 planned_at=2026-07-30
 depends_on=[Phase 52](phase-52.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
@@ -427,53 +427,10 @@ Phase 53 closes only when:
 
 ## Next Step
 
-Phase 53 is in progress. CS-01 has completed its cross-repository authority
-and generation-path inventory; CS-02A has established the framework-owned
-versioned catalog and descriptor-v2 boundary; CS-02B has preserved typed CML
-style selection in the Kaleidox semantic owner; CS-02C has carried the same
-catalog through the digest-protected runtime descriptor so Cozy admits known
-explicit selections and rejects unavailable ones before generation. CS-02D has
-completed recursive capability-graph validation, including unreachable bundle
-closures and required SubsystemCapability major-version compatibility. CS-02E
-has a focused review-fix for its selected catalog snapshot projection,
-`project.yaml`/source-descriptor authority guard, and component-only generation
-evidence; it is accepted. CS-03 is complete: its v2 styled projection and v1
-style-less legacy projection share explicit evidence identities and runtime
-admission rules, and their source-authority boundaries are covered by focused
-review and full validation. CS-04 is DONE; CS-05 is the current implementation
-group. CS-05B records the owner-approved Phase 55 configuration-binding
-deferral, and CS-05C completes strict descriptor-owned stable Subsystem
-identity for direct packaged/development bootstrap. CS-05D finalizes the
-camelCase internal Component.Factory DSL operation surface without changing the
-ActionCall.Core holder boundary or adding a Component facade; fixed lookup
-operations are final while reviewed authorization hooks remain available for
-existing Component policy. External CAR migration is recorded for release
-coordination. CS-05E admits only
-`textus.web.application-mode` as the Web-operation selector, and the
-focused-validated follow-up contributes its traceable conditional
-direct-Component `standalone` default; review-fix validation and focused
-re-review are clean. CS-05F adds focused-validated non-destructive profile
-admission evidence; review-fix validation and focused re-review are clean.
-CS-05G removes the dormant public `Component.Config` mode/configuration
-authority and adds focused-validated Component-facing exclusion evidence;
-review-fix re-review is clean. CS-05J adds focused-validated CNCF/Textus
-launcher transport evidence: component target and runtime selection remain
-independent, and the wrappers forward canonical/noncanonical Web keys,
-fixed-user-shaped values, and post-`--` passthrough without semantic
-interpretation. Effective profile ordering is deferred to Phase 55
-ConfigurationBinding work. CS-05K reconciles existing executable evidence:
-authenticated ingress has no local fixed-user fallback, and the CS-05I
-profile-admission boundary excludes authenticated and controlled HOME-profile
-admission. Fixed/authenticated construction keeps the same mode-free datastore
-and EntityStore interfaces at the Component boundary. CS-05L closes the work
-group without new runtime behavior: Phase 54 owns datastore metadata/lifecycle,
-Phase 55 owns effective binding, UserId migration, formatting, provenance and
-redaction, Phase 60 owns operator presentation, strategy candidate 9.53 owns
-general Factory purity, and CS-06 owns final Component/ArtScene acceptance.
-
-CS-05 and CS-06 are DONE. CS-07 records final cross-repository validation,
-review, and the verified normative promotion. The deferred work remains
-explicitly unimplemented and receives no Phase 53 behavior credit.
+Phase 53 is closed. CS-01 through CS-07 are DONE, and `PM-53-01` is CLOSED.
+Existing deferred ownership, including Phases 54, 55, and 58, remains
+unchanged; deferred work remains explicitly unimplemented and receives no
+Phase 53 behavior credit.
 
 ## Post-Completion Maintenance
 

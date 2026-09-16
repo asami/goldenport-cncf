@@ -68,12 +68,12 @@ Current baseline:
   is closed: `JM69-03` establishes durable storage and deterministic process
   recovery. Phase 69.2 is closed: `JM69-04` establishes canonical authorized
   cursor and exact management reads, guarded controls, the compatible
-  `listJobs` facade, and the generated `job_control` projection. Phase 62 and
-  Phase 69.3 through Phase 69.7 remain planned and not started:
+  `listJobs` facade, and the generated `job_control` projection. Phase 69.3
+  is closed: `JM69-05` establishes executable JCL runtime semantics. Phase
+  69.4 is the active lightweight direct JobDefinition lifecycle work. Phase 62
+  and Phase 69.5 through Phase 69.7 remain planned and not started:
   - `phase-69.md` / `phase-69-checklist.md`
   - `phase-69.1.md` / `phase-69.1-checklist.md`
-  - `phase-69.3.md` / `phase-69.3-checklist.md`
-  - `phase-69.4.md` / `phase-69.4-checklist.md`
   - `phase-69.5.md` / `phase-69.5-checklist.md`
   - `phase-69.6.md` / `phase-69.6-checklist.md`
   - `phase-69.7.md` / `phase-69.7-checklist.md`
@@ -142,10 +142,53 @@ Current baseline:
   - `phase-69.md`
   - `phase-69.1.md`
   - `phase-69.2.md`
+  - `phase-69.3.md`
   - `phase-70.md`
   - `phase-70.1.md`
-- No CNCF phase is selected as active by the Phase 69.2 closure. Phase 62 and
-  Phase 69.3 through Phase 69.7 remain planned and not started.
+- Phase 69.4 is the active lightweight direct JobDefinition lifecycle work.
+  Its direct lifecycle contract is consumed by Phase 69.5; Phase 69.5 through
+  Phase 69.7 remain planned and not started.
+
+## Planned Entity ID Contract Recovery
+
+- The planned, not-started [Phase 74 sequence](phase-74.md) partitions EntityId
+  restoration into bounded units: [Phase 74](phase-74.md) freezes the contract
+  and inventory; [Phase 74.1](phase-74.1.md) restores the model base;
+  [Phase 74.2](phase-74.2.md) adopts it in CNCF and affected generators; and
+  [Phase 74.3](phase-74.3.md) owns final producer/consumer closure and the one
+  aggregate full suite.
+- Ledgers: [74](phase-74-checklist.md), [74.1](phase-74.1-checklist.md),
+  [74.2](phase-74.2-checklist.md), and [74.3](phase-74.3-checklist.md).
+  This planning split selects no active Phase and changes no existing completion
+  status.
+
+## Planned Service Execution Contracts
+
+- [Phase 75 - Component/Service Purpose and Operation Statefulness](phase-75.md)
+  is planned and not started. Component purpose supports domain/application/both;
+  service purpose supplies stateless/stateful defaults with explicit overrides.
+- [Phase 75 Checklist](phase-75-checklist.md) is the implementation ledger.
+  This addition selects no active phase and changes no existing phase status.
+
+## Planned Hash Responsibility Review
+
+- [Phase 76 - Hash Responsibility and Integrity Boundary Review](phase-76.md)
+  is planned and not started. It is the parent review for CNCF hash,
+  fingerprint, checksum, and content-digest controls, including CNCF cleanup.
+- [Phase 76 Checklist](phase-76-checklist.md) owns inventory, remediation,
+  validation, and closure in CNCF; only external-owner work is handed off.
+
+## Planned First-Class CML WORKFLOW Admission
+
+- [Phase 77 - First-Class CML WORKFLOW ABI Admission and Progression Contract](phase-77.md)
+  is planned and not started. It consumes Cozy Phase 62's generated `WORKFLOW`
+  definition after the Phase 64/64.2 prerequisites, admits it through
+  ComponentFactory, and provides an explicit deterministic progression boundary.
+- [Phase 77 Checklist](phase-77-checklist.md) owns ABI admission, generated
+  discovery, the independent WorkflowInstance persistence contract, evaluation,
+  Action integration, and CML-first consumer evidence. Entity StateMachine
+  persistence remains entity-owned; Textus `sm-workflow` supplies the separate
+  SQLite-backed WorkflowRun store and skill behavior.
 
 ## Related Rules
 

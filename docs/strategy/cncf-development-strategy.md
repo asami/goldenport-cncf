@@ -1814,6 +1814,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
 | DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
 | DEV-009 | `docs/journal/2026/08/2026-08-19-conclusion-diagnostics-availability-kind-development-task.md` | Explicit availability-kind diagnostic keys for not-running, connection-refused, and unreachable conclusions. | STRATEGY_ITEM | [9.4](#94-metrics-and-observability) | CANDIDATE |
+| DEV-010 | User direction on 2026-09-16 | Admit first-class Cozy-generated CML `WORKFLOW` definitions through ComponentFactory and expose an explicit automatic-versus-semantic progression contract without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md), after Cozy Phase 62 and CNCF Phases 64/64.2 | ADOPTED |
 
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
@@ -2335,7 +2336,7 @@ The approved 2026-09-09 split assigns every unfinished stage exactly once:
 - Phase 69.1: durable storage and process recovery (`JM69-03`).
 - Phase 69.2: query, pagination, result, and control (`JM69-04`).
 - Phase 69.3: executable JCL (`JM69-05`).
-- Phase 69.4: JobDefinition governance and rollout (`JM69-06`).
+- Phase 69.4: active lightweight direct JobDefinition lifecycle (`JM69-06`).
 - Phase 69.5: CompositeQuery v2 (`JM69-07`).
 - Phase 69.6: user and operator Job experience (`JM69-08`).
 - Phase 69.7: security, retention, operations, downstream acceptance, and
@@ -2344,10 +2345,10 @@ The approved 2026-09-09 split assigns every unfinished stage exactly once:
 - Implement executable JCL runtime for procedural `flow` and Event-driven
   `events` / `onEvent` sections. Phase 22 stores and documents those sections
   as future language surfaces only.
-- Add JobDefinition accept/apply workflow and operational lifecycle expansion
-  beyond create/update/activate/retire/search. This includes operator review of
-  reconstructed JCL, promotion policy, and definition rollout/rollback
-  handling.
+- JobDefinition governance accept/apply, review, promotion, rollout, rollback,
+  audit, and content-history work is deliberately retired from the Phase 69
+  sequence. A future need requires newly authorized Phase work rather than an
+  implicit successor.
 - Persist Job/Task execution records beyond the current lightweight Job Entity
   projection. Full timeline, Task Execution Tree, task-local calltree, raw
   event history, and large result bodies need durable storage, retention, and
@@ -2391,9 +2392,10 @@ Alignment with Phase 64:
 - Phase 64 reuses the existing JobEngine submission, retry/dead-letter, and Job
   linkage contracts for a Workflow-selected Operation.
 - It may add only the correlation/idempotency evidence required for that path;
-  executable JCL flow/events, JobDefinition rollout, durable Task Execution
-  Tree/history, CompositeQuery v2, and general Job UX remain owned by the
-  planned Phase 69 sequence.
+  executable JCL flow/events, the lightweight direct JobDefinition lifecycle,
+  durable Task Execution Tree/history, CompositeQuery v2, and general Job UX
+  remain owned by the planned Phase 69 sequence. JobDefinition rollout remains
+  deliberately retired from that sequence.
 
 ### 9.15 Saga Management
 Future distributed-collaboration development item.
@@ -5059,3 +5061,143 @@ accepted by either CNCF phase.
   - `src/main/scala/org/goldenport/cncf/component/Component.scala`;
   - `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala`; and
   - `textus-bok:docs/phase/phase-8.md`.
+
+### 9.60 Component Knowledge Contribution Hub
+
+Planned as Phase 73. Components contribute their own domain knowledge to a
+domain-neutral CNCF hub, and Textus BoK or other consumers discover and read
+the contribution through CNCF rather than binding directly to its provider.
+
+- Contract direction:
+  - keep stable `knowledgeDomainId` separate from the current
+    `providerComponent`;
+  - exchange attributable, versioned, complete immutable snapshots;
+  - keep domain records opaque to CNCF; and
+  - begin with pull-after-assembly and defer events, incremental updates,
+    watchers, and remote federation.
+- First consumers:
+  - Textus Knowledge Editor Phase 2 supplies `textus.book`; and
+  - Textus BoK Phase 7.5 consumes the accepted generic CNCF handoff and the
+    accepted TKE provider handoff.
+- Planning references:
+  - `docs/phase/phase-73.md`;
+  - `docs/phase/phase-73-checklist.md`;
+  - `textus-knowledge-editor:docs/phase/phase-2.md`; and
+  - `textus-bok:docs/phase/phase-7.5.md`.
+
+### 9.61 EntityId Inheritance Contract Restoration
+
+Planned as the ordered [Phase 74](../phase/phase-74.md) through
+[Phase 74.3](../phase/phase-74.3.md) sequence. It restores the intended
+`UniversalId -> abstract EntityId -> XxxId` model in simplemodeling-model and
+adopts JobDefinitionId as the first CNCF consumer. This is a selected model/API
+recovery, not an additional rule or a new Job execution feature. Phase 74
+freezes the contract/inventory, Phase 74.1 implements the model contract, Phase
+74.2 migrates affected consumers, and Phase 74.3 owns aggregate final validation.
+
+- Preserve ordinary automatically generated UUID/entropy, explicit special-purpose
+  arbitrary values, and lossless restoration of saved IDs as separate operations.
+- Preserve Phase 52 / [9.47](#947-exact-entity-id-serialization-and-collection-identity)
+  complete collection-exact canonical encoding, equality/hash, Record/JSON,
+  persistence keys, and generic EntityStore interoperability.
+- simplemodeling-model owns the abstract base and generic/typed materialization;
+  CNCF owns context and JobDefinition/store adoption; simple-modeler and Cozy
+  adopt only affected generated-consumer edges.
+- Resolve JobDefinition business keys by searching saved identity, not by
+  regenerating EntityId. Coordinate settled shared paths with the Phase 69
+  producer handoff without reopening or expanding [9.14](#914-job-management-follow-ups).
+- Retain the independent Phase 71 conflict, Phase 72 lifecycle, and Phase 73
+  knowledge hub boundaries. Do not force a broad CAR or JobId hierarchy migration.
+- Planning references:
+  - [Phase 74 Checklist](../phase/phase-74-checklist.md);
+  - [Phase 74.1 Checklist](../phase/phase-74.1-checklist.md);
+  - [Phase 74.2 Checklist](../phase/phase-74.2-checklist.md);
+  - [Phase 74.3 Checklist](../phase/phase-74.3-checklist.md);
+  - [Provisional Specification](../notes/entityid-inheritance-contract-restoration-provisional-specification.md); and
+  - [2026-09-13 Journal](../journal/2026/09/2026-09-13-entityid-inheritance-contract-restoration.md).
+
+### 9.62 Service Purpose and Operation Statefulness
+
+Planned as [Phase 75](../phase/phase-75.md). Make component/service purpose and
+resident-memory dependence explicit while preserving existing query/command.
+
+- Component purpose supports domain/application/both, default domain. Explicit
+  service purpose wins; otherwise a single-purpose component supplies the default.
+  Both supports mixed services; SP75-01 freezes the domain omission fallback proposal.
+- Service purpose is domain/application. Domain defaults to
+  stateful; application defaults to stateless. Explicit service statefulness
+  overrides the purpose default; operations inherit and may override it.
+- Stateless means correctness does not require authoritative memory retained
+  across invocations. Durable domain updates and disposable caches are separate.
+- Application services remain thin coordinators of one or more domains.
+  Cloud functions are an important realization option, enabled by statefulness
+  and target execution constraints rather than imposed as an abstract primitive.
+- CNCF owns resolution/runtime/review consumption. Existing shared protocol
+  definitions retain upstream ownership; inventory freezes any generator handoff.
+- Preserve unannotated service compatibility and existing phase boundaries.
+  This plan includes no provider deployment or bare orchestrator flag.
+- Planning references:
+  - [Phase 75 Checklist](../phase/phase-75-checklist.md);
+  - [Design Note](../notes/service-purpose-and-operation-statefulness-design-note.md); and
+- [2026-09-14 Journal](../journal/2026/09/2026-09-14-service-purpose-and-operation-statefulness.md).
+
+### 9.63 Hash Responsibility and Integrity Boundary Review
+
+Planned as [Phase 76](../phase/phase-76.md). Phase 76 is a CNCF-wide parent
+review and cleanup that separates necessary artifact/network integrity controls
+from unnecessary hash-based control inside ordinary application data flow.
+
+- Typed entity identity, explicit revision/version, and structural immutable
+  value equality remain independent controls. A digest never substitutes for
+  them or proves equal entity, authorization, deployment, or audit history.
+- Persisted application records do not gain a digest by default. A retained
+  persisted digest requires an identified external integrity/content-addressed
+  contract and a compatibility owner.
+- Transport authentication requires its actual security contract, such as a
+  signature or MAC where appropriate; a bare hash is not authentication.
+- Artifact, cache, and externally verifiable content integrity remain valid
+  candidates, but only with named producers, consumers, and protocol/threat
+  rationale.
+- The parent inventories, classifies, removes, or replaces admitted CNCF
+  controls in this Phase, with focused compatibility and executable evidence.
+  It hands off only a control owned by an upstream or external protocol
+  repository; it does not change unrelated Phase acceptance status.
+- Planning references:
+  - [Phase 76 Checklist](../phase/phase-76-checklist.md);
+  - [Phase 69.4](../phase/phase-69.4.md); and
+  - [Phase 74](../phase/phase-74.md).
+
+### 9.64 First-Class CML WORKFLOW Admission and Progression
+
+Planned as [Phase 77](../phase/phase-77.md), after Cozy Phase 62 and the
+Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
+
+- Cozy owns the first-class CML `WORKFLOW` declaration, normalization, static
+  validation, source identity, generated ABI, and producer fixture. CNCF does
+  not parse CML or reconstruct Workflow meaning from names or status fields.
+- CNCF admits the generated definition by explicit ABI version, discovers it
+  through ComponentFactory, and preserves the established Composite
+  StateMachine, typed Action, `ExecProgram`, and `UnitOfWorkOp` boundaries.
+- Generated progression metadata explicitly distinguishes automatic transitions
+  from typed Work Order, Decision, and Wait boundaries. The CNCF evaluator is
+  deterministic and bounded, returns a single boundary, and fails closed on
+  ambiguity, cycles, unavailable state, or unsupported semantics.
+- CNCF binds the generated ABI to Phase 64's independent WorkflowInstance
+  persistence SPI: entity-local StateMachine state remains entity-owned, while
+  a WorkflowInstance has its own identity/revision/history and idempotently
+  correlates to committed entity transitions. A shared physical database
+  requires separate logical store ownership; entity fields and shared-table
+  ownership are not substitutes.
+- A consuming component binds that SPI and owns external execution policy.
+  Textus `sm-workflow` therefore supplies the component-local SQLite store and
+  owns WorkflowRun/WorkOrder lifecycle, `advance`, leases, public protocols,
+  skills, and Codex-cost accounting.
+- This Phase neither replaces Phase 64's Composite StateMachine runtime nor
+  adds BPMN/DAG, arbitrary scripting, raw callbacks, a parallel Action algebra,
+  or a CNCF-local Workflow source language.
+- Planning references:
+  - [Phase 77](../phase/phase-77.md);
+  - [Phase 77 Checklist](../phase/phase-77-checklist.md);
+  - [Phase 64](../phase/phase-64.md);
+  - [Phase 64.2](../phase/phase-64.2.md); and
+  - `asami/cozy/docs/phase/phase-62.md`.

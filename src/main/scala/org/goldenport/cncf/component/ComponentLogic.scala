@@ -15,7 +15,6 @@ import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, Entity
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventEngine, EventReception, EventStore, ReceptionInput}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.http.OperationUpdateRequestNormalizer
@@ -34,7 +33,8 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -417,13 +417,8 @@ case class ComponentLogic(
   private def _load_job_definition(
     ref: String,
     ctx: ExecutionContext
-  ): Consequence[Option[JobDefinitionEntity]] = {
-    given ExecutionContext = ctx
-    EntityStore.standard().load[JobDefinitionEntity](JobDefinitionEntity.entityId(ref))(using JobDefinitionEntity.entityPersistent, ctx).flatMap {
-      case some @ Some(_) => Consequence.success(some)
-      case None => _load_job_definition_from_job_control(ref, ctx)
-    }
-  }
+  ): Consequence[Option[JobDefinitionEntity]] =
+    _load_job_definition_from_job_control(ref, ctx)
 
   private def _command_execution_parameters(
     policy: CommandExecutionPolicy
