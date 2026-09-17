@@ -1,16 +1,26 @@
 # Phase 74.2 - EntityId CNCF and Generated Consumer Adoption
 
-status=planned
+status=closed
 split_full_test_policy=final-only
 validation_ownership=aggregate-deferred
 aggregate_validation_owner=PHASE-74.3
 aggregate_validation_sequence=["PHASE-74","PHASE-74.1","PHASE-74.2","PHASE-74.3"]
 planned_at=2026-09-16
+closed_at=2026-09-17
 split_from=[Phase 74](phase-74.md)
 depends_on=[Phase 74.1](phase-74.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md#961-entityid-inheritance-contract-restoration)
 checklist=[Phase 74.2 Checklist](phase-74.2-checklist.md)
 successor=[Phase 74.3](phase-74.3.md)
+
+Status: CLOSED
+
+Phase 74.2 closed with CNCF consumer Step
+`e72b58cdddee85d26e44e6181500d3633129ee3b` and the accepted local repair
+for `CPB-74.2-001`. The focused consumer receipts, Phase full review, and
+focused re-review establish this handoff. The repository full suite was not
+run here: it remains the single aggregate-validation responsibility of Phase
+74.3 under the declared final-only sequence.
 
 ## Purpose
 
@@ -72,12 +82,38 @@ consumer edges. This is EIR-03 of the former Phase 74; the work uses Phase
 - A complete release handoff names changed producer/consumer identities and
   focused receipts for Phase 74.3's final integration validation.
 
+## Accepted Handoff to Phase 74.3
+
+- Producer input: `simplemodeling-model` commit
+  `4d440f99cfc3ccb349a5af1cf4cc127242aa7fef`, locally published as
+  `org.simplemodeling:simplemodeling-model:0.2.2-SNAPSHOT` by Phase 74.1.
+- Consumer source: CNCF Step
+  `e72b58cdddee85d26e44e6181500d3633129ee3b`, adopting concrete
+  `JobDefinitionId`, context-owned issuance, saved `{ id, key, ... }`
+  persistence, and saved-ID lookup.
+- Focused consumer evidence: compile receipt
+  `P742-EIR03-01-REVIEW-FIX-001-VAL-COMPILE-001`; representative receipt
+  `P742-EIR03-01-STEP-COMMIT-VAL-REPRESENTATIVE-002`; accumulator receipt
+  `P742-EIR03-01-STEP-COMMIT-VAL-ACCUMULATOR-002`; and repair receipt
+  `P742-PHASE-FIX-001-VAL-JOBCONTROL-001` for `JclJobControlComponentSpec`.
+- Review evidence: `PHASE-74.2-full-review-001` found only
+  `CPB-74.2-001`; the one-file local naming repair was accepted by
+  `PHASE-74.2-focused-rereview-001` with no remaining blocker.
+- Compatibility limit: generic `EntityId` storage/recovery remains supported,
+  but this Phase neither redesigns generic identity policy nor introduces
+  generic durable issuance, key-derived IDs, hash/content revision controls,
+  or a separate key-to-ID table. No `simple-modeler` source or artifact is
+  changed by this CNCF consumer Step.
+- Aggregate disposition: `repository_full_suite=deferred-not-run`; Phase 74.3
+  alone owns the declared aggregate full suite and cross-producer closure.
+
 ## Non-Goals
 
 - Redesigning generic EntityId policy or the model contract; it belongs to
   Phase 74 and Phase 74.1.
-- The aggregate full suite, cross-repository closure review, specification
-  promotion, and release closure; they belong to Phase 74.3.
+- The aggregate full suite, cross-repository closure review, and specification
+  promotion; they belong to Phase 74.3. This Phase's own aggregate-deferred
+  release closure records the handoff without claiming that validation.
 
 ## References
 

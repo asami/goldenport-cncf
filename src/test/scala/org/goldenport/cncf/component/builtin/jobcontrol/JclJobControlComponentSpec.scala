@@ -415,7 +415,7 @@ final class JclJobControlComponentSpec
         java.time.Instant.EPOCH,
         "bridgedfixture"
       ).toOption.getOrElse(fail("bridged JobDefinition fixture id is invalid"))
-      def _definition(id: JobDefinitionId, key: String) = JobDefinitionEntity.create(
+      def _definition_(id: JobDefinitionId, key: String) = JobDefinitionEntity.create(
         id = id,
         key = key,
         jclSource = body,
@@ -427,9 +427,9 @@ final class JclJobControlComponentSpec
         targetAction = Some("org.goldenport.cncf.test.JclFixture.command.ok"),
         now = summon[ExecutionContext].clock.instant()
       )
-      val dashedentity = _definition(dashedid, "a-b")
-      val underscoredentity = _definition(underscoredid, "a_b")
-      val bridgedentity = _definition(bridgedid, "bridged-existing")
+      val dashedentity = _definition_(dashedid, "a-b")
+      val underscoredentity = _definition_(underscoredid, "a_b")
+      val bridgedentity = _definition_(bridgedid, "bridged-existing")
       Vector(dashedentity, underscoredentity, bridgedentity).foreach { entity =>
         EntityStore.standard().create(entity)(using
           EntityPersistentCreate.fromPersistent(JobDefinitionEntity.entityPersistent),
