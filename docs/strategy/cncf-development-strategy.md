@@ -5094,7 +5094,9 @@ adopts JobDefinitionId as the first CNCF consumer. This is a selected model/API
 recovery, not an additional rule or a new Job execution feature. Phase 74 is
 closed as the contract/inventory authority, Phase 74.1 is closed as the model
 producer materialization, and Phase 74.2 is closed as the CNCF typed-consumer
-migration. Phase 74.3 remains planned for aggregate final validation.
+migration. Phase 74.3 is closed: focused validation, the aggregate suite,
+Phase full review, and focused closure re-review passed, and its distinct local
+release records the aggregate closure evidence.
 
 - Preserve ordinary automatically generated UUID/entropy, explicit special-purpose
   arbitrary values, and lossless restoration of saved IDs as separate operations.

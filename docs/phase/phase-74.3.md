@@ -1,6 +1,6 @@
 # Phase 74.3 - EntityId Producer/Consumer Closure
 
-status=planned
+status=closed
 split_full_test_policy=final-only
 validation_ownership=aggregate-final-owner
 aggregate_validation_owner=PHASE-74.3
@@ -12,16 +12,20 @@ depends_on=[Phase 74.2](phase-74.2.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md#961-entityid-inheritance-contract-restoration)
 checklist=[Phase 74.3 Checklist](phase-74.3-checklist.md)
 
-Status: EIR-04.2 FOCUSED VALIDATION COMPLETE; AGGREGATE CLOSURE PENDING
+Status: CLOSED — EIR-04.2 focused validation, the aggregate full suite, the
+Phase full review, and the focused closure re-review passed. This document is
+recorded by the distinct local Phase release commit.
 
 EIR-04.1's owner-document promotion is recorded by CNCF Step
 `bd04514bbc07e7280f653b797efde2d0ff63c473`. The first aggregate suite found
 that Phase 74.2's test-only `EntityIdFixtureBridge` supplied a default entropy,
 so fixtures with the same structural parts could silently receive the same ID.
-EIR-04.2 now fixes fixture timestamps at `Instant.EPOCH`, requires an explicit
-entropy at every call site, and has a passing focused receipt
-`P743-EIR042-ASSERT-VAL-001` (four suites, 345 tests). This status does not
-claim the aggregate suite, Phase full review, or final release.
+EIR-04.2 fixes fixture timestamps at `Instant.EPOCH`, requires an explicit
+entropy at every call site, and has the passing focused receipt
+`P743-EIR042-COMBINED-VAL-002`. The admitted aggregate full suite passed as
+`P743-AGGREGATE-FINAL-VAL-002` on the committed EIR-04.2 tree. The subsequent
+Phase full review and focused closure re-review passed; this release records
+their closure evidence without reopening either forced predecessor release.
 
 The user-approved acceptance change preserves the separately recorded forced
 releases of Phase 74.1 and Phase 74.2.  This final owner accepts only the

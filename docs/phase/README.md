@@ -155,12 +155,12 @@ Current baseline:
   authority, [Phase 74.1](phase-74.1.md) is closed as the
   `simplemodeling-model` producer materialization, and
   [Phase 74.2](phase-74.2.md) is closed as the CNCF typed-consumer adoption.
-  [Phase 74.3](phase-74.3.md) remains planned and not started; it owns the
-  producer/consumer closure and the one aggregate full suite.
+  [Phase 74.3](phase-74.3.md) is closed: focused validation, the aggregate
+  suite, Phase full review, and focused closure re-review passed, and its
+  distinct local release records the producer/consumer closure.
 - Ledgers: [74](phase-74-checklist.md), [74.1](phase-74.1-checklist.md),
   [74.2](phase-74.2-checklist.md), and [74.3](phase-74.3-checklist.md).
-  This status projection selects no successor as active and does not alter its
-  planned/not-started boundary.
+  This status projection selects no successor as active.
 
 ## Planned Service Execution Contracts
 
