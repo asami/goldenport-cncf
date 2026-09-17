@@ -30,7 +30,7 @@ final class ViewSpaceSpec
       Given("a view space with default and named browser")
       val viewspace = new ViewSpace
       val collectionid = EntityCollectionId("test", "a", "user")
-      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u1", collectionid)
+      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u1", collectionid, entropy = "u1")
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
           def build(id: EntityId): Consequence[String] =
@@ -63,7 +63,7 @@ final class ViewSpaceSpec
     "treat empty view name as default browser" in {
       val viewspace = new ViewSpace
       val collectionid = EntityCollectionId("test", "a", "user")
-      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u2", collectionid)
+      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u2", collectionid, entropy = "u2")
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
           def build(id: EntityId): Consequence[String] =
@@ -84,7 +84,7 @@ final class ViewSpaceSpec
       var queryCount = 0
       val viewspace = new ViewSpace
       val collectionid = EntityCollectionId("test", "a", "user")
-      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u3", collectionid)
+      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u3", collectionid, entropy = "u3")
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
           def build(id: EntityId): Consequence[String] = {
@@ -245,7 +245,7 @@ final class ViewSpaceSpec
       given ExecutionContext = ExecutionContext.test()
       val viewspace = new ViewSpace
       val collectionid = EntityCollectionId("test", "a", "user")
-      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u4", collectionid)
+      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u4", collectionid, entropy = "u4")
       val collection = new ViewCollection[String](
         new ContextualViewBuilder[String] {
           def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[String] =
@@ -327,7 +327,7 @@ final class ViewSpaceSpec
       given ExecutionContext = ExecutionContext.test()
       val viewspace = new ViewSpace
       val collectionid = EntityCollectionId("test", "a", "user")
-      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u5", collectionid)
+      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u5", collectionid, entropy = "u5")
       var buildCount = 0
       var queryCount = 0
       var countCount = 0

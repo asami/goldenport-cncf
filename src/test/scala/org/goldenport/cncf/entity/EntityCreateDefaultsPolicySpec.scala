@@ -22,7 +22,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
-      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target)
+      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target")
 
       When("the default create policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
@@ -41,7 +41,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
-      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target)
+      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target")
 
       When("the default create policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
@@ -69,7 +69,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the default create policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target", "shortid" -> "manual-shortid"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions.default
       )
 
@@ -91,12 +91,12 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the policy complements records for both collections")
       val targetRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions.default
       )
       val otherRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "other"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "other", other),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "other", other, entropy = "other"),
         EntityCreateOptions.default
       )
 
@@ -124,7 +124,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions(defaultProfiles = Set("public-read"))
       )
 
@@ -144,7 +144,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions.default
       )
 
@@ -170,7 +170,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions(defaultProfiles = Set("cms", "publication", "public-content", "public-read"))
       )
 
@@ -196,7 +196,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions(defaultProfiles = Set("task"))
       )
 
@@ -220,7 +220,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the selector policy complements the target record")
       val targetRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions.default
       )
 
@@ -246,7 +246,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the selector policy complements the target record")
       val targetRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target, entropy = "target"),
         EntityCreateOptions.default
       )
 
@@ -276,12 +276,12 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the entity-name policy complements sales order and invoice records")
       val salesOrderRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "sales-order"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sales_order", salesOrder),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sales_order", salesOrder, entropy = "sales_order"),
         EntityCreateOptions.default
       )
       val invoiceRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "invoice"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "invoice", invoice),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "invoice", invoice, entropy = "invoice"),
         EntityCreateOptions.default
       )
 
@@ -319,12 +319,12 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers wit
       When("the composed policy complements customer and sales order records")
       val customerRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "customer"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "customer", customer),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "customer", customer, entropy = "customer"),
         EntityCreateOptions.default
       )
       val salesOrderRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "sales-order"),
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sales_order", salesOrder),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sales_order", salesOrder, entropy = "sales_order"),
         EntityCreateOptions.default
       )
 

@@ -4,7 +4,6 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.association.{Association, AssociationDomain, AssociationFilter, AssociationStoragePolicy}
 import org.goldenport.datatype.ContentType
-import org.goldenport.id.UniversalId
 import org.simplemodeling.model.datatype.EntityId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -125,7 +124,7 @@ final class BlobProjectionSpec
     associationId: String
   ): Association =
     Association(
-      id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", _safe_minor(associationId), AssociationStoragePolicy.BlobAttachmentCollection),
+      id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", _safe_minor(associationId), AssociationStoragePolicy.BlobAttachmentCollection, entropy = _safe_minor(associationId)),
       associationId = associationId,
       sourceEntityId = source,
       targetEntityId = _blob_id(blobMinor).value,
@@ -158,7 +157,7 @@ final class BlobProjectionSpec
   private def _blob_id(
     minor: String
   ): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(BlobRepository.CollectionId.major, _safe_minor(minor), BlobRepository.CollectionId)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(BlobRepository.CollectionId.major, _safe_minor(minor), BlobRepository.CollectionId, entropy = _safe_minor(minor))
 
   private def _safe_minor(
     value: String
@@ -168,17 +167,7 @@ final class BlobProjectionSpec
   private def _blob_id_from_value(
     value: String
   ): EntityId =
-    UniversalId.parseParts(value, "entity") match {
-      case Consequence.Success(parts) =>
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
-          major = parts.major,
-          minor = parts.minor,
-          collection = BlobRepository.CollectionId,
-          timestamp = Some(parts.timestamp),
-          entropy = Some(parts.entropy)
-        )
-      case Consequence.Failure(conclusion) => fail(conclusion.show)
-    }
+    EntityId.parse(value).getOrElse(fail(s"invalid canonical blob entity id: $value"))
 
   private val _now: Instant =
     Instant.parse("2026-04-30T00:00:00Z")

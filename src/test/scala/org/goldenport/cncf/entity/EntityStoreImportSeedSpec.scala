@@ -33,7 +33,7 @@ final class EntityStoreImportSeedSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PersonEntity] = _person_persistent
-      val e1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", collectionId), "taro")
+      val e1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", collectionId, entropy = "p1"), "taro")
 
       val seed = EntityStoreSeed(
         Vector(
@@ -57,7 +57,7 @@ final class EntityStoreImportSeedSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[StoreStylePersonEntity] = _store_style_person_persistent
-      val e1 = StoreStylePersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "s1", storeStyleCollectionId), "hanako")
+      val e1 = StoreStylePersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "s1", storeStyleCollectionId, entropy = "s1"), "hanako")
 
       When("importing the seed")
       val imported = entitystorespace.importSeed(EntityStoreSeed(Vector(EntityStoreSeedEntry(e1))))

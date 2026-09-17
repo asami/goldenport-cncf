@@ -507,10 +507,10 @@ final class ChildEntityBindingWorkflowSpec
     )
 
   private def _order_id(value: String): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(OrderEntity.collectionId.major, value, OrderEntity.collectionId)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(OrderEntity.collectionId.major, value, OrderEntity.collectionId, entropy = value)
 
   private def _order_line_id(value: String): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(OrderLineEntity.collectionId.major, value, OrderLineEntity.collectionId)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(OrderLineEntity.collectionId.major, value, OrderLineEntity.collectionId, entropy = value)
 
   private def _records(record: Record, key: String): Vector[Record] =
     record.getVector(key).getOrElse(Vector.empty).collect {

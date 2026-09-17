@@ -43,8 +43,8 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       given EntityPersistent[PersonEntity] = _persistent
       val component = _create_component_with_metadata()
       component.entitySpace.registerEntity(_entity_name, _collection(Vector(
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), "taro", "Tokyo"),
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), "hanako", "Osaka")
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), "taro", "Tokyo"),
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), "hanako", "Osaka")
       )))
       val factory = new ComponentFactory()
 
@@ -64,8 +64,8 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       given EntityPersistent[PersonEntity] = _persistent
       given ExecutionContext = _execution_context(DataStore.inMemorySearchable())
       val entities = Vector(
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), "taro", "Tokyo"),
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), "hanako", "Osaka")
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), "taro", "Tokyo"),
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), "hanako", "Osaka")
       )
       val seeded = summon[ExecutionContext].dataStoreSpace.inject(
         DataStoreSpace.Seed(entities.map { entity =>
@@ -99,8 +99,8 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       given ExecutionContext = _execution_context(DataStore.noop())
       val component = _create_component_with_metadata()
       component.entitySpace.registerEntity(_entity_name, _collection(Vector(
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), "taro", "Tokyo"),
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), "hanako", "Osaka")
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), "taro", "Tokyo"),
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), "hanako", "Osaka")
       )))
       val factory = new ComponentFactory()
 
@@ -122,8 +122,8 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       val datastore = DataStore.inMemorySearchable()
       given ExecutionContext = _execution_context(datastore)
       val persisted = Vector(
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), "taro", "Tokyo"),
-        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), "hanako", "Osaka")
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), "taro", "Tokyo"),
+        PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), "hanako", "Osaka")
       )
       val seeded = summon[ExecutionContext].dataStoreSpace.inject(
         DataStoreSpace.Seed(persisted.map { entity =>
@@ -150,7 +150,7 @@ final class ComponentFactoryAggregateViewBootstrapSpec
       Given("an empty searchable datastore while one stale entity remains resident")
       given EntityPersistent[PersonEntity] = _persistent
       given ExecutionContext = _execution_context(DataStore.inMemorySearchable())
-      val resident = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "stale", _cid), "stale", "Tokyo")
+      val resident = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "stale", _cid, entropy = "stale"), "stale", "Tokyo")
       val component = _create_component_with_metadata()
       component.entitySpace.registerEntity(_entity_name, _collection(Vector(resident)))
       val factory = new ComponentFactory()

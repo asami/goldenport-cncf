@@ -913,15 +913,13 @@ final class ContentReferenceWorkflowSpec
   }
 
   private def _blob_id(value: String): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "builtin", EntityCollectionId("cncf", "builtin", "blob"), entropy = Some(value))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "builtin", EntityCollectionId("cncf", "builtin", "blob"),entropy = value)
 
   private def _article_id(value: String): EntityId =
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "sample",
-      EntityCollectionId("cncf", "sample", "article"),
-      entropy = Some(value)
-    )
+      EntityCollectionId("cncf", "sample", "article"),entropy = value)
 
   private def _success[A](result: Consequence[A]): A =
     result match {

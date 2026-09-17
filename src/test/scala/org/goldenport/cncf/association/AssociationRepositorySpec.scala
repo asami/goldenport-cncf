@@ -135,8 +135,8 @@ final class AssociationRepositorySpec
       Given("a Blob attachment Association repository and a foreign canonical EntityId")
       given ExecutionContext = ExecutionContext.test()
       val repository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
-      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_foreign", EntityCollectionId("cncf", "builtin", "tag"))
-      val target = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "target_foreign", EntityCollectionId("cncf", "builtin", "blob"))
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_foreign", EntityCollectionId("cncf", "builtin", "tag"), entropy = "association_foreign")
+      val target = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "target_foreign", EntityCollectionId("cncf", "builtin", "blob"), entropy = "target_foreign")
 
       When("the foreign id is selected for a Blob attachment association")
       val result = repository.create(
@@ -156,7 +156,7 @@ final class AssociationRepositorySpec
       Then("creation fails and the association codec retains the canonical target string exactly")
       result shouldBe a[Consequence.Failure[_]]
       val association = Association(
-        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_canonical", AssociationStoragePolicy.BlobAttachmentCollection),
+        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_canonical", AssociationStoragePolicy.BlobAttachmentCollection, entropy = "association_canonical"),
         associationId = "assoc-canonical",
         sourceEntityId = _source_id("source-canonical"),
         targetEntityId = target.value,
@@ -186,7 +186,7 @@ final class AssociationRepositorySpec
         collectionId = AssociationStoragePolicy.BlobAttachmentCollection
       )
       val canonical = Association(
-        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_decode", AssociationStoragePolicy.BlobAttachmentCollection),
+        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_decode", AssociationStoragePolicy.BlobAttachmentCollection, entropy = "association_decode"),
         associationId = "assoc-decode",
         sourceEntityId = _source_id("decode-source"),
         targetEntityId = _blob_id("decode-target"),
@@ -229,8 +229,5 @@ final class AssociationRepositorySpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       collection.major,
       collection.minor,
-      collection,
-      timestamp = Some(Instant.EPOCH),
-      entropy = Some(entropy.replace('-', '_'))
-    ).value
+      collection,entropy = entropy.replace('-', '_')).value
 }

@@ -36,7 +36,7 @@ final class UpdateSpec
 
     "allow cozy-style update directive object" in {
       Given("an entity id and a typed Person update directive")
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a", EntityCollectionId("test", "a", "person"))
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a", EntityCollectionId("test", "a", "person"), entropy = "a")
       val directive = domain.update.Person(
         name = Update.set(Name("hanako")),
         age = Update.noop[Age]

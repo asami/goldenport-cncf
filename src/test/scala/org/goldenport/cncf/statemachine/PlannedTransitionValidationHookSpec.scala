@@ -28,7 +28,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
 
       val provider = new _ProviderWithPlan
       val hook = new PlannedTransitionValidationHook(provider)
-      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_1", _cid), "taro")
+      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_1", _cid, entropy = "hook_1"), "taro")
       When("the planned validation hook processes the update")
       val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
 
@@ -65,7 +65,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
 
       val provider = new _ProviderWithFailingPlan
       val hook = new PlannedTransitionValidationHook(provider)
-      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_2", _cid), "hanako")
+      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_2", _cid, entropy = "hook_2"), "hanako")
       When("the planned validation hook processes the update")
       val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
 

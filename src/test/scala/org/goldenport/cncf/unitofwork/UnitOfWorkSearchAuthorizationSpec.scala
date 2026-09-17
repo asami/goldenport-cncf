@@ -45,8 +45,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a", _cid), "taro", "owner-1")
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b", _cid), "hanako", "owner-2")
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a", _cid, entropy = "a"), "taro", "owner-1")
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b", _cid, entropy = "b"), "hanako", "owner-2")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -90,8 +90,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m1", _cid), "taro", "owner-1")
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m2", _cid), "hanako", "owner-2")
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m1", _cid, entropy = "m1"), "taro", "owner-1")
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m2", _cid, entropy = "m2"), "hanako", "owner-2")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -135,8 +135,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g1", _cid), "taro", "owner-x", groupId = Some("team-a"))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g2", _cid), "hanako", "owner-y", groupId = Some("team-b"))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g1", _cid, entropy = "g1"), "taro", "owner-x", groupId = Some("team-a"))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g2", _cid, entropy = "g2"), "hanako", "owner-y", groupId = Some("team-b"))
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -179,8 +179,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", _cid), "taro", "owner-x", privilegeId = Some("vip-access"))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p2", _cid), "hanako", "owner-y", privilegeId = Some("other-access"))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", _cid, entropy = "p1"), "taro", "owner-x", privilegeId = Some("vip-access"))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p2", _cid, entropy = "p2"), "hanako", "owner-y", privilegeId = Some("other-access"))
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -222,7 +222,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PublicEntity] = _public_persistent
 
-      val p1 = PublicEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "public1", _cid), "private-post")
+      val p1 = PublicEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "public1", _cid, entropy = "public1"), "private-post")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -278,8 +278,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[TypedSecurityEntity] = _typed_security_persistent
 
-      val p1 = TypedSecurityEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "typed1", _cid), "typed-visible", "typed-owner")
-      val p2 = TypedSecurityEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "typed2", _cid), "typed-hidden", "other-owner")
+      val p1 = TypedSecurityEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "typed1", _cid, entropy = "typed1"), "typed-visible", "typed-owner")
+      val p2 = TypedSecurityEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "typed2", _cid, entropy = "typed2"), "typed-hidden", "other-owner")
 
       When("filtering search results through OperationAccessPolicy")
       val result = OperationAccessPolicy.filterVisibleSearchResult(
@@ -318,8 +318,8 @@ final class UnitOfWorkSearchAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "n1", _cid), "published", "reader", publishAt = Some("2000-01-01T00:00:00Z"))
-        val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "n2", _cid), "future", "reader", publishAt = Some("2999-01-01T00:00:00Z"))
+        val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "n1", _cid, entropy = "n1"), "published", "reader", publishAt = Some("2000-01-01T00:00:00Z"))
+        val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "n2", _cid, entropy = "n2"), "future", "reader", publishAt = Some("2999-01-01T00:00:00Z"))
         val _ = datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(
@@ -370,8 +370,8 @@ final class UnitOfWorkSearchAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sys_n1", _cid), "visible", "owner-1")
-        val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sys_n2", _cid), "otherwise-hidden", "owner-2")
+        val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sys_n1", _cid, entropy = "sys_n1"), "visible", "owner-1")
+        val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sys_n2", _cid, entropy = "sys_n2"), "otherwise-hidden", "owner-2")
         val _ = datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(
@@ -421,9 +421,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "r1", _cid), "customer-a-record", "owner-x", customerId = Some("customer-a"))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "r2", _cid), "account-a-record", "owner-y", customerId = Some("customer-b"), accountId = Some("account-a"))
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "r3", _cid), "unrelated-record", "owner-z")
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "r1", _cid, entropy = "r1"), "customer-a-record", "owner-x", customerId = Some("customer-a"))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "r2", _cid, entropy = "r2"), "account-a-record", "owner-y", customerId = Some("customer-b"), accountId = Some("account-a"))
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "r3", _cid, entropy = "r3"), "unrelated-record", "owner-z")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -472,7 +472,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rk1", _cid), "customer-a-record", "owner-x", customerId = Some("customer-a"))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rk1", _cid, entropy = "rk1"), "customer-a-record", "owner-x", customerId = Some("customer-a"))
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -515,8 +515,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rp1", _cid), "principal-record", "principal-owner")
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rp2", _cid), "other-record", "other-owner")
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rp1", _cid, entropy = "rp1"), "principal-record", "principal-owner")
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rp2", _cid, entropy = "rp2"), "other-record", "other-owner")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -564,9 +564,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rt1", _cid), "tenant-org-record", "owner-x", tenantId = Some("tenant-a"), organizationId = Some("org-a"))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rt2", _cid), "tenant-only-record", "owner-y", tenantId = Some("tenant-a"), organizationId = Some("org-b"))
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rt3", _cid), "organization-only-record", "owner-z", tenantId = Some("tenant-b"), organizationId = Some("org-a"))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rt1", _cid, entropy = "rt1"), "tenant-org-record", "owner-x", tenantId = Some("tenant-a"), organizationId = Some("org-a"))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rt2", _cid, entropy = "rt2"), "tenant-only-record", "owner-y", tenantId = Some("tenant-a"), organizationId = Some("org-b"))
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rt3", _cid, entropy = "rt3"), "organization-only-record", "owner-z", tenantId = Some("tenant-b"), organizationId = Some("org-a"))
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -614,9 +614,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ra1", _cid), "assigned-record", "owner-x", assigneeId = Some("work-user"))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ra2", _cid), "participant-record", "owner-y", participantId = Some("work-user"))
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ra3", _cid), "unrelated-record", "owner-z", assigneeId = Some("other-user"), participantId = Some("another-user"))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ra1", _cid, entropy = "ra1"), "assigned-record", "owner-x", assigneeId = Some("work-user"))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ra2", _cid, entropy = "ra2"), "participant-record", "owner-y", participantId = Some("work-user"))
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ra3", _cid, entropy = "ra3"), "unrelated-record", "owner-z", assigneeId = Some("other-user"), participantId = Some("another-user"))
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -670,9 +670,9 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bn1", _cid), "boundary-record", "boundary-user", customerId = Some("customer-a"), accountId = Some("account-a"), tenantId = Some("tenant-a"), organizationId = Some("org-a"))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bn2", _cid), "wrong-customer-record", "boundary-user", customerId = Some("customer-b"), accountId = Some("account-a"), tenantId = Some("tenant-a"), organizationId = Some("org-a"))
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bn3", _cid), "wrong-tenant-record", "boundary-user", customerId = Some("customer-a"), accountId = Some("account-a"), tenantId = Some("tenant-b"), organizationId = Some("org-a"))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bn1", _cid, entropy = "bn1"), "boundary-record", "boundary-user", customerId = Some("customer-a"), accountId = Some("account-a"), tenantId = Some("tenant-a"), organizationId = Some("org-a"))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bn2", _cid, entropy = "bn2"), "wrong-customer-record", "boundary-user", customerId = Some("customer-b"), accountId = Some("account-a"), tenantId = Some("tenant-a"), organizationId = Some("org-a"))
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bn3", _cid, entropy = "bn3"), "wrong-tenant-record", "boundary-user", customerId = Some("customer-a"), accountId = Some("account-a"), tenantId = Some("tenant-b"), organizationId = Some("org-a"))
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(

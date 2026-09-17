@@ -35,9 +35,9 @@ final class EntityConditionalTransitionDiagnosticsSpec
   private val _successor_collection =
     EntityCollectionId("test", "phase49", "diagnostic_successor")
   private val _root_id =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "diagnostic_root", _root_collection)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "diagnostic_root", _root_collection, entropy = "diagnostic_root")
   private val _successor_id =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "diagnostic_successor", _successor_collection)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "diagnostic_successor", _successor_collection, entropy = "diagnostic_successor")
 
   "Entity conditional-transition diagnostics" should {
     "classify typed outcomes and structured failures without display parsing" in {

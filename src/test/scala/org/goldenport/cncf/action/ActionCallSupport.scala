@@ -220,5 +220,5 @@ object ActionCallSupport {
     minor: String,
     cid: org.simplemodeling.model.datatype.EntityCollectionId
   ): org.simplemodeling.model.datatype.EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", minor, cid)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", minor, cid, entropy = minor)
 }

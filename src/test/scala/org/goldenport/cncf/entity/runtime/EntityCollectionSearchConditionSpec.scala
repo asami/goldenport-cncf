@@ -38,8 +38,8 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), Name("taro"), Age(20))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), Name("hanako"), Age(30))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), Name("taro"), Age(20))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), Name("hanako"), Age(30))
 
       val storerealm = new EntityRealm[PersonEntity](
         entityName = "person",
@@ -88,9 +88,9 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), Name("taro"), Age(20))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), Name("hanako"), Age(30))
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c", _cid), Name("jiro"), Age(40))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), Name("taro"), Age(20))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), Name("hanako"), Age(30))
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c", _cid, entropy = "c"), Name("jiro"), Age(40))
 
       val storerealm = new EntityRealm[PersonEntity](
         entityName = "person",
@@ -139,8 +139,8 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), Name("taro"), Age(20))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), Name("hanako"), Age(30))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), Name("taro"), Age(20))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), Name("hanako"), Age(30))
 
       val storerealm = new EntityRealm[PersonEntity](
         entityName = "person",
@@ -189,8 +189,8 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val recent = TimedPostEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "r", _cid), now.minusSeconds(3600), "recent")
-      val old = TimedPostEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "o", _cid), now.minusSeconds(3 * 24 * 3600), "old")
+      val recent = TimedPostEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "r", _cid, entropy = "r"), now.minusSeconds(3600), "recent")
+      val old = TimedPostEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "o", _cid, entropy = "o"), now.minusSeconds(3 * 24 * 3600), "old")
       val storerealm = new EntityRealm[TimedPostEntity](
         entityName = "person",
         loader = EntityLoader[TimedPostEntity](_ => None),
@@ -242,12 +242,12 @@ final class EntityCollectionSearchConditionSpec
       }
 
       val recent = GeneratedTimedPostEntity(
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "gr", _cid),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "gr", _cid, entropy = "gr"),
         java.time.Instant.parse("2026-04-24T10:00:00Z").toString,
         "recent"
       )
       val old = GeneratedTimedPostEntity(
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "go", _cid),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "go", _cid, entropy = "go"),
         java.time.Instant.parse("2026-04-22T10:00:00Z").toString,
         "old"
       )
@@ -310,12 +310,12 @@ final class EntityCollectionSearchConditionSpec
       }
 
       val recent = GeneratedStoreStyleTimedPostEntity(
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "gsr", _cid),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "gsr", _cid, entropy = "gsr"),
         java.time.Instant.parse("2026-04-24T10:00:00Z").toString,
         "recent"
       )
       val old = GeneratedStoreStyleTimedPostEntity(
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "gso", _cid),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "gso", _cid, entropy = "gso"),
         java.time.Instant.parse("2026-04-22T10:00:00Z").toString,
         "old"
       )
@@ -374,13 +374,13 @@ final class EntityCollectionSearchConditionSpec
       }
 
       val live = TimedLifecyclePostEntity(
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "l", _cid),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "l", _cid, entropy = "l"),
         now.minusSeconds(3600),
         "live",
         "alive"
       )
       val deleted = TimedLifecyclePostEntity(
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "d", _cid),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "d", _cid, entropy = "d"),
         now.minusSeconds(3600),
         "deleted",
         "alive",
@@ -436,9 +436,9 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), Name("taro"), Age(20))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), Name("hanako"), Age(30))
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c", _cid), Name("taro"), Age(40))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), Name("taro"), Age(20))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), Name("hanako"), Age(30))
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c", _cid, entropy = "c"), Name("taro"), Age(40))
 
       val storerealm = new EntityRealm[PersonEntity](
         entityName = "person",
@@ -489,9 +489,9 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid), Name("taro"), Age(20))
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid), Name("hanako"), Age(30))
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c", _cid), Name("jiro"), Age(40))
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a"), Name("taro"), Age(20))
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b"), Name("hanako"), Age(30))
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c", _cid, entropy = "c"), Name("jiro"), Age(40))
 
       val storerealm = new EntityRealm[PersonEntity](
         entityName = "person",
@@ -550,8 +550,8 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val s1 = StatusEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "ja", _cid), "Published", "trace-a")
-      val s2 = StatusEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "jb", _cid), "Draft", "trace-b")
+      val s1 = StatusEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "ja", _cid, entropy = "ja"), "Published", "trace-a")
+      val s2 = StatusEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "jb", _cid, entropy = "jb"), "Draft", "trace-b")
 
       val storerealm = new EntityRealm[StatusEntity](
         entityName = "statusPerson",

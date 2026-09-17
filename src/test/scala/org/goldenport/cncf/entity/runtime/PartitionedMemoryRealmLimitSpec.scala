@@ -36,8 +36,8 @@ final class PartitionedMemoryRealmLimitSpec
         maxPartitions = 2,
         maxEntitiesPerPartition = 1
       )
-      val id1 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
-      val id2 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid)
+      val id1 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a")
+      val id2 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid, entropy = "b")
 
       When("putting two entities into the same partition")
       val e1 = TestEntityInPartition(id1)

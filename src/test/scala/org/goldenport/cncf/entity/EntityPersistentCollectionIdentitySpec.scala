@@ -45,7 +45,7 @@ final class EntityPersistentCollectionIdentitySpec
               s"Spec: docs/spec/entity-collection-identity.md; Rules: R1,R4; Example: E1; a record for $name whose canonical EntityId carries its exact namespace"
             )
             val canonicalcollection = EntityCollectionId("major", "minor", name)
-            val runtimeid           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", canonicalcollection)
+            val runtimeid           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", canonicalcollection, entropy = "global")
             val record = Record.dataAuto(
               "id"    -> runtimeid.value,
               "value" -> value
@@ -85,7 +85,7 @@ final class EntityPersistentCollectionIdentitySpec
         val scalarcollection =
           EntityCollectionId("single", "global", "facility")
         val record = Record.dataAuto(
-          "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", scalarcollection).value,
+          "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", scalarcollection, entropy = "global").value,
           "value" -> "museum"
         )
 
@@ -121,11 +121,11 @@ final class EntityPersistentCollectionIdentitySpec
         val archivecollection =
           EntityCollectionId("textus", "archive", "exhibit")
         val original = GeneratedReferenceFixture(
-          id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "facility_1", facilitycollection),
-          primaryreference = Some(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_primary", exhibitcollection)),
+          id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "facility_1", facilitycollection, entropy = "facility_1"),
+          primaryreference = Some(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_primary", exhibitcollection, entropy = "exhibit_primary")),
           relatedreferences = Vector(
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_collection", exhibitcollection),
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_archive", archivecollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_collection", exhibitcollection, entropy = "exhibit_collection"),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_archive", archivecollection, entropy = "exhibit_archive")
           )
         )
 
@@ -152,7 +152,7 @@ final class EntityPersistentCollectionIdentitySpec
       val runtimecollection =
         EntityCollectionId("single", "global", "facility")
       val record = Record.dataAuto(
-        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", runtimecollection).value,
+        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", runtimecollection, entropy = "global").value,
         "value" -> "museum"
       )
 
@@ -188,7 +188,7 @@ final class EntityPersistentCollectionIdentitySpec
       val actualcollection =
         EntityCollectionId("single", "global", "exhibition")
       val record = Record.dataAuto(
-        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", actualcollection).value,
+        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", actualcollection, entropy = "global").value,
         "value" -> "summer"
       )
 
@@ -223,7 +223,7 @@ final class EntityPersistentCollectionIdentitySpec
       val runtimecollection =
         EntityCollectionId("single", "global", "facility")
       val record = Record.dataAuto(
-        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", runtimecollection).value,
+        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", runtimecollection, entropy = "global").value,
         "value" -> "museum"
       )
       var decodecount    = 0
@@ -272,7 +272,7 @@ final class EntityPersistentCollectionIdentitySpec
       val requestedcollection =
         EntityCollectionId("major", "minor", "facility")
       val runtimeid =
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", requestedcollection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", requestedcollection, entropy = "global")
       val record = Record.dataAuto(
         "id"    -> runtimeid.value,
         "value" -> "museum"

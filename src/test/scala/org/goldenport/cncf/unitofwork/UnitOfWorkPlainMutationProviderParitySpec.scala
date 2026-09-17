@@ -136,7 +136,8 @@ final class UnitOfWorkPlainMutationProviderParitySpec
     val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       s"plain_mutation_$providername",
-      collectionid
+      collectionid,
+      entropy = s"plain_mutation_$providername"
     )
     val interpreter =
       new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))

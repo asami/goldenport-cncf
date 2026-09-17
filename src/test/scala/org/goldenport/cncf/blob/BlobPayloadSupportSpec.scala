@@ -129,7 +129,7 @@ final class BlobPayloadSupportSpec
   }
 
   private def _blob_id(value: String): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", value, EntityCollectionId("cncf", "builtin", "blob"))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", value, EntityCollectionId("cncf", "builtin", "blob"), entropy = value)
 
   private def _success[A](result: Consequence[A]): A =
     result match {

@@ -370,10 +370,7 @@ final class InformationCmlCanonicalContractSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       major = "major",
       minor = "minor",
-      collection = EntityCollectionId("major", "minor", "information"),
-      timestamp = Some(java.time.Instant.parse("2026-08-30T00:00:00Z")),
-      entropy = Some("information_contract_1")
-    )
+      collection = EntityCollectionId("major", "minor", "information"),entropy = "information_contract_1")
 
   private val _output_classes: Vector[Class[?]] = Vector(
     _root_class,

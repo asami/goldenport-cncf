@@ -113,7 +113,7 @@ final class ActionCallDetachedRevisionDslSpec
   private val _collection_id =
     EntityCollectionId("test", "detached", "action_dsl")
   private val _id =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "detached_action", _collection_id)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "detached_action", _collection_id, entropy = "detached_action")
 
   private final case class DetachedEntity(
     id: EntityId,

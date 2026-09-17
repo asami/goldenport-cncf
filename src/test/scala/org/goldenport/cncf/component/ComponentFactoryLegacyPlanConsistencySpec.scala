@@ -38,8 +38,8 @@ final class ComponentFactoryLegacyPlanConsistencySpec
         .getOrElse(fail("legacy bootstrap should create memory realm"))
       val cid = EntityCollectionId("sys", "sys", "default")
 
-      memory.put(SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", cid), "taro"))
-      memory.put(SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", cid), "jiro"))
+      memory.put(SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", cid, "taro"), "taro"))
+      memory.put(SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", cid, "jiro"), "jiro"))
 
       Then("descriptor plan and runtime defaults are aligned")
       collection.descriptor.plan.maxPartitions shouldBe 64

@@ -13,20 +13,13 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @author  ASAMI, Tomoharu
  */
 object EntityIdFixtureBridge {
-  private val _default_timestamp = Instant.EPOCH
-  private val _default_entropy = "fixture"
-
   def fromParts(
     major: String,
     minor: String,
     collection: EntityCollectionId,
-    timestamp: Option[Instant] = Some(_default_timestamp),
-    entropy: Option[String] = Some(_default_entropy)
-  ): EntityId = {
-    val canontimestamp = timestamp.getOrElse(_default_timestamp)
-    val canonentropy = entropy.getOrElse(_default_entropy)
-    EntityId.bridgeFromParts(major, minor, collection, canontimestamp, canonentropy)
+    entropy: String
+  ): EntityId =
+    EntityId.bridgeFromParts(major, minor, collection, Instant.EPOCH, entropy)
       .toOption
       .getOrElse(throw new IllegalArgumentException("Invalid EntityId fixture bridge parts"))
-  }
 }

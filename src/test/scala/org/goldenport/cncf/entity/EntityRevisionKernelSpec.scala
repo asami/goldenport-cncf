@@ -184,7 +184,7 @@ final class EntityRevisionKernelSpec
         )
         val fixture            = _component_fixture()
         given ExecutionContext = fixture.context
-        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "uow_create", _collection_id)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "uow_create", _collection_id, entropy = "uow_create")
         val entity             = TestEntity(id, "unit-of-work", None)
         val interpreter =
           new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
@@ -224,7 +224,8 @@ final class EntityRevisionKernelSpec
           val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
             "test",
             s"revision_$attempted",
-            _collection_id
+            _collection_id,
+            entropy = s"revision_$attempted"
           )
           val entity = TestEntity(id, s"entity-$attempted", None)
           val created = fixture.entitystorespace.create(
@@ -274,9 +275,9 @@ final class EntityRevisionKernelSpec
         )
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val createdid          = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "created", _collection_id)
-        val importedid         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "imported", _collection_id)
-        val reimportedid       = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "reimported", _collection_id)
+        val createdid          = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "created", _collection_id, entropy = "created")
+        val importedid         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "imported", _collection_id, entropy = "imported")
+        val reimportedid       = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "reimported", _collection_id, entropy = "reimported")
         val created = fixture.entitystorespace.create(
           UnitOfWorkOp.EntityStoreCreate(
             TestEntity(createdid, "before", None),
@@ -426,7 +427,7 @@ final class EntityRevisionKernelSpec
         )
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "legacy", _collection_id)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "legacy", _collection_id, entropy = "legacy")
         val seeded = fixture.datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(
@@ -475,7 +476,7 @@ final class EntityRevisionKernelSpec
         )
         val fixture = _fixture()
         given ExecutionContext = fixture.context
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "store_codec", _collection_id)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "store_codec", _collection_id, entropy = "store_codec")
         val seeded = fixture.datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(

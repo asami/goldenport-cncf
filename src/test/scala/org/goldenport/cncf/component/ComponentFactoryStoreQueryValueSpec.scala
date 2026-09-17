@@ -23,7 +23,7 @@ final class ComponentFactoryStoreQueryValueSpec
     "normalize generated scalar and entity identity values before datastore search" in {
       Given("a query record containing generated scalar, entity id, option, and membership conditions")
       val factory = new ComponentFactory()
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "article_1", EntityCollectionId("test", "a", "article"))
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "article_1", EntityCollectionId("test", "a", "article"), entropy = "article_1")
       val source = Record.create(Vector[(String, Any)](
         "status" -> Condition.Is(_TestStatus("draft")),
         "statuses" -> Condition.In(Set(_TestStatus("draft"), _TestStatus("published"))),

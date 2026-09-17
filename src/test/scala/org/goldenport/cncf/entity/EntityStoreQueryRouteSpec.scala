@@ -57,7 +57,7 @@ final class EntityStoreQueryRouteSpec
   "EntityPersistent store record contract" must _in_phase52_spec {
     "delegate default store APIs to RecordCodex compatibility methods" in {
       Given("an old-style EntityPersistent implementation with only toRecord/fromRecord")
-      val id         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "old_style", _cid)
+      val id         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "old_style", _cid, entropy = "old_style")
       val entity     = PersonEntity(id, "taro", 20)
       val persistent = _person_persistent
 
@@ -72,7 +72,7 @@ final class EntityStoreQueryRouteSpec
 
     "produce view records through the explicit view boundary API" in {
       Given("an entity whose DB record differs from its view record")
-      val id         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "view_1", EntityCollectionId("test", "a", "store_decode"))
+      val id         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "view_1", EntityCollectionId("test", "a", "store_decode"), entropy = "view_1")
       val entity     = StoreDecodeEntity(id, "view-name")
       val persistent = _store_decode_persistent
 
@@ -94,7 +94,7 @@ final class EntityStoreQueryRouteSpec
           )
           val exactcollection =
             EntityCollectionId("textus", "artscene", "facility")
-          val original = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", exactcollection)
+          val original = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", exactcollection, entropy = "global")
           val space    = new EntityStoreSpace()
 
           When("the canonical value is parsed and converted to datastore addresses")
@@ -135,9 +135,9 @@ final class EntityStoreQueryRouteSpec
         }
       }
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a", _cid), "jiro", 20)
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b", _cid), "hanako", 30)
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "c", _cid), "taro", 40)
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a", _cid, entropy = "a"), "jiro", 20)
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b", _cid, entropy = "b"), "hanako", 30)
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "c", _cid, entropy = "c"), "taro", 40)
 
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
@@ -196,8 +196,8 @@ final class EntityStoreQueryRouteSpec
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PostedEntity] = _posted_persistent
 
-      val p1 = PostedEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", collectionid), "older", "2026-04-23T10:00:00Z")
-      val p2 = PostedEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p2", collectionid), "newer", "2026-04-24T10:00:00Z")
+      val p1 = PostedEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", collectionid, entropy = "p1"), "older", "2026-04-23T10:00:00Z")
+      val p2 = PostedEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p2", collectionid, entropy = "p2"), "newer", "2026-04-24T10:00:00Z")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -271,7 +271,7 @@ final class EntityStoreQueryRouteSpec
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistentCreate[StoreCreateCandidate] = _store_create_candidate_persistent
       val foreigncollection = EntityCollectionId("test", "foreign", "store_create_candidate")
-      val foreignid         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "mismatch", foreigncollection)
+      val foreignid         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "mismatch", foreigncollection, entropy = "mismatch")
 
       When("the create route is asked to persist the foreign exact EntityId")
       val created = entitystorespace.create(
@@ -293,8 +293,8 @@ final class EntityStoreQueryRouteSpec
       Given("two explicit EntityIds with the same local fields and different complete collections")
       val firstcollection  = EntityCollectionId("test", "first", "facility")
       val secondcollection = EntityCollectionId("test", "second", "facility")
-      val firstid          = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "same_local", firstcollection)
-      val secondid         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "same_local", secondcollection)
+      val firstid          = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "same_local", firstcollection, entropy = "same_local")
+      val secondid         = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "same_local", secondcollection, entropy = "same_local")
       val datastorespace   = DataStoreSpace.default()
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
@@ -347,7 +347,7 @@ final class EntityStoreQueryRouteSpec
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[StoreDecodeEntity] = _store_decode_persistent
 
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "decode_1", collectionid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "decode_1", collectionid, entropy = "decode_1")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -396,7 +396,7 @@ final class EntityStoreQueryRouteSpec
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[OwnedValueEntity] = _owned_value_persistent
 
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "owned_value_1", collectionid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "owned_value_1", collectionid, entropy = "owned_value_1")
       val entity = OwnedValueEntity(
         id = id,
         name = "owned-value",
@@ -467,9 +467,9 @@ final class EntityStoreQueryRouteSpec
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g1", _cid), "taro", 20)
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g2", _cid), "hanako", 30)
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g3", _cid), "jiro", 40)
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g1", _cid, entropy = "g1"), "taro", 20)
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g2", _cid, entropy = "g2"), "hanako", 30)
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "g3", _cid, entropy = "g3"), "jiro", 40)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -520,9 +520,9 @@ final class EntityStoreQueryRouteSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m1", _cid), "taro", 20)
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m2", _cid), "hanako", 30)
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m3", _cid), "jiro", 40)
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m1", _cid, entropy = "m1"), "taro", 20)
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m2", _cid, entropy = "m2"), "hanako", 30)
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "m3", _cid, entropy = "m3"), "jiro", 40)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -576,10 +576,10 @@ final class EntityStoreQueryRouteSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a1", _cid), "taro", 20)
-      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a2", _cid), "hanako", 30)
-      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a3", _cid), "jiro", 40)
-      val p4 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a4", _cid), "saburo", 50)
+      val p1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a1", _cid, entropy = "a1"), "taro", 20)
+      val p2 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a2", _cid, entropy = "a2"), "hanako", 30)
+      val p3 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a3", _cid, entropy = "a3"), "jiro", 40)
+      val p4 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a4", _cid, entropy = "a4"), "saburo", 50)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -637,7 +637,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[PersonEntity]      = _person_persistent
       given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
 
-      val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ka", _cid)
+      val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ka", _cid, entropy = "ka")
       val entity = PersonEntity(id, "taro", 20)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
@@ -680,7 +680,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[PersonEntity]      = _person_persistent
       given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
 
-      val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "set_null", _cid)
+      val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "set_null", _cid, entropy = "set_null")
       val entity = PersonEntity(id, "taro", 20)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
@@ -730,7 +730,7 @@ final class EntityStoreQueryRouteSpec
         given ExecutionContext = _execution_context(datastorespace, entitystorespace)
         given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sqlite_set_null", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sqlite_set_null", _cid, entropy = "sqlite_set_null")
         val entity = PersonEntity(id, "taro", 20)
         val created = entitystorespace.create(
           UnitOfWorkOp.EntityStoreCreate(
@@ -782,7 +782,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistentUpdate[StorePatchCandidate] = _store_patch_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "store_patch_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sp1", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sp1", collectionid, entropy = "sp1")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -894,7 +894,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[SaveCandidate] = _save_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "save_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ma", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ma", collectionid, entropy = "ma")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -965,7 +965,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[SaveCandidate] = _save_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "save_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "deleted_save", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "deleted_save", collectionid, entropy = "deleted_save")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -1013,7 +1013,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[SaveCandidate] = _save_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "save_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "overflow_save", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "overflow_save", collectionid, entropy = "overflow_save")
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         Record.dataAuto(
@@ -1119,7 +1119,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "update_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "na", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "na", collectionid, entropy = "na")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -1189,7 +1189,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "update_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "deleted_update", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "deleted_update", collectionid, entropy = "deleted_update")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -1236,7 +1236,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "update_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "overflow_update", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "overflow_update", collectionid, entropy = "overflow_update")
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         Record.dataAuto(
@@ -1301,7 +1301,7 @@ final class EntityStoreQueryRouteSpec
         "a",
         "create_candidate"
       )
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "overflow_upsert", collectionid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "overflow_upsert", collectionid, entropy = "overflow_upsert")
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         Record.dataAuto(
@@ -1371,7 +1371,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[AuditSpoofUpdateCandidate] = _audit_spoof_update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "audit_spoof_update_candidate")
-      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "qa", collectionid)
+      val id           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "qa", collectionid, entropy = "qa")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -1428,7 +1428,7 @@ final class EntityStoreQueryRouteSpec
       val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "oa", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "oa", _cid, entropy = "oa")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -1479,7 +1479,7 @@ final class EntityStoreQueryRouteSpec
       val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ob", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ob", _cid, entropy = "ob")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -1517,7 +1517,7 @@ final class EntityStoreQueryRouteSpec
       val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "oc", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "oc", _cid, entropy = "oc")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(

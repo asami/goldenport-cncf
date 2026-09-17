@@ -308,9 +308,7 @@ final class EntityVersionedMutationSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       "versioned",
-      _collection_id,
-      entropy = Some(entropy)
-    )
+      _collection_id,entropy = entropy)
 
   private def _entity_record(
     entity: TestEntity

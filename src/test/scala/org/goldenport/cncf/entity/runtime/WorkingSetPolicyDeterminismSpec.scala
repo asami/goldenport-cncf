@@ -45,7 +45,7 @@ final class WorkingSetPolicyDeterminismSpec
           }
         )
         val collection = _collection(policy)
-        val entity = PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "one", PolicyCollectionId.value), "value")
+        val entity = PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "one", PolicyCollectionId.value, entropy = "one"), "value")
 
         collection.putScoped(entity)(using summon[ExecutionContext])
         collection.storage.workingSetStatus.markReady(evaluatedat)
@@ -68,7 +68,7 @@ final class WorkingSetPolicyDeterminismSpec
       Given("an Entity collection whose recent policy requires an evaluation instant")
       given EntityPersistent[PolicyEntity] = PolicyEntityPersistent
       val collection = _collection(WorkingSetPolicy.Recent(Duration.ofHours(1), "updatedAt"))
-      val entity = PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "context_free", PolicyCollectionId.value), "value")
+      val entity = PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "context_free", PolicyCollectionId.value, entropy = "context_free"), "value")
 
       When("context-free compatibility put attempts to admit the Entity")
       val failure = the[IllegalStateException] thrownBy collection.put(entity)
@@ -116,7 +116,7 @@ final class WorkingSetPolicyDeterminismSpec
         }
       )
       val collection = _collection(policy)
-      val entity = PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "resolution", PolicyCollectionId.value), "value")
+      val entity = PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "resolution", PolicyCollectionId.value, entropy = "resolution"), "value")
       collection.storage.storeRealm.put(entity)
 
       When("context-free resolution loads the Entity before scoped resolution")
@@ -171,7 +171,7 @@ private object PolicyEntityPersistent extends EntityPersistent[PolicyEntity] {
     record.getString("value") match {
       case Some(value) =>
         Consequence.success(
-          PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "record", PolicyCollectionId.value), value)
+          PolicyEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "record", PolicyCollectionId.value, entropy = "record"), value)
         )
       case None =>
         Consequence.argumentMissing("value")

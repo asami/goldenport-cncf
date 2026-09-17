@@ -241,8 +241,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
   private def _component_with_runtime_plan(): Component = {
     val component = new Component() with EntityRuntimePlanProvider {
       private val _cid = EntityCollectionId("sys", "sys", "person")
-      private val _first = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "taro")
-      private val _second = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "jiro")
+      private val _first = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid, "taro"), "taro")
+      private val _second = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid, "jiro"), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(
@@ -342,8 +342,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
   private def _component_factory_bundle(): Component.SinglePrimaryBundleFactory =
     new Component.SinglePrimaryBundleFactory with EntityRuntimePlanProvider {
       private val _cid = EntityCollectionId("sys", "sys", "person")
-      private val _first = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "taro")
-      private val _second = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "jiro")
+      private val _first = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid, "taro"), "taro")
+      private val _second = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid, "jiro"), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(

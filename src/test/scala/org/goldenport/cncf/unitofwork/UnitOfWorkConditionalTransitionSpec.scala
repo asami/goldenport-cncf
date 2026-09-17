@@ -92,9 +92,9 @@ final class UnitOfWorkConditionalTransitionSpec
         val fixture = _fixture()
         given ExecutionContext = fixture.context
         val rootid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_create_root", _rootcollection)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_create_root", _rootcollection, entropy = "conditional_create_root")
         val successorid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_create_successor", _successorcollection)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_create_successor", _successorcollection, entropy = "conditional_create_successor")
         _seed_root(fixture, Root(rootid, "open", None))
         val request =
           _request(
@@ -150,12 +150,13 @@ final class UnitOfWorkConditionalTransitionSpec
         val fixture = _fixture()
         given ExecutionContext = fixture.context
         val rootid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_identity_root", _rootcollection)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_identity_root", _rootcollection, entropy = "conditional_identity_root")
         val successorid =
           org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
             "test",
             "conditional_identity_successor",
-            _successorcollection
+            _successorcollection,
+            entropy = "conditional_identity_successor"
           )
         _seed_root(fixture, Root(rootid, "open", None))
         val create = new CountingSuccessorCreate
@@ -196,7 +197,7 @@ final class UnitOfWorkConditionalTransitionSpec
         val fixture = _fixture(datastore = datastore)
         given ExecutionContext = fixture.context
         val rootid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_generated_id_root", _rootcollection)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_generated_id_root", _rootcollection, entropy = "conditional_generated_id_root")
         _seed_root(fixture, Root(rootid, "open", None))
         val create = new CountingSuccessorDraftCreate
         val successor =
@@ -250,9 +251,9 @@ final class UnitOfWorkConditionalTransitionSpec
         val fixture = _fixture()
         given ExecutionContext = fixture.context
         val rootid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_bind_root", _rootcollection)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_bind_root", _rootcollection, entropy = "conditional_bind_root")
         val successorid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_bind_successor", _successorcollection)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_bind_successor", _successorcollection, entropy = "conditional_bind_successor")
         _seed_root(fixture, Root(rootid, "open", None))
         _seed_successor(fixture, Successor(successorid, "existing"))
         val request =
@@ -307,12 +308,13 @@ final class UnitOfWorkConditionalTransitionSpec
         val fixture = _fixture()
         given ExecutionContext = fixture.context
         val rootid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_mismatch_root", _rootcollection)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_mismatch_root", _rootcollection, entropy = "conditional_mismatch_root")
         val successorid =
           org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
             "test",
             "conditional_mismatch_successor",
-            _successorcollection
+            _successorcollection,
+            entropy = "conditional_mismatch_successor"
           )
         _seed_root(fixture, Root(rootid, "closed", None))
         val request =
@@ -362,9 +364,9 @@ final class UnitOfWorkConditionalTransitionSpec
           val fixture = _fixture()
           given ExecutionContext = fixture.context
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_empty_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_empty_root", _rootcollection, entropy = "conditional_empty_root")
           val successorid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_empty_successor", _successorcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_empty_successor", _successorcollection, entropy = "conditional_empty_successor")
           _seed_root(fixture, Root(rootid, "open", None))
           val request =
             _raw_request(
@@ -392,9 +394,9 @@ final class UnitOfWorkConditionalTransitionSpec
           val fixture = _fixture()
           given ExecutionContext = fixture.context
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_noop_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_noop_root", _rootcollection, entropy = "conditional_noop_root")
           val successorid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_noop_successor", _successorcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_noop_successor", _successorcollection, entropy = "conditional_noop_successor")
           _seed_root(fixture, Root(rootid, "open", None))
           val request =
             _request(
@@ -423,9 +425,9 @@ final class UnitOfWorkConditionalTransitionSpec
           val fixture = _fixture()
           given ExecutionContext = fixture.context
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_managed_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_managed_root", _rootcollection, entropy = "conditional_managed_root")
           val successorid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_managed_successor", _successorcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_managed_successor", _successorcollection, entropy = "conditional_managed_successor")
           _seed_root(fixture, Root(rootid, "open", None))
           val request =
             _raw_request(
@@ -457,9 +459,9 @@ final class UnitOfWorkConditionalTransitionSpec
           val fixture = _fixture()
           given ExecutionContext = fixture.context
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_deleted_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_deleted_root", _rootcollection, entropy = "conditional_deleted_root")
           val successorid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_deleted_successor", _successorcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_deleted_successor", _successorcollection, entropy = "conditional_deleted_successor")
           _seed_root(
             fixture,
             Root(rootid, "open", None),
@@ -498,9 +500,9 @@ final class UnitOfWorkConditionalTransitionSpec
           val fixture = _fixture(datastore = datastore)
           given ExecutionContext = fixture.context
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_delta_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_delta_root", _rootcollection, entropy = "conditional_delta_root")
           val successorid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_delta_successor", _successorcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_delta_successor", _successorcollection, entropy = "conditional_delta_successor")
           _seed_root(
             fixture,
             Root(rootid, "open", None),
@@ -544,9 +546,9 @@ final class UnitOfWorkConditionalTransitionSpec
           val fixture = _fixture(hook)
           given ExecutionContext = fixture.context
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_hook_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_hook_root", _rootcollection, entropy = "conditional_hook_root")
           val successorid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_hook_successor", _successorcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_hook_successor", _successorcollection, entropy = "conditional_hook_successor")
           _seed_root(fixture, Root(rootid, "open", None))
           val request =
             _request(
@@ -575,12 +577,13 @@ final class UnitOfWorkConditionalTransitionSpec
         "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R15; one relation-authorized root and owner-readable bound successor"
       )
       val rootid =
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_relation_root", _rootcollection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_relation_root", _rootcollection, entropy = "conditional_relation_root")
       val successorid =
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "test",
           "conditional_relation_successor",
-          _successorcollection
+          _successorcollection,
+          entropy = "conditional_relation_successor"
         )
       val fixture = _fixture(principalid = Some("transition-owner"))
       given ExecutionContext = fixture.context
@@ -655,12 +658,12 @@ final class UnitOfWorkConditionalTransitionSpec
             "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R16; Example: E13; a hook that advances the bound successor revision after authorization"
           )
           val successorid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_racing_successor", _successorcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_racing_successor", _successorcollection, entropy = "conditional_racing_successor")
           val hook = new AdvancingSuccessorHook(successorid)
           val fixture = _fixture(hook)
           given ExecutionContext = fixture.context
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_racing_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_racing_root", _rootcollection, entropy = "conditional_racing_root")
           _seed_root(fixture, Root(rootid, "open", None))
           _seed_successor(fixture, Successor(successorid, "existing"))
           val request =
@@ -699,12 +702,13 @@ final class UnitOfWorkConditionalTransitionSpec
             "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R15; Example: E14; an owner-readable root and a hook that revokes ownership while advancing its revision"
           )
           val rootid =
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_reauthorization_root", _rootcollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "conditional_reauthorization_root", _rootcollection, entropy = "conditional_reauthorization_root")
           val successorid =
             org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
               "test",
               "conditional_reauthorization_successor",
-              _successorcollection
+              _successorcollection,
+              entropy = "conditional_reauthorization_successor"
             )
           val hook = new RevokingRootHook(rootid)
           val fixture =

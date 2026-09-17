@@ -42,7 +42,7 @@ final class DataStoreConditionalTransitionSpec
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R6,R7,R12; exact scalar values and rejected general values"
         )
         val entityid =
-          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "entity_1", _root_collection_id)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "entity_1", _root_collection_id, entropy = "entity_1")
         val accepted = Vector(
           "open",
           true,

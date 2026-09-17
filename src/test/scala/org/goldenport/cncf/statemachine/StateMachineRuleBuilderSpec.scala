@@ -76,7 +76,7 @@ final class StateMachineRuleBuilderSpec
         ))
       )
 
-      val entity = _Entity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b1", _cid), "taro")
+      val entity = _Entity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b1", _cid, entropy = "b1"), "taro")
       val event = TransitionEvent("update", Some(entity.id))
       When("the provider selects and executes the update plan")
       val selected = provider.planForUpdate(entity, _entityPersistent, event)

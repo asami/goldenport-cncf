@@ -450,7 +450,7 @@ final class BlobStoreSpec
     EntityCollectionId("cncf", "builtin", "blob")
 
   private def _id(value: String): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", _label(value), _collection_id)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", _label(value), _collection_id, entropy = _label(value))
 
   private def _label(value: String): String =
     value.trim.toLowerCase(java.util.Locale.ROOT).map {

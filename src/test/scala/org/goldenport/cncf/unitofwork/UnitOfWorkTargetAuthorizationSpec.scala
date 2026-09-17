@@ -118,7 +118,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           principalid = "preflight-owner"
         )
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "preflight_authorize", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "preflight_authorize", _cid, entropy = "preflight_authorize")
         _seed(PersonEntity(id, "preflight", "preflight-owner"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -149,7 +149,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           principalid = "preflight-non-owner"
         )
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "preflight_authorize_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "preflight_authorize_denied", _cid, entropy = "preflight_authorize_denied")
         _seed(PersonEntity(id, "preflight-denied", "preflight-owner"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -198,7 +198,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           principalid = "aggregate-non-owner"
         )
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "aggregate_update_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "aggregate_update_denied", _cid, entropy = "aggregate_update_denied")
         val record =
           PersonEntity(id, "notice", "notice-owner", groupid = Some("notice-team")).toRecord()
 
@@ -226,7 +226,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           principalattributes = Map("access_token" -> "reviewer-token")
         )
 
-        val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "aggregate_review", _cid)
+        val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "aggregate_review", _cid, entropy = "aggregate_review")
         val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
 
         When("the principal requests the command")
@@ -249,7 +249,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           principalattributes = Map("anonymous" -> "true")
         )
 
-        val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "aggregate_anonymous_review", _cid)
+        val id     = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "aggregate_anonymous_review", _cid, entropy = "aggregate_anonymous_review")
         val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
 
         When("the anonymous principal requests the command")
@@ -328,7 +328,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "load_group", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "load_group", _cid, entropy = "load_group")
         _seed(PersonEntity(id, "taro", "owner-x", groupid = Some("team-a")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -364,7 +364,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_group", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_group", _cid, entropy = "save_group")
         _seed(PersonEntity(id, "taro", "owner-x", groupid = Some("team-a")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -403,7 +403,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security", _cid, entropy = "save_typed_security")
         val _ = summon[ExecutionContext].dataStoreSpace.inject(
           DataStore.CollectionId.EntityStore(_cid),
           EntityRevisionFixture.persistedRecord(
@@ -445,7 +445,7 @@ final class UnitOfWorkTargetAuthorizationSpec
       "build authorization record with typed security overriding stale target and legacy security" in {
         Given("typed security metadata together with stale target and legacy security fields")
         given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security_overlay", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security_overlay", _cid, entropy = "save_typed_security_overlay")
         val entity =
           TypedSecurityTargetEntity(id, "typed-overlay", "typed-owner", stalesecurity = true)
 
@@ -470,7 +470,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
 
-        val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security_stale_owner_denied", _cid)
+        val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security_stale_owner_denied", _cid, entropy = "save_typed_security_stale_owner_denied")
         val uow = new UnitOfWork(summon[ExecutionContext])
 
         When("the stale owner attempts to save the typed Entity")
@@ -511,7 +511,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
 
-        val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security_denied", _cid)
+        val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "save_typed_security_denied", _cid, entropy = "save_typed_security_denied")
         val uow = new UnitOfWork(summon[ExecutionContext])
 
         When("the non-owner attempts to save the Entity")
@@ -547,7 +547,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_denied", _cid, entropy = "update_denied")
         _seed(PersonEntity(id, "shiro", "owner-x"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -586,7 +586,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         given EntityPersistent[PersonEntity]      = _person_persistent
         given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_priv", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_priv", _cid, entropy = "update_priv")
         _seed(PersonEntity(id, "hanako", "owner-x", privilegeid = Some("vip-access")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -622,7 +622,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         given ExecutionContext = _execution_context(
           principalid = "other-user"
         )
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "delete_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "delete_denied", _cid, entropy = "delete_denied")
         _seed(PersonEntity(id, "jiro", "owner-x"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -659,7 +659,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_service_internal", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_service_internal", _cid, entropy = "update_service_internal")
         _seed(PersonEntity(id, "order-1", "sales-org"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -697,7 +697,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_system", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_system", _cid, entropy = "update_system")
         _seed(PersonEntity(id, "projection-1", "business-owner"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -739,7 +739,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
           given EntityPersistent[PersonEntity] = _person_persistent
 
-          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_service_internal_audit", _cid)
+          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_service_internal_audit", _cid, entropy = "update_service_internal_audit")
           _seed(PersonEntity(id, "order-1", "sales-org"))
           val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -784,7 +784,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
           given EntityPersistent[PersonEntity] = _person_persistent
 
-          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_system_audit", _cid)
+          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_system_audit", _cid, entropy = "update_system_audit")
           _seed(PersonEntity(id, "projection-1", "business-owner"))
           val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -824,7 +824,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_same_component_internal", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_same_component_internal", _cid, entropy = "update_same_component_internal")
         _seed(PersonEntity(id, "order-1", "sales-org"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -868,7 +868,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
           given EntityPersistent[PersonEntity] = _person_persistent
 
-          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_cross_component_internal_denied", _cid)
+          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_cross_component_internal_denied", _cid, entropy = "update_cross_component_internal_denied")
           _seed(PersonEntity(id, "stock-1", "inventory-org"))
           val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -912,7 +912,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_cross_component_internal_allowed", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_cross_component_internal_allowed", _cid, entropy = "update_cross_component_internal_allowed")
         _seed(PersonEntity(id, "stock-1", "inventory-org"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -959,7 +959,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
           given EntityPersistent[PersonEntity] = _person_persistent
 
-          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_relation", _cid)
+          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_relation", _cid, entropy = "read_relation")
           _seed(PersonEntity(id, "order-3", "sales-org", customerid = Some("customer-123")))
           val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -999,7 +999,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_relation_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_relation_denied", _cid, entropy = "update_relation_denied")
         _seed(PersonEntity(id, "order-4", "sales-org", customerid = Some("customer-123")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -1047,7 +1047,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_relation_allowed", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "update_relation_allowed", _cid, entropy = "update_relation_allowed")
         _seed(PersonEntity(id, "order-5", "sales-org", customerid = Some("customer-123")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -1094,7 +1094,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_tenant_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_tenant_denied", _cid, entropy = "read_abac_tenant_denied")
         _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantid = Some("tenant-b")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -1134,7 +1134,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_tenant_allowed", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_tenant_allowed", _cid, entropy = "read_abac_tenant_allowed")
         _seed(PersonEntity(
           id,
           "tenant-record",
@@ -1184,7 +1184,7 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
           given EntityPersistent[PersonEntity] = _person_persistent
 
-          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_diagnostics", _cid)
+          val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_diagnostics", _cid, entropy = "read_abac_diagnostics")
           _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantid = Some("tenant-a")))
           val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -1226,7 +1226,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_publication_allowed", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_publication_allowed", _cid, entropy = "read_abac_publication_allowed")
         _seed(PersonEntity(
           id,
           "published-record",
@@ -1269,7 +1269,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_publication_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_publication_denied", _cid, entropy = "read_abac_publication_denied")
         _seed(PersonEntity(id, "future-record", "reader", publishat = Some("2999-01-01T00:00:00Z")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -1311,7 +1311,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_operation_application_allowed", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_operation_application_allowed", _cid, entropy = "read_abac_operation_application_allowed")
         _seed(PersonEntity(id, "operation-application-record", "reader"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
@@ -1352,7 +1352,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_visibility_allowed", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_visibility_allowed", _cid, entropy = "read_abac_visibility_allowed")
         _seed(PersonEntity(
           id,
           "public-record",
@@ -1399,7 +1399,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_visibility_denied", _cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "read_abac_visibility_denied", _cid, entropy = "read_abac_visibility_denied")
         _seed(PersonEntity(
           id,
           "private-record",

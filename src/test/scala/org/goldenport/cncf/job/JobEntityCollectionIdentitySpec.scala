@@ -22,7 +22,7 @@ final class JobEntityCollectionIdentitySpec
   "Job persistence codecs" should {
     "reject foreign canonical ids rather than rebinding job and job-definition records" in {
       Given("records whose ids belong to the foreign Blob collection")
-      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_job", EntityCollectionId("cncf", "builtin", "blob"))
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_job", EntityCollectionId("cncf", "builtin", "blob"), entropy = "foreign_job")
       val job = Record.dataAuto("id" -> foreign.value)
       val definition = Record.dataAuto(
         "id" -> foreign.value,

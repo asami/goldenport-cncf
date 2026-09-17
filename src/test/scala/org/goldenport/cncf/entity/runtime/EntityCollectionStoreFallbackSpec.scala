@@ -26,7 +26,7 @@ final class EntityCollectionStoreFallbackSpec
   "EntityCollection.resolve" should {
     "load from store realm on memory miss and cache it into memory realm" in {
       Given("an entity collection with empty memory and store loader containing the entity")
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a")
       val entity = TestEntity(id, "name-1")
 
       given EntityPersistent[TestEntity] = new EntityPersistent[TestEntity] {

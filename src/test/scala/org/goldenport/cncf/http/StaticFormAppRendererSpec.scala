@@ -1851,10 +1851,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
-        foreigncollection,
-        timestamp = storedid.timestamp,
-        entropy = storedid.entropy
-      ).value
+        foreigncollection,entropy = storedid.entropy.getOrElse(fail("stored notice entropy is missing"))).value
 
       When("detail and edit pages are rendered for the foreign owner")
       val detail = _renderer.renderComponentAdminEntityDetail(subsystem, "notice_board", "notice", foreignid)
@@ -2263,16 +2260,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
-      val canonicalid = _new_notice_entity_id().value
+      val canonicalid = _new_notice_entity_id(entropy = "canonical_route_id").value
       val storedid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
       val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
-        foreigncollection,
-        timestamp = Some(java.time.Instant.EPOCH),
-        entropy = Some(storedid.parts.entropy)
-      ).value
+        foreigncollection,entropy = storedid.parts.entropy).value
 
       When("an unresolved scalar route is submitted")
       val scalarresponse = server
@@ -2601,7 +2595,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val before = collection.storage.storeRealm.values.size
-      val id = _new_notice_entity_id()
+      val id = _new_notice_entity_id(entropy = "create_entity")
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
         s"fields=id%3D${java.net.URLEncoder.encode(id.value, StandardCharsets.UTF_8)}%0Atitle%3Dnew+notice%0Aauthor%3Dbob"
@@ -2854,7 +2848,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val filename = s"web-admin-${java.util.UUID.randomUUID().toString.replace("-", "")}.png"
-      val id = _new_notice_entity_id()
+      val id = _new_notice_entity_id(entropy = "multipart_image_create")
       val req = _post_multipart_request(
         "/form/notice-board/admin/entities/notice/create",
         Vector(
@@ -2899,9 +2893,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val missingblobid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         BlobRepository.CollectionId.major,
         BlobRepository.CollectionId.minor,
-        BlobRepository.CollectionId,
-        entropy = Some(missingtoken)
-      ).value
+        BlobRepository.CollectionId,entropy = missingtoken).value
 
       When("compensate admin entity create when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
@@ -2936,9 +2928,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val missingblobid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         BlobRepository.CollectionId.major,
         BlobRepository.CollectionId.minor,
-        BlobRepository.CollectionId,
-        entropy = Some(missingtoken)
-      ).value
+        BlobRepository.CollectionId,entropy = missingtoken).value
 
       When("keep admin entity update when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
@@ -3207,7 +3197,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
-      val id = _new_notice_entity_id()
+      val id = _new_notice_entity_id(entropy = "derived_alias_create")
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
         s"id=${java.net.URLEncoder.encode(id.value, StandardCharsets.UTF_8)}&senderName=alice&recipientName=bob&subject=Phase+12&body=Alias+body"
@@ -3242,7 +3232,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = HttpRuntimeBindingAdmissionFixture.server(engine, operationDispatcherOption = Some(dispatcher))
-      val id = _new_notice_entity_id()
+      val id = _new_notice_entity_id(entropy = "static_result_guard")
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
         s"fields=id%3D${java.net.URLEncoder.encode(id.value, StandardCharsets.UTF_8)}%0Atitle%3Dstatic+guard%0Aauthor%3Dbob"
@@ -5923,10 +5913,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
-        foreigncollection,
-        timestamp = Some(java.time.Instant.EPOCH),
-        entropy = Some("notice_1")
-      ).value
+        foreigncollection,entropy = "notice_1").value
       val viewsubsystem = _view_fixture_subsystem()
       val aggregatesubsystem = _aggregate_fixture_subsystem()
 
@@ -5959,10 +5946,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
-        foreigncollection,
-        timestamp = Some(java.time.Instant.EPOCH),
-        entropy = Some("notice_1")
-      ).value
+        foreigncollection,entropy = "notice_1").value
       val viewengine = new HttpExecutionEngine(_view_fixture_subsystem())
       val aggregateengine = new HttpExecutionEngine(_aggregate_fixture_subsystem())
 
@@ -15055,12 +15039,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     component.withComponentDescriptors(Vector(descriptor))
     val notices = Vector(
       NoticeEntity(
-        _new_notice_entity_id(),
+        _new_notice_entity_id(entropy = "board_update"),
         "board update",
         "alice"
       ),
       NoticeEntity(
-        _new_notice_entity_id(),
+        _new_notice_entity_id(entropy = "board_followup"),
         "board followup",
         "bob"
       )
@@ -15398,16 +15382,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     value match {
       case Some(id: EntityId) => id
       case Some(text: String) =>
-        EntityId.parse(text).toOption.getOrElse(_new_notice_entity_id())
+        EntityId.parse(text).toOption.getOrElse(_new_notice_entity_id(entropy = "notice_entity_id_fallback"))
       case Some(other) =>
-        EntityId.parse(other.toString).toOption.getOrElse(_new_notice_entity_id())
+        EntityId.parse(other.toString).toOption.getOrElse(_new_notice_entity_id(entropy = "notice_entity_id_fallback"))
       case None =>
-        _new_notice_entity_id()
+        _new_notice_entity_id(entropy = "notice_entity_id_fallback")
     }
 
-  private def _new_notice_entity_id(): EntityId = {
+  private def _new_notice_entity_id(entropy: String): EntityId = {
     val collection = NoticeEntity.collectionid
-    val generated = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(collection.major, collection.minor, collection)
+    val generated = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(collection.major, collection.minor, collection, entropy = entropy)
     EntityId.parse(generated.value).getOrElse(fail("notice entity id generation failed"))
   }
 
@@ -15416,10 +15400,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     val generated = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       collection.major,
       collection.minor,
-      collection,
-      timestamp = Some(java.time.Instant.EPOCH),
-      entropy = Some(shortid)
-    )
+      collection,entropy = shortid)
     EntityId.parse(generated.value).getOrElse(fail("notice entity id generation failed"))
   }
 
@@ -15500,7 +15481,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   ): String = {
     val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("Blob component is missing"))
     given ExecutionContext = component.logic.executionContext()
-    val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId)
+    val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId, entropy = BlobRepository.CollectionId.minor)
     val created = _success(BlobRepository.entityStore().create(
       BlobCreate(
         id = id,

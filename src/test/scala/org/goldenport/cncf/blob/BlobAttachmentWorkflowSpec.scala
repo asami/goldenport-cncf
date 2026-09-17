@@ -285,24 +285,21 @@ final class BlobAttachmentWorkflowSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       BlobRepository.CollectionId.major,
       BlobRepository.CollectionId.minor,
-      BlobRepository.CollectionId,
-      entropy = Some(value)
-    )
+      BlobRepository.CollectionId,entropy = value)
 
   private def _new_blob_entity_id(): EntityId =
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       BlobRepository.CollectionId.major,
       BlobRepository.CollectionId.minor,
-      BlobRepository.CollectionId
+      BlobRepository.CollectionId,
+      entropy = BlobRepository.CollectionId.minor
     )
 
   private def _article_entity_id(value: String): EntityId =
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "sample",
-      EntityCollectionId("cncf", "sample", "article"),
-      entropy = Some(value)
-    )
+      EntityCollectionId("cncf", "sample", "article"),entropy = value)
 
   private def _success[A](result: Consequence[A]): A =
     result match {

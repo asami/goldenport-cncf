@@ -80,7 +80,7 @@ final class MediaModelSpec
 
     "reject foreign canonical ids in Blob and Media records rather than rebinding them" in {
       Given("records whose ids name collections other than their selected built-in repository")
-      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_media", EntityCollectionId("cncf", "builtin", "tag"))
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_media", EntityCollectionId("cncf", "builtin", "tag"), entropy = "foreign_media")
       val blob = Record.dataAuto(
         "id" -> foreign.value,
         "kind" -> BlobKind.Binary.print,
@@ -110,9 +110,7 @@ final class MediaModelSpec
       val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         MediaEntityCollections.Image.major,
         MediaEntityCollections.Image.minor,
-        MediaEntityCollections.Image,
-        entropy = Some("malformed_poster")
-      )
+        MediaEntityCollections.Image,entropy = "malformed_poster")
       val record = Record.dataAuto(
         "id" -> id.value,
         "kind" -> MediaKind.Image.print,
@@ -149,7 +147,7 @@ final class MediaModelSpec
   }
 
   private def _blob_id(value: String): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "builtin", EntityCollectionId("cncf", "builtin", "blob"), entropy = Some(value))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "builtin", EntityCollectionId("cncf", "builtin", "blob"),entropy = value)
 
   private def _success[A](result: Consequence[A]): A =
     result match {

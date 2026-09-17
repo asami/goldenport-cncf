@@ -28,7 +28,7 @@ final class ActionCallViewResolveSpec
       Given("a component with default and named view browser")
       val component = _component_with_views()
       val pair = ActionCallSupport.componentPair(component)
-      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u1", EntityCollectionId("test", "a", "user"))
+      val targetid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "u1", EntityCollectionId("test", "a", "user"), entropy = "u1")
 
       When("executing default load")
       val defaultcall = action_call("load-default-view", pair) { core =>

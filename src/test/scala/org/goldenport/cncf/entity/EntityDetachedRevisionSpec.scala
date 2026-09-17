@@ -543,11 +543,10 @@ final class EntityDetachedRevisionSpec
           _persistent.fromRecord(record).map(entity =>
             entity.copy(
               id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
-                entity.id.major,
-                entity.id.minor,
-                foreigncollection,
-                entity.id.timestamp,
-                entity.id.entropy
+        entity.id.major,
+        entity.id.minor,
+        foreigncollection,
+        entity.id.entropy.getOrElse(fail("Detached entity fixture entropy is missing"))
               )
             )
           )
@@ -584,11 +583,10 @@ final class EntityDetachedRevisionSpec
       val foreignentity =
         DetachedEntity(
           org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
-            requestedid.major,
-            requestedid.minor,
-            foreigncollection,
-            requestedid.timestamp,
-            requestedid.entropy
+        requestedid.major,
+        requestedid.minor,
+        foreigncollection,
+        requestedid.entropy.getOrElse(fail("Foreign detached entity fixture entropy is missing"))
           ),
           "foreign",
           "domain"
@@ -829,9 +827,7 @@ final class EntityDetachedRevisionSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       "detached",
-      _collection_id,
-      entropy = Some(entropy)
-    )
+      _collection_id,entropy = entropy)
 
   private def _required_carrier[A](
     id: EntityId,

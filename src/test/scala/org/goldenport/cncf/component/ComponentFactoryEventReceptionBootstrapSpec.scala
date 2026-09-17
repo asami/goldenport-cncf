@@ -34,7 +34,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
   "ComponentFactory.createEventReception" should {
     "propagate working-set entity names to reception and enforce keep-resident pub-sub" in {
       Given("component with working-set entity marker and empty memory realm")
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid, entropy = "a")
       val entity = BootEntity(id, "suzuki")
       given EntityPersistent[BootEntity] = _persistent
 

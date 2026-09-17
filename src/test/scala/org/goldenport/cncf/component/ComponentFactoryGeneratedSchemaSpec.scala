@@ -93,7 +93,7 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
         .find(_.getName == "_as_entity_persistent")
         .getOrElse(fail("_as_entity_persistent is missing"))
       method.setAccessible(true)
-      val entity = _GeneratedStyleEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "reflective_store", EntityCollectionId("test", "a", "generated_style")), "hello", "2026-04-26T00:00:00Z")
+      val entity = _GeneratedStyleEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "reflective_store", EntityCollectionId("test", "a", "generated_style"), entropy = "reflective_store"), "hello", "2026-04-26T00:00:00Z")
 
       When("ComponentFactory wraps the module as EntityPersistent")
       val persistent = method.invoke(factory, _GeneratedStyleStorePersistentModule, None)
@@ -121,7 +121,7 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
         .getOrElse(fail("_as_entity_persistent is missing"))
       method.setAccessible(true)
       val entity = _GeneratedStyleAccount(
-        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "generated_store_shape", EntityCollectionId("test", "a", "account")),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "generated_store_shape", EntityCollectionId("test", "a", "account"), entropy = "generated_store_shape"),
         "Alice",
         "2026-04-26T01:02:03Z",
         "2026-04-26T04:05:06Z",

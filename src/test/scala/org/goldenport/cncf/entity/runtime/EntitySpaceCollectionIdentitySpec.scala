@@ -91,13 +91,15 @@ final class EntitySpaceCollectionIdentitySpec
             org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
               "runtime",
               "entry_scope",
-              EntityCollectionId("runtime", "entry_scope", "facility")
+              EntityCollectionId("runtime", "entry_scope", "facility"),
+              entropy = "entry_scope"
             )
           val otherentityid =
             org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
               "runtime",
               "entry_scope",
-              EntityCollectionId("runtime", "entry_scope", "exhibition")
+              EntityCollectionId("runtime", "entry_scope", "exhibition"),
+              entropy = "entry_scope"
             )
 
           And("the canonical parser exposes the stored exact owner")
@@ -155,7 +157,8 @@ final class EntitySpaceCollectionIdentitySpec
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "fixture",
           "ambiguous",
-          EntityCollectionId("single", "global", "facility")
+          EntityCollectionId("single", "global", "facility"),
+          entropy = "ambiguous"
         )
       space.canonicalEntityIdC(runtimeid) match {
         case Consequence.Failure(conclusion) =>
@@ -184,7 +187,8 @@ final class EntitySpaceCollectionIdentitySpec
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "fixture",
           "unique",
-          EntityCollectionId("single", "global", "facility")
+          EntityCollectionId("single", "global", "facility"),
+          entropy = "unique"
         )
       val canonical = space.canonicalEntityIdC(runtimeid)
       canonical shouldBe a[Consequence.Failure[?]]
@@ -239,7 +243,8 @@ final class EntitySpaceCollectionIdentitySpec
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "fixture",
           "uow_ambiguous",
-          EntityCollectionId("single", "global", "facility")
+          EntityCollectionId("single", "global", "facility"),
+          entropy = "uow_ambiguous"
         )
 
       When("a direct load reaches UnitOfWork with an unregistered exact collection identity")
@@ -322,7 +327,7 @@ final class EntitySpaceCollectionIdentitySpec
       component.entitySpace.registerEntity(firstid.name, first)
       component.entitySpace.registerEntity(secondid.name, second)
       given ExecutionContext = ExecutionContext.create().withScope(component.scopeContext)
-      val secondentity = FixtureEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "resident", secondid))
+      val secondentity = FixtureEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "resident", secondid, entropy = "resident"))
       second.putScoped(secondentity)
       val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
       val query = EntityQuery[FixtureEntity](
@@ -373,7 +378,7 @@ final class EntitySpaceCollectionIdentitySpec
         )
       given ExecutionContext =
         ExecutionContext.create().withScope(scope)
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "create_none", collectionid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "create_none", collectionid, entropy = "create_none")
 
       When("the collection synchronizes the create result")
       val result =
@@ -411,7 +416,7 @@ final class EntitySpaceCollectionIdentitySpec
         )
       given ExecutionContext =
         ExecutionContext.create().withScope(scope)
-      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "create_rollback", collectionid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "create_rollback", collectionid, entropy = "create_rollback")
 
       When("the persisted canonical Record is decoded under its exact owner")
       val result =

@@ -31,16 +31,16 @@ trait AggregateSpaceSpecHelper {
   }
 
   protected final def sales_order_id(): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m1", "a", EntityCollectionId("c1", "a", "sales_order"))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m1", "a", EntityCollectionId("c1", "a", "sales_order"), entropy = "a")
 
   protected final def user_id(): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m2", "b", EntityCollectionId("c2", "b", "user"))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m2", "b", EntityCollectionId("c2", "b", "user"), entropy = "b")
 
   protected final def product_id(): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m3", "c", EntityCollectionId("c3", "c", "product"))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m3", "c", EntityCollectionId("c3", "c", "product"), entropy = "c")
 
   protected final def missing_id(): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m9", "z", EntityCollectionId("c9", "z", "missing"))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m9", "z", EntityCollectionId("c9", "z", "missing"), entropy = "z")
 
   protected final def expected_sales_order_aggregate(id: EntityId): SalesOrderAggregate = {
     val quantity = id.minor.headOption.map(_.toInt).getOrElse(1) - 'a'.toInt + 1

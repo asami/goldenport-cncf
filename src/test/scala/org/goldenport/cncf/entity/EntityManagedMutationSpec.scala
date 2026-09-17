@@ -782,9 +782,7 @@ final class EntityManagedMutationSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       "managed",
-      _collection_id,
-      entropy = Some(entropy)
-    )
+      _collection_id,entropy = entropy)
 
   private def _entity_id(
     record: Record

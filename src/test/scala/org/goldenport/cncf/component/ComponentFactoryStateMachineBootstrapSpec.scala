@@ -43,7 +43,7 @@ final class ComponentFactoryStateMachineBootstrapSpec
       val executioncontext = bootstrapped.logic.executionContext()
       given org.goldenport.cncf.context.ExecutionContext = executioncontext
       given EntityPersistent[SpecEntity] = _entity_persistent
-      val entity = SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bootstrap_1", _cid), "taro")
+      val entity = SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bootstrap_1", _cid, entropy = "bootstrap_1"), "taro")
 
       val transitionresult =
         executioncontext.runtime.transitionValidationHook.beforeUpdate(entity, _entity_persistent)

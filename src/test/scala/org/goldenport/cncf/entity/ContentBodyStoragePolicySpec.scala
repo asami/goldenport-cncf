@@ -124,7 +124,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
   }
 
   private def _id(entropy: String): EntityId =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "content", EntityCollectionId("test", "content", "article"), entropy = Some(entropy))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "content", EntityCollectionId("test", "content", "article"),entropy = entropy)
 
   private def _success[A](result: Consequence[A]): A =
     result match {

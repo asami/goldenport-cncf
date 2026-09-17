@@ -143,7 +143,7 @@ final class ActionCallConditionalTransitionDslSpec
         val component = new TestComponent
         val core = _core(component, capture)
         given ExecutionContext = core.executionContext
-        val rootid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "internal_snapshot_root", _rootcollection)
+        val rootid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "internal_snapshot_root", _rootcollection, entropy = "internal_snapshot_root")
         val record =
           EntityConcurrencyMetadata.initializeForCreate(
             _root_persistent.toStoreRecord(Root(rootid, "terminal"))
@@ -178,7 +178,8 @@ final class ActionCallConditionalTransitionDslSpec
           org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
             foreigncollection.major,
             foreigncollection.minor,
-            foreigncollection
+            foreigncollection,
+            entropy = foreigncollection.minor
           )
         val call =
           new InternalSnapshotLoadCall(
@@ -318,7 +319,7 @@ final class ActionCallConditionalTransitionDslSpec
           foreigncollection.name,
           _empty_collection(foreigncollection, _root_persistent)
         )
-        val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("foreign", "same_local_root", foreigncollection)
+        val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("foreign", "same_local_root", foreigncollection, entropy = "same_local_root")
         val core = _core(component, capture)
         val loadcall = new AggregateExactIdLoadCall(core, foreignid)
         val updatecall = new AggregateExactIdUpdateCall(core, foreignid)
@@ -384,7 +385,7 @@ final class ActionCallConditionalTransitionDslSpec
           new AggregateRecordCreateCall(
             core,
             Record.dataAuto(
-              "id" -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("foreign", "wrong_owner", foreigncollection).value,
+              "id" -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("foreign", "wrong_owner", foreigncollection, entropy = "wrong_owner").value,
               "status" -> "invalid"
             )
           )
@@ -757,9 +758,9 @@ final class ActionCallConditionalTransitionDslSpec
     successorcollection: EntityCollectionId = _successorcollection
   ):
       EntityConditionalTransition[Root, RootPatch, Successor] = {
-    val rootid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "dsl_root", rootcollection)
+    val rootid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "dsl_root", rootcollection, entropy = "dsl_root")
     val successorid =
-      org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "dsl_successor", successorcollection)
+      org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "dsl_successor", successorcollection, entropy = "dsl_successor")
     val field =
       EntityTransitionField
         .exact[Root, String]("status", _root_persistent)
@@ -857,7 +858,7 @@ final class ActionCallConditionalTransitionDslSpec
     }
 
   private val _generated_root_id =
-    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "generated_root", _rootcollection)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "generated_root", _rootcollection, entropy = "generated_root")
 
   private val _generated_root_persistent: EntityPersistent[Root] =
     new EntityPersistent[Root] {

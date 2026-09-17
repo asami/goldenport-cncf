@@ -324,7 +324,7 @@ final class ActionCallAggregateResolveSpec
           Given("a private aggregate backing entity owned by another subject")
           given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
           val cid = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
-          val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "private_notice_audit", cid)
+          val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "private_notice_audit", cid, entropy = "private_notice_audit")
           val component = new Component() {}
           component.entitySpace.registerEntity(
             "notice",
@@ -365,7 +365,7 @@ final class ActionCallAggregateResolveSpec
         Given("a component with a private aggregate backing entity owned by another subject")
         given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
         val cid       = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
-        val id        = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "private_notice", cid)
+        val id        = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "private_notice", cid, entropy = "private_notice")
         val component = new Component() {}
         component.entitySpace.registerEntity(
           "notice",
@@ -404,7 +404,7 @@ final class ActionCallAggregateResolveSpec
             "a",
             "notice"
           )
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ordinary_notice", cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "ordinary_notice", cid, entropy = "ordinary_notice")
         val current = NoticeProbeAggregate.publicWritable(id, "before")
         val component = new Component() {
           override def operationDefinitions: Vector[CmlOperationDefinition] =
@@ -465,7 +465,7 @@ final class ActionCallAggregateResolveSpec
             "a",
             "notice"
           )
-        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "observed_notice", cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "observed_notice", cid, entropy = "observed_notice")
         val current =
           NoticeProbeAggregate.privateOwnedBy(id, "before", "reviewer")
         val component = new Component() {
@@ -551,7 +551,7 @@ final class ActionCallAggregateResolveSpec
         Given("a shared aggregate and an authenticated-only command")
         given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
         val cid     = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
-        val id      = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "shared_notice", cid)
+        val id      = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "shared_notice", cid, entropy = "shared_notice")
         val current = NoticeProbeAggregate.privateOwnedBy(id, "shared", "source-manager")
         val component = new Component() {
           override def operationDefinitions: Vector[CmlOperationDefinition] = Vector(
@@ -617,7 +617,7 @@ final class ActionCallAggregateResolveSpec
         Given("an aggregate builder with an older root value than authoritative storage")
         given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
         val cid   = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
-        val id    = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "stale_builder_notice", cid)
+        val id    = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "stale_builder_notice", cid, entropy = "stale_builder_notice")
         val stale = NoticeProbeAggregate.privateOwnedBy(id, "stale", "source-manager")
         val authoritative =
           NoticeProbeAggregate.privateOwnedBy(id, "authoritative", "source-manager")
@@ -689,7 +689,7 @@ final class ActionCallAggregateResolveSpec
         Given("an aggregate and a cached read-side view over the same entity")
         given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
         val cid     = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
-        val id      = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "cached_notice", cid)
+        val id      = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "cached_notice", cid, entropy = "cached_notice")
         val current = NoticeProbeAggregate.privateOwnedBy(id, "before", "source-manager")
         val component = new Component() {
           override def operationDefinitions: Vector[CmlOperationDefinition] = Vector(
@@ -797,7 +797,7 @@ final class ActionCallAggregateResolveSpec
         }
         val pair = ActionCallSupport.componentPair(component)
         val cid  = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
-        val id   = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "new_notice", cid)
+        val id   = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "new_notice", cid, entropy = "new_notice")
 
         When("executing an action call that only uses aggregate_create")
         val call = action_call(

@@ -176,7 +176,7 @@ final class TagModelSpec
     "reject foreign canonical ids rather than rebinding them to the Tag collection" in {
       Given("a Tag record and repository lookup with a foreign exact EntityId")
       given ExecutionContext = _execution_context()
-      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_tag", EntityCollectionId("cncf", "builtin", "blob"))
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_tag", EntityCollectionId("cncf", "builtin", "blob"), entropy = "foreign_tag")
       val record = Record.dataAuto(
         "id" -> foreign.value,
         "key" -> "foreign",
@@ -200,9 +200,7 @@ final class TagModelSpec
       val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         TagEntityCollections.Tag.major,
         TagEntityCollections.Tag.minor,
-        TagEntityCollections.Tag,
-        entropy = Some("malformed_parent")
-      )
+        TagEntityCollections.Tag,entropy = "malformed_parent")
       val record = Record.dataAuto(
         "id" -> id.value,
         "key" -> "malformed-parent",
@@ -419,8 +417,7 @@ final class TagModelSpec
         "foreign",
         parsed.minor,
         EntityCollectionId("foreign", parsed.minor, "tag"),
-        parsed.timestamp,
-        parsed.entropy
+        parsed.entropy.getOrElse(fail("Tag fixture entropy is missing"))
       )
       val classifierpath = classifier.getString("path").getOrElse(fail("classifier tag path is missing"))
       _success(subsystem.executeOperationResponse(_tag_request(
@@ -562,8 +559,6 @@ final class TagModelSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       collection.major,
       collection.minor,
-      collection,
-      entropy = Some(entropy)
-    ).value
+      collection,entropy = entropy).value
   }
 }

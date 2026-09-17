@@ -30,7 +30,7 @@ final class AggregateViewCqrsEndToEndSpec
     "flow command -> event -> projection -> query without command/read boundary violation" in {
       Given("an aggregate command handler and view projector")
       val collectionid = EntityCollectionId("tokyo", "sales", "person_view")
-      val viewid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", collectionid)
+      val viewid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", collectionid, entropy = "sales")
       val aggregate = new AggregateCommandHandler[_Command, _State, _Event] {
         def handle(command: _Command, state: _State): Consequence[AggregateCommandResult[_State, _Event]] =
           if (command.amount <= 0)

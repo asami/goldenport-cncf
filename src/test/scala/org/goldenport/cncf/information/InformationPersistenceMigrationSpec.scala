@@ -69,8 +69,7 @@ final class InformationPersistenceMigrationSpec
           _information.id.major,
           _information.id.minor,
           collectionid,
-          _information.id.timestamp,
-          _information.id.entropy
+          _information.id.entropy.getOrElse(fail("Information fixture entropy is missing"))
         )
       )
       val collection = DataStore.CollectionId.EntityStore(information.id.collection)
@@ -169,8 +168,7 @@ final class InformationPersistenceMigrationSpec
           _information.id.major,
           _information.id.minor,
           collectionid,
-          _information.id.timestamp,
-          _information.id.entropy
+          _information.id.entropy.getOrElse(fail("Information migration fixture entropy is missing"))
         )
       )
 
@@ -285,8 +283,7 @@ final class InformationPersistenceMigrationSpec
           _information.id.major,
           _information.id.minor,
           collectionid,
-          _information.id.timestamp,
-          _information.id.entropy
+          _information.id.entropy.getOrElse(fail("Information incompatibility fixture entropy is missing"))
         )
       )
       val collection = DataStore.CollectionId.EntityStore(information.id.collection)
@@ -320,10 +317,7 @@ final class InformationPersistenceMigrationSpec
   private val _information_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
     major = "phase61",
     minor = "migration",
-    collection = EntityCollectionId("phase61", "migration", "information"),
-    timestamp = Some(_updated_at),
-    entropy = Some("legacy_information_1")
-  )
+    collection = EntityCollectionId("phase61", "migration", "information"),entropy = "legacy_information_1")
   private val _binding = InformationIdentityBinding(
     rdfSubject = Some(RdfNodeName("urn:legacy:paper")),
     externalIdentifiers = Vector(ExternalKnowledgeIdentifier("openlibrary", "OL45883W", Some("work"))),

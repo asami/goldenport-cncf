@@ -1011,8 +1011,7 @@ final class BlobComponentSpec
         parsed.major,
         parsed.minor,
         EntityCollectionId(parsed.major, parsed.minor, "image"),
-        parsed.timestamp,
-        parsed.entropy
+        parsed.entropy.getOrElse(fail("Blob fixture entropy is missing"))
       )
 
       When("admin_delete_blob receives the foreign canonical id")
@@ -1200,17 +1199,13 @@ final class BlobComponentSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "builtin",
-      EntityCollectionId("cncf", "builtin", "blob"),
-      entropy = Some(minor)
-    )
+      EntityCollectionId("cncf", "builtin", "blob"),entropy = minor)
 
   private def _product_entity_id(value: String): EntityId =
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "sample",
-      EntityCollectionId("cncf", "sample", "product"),
-      entropy = Some(value)
-    )
+      EntityCollectionId("cncf", "sample", "product"),entropy = value)
 
   private def _subsystem_with_blob_store(
     store: BlobStore,

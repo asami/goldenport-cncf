@@ -62,7 +62,7 @@ final class UnitOfWorkStateMachineHookSpec
         EntityRevisionRepresentation.Detached
       )
       val uow = new UnitOfWork(context, EventEngine.noop(DataStore.noop()))
-      val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sm_1", _cid)
+      val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sm_1", _cid, entropy = "sm_1")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -103,7 +103,7 @@ final class UnitOfWorkStateMachineHookSpec
         _person_persistent,
         EntityRevisionRepresentation.Detached
       )
-      val id                               = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sm_2", _cid)
+      val id                               = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sm_2", _cid, entropy = "sm_2")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(

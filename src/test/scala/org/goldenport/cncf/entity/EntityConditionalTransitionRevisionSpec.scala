@@ -605,7 +605,8 @@ final class EntityConditionalTransitionRevisionSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       _minor(s"revision_transition_root_$suffix"),
-      fixture.rootcollection
+      fixture.rootcollection,
+      entropy = _minor(s"revision_transition_root_$suffix")
     )
 
   private def _successor_id(
@@ -615,7 +616,8 @@ final class EntityConditionalTransitionRevisionSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       _minor(s"revision_transition_successor_$suffix"),
-      fixture.successorcollection
+      fixture.successorcollection,
+      entropy = _minor(s"revision_transition_successor_$suffix")
     )
 
   private def _collection(

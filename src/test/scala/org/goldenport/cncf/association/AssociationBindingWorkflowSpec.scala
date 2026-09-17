@@ -106,9 +106,7 @@ final class AssociationBindingWorkflowSpec
             org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
               _article_collection_id.major,
               _article_collection_id.minor,
-              _article_collection_id,
-              entropy = Some("target_1")
-            )
+              _article_collection_id,entropy = "target_1")
           val parsedtarget = EntityId.parse(exacttarget.value).toOption.get
           parsedtarget.collection shouldBe _article_collection_id
           EntityId.parse(exacttarget.value).toOption shouldBe Some(exacttarget)
@@ -404,9 +402,7 @@ final class AssociationBindingWorkflowSpec
               org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
                 org.goldenport.cncf.blob.BlobRepository.CollectionId.major,
                 org.goldenport.cncf.blob.BlobRepository.CollectionId.minor,
-                org.goldenport.cncf.blob.BlobRepository.CollectionId,
-                entropy = Some("existing_blob")
-              ).value,
+                org.goldenport.cncf.blob.BlobRepository.CollectionId,entropy = "existing_blob").value,
               None
             )
           )
@@ -479,9 +475,7 @@ final class AssociationBindingWorkflowSpec
       val missingblob = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         org.goldenport.cncf.blob.BlobRepository.CollectionId.major,
         org.goldenport.cncf.blob.BlobRepository.CollectionId.minor,
-        org.goldenport.cncf.blob.BlobRepository.CollectionId,
-        entropy = Some("missing_blob_for_association_cleanup")
-      )
+        org.goldenport.cncf.blob.BlobRepository.CollectionId,entropy = "missing_blob_for_association_cleanup")
       val request = Request.of(
         component = component.componentId.name,
         service = "article",
@@ -766,10 +760,7 @@ final class AssociationBindingWorkflowSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       _article_collection_id.major,
       _article_collection_id.minor,
-      _article_collection_id,
-      timestamp = Some(java.time.Instant.EPOCH),
-      entropy = Some(value)
-    )
+      _article_collection_id,entropy = value)
 
   private lazy val _comment_collection_id: EntityCollectionId =
     EntityCollectionId("cncf", "sample", "comment")
@@ -778,10 +769,7 @@ final class AssociationBindingWorkflowSpec
     org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       _comment_collection_id.major,
       _comment_collection_id.minor,
-      _comment_collection_id,
-      timestamp = Some(java.time.Instant.EPOCH),
-      entropy = Some(value)
-    )
+      _comment_collection_id,entropy = value)
 
   private def _seed_entity(
       id: EntityId

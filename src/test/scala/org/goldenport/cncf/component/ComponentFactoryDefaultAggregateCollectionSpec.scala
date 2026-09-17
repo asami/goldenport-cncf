@@ -36,9 +36,9 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
   import org.goldenport.cncf.component.entity.{Customer => CustomerEntity, Order => OrderEntity, OrderLine => OrderLineEntity}
   import org.goldenport.cncf.component.entity.aggregate.Order as OrderAggregate
 
-  private val _order_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "o1", OrderEntity.collectionId)
-  private val _customer_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c1", CustomerEntity.collectionId)
-  private val _line_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "l1", OrderLineEntity.collectionId)
+  private val _order_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "o1", OrderEntity.collectionId, entropy = "o1")
+  private val _customer_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c1", CustomerEntity.collectionId, entropy = "c1")
+  private val _line_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "l1", OrderLineEntity.collectionId, entropy = "l1")
 
   "ComponentFactory default aggregate collection" should {
     "build aggregate with plural composition member and singular aggregation member" in {
@@ -150,10 +150,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
       val placeholderid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         "m",
         "placeholder",
-        placeholdercollection,
-        timestamp = Some(java.time.Instant.parse("2026-07-26T00:00:00Z")),
-        entropy = Some("2cigmZWq3CNMnw8zLaNpg")
-      )
+        placeholdercollection,entropy = "2cigmZWq3CNMnw8zLaNpg")
       val aggregate = OrderAggregate(
         id = placeholderid,
         name = "Canonical runtime collection",

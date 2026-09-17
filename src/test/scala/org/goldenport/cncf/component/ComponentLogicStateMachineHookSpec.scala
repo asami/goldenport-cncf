@@ -39,7 +39,7 @@ final class ComponentLogicStateMachineHookSpec
       given EntityPersistent[_Person] = _person_persistent
       val hook = ctx.runtime.transitionValidationHook
       When("the planned transition hook validates a person update")
-      val result = hook.beforeUpdate(_Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", _cid), "taro"), _person_persistent)
+      val result = hook.beforeUpdate(_Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", _cid, entropy = "p1"), "taro"), _person_persistent)
 
       Then("the hook accepts the update and invokes the provider")
       ctx.runtime.transitionValidationHook shouldBe a[PlannedTransitionValidationHook]

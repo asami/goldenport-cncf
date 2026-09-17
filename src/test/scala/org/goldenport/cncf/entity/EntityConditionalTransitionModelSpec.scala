@@ -89,7 +89,7 @@ final class EntityConditionalTransitionModelSpec
           EntityCollectionId("test", "foreign", "conditional_successor")
         val candidate =
           Root(
-            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "foreign_successor", foreigncollection),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "foreign_successor", foreigncollection, entropy = "foreign_successor"),
             "open"
           )
         val create = new EntityPersistentCreate[Root] {
