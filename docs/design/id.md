@@ -86,6 +86,24 @@ System, subsystem, and component identity belongs in descriptors, collection
 namespace, runtime metadata, and observability context. Application logic must
 not parse `EntityId.major` or `EntityId.minor` to recover component structure.
 
+## Owner-Level Typed Identity Contract
+
+The accepted entity-identity hierarchy is:
+
+```text
+UniversalId -> abstract EntityId -> concrete XxxId
+```
+
+`JobDefinitionId` is a concrete example. Bare `EntityId` remains valid at
+generic `EntityStore`, common persistence, decode, parse, restoration, and
+declared special-bridge boundaries. It is not an ordinary durable issuance
+surface: normal issuance uses a concrete typed issue API or
+`IdGenerationContext`, which never derives an ID from a business key.
+
+A business key never generates a durable entity ID. The saved entity is the
+sole key-to-ID correspondence authority; no hash, companion integrity field,
+or dedicated key-to-ID correspondence table is needed.
+
 ---
 
 ## EntityId Physical Key and Collection Identity

@@ -21,9 +21,13 @@ planned Phase.
 ## Identity and concurrency
 
 The user key is trimmed according to the existing policy and remains a key, not
-an identifier. In particular, `a-b` and `a_b` are distinct keys. This Phase
-does not change the existing direct EntityId approach; its UniversalId/EntityId
-contract correction is deferred to Phase 74.
+an identifier. Creation persists one typed `{ id, key, ... }` entity, with
+`id` as its `JobDefinitionId`; that stored entity is the sole key-to-ID
+correspondence authority. Exact-key search finds the saved entity and uses its
+stored `JobDefinitionId`, and updates retain that identity. In particular,
+`a-b` and `a_b` are distinct keys. This is the implemented lightweight
+UniversalId/EntityId contract; no key-derived ID, hash, companion integrity
+field, or dedicated key-to-ID correspondence table is needed.
 
 EntityStore owns the entity `revision`. The service reads a snapshot and uses
 that revision only for its internal conditional save, preventing a stale
