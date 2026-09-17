@@ -149,18 +149,18 @@ Current baseline:
   Its direct lifecycle contract is consumed by Phase 69.5; Phase 69.5 through
   Phase 69.7 remain planned and not started.
 
-## Planned Entity ID Contract Recovery
+## Entity ID Contract Recovery
 
-- The planned, not-started [Phase 74 sequence](phase-74.md) partitions EntityId
-  restoration into bounded units: [Phase 74](phase-74.md) freezes the contract
-  and inventory; [Phase 74.1](phase-74.1.md) restores the model base;
-  [Phase 74.2](phase-74.2.md) adopts it in CNCF and affected generators; and
-  [Phase 74.3](phase-74.3.md) owns final producer/consumer closure and the one
-  aggregate full suite.
+- [Phase 74](phase-74.md) is closed as the EntityId contract/inventory
+  authority, and [Phase 74.1](phase-74.1.md) is closed as the
+  `simplemodeling-model` producer materialization. [Phase 74.2](phase-74.2.md)
+  and [Phase 74.3](phase-74.3.md) remain planned and not started: the former
+  owns CNCF/generator adoption and the latter owns producer/consumer closure
+  and the one aggregate full suite.
 - Ledgers: [74](phase-74-checklist.md), [74.1](phase-74.1-checklist.md),
   [74.2](phase-74.2-checklist.md), and [74.3](phase-74.3-checklist.md).
-  This planning split selects no active Phase and changes no existing completion
-  status.
+  This status projection selects no successor as active and does not alter its
+  planned/not-started boundary.
 
 ## Planned Service Execution Contracts
 

@@ -1,16 +1,27 @@
 # Phase 74.1 - EntityId Model Contract Materialization
 
-status=planned
+status=closed
 split_full_test_policy=final-only
 validation_ownership=aggregate-deferred
 aggregate_validation_owner=PHASE-74.3
 aggregate_validation_sequence=["PHASE-74","PHASE-74.1","PHASE-74.2","PHASE-74.3"]
 planned_at=2026-09-16
+closed_at=2026-09-17
 split_from=[Phase 74](phase-74.md)
 depends_on=[Phase 74](phase-74.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md#961-entityid-inheritance-contract-restoration)
 checklist=[Phase 74.1 Checklist](phase-74.1-checklist.md)
 successor=[Phase 74.2](phase-74.2.md)
+
+Status: CLOSED
+
+Phase 74.1 closed with the accepted `simplemodeling-model` producer Step
+`4d440f99cfc3ccb349a5af1cf4cc127242aa7fef` and its locally published
+`org.simplemodeling:simplemodeling-model:0.2.2-SNAPSHOT` artifact. Focused
+producer receipts P005/P006, publication receipt P007, the clean Phase full
+review, and the focused closure-projection review establish this handoff.
+The aggregate repository full suite remains deferred to Phase 74.3 exactly as
+declared below; this closure does not claim to have run it.
 
 ## Purpose
 
@@ -67,6 +78,25 @@ against the authority handoff from Phase 74, not a reopening of identity policy.
 - The released handoff to Phase 74.2 identifies the exact source/artifact,
   typed migration API, producer tests, and compatibility limits.
 
+## Accepted Handoff to Phase 74.2
+
+- Producer source: `simplemodeling-model` commit
+  `4d440f99cfc3ccb349a5af1cf4cc127242aa7fef`.
+- Producer artifact: local `publishLocal` coordinate
+  `org.simplemodeling:simplemodeling-model:0.2.2-SNAPSHOT` (P007).
+- Public migration boundary: abstract `EntityId`; generic recovery through
+  `parse`, `restore`, and `bridgeFromParts`; normal durable issuance only from
+  a concrete subtype; and generic `Codec` / `ValueReader` compatibility.
+- Compatibility limit: generic parsing/recovery does not infer a domain
+  subtype and does not issue an ID. Consumer-specific typed IDs, including
+  JobDefinitionId adoption and direct-construction migration, remain Phase
+  74.2 work.
+- Acceptance: P005 validates generic entity-model consumption; P006 validates
+  typed and generic EntityId restoration/transport; the Phase full review and
+  closure-projection focused review are clean.
+- Policy boundary: no business-key- or hash-derived issuance is introduced.
+  Any change to EntityId issuance or restoration policy returns to Phase 74.
+
 ## Non-Goals
 
 - CNCF JobDefinition/store adoption, direct-construction migration, and affected
@@ -78,4 +108,5 @@ against the authority handoff from Phase 74, not a reopening of identity policy.
 
 - [Phase 74](phase-74.md)
 - [Phase 74.1 Checklist](phase-74.1-checklist.md)
+- [Phase 74.1 EntityId Model Contract Handoff](../notes/phase-74.1-entityid-model-contract-handoff.md)
 - [Provisional Specification](../notes/entityid-inheritance-contract-restoration-provisional-specification.md)

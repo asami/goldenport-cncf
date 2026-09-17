@@ -5087,13 +5087,14 @@ the contribution through CNCF rather than binding directly to its provider.
 
 ### 9.61 EntityId Inheritance Contract Restoration
 
-Planned as the ordered [Phase 74](../phase/phase-74.md) through
-[Phase 74.3](../phase/phase-74.3.md) sequence. It restores the intended
+The ordered [Phase 74](../phase/phase-74.md) through
+[Phase 74.3](../phase/phase-74.3.md) sequence restores the intended
 `UniversalId -> abstract EntityId -> XxxId` model in simplemodeling-model and
 adopts JobDefinitionId as the first CNCF consumer. This is a selected model/API
-recovery, not an additional rule or a new Job execution feature. Phase 74
-freezes the contract/inventory, Phase 74.1 implements the model contract, Phase
-74.2 migrates affected consumers, and Phase 74.3 owns aggregate final validation.
+recovery, not an additional rule or a new Job execution feature. Phase 74 is
+closed as the contract/inventory authority, and Phase 74.1 is closed as the
+model producer materialization. Phase 74.2 remains planned for affected
+consumer migration; Phase 74.3 remains planned for aggregate final validation.
 
 - Preserve ordinary automatically generated UUID/entropy, explicit special-purpose
   arbitrary values, and lossless restoration of saved IDs as separate operations.
@@ -5108,11 +5109,12 @@ freezes the contract/inventory, Phase 74.1 implements the model contract, Phase
   producer handoff without reopening or expanding [9.14](#914-job-management-follow-ups).
 - Retain the independent Phase 71 conflict, Phase 72 lifecycle, and Phase 73
   knowledge hub boundaries. Do not force a broad CAR or JobId hierarchy migration.
-- Planning references:
+- Phase and handoff references:
   - [Phase 74 Checklist](../phase/phase-74-checklist.md);
   - [Phase 74.1 Checklist](../phase/phase-74.1-checklist.md);
   - [Phase 74.2 Checklist](../phase/phase-74.2-checklist.md);
   - [Phase 74.3 Checklist](../phase/phase-74.3-checklist.md);
+  - [Phase 74.1 EntityId Model Contract Handoff](../notes/phase-74.1-entityid-model-contract-handoff.md);
   - [Provisional Specification](../notes/entityid-inheritance-contract-restoration-provisional-specification.md); and
   - [2026-09-13 Journal](../journal/2026/09/2026-09-13-entityid-inheritance-contract-restoration.md).
 
