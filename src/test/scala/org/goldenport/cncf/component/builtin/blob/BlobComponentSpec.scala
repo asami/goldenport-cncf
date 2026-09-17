@@ -34,7 +34,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
  *  version Apr. 29, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec
@@ -1006,7 +1007,7 @@ final class BlobComponentSpec
       ))))
       val blobid = registered.getString("id").getOrElse(fail("Blob id should be present"))
       val parsed = EntityId.parse(blobid).toOption.getOrElse(fail("Blob id must be canonical"))
-      val foreign = EntityId(
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         parsed.major,
         parsed.minor,
         EntityCollectionId(parsed.major, parsed.minor, "image"),
@@ -1196,7 +1197,7 @@ final class BlobComponentSpec
     }
 
   private def _blob_entity_id(minor: String): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "builtin",
       EntityCollectionId("cncf", "builtin", "blob"),
@@ -1204,7 +1205,7 @@ final class BlobComponentSpec
     )
 
   private def _product_entity_id(value: String): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "sample",
       EntityCollectionId("cncf", "sample", "product"),

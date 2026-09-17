@@ -36,7 +36,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Executable specification for BI-04 operation-level Association binding.
  *
  * @since   Apr. 30, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AssociationBindingWorkflowSpec
@@ -102,7 +103,7 @@ final class AssociationBindingWorkflowSpec
 
           And("the Association request parser retains the exact target owner")
           val exacttarget =
-            EntityId(
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
               _article_collection_id.major,
               _article_collection_id.minor,
               _article_collection_id,
@@ -400,7 +401,7 @@ final class AssociationBindingWorkflowSpec
           List(
             Property(
               "blobId.primary",
-              EntityId(
+              org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
                 org.goldenport.cncf.blob.BlobRepository.CollectionId.major,
                 org.goldenport.cncf.blob.BlobRepository.CollectionId.minor,
                 org.goldenport.cncf.blob.BlobRepository.CollectionId,
@@ -475,7 +476,7 @@ final class AssociationBindingWorkflowSpec
       val source = _article_id("article_association_image_failure").value
       _seed_entity(target)
       given ExecutionContext = runtimecomponent.logic.executionContext()
-      val missingblob = EntityId(
+      val missingblob = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         org.goldenport.cncf.blob.BlobRepository.CollectionId.major,
         org.goldenport.cncf.blob.BlobRepository.CollectionId.minor,
         org.goldenport.cncf.blob.BlobRepository.CollectionId,
@@ -762,7 +763,7 @@ final class AssociationBindingWorkflowSpec
     EntityCollectionId("cncf", "sample", "article")
 
   private def _article_id(value: String): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       _article_collection_id.major,
       _article_collection_id.minor,
       _article_collection_id,
@@ -774,7 +775,7 @@ final class AssociationBindingWorkflowSpec
     EntityCollectionId("cncf", "sample", "comment")
 
   private def _comment_id(value: String): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       _comment_collection_id.major,
       _comment_collection_id.minor,
       _comment_collection_id,

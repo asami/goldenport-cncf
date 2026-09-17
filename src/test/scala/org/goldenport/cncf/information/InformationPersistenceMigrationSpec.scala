@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 1, 2026
- * @version Sep.  3, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationPersistenceMigrationSpec
@@ -65,7 +65,13 @@ final class InformationPersistenceMigrationSpec
       val repository = new InformationEntityRepository(None)
       val collectionid = _success(repository.collectionIdC)
       val information = _information.copy(
-        id = _information.id.copy(collection = collectionid)
+        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          _information.id.major,
+          _information.id.minor,
+          collectionid,
+          _information.id.timestamp,
+          _information.id.entropy
+        )
       )
       val collection = DataStore.CollectionId.EntityStore(information.id.collection)
       val entry = DataStore.EntryId(information.id)
@@ -159,7 +165,13 @@ final class InformationPersistenceMigrationSpec
       val repository = new InformationEntityRepository(None)
       val collectionid = _success(repository.collectionIdC)
       val information = _information.copy(
-        id = _information.id.copy(collection = collectionid)
+        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          _information.id.major,
+          _information.id.minor,
+          collectionid,
+          _information.id.timestamp,
+          _information.id.entropy
+        )
       )
 
       When("the repository creates it and a fresh InformationSpace reloads its EntityStore collection")
@@ -269,7 +281,13 @@ final class InformationPersistenceMigrationSpec
       val repository = new InformationEntityRepository(None)
       val collectionid = _success(repository.collectionIdC)
       val information = _information.copy(
-        id = _information.id.copy(collection = collectionid)
+        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          _information.id.major,
+          _information.id.minor,
+          collectionid,
+          _information.id.timestamp,
+          _information.id.entropy
+        )
       )
       val collection = DataStore.CollectionId.EntityStore(information.id.collection)
       val entry = DataStore.EntryId(information.id)
@@ -299,7 +317,7 @@ final class InformationPersistenceMigrationSpec
   }
 
   private val _updated_at = Instant.parse("2026-08-29T03:04:05Z")
-  private val _information_id = EntityId(
+  private val _information_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
     major = "phase61",
     minor = "migration",
     collection = EntityCollectionId("phase61", "migration", "information"),

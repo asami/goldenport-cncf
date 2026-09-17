@@ -10,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobRuntimeModelDeterminismSpec
@@ -47,7 +48,13 @@ final class JobRuntimeModelDeterminismSpec
           ttl = Duration.ofDays(1L),
           createdAt = createdat
         )
+        val definitionids = IdGenerationContext.deterministic(
+          IdGenerationContext.IdNamespace("job", "definition"),
+          Clock.fixed(createdat, ZoneOffset.UTC),
+          "definition-lifecycle"
+        )
         val definition = JobDefinitionEntity.create(
+          id = JobDefinitionId.issue(definitionids),
           key = "deterministic-job",
           jclSource = "job deterministic-job {}",
           profile = None,
@@ -85,13 +92,13 @@ final class JobRuntimeModelDeterminismSpec
       checked.passed shouldBe true
     }
 
-    "replay Job, Task, and Action identity sequences from equivalent execution capabilities" in {
+    "replay Job, Task, Action, and JobDefinition identity sequences from equivalent execution capabilities" in {
       Given("two equivalent invocation-local ID capabilities and a fixed execution clock")
       val timestamp = Instant.parse("2026-07-16T01:00:00Z")
       val clock = Clock.fixed(timestamp, ZoneOffset.UTC)
       val namespace = IdGenerationContext.IdNamespace("phase31", "execution")
 
-      When("Job, Task, and Action IDs are generated with equal purposes and interleaving")
+      When("Job, Task, Action, and JobDefinition IDs are generated with equal purposes and interleaving")
       val replayproperty = Prop.forAll(Gen.alphaNumStr.suchThat(_.nonEmpty)) { seedbody =>
         val seed = s"job-runtime-$seedbody"
         val leftids = IdGenerationContext.deterministic(namespace, clock, seed)
@@ -110,6 +117,10 @@ final class JobRuntimeModelDeterminismSpec
           ActionId.create("component.execute", timestamp, leftcontext.idGeneration),
           ActionId.create("component.execute", timestamp, leftcontext.idGeneration)
         )
+        val leftdefinitions = Vector(
+          JobDefinitionId.issue(leftcontext.idGeneration),
+          JobDefinitionId.issue(leftcontext.idGeneration)
+        )
         val rightjobs = Vector(
           JobId.create("submit", timestamp, rightcontext.idGeneration),
           JobId.create("submit", timestamp, rightcontext.idGeneration)
@@ -122,17 +133,28 @@ final class JobRuntimeModelDeterminismSpec
           ActionId.create("component.execute", timestamp, rightcontext.idGeneration),
           ActionId.create("component.execute", timestamp, rightcontext.idGeneration)
         )
+        val rightdefinitions = Vector(
+          JobDefinitionId.issue(rightcontext.idGeneration),
+          JobDefinitionId.issue(rightcontext.idGeneration)
+        )
 
         leftjobs == rightjobs &&
           lefttasks == righttasks &&
           leftactions == rightactions &&
+          leftdefinitions == rightdefinitions &&
           leftjobs.distinct.size == leftjobs.size &&
           lefttasks.distinct.size == lefttasks.size &&
           leftactions.distinct.size == leftactions.size &&
+          leftdefinitions.distinct.size == leftdefinitions.size &&
           (leftjobs ++ lefttasks ++ leftactions).forall { id =>
             id.parts.major == namespace.major &&
               id.parts.minor == namespace.minor &&
               id.parts.timestamp == timestamp
+          } &&
+          leftdefinitions.forall { id =>
+            id.major == namespace.major &&
+              id.minor == namespace.minor &&
+              id.timestamp.contains(timestamp)
           }
       }
       val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(50), replayproperty)

@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Apr. 26, 2026
  *  version Apr. 29, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobStoreSpec
@@ -449,7 +450,7 @@ final class BlobStoreSpec
     EntityCollectionId("cncf", "builtin", "blob")
 
   private def _id(value: String): EntityId =
-    EntityId("cncf", _label(value), _collection_id)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", _label(value), _collection_id)
 
   private def _label(value: String): String =
     value.trim.toLowerCase(java.util.Locale.ROOT).map {

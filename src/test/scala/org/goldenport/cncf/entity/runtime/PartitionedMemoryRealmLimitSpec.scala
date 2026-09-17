@@ -8,7 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PartitionedMemoryRealmLimitSpec
@@ -35,8 +36,8 @@ final class PartitionedMemoryRealmLimitSpec
         maxPartitions = 2,
         maxEntitiesPerPartition = 1
       )
-      val id1 = EntityId("m", "a", _cid)
-      val id2 = EntityId("m", "b", _cid)
+      val id1 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
+      val id2 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", _cid)
 
       When("putting two entities into the same partition")
       val e1 = TestEntityInPartition(id1)

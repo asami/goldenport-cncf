@@ -35,7 +35,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 28, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntitySpaceCollectionIdentitySpec
@@ -87,13 +88,13 @@ final class EntitySpaceCollectionIdentitySpec
             EntityCollectionId("runtime", "selected", "facility")
           val collection = _collection(collectionid)
           val scalarid =
-            EntityId(
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
               "runtime",
               "entry_scope",
               EntityCollectionId("runtime", "entry_scope", "facility")
             )
           val otherentityid =
-            EntityId(
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
               "runtime",
               "entry_scope",
               EntityCollectionId("runtime", "entry_scope", "exhibition")
@@ -151,7 +152,7 @@ final class EntitySpaceCollectionIdentitySpec
 
       And("canonical EntityId ingress does not use logical-name ambiguity resolution")
       val runtimeid =
-        EntityId(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "fixture",
           "ambiguous",
           EntityCollectionId("single", "global", "facility")
@@ -180,7 +181,7 @@ final class EntitySpaceCollectionIdentitySpec
 
       And("an unregistered exact EntityId is not rebound to that unique owner")
       val runtimeid =
-        EntityId(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "fixture",
           "unique",
           EntityCollectionId("single", "global", "facility")
@@ -235,7 +236,7 @@ final class EntitySpaceCollectionIdentitySpec
           new UnitOfWork(summon[ExecutionContext])
         )
       val runtimeid =
-        EntityId(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "fixture",
           "uow_ambiguous",
           EntityCollectionId("single", "global", "facility")
@@ -321,7 +322,7 @@ final class EntitySpaceCollectionIdentitySpec
       component.entitySpace.registerEntity(firstid.name, first)
       component.entitySpace.registerEntity(secondid.name, second)
       given ExecutionContext = ExecutionContext.create().withScope(component.scopeContext)
-      val secondentity = FixtureEntity(EntityId("fixture", "resident", secondid))
+      val secondentity = FixtureEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "resident", secondid))
       second.putScoped(secondentity)
       val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
       val query = EntityQuery[FixtureEntity](
@@ -372,7 +373,7 @@ final class EntitySpaceCollectionIdentitySpec
         )
       given ExecutionContext =
         ExecutionContext.create().withScope(scope)
-      val id = EntityId("fixture", "create_none", collectionid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "create_none", collectionid)
 
       When("the collection synchronizes the create result")
       val result =
@@ -410,7 +411,7 @@ final class EntitySpaceCollectionIdentitySpec
         )
       given ExecutionContext =
         ExecutionContext.create().withScope(scope)
-      val id = EntityId("fixture", "create_rollback", collectionid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("fixture", "create_rollback", collectionid)
 
       When("the persisted canonical Record is decoded under its exact owner")
       val result =

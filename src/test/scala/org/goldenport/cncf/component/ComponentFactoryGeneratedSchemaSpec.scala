@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 16, 2026
  *  version Apr. 26, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -92,7 +93,7 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
         .find(_.getName == "_as_entity_persistent")
         .getOrElse(fail("_as_entity_persistent is missing"))
       method.setAccessible(true)
-      val entity = _GeneratedStyleEntity(EntityId("test", "reflective_store", EntityCollectionId("test", "a", "generated_style")), "hello", "2026-04-26T00:00:00Z")
+      val entity = _GeneratedStyleEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "reflective_store", EntityCollectionId("test", "a", "generated_style")), "hello", "2026-04-26T00:00:00Z")
 
       When("ComponentFactory wraps the module as EntityPersistent")
       val persistent = method.invoke(factory, _GeneratedStyleStorePersistentModule, None)
@@ -120,7 +121,7 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
         .getOrElse(fail("_as_entity_persistent is missing"))
       method.setAccessible(true)
       val entity = _GeneratedStyleAccount(
-        EntityId("test", "generated_store_shape", EntityCollectionId("test", "a", "account")),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "generated_store_shape", EntityCollectionId("test", "a", "account")),
         "Alice",
         "2026-04-26T01:02:03Z",
         "2026-04-26T04:05:06Z",

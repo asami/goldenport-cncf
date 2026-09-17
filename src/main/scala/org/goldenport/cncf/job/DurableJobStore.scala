@@ -41,6 +41,10 @@ import org.simplemodeling.model.datatype.{
  * Package-internal canonical v1 durable-record storage.  This remains
  * deliberately separate from JobEntity: it has no live JobEngine authority
  * and stores only the closed canonical durable value and stable identity.
+ *
+ * @since   Sep. 10, 2026
+ * @version Sep. 17, 2026
+ * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobStoreSnapshot(
   record: DurableJobRecord,
@@ -351,14 +355,12 @@ private[job] object DurableJobStoreEntity {
   def entityId(jobId: String): Consequence[EntityId] =
     Option(jobId).filter(_.nonEmpty) match {
       case Some(value) =>
-        Consequence.success(
-          EntityId(
-            major = Collection.major,
-            minor = Collection.minor,
-            collection = Collection,
-            timestamp = Some(Instant.EPOCH),
-            entropy = Some(_stable_entropy(value))
-          )
+        EntityId.bridgeFromParts(
+          major = Collection.major,
+          minor = Collection.minor,
+          collection = Collection,
+          timestamp = Instant.EPOCH,
+          entropy = _stable_entropy(value)
         )
       case None =>
         Consequence.argumentInvalid("durableJobId", "nonempty durable job id", "empty")

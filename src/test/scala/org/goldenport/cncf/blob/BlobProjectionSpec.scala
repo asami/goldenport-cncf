@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for BlobAttachment projection helpers.
  *
  * @since   Apr. 30, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobProjectionSpec
@@ -124,7 +125,7 @@ final class BlobProjectionSpec
     associationId: String
   ): Association =
     Association(
-      id = EntityId("cncf", _safe_minor(associationId), AssociationStoragePolicy.BlobAttachmentCollection),
+      id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", _safe_minor(associationId), AssociationStoragePolicy.BlobAttachmentCollection),
       associationId = associationId,
       sourceEntityId = source,
       targetEntityId = _blob_id(blobMinor).value,
@@ -157,7 +158,7 @@ final class BlobProjectionSpec
   private def _blob_id(
     minor: String
   ): EntityId =
-    EntityId(BlobRepository.CollectionId.major, _safe_minor(minor), BlobRepository.CollectionId)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(BlobRepository.CollectionId.major, _safe_minor(minor), BlobRepository.CollectionId)
 
   private def _safe_minor(
     value: String
@@ -169,7 +170,7 @@ final class BlobProjectionSpec
   ): EntityId =
     UniversalId.parseParts(value, "entity") match {
       case Consequence.Success(parts) =>
-        EntityId(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           major = parts.major,
           minor = parts.minor,
           collection = BlobRepository.CollectionId,

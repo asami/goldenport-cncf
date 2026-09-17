@@ -42,7 +42,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 26, 2026
  *  version Jun.  5, 2026
- * @version Aug.  8, 2026
+ *  version Aug.  8, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -1481,16 +1482,22 @@ object BlobComponent {
 
     private def _association_delete(association: Association, system: Boolean): ExecUowM[Unit] = {
       val collection = AssociationStoragePolicy.blobAttachmentDefault.collection(association.associationDomain)
-      val id = EntityId(
-        association.id.major,
-        association.id.minor,
-        collection,
-        association.id.timestamp,
-        association.id.entropy
-      )
-      _exec_uow(UnitOfWorkOp.Authorize(
-        _association_authorization(association.associationDomain, collection, Some(id), "delete", system)
-      )).flatMap(_ => _exec_uow(UnitOfWorkOp.EntityStoreDeleteHard(id)))
+      if (association.id.collection != collection)
+        exec_from(Consequence.argumentInvalid(
+          s"blob association id collection mismatch: expected ${collection.print}, got ${association.id.collection.print}"
+        ))
+      else
+        exec_from(EntityId.bridgeFromParts(
+          association.id.major,
+          association.id.minor,
+          association.id.collection,
+          association.id.timestamp.get,
+          association.id.entropy.get
+        )).flatMap { id =>
+          _exec_uow(UnitOfWorkOp.Authorize(
+            _association_authorization(association.associationDomain, collection, Some(id), "delete", system)
+          )).flatMap(_ => _exec_uow(UnitOfWorkOp.EntityStoreDeleteHard(id)))
+        }
     }
 
     private def _authorize_blob_create(

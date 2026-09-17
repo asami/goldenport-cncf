@@ -27,7 +27,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for hierarchical Tag master and TagAttachment.
  *
  * @since   May.  5, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagModelSpec
@@ -175,7 +176,7 @@ final class TagModelSpec
     "reject foreign canonical ids rather than rebinding them to the Tag collection" in {
       Given("a Tag record and repository lookup with a foreign exact EntityId")
       given ExecutionContext = _execution_context()
-      val foreign = EntityId("cncf", "foreign_tag", EntityCollectionId("cncf", "builtin", "blob"))
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_tag", EntityCollectionId("cncf", "builtin", "blob"))
       val record = Record.dataAuto(
         "id" -> foreign.value,
         "key" -> "foreign",
@@ -196,7 +197,7 @@ final class TagModelSpec
 
     "reject a present malformed parent Tag reference instead of dropping it" in {
       Given("a canonical Tag record with a malformed optional parent reference")
-      val id = EntityId(
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         TagEntityCollections.Tag.major,
         TagEntityCollections.Tag.minor,
         TagEntityCollections.Tag,
@@ -414,7 +415,7 @@ final class TagModelSpec
       ))))
       val sourceid = source.getString("id").getOrElse(fail("source tag id is missing"))
       val parsed = EntityId.parse(sourceid).toOption.getOrElse(fail("source tag id must be canonical"))
-      val foreign = EntityId(
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         "foreign",
         parsed.minor,
         EntityCollectionId("foreign", parsed.minor, "tag"),
@@ -558,7 +559,7 @@ final class TagModelSpec
 
   private def _source_id(entropy: String): String = {
     val collection = EntityCollectionId("test", "tag", "source")
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       collection.major,
       collection.minor,
       collection,

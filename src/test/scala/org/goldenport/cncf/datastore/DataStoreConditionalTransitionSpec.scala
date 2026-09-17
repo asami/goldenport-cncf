@@ -17,7 +17,8 @@ import org.simplemodeling.model.datatype.{
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DataStoreConditionalTransitionSpec
@@ -41,7 +42,7 @@ final class DataStoreConditionalTransitionSpec
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R6,R7,R12; exact scalar values and rejected general values"
         )
         val entityid =
-          EntityId("test", "entity_1", _root_collection_id)
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "entity_1", _root_collection_id)
         val accepted = Vector(
           "open",
           true,

@@ -47,6 +47,7 @@ import org.goldenport.cncf.job.{
   JobControlRequest,
   JobDefinition,
   JobDefinitionEntity,
+  JobDefinitionId,
   JobDefinitionSnapshot,
   JobDefinitionStatus,
   JobFailureHook,
@@ -90,7 +91,7 @@ import org.goldenport.value.BaseContent
  *  version Apr. 22, 2026
  *  version May. 31, 2026
  *  version Aug.  8, 2026
- * @version Sep. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component with EntityRuntimePlanProvider {
@@ -884,6 +885,7 @@ object JobControlComponent {
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] =
       _definition_payload(key, body, format, Some(status)).map { case (job, parsedstatus) =>
         JobDefinitionEntity.create(
+          id = JobDefinitionId.issue(summon[org.goldenport.cncf.context.ExecutionContext].idGeneration),
           key = key,
           jclSource = body,
           jclformat = JobBatchDefinition.formatName(format),
@@ -1017,11 +1019,7 @@ object JobControlComponent {
         org.goldenport.cncf.context.ExecutionContext
     ): Consequence[Option[EntitySnapshot[JobDefinitionEntity]]] = {
       val requested = _normalize_definition_key(ref)
-      _load_definition_snapshot(JobDefinitionEntity.entityId(requested), requested).flatMap {
-        case found @ Some(_) => Consequence.success(found)
-        case None =>
-          _load_legacy_definition_snapshot_by_key(requested)
-      }
+      _load_definition_snapshot_by_key(requested)
     }
 
     private def _load_definition_snapshot(
@@ -1038,7 +1036,7 @@ object JobControlComponent {
         EntitySnapshot(carrier.entity, carrier.revision)
       ).filter(snapshot => _has_definition_key(snapshot.entity, requested)))
 
-    private def _load_legacy_definition_snapshot_by_key(
+    private def _load_definition_snapshot_by_key(
       requested: String
     )(using
         org.goldenport.cncf.context.ExecutionContext

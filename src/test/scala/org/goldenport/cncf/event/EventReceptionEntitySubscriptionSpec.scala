@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionEntitySubscriptionSpec
@@ -29,7 +30,7 @@ final class EventReceptionEntitySubscriptionSpec
   "EventReception entity subscription" should {
     "activate entity on receive when memory miss occurs" in {
       Given("entity subscription with ActivateOnReceive")
-      val id = EntityId("m", "a", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
       val entity = _TestEntity(id, "taro")
       given EntityPersistent[_TestEntity] = _persistent
       val collection = _collection("customer", id, entity)
@@ -90,7 +91,7 @@ final class EventReceptionEntitySubscriptionSpec
 
     "fail KeepResident when entity is not active in memory" in {
       Given("entity subscription with KeepResident and empty memory")
-      val id = EntityId("m", "a", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
       val entity = _TestEntity(id, "hanako")
       given EntityPersistent[_TestEntity] = _persistent
       val collection = _collection("customer", id, entity)
@@ -169,7 +170,7 @@ final class EventReceptionEntitySubscriptionSpec
 
     "treat working-set pub-sub subscription as keep-resident automatically" in {
       Given("pub-sub subscription for working-set entity")
-      val id = EntityId("m", "a", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
       val entity = _TestEntity(id, "jiro")
       given EntityPersistent[_TestEntity] = _persistent
       val collection = _collection("customer", id, entity)

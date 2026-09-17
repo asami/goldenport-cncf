@@ -37,7 +37,8 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 30, 2026
  *  version May. 18, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ChildEntityBindingWorkflowSpec
@@ -506,10 +507,10 @@ final class ChildEntityBindingWorkflowSpec
     )
 
   private def _order_id(value: String): EntityId =
-    EntityId(OrderEntity.collectionId.major, value, OrderEntity.collectionId)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(OrderEntity.collectionId.major, value, OrderEntity.collectionId)
 
   private def _order_line_id(value: String): EntityId =
-    EntityId(OrderLineEntity.collectionId.major, value, OrderLineEntity.collectionId)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(OrderLineEntity.collectionId.major, value, OrderLineEntity.collectionId)
 
   private def _records(record: Record, key: String): Vector[Record] =
     record.getVector(key).getOrElse(Vector.empty).collect {

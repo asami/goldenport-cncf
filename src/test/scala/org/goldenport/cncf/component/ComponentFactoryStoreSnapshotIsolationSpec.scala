@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStoreSnapshotIsolationSpec
@@ -25,7 +26,7 @@ final class ComponentFactoryStoreSnapshotIsolationSpec
       Given("two different snapshots with the same entity id and different payloads")
       val factory = new ComponentFactory()
       val cid = EntityCollectionId("test", "a", "sample")
-      val id = EntityId("m", "a", cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", cid)
       val left = SnapshotEntity(id, "left")
       val right = SnapshotEntity(id, "right")
       val leftsnapshot = TrieMap.empty[EntityId, Any]
@@ -56,7 +57,7 @@ final class ComponentFactoryStoreSnapshotIsolationSpec
       forAll(table) { (minor, leftname, rightname) =>
         val factory = new ComponentFactory()
         val cid = EntityCollectionId("test", "a", "sample")
-        val id = EntityId("m", minor, cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", minor, cid)
         val left = SnapshotEntity(id, leftname)
         val right = SnapshotEntity(id, rightname)
         val leftsnapshot = TrieMap.empty[EntityId, Any]
@@ -84,7 +85,7 @@ final class ComponentFactoryStoreSnapshotIsolationSpec
       val property = Prop.forAll(genCase) { (minor, leftname, rightname) =>
         val factory = new ComponentFactory()
         val cid = EntityCollectionId("test", "a", "sample")
-        val id = EntityId("m", minor, cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", minor, cid)
         val left = SnapshotEntity(id, leftname)
         val right = SnapshotEntity(id, rightname)
         val leftsnapshot = TrieMap.empty[EntityId, Any]

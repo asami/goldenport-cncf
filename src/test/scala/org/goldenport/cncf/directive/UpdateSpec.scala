@@ -4,17 +4,20 @@ import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.record.Record
 import org.simplemodeling.model.directive.Update
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version May.  2, 2026
+ *  version May.  2, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UpdateSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
 
   "Update" should {
     "support noop / set / setNull states" in {
@@ -32,17 +35,19 @@ final class UpdateSpec
     }
 
     "allow cozy-style update directive object" in {
-      val id = EntityId("test", "a", EntityCollectionId("test", "a", "person"))
+      Given("an entity id and a typed Person update directive")
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "a", EntityCollectionId("test", "a", "person"))
       val directive = domain.update.Person(
         name = Update.set(Name("hanako")),
         age = Update.noop[Age]
       )
 
-      directive.name.isSet shouldBe true
-      directive.age.isNoop shouldBe true
-
+      When("the directive is wrapped as by-id and by-query updates")
       val byid = UpdateDirective.ById(id, directive)
       val byquery = UpdateDirective.ByQuery(Query("name = 'hanako'"), directive)
+      Then("the wrappers preserve the directive and report a change")
+      directive.name.isSet shouldBe true
+      directive.age.isNoop shouldBe true
       byid.id shouldBe id
       byquery.patch shouldBe directive
       Update.hasChange(directive) shouldBe true

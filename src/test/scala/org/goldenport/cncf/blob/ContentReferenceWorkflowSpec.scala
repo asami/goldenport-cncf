@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for SimpleEntity content reference handling.
  *
  * @since   May.  3, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentReferenceWorkflowSpec
@@ -912,10 +913,10 @@ final class ContentReferenceWorkflowSpec
   }
 
   private def _blob_id(value: String): EntityId =
-    EntityId("cncf", "builtin", EntityCollectionId("cncf", "builtin", "blob"), entropy = Some(value))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "builtin", EntityCollectionId("cncf", "builtin", "blob"), entropy = Some(value))
 
   private def _article_id(value: String): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "sample",
       EntityCollectionId("cncf", "sample", "article"),

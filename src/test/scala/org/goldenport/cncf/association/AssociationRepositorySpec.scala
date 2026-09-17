@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the generic Association runtime foundation.
  *
  * @since   Apr. 27, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AssociationRepositorySpec
@@ -134,8 +135,8 @@ final class AssociationRepositorySpec
       Given("a Blob attachment Association repository and a foreign canonical EntityId")
       given ExecutionContext = ExecutionContext.test()
       val repository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
-      val foreign = EntityId("cncf", "association_foreign", EntityCollectionId("cncf", "builtin", "tag"))
-      val target = EntityId("cncf", "target_foreign", EntityCollectionId("cncf", "builtin", "blob"))
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_foreign", EntityCollectionId("cncf", "builtin", "tag"))
+      val target = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "target_foreign", EntityCollectionId("cncf", "builtin", "blob"))
 
       When("the foreign id is selected for a Blob attachment association")
       val result = repository.create(
@@ -155,7 +156,7 @@ final class AssociationRepositorySpec
       Then("creation fails and the association codec retains the canonical target string exactly")
       result shouldBe a[Consequence.Failure[_]]
       val association = Association(
-        id = EntityId("cncf", "association_canonical", AssociationStoragePolicy.BlobAttachmentCollection),
+        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_canonical", AssociationStoragePolicy.BlobAttachmentCollection),
         associationId = "assoc-canonical",
         sourceEntityId = _source_id("source-canonical"),
         targetEntityId = target.value,
@@ -185,7 +186,7 @@ final class AssociationRepositorySpec
         collectionId = AssociationStoragePolicy.BlobAttachmentCollection
       )
       val canonical = Association(
-        id = EntityId("cncf", "association_decode", AssociationStoragePolicy.BlobAttachmentCollection),
+        id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "association_decode", AssociationStoragePolicy.BlobAttachmentCollection),
         associationId = "assoc-decode",
         sourceEntityId = _source_id("decode-source"),
         targetEntityId = _blob_id("decode-target"),
@@ -225,7 +226,7 @@ final class AssociationRepositorySpec
     collection: EntityCollectionId,
     entropy: String
   ): String =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       collection.major,
       collection.minor,
       collection,

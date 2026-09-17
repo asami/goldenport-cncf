@@ -75,7 +75,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Sep.  1, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1848,7 +1848,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val subsystem = _management_console_fixture_subsystem()
       val storedid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
-      val foreignid = EntityId(
+      val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
         foreigncollection,
@@ -2266,7 +2266,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val canonicalid = _new_notice_entity_id().value
       val storedid = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice").storage.storeRealm.values.head.id
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
-      val foreignid = EntityId(
+      val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
         foreigncollection,
@@ -2896,7 +2896,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val localid = s"notice_admin_compensate_${java.util.UUID.randomUUID().toString.replace("-", "")}"
       val missingtoken = s"missing_${localid}"
-      val missingblobid = EntityId(
+      val missingblobid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         BlobRepository.CollectionId.major,
         BlobRepository.CollectionId.minor,
         BlobRepository.CollectionId,
@@ -2933,7 +2933,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id
       val missingtoken = s"missing_update_${java.util.UUID.randomUUID().toString.replace("-", "")}"
-      val missingblobid = EntityId(
+      val missingblobid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         BlobRepository.CollectionId.major,
         BlobRepository.CollectionId.minor,
         BlobRepository.CollectionId,
@@ -5920,7 +5920,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "reject a foreign canonical instance locator without rendering Admin reads or aggregate operations" in {
       Given("view and aggregate fixtures with a local short ID colliding with a foreign canonical ID")
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
-      val foreignid = EntityId(
+      val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
         foreigncollection,
@@ -5956,7 +5956,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "reject foreign canonical IDs at direct Admin view and aggregate reads" in {
       Given("direct Admin surfaces with a local entropy collision in another collection")
       val foreigncollection = EntityCollectionId("foreign", "route", "notice")
-      val foreignid = EntityId(
+      val foreignid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         foreigncollection.major,
         foreigncollection.minor,
         foreigncollection,
@@ -15407,13 +15407,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
   private def _new_notice_entity_id(): EntityId = {
     val collection = NoticeEntity.collectionid
-    val generated = EntityId(collection.major, collection.minor, collection)
+    val generated = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(collection.major, collection.minor, collection)
     EntityId.parse(generated.value).getOrElse(fail("notice entity id generation failed"))
   }
 
   private def _notice_entity_id_from_shortid(shortid: String): EntityId = {
     val collection = NoticeEntity.collectionid
-    val generated = EntityId(
+    val generated = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       collection.major,
       collection.minor,
       collection,
@@ -15500,7 +15500,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   ): String = {
     val component = subsystem.findComponent(org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.BLOB).getOrElse(fail("Blob component is missing"))
     given ExecutionContext = component.logic.executionContext()
-    val id = EntityId(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId)
+    val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId)
     val created = _success(BlobRepository.entityStore().create(
       BlobCreate(
         id = id,

@@ -44,7 +44,8 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkVersionedMutationSpec
@@ -63,7 +64,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingNativeDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.None, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "native_acknowledgment", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "native_acknowledgment", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val created = interpreter.interpret(
           UnitOfWorkOp.EntityStoreCreate(
@@ -115,7 +116,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore           = new RecordingNativeDataStore
         val fixture             = _fixture(EntityConcurrencyPolicy.None, datastore)
         given ExecutionContext  = fixture.context
-        val id                  = EntityId("test", "native_direct", _collectionid)
+        val id                  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "native_direct", _collectionid)
         val interpreter         = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val authorization =
           Some(
@@ -168,7 +169,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingNativeDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.Optimistic, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "native_managed_cas", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "native_managed_cas", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val created = interpreter.interpret(
           UnitOfWorkOp.EntityStoreCreate(
@@ -210,7 +211,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingNativeDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.Optimistic, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "native_cas", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "native_cas", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val authorization =
           Some(
@@ -274,7 +275,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingNativeDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.None, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "native_deleted", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "native_deleted", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val authorization =
           Some(
@@ -337,7 +338,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingNativeDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.None, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "native_authorized", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "native_authorized", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val authorization =
           Some(
@@ -383,7 +384,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingNativeDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.Optimistic, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "authorized_managed_base", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "authorized_managed_base", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val authorization =
           Some(
@@ -458,7 +459,7 @@ final class UnitOfWorkVersionedMutationSpec
           _current_aware_transition_validation_hook
         )
         given ExecutionContext = fixture.context
-        val id = EntityId("test", "validated_missing_base", _collectionid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "validated_missing_base", _collectionid)
         val interpreter =
           new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         datastore.createAfterNextLoad(
@@ -499,7 +500,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingNativeDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.None, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "guarded_write_if_changed", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "guarded_write_if_changed", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val created = interpreter.interpret(
           UnitOfWorkOp.EntityStoreCreate(
@@ -546,7 +547,7 @@ final class UnitOfWorkVersionedMutationSpec
         val datastore          = new RecordingGuardedDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.None, datastore)
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "guarded_provider", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "guarded_provider", _collectionid)
         val interpreter        = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val created = interpreter.interpret(
           UnitOfWorkOp.EntityStoreCreate(
@@ -593,7 +594,7 @@ final class UnitOfWorkVersionedMutationSpec
         )
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "created", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "created", _collectionid)
         val interpreter =
           new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
 
@@ -620,7 +621,7 @@ final class UnitOfWorkVersionedMutationSpec
         )
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "embedded_patch", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "embedded_patch", _collectionid)
         val interpreter =
           new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val created = interpreter.interpret(
@@ -655,7 +656,7 @@ final class UnitOfWorkVersionedMutationSpec
         Given("one persisted Entity and its component-scoped working set")
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "authoritative", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "authoritative", _collectionid)
         val initial            = VersionedPerson(id, "before")
         val _ = fixture.datastorespace.inject(
           DataStore.CollectionId.EntityStore(_collectionid),
@@ -692,7 +693,7 @@ final class UnitOfWorkVersionedMutationSpec
         Given("two candidates admitted from the same Entity snapshot")
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "stale", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "stale", _collectionid)
         val initial            = VersionedPerson(id, "before")
         val _ = fixture.datastorespace.inject(
           DataStore.CollectionId.EntityStore(_collectionid),
@@ -742,7 +743,7 @@ final class UnitOfWorkVersionedMutationSpec
         Given("a versioned mutation whose result decoder fails after datastore success")
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "projection_failure", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "projection_failure", _collectionid)
         val initial            = VersionedPerson(id, "before")
         val _ = fixture.datastorespace.inject(
           DataStore.CollectionId.EntityStore(_collectionid),
@@ -834,7 +835,7 @@ final class UnitOfWorkVersionedMutationSpec
         Given("one optimistic Entity and a stale copy admitted before any managed save")
         val fixture = _fixture()
         given ExecutionContext = fixture.context
-        val id = EntityId("test", "managed_policy", _collectionid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "managed_policy", _collectionid)
         val initial = VersionedPerson(id, "before")
         val interpreter =
           new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
@@ -889,7 +890,7 @@ final class UnitOfWorkVersionedMutationSpec
         Given("a managed save whose authoritative decoder fails after datastore success")
         val fixture = _fixture()
         given ExecutionContext = fixture.context
-        val id = EntityId("test", "managed_projection_failure", _collectionid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "managed_projection_failure", _collectionid)
         val initial = VersionedPerson(id, "before")
         val _ = fixture.datastorespace.inject(
           DataStore.CollectionId.EntityStore(_collectionid),
@@ -940,7 +941,7 @@ final class UnitOfWorkVersionedMutationSpec
         )
         val fixture = _fixture(EntityConcurrencyPolicy.None)
         given ExecutionContext = fixture.context
-        val id = EntityId("test", "explicit_optimistic", _collectionid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "explicit_optimistic", _collectionid)
         val initial = VersionedPerson(id, "before")
         val _ = fixture.datastorespace.inject(
           DataStore.CollectionId.EntityStore(_collectionid),
@@ -979,7 +980,7 @@ final class UnitOfWorkVersionedMutationSpec
         Given("an explicitly classified framework-bootstrap save")
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id                 = EntityId("test", "unversioned", _collectionid)
+        val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "unversioned", _collectionid)
         val _ = fixture.datastorespace.inject(
           DataStore.CollectionId.EntityStore(_collectionid),
           _persistent.toStoreRecord(VersionedPerson(id, "before"))

@@ -15,7 +15,8 @@ import org.goldenport.protocol.Request
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object ActionCallSupport {
@@ -219,5 +220,5 @@ object ActionCallSupport {
     minor: String,
     cid: org.simplemodeling.model.datatype.EntityCollectionId
   ): org.simplemodeling.model.datatype.EntityId =
-    org.simplemodeling.model.datatype.EntityId("test", minor, cid)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", minor, cid)
 }

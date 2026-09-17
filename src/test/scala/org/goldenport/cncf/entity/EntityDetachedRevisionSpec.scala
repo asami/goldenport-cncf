@@ -55,7 +55,8 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityDetachedRevisionSpec
@@ -541,7 +542,13 @@ final class EntityDetachedRevisionSpec
         def fromRecord(record: Record): Consequence[DetachedEntity] =
           _persistent.fromRecord(record).map(entity =>
             entity.copy(
-              id = entity.id.copy(collection = foreigncollection)
+              id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+                entity.id.major,
+                entity.id.minor,
+                foreigncollection,
+                entity.id.timestamp,
+                entity.id.entropy
+              )
             )
           )
 
@@ -576,7 +583,13 @@ final class EntityDetachedRevisionSpec
         EntityCollectionId("provider", "alias", _collection_id.name)
       val foreignentity =
         DetachedEntity(
-          requestedid.copy(collection = foreigncollection),
+          org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+            requestedid.major,
+            requestedid.minor,
+            foreigncollection,
+            requestedid.timestamp,
+            requestedid.entropy
+          ),
           "foreign",
           "domain"
         )
@@ -813,7 +826,7 @@ final class EntityDetachedRevisionSpec
   private def _id(
     entropy: String
   ): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       "detached",
       _collection_id,

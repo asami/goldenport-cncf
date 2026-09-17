@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Aug. 14, 2026
+ *  version Aug. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStateMachineBootstrapSpec
@@ -42,7 +43,7 @@ final class ComponentFactoryStateMachineBootstrapSpec
       val executioncontext = bootstrapped.logic.executionContext()
       given org.goldenport.cncf.context.ExecutionContext = executioncontext
       given EntityPersistent[SpecEntity] = _entity_persistent
-      val entity = SpecEntity(EntityId("test", "bootstrap_1", _cid), "taro")
+      val entity = SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bootstrap_1", _cid), "taro")
 
       val transitionresult =
         executioncontext.runtime.transitionValidationHook.beforeUpdate(entity, _entity_persistent)

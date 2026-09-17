@@ -43,7 +43,8 @@ import org.testcontainers.utility.DockerImageName
 
 /*
  * @since   Jul. 26, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkPlainMutationProviderParitySpec
@@ -132,7 +133,7 @@ final class UnitOfWorkPlainMutationProviderParitySpec
       )
     val fixture = _fixture(collectionid, datastore)
     given ExecutionContext = fixture.context
-    val id = EntityId(
+    val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       s"plain_mutation_$providername",
       collectionid

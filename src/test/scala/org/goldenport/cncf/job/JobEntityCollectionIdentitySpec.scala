@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for exact Job persistence collection identity.
  *
  * @since   Jul. 30, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobEntityCollectionIdentitySpec
@@ -21,7 +22,7 @@ final class JobEntityCollectionIdentitySpec
   "Job persistence codecs" should {
     "reject foreign canonical ids rather than rebinding job and job-definition records" in {
       Given("records whose ids belong to the foreign Blob collection")
-      val foreign = EntityId("cncf", "foreign_job", EntityCollectionId("cncf", "builtin", "blob"))
+      val foreign = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "foreign_job", EntityCollectionId("cncf", "builtin", "blob"))
       val job = Record.dataAuto("id" -> foreign.value)
       val definition = Record.dataAuto(
         "id" -> foreign.value,

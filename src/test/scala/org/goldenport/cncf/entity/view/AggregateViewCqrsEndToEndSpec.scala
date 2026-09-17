@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewCqrsEndToEndSpec
@@ -29,7 +30,7 @@ final class AggregateViewCqrsEndToEndSpec
     "flow command -> event -> projection -> query without command/read boundary violation" in {
       Given("an aggregate command handler and view projector")
       val collectionid = EntityCollectionId("tokyo", "sales", "person_view")
-      val viewid = EntityId("tokyo", "sales", collectionid)
+      val viewid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", collectionid)
       val aggregate = new AggregateCommandHandler[_Command, _State, _Event] {
         def handle(command: _Command, state: _State): Consequence[AggregateCommandResult[_State, _Event]] =
           if (command.amount <= 0)

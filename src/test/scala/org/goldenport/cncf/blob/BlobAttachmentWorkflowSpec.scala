@@ -22,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Apr. 27, 2026
  *  version Apr. 30, 2026
- * @version Jul. 29, 2026
+ *  version Jul. 29, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobAttachmentWorkflowSpec
@@ -281,7 +282,7 @@ final class BlobAttachmentWorkflowSpec
     }
 
   private def _blob_entity_id(value: String): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       BlobRepository.CollectionId.major,
       BlobRepository.CollectionId.minor,
       BlobRepository.CollectionId,
@@ -289,14 +290,14 @@ final class BlobAttachmentWorkflowSpec
     )
 
   private def _new_blob_entity_id(): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       BlobRepository.CollectionId.major,
       BlobRepository.CollectionId.minor,
       BlobRepository.CollectionId
     )
 
   private def _article_entity_id(value: String): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "cncf",
       "sample",
       EntityCollectionId("cncf", "sample", "article"),

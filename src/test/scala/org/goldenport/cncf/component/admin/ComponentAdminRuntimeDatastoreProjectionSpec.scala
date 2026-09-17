@@ -26,7 +26,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * package-private, value-only Admin runtime/datastore projection.
  *
  * @since   Aug. 28, 2026
- * @version Aug. 28, 2026
+ *  version Aug. 28, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentAdminRuntimeDatastoreProjectionSpec
@@ -120,7 +121,7 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
     "E3 resolve only the declared backing collection and preserve exact canonical identity" must _e3 {
       "when an Admin Entity-ID input names its owner explicitly" in {
         Given("Spec: ADM05-RUNTIME-DATASTORE-IDENTITY; Rules: ADM05-R3; Example: E3; one declared entity name, one registered exact collection, and a canonical EntityId owned by it")
-        val entityid = EntityId("runtime", "entry_1", _collection_id)
+        val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("runtime", "entry_1", _collection_id)
         val entityidprovenance = _entity_id_provenance
         val input = ComponentAdminEntityIdInput(Some("facility"), entityid.value, entityidprovenance)
         val facts = _facts(_view, _space(_collection_id), Vector(input), SubsystemUserMode.Standalone)
@@ -144,14 +145,14 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
         Given("Spec: ADM05-RUNTIME-DATASTORE-IDENTITY; Rules: ADM05-R4; Example: E4; scalar input, foreign canonical ID, blank and whitespace declared owners, absent declared owner, and two exact collections sharing one name")
         val selectedspace = _space(_collection_id)
         val scalar = _input(Some("facility"), "notice_1")
-        val foreign = _input(Some("facility"), EntityId("runtime", "notice_1", _foreign_collection).value)
-        val blank = _input(Some(""), EntityId("runtime", "notice_1", _collection_id).value)
-        val whitespace = _input(Some(" "), EntityId("runtime", "notice_1", _collection_id).value)
-        val missing = _input(None, EntityId("runtime", "notice_1", _collection_id).value)
+        val foreign = _input(Some("facility"), org.goldenport.cncf.EntityIdFixtureBridge.fromParts("runtime", "notice_1", _foreign_collection).value)
+        val blank = _input(Some(""), org.goldenport.cncf.EntityIdFixtureBridge.fromParts("runtime", "notice_1", _collection_id).value)
+        val whitespace = _input(Some(" "), org.goldenport.cncf.EntityIdFixtureBridge.fromParts("runtime", "notice_1", _collection_id).value)
+        val missing = _input(None, org.goldenport.cncf.EntityIdFixtureBridge.fromParts("runtime", "notice_1", _collection_id).value)
         val ambiguousspace = new EntitySpace()
         ambiguousspace.registerEntity("facility", _collection(_first_collection))
         ambiguousspace.registerEntity("facility", _collection(_second_collection))
-        val ambiguous = _input(Some("facility"), EntityId("runtime", "notice_1", _first_collection).value)
+        val ambiguous = _input(Some("facility"), org.goldenport.cncf.EntityIdFixtureBridge.fromParts("runtime", "notice_1", _first_collection).value)
 
         When("the projection evaluates each independent boundary input")
         val scalarresult = ComponentAdminRuntimeDatastoreProjection.projectC(_view, _facts(_view, selectedspace, Vector(scalar), SubsystemUserMode.Standalone))
@@ -180,7 +181,7 @@ final class ComponentAdminRuntimeDatastoreProjectionSpec
       "when the pure projection evaluates generated canonical inputs" in {
         Given("Spec: ADM05-RUNTIME-DATASTORE-IDENTITY; Rules: ADM05-R5; Example: E5; a finite generator of canonical EntityIds owned by one registered collection")
         val property = Prop.forAll(Gen.choose(1, 500)) { number =>
-          val entityid = EntityId("runtime", s"entry_$number", _collection_id)
+          val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("runtime", s"entry_$number", _collection_id)
           val input = ComponentAdminEntityIdInput(Some("facility"), entityid.value, _provenance)
           ComponentAdminRuntimeDatastoreProjection.projectC(
             _view,

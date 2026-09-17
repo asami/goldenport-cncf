@@ -52,7 +52,8 @@ import org.simplemodeling.model.directive.Condition
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 26, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -68,7 +69,7 @@ final class ActionCallEntityAccessMetricsSpec
         given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
         given EntityPersistent[ClaimPerson]             = _claim_persistent
         val cid                                         = _cid("person_claim_or_load")
-        val id                                          = EntityId("test", "claim_or_load", cid)
+        val id                                          = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "claim_or_load", cid)
         val component = TestComponentFactory.create("claim_or_load", Protocol.empty)
         val ctx = _execution_context(
           DataStoreSpace.default(),
@@ -100,7 +101,7 @@ final class ActionCallEntityAccessMetricsSpec
         given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
         given EntityPersistent[ClaimPerson]             = _claim_persistent
         val cid                                         = _cid("person_claim_or_load_internal")
-        val id        = EntityId("test", "claim_or_load_internal", cid)
+        val id        = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "claim_or_load_internal", cid)
         val component = TestComponentFactory.create("claim_or_load_internal", Protocol.empty)
         val ctx = _execution_context(
           DataStoreSpace.default(),
@@ -129,7 +130,7 @@ final class ActionCallEntityAccessMetricsSpec
         given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
         given EntityPersistent[ClaimPerson]             = _claim_persistent
         val cid                                         = _cid("person_internal_save")
-        val id                                          = EntityId("test", "internal_save", cid)
+        val id                                          = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "internal_save", cid)
         val component = TestComponentFactory.create("internal_save", Protocol.empty)
         val ctx = _execution_context(
           DataStoreSpace.default(),
@@ -166,7 +167,7 @@ final class ActionCallEntityAccessMetricsSpec
         given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
         given EntityPersistent[ClaimPerson]             = _claim_persistent
         val cid                                         = _cid("person_internal_upsert")
-        val id                                          = EntityId("test", "internal_upsert", cid)
+        val id                                          = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "internal_upsert", cid)
         val component = TestComponentFactory.create("internal_upsert", Protocol.empty)
         val ctx = _execution_context(
           DataStoreSpace.default(),
@@ -201,7 +202,7 @@ final class ActionCallEntityAccessMetricsSpec
           given EntityPersistent[TestPerson] = _persistent
 
           val cid       = _cid("person_metrics_cache_load")
-          val id        = EntityId("test", "cache_load", cid)
+          val id        = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "cache_load", cid)
           val entity    = TestPerson(id, "taro", 20)
           val component = TestComponentFactory.create("metrics_cache_load", Protocol.empty)
           component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
@@ -228,7 +229,7 @@ final class ActionCallEntityAccessMetricsSpec
           given EntityPersistent[TestPerson] = _persistent
 
           val cid       = _cid("person_metrics_authz_cache_load")
-          val id        = EntityId("test", "authz_cache_load", cid)
+          val id        = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "authz_cache_load", cid)
           val entity    = TestPerson.privateOwnedBy(id, "private-cache-load", 30, "other-owner")
           val component = TestComponentFactory.create("metrics_authz_cache_load", Protocol.empty)
           component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
@@ -267,7 +268,7 @@ final class ActionCallEntityAccessMetricsSpec
           )
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_typed_security_cache_load")
-          val id                 = EntityId("test", "typed_security_cache_load", cid)
+          val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "typed_security_cache_load", cid)
           val resident   = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
           val stalestore = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
           val _ = datastorespace.inject(
@@ -309,7 +310,7 @@ final class ActionCallEntityAccessMetricsSpec
           )
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_typed_security_cache_load_denied")
-          val id                 = EntityId("test", "typed_security_cache_load_denied", cid)
+          val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "typed_security_cache_load_denied", cid)
           val resident =
             TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
           val stalestore =
@@ -349,7 +350,7 @@ final class ActionCallEntityAccessMetricsSpec
           val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_store_load")
-          val id                 = EntityId("test", "store_load", cid)
+          val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "store_load", cid)
           val entity             = TestPerson.privateOwnedBy(id, "hanako", 30, "test-principal")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
@@ -384,13 +385,13 @@ final class ActionCallEntityAccessMetricsSpec
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_search")
           val p1 = TestPerson.privateOwnedBy(
-            EntityId("test", "search_1", cid),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "search_1", cid),
             "alpha",
             20,
             "test-principal"
           )
           val p2 = TestPerson.privateOwnedBy(
-            EntityId("test", "search_2", cid),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "search_2", cid),
             "beta",
             30,
             "test-principal"
@@ -439,7 +440,7 @@ final class ActionCallEntityAccessMetricsSpec
           val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_authz_load_fallback")
-          val id                 = EntityId("test", "authz_load_fallback", cid)
+          val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "authz_load_fallback", cid)
           val entity             = TestPerson.privateOwnedBy(id, "private-load", 31, "other-owner")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(
@@ -476,7 +477,7 @@ final class ActionCallEntityAccessMetricsSpec
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_authz_search_fallback")
           val p1 = TestPerson.privateOwnedBy(
-            EntityId("test", "authz_search_1", cid),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "authz_search_1", cid),
             "private-search",
             32,
             "other-owner"
@@ -522,9 +523,9 @@ final class ActionCallEntityAccessMetricsSpec
           val ctx                = _execution_context(datastorespace, entitystorespace)
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_search_bypass")
-          val resident           = TestPerson(EntityId("test", "resident", cid), "resident", 20)
+          val resident           = TestPerson(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "resident", cid), "resident", 20)
           val stored = TestPerson.privateOwnedBy(
-            EntityId("test", "stored", cid),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "stored", cid),
             "stored",
             30,
             "test-principal"
@@ -582,7 +583,7 @@ final class ActionCallEntityAccessMetricsSpec
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_working_set_loading")
           val stored = TestPerson.privateOwnedBy(
-            EntityId("test", "loading_store", cid),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "loading_store", cid),
             "loading-store",
             30,
             "test-principal"
@@ -641,9 +642,9 @@ final class ActionCallEntityAccessMetricsSpec
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_working_set_disabled")
           val resident =
-            TestPerson(EntityId("test", "resident_disabled", cid), "resident-disabled", 20)
+            TestPerson(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "resident_disabled", cid), "resident-disabled", 20)
           val stored = TestPerson.privateOwnedBy(
-            EntityId("test", "stored_disabled", cid),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "stored_disabled", cid),
             "stored-disabled",
             30,
             "test-principal"
@@ -697,7 +698,7 @@ final class ActionCallEntityAccessMetricsSpec
           val ctx     = ExecutionContext.withFrameworkWorkingSetEnabled(basectx, enabled = false)
           given ExecutionContext = ctx
           val cid                = _cid("person_metrics_working_set_disabled_load_auth")
-          val id                 = EntityId("test", "disabled_load_auth", cid)
+          val id                 = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "disabled_load_auth", cid)
           val stored = TestPerson.privateOwnedBy(id, "disabled-load-auth", 30, "other-owner")
           val _ = datastorespace.inject(
             DataStoreSpace.Seed(

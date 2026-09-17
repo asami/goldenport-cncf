@@ -17,12 +17,13 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 28, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _blob_collection = EntityCollectionId("cncf", "builtin", "blob")
-  private val _blob_id = EntityId("cncf", "blob_1", _blob_collection)
+  private val _blob_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", "blob_1", _blob_collection)
 
   "OperationAccessPolicy resource policies" should {
     "deny Blob collection create without the configured collection capability" in {

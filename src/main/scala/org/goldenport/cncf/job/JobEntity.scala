@@ -1,8 +1,8 @@
 package org.goldenport.cncf.job
 
-import java.nio.charset.StandardCharsets
 import java.time.Instant
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   May.  7, 2026
  *  version May. 31, 2026
  *  version Jul. 30, 2026
- * @version Sep. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -48,8 +48,72 @@ object JobDefinitionStatus {
     }
 }
 
+final class JobDefinitionId private (
+  major: String,
+  minor: String,
+  timestamp: Instant,
+  entropy: String
+) extends EntityId(
+  major,
+  minor,
+  JobEntityCollections.JobDefinition,
+  Some(timestamp),
+  Some(entropy)
+)
+
+object JobDefinitionId {
+  def issue(context: IdGenerationContext): JobDefinitionId =
+    context.entityId(
+      JobEntityCollections.JobDefinition,
+      "job-definition-create"
+    )(_issued_factory)
+
+  def restore(id: EntityId): Consequence[JobDefinitionId] =
+    if (id.collection != JobEntityCollections.JobDefinition)
+      Consequence.argumentInvalid(
+        s"job definition id collection mismatch: expected ${JobEntityCollections.JobDefinition.print}, got ${id.collection.print}"
+      )
+    else
+      (id.timestamp, id.entropy) match {
+        case (Some(timestamp), Some(entropy)) =>
+          Consequence.success(new JobDefinitionId(id.major, id.minor, timestamp, entropy))
+        case _ =>
+          Consequence.stateInvalid("job definition id must retain canonical timestamp and entropy")
+      }
+
+  def bridgeFromParts(
+    major: String,
+    minor: String,
+    timestamp: Instant,
+    entropy: String
+  ): Consequence[JobDefinitionId] =
+    EntityId.bridgeFromParts(
+      major,
+      minor,
+      JobEntityCollections.JobDefinition,
+      timestamp,
+      entropy
+    ).flatMap(restore)
+
+  private val _issued_factory = new IdGenerationContext.EntityIdFactory[JobDefinitionId] {
+    def fromIssuedParts(
+      major: String,
+      minor: String,
+      collection: EntityCollectionId,
+      timestamp: Instant,
+      entropy: String
+    ): JobDefinitionId =
+      if (collection != JobEntityCollections.JobDefinition)
+        throw new IllegalArgumentException(
+          s"JobDefinitionId issuance collection mismatch: ${collection.print}"
+        )
+      else
+        new JobDefinitionId(major, minor, timestamp, entropy)
+  }
+}
+
 final case class JobDefinitionEntity(
-  id: EntityId,
+  id: JobDefinitionId,
   key: String,
   jclSource: String,
   jclFormat: String,
@@ -100,19 +164,8 @@ final case class JobDefinitionEntity(
 }
 
 object JobDefinitionEntity {
-  def entityId(key: String): EntityId =
-    _entity_id(_versioned_entity_id_label(_normalize_key(key)))
-
-  private def _entity_id(label: String): EntityId =
-    EntityId(
-      major = "cncf",
-      minor = label,
-      collection = JobEntityCollections.JobDefinition,
-      timestamp = Some(Instant.EPOCH),
-      entropy = Some(_stable_entropy(label))
-    )
-
   def create(
+    id: JobDefinitionId,
     key: String,
     jclSource: String,
     jclformat: String = JobBatchDefinition.DefaultFormatName,
@@ -125,7 +178,7 @@ object JobDefinitionEntity {
     now: Instant
   ): JobDefinitionEntity =
     JobDefinitionEntity(
-      id = entityId(key),
+      id = id,
       key = _normalize_key(key),
       jclSource = jclSource,
       jclFormat = _normalize_jcl_format(jclformat),
@@ -177,7 +230,7 @@ object JobDefinitionEntity {
       jcl <- _required(record, "jclSource")
       jclformat <- _jcl_format(record)
       status <- JobDefinitionStatus.parse(record.getString("definitionStatus").getOrElse("draft"))
-      id <- EntityId.createC(record).flatMap(_require_definition_id)
+      id <- EntityId.createC(record).flatMap(JobDefinitionId.restore)
       parsed = JobBatchDefinition.parse(jcl, jclformat).toOption.flatMap(_.jobs.headOption)
     } yield JobDefinitionEntity(
       id = id,
@@ -210,22 +263,6 @@ object JobDefinitionEntity {
 
   private def _normalize_key(key: String): String =
     key.trim
-
-  private def _require_definition_id(id: EntityId): Consequence[EntityId] =
-    if (id.collection == JobEntityCollections.JobDefinition)
-      Consequence.success(id)
-    else
-      Consequence.argumentInvalid(
-        s"job definition id collection mismatch: expected ${JobEntityCollections.JobDefinition.print}, got ${id.collection.print}"
-      )
-
-  private def _versioned_entity_id_label(key: String): String = {
-    val units = key.iterator.map(value => f"${value.toInt}%04x").mkString
-    s"v1_${key.length.toHexString}_$units"
-  }
-
-  private def _stable_entropy(label: String): String =
-    label.getBytes(StandardCharsets.UTF_8).map(value => f"${value & 0xff}%02x").mkString
 
   private def _required(record: Record, key: String): Consequence[String] =
     record.getString(key).filter(_.trim.nonEmpty) match {
@@ -299,21 +336,25 @@ object JobEntity {
   def entityId(jobId: JobId): EntityId =
     JobId.parse(jobId.value) match {
       case Consequence.Success(parsed) =>
-        EntityId(
-          major = parsed.major,
-          minor = parsed.minor,
-          collection = JobEntityCollections.Job,
-          timestamp = parsed.timestamp,
-          entropy = parsed.entropy
-        )
+        _job_id_recovery_bridge(parsed)
       case Consequence.Failure(_) =>
-        EntityId(
-          major = jobId.major,
-          minor = jobId.minor,
+        _job_id_recovery_bridge(jobId)
+    }
+
+  private def _job_id_recovery_bridge(jobid: JobId): EntityId =
+    (jobid.timestamp, jobid.entropy) match {
+      case (Some(timestamp), Some(entropy)) =>
+        EntityId.bridgeFromParts(
+          major = jobid.major,
+          minor = jobid.minor,
           collection = JobEntityCollections.Job,
-          timestamp = jobId.timestamp,
-          entropy = jobId.entropy
+          timestamp = timestamp,
+          entropy = entropy
+        ).toOption.getOrElse(
+          throw new IllegalArgumentException(s"Invalid JobId recovery bridge: ${jobid.value}")
         )
+      case _ =>
+        throw new IllegalArgumentException(s"JobId recovery requires canonical timestamp and entropy: ${jobid.value}")
     }
 
   def from(model: JobQueryReadModel): JobEntity = {

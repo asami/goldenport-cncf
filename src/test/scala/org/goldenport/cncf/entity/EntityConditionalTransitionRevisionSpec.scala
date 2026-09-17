@@ -39,7 +39,8 @@ import org.simplemodeling.model.datatype.{
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionRevisionSpec
@@ -601,7 +602,7 @@ final class EntityConditionalTransitionRevisionSpec
     fixture: Fixture,
     suffix: String
   ): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       _minor(s"revision_transition_root_$suffix"),
       fixture.rootcollection
@@ -611,7 +612,7 @@ final class EntityConditionalTransitionRevisionSpec
     fixture: Fixture,
     suffix: String
   ): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       _minor(s"revision_transition_successor_$suffix"),
       fixture.successorcollection

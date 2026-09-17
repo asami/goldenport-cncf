@@ -24,7 +24,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 24, 2026
  *  version May.  3, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -240,8 +241,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
   private def _component_with_runtime_plan(): Component = {
     val component = new Component() with EntityRuntimePlanProvider {
       private val _cid = EntityCollectionId("sys", "sys", "person")
-      private val _first = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "taro")
-      private val _second = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "jiro")
+      private val _first = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "taro")
+      private val _second = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(
@@ -341,8 +342,8 @@ final class ComponentFactoryRuntimePlanActivationSpec
   private def _component_factory_bundle(): Component.SinglePrimaryBundleFactory =
     new Component.SinglePrimaryBundleFactory with EntityRuntimePlanProvider {
       private val _cid = EntityCollectionId("sys", "sys", "person")
-      private val _first = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "taro")
-      private val _second = RuntimePlanEntity(EntityId("tokyo", "sales", _cid), "jiro")
+      private val _first = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "taro")
+      private val _second = RuntimePlanEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", _cid), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(

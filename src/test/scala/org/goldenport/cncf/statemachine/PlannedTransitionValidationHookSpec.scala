@@ -6,28 +6,33 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.cncf.event.{TransitionLifecycleEvent, TransitionLifecycleKind}
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
-final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers {
+final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _cid = EntityCollectionId("test", "sm", "person")
 
   "PlannedTransitionValidationHook" should {
     "call planner and execute plan before update" in {
+      Given("an execution context, persistent person, and successful transition plan")
       given ExecutionContext = ExecutionContext.create()
       given EntityPersistent[_Person] = _person_persistent
 
       val provider = new _ProviderWithPlan
       val hook = new PlannedTransitionValidationHook(provider)
-      val entity = _Person(EntityId("test", "hook_1", _cid), "taro")
+      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_1", _cid), "taro")
+      When("the planned validation hook processes the update")
       val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
 
+      Then("the update succeeds and lifecycle events are emitted")
       result shouldBe Consequence.unit
       provider.called shouldBe true
       provider.executionTrace shouldBe Vector("exit", "transition", "entry")
@@ -54,14 +59,17 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     }
 
     "emit transition-failed on action failure" in {
+      Given("an execution context, persistent person, and failing transition plan")
       given ExecutionContext = ExecutionContext.create()
       given EntityPersistent[_Person] = _person_persistent
 
       val provider = new _ProviderWithFailingPlan
       val hook = new PlannedTransitionValidationHook(provider)
-      val entity = _Person(EntityId("test", "hook_2", _cid), "hanako")
+      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_2", _cid), "hanako")
+      When("the planned validation hook processes the update")
       val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
 
+      Then("the update fails and emits a transition-failed lifecycle event")
       result shouldBe a[Consequence.Failure[_]]
       val lifecycle = summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
         case e: TransitionLifecycleEvent => e

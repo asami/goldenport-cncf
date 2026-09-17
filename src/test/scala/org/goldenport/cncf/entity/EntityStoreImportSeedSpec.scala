@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 27, 2026
  *  version Apr. 10, 2026
  *  version Apr. 14, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreImportSeedSpec
@@ -32,7 +33,7 @@ final class EntityStoreImportSeedSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PersonEntity] = _person_persistent
-      val e1 = PersonEntity(EntityId("test", "p1", collectionId), "taro")
+      val e1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", collectionId), "taro")
 
       val seed = EntityStoreSeed(
         Vector(
@@ -56,7 +57,7 @@ final class EntityStoreImportSeedSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[StoreStylePersonEntity] = _store_style_person_persistent
-      val e1 = StoreStylePersonEntity(EntityId("test", "s1", storeStyleCollectionId), "hanako")
+      val e1 = StoreStylePersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "s1", storeStyleCollectionId), "hanako")
 
       When("importing the seed")
       val imported = entitystorespace.importSeed(EntityStoreSeed(Vector(EntityStoreSeedEntry(e1))))

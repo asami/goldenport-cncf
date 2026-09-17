@@ -6,17 +6,20 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.record.Record
 import org.simplemodeling.model.directive.Update
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
-final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
+final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "ContentBodyStoragePolicy" should {
     "keep small text content inline with charset-aware byte metadata" in {
+      Given("a small UTF-8 text record")
       given ExecutionContext = ExecutionContext.create()
       val id = _id("inline")
       val record = Record.dataAuto(
@@ -25,8 +28,10 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
         "content_charset" -> "UTF-8"
       )
 
+      When("the record is prepared for storage")
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(id, record))
 
+      Then("the content remains inline with encoded byte metadata")
       stored.getString("content") shouldBe Some("abc")
       stored.getString("content_storage") shouldBe Some("inline")
       stored.getInt("content_byte_size") shouldBe Some(3)
@@ -34,6 +39,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
     }
 
     "overflow large text content by encoded byte length and hydrate it back" in {
+      Given("a large UTF-8 text record and a five-byte inline threshold")
       given ExecutionContext = ExecutionContext.create()
       val id = _id("overflow")
       val text = "日本語"
@@ -43,6 +49,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
         "content_charset" -> "UTF-8"
       )
 
+      When("the record is prepared and hydrated")
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         record,
@@ -50,6 +57,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
       ))
       val hydrated = _success(ContentBodyStoragePolicy.hydrate(id, stored))
 
+      Then("the content is stored as overflow and restored on hydration")
       stored.getString("content") shouldBe None
       stored.getString("content_storage") shouldBe Some("overflow")
       stored.getInt("content_byte_size") shouldBe Some(text.getBytes(StandardCharsets.UTF_8).length)
@@ -57,6 +65,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
     }
 
     "preserve existing overflow content when a partial update omits content" in {
+      Given("an existing overflow record and an update that changes only the title")
       given ExecutionContext = ExecutionContext.create()
       val id = _id("overflow_update")
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
@@ -70,6 +79,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
       ))
       val updateRecord = stored ++ Record.dataAuto("title" -> "updated")
 
+      When("the partial update is prepared and hydrated")
       val updated = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         updateRecord,
@@ -77,12 +87,14 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
       ))
       val hydrated = _success(ContentBodyStoragePolicy.hydrate(id, updated))
 
+      Then("the existing overflow content is preserved alongside the title")
       updated.getString("content_storage") shouldBe Some("overflow")
       hydrated.getString("content") shouldBe Some("日本語")
       hydrated.getString("title") shouldBe Some("updated")
     }
 
     "clear overflow content on explicit setNull" in {
+      Given("an existing overflow record and an explicit content null update")
       given ExecutionContext = ExecutionContext.create()
       val id = _id("overflow_clear")
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
@@ -96,6 +108,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
       ))
       val clearRecord = stored ++ Record.dataAuto("content" -> Update.setNull[String])
 
+      When("the explicit null update is prepared and hydrated")
       val cleared = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         clearRecord,
@@ -103,6 +116,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
       ))
       val hydrated = _success(ContentBodyStoragePolicy.hydrate(id, cleared))
 
+      Then("the overflow content and storage marker are cleared")
       cleared.getString("content") shouldBe None
       cleared.getString("content_storage") shouldBe None
       hydrated.getString("content") shouldBe None
@@ -110,7 +124,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers {
   }
 
   private def _id(entropy: String): EntityId =
-    EntityId("test", "content", EntityCollectionId("test", "content", "article"), entropy = Some(entropy))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "content", EntityCollectionId("test", "content", "article"), entropy = Some(entropy))
 
   private def _success[A](result: Consequence[A]): A =
     result match {

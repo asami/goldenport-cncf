@@ -25,7 +25,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   Apr. 22, 2026
  *  version May.  4, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowEngineSpec
@@ -392,7 +393,7 @@ final class WorkflowEngineSpec
   private def _entity_id(
     entropy: String
   ): EntityId =
-    EntityId("workflow", entropy, _collection_id)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("workflow", entropy, _collection_id)
 
   private def _persistent: EntityPersistent[SalesOrder] = new EntityPersistent[SalesOrder] {
     def id(e: SalesOrder): EntityId = e.id

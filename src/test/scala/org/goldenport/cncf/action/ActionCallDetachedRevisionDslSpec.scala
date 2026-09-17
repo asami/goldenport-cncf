@@ -56,7 +56,8 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallDetachedRevisionDslSpec
@@ -112,7 +113,7 @@ final class ActionCallDetachedRevisionDslSpec
   private val _collection_id =
     EntityCollectionId("test", "detached", "action_dsl")
   private val _id =
-    EntityId("test", "detached_action", _collection_id)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "detached_action", _collection_id)
 
   private final case class DetachedEntity(
     id: EntityId,

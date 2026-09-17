@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 26, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityPersistentCollectionIdentitySpec
@@ -44,7 +45,7 @@ final class EntityPersistentCollectionIdentitySpec
               s"Spec: docs/spec/entity-collection-identity.md; Rules: R1,R4; Example: E1; a record for $name whose canonical EntityId carries its exact namespace"
             )
             val canonicalcollection = EntityCollectionId("major", "minor", name)
-            val runtimeid           = EntityId("single", "global", canonicalcollection)
+            val runtimeid           = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", canonicalcollection)
             val record = Record.dataAuto(
               "id"    -> runtimeid.value,
               "value" -> value
@@ -84,7 +85,7 @@ final class EntityPersistentCollectionIdentitySpec
         val scalarcollection =
           EntityCollectionId("single", "global", "facility")
         val record = Record.dataAuto(
-          "id"    -> EntityId("single", "global", scalarcollection).value,
+          "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", scalarcollection).value,
           "value" -> "museum"
         )
 
@@ -120,11 +121,11 @@ final class EntityPersistentCollectionIdentitySpec
         val archivecollection =
           EntityCollectionId("textus", "archive", "exhibit")
         val original = GeneratedReferenceFixture(
-          id = EntityId("entry", "facility_1", facilitycollection),
-          primaryreference = Some(EntityId("entry", "exhibit_primary", exhibitcollection)),
+          id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "facility_1", facilitycollection),
+          primaryreference = Some(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_primary", exhibitcollection)),
           relatedreferences = Vector(
-            EntityId("entry", "exhibit_collection", exhibitcollection),
-            EntityId("entry", "exhibit_archive", archivecollection)
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_collection", exhibitcollection),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("entry", "exhibit_archive", archivecollection)
           )
         )
 
@@ -151,7 +152,7 @@ final class EntityPersistentCollectionIdentitySpec
       val runtimecollection =
         EntityCollectionId("single", "global", "facility")
       val record = Record.dataAuto(
-        "id"    -> EntityId("single", "global", runtimecollection).value,
+        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", runtimecollection).value,
         "value" -> "museum"
       )
 
@@ -187,7 +188,7 @@ final class EntityPersistentCollectionIdentitySpec
       val actualcollection =
         EntityCollectionId("single", "global", "exhibition")
       val record = Record.dataAuto(
-        "id"    -> EntityId("single", "global", actualcollection).value,
+        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", actualcollection).value,
         "value" -> "summer"
       )
 
@@ -222,7 +223,7 @@ final class EntityPersistentCollectionIdentitySpec
       val runtimecollection =
         EntityCollectionId("single", "global", "facility")
       val record = Record.dataAuto(
-        "id"    -> EntityId("single", "global", runtimecollection).value,
+        "id"    -> org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", runtimecollection).value,
         "value" -> "museum"
       )
       var decodecount    = 0
@@ -271,7 +272,7 @@ final class EntityPersistentCollectionIdentitySpec
       val requestedcollection =
         EntityCollectionId("major", "minor", "facility")
       val runtimeid =
-        EntityId("single", "global", requestedcollection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("single", "global", requestedcollection)
       val record = Record.dataAuto(
         "id"    -> runtimeid.value,
         "value" -> "museum"

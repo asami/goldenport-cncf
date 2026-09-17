@@ -65,7 +65,8 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionCoherenceSpec
@@ -84,9 +85,9 @@ final class EntityConditionalTransitionCoherenceSpec
       )
       val fixture = _fixture()
       given ExecutionContext = fixture.context
-      val rootid = EntityId("test", "transitioned_root", _root_collection)
+      val rootid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "transitioned_root", _root_collection)
       val successorid =
-        EntityId("test", "transitioned_successor", _successor_collection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "transitioned_successor", _successor_collection)
       _seed_root(fixture, Root(rootid, "open", None))
       fixture.rootcollection.put(Root(rootid, "resident-stale", None))
       val viewcounter = _register_view(fixture)
@@ -135,9 +136,9 @@ final class EntityConditionalTransitionCoherenceSpec
       )
       val fixture = _fixture()
       given ExecutionContext = fixture.context
-      val rootid = EntityId("test", "not_matched_root", _root_collection)
+      val rootid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "not_matched_root", _root_collection)
       val successorid =
-        EntityId("test", "not_matched_successor", _successor_collection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "not_matched_successor", _successor_collection)
       _seed_root(fixture, Root(rootid, "already-closed", None))
       fixture.rootcollection.put(Root(rootid, "open", None))
       val viewcounter = _register_view(fixture)
@@ -180,9 +181,9 @@ final class EntityConditionalTransitionCoherenceSpec
       )
       val fixture = _fixture(new RejectingHook)
       given ExecutionContext = fixture.context
-      val rootid = EntityId("test", "rejected_root", _root_collection)
+      val rootid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rejected_root", _root_collection)
       val successorid =
-        EntityId("test", "rejected_successor", _successor_collection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "rejected_successor", _successor_collection)
       _seed_root(fixture, Root(rootid, "open", None))
       fixture.rootcollection.put(Root(rootid, "resident-before", None))
       val viewcounter = _register_view(fixture)
@@ -217,9 +218,9 @@ final class EntityConditionalTransitionCoherenceSpec
         "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R15,R17-R18; Examples: E7,E14; a concurrent mismatch that revokes caller read access"
       )
       val rootid =
-        EntityId("test", "authorization_revoked_root", _root_collection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "authorization_revoked_root", _root_collection)
       val successorid =
-        EntityId(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "test",
           "authorization_revoked_successor",
           _successor_collection
@@ -282,9 +283,9 @@ final class EntityConditionalTransitionCoherenceSpec
         "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rule: R20; provider implementations that return raw and transaction failures"
       )
       val rootid =
-        EntityId("test", "provider_failure_root", _root_collection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "provider_failure_root", _root_collection)
       val successorid =
-        EntityId("test", "provider_failure_successor", _successor_collection)
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "provider_failure_successor", _successor_collection)
       val request =
         _request(
           rootid,

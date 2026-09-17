@@ -444,7 +444,7 @@ lazy val root = project
       "org.apache.logging.log4j" % "log4j-to-slf4j" % "2.21.1",
 
       "org.goldenport" %% "goldenport-core" % "0.4.2",
-      "org.simplemodeling" %% "simplemodeling-model" % "0.2.1",
+      "org.simplemodeling" %% "simplemodeling-model" % "0.2.2-SNAPSHOT",
       "org.goldenport" % "cncf-collaborator-api" % "0.2.0",
 
       // Testing

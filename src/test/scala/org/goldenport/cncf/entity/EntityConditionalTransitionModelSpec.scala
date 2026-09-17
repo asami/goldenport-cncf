@@ -11,7 +11,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionModelSpec
@@ -88,7 +89,7 @@ final class EntityConditionalTransitionModelSpec
           EntityCollectionId("test", "foreign", "conditional_successor")
         val candidate =
           Root(
-            EntityId("test", "foreign_successor", foreigncollection),
+            org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "foreign_successor", foreigncollection),
             "open"
           )
         val create = new EntityPersistentCreate[Root] {

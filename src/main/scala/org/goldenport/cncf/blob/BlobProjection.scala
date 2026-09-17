@@ -2,7 +2,6 @@ package org.goldenport.cncf.blob
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.association.{Association, AssociationDomain, AssociationFilter}
-import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityId
 
@@ -11,7 +10,8 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 27, 2026
  *  version Apr. 30, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object BlobProjection {
@@ -98,14 +98,19 @@ object BlobProjection {
     Option(role).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
 
   private def _blob_entity_id(value: String): Consequence[EntityId] =
-    UniversalId.parseParts(value, "entity").map { parts =>
-      EntityId(
-        major = parts.major,
-        minor = parts.minor,
-        collection = BlobRepository.CollectionId,
-        timestamp = Some(parts.timestamp),
-        entropy = Some(parts.entropy)
-      )
+    EntityId.parse(value).flatMap { id =>
+      if (id.collection == BlobRepository.CollectionId)
+        EntityId.bridgeFromParts(
+          major = id.major,
+          minor = id.minor,
+          collection = id.collection,
+          timestamp = id.timestamp.get,
+          entropy = id.entropy.get
+        )
+      else
+        Consequence.argumentInvalid(
+          s"blob projection id collection mismatch: expected ${BlobRepository.CollectionId.print}, got ${id.collection.print}"
+        )
     }
 
   private def _association_blob_id(
@@ -127,16 +132,22 @@ object BlobProjection {
     value: String,
     targetKind: Option[String]
   ): Consequence[EntityId] =
-    UniversalId.parseParts(value, "entity").flatMap { parts =>
+    EntityId.parse(value).flatMap { id =>
       val kind = targetKind.getOrElse("image")
-      MediaKind.parse(kind).map { mediaKind =>
-        EntityId(
-          major = parts.major,
-          minor = parts.minor,
-          collection = MediaEntityCollections.collection(mediaKind),
-          timestamp = Some(parts.timestamp),
-          entropy = Some(parts.entropy)
-        )
+      MediaKind.parse(kind).flatMap { mediaKind =>
+        val expected = MediaEntityCollections.collection(mediaKind)
+        if (id.collection == expected)
+          EntityId.bridgeFromParts(
+            major = id.major,
+            minor = id.minor,
+            collection = id.collection,
+            timestamp = id.timestamp.get,
+            entropy = id.entropy.get
+          )
+        else
+          Consequence.argumentInvalid(
+            s"media projection id collection mismatch: expected ${expected.print}, got ${id.collection.print}"
+          )
       }
     }
 }

@@ -1,6 +1,7 @@
 /*
  * @since   Mar. 30, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 package org.goldenport.cncf.component
@@ -35,9 +36,9 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
   import org.goldenport.cncf.component.entity.{Customer => CustomerEntity, Order => OrderEntity, OrderLine => OrderLineEntity}
   import org.goldenport.cncf.component.entity.aggregate.Order as OrderAggregate
 
-  private val _order_id = EntityId("m", "o1", OrderEntity.collectionId)
-  private val _customer_id = EntityId("m", "c1", CustomerEntity.collectionId)
-  private val _line_id = EntityId("m", "l1", OrderLineEntity.collectionId)
+  private val _order_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "o1", OrderEntity.collectionId)
+  private val _customer_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "c1", CustomerEntity.collectionId)
+  private val _line_id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "l1", OrderLineEntity.collectionId)
 
   "ComponentFactory default aggregate collection" should {
     "build aggregate with plural composition member and singular aggregation member" in {
@@ -146,7 +147,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec
       given ExecutionContext = _execution_context(Vector.empty)
       val placeholdercollection =
         org.simplemodeling.model.datatype.EntityCollectionId("major", "minor", "order")
-      val placeholderid = EntityId(
+      val placeholderid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
         "m",
         "placeholder",
         placeholdercollection,

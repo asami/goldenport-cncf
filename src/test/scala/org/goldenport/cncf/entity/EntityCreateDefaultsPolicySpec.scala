@@ -4,45 +4,53 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 13, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
-final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
+final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "EntityCreateDefaultsPolicy" should {
     "store shortid from EntityId entropy as a SimpleEntity identity attribute" in {
+      Given("a target collection and canonical entity fixture id")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
-      val entityId = EntityId("test", "target", target)
+      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target)
 
+      When("the default create policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        entityId,
+        entityid,
         EntityCreateOptions.default
       )
 
-      targetRecord.getString("short_id") shouldBe Some(entityId.parts.entropy)
+      Then("the short id comes from entity id entropy and legacy fields are absent")
+      targetRecord.getString("short_id") shouldBe Some(entityid.parts.entropy)
       _assert_no_legacy_target_fields(targetRecord)
     }
 
     "complement lifecycle audit fields using target storage names" in {
+      Given("a target collection and canonical entity fixture id")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
-      val entityId = EntityId("test", "target", target)
+      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target)
 
+      When("the default create policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        entityId,
+        entityid,
         EntityCreateOptions.default
       )
 
+      Then("lifecycle audit fields use target storage names and values")
       targetRecord.getAny("created_at").getOrElse(fail("created_at should exist")) shouldBe a[Instant]
       targetRecord.getAny("updated_at").getOrElse(fail("updated_at should exist")) shouldBe a[Instant]
       targetRecord.getString("created_by") shouldBe Some("test_user_principal")
@@ -53,21 +61,25 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "preserve explicitly supplied shortid create value" in {
+      Given("a target collection and an explicitly supplied short id")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
 
+      When("the default create policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target", "shortid" -> "manual-shortid"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions.default
       )
 
+      Then("the explicit short id is preserved without legacy fields")
       targetRecord.getString("short_id") shouldBe Some("manual-shortid")
       _assert_no_legacy_target_fields(targetRecord)
     }
 
     "override create defaults by entity collection" in {
+      Given("target and other collections with a target-specific custom policy")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
@@ -76,17 +88,19 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         Map("target_entity" -> _custom_policy)
       )
 
+      When("the policy complements records for both collections")
       val targetRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions.default
       )
       val otherRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "other"),
-        EntityId("test", "other", other),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "other", other),
         EntityCreateOptions.default
       )
 
+      Then("only the target collection receives the custom default")
       targetRecord.getString("customDefault") shouldBe Some("target-default")
       otherRecord.getString("customDefault") shouldBe None
       targetRecord.getString("created_by") shouldBe Some("test_user_principal")
@@ -102,16 +116,19 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "support public-read create defaults for cms-like entities" in {
+      Given("a target collection with the public-read default profile")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
 
+      When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions(defaultProfiles = Set("public-read"))
       )
 
+      Then("other readers have read permission without write or execute permission")
       val rights = _rights(targetRecord)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("read")) shouldBe Some(true)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("write")) shouldBe Some(false)
@@ -119,16 +136,19 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "use business/private owner-group-other permissions by default" in {
+      Given("a business entity collection with default profiles")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "business_entity")
 
+      When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions.default
       )
 
+      Then("owner, group, and other permissions follow the private defaults")
       val rights = _rights(targetRecord)
       rights.flatMap(_.getRecord("owner")).flatMap(_.getBoolean("read")) shouldBe Some(true)
       rights.flatMap(_.getRecord("owner")).flatMap(_.getBoolean("write")) shouldBe Some(true)
@@ -142,16 +162,19 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "use CMS/public-content read visibility and publication defaults" in {
+      Given("a CMS entity collection with public content and publication profiles")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "cms_entity")
 
+      When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions(defaultProfiles = Set("cms", "publication", "public-content", "public-read"))
       )
 
+      Then("public visibility and publication fields use target storage names")
       val rights = _rights(targetRecord)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("read")) shouldBe Some(true)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("write")) shouldBe Some(false)
@@ -165,16 +188,19 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "keep execute false for task-like create defaults" in {
+      Given("a task entity collection with the task default profile")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "task_entity")
 
+      When("the default policy complements the target record")
       val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions(defaultProfiles = Set("task"))
       )
 
+      Then("execute permission remains false for owner, group, and other")
       val rights = _rights(targetRecord)
       rights.flatMap(_.getRecord("owner")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
       rights.flatMap(_.getRecord("group")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
@@ -182,6 +208,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "select owner and group ids with selector policies" in {
+      Given("owner and group selector policies for a sales order collection")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "sales_order")
@@ -190,12 +217,14 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateDefaultsPolicy.GroupIdSelector.constant("sales_ops")
       )
 
+      When("the selector policy complements the target record")
       val targetRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions.default
       )
 
+      Then("owner and group ids use the selected storage names")
       targetRecord.getString("owner_id") shouldBe Some("seller_organization")
       targetRecord.getString("group_id") shouldBe Some("sales_ops")
       targetRecord.getString("ownerId") shouldBe None
@@ -203,6 +232,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "select tenant and organization ids with selector policies" in {
+      Given("tenant, organization, owner, and group selector policies")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "sales_order")
@@ -213,12 +243,14 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         organizationIdSelector = EntityCreateDefaultsPolicy.OrganizationIdSelector.constant("seller_org")
       )
 
+      When("the selector policy complements the target record")
       val targetRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "target"),
-        EntityId("test", "target", target),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "target", target),
         EntityCreateOptions.default
       )
 
+      Then("tenant and organization ids use the selected storage names")
       targetRecord.getString("tenant_id") shouldBe Some("tenant_a")
       targetRecord.getString("organization_id") shouldBe Some("seller_org")
       targetRecord.getString("tenantId") shouldBe None
@@ -226,6 +258,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "select entity-level create defaults by entity name" in {
+      Given("an entity-name policy override for sales orders")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val salesOrder = EntityCollectionId("test", "a", "sales_order")
@@ -240,17 +273,19 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         Map("sales_order" -> salesOrderPolicy)
       )
 
+      When("the entity-name policy complements sales order and invoice records")
       val salesOrderRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "sales-order"),
-        EntityId("test", "sales_order", salesOrder),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sales_order", salesOrder),
         EntityCreateOptions.default
       )
       val invoiceRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "invoice"),
-        EntityId("test", "invoice", invoice),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "invoice", invoice),
         EntityCreateOptions.default
       )
 
+      Then("the sales order override applies and invoice defaults remain unchanged")
       salesOrderRecord.getString("owner_id") shouldBe Some("seller_organization")
       salesOrderRecord.getString("group_id") shouldBe Some("sales_ops")
       salesOrderRecord.getString("tenant_id") shouldBe Some("tenant_a")
@@ -261,6 +296,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     }
 
     "use application-level create defaults with entity-level overrides" in {
+      Given("application defaults and a sales order entity-level override")
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val customer = EntityCollectionId("test", "a", "customer")
@@ -280,17 +316,19 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         Map("sales_order" -> salesOrderPolicy)
       )
 
+      When("the composed policy complements customer and sales order records")
       val customerRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "customer"),
-        EntityId("test", "customer", customer),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "customer", customer),
         EntityCreateOptions.default
       )
       val salesOrderRecord = policy.complementCreateRecord(
         Record.dataAuto("name" -> "sales-order"),
-        EntityId("test", "sales_order", salesOrder),
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sales_order", salesOrder),
         EntityCreateOptions.default
       )
 
+      Then("application defaults apply to customers and entity overrides apply to sales orders")
       customerRecord.getString("owner_id") shouldBe Some("application_owner")
       customerRecord.getString("group_id") shouldBe Some("application_group")
       customerRecord.getString("tenant_id") shouldBe Some("tenant_a")

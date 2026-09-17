@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PartitionedMemoryRealmConcurrentPutEvictSpec
@@ -23,8 +24,8 @@ final class PartitionedMemoryRealmConcurrentPutEvictSpec
     "hold realm update inside lock so concurrent put cannot pass while first put is in critical section" in {
       Given("maxPartitions=1 and an idOf hook that blocks in the second idOf call for entity A")
       val cid = EntityCollectionId("test", "a", "sample")
-      val ida = EntityId("m", "a", cid)
-      val idb = EntityId("m", "b", cid)
+      val ida = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", cid)
+      val idb = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "b", cid)
       val entercritical = new CountDownLatch(1)
       val releasecritical = new CountDownLatch(1)
       val callcount = TrieMap.empty[EntityId, AtomicInteger]

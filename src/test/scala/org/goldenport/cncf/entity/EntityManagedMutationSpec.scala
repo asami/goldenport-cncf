@@ -53,7 +53,8 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 25, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityManagedMutationSpec
@@ -778,7 +779,7 @@ final class EntityManagedMutationSpec
   private def _id(
     entropy: String
   ): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       "managed",
       _collection_id,

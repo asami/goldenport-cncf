@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryLegacyPlanConsistencySpec
@@ -37,8 +38,8 @@ final class ComponentFactoryLegacyPlanConsistencySpec
         .getOrElse(fail("legacy bootstrap should create memory realm"))
       val cid = EntityCollectionId("sys", "sys", "default")
 
-      memory.put(SpecEntity(EntityId("tokyo", "sales", cid), "taro"))
-      memory.put(SpecEntity(EntityId("tokyo", "sales", cid), "jiro"))
+      memory.put(SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", cid), "taro"))
+      memory.put(SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("tokyo", "sales", cid), "jiro"))
 
       Then("descriptor plan and runtime defaults are aligned")
       collection.descriptor.plan.maxPartitions shouldBe 64

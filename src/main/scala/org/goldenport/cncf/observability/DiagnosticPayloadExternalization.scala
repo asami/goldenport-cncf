@@ -12,6 +12,7 @@ import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.blob.{BlobKind, BlobPutRequest, BlobStorageRef, BlobStoreConfig, BlobStoreFactory}
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameter, ResolvedParameters, RuntimeConfig}
+import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.datatype.ContentType
 import org.goldenport.record.Record
@@ -21,7 +22,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 11, 2026
- * @version Aug.  4, 2026
+ *  version Aug.  4, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class DiagnosticPayloadExternalizationConfig(
@@ -254,7 +256,8 @@ object DiagnosticPayloadExternalizer {
       .map(global => DiagnosticPayloadExternalizer(
         global.config.diagnosticPayloadExternalizationConfig.forOperationMode(operationMode),
         operationMode,
-        global.config.blobStoreConfig
+        global.config.blobStoreConfig,
+        IdGenerationContext.default(global.config.idNamespace)
       ))
       .getOrElse(DiagnosticPayloadExternalizer.disabled)
 
@@ -297,7 +300,8 @@ object DiagnosticPayloadExternalizer {
 final case class DiagnosticPayloadExternalizer(
   config: DiagnosticPayloadExternalizationConfig,
   operationMode: OperationMode,
-  blobStoreConfig: BlobStoreConfig
+  blobStoreConfig: BlobStoreConfig,
+  idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DEFAULT_NAMESPACE)
 ) {
   def externalizeRecordSummary(
     operation: String,
@@ -541,9 +545,8 @@ final case class DiagnosticPayloadExternalizer(
   }
 
   private def _blob_entity_id(): EntityId =
-    EntityId(
-      "cncf",
-      "p" + UUID.randomUUID().toString.replace("-", ""),
-      EntityCollectionId("cncf", "observability", "diagnostic_payload")
+    idGeneration.entityId(
+      EntityCollectionId("cncf", "observability", "diagnostic_payload"),
+      "diagnostic-payload-externalization"
     )
 }

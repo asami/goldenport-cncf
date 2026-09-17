@@ -9,7 +9,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   May.  2, 2026
  *  version May.  5, 2026
- * @version Jul. 15, 2026
+ *  version Jul. 15, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait IdGenerationContext {
@@ -20,11 +21,35 @@ trait IdGenerationContext {
 
   def entityId(collection: EntityCollectionId, purpose: String): EntityId
 
+  def entityId[A <: EntityId](
+    collection: EntityCollectionId,
+    purpose: String
+  )(factory: IdGenerationContext.EntityIdFactory[A]): A = {
+    val issued = entityId(collection, purpose)
+    factory.fromIssuedParts(
+      issued.major,
+      issued.minor,
+      issued.collection,
+      issued.timestamp.get,
+      issued.entropy.get
+    )
+  }
+
   def opaqueId(purpose: String): String
 }
 
 object IdGenerationContext {
   val DEFAULT_NAMESPACE: IdNamespace = IdNamespace("single", "global")
+
+  trait EntityIdFactory[A <: EntityId] {
+    def fromIssuedParts(
+      major: String,
+      minor: String,
+      collection: EntityCollectionId,
+      timestamp: Instant,
+      entropy: String
+    ): A
+  }
 
   def default(namespace: IdNamespace): IdGenerationContext =
     production(namespace, Clock.systemUTC(), EntropyContext.secure())
@@ -107,22 +132,28 @@ object IdGenerationContext {
   ) extends IdGenerationContext {
     private val _sequences = new ConcurrentHashMap[String, AtomicLong]()
 
-    def entityId(collection: EntityCollectionId, purpose: String): EntityId = {
-      _entity_id(namespace, collection, purpose)
-    }
+    def entityId(collection: EntityCollectionId, purpose: String): EntityId =
+      _entity_id(namespace, collection, purpose, ContextIssuedEntityId)
 
-    private def _entity_id(
-      idnamespace: IdNamespace,
+    override def entityId[A <: EntityId](
       collection: EntityCollectionId,
       purpose: String
-    ): EntityId = {
+    )(factory: EntityIdFactory[A]): A =
+      _entity_id(namespace, collection, purpose, factory)
+
+    private def _entity_id[A <: EntityId](
+      idnamespace: IdNamespace,
+      collection: EntityCollectionId,
+      purpose: String,
+      factory: EntityIdFactory[A]
+    ): A = {
       val key = s"entity.${_collection_key(collection)}.${_purpose(purpose)}"
-      EntityId(
+      factory.fromIssuedParts(
         idnamespace.major,
         idnamespace.minor,
         collection,
-        timestamp = Some(Instant.ofEpochMilli(clock.instant().toEpochMilli)),
-        entropy = Some(_token(key))
+        Instant.ofEpochMilli(clock.instant().toEpochMilli),
+        _token(key)
       )
     }
 
@@ -153,6 +184,25 @@ object IdGenerationContext {
 
   private def _hex(bytes: Array[Byte]): String =
     bytes.iterator.map(byte => f"${byte & 0xff}%02x").mkString
+
+  private object ContextIssuedEntityId extends EntityIdFactory[EntityId] {
+    def fromIssuedParts(
+      major: String,
+      minor: String,
+      collection: EntityCollectionId,
+      timestamp: Instant,
+      entropy: String
+    ): EntityId =
+      new ContextIssuedEntityId(major, minor, collection, timestamp, entropy)
+  }
+
+  private final class ContextIssuedEntityId(
+    major: String,
+    minor: String,
+    collection: EntityCollectionId,
+    timestamp: Instant,
+    entropy: String
+  ) extends EntityId(major, minor, collection, Some(timestamp), Some(entropy))
 
   private def _safe_seed(value: String): String = {
     val raw = value.trim.toLowerCase(java.util.Locale.ROOT).map {

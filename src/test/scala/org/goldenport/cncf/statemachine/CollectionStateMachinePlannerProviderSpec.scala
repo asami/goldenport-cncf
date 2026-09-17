@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Aug. 14, 2026
+ *  version Aug. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CollectionStateMachinePlannerProviderSpec
@@ -50,7 +51,7 @@ final class CollectionStateMachinePlannerProviderSpec
         new CollectionStateMachinePlanner(Vector(lowpriorityrule, highpriorityrule))
       )
 
-      val person = Person(EntityId("test", "p2", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p2", _cid), "taro", age = 20)
       val event = TransitionEvent("update", Some(person.id))
 
       When("the update event is planned")
@@ -81,7 +82,7 @@ final class CollectionStateMachinePlannerProviderSpec
         new CollectionStateMachinePlanner(Vector(rule))
       )
 
-      val person = Person(EntityId("test", "p3", _cid), "hanako", age = 30)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p3", _cid), "hanako", age = 30)
       val event = TransitionEvent("update", Some(person.id))
 
       When("the update event is planned")
@@ -96,7 +97,7 @@ final class CollectionStateMachinePlannerProviderSpec
       val planner = new CollectionStateMachinePlanner(Vector(
         _structural_rule("publish", "Draft", 1, "Published", 2)
       ))
-      val person = Person(EntityId("test", "p4", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p4", _cid), "taro", age = 20)
       val event = TransitionEvent(
         "update",
         Some(person.id),
@@ -116,7 +117,7 @@ final class CollectionStateMachinePlannerProviderSpec
       val planner = new CollectionStateMachinePlanner(Vector(
         _structural_rule("publish", "Draft", 1, "Published", 2)
       ))
-      val person = Person(EntityId("test", "p5", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p5", _cid), "taro", age = 20)
       val event = TransitionEvent(
         "update",
         Some(person.id),
@@ -140,7 +141,7 @@ final class CollectionStateMachinePlannerProviderSpec
       val planner = new CollectionStateMachinePlanner(Vector(
         _structural_rule("publish", "Draft", 1, "Published", 2)
       ))
-      val person = Person(EntityId("test", "p6", _cid), "taro", age = 21)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p6", _cid), "taro", age = 21)
       val event = TransitionEvent(
         "update",
         Some(person.id),
@@ -160,7 +161,7 @@ final class CollectionStateMachinePlannerProviderSpec
       val queued = _structural_rule("cancel", "Queued", 1, "Canceled", 4)
       val sending = _structural_rule("cancel", "Sending", 2, "Canceled", 4)
       val planner = new CollectionStateMachinePlanner(Vector(queued, sending))
-      val person = Person(EntityId("test", "p7", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p7", _cid), "taro", age = 20)
       val event = TransitionEvent(
         "update",
         Some(person.id),
@@ -179,7 +180,7 @@ final class CollectionStateMachinePlannerProviderSpec
       Given("a named Review history transition with an existing persistent history record")
       val rule = _history_rule
       val planner = new CollectionStateMachinePlanner(Vector(rule))
-      val person = Person(EntityId("test", "p8", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p8", _cid), "taro", age = 20)
       val event = TransitionEvent(
         "update",
         Some(person.id),
@@ -198,7 +199,7 @@ final class CollectionStateMachinePlannerProviderSpec
       Given("a named Review history transition with no stored Review entry")
       val rule = _history_rule
       val planner = new CollectionStateMachinePlanner(Vector(rule))
-      val person = Person(EntityId("test", "p9", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p9", _cid), "taro", age = 20)
       val fallback = TransitionEvent(
         "update",
         Some(person.id),
@@ -217,7 +218,7 @@ final class CollectionStateMachinePlannerProviderSpec
       Given("a named Review history transition with no stored Review entry")
       val rule = _history_rule
       val planner = new CollectionStateMachinePlanner(Vector(rule))
-      val person = Person(EntityId("test", "p9", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p9", _cid), "taro", age = 20)
       val fallback = TransitionEvent(
         "update",
         Some(person.id),
@@ -249,7 +250,7 @@ final class CollectionStateMachinePlannerProviderSpec
         expectedHistoryRecordWrites = Vector(HistoryRecordWrite("Review", "Approved"))
       )
       val planner = new CollectionStateMachinePlanner(Vector(enter, move, leave))
-      val person = Person(EntityId("test", "p10", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p10", _cid), "taro", age = 20)
       val enteraccepted = TransitionEvent(
         "update",
         Some(person.id),
@@ -276,7 +277,7 @@ final class CollectionStateMachinePlannerProviderSpec
       Given("a normal transition that enters Review.Pending")
       val rule = _normal_composite_rule
       val planner = new CollectionStateMachinePlanner(Vector(rule))
-      val person = Person(EntityId("test", "p10", _cid), "taro", age = 20)
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p10", _cid), "taro", age = 20)
       val accepted = TransitionEvent(
         "update",
         Some(person.id),

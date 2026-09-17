@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the reusable Blob payload helper.
  *
  * @since   Apr. 29, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobPayloadSupportSpec
@@ -128,7 +129,7 @@ final class BlobPayloadSupportSpec
   }
 
   private def _blob_id(value: String): EntityId =
-    EntityId("cncf", value, EntityCollectionId("cncf", "builtin", "blob"))
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("cncf", value, EntityCollectionId("cncf", "builtin", "blob"))
 
   private def _success[A](result: Consequence[A]): A =
     result match {

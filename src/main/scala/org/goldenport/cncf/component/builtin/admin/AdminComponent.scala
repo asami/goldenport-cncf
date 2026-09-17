@@ -111,7 +111,8 @@ import org.simplemodeling.model.datatype.{
  *  version May. 31, 2026
  *  version Jun. 18, 2026
  *  version Jul. 30, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -2009,7 +2010,7 @@ object AdminComponent {
         policyselection,
         expectedrevision
       )
-      inputrecord <- _admin_entity_record(collection, _action_record(core))
+      inputrecord <- _admin_entity_record(collection, _action_record(core), entityexecutioncontext)
       record <- _canonical_admin_entity_record(
         operation,
         entityexecutioncontext,
@@ -3235,7 +3236,8 @@ object AdminComponent {
 
   private def _admin_entity_record(
     collection: EntityCollection[?],
-    args: Record
+    args: Record,
+    executioncontext: ExecutionContext
   ): Consequence[Record] = {
     val data = args.filterFields { field =>
       field.key != "component" &&
@@ -3251,7 +3253,10 @@ object AdminComponent {
             .map(id => data.upsertSingle("id", id.value))
         case None =>
           val cid = collection.descriptor.collectionId
-          Consequence.success(data.appendField("id", EntityId(cid.major, cid.minor, cid).value))
+          Consequence.success(data.appendField(
+            "id",
+            executioncontext.idGeneration.entityId(cid, "admin-entity-create").value
+          ))
       }
     withid
   }

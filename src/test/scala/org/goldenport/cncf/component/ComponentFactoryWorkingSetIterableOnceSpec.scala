@@ -34,7 +34,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Apr. 25, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetIterableOnceSpec
@@ -49,7 +50,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
       val entityspace = new EntitySpace
       val snapshot = TrieMap.empty[EntityId, Any]
       val cid = EntityCollectionId("test", "a", "sample")
-      val id = EntityId("m", "a", cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", cid)
       val entity = WorkingSetEntity(id, "sample")
 
       given EntityPersistent[Any] = new EntityPersistent[Any] {
@@ -129,7 +130,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         val entityspace = new EntitySpace
         val snapshot = TrieMap.empty[EntityId, Any]
         val cid = EntityCollectionId("test", "a", "sample")
-        val id = EntityId("m", minor, cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", minor, cid)
         val entity = WorkingSetEntity(id, name)
 
         given EntityPersistent[Any] = new EntityPersistent[Any] {
@@ -207,7 +208,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         val entityspace = new EntitySpace
         val snapshot = TrieMap.empty[EntityId, Any]
         val cid = EntityCollectionId("test", "a", "sample")
-        val id = EntityId("m", minor, cid)
+        val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", minor, cid)
         val entity = WorkingSetEntity(id, name)
 
         given EntityPersistent[Any] = new EntityPersistent[Any] {
@@ -282,7 +283,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
       Given("a working-set source that records when its iterator is consumed")
       val entityspace = new EntitySpace
       val cid = EntityCollectionId("test", "a", "sample")
-      val id = EntityId("m", "async", cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "async", cid)
       val entity = WorkingSetEntity(id, "async")
       val source = new RecordingIterableOnce[Any](Iterator.single(entity))
       val queued = new QueuedExecutionContext

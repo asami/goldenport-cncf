@@ -21,7 +21,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Apr. 10, 2026
  *  version May. 31, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec
@@ -33,7 +34,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
   "ComponentFactory.createEventReception" should {
     "propagate working-set entity names to reception and enforce keep-resident pub-sub" in {
       Given("component with working-set entity marker and empty memory realm")
-      val id = EntityId("m", "a", _cid)
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("m", "a", _cid)
       val entity = BootEntity(id, "suzuki")
       given EntityPersistent[BootEntity] = _persistent
 

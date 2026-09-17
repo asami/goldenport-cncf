@@ -22,7 +22,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionDiagnosticsSpec
@@ -34,9 +35,9 @@ final class EntityConditionalTransitionDiagnosticsSpec
   private val _successor_collection =
     EntityCollectionId("test", "phase49", "diagnostic_successor")
   private val _root_id =
-    EntityId("test", "diagnostic_root", _root_collection)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "diagnostic_root", _root_collection)
   private val _successor_id =
-    EntityId("test", "diagnostic_successor", _successor_collection)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "diagnostic_successor", _successor_collection)
 
   "Entity conditional-transition diagnostics" should {
     "classify typed outcomes and structured failures without display parsing" in {

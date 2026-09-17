@@ -6,23 +6,27 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineRuleBuilderSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "sm", "person")
 
   "StateMachineRuleBuilder" should {
     "build update rule with ref guard and execute plan" in {
+      Given("a state-machine update rule with a reference guard and execution plan")
       given ExecutionContext = ExecutionContext.create()
       given EntityPersistent[_Entity] = _entityPersistent
 
@@ -72,10 +76,12 @@ final class StateMachineRuleBuilderSpec
         ))
       )
 
-      val entity = _Entity(EntityId("test", "b1", _cid), "taro")
+      val entity = _Entity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b1", _cid), "taro")
       val event = TransitionEvent("update", Some(entity.id))
+      When("the provider selects and executes the update plan")
       val selected = provider.planForUpdate(entity, _entityPersistent, event)
       val selectedPlan = selected.TAKE.getOrElse(fail("plan should be selected"))
+      Then("the plan executes its exit, transition, and entry actions in order")
       ExecutionPlanExecutor.execute(selectedPlan, entity, event) shouldBe Consequence.unit
       trace.toVector shouldBe Vector("exit", "transition", "entry")
     }

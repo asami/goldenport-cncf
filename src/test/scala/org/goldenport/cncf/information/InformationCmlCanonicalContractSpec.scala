@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 30, 2026
- * @version Sep.  3, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationCmlCanonicalContractSpec
@@ -367,7 +367,7 @@ final class InformationCmlCanonicalContractSpec
     classOf[org.goldenport.cncf.information.entity.Information]
 
   private val _information_id: EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       major = "major",
       minor = "minor",
       collection = EntityCollectionId("major", "minor", "information"),

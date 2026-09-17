@@ -7,11 +7,11 @@ import cats.effect.Ref
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, ProcedureActionCall}
 import org.goldenport.cncf.component.{Component, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext, SecurityContext}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityStore}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntityStorage, PartitionStrategy}
 import org.goldenport.cncf.event.{DomainEvent, EventDispatchHandler, EventStore, EventSubscription, ReceptionDomainEvent}
-import org.goldenport.cncf.job.{JobBatchDefinition, JobDefinition, JobDefinitionEntity, JobEngineTestFixture, JobEntityCollections, JobStatus, JobTarget, JobWorkflowTarget}
+import org.goldenport.cncf.job.{JobBatchDefinition, JobDefinition, JobDefinitionEntity, JobDefinitionId, JobEngineTestFixture, JobEntityCollections, JobStatus, JobTarget, JobWorkflowTarget}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
@@ -31,7 +31,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
  *  version Aug. 13, 2026
- * @version Sep. 14, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -331,25 +331,21 @@ final class JclJobControlComponentSpec
       textualbooleanrejected shouldBe true
     }
 
-    "preserve trim-stable distinct direct JobDefinition IDs for generated key pairs" in {
-      Given("non-empty lowercase fragments for dashed and underscored normalized keys")
-      val fragment = Gen.nonEmptyListOf(Gen.alphaLowerChar).map(_.mkString)
-      val property = Prop.forAll(fragment) { fragmentvalue =>
-        val dashedkey = s"job-$fragmentvalue"
-        val underscoredkey = s"job_$fragmentvalue"
-        val dashedid = JobDefinitionEntity.entityId(dashedkey)
-        val underscoredid = JobDefinitionEntity.entityId(underscoredkey)
+    "issue JobDefinition IDs independently of business keys" in {
+      Given("one deterministic ordinary issuance context")
+      val ids = IdGenerationContext.deterministic(
+        IdGenerationContext.IdNamespace("jcl", "job_definition"),
+        "job-definition-identity"
+      )
 
-        JobDefinitionEntity.entityId(s"  $dashedkey  ") == dashedid &&
-          JobDefinitionEntity.entityId(s"  $underscoredkey  ") == underscoredid &&
-          dashedid != underscoredid
-      }
+      When("two definitions with punctuation-bearing business keys are issued")
+      val dashed = JobDefinitionId.issue(ids)
+      val underscored = JobDefinitionId.issue(ids)
 
-      When("the generated key-pair identity property is checked")
-      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(48), property)
-
-      Then("direct IDs remain trim-stable and preserve dashed versus underscored distinction")
-      checked.passed shouldBe true
+      Then("their stored identities are distinct and both fix the JobDefinition collection")
+      dashed should not be underscored
+      dashed.collection shouldBe JobEntityCollections.JobDefinition
+      underscored.collection shouldBe JobEntityCollections.JobDefinition
     }
 
     "store and submit a JSON JobDefinition without reparsing it as YAML" in {
@@ -393,8 +389,8 @@ final class JclJobControlComponentSpec
       }
     }
 
-    "preserve exact JobDefinition keys across versioned and historical legacy identity candidates" in {
-      Given("a legacy-only a-b record with a literal historical three-argument EntityId")
+    "resolve stored JobDefinition identities by exact persisted business key" in {
+      Given("two normally issued punctuation-bearing definitions and one explicitly bridged existing definition")
       _with_fixture() { fixture =>
       val jobcontrolselector =
         s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job"
@@ -405,15 +401,23 @@ final class JclJobControlComponentSpec
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
 
-      When("the exact legacy record is seeded and resolved before any current-ID record exists")
+      When("the three records are seeded before the JobControl definition cache is populated")
       val jobcontrolcomponent = _component_for(
         fixture.subsystem,
         s"$jobcontrolselector.get_job_definition"
       )
       given ExecutionContext = jobcontrolcomponent.logic.executionContext()
-      val legacyid = EntityId("cncf", "a_b", JobEntityCollections.JobDefinition)
-      val legacyentity = JobDefinitionEntity.create(
-        key = "a-b",
+      val dashedid = JobDefinitionId.issue(summon[ExecutionContext].idGeneration)
+      val underscoredid = JobDefinitionId.issue(summon[ExecutionContext].idGeneration)
+      val bridgedid = JobDefinitionId.bridgeFromParts(
+        "cncf",
+        "bridged_definition",
+        java.time.Instant.EPOCH,
+        "bridgedfixture"
+      ).toOption.getOrElse(fail("bridged JobDefinition fixture id is invalid"))
+      def _definition(id: JobDefinitionId, key: String) = JobDefinitionEntity.create(
+        id = id,
+        key = key,
         jclSource = body,
         profile = None,
         flowSource = None,
@@ -422,40 +426,36 @@ final class JclJobControlComponentSpec
         status = org.goldenport.cncf.job.JobDefinitionStatus.Active,
         targetAction = Some("org.goldenport.cncf.test.JclFixture.command.ok"),
         now = summon[ExecutionContext].clock.instant()
-      ).copy(id = legacyid)
-      val legacyseeded = EntityStore.standard().create(legacyentity)(using
-        EntityPersistentCreate.fromPersistent(JobDefinitionEntity.entityPersistent),
-        summon[ExecutionContext]
-      ) match {
-        case Consequence.Success(_) => true
-        case Consequence.Failure(conclusion) => fail(conclusion.show)
+      )
+      val dashedentity = _definition(dashedid, "a-b")
+      val underscoredentity = _definition(underscoredid, "a_b")
+      val bridgedentity = _definition(bridgedid, "bridged-existing")
+      Vector(dashedentity, underscoredentity, bridgedentity).foreach { entity =>
+        EntityStore.standard().create(entity)(using
+          EntityPersistentCreate.fromPersistent(JobDefinitionEntity.entityPersistent),
+          summon[ExecutionContext]
+        ) match {
+          case Consequence.Success(_) => ()
+          case Consequence.Failure(conclusion) => fail(conclusion.show)
+        }
       }
-      val resolvedlegacydash = _record(_execute(
+      val resolveddash = _record(_execute(
         fixture.subsystem,
         s"$jobcontrolselector.get_job_definition",
         arguments = List(Argument("key", "a-b"))
-      ))
-      val matchedunderscore = _execute_result(
-        fixture.subsystem,
-        s"$jobcontrolselector.get_job_definition",
-        arguments = List(Argument("key", "a_b"))
-      )
-
-      When("the distinct underscore key is created through its current versioned ID")
-      val createdunderscore = _record(_execute(
-        fixture.subsystem,
-        s"$jobcontrolselector.create_job_definition",
-        arguments = List(
-          Argument("key", "a_b"),
-          Argument("status", "active"),
-          Argument("body", body)
-        )
       ))
       val resolvedunderscore = _record(_execute(
         fixture.subsystem,
         s"$jobcontrolselector.get_job_definition",
         arguments = List(Argument("key", "a_b"))
       ))
+      val resolvedbridged = _record(_execute(
+        fixture.subsystem,
+        s"$jobcontrolselector.get_job_definition",
+        arguments = List(Argument("key", "bridged-existing"))
+      ))
+
+      When("a trimmed duplicate of an exact stored key is created")
       val duplicatedash = _execute_result(
         fixture.subsystem,
         s"$jobcontrolselector.create_job_definition",
@@ -466,18 +466,18 @@ final class JclJobControlComponentSpec
         )
       )
 
-      Then("the exact historical representation resolves the matching legacy-only key")
-      legacyseeded shouldBe true
-      resolvedlegacydash.getString("id") shouldBe Some(legacyentity.id.value)
-      resolvedlegacydash.getString("key") shouldBe Some("a-b")
-
-      And("the colliding historical candidate is rejected for the different normalized key")
-      matchedunderscore shouldBe a[Consequence.Failure[_]]
-
-      And("the versioned direct IDs distinguish a-b and a_b while creation preserves both keys")
-      createdunderscore.getString("id") shouldBe Some(JobDefinitionEntity.entityId("a_b").value)
-      JobDefinitionEntity.entityId("a-b") should not be JobDefinitionEntity.entityId("a_b")
+      Then("the cold cache lookup loads each persisted stored identity rather than deriving one from its key")
+      dashedentity.id should not be underscoredentity.id
+      resolveddash.getString("id") shouldBe Some(dashedentity.id.value)
+      resolveddash.getString("key") shouldBe Some("a-b")
+      resolvedunderscore.getString("id") shouldBe Some(underscoredentity.id.value)
       resolvedunderscore.getString("key") shouldBe Some("a_b")
+
+      And("the explicit bridge remains the persisted typed identity of the recovered record")
+      resolvedbridged.getString("id") shouldBe Some(bridgedentity.id.value)
+      resolvedbridged.getString("key") shouldBe Some("bridged-existing")
+
+      And("a trimmed duplicate is rejected without changing either distinct definition")
       duplicatedash shouldBe a[Consequence.Failure[_]]
       }
     }
@@ -1928,7 +1928,7 @@ final class JclJobControlComponentSpec
   private def _entity_id(
     entropy: String
   ): EntityId =
-    EntityId("jcl", entropy, _collection_id)
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts("jcl", entropy, _collection_id)
 
   private def _persistent: EntityPersistent[SalesOrder] = new EntityPersistent[SalesOrder] {
     def id(e: SalesOrder): EntityId = e.id

@@ -11,7 +11,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentBodyVersionedMutationSpec
@@ -153,7 +154,7 @@ final class ContentBodyVersionedMutationSpec
   private def _id(
     entropy: String
   ): EntityId =
-    EntityId(
+    org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
       "test",
       "versioned",
       _collection_id,

@@ -35,7 +35,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Sep. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec
@@ -61,7 +62,7 @@ final class UnitOfWorkStateMachineHookSpec
         EntityRevisionRepresentation.Detached
       )
       val uow = new UnitOfWork(context, EventEngine.noop(DataStore.noop()))
-      val id  = EntityId("test", "sm_1", _cid)
+      val id  = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sm_1", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -102,7 +103,7 @@ final class UnitOfWorkStateMachineHookSpec
         _person_persistent,
         EntityRevisionRepresentation.Detached
       )
-      val id                               = EntityId("test", "sm_2", _cid)
+      val id                               = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "sm_2", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
