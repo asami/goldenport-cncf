@@ -120,6 +120,48 @@ final class EventEngineLaneSemanticsSpec
       record.payload.keySet should not contain "payload"
     }
 
+    "retain one occurrence when an issued committed transition is re-emitted" in {
+      Given("a deterministic execution context, one committed transition, and an independent committed transition")
+      val instant = Instant.parse("2026-09-18T10:30:00Z")
+      val clock = Clock.fixed(instant, ZoneOffset.UTC)
+      val ids = IdGenerationContext.deterministic(
+        IdGenerationContext.IdNamespace("test", "committed_transition_retry"),
+        clock,
+        "committed-transition-retry-record"
+      )
+      given ExecutionContext = ExecutionContext.withIdGenerationContext(ExecutionContext.create(clock), ids)
+      val collection = EntityCollectionId("test", "sm", "person")
+      val entityid = ids.entityId(collection, "committed-transition-retry-entity")
+      val tx = TransactionContext.create(summon[ExecutionContext].transactionContext, clock, ids)
+      val event = CommittedTransition.create(entityid, _binding(collection), "update", tx.id)
+      val independentevent = CommittedTransition.create(entityid, _binding(collection), "update", tx.id)
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(), eventstore = store)
+      val factory = EventRecordFactory.from(summon[ExecutionContext])
+
+      When("the issued transition is emitted twice through the non-transactional lane and another transition is emitted")
+      val first = engine.emit(Vector(event), factory)
+      val retried = engine.emit(Vector(event), factory)
+      val independent = engine.emit(Vector(independentevent), factory)
+      val queried = store.query(EventStore.Query())
+      val replayed = store.replay(EventStore.Query())
+
+      Then("the retry returns the original issued identity and sequence")
+      first.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector((event.id, 1L))
+      retried.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector((event.id, 1L))
+
+      And("query and replay retain one occurrence for the retried event and one for the independent event")
+      independent.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector((independentevent.id, 2L))
+      queried.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector(
+        (event.id, 1L),
+        (independentevent.id, 2L)
+      )
+      replayed.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector(
+        (event.id, 1L),
+        (independentevent.id, 2L)
+      )
+    }
+
     "issue distinct deterministic transaction identities from controlled clock and entropy" in {
       Given("one fixed clock and deterministic IdGenerationContext")
       val instant = Instant.parse("2026-09-18T11:00:00Z")

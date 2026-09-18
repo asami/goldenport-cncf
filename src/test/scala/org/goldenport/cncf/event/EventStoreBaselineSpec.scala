@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventStoreBaselineSpec
@@ -66,6 +66,38 @@ final class EventStoreBaselineSpec
       And("replay uses the same deterministic order")
       val replayed = store.replay(EventStore.Query(name = Some("person.transition")))
       replayed shouldBe queried
+    }
+
+    "retain the original sequence when an issued record is retried" in {
+      Given("an in-memory event store and one already-issued event record")
+      val store = EventStore.inMemory
+      val record = EventRecord(
+        id = EventId.generate(),
+        name = "retry.target",
+        kind = "committed-transition",
+        payload = Map("entity.id" -> "person-1"),
+        attributes = Map.empty,
+        createdAt = Instant.now(),
+        persistent = true,
+        status = EventRecord.Status.Stored,
+        lane = EventLane.NonTransactional
+      )
+
+      When("the same issued record is appended and retried")
+      val first = store.append(Vector(record))
+      val retried = store.append(Vector(record))
+      val queried = store.query(EventStore.Query(name = Some("retry.target")))
+      val replayed = store.replay(EventStore.Query(name = Some("retry.target")))
+
+      Then("the retry returns the original stored sequence")
+      first.toOption.getOrElse(Vector.empty).map(_.sequence) shouldBe Vector(1L)
+      retried.toOption.getOrElse(Vector.empty).map(_.sequence) shouldBe Vector(1L)
+
+      And("query and replay each expose one occurrence of that issued identity")
+      queried.toOption.getOrElse(Vector.empty).map(_.id) shouldBe Vector(record.id)
+      replayed.toOption.getOrElse(Vector.empty).map(_.id) shouldBe Vector(record.id)
+      queried.toOption.getOrElse(Vector.empty).map(_.sequence) shouldBe Vector(1L)
+      replayed.toOption.getOrElse(Vector.empty).map(_.sequence) shouldBe Vector(1L)
     }
 
     "replay-dispatch in deterministic order" in {

@@ -15,7 +15,7 @@ import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
  * - replay
  *
  * Replay returns a deterministic event stream snapshot ordered by sequence.
- * Re-dispatch idempotency is handled by upper layers.
+ * The in-memory baseline retains the first record for an already-issued EventId.
  *
  * @since   Mar. 20, 2026
  *  version Jul. 16, 2026
@@ -259,11 +259,13 @@ object EventStore {
 
     def append(records: Seq[EventRecord]): Consequence[Vector[EventRecord]] = synchronized {
       val stored = records.toVector.map { r =>
-        _sequence = _sequence + 1
-        val x = r.copy(sequence = _sequence)
-        _records += x
-        _index.update(x.id, x)
-        x
+        _index.get(r.id).getOrElse {
+          _sequence = _sequence + 1
+          val x = r.copy(sequence = _sequence)
+          _records += x
+          _index.update(x.id, x)
+          x
+        }
       }
       Consequence.success(stored)
     }
