@@ -21,6 +21,11 @@ enum TransitionLifecycleKind(val value: String) {
   case TransitionFailed extends TransitionLifecycleKind("transition-failed")
 }
 
+enum TransitionLifecycleFailureStage(val value: String) {
+  case Planning extends TransitionLifecycleFailureStage("planning")
+  case Action extends TransitionLifecycleFailureStage("action")
+}
+
 final case class TransitionLifecycleCorrelation(
   executionContextId: ExecutionContextId,
   traceId: String,
@@ -39,7 +44,8 @@ final case class TransitionLifecycleTransition(
 
 final case class TransitionLifecycleFailure(
   taxonomy: String,
-  message: Option[String]
+  message: Option[String],
+  stage: TransitionLifecycleFailureStage = TransitionLifecycleFailureStage.Action
 )
 
 final case class TransitionLifecycleEvent(
@@ -72,7 +78,8 @@ object TransitionLifecycleEvent {
   def transitionFailed(
     event: TransitionEvent,
     collection: Option[String],
-    failure: Conclusion
+    failure: Conclusion,
+    stage: TransitionLifecycleFailureStage = TransitionLifecycleFailureStage.Action
   )(using ctx: ExecutionContext): TransitionLifecycleEvent =
     _create(
       TransitionLifecycleKind.TransitionFailed,
@@ -83,7 +90,8 @@ object TransitionLifecycleEvent {
           taxonomy = failure.observation.taxonomy.print,
           // Keep the compatibility field structurally present without exporting
           // an action, guard, persistence, or provider failure's raw text.
-          message = None
+          message = None,
+          stage = stage
         )
       )
     )

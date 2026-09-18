@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
-import org.goldenport.cncf.event.{CommittedTransition, TransitionLifecycleEvent}
+import org.goldenport.cncf.event.{CommittedTransition, TransitionLifecycleEvent, TransitionLifecycleFailureStage}
 import org.goldenport.record.Record
 
 /*
@@ -83,7 +83,11 @@ final class PlannedTransitionValidationHook(
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val event = TransitionEvent("save", Some(tc.id(entity)))
     for {
-      plan <- plannerProvider.planForSave(entity, tc, event)
+      plan <- _observe_planning_failure(
+        event,
+        Some(tc.id(entity).collection.name),
+        plannerProvider.planForSave(entity, tc, event)
+      )
       _ <- plan.fold(Consequence.unit) { p =>
         ExecutionPlanExecutor.execute(
           p,
@@ -101,7 +105,11 @@ final class PlannedTransitionValidationHook(
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val event = TransitionEvent("update", Some(tc.id(entity)))
     for {
-      plan <- plannerProvider.planForUpdate(entity, tc, event)
+      plan <- _observe_planning_failure(
+        event,
+        Some(tc.id(entity).collection.name),
+        plannerProvider.planForUpdate(entity, tc, event)
+      )
       _ <- plan.fold(Consequence.unit) { p =>
         ExecutionPlanExecutor.execute(
           p,
@@ -121,7 +129,11 @@ final class PlannedTransitionValidationHook(
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val event = TransitionEvent("update", Some(tc.id(entity)), Some(current), Some(proposed))
     for {
-      plan <- plannerProvider.planForUpdate(entity, tc, event)
+      plan <- _observe_planning_failure(
+        event,
+        Some(tc.id(entity).collection.name),
+        plannerProvider.planForUpdate(entity, tc, event)
+      )
       _ <- plan.fold(Consequence.unit) { p =>
         ExecutionPlanExecutor.execute(
           p,
@@ -141,7 +153,11 @@ final class PlannedTransitionValidationHook(
     val event = TransitionEvent("updateById", Some(id))
     val state = (id, patch)
     for {
-      plan <- plannerProvider.planForUpdateById(id, patch, tc, event)
+      plan <- _observe_planning_failure(
+        event,
+        Some(id.collection.name),
+        plannerProvider.planForUpdateById(id, patch, tc, event)
+      )
       _ <- plan.fold(Consequence.unit) { p =>
         ExecutionPlanExecutor.execute(
           p,
@@ -163,7 +179,11 @@ final class PlannedTransitionValidationHook(
     val event = TransitionEvent("updateById", Some(id), Some(current), Some(proposed))
     val state = (id, patch)
     for {
-      plan <- plannerProvider.planForUpdateById(id, patch, tc, event)
+      plan <- _observe_planning_failure(
+        event,
+        Some(id.collection.name),
+        plannerProvider.planForUpdateById(id, patch, tc, event)
+      )
       _ <- plan.fold(Consequence.unit) { p =>
         ExecutionPlanExecutor.execute(
           p,
@@ -209,10 +229,45 @@ final class PlannedTransitionValidationHook(
         failure: org.goldenport.Conclusion
       ): Unit = {
         val _ = (plan, state, event)
-        ctx.runtime.unitOfWork.stagePostAbortEventC { _ =>
-          TransitionLifecycleEvent.transitionFailed(transitionevent, collection, failure)
-        }
+        _stage_failure(
+          transitionevent,
+          collection,
+          failure,
+          TransitionLifecycleFailureStage.Action
+        )
       }
+    }
+
+  private def _observe_planning_failure[S](
+    transitionevent: TransitionEvent,
+    collection: Option[String],
+    result: Consequence[Option[ExecutionPlan[S, TransitionEvent]]]
+  )(using ctx: ExecutionContext): Consequence[Option[ExecutionPlan[S, TransitionEvent]]] =
+    result match {
+      case Consequence.Failure(failure) =>
+        _stage_failure(
+          transitionevent,
+          collection,
+          failure,
+          TransitionLifecycleFailureStage.Planning
+        )
+        Consequence.Failure(failure)
+      case success => success
+    }
+
+  private def _stage_failure(
+    transitionevent: TransitionEvent,
+    collection: Option[String],
+    failure: org.goldenport.Conclusion,
+    stage: TransitionLifecycleFailureStage
+  )(using ctx: ExecutionContext): Unit =
+    ctx.runtime.unitOfWork.stagePostAbortEventC { _ =>
+      TransitionLifecycleEvent.transitionFailed(
+        transitionevent,
+        collection,
+        failure,
+        stage
+      )
     }
 
   private def _stage(event: org.goldenport.cncf.event.DomainEvent)(using ctx: ExecutionContext): Unit =

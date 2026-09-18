@@ -6,7 +6,7 @@ import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.datastore.DataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
-import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleKind}
+import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleFailureStage, TransitionLifecycleKind}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -192,7 +192,60 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       failures should have size 1
       failures.head.lane shouldBe EventLane.NonTransactional
       failures.head.payload.get("transition.failure.taxonomy").map(_.toString).getOrElse("") should not be empty
+      failures.head.payload.get("transition.failure.stage") shouldBe Some(TransitionLifecycleFailureStage.Action.value)
       failures.head.payload.values.mkString(" ") should not include "transition failed in spec"
+      store.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
+    }
+
+    "persist one safe planning failure after hook failure rolls back" in {
+      Given("a failing planner bound to a runtime UnitOfWork with an in-memory EventStore")
+      val store = EventStore.inMemory
+      val base = ExecutionContext.create()
+      lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(base, runtime)
+      lazy val runtime: RuntimeContext = new RuntimeContext(
+        core = base.runtime.core,
+        unitofworksupplier = () => new UnitOfWork(
+          context,
+          EventEngine.noop(DataStore.noop(), eventstore = store)
+        ),
+        unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+        commitaction = uow => {
+          val _ = uow.commit()
+          ()
+        },
+        abortaction = uow => {
+          val _ = uow.rollback()
+          ()
+        },
+        disposeaction = _ => (),
+        token = "planned-transition-planning-failure-spec"
+      )
+      given ExecutionContext = context
+      given EntityPersistent[_Person] = _person_persistent
+      val hook = new PlannedTransitionValidationHook(new _ProviderWithPlanningFailure)
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          "test",
+          "hook_planning_failure_rollback",
+          _cid,
+          entropy = "hook_planning_failure_rollback"
+        ),
+        "hanako"
+      )
+
+      When("the planner fails and its runtime UnitOfWork rolls back")
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val rollbackresult = summon[ExecutionContext].runtime.unitOfWork.rollback()
+
+      Then("exactly one non-transactional planning failure is stored without private planner text")
+      result shouldBe a[Consequence.Failure[_]]
+      rollbackresult.isSuccess shouldBe true
+      val failures = store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
+      failures should have size 1
+      failures.head.lane shouldBe EventLane.NonTransactional
+      failures.head.payload.get("transition.failure.stage") shouldBe Some(TransitionLifecycleFailureStage.Planning.value)
+      failures.head.payload.get("transition.failure.taxonomy").map(_.toString).getOrElse("") should not be empty
+      failures.head.payload.values.mkString(" ") should not include "planner secret in spec"
       store.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
     }
   }
@@ -325,6 +378,36 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
           )
         )
       )
+    }
+
+    def planForUpdateById[P](
+      id: EntityId,
+      patch: P,
+      tc: EntityPersistentUpdate[P],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[(EntityId, P), TransitionEvent]]] = {
+      val _ = (id, patch, tc, event)
+      Consequence.success(None)
+    }
+  }
+
+  private final class _ProviderWithPlanningFailure extends StateMachinePlannerProvider {
+    def planForSave[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(None)
+    }
+
+    def planForUpdate[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.stateConflict("planner secret in spec")
     }
 
     def planForUpdateById[P](

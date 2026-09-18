@@ -106,8 +106,11 @@ final case class EventRecordFactory(
         )
       case e: TransitionLifecycleEvent =>
         val failurepayload = e.failure.map { failure =>
-          "transition.failure.taxonomy" -> failure.taxonomy
-        }.toMap
+          Map(
+            "transition.failure.taxonomy" -> failure.taxonomy,
+            "transition.failure.stage" -> failure.stage.value
+          )
+        }.getOrElse(Map.empty)
         EventRecord(
           id = e.id,
           name = e.name,
