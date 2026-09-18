@@ -65,6 +65,9 @@ Stage Status:
 
 - [ ] Dispatch admitted StateMachine Provided API operations through typed runtime contracts.
 - [ ] Resolve Required SPI operations through provider bindings independent from Action implementation.
+- [ ] Define the component-programmer API so `ComponentFactory` exposes generated/standard Provider factory methods and component implementations override those methods to construct component-specific Providers.
+- [ ] Keep Action methods themselves out of the `ComponentFactory` override surface; Providers implement the typed Required SPI operations associated with Actions.
+- [ ] Allow one Provider to implement a coherent group of Required SPI operations while retaining operation/SPI-specific runtime binding and selective test/external replacement.
 - [ ] Support local/direct, external-continuation, and deterministic test provider forms at the contract/runtime level.
 - [ ] Reuse `ExecProgram[UnitOfWorkOp, A]` and Phase 64.2 planner contracts for internal typed Operations/actions where applicable.
 - [ ] Preserve identity, idempotency, authorization, provenance and normal UnitOfWork boundaries.
