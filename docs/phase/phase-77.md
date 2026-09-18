@@ -50,6 +50,7 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic `Invoc
 - Workflow reuses/projects the StateMachine foundation; CNCF does not add a parallel Workflow-specific API/SPI or Continuation engine.
 - An entity-local StateMachine owns only lifecycle data persisted with that entity. WorkflowInstance process persistence remains independently owned.
 - A consuming component binds WorkflowInstance persistence, retention, lease/idempotency policy, public operations and client behavior.
+- Component implementation code supplies Required SPI implementations through Providers. `ComponentFactory` is the construction/injection boundary: the component overrides generated/standard Provider factory methods to create component-specific Providers rather than overriding individual Workflow/StateMachine Actions.
 - Generic Skill Workflow Support projects suspended external SPI operations into Skill commands/WorkOrders. Domain-specific software-development policy remains in `sm-workflow`.
 
 ## Work Stack
@@ -61,7 +62,7 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic `Invoc
 | CWF-77-03 | Bind admitted Workflow definitions to Phase 64's separate WorkflowInstance persistence SPI and identity/revision/history contract. | planned |
 | CWF-77-04 | Implement deterministic StateMachine progression and bounded next-Action selection without inferring semantics from names/effects. | planned |
 | CWF-77-05 | Implement ActionExecution handling for `Completed`, `Suspended`, and `Failed`, reusing the existing typed `ExecProgram[UnitOfWorkOp, A]` path for internal Actions. | planned |
-| CWF-77-06 | Implement Required SPI provider resolution contracts for local/direct, external-continuation, and deterministic test providers. | planned |
+| CWF-77-06 | Implement Required SPI provider resolution contracts and the ComponentFactory Provider-construction developer API for local/direct, external-continuation, and deterministic test providers. | planned |
 | CWF-77-07 | Implement durable Continuation creation/resume validation including identity, revision/ContextSnapshot, typed result, completion/evidence, stale and duplicate rejection boundaries. | planned |
 | CWF-77-08 | Provide Generic Skill Workflow projection for suspended external SPI operations without exposing internal deterministic Actions as WorkOrders. | planned |
 | CWF-77-09 | Prove the CML-first producer-to-CNCF path with Cozy's real fixture and freeze the `sm-workflow` consumer handoff. | planned |
@@ -88,6 +89,28 @@ Required SPI
 ```
 
 A local/test provider may return `Completed(Result)`. An external provider produces `Suspended(Continuation)` until a typed result is submitted. Provider placement does not duplicate State/Guard/Operation/Result semantics.
+
+### Component implementation / Provider construction
+
+The component-programmer-facing implementation boundary is Provider construction through `ComponentFactory`.
+
+A component does not implement a Workflow/StateMachine Action by overriding one factory method per Action. Generated/admitted Workflow metadata identifies Required SPI operations; the component supplies their implementation by overriding generated/standard Provider factory methods on its `ComponentFactory` and returning component-specific Provider implementations.
+
+Conceptually:
+
+```text
+CML Workflow / StateMachine
+  -> Action
+  -> Required SPI
+  -> runtime ProviderBinding
+  -> ComponentFactory provider factory method
+  -> component-specific Provider
+  -> typed Required SPI implementation
+```
+
+The Provider may implement a coherent group of related Required SPI operations. Runtime binding remains operation/SPI-specific, so test or external Providers can replace selected bindings without changing Workflow semantics.
+
+`ComponentFactory` owns Provider construction and dependency injection; the Provider owns Required SPI implementation; the StateMachine/Workflow runtime owns provider resolution, Action execution and progression. Generated CML metadata must not embed arbitrary Scala functions or Provider instances.
 
 `advance` executes bounded internal progress: it selects the next admitted Action, executes internal providers, feeds Completed results back into the StateMachine, and continues until a suspension, terminal state, declared wait/failure boundary, ambiguity/cycle/safety bound, or other explicit policy stop is reached.
 
