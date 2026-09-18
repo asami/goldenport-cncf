@@ -19,7 +19,7 @@ import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
  *
  * @since   Mar. 20, 2026
  *  version Jul. 16, 2026
- * @version Sep. 18, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventStore {
@@ -105,6 +105,9 @@ final case class EventRecordFactory(
           lane = lane
         )
       case e: TransitionLifecycleEvent =>
+        val failurepayload = e.failure.map { failure =>
+          "transition.failure.taxonomy" -> failure.taxonomy
+        }.toMap
         EventRecord(
           id = e.id,
           name = e.name,
@@ -113,7 +116,7 @@ final case class EventRecordFactory(
             "transition.event" -> e.transition.event,
             "transition.collection" -> e.transition.collection.getOrElse(""),
             "transition.targetId" -> e.transition.targetId.map(_.print).getOrElse("")
-          ),
+          ) ++ failurepayload,
           attributes = Map(
             "traceId" -> e.correlation.traceId,
             "spanId" -> e.correlation.spanId.getOrElse(""),

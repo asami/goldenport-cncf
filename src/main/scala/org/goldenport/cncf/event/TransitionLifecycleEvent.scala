@@ -12,7 +12,7 @@ import org.goldenport.cncf.statemachine.TransitionEvent
  *
  * @since   Mar. 20, 2026
  *  version Mar. 24, 2026
- * @version Jul. 15, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TransitionLifecycleKind(val value: String) {
@@ -81,7 +81,9 @@ object TransitionLifecycleEvent {
       Some(
         TransitionLifecycleFailure(
           taxonomy = failure.observation.taxonomy.print,
-          message = failure.observation.getEffectiveMessage
+          // Keep the compatibility field structurally present without exporting
+          // an action, guard, persistence, or provider failure's raw text.
+          message = None
         )
       )
     )

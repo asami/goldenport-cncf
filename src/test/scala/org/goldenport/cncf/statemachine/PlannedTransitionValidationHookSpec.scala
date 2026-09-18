@@ -1,11 +1,13 @@
 package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext}
 import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.datastore.DataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
-import org.goldenport.cncf.event.{CommittedTransition, TransitionLifecycleEvent, TransitionLifecycleKind}
+import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleKind}
+import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
  *  version Sep. 17, 2026
- * @version Sep. 18, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -130,22 +132,68 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       When("the planned validation hook processes the update")
       val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
 
-      Then("the update fails and emits a transition-failed lifecycle event")
+      Then("the update fails without staging a raw failure diagnostic for transactional publication")
       result shouldBe a[Consequence.Failure[_]]
       val lifecycle = summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
         case e: TransitionLifecycleEvent => e
       }
       lifecycle.map(_.kind) shouldBe Vector(
-        TransitionLifecycleKind.BeforeTransition,
-        TransitionLifecycleKind.TransitionFailed
+        TransitionLifecycleKind.BeforeTransition
       )
-      val failed = lifecycle.last
-      failed.failure.isDefined shouldBe true
-      failed.failure.map(_.taxonomy).getOrElse("") should not be empty
-      failed.failure.flatMap(_.message).getOrElse("") should include("transition")
       summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
         case e: CommittedTransition => e
       } shouldBe empty
+    }
+
+    "persist one safe transition-failed record after hook failure rolls back" in {
+      Given("a failing planned transition hook bound to a runtime UnitOfWork with an in-memory EventStore")
+      val store = EventStore.inMemory
+      val base = ExecutionContext.create()
+      lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(base, runtime)
+      lazy val runtime: RuntimeContext = new RuntimeContext(
+        core = base.runtime.core,
+        unitofworksupplier = () => new UnitOfWork(
+          context,
+          EventEngine.noop(DataStore.noop(), eventstore = store)
+        ),
+        unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+        commitaction = uow => {
+          val _ = uow.commit()
+          ()
+        },
+        abortaction = uow => {
+          val _ = uow.rollback()
+          ()
+        },
+        disposeaction = _ => (),
+        token = "planned-transition-validation-hook-failure-spec"
+      )
+      given ExecutionContext = context
+      given EntityPersistent[_Person] = _person_persistent
+      val hook = new PlannedTransitionValidationHook(new _ProviderWithFailingPlan)
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          "test",
+          "hook_failure_rollback",
+          _cid,
+          entropy = "hook_failure_rollback"
+        ),
+        "hanako"
+      )
+
+      When("the hook fails and its runtime UnitOfWork rolls back")
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val rollbackresult = summon[ExecutionContext].runtime.unitOfWork.rollback()
+
+      Then("exactly one non-transactional taxonomy-only failure is stored without a committed-success transition")
+      result shouldBe a[Consequence.Failure[_]]
+      rollbackresult.isSuccess shouldBe true
+      val failures = store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
+      failures should have size 1
+      failures.head.lane shouldBe EventLane.NonTransactional
+      failures.head.payload.get("transition.failure.taxonomy").map(_.toString).getOrElse("") should not be empty
+      failures.head.payload.values.mkString(" ") should not include "transition failed in spec"
+      store.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
     }
   }
 

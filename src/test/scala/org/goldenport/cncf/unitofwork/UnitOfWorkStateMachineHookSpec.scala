@@ -25,7 +25,7 @@ import org.goldenport.cncf.entity.{
   EntityStore,
   EntityStoreSpace
 }
-import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventStore, ReceptionDomainEvent, TransitionLifecycleEvent}
+import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, ReceptionDomainEvent, TransitionLifecycleEvent}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.testutil.EntityRevisionFixture
 import org.goldenport.cncf.statemachine.{ExecutionPlan, PlannedTransitionValidationHook, ResolvedAction, StateMachinePlannerProvider, TransitionEvent, TransitionValidationHook}
@@ -40,7 +40,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 14, 2026
  *  version Jul. 25, 2026
  *  version Sep. 17, 2026
- * @version Sep. 18, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec
@@ -259,6 +259,87 @@ final class UnitOfWorkStateMachineHookSpec
       store.query(EventStore.Query()).toOption.getOrElse(Vector.empty) shouldBe empty
       unitofwork.lastCommitTermination shouldBe None
       unitofwork.lastAbortResult.exists(_.isSuccess) shouldBe true
+    }
+
+    "emit a safe transition failure after rollback" in {
+      Given("a UnitOfWork with an in-memory event store and a failure containing private action text")
+      val instant = Instant.parse("2026-09-18T14:00:00Z")
+      val clock = Clock.fixed(instant, ZoneOffset.UTC)
+      given ExecutionContext = ExecutionContext.create(clock)
+      val collection = EntityCollectionId("test", "sm", "person")
+      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+        "test",
+        "sm_failure",
+        collection,
+        entropy = "sm_failure"
+      )
+      val store = EventStore.inMemory
+      val unitofwork = new UnitOfWork(
+        summon[ExecutionContext],
+        EventEngine.noop(DataStore.noop(), eventstore = store)
+      )
+      val privateactiontext = "password=not-for-observability"
+      val failure = Consequence.stateConflict(privateactiontext) match {
+        case Consequence.Failure(conclusion) => conclusion
+        case _ => fail("state conflict must produce a failure conclusion")
+      }
+      val lifecycle = TransitionLifecycleEvent.transitionFailed(
+        TransitionEvent("update", Some(entityid)),
+        Some(collection.name),
+        failure
+      )
+      unitofwork.stagePostAbortEventC(_ => lifecycle)
+
+      When("the transaction rolls back")
+      val result = unitofwork.rollback()
+
+      Then("one non-transactional record retains only the safe taxonomy")
+      result.isSuccess shouldBe true
+      lifecycle.failure.flatMap(_.message) shouldBe None
+      val records = store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
+      records should have size 1
+      records.head.lane shouldBe EventLane.NonTransactional
+      records.head.payload.get("transition.failure.taxonomy").map(_.toString).getOrElse("") should not be empty
+      records.head.payload.values.mkString(" ") should not include privateactiontext
+    }
+
+    "clear post-abort lifecycle callbacks after successful commit" in {
+      Given("a reusable UnitOfWork with an in-memory event store and a staged post-abort transition failure")
+      val instant = Instant.parse("2026-09-19T09:00:00Z")
+      val clock = Clock.fixed(instant, ZoneOffset.UTC)
+      given ExecutionContext = ExecutionContext.create(clock)
+      val collection = EntityCollectionId("test", "sm", "person")
+      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+        "test",
+        "sm_commit_then_rollback",
+        collection,
+        entropy = "sm_commit_then_rollback"
+      )
+      val store = EventStore.inMemory
+      val unitofwork = new UnitOfWork(
+        summon[ExecutionContext],
+        EventEngine.noop(DataStore.noop(), eventstore = store)
+      )
+      val failure = Consequence.stateConflict("must not survive successful commit") match {
+        case Consequence.Failure(conclusion) => conclusion
+        case _ => fail("state conflict must produce a failure conclusion")
+      }
+      unitofwork.stagePostAbortEventC { _ =>
+        TransitionLifecycleEvent.transitionFailed(
+          TransitionEvent("update", Some(entityid)),
+          Some(collection.name),
+          failure
+        )
+      }
+
+      When("the UnitOfWork commits successfully and is later rolled back")
+      val commitresult = unitofwork.commit()
+      val rollbackresult = unitofwork.rollback()
+
+      Then("the later rollback does not persist the stale transition-failed lifecycle event")
+      commitresult.isSuccess shouldBe true
+      rollbackresult.isSuccess shouldBe true
+      store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty) shouldBe empty
     }
   }
 

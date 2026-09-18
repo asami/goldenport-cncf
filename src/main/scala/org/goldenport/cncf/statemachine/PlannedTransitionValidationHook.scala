@@ -11,7 +11,7 @@ import org.goldenport.record.Record
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Jul. 16, 2026
- * @version Sep. 18, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionEvent(
@@ -209,7 +209,9 @@ final class PlannedTransitionValidationHook(
         failure: org.goldenport.Conclusion
       ): Unit = {
         val _ = (plan, state, event)
-        _stage(TransitionLifecycleEvent.transitionFailed(transitionevent, collection, failure))
+        ctx.runtime.unitOfWork.stagePostAbortEventC { _ =>
+          TransitionLifecycleEvent.transitionFailed(transitionevent, collection, failure)
+        }
       }
     }
 
