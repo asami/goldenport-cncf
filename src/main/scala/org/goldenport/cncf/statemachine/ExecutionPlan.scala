@@ -4,7 +4,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 20, 2026
+ *  version Mar. 20, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ResolvedAction[S, E] {
@@ -14,7 +15,8 @@ trait ResolvedAction[S, E] {
 final case class ExecutionPlan[S, E](
   exitActions: Vector[ResolvedAction[S, E]],
   transitionAction: Option[ResolvedAction[S, E]],
-  entryActions: Vector[ResolvedAction[S, E]]
+  entryActions: Vector[ResolvedAction[S, E]],
+  selectedTransitionBinding: Option[CmlTransitionBinding] = None
 )
 
 object ExecutionPlan {

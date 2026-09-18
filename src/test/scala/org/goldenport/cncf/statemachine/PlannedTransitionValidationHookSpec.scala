@@ -2,9 +2,10 @@ package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.component.ComponentId
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
-import org.goldenport.cncf.event.{TransitionLifecycleEvent, TransitionLifecycleKind}
+import org.goldenport.cncf.event.{CommittedTransition, TransitionLifecycleEvent, TransitionLifecycleKind}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -14,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -56,6 +58,65 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         e.transition.targetId shouldBe Some(entity.id)
         e.failure shouldBe None
       }
+      summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
+        case e: CommittedTransition => e
+      } shouldBe empty
+    }
+
+    "schedule an explicitly bound committed transition without staging it before commit" in {
+      Given("an execution context, persistent person, and successful explicitly bound transition plan")
+      given ExecutionContext = ExecutionContext.create()
+      given EntityPersistent[_Person] = _person_persistent
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_bound", _cid, entropy = "hook_bound"),
+        "sachiko"
+      )
+      val hook = new PlannedTransitionValidationHook(new ProviderWithBoundPlan(_binding))
+
+      When("the planned validation hook processes the successful update before UnitOfWork commit")
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+
+      Then("only the existing lifecycle events are staged and no committed-transition event is pre-commit")
+      result shouldBe Consequence.unit
+      val staged = summon[ExecutionContext].runtime.unitOfWork.pendingEvents
+      staged.collect { case e: TransitionLifecycleEvent => e.kind } shouldBe Vector(
+        TransitionLifecycleKind.BeforeTransition,
+        TransitionLifecycleKind.AfterTransition
+      )
+      staged.collect { case e: CommittedTransition => e } shouldBe empty
+    }
+
+    "attach the selected rule binding to a structural execution plan without rewriting the hook operation" in {
+      Given("a structural rule with an explicit CML binding and an update whose state changes from Draft to Approved")
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "planner_bound", _cid, entropy = "planner_bound"),
+        "ichiro"
+      )
+      val rule = TransitionRule[_Person](
+        eventName = "approve",
+        priority = 0,
+        declarationOrder = 0,
+        guard = None,
+        plan = ExecutionPlan(Vector.empty, None, Vector.empty),
+        stateFieldName = Some("status"),
+        fromState = Some("Draft"),
+        toState = Some("Approved"),
+        binding = Some(_binding)
+      )
+      val planner = new CollectionStateMachinePlanner(Vector(rule))
+      val operation = TransitionEvent(
+        "update",
+        Some(entity.id),
+        Some(Record.dataAuto("status" -> "Draft")),
+        Some(Record.dataAuto("status" -> "Approved"))
+      )
+
+      When("the planner selects the rule while evaluating its semantic transition event")
+      val selected = planner.plan(entity, operation).toOption.flatten
+
+      Then("the selected plan carries the typed rule binding while the hook operation remains the original update")
+      selected.flatMap(_.selectedTransitionBinding) shouldBe Some(_binding)
+      operation.name shouldBe "update"
     }
 
     "emit transition-failed on action failure" in {
@@ -82,6 +143,9 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       failed.failure.isDefined shouldBe true
       failed.failure.map(_.taxonomy).getOrElse("") should not be empty
       failed.failure.flatMap(_.message).getOrElse("") should include("transition")
+      summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
+        case e: CommittedTransition => e
+      } shouldBe empty
     }
   }
 
@@ -101,6 +165,28 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
           Consequence.argumentInvalid("invalid person record")
       }
     }
+  }
+
+  private val _binding: CmlTransitionBinding = {
+    val machine = CmlStateMachineIdentity("person-lifecycle")
+    val source = CmlStateMachineStateIdentity(
+      machine,
+      CmlStateMachineStatePath(Vector("Draft"))
+    )
+    val target = CmlStateMachineStateIdentity(
+      machine,
+      CmlStateMachineStatePath(Vector("Approved"))
+    )
+    CmlTransitionBinding(
+      componentId = ComponentId("org.example.Person"),
+      entityType = _cid,
+      machine = machine,
+      version = CmlStateMachineVersion(1),
+      transition = CmlStateMachineTransitionIdentity(machine, 0),
+      source = source,
+      target = CmlStateMachineTransitionTarget.State(target),
+      trigger = CmlStateMachineTriggerIdentity(machine, "approve")
+    )
   }
 
   private final class _ProviderWithPlan extends StateMachinePlannerProvider {
@@ -188,6 +274,52 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
             exitActions = Vector.empty,
             transitionAction = Some(failaction),
             entryActions = Vector.empty
+          )
+        )
+      )
+    }
+
+    def planForUpdateById[P](
+      id: EntityId,
+      patch: P,
+      tc: EntityPersistentUpdate[P],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[(EntityId, P), TransitionEvent]]] = {
+      val _ = (id, patch, tc, event)
+      Consequence.success(None)
+    }
+  }
+
+  private final class ProviderWithBoundPlan(
+    binding: CmlTransitionBinding
+  ) extends StateMachinePlannerProvider {
+    def planForSave[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(None)
+    }
+
+    def planForUpdate[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(
+        Some(
+          ExecutionPlan(
+            exitActions = Vector.empty,
+            transitionAction = Some(new ResolvedAction[T, TransitionEvent] {
+              def run(state: T, transitionevent: TransitionEvent): Consequence[Unit] = {
+                val _ = (state, transitionevent)
+                Consequence.unit
+              }
+            }),
+            entryActions = Vector.empty,
+            selectedTransitionBinding = Some(binding)
           )
         )
       )

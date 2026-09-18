@@ -10,7 +10,8 @@ import org.goldenport.record.Record
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Aug. 14, 2026
+ *  version Aug. 14, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionRule[S](
@@ -29,7 +30,8 @@ final case class TransitionRule[S](
   historyFieldName: Option[String] = None,
   historyDirectLeaves: Vector[String] = Vector.empty,
   historyFallbackLeaf: Option[String] = None,
-  expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
+  expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty,
+  binding: Option[CmlTransitionBinding] = None
 ) {
   def isStructural: Boolean =
     stateFieldName.isDefined && fromState.isDefined &&
@@ -61,7 +63,7 @@ final class CollectionStateMachinePlanner[S](
       .select(candidates) { c =>
         c.guard.fold(Consequence.success(true))(_.eval(state, event))
       }
-      .map(_.map(_.plan))
+      .map(_.map(_selected_plan))
   }
 
   private def _plan_structural(
@@ -99,7 +101,7 @@ final class CollectionStateMachinePlanner[S](
                   }
                 }
                 .flatMap {
-                  case Some(rule) => Consequence.success(Some(rule.plan))
+                  case Some(rule) => Consequence.success(Some(_selected_plan(rule)))
                   case None => _state_conflict(fieldname, currentvalue, proposedvalue)
                 }
           case fields =>
@@ -110,6 +112,11 @@ final class CollectionStateMachinePlanner[S](
       case _ =>
         Consequence.stateConflict("Structural state-machine validation requires current and proposed records")
     }
+
+  private def _selected_plan(
+    rule: TransitionRule[S]
+  ): ExecutionPlan[S, TransitionEvent] =
+    rule.plan.copy(selectedTransitionBinding = rule.binding)
 
   private def _matches_transition_target(
     rule: TransitionRule[S],

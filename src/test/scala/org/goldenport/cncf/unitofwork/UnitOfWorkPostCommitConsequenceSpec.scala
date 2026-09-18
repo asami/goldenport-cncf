@@ -1,18 +1,23 @@
 package org.goldenport.cncf.unitofwork
 
+import java.time.{Clock, Instant, ZoneOffset}
 import java.lang.reflect.{InvocationHandler, Method, Proxy}
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.event.EventEngine
+import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore}
+import org.goldenport.cncf.statemachine.{CmlStateMachineIdentity, CmlStateMachineStateIdentity, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding}
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 12, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkPostCommitConsequenceSpec
@@ -36,6 +41,46 @@ final class UnitOfWorkPostCommitConsequenceSpec
         Then("the commit remains successful and records normal transaction completion")
         result.isSuccess shouldBe true
         recorder.entries shouldBe Vector("UnitOfWork.prepare", "EventEngine.prepare", "UnitOfWork.commit", "EventEngine.commit", "DataStore.commit")
+      }
+
+      "emit a bound committed transition exactly once only after the transaction commits" in {
+        Given("a UnitOfWork with a deterministic context, in-memory event store, and post-commit committed-transition factory")
+        val instant = Instant.parse("2026-09-18T12:00:00Z")
+        val clock = Clock.fixed(instant, ZoneOffset.UTC)
+        val ids = IdGenerationContext.deterministic(
+          IdGenerationContext.IdNamespace("test", "post_commit"),
+          clock,
+          "post-commit-committed-transition"
+        )
+        given ExecutionContext = ExecutionContext.withIdGenerationContext(ExecutionContext.create(clock), ids)
+        val collection = EntityCollectionId("test", "sm", "person")
+        val entityid = ids.entityId(collection, "post-commit-entity")
+        val store = EventStore.inMemory
+        val recorder = new RecordingCommitRecorder
+        val unitofwork = new UnitOfWork(
+          summon[ExecutionContext],
+          EventEngine.noop(DataStore.noop(recorder), recorder, store),
+          recorder
+        )
+        val issued = ArrayBuffer.empty[TransactionContext.TransactionContextId]
+        unitofwork.stagePostCommitEventC { transactionid =>
+          issued += transactionid
+          CommittedTransition.create(entityid, _binding(collection), "update", transactionid)
+        }
+
+        When("the UnitOfWork is observed before and then after successful commit")
+        store.query(EventStore.Query()).toOption.getOrElse(Vector.empty) shouldBe empty
+        val committed = unitofwork.commit()
+        val records = store.query(EventStore.Query()).toOption.getOrElse(Vector.empty)
+
+        Then("the committed transition is absent before commit and persists once through the non-transactional lane with the issued transaction identity")
+        committed.isSuccess shouldBe true
+        issued should have size 1
+        records should have size 1
+        records.head.lane shouldBe EventLane.NonTransactional
+        records.head.payload("transaction.id") shouldBe issued.head.print
+        records.head.payload("operation.id") shouldBe "update"
+        unitofwork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       }
 
       "surface a structured callback Failure after commit without aborting the transaction" in {
@@ -178,6 +223,14 @@ final class UnitOfWorkPostCommitConsequenceSpec
           callbacks += "must-not-run"
           Consequence.unit
         }
+        var committedtransitionemitted = false
+        given ExecutionContext = ExecutionContext.create()
+        val collection = EntityCollectionId("test", "sm", "person")
+        val entityid = summon[ExecutionContext].idGeneration.entityId(collection, "prepare-rejection-entity")
+        unitofwork.stagePostCommitEventC { transactionid =>
+          committedtransitionemitted = true
+          CommittedTransition.create(entityid, _binding(collection), "update", transactionid)
+        }
 
         When("prepare rejects before transaction commit")
         val result = unitofwork.commit()
@@ -185,6 +238,7 @@ final class UnitOfWorkPostCommitConsequenceSpec
         Then("the transaction terminates as aborted and no post-commit callback runs")
         result.isFaillure shouldBe true
         callbacks.toVector shouldBe empty
+        committedtransitionemitted shouldBe false
         recorder.entries shouldBe Vector(
           "UnitOfWork.prepare",
           "EventEngine.prepare",
@@ -242,5 +296,23 @@ final class UnitOfWorkPostCommitConsequenceSpec
       terminations += termination
       Consequence.unit
     }
+  }
+
+  private def _binding(
+    collection: EntityCollectionId
+  ): CmlTransitionBinding = {
+    val machine = CmlStateMachineIdentity("person-lifecycle")
+    val source = CmlStateMachineStateIdentity(machine, CmlStateMachineStatePath(Vector("Draft")))
+    val target = CmlStateMachineStateIdentity(machine, CmlStateMachineStatePath(Vector("Approved")))
+    CmlTransitionBinding(
+      componentId = ComponentId("org.example.Person"),
+      entityType = collection,
+      machine = machine,
+      version = CmlStateMachineVersion(1),
+      transition = CmlStateMachineTransitionIdentity(machine, 0),
+      source = source,
+      target = CmlStateMachineTransitionTarget.State(target),
+      trigger = CmlStateMachineTriggerIdentity(machine, "approve")
+    )
   }
 }

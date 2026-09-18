@@ -1,8 +1,9 @@
 package org.goldenport.cncf.unitofwork
 
-import java.time.Instant
+import java.time.{Clock, Instant, ZoneOffset}
 import cats.~>
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.context.{
   CorrelationId,
   DataStoreContext,
@@ -14,6 +15,7 @@ import org.goldenport.cncf.context.{
   ScopeKind,
   TraceId
 }
+import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, EntityVersionedMutationCheckpoint}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.goldenport.cncf.entity.{
@@ -23,7 +25,7 @@ import org.goldenport.cncf.entity.{
   EntityStore,
   EntityStoreSpace
 }
-import org.goldenport.cncf.event.{EventEngine, ReceptionDomainEvent, TransitionLifecycleEvent}
+import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventStore, ReceptionDomainEvent, TransitionLifecycleEvent}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.testutil.EntityRevisionFixture
 import org.goldenport.cncf.statemachine.{ExecutionPlan, PlannedTransitionValidationHook, ResolvedAction, StateMachinePlannerProvider, TransitionEvent, TransitionValidationHook}
@@ -37,7 +39,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
  *  version Jul. 25, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec
@@ -223,6 +226,64 @@ final class UnitOfWorkStateMachineHookSpec
 
       loadedage shouldBe Consequence.success(Some(40))
     }
+
+    "discard a bound committed-transition emitter on rollback" in {
+      Given("a UnitOfWork with deterministic identity issuance, an in-memory event store, and a bound committed-transition emitter")
+      val instant = Instant.parse("2026-09-18T13:00:00Z")
+      val clock = Clock.fixed(instant, ZoneOffset.UTC)
+      val ids = IdGenerationContext.deterministic(
+        IdGenerationContext.IdNamespace("test", "rollback"),
+        clock,
+        "rollback-committed-transition"
+      )
+      given ExecutionContext = ExecutionContext.withIdGenerationContext(ExecutionContext.create(clock), ids)
+      val collection = EntityCollectionId("test", "sm", "person")
+      val entityid = ids.entityId(collection, "rollback-entity")
+      val store = EventStore.inMemory
+      val unitofwork = new UnitOfWork(
+        summon[ExecutionContext],
+        EventEngine.noop(DataStore.noop(), eventstore = store)
+      )
+      var emittercalled = false
+      unitofwork.stagePostCommitEventC { transactionid =>
+        emittercalled = true
+        CommittedTransition.create(entityid, _binding(collection), "update", transactionid)
+      }
+
+      When("the UnitOfWork rolls back before commit")
+      val result = unitofwork.rollback()
+
+      Then("the transaction aborts without invoking the emitter or persisting a committed transition")
+      result.isSuccess shouldBe true
+      emittercalled shouldBe false
+      store.query(EventStore.Query()).toOption.getOrElse(Vector.empty) shouldBe empty
+      unitofwork.lastCommitTermination shouldBe None
+      unitofwork.lastAbortResult.exists(_.isSuccess) shouldBe true
+    }
+  }
+
+  private def _binding(
+      collection: EntityCollectionId
+  ): org.goldenport.cncf.statemachine.CmlTransitionBinding = {
+    val machine = org.goldenport.cncf.statemachine.CmlStateMachineIdentity("person-lifecycle")
+    val source = org.goldenport.cncf.statemachine.CmlStateMachineStateIdentity(
+      machine,
+      org.goldenport.cncf.statemachine.CmlStateMachineStatePath(Vector("Draft"))
+    )
+    val target = org.goldenport.cncf.statemachine.CmlStateMachineStateIdentity(
+      machine,
+      org.goldenport.cncf.statemachine.CmlStateMachineStatePath(Vector("Approved"))
+    )
+    org.goldenport.cncf.statemachine.CmlTransitionBinding(
+      componentId = ComponentId("org.example.Person"),
+      entityType = collection,
+      machine = machine,
+      version = org.goldenport.cncf.statemachine.CmlStateMachineVersion(1),
+      transition = org.goldenport.cncf.statemachine.CmlStateMachineTransitionIdentity(machine, 0),
+      source = source,
+      target = org.goldenport.cncf.statemachine.CmlStateMachineTransitionTarget.State(target),
+      trigger = org.goldenport.cncf.statemachine.CmlStateMachineTriggerIdentity(machine, "approve")
+    )
   }
 
   private def _execution_context(

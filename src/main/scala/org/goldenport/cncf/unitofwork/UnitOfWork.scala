@@ -36,7 +36,8 @@ import org.goldenport.cncf.operation.evaluation.{
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
  *  version Apr. 28, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -51,7 +52,7 @@ class UnitOfWork(
 //  private var _shell_command_executor: Option[ShellCommandExecutor] = None
   private val _dirty_entities: mutable.Map[EntityId, Entity] = mutable.Map.empty
   private var _pending_events: Vector[DomainEvent] = Vector.empty
-  private var _post_commit_callbacks: Vector[() => Consequence[Unit]] = Vector.empty
+  private var _post_commit_callbacks: Vector[TransactionContext.TransactionContextId => Consequence[Unit]] = Vector.empty
   private val _operation_evaluation_supplemental_buffer = operationevaluationsupplementalbuffer
   private var _last_commit_result: Option[Consequence[CommitResult]] = None
   private var _last_commit_termination: Option[UnitOfWorkTermination] = None
@@ -135,7 +136,7 @@ class UnitOfWork(
     var termination = UnitOfWorkTermination.Aborted
     var postcommitcontrol: Option[Throwable] = None
     val result = try {
-      val tx = TransactionContext.create(context.transactionContext)
+      val tx = TransactionContext.create(context.transactionContext, context.clock, context.idGeneration)
       val all = _pending_events ++ events.toVector
       eventengine.stage(all, EventRecordFactory.from(context))
       recorder.record("UnitOfWork.prepare")
@@ -160,7 +161,7 @@ class UnitOfWork(
           val callbacks = _post_commit_callbacks
           _post_commit_callbacks = Vector.empty
           termination = UnitOfWorkTermination.Committed
-          _run_post_commit_callbacks_c(callbacks)
+          _run_post_commit_callbacks_c(callbacks, tx.id)
       }
     } catch {
       case e: Throwable =>
@@ -198,7 +199,7 @@ class UnitOfWork(
 
   def abort(): Consequence[AbortResult] = {
     val result = try {
-      val tx = TransactionContext.create(context.transactionContext)
+      val tx = TransactionContext.create(context.transactionContext, context.clock, context.idGeneration)
       recorder.record("UnitOfWork.abort")
       eventengine.abort(tx) // TODO
       tx.abort()
@@ -288,7 +289,19 @@ class UnitOfWork(
     }
 
   def stagePostCommitC(callback: => Consequence[Unit]): Unit =
-    _post_commit_callbacks = _post_commit_callbacks :+ (() => callback)
+    _stage_post_commit_with_transaction_c(_ => callback)
+
+  private def _stage_post_commit_with_transaction_c(
+    callback: TransactionContext.TransactionContextId => Consequence[Unit]
+  ): Unit =
+    _post_commit_callbacks = _post_commit_callbacks :+ callback
+
+  def stagePostCommitEventC(
+    event: TransactionContext.TransactionContextId => DomainEvent
+  ): Unit =
+    _stage_post_commit_with_transaction_c { transactionid =>
+      eventengine.emit(Vector(event(transactionid)), EventRecordFactory.from(context)).map(_ => ())
+    }
 
   def executionContext: ExecutionContext = context
 
@@ -313,11 +326,12 @@ class UnitOfWork(
   }
 
   private def _run_post_commit_callbacks_c(
-    callbacks: Vector[() => Consequence[Unit]]
+    callbacks: Vector[TransactionContext.TransactionContextId => Consequence[Unit]],
+    transactionid: TransactionContext.TransactionContextId
   ): Consequence[Unit] = {
     var failures = Vector.empty[Conclusion]
     callbacks.foreach { callback =>
-      _run_post_commit_callback_c(callback) match {
+      _run_post_commit_callback_c(callback, transactionid) match {
         case Consequence.Failure(conclusion) => failures = failures :+ conclusion
         case Consequence.Success(_) => ()
       }
@@ -326,10 +340,11 @@ class UnitOfWork(
   }
 
   private def _run_post_commit_callback_c(
-    callback: () => Consequence[Unit]
+    callback: TransactionContext.TransactionContextId => Consequence[Unit],
+    transactionid: TransactionContext.TransactionContextId
   ): Consequence[Unit] =
     try {
-      callback()
+      callback(transactionid)
     } catch {
       case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
     }

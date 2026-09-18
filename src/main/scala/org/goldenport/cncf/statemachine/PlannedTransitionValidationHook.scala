@@ -4,13 +4,14 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
-import org.goldenport.cncf.event.TransitionLifecycleEvent
+import org.goldenport.cncf.event.{CommittedTransition, TransitionLifecycleEvent}
 import org.goldenport.record.Record
 
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionEvent(
@@ -193,8 +194,12 @@ final class PlannedTransitionValidationHook(
         state: S,
         event: TransitionEvent
       ): Unit = {
-        val _ = (plan, state, event)
+        val _ = (state, event)
         _stage(TransitionLifecycleEvent.afterTransition(transitionevent, collection))
+        for {
+          binding <- plan.selectedTransitionBinding
+          entityid <- transitionevent.targetId
+        } _stage_committed_transition(binding, entityid, transitionevent.name)
       }
 
       def failed(
@@ -210,4 +215,13 @@ final class PlannedTransitionValidationHook(
 
   private def _stage(event: org.goldenport.cncf.event.DomainEvent)(using ctx: ExecutionContext): Unit =
     ctx.runtime.unitOfWork.stageEvent(event)
+
+  private def _stage_committed_transition(
+    binding: CmlTransitionBinding,
+    entityid: EntityId,
+    operationid: String
+  )(using ctx: ExecutionContext): Unit =
+    ctx.runtime.unitOfWork.stagePostCommitEventC { transactionid =>
+      CommittedTransition.create(entityid, binding, operationid, transactionid)
+    }
 }

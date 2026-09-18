@@ -18,7 +18,8 @@ import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
  * Re-dispatch idempotency is handled by upper layers.
  *
  * @since   Mar. 20, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventStore {
@@ -123,6 +124,38 @@ final case class EventRecordFactory(
           status = EventRecord.Status.Stored,
           lane = lane
         )
+      case e: CommittedTransition =>
+        val target = _committed_transition_target(e)
+        EventRecord(
+          id = e.id,
+          name = e.name,
+          kind = e.kind,
+          payload = Map(
+            "entity.id" -> e.entityId.print,
+            "component.id" -> e.binding.componentId.name,
+            "entity.type" -> e.binding.entityType.print,
+            "machine.name" -> e.binding.machine.name,
+            "machine.version" -> e.binding.version.value,
+            "transition.declarationOrder" -> e.binding.transition.declarationOrder,
+            "transition.source" -> e.binding.source.path.render,
+            "transition.target.kind" -> target.kind,
+            "transition.target" -> target.value,
+            "transition.target.fallback" -> target.fallback.getOrElse(""),
+            "transition.trigger" -> e.binding.trigger.name,
+            "operation.id" -> e.operationId,
+            "transaction.id" -> e.transactionId.print
+          ),
+          attributes = Map(
+            "executionContextId" -> e.correlation.executionContextId.print,
+            "traceId" -> e.correlation.traceId,
+            "spanId" -> e.correlation.spanId.getOrElse(""),
+            "correlationId" -> e.correlation.correlationId.getOrElse("")
+          ),
+          createdAt = e.occurredAt,
+          persistent = true,
+          status = EventRecord.Status.Stored,
+          lane = lane
+        )
       case e: ActionEvent =>
         EventRecord(
           id = _event_id(e, occurredat),
@@ -167,6 +200,28 @@ final case class EventRecordFactory(
       case e: ReceptionDomainEvent => EventId.create(s"record.${e.name}", occurredat, idGeneration)
       case e: ActionEvent => EventId.create(s"record.${e.actionName}", occurredat, idGeneration)
       case other => EventId.create(s"record.${other.getClass.getName}", occurredat, idGeneration)
+    }
+
+  private final case class CommittedTransitionTarget(
+    kind: String,
+    value: String,
+    fallback: Option[String]
+  )
+
+  private def _committed_transition_target(
+    event: CommittedTransition
+  ): CommittedTransitionTarget =
+    event.binding.target match {
+      case org.goldenport.cncf.statemachine.CmlStateMachineTransitionTarget.State(state) =>
+        CommittedTransitionTarget("state", state.path.render, None)
+      case org.goldenport.cncf.statemachine.CmlStateMachineTransitionTarget.ShallowHistory(target) =>
+        CommittedTransitionTarget(
+          "shallow-history",
+          target.composite.path.render,
+          Some(target.fallbackLeaf.path.render)
+        )
+      case org.goldenport.cncf.statemachine.CmlStateMachineTransitionTarget.Final =>
+        CommittedTransitionTarget("final", "", None)
     }
 }
 

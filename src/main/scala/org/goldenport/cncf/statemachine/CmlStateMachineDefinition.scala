@@ -1,11 +1,15 @@
 package org.goldenport.cncf.statemachine
 
+import org.goldenport.cncf.component.ComponentId
+import org.simplemodeling.model.datatype.EntityCollectionId
+
 /*
  * Cozy-generated statemachine metadata passed through component contracts.
  *
  * @since   Mar. 24, 2026
  *  version Mar. 25, 2026
- * @version Aug. 14, 2026
+ *  version Aug. 14, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlStateMachineDefinition(
@@ -63,6 +67,31 @@ final case class CmlStateMachineTriggerIdentity(
   name: String
 ) {
   require(CmlStateMachineAbi.isName(name), "StateMachine trigger identity name must be nonempty")
+}
+
+/*
+ * Complete generated-CML identity for a transition selected by the runtime.
+ * It intentionally carries declarations only: a planner attaches it to the
+ * selected plan, while later runtime stages must not recover it from an
+ * operation name, a state value, or a record payload.
+ */
+final case class CmlTransitionBinding(
+  componentId: ComponentId,
+  entityType: EntityCollectionId,
+  machine: CmlStateMachineIdentity,
+  version: CmlStateMachineVersion,
+  transition: CmlStateMachineTransitionIdentity,
+  source: CmlStateMachineStateIdentity,
+  target: CmlStateMachineTransitionTarget,
+  trigger: CmlStateMachineTriggerIdentity
+) {
+  require(transition.machine == machine, "StateMachine transition binding must belong to its machine")
+  require(source.machine == machine, "StateMachine transition binding source must belong to its machine")
+  require(trigger.machine == machine, "StateMachine transition binding trigger must belong to its machine")
+  require(
+    CmlStateMachineAbi.targetMachine(target).forall(_ == machine),
+    "StateMachine transition binding target must belong to its machine"
+  )
 }
 
 final case class CmlStateMachineTriggerContextIdentity(
