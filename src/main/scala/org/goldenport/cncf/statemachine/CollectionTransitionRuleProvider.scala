@@ -31,8 +31,10 @@ final case class CollectionTransitionRule[S](
   historyCompositeName: Option[String] = None,
   historyFieldName: Option[String] = None,
   historyDirectLeaves: Vector[String] = Vector.empty,
+  historyDirectLeafValues: Map[String, Int] = Map.empty,
   historyFallbackLeaf: Option[String] = None,
-  expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
+  expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty,
+  binding: Option[CmlTransitionBinding] = None
 ) {
   def isStructural: Boolean =
     stateFieldName.isDefined && fromState.isDefined &&

@@ -195,6 +195,25 @@ final class CollectionStateMachinePlannerProviderSpec
       selected shouldBe Consequence.success(Some(rule.plan))
     }
 
+    "recover named shallow history when the generated state carrier stores numeric values" in {
+      Given("a named Review history transition whose persistent leaf is Approved")
+      val rule = _history_rule
+      val planner = new CollectionStateMachinePlanner(Vector(rule))
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p8numeric", _cid, entropy = "p8numeric"), "taro", age = 20)
+      val event = TransitionEvent(
+        "update",
+        Some(person.id),
+        currentRecord = Some(Record.data("status" -> 4, "lifecycleHistory" -> Record.data("Review" -> "Approved"))),
+        proposedRecord = Some(Record.data("status" -> 3, "lifecycleHistory" -> Record.data("Review" -> "Approved")))
+      )
+
+      When("the PowerType-backed numeric state resumes the persisted shallow-history leaf")
+      val selected = planner.plan(person, event)
+
+      Then("the generated leaf-value binding admits the matching numeric state")
+      selected shouldBe Consequence.success(Some(rule.plan))
+    }
+
     "fall back to the declared direct leaf for absent history" in {
       Given("a named Review history transition with no stored Review entry")
       val rule = _history_rule
@@ -325,9 +344,11 @@ final class CollectionStateMachinePlannerProviderSpec
       machineName = Some("lifecycle"),
       stateFieldName = Some("status"),
       fromState = Some("Suspended"),
+      fromStateValue = Some(4),
       historyCompositeName = Some("Review"),
       historyFieldName = Some("lifecycleHistory"),
       historyDirectLeaves = Vector("Pending", "Approved"),
+      historyDirectLeafValues = Map("Pending" -> 2, "Approved" -> 3),
       historyFallbackLeaf = Some("Pending")
     )
 

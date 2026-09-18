@@ -29,6 +29,7 @@ final case class TransitionRule[S](
   historyCompositeName: Option[String] = None,
   historyFieldName: Option[String] = None,
   historyDirectLeaves: Vector[String] = Vector.empty,
+  historyDirectLeafValues: Map[String, Int] = Map.empty,
   historyFallbackLeaf: Option[String] = None,
   expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty,
   binding: Option[CmlTransitionBinding] = None
@@ -127,7 +128,7 @@ final class CollectionStateMachinePlanner[S](
     rule.historyCompositeName match {
       case Some(composite) =>
         _history_transition_target(rule, current, composite).flatMap { expected =>
-          if (_matches_state(proposedstate, Some(expected), None))
+          if (_matches_state(proposedstate, Some(expected), rule.historyDirectLeafValues.get(expected)))
             _validate_history_record_writes(
               proposed,
               rule.historyFieldName,

@@ -6,7 +6,7 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
-import org.goldenport.cncf.statemachine.{CmlNormalizedStateMachine, CmlStateMachineDefinition, CmlStateMachineDefinitionProvider, CmlStateMachineIdentity, CmlStateMachineStateDefinition, CmlStateMachineStateIdentity, CmlStateMachineStateKind, CmlStateMachineStatePath, CmlStateMachineVersion, CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
+import org.goldenport.cncf.statemachine.{CmlNormalizedStateMachine, CmlStateMachineDefinition, CmlStateMachineDefinitionProvider, CmlStateMachineIdentity, CmlStateMachineStateDefinition, CmlStateMachineStateIdentity, CmlStateMachineStateKind, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding, CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -44,11 +44,16 @@ final class ComponentFactoryStateMachineBootstrapSpec
       given org.goldenport.cncf.context.ExecutionContext = executioncontext
       given EntityPersistent[SpecEntity] = _entity_persistent
       val entity = SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "bootstrap_1", _cid, entropy = "bootstrap_1"), "taro")
+      val selectedplan = component.stateMachinePlannerProvider
+        .planForUpdate(entity, _entity_persistent, TransitionEvent("update", Some(entity.id)))
+        .TAKE
+        .getOrElse(fail("the component rule must be registered for update planning"))
 
       val transitionresult =
         executioncontext.runtime.transitionValidationHook.beforeUpdate(entity, _entity_persistent)
 
       Then("bootstrap installs and executes the transition validation hook")
+      selectedplan.selectedTransitionBinding shouldBe Some(_binding)
       transitionresult shouldBe Consequence.unit
       trace.toVector shouldBe Vector("exit", "transition", "entry")
       component match {
@@ -130,7 +135,8 @@ final class ComponentFactoryStateMachineBootstrapSpec
               entryActions = Vector(_record_action("entry", trace))
             ),
             historyFieldName = Some("lifecycleHistory"),
-            expectedHistoryRecordWrites = Vector(org.goldenport.cncf.statemachine.HistoryRecordWrite("Review", "Draft"))
+            expectedHistoryRecordWrites = Vector(org.goldenport.cncf.statemachine.HistoryRecordWrite("Review", "Draft")),
+            binding = Some(_binding)
           )
         )
 
@@ -187,6 +193,28 @@ final class ComponentFactoryStateMachineBootstrapSpec
         transitions = Vector.empty,
         terminalTransitions = Vector.empty
       ))
+    )
+  }
+
+  private val _binding: CmlTransitionBinding = {
+    val machine = CmlStateMachineIdentity("lifecycle")
+    val source = CmlStateMachineStateIdentity(
+      machine,
+      CmlStateMachineStatePath(Vector("Draft"))
+    )
+    val target = CmlStateMachineStateIdentity(
+      machine,
+      CmlStateMachineStatePath(Vector("Approved"))
+    )
+    CmlTransitionBinding(
+      componentId = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
+      entityType = _cid,
+      machine = machine,
+      version = CmlStateMachineVersion(1),
+      transition = CmlStateMachineTransitionIdentity(machine, 0),
+      source = source,
+      target = CmlStateMachineTransitionTarget.State(target),
+      trigger = CmlStateMachineTriggerIdentity(machine, "update")
     )
   }
 

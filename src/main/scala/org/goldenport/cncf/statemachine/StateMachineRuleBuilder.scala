@@ -58,8 +58,10 @@ object StateMachineRuleBuilder {
     historyCompositeName: Option[String] = None,
     historyFieldName: Option[String] = None,
     historyDirectLeaves: Vector[String] = Vector.empty,
+    historyDirectLeafValues: Map[String, Int] = Map.empty,
     historyFallbackLeaf: Option[String] = None,
-    expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
+    expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty,
+    binding: Option[CmlTransitionBinding] = None
   ): CollectionTransitionRule[Any] =
     CollectionTransitionRule[Any](
       collectionName = collectionName,
@@ -78,8 +80,10 @@ object StateMachineRuleBuilder {
       historyCompositeName = historyCompositeName,
       historyFieldName = historyFieldName,
       historyDirectLeaves = historyDirectLeaves,
+      historyDirectLeafValues = historyDirectLeafValues,
       historyFallbackLeaf = historyFallbackLeaf,
-      expectedHistoryRecordWrites = expectedHistoryRecordWrites
+      expectedHistoryRecordWrites = expectedHistoryRecordWrites,
+      binding = binding
     )
 
   def saveRule[S](
@@ -98,8 +102,10 @@ object StateMachineRuleBuilder {
     historyCompositeName: Option[String] = None,
     historyFieldName: Option[String] = None,
     historyDirectLeaves: Vector[String] = Vector.empty,
+    historyDirectLeafValues: Map[String, Int] = Map.empty,
     historyFallbackLeaf: Option[String] = None,
-    expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
+    expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty,
+    binding: Option[CmlTransitionBinding] = None
   ): CollectionTransitionRule[Any] =
     CollectionTransitionRule[Any](
       collectionName = collectionName,
@@ -118,7 +124,9 @@ object StateMachineRuleBuilder {
       historyCompositeName = historyCompositeName,
       historyFieldName = historyFieldName,
       historyDirectLeaves = historyDirectLeaves,
+      historyDirectLeafValues = historyDirectLeafValues,
       historyFallbackLeaf = historyFallbackLeaf,
-      expectedHistoryRecordWrites = expectedHistoryRecordWrites
+      expectedHistoryRecordWrites = expectedHistoryRecordWrites,
+      binding = binding
     )
 }

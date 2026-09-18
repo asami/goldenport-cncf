@@ -640,8 +640,10 @@ final class ComponentFactory(
       historyCompositeName = p.historyCompositeName,
       historyFieldName = p.historyFieldName,
       historyDirectLeaves = p.historyDirectLeaves,
+      historyDirectLeafValues = p.historyDirectLeafValues,
       historyFallbackLeaf = p.historyFallbackLeaf,
-      expectedHistoryRecordWrites = p.expectedHistoryRecordWrites
+      expectedHistoryRecordWrites = p.expectedHistoryRecordWrites,
+      binding = p.binding
     )
 
   private def _bootstrap_entities_with_plan(
