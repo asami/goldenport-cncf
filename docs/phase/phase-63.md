@@ -1,135 +1,114 @@
-# Phase 63 - CML StateMachine Runtime Completion
+# Phase 63 - CML StateMachine Contract and Normalization
 
-status=planned
+status=in-progress
 planned_at=2026-08-12
-depends_on=[Phase 62](phase-62.md)
+split_at=2026-09-17
+split_full_test_policy=final-only
+split_full_validation_method=sbt-full-suite
+split_validation_bootstrap=none
+validation_ownership=aggregate-deferred
+aggregate_validation_owner=PHASE-63.2
+aggregate_validation_sequence=["PHASE-63","PHASE-63.1","PHASE-63.2"]
+successor=[Phase 63.1](phase-63.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 63 Checklist](phase-63-checklist.md)
+execution_plan=[Phase 63 Execution Plan](phase-63-execution-plan.md)
 
 ## Purpose
 
-Complete the executable path from a CML StateMachine declaration to one
-canonical, deterministic, atomic CNCF transition runtime.
+Freeze the canonical typed StateMachine contract and normalize CML declarations
+to it. This is the first, independently closable member of the StateMachine
+runtime sequence; it does not deliver generated code or CNCF execution.
 
-Phase 63 closes the remaining gaps between parsed/generated transition rules
-and actual guard, action, state update, event, rollback, and observability
-behavior. It establishes the transition contract that Workflow and executable
-DbC can safely consume in later phases.
+## Dependency and Closure
 
-## Dependency
+Phase 63 has no dependency on Phase 62. Its foundations are Phase 4
+StateMachine integration, the canonical `org.goldenport.statemachine`
+primitives, and existing CML transition declarations.
 
-Phase 63 begins after Phase 62 closes.
+It closes only when CML normalization produces the one closed transition and
+predicate model with stable identities, ordering, validation, compatibility
+admission, and failing-first specifications. Phase 63.1 alone may consume that
+accepted contract for generation and runtime execution.
 
-Its foundations are Phase 4 StateMachine integration, the canonical
-`org.goldenport.statemachine` primitives, generated CML transition rules,
-CNCF transition planning/hooks, Aggregate persistence, UnitOfWork, and
-CallTree observability.
+## Approved Split
 
-## Selected Direction
-
-- The core StateMachine remains the canonical owner of pure transition
-  selection and `(priority, declarationOrder)` determinism.
-- CNCF owns binding resolution, candidate-state construction, UnitOfWork
-  planning, local effect execution, persistence, publication, and diagnostics.
-- CML expression guards normalize to a closed, typed, versioned, pure
-  `PredicateProgram`; named guards remain explicit resolver bindings.
-- The canonical machine definition preserves explicit initial/final-state
-  semantics, the existing one-level composite-state/named shallow-history
-  contract, and the typed trigger context seen by predicates.
-- A transition produces a candidate state and a local effect plan before any
-  state is committed.
-- State mutation, admitted local effects, persistence, and the durable
-  transition outcome share one UnitOfWork boundary.
-- External I/O is not a transition action. It starts only from a committed
-  transition/domain event through a separately governed Operation or Job.
-- A successful commit exposes one stable `CommittedTransition` envelope.
-- Guard non-match, guard/evaluator failure, invalid source state, ambiguous
-  transition, action failure, persistence failure, and rollback remain
-  distinct structured outcomes.
-- Failed transitions publish no successful transition event, but their
-  bounded diagnostic outcome remains retrievable after rollback.
-- Create, update/save, patch, command, and compatibility execution paths must
-  not silently bypass declared StateMachine enforcement.
-- End-to-end acceptance must cross CML parsing, SimpleModeler generation,
-  generated provider publication, ComponentFactory automatic bootstrap, and
-  the real UnitOfWork boundary. A manually injected transition provider is not
-  sufficient evidence for this path.
+On 2026-09-17, `P63-DEC-PACKING-SPLIT-001` partitioned the previously
+unstarted Phase 63 into Phase 63 (`SMR-01`--`SMR-03`), Phase 63.1
+(`SMR-04`--`SMR-05`), and Phase 63.2 (`SMR-06`--`SMR-08`). The pre-split
+entry gate estimated 16--21 hours and returned `SPLIT_REQUIRED` for
+`time-bound`; it is historical gate evidence, not this Phase's current gate.
+No completed work or history moved.
 
 ## Work Stack
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| SMR-01 | Inventory and semantic freeze | Existing CML, generated, core, CNCF, Aggregate, UnitOfWork, and observability behavior plus bypasses are fixed by failing-first evidence. | planned |
-| SMR-02 | Canonical transition and predicate contract | Core selection, typed guard IR, named binding, effect boundary, result vocabulary, and ordering are fixed without duplicate engines. | planned |
-| SMR-03 | CML normalization | Machine identity/version, initial/final state, existing composite/history structure, typed trigger context, transition identity, source/target, event, priority, guard, and action declarations normalize deterministically. | planned |
-| SMR-04 | Generation and ABI propagation | SimpleModeler emits stable typed machine/transition definitions, predicates, bindings, hierarchy/history, and metadata without required raw-string execution. | planned |
-| SMR-05 | Atomic CNCF execution | CNCF plans and commits candidate state, admitted local effects, persistence, and outcomes exactly once through UnitOfWork. | planned |
-| SMR-06 | Trigger and committed-transition contract | Operation/event triggers are explicit and a successful commit produces one stable downstream envelope. | planned |
-| SMR-07 | Observability and compatibility | Structured failures, redaction, legacy admission, projections, rollback diagnostics, and bypass prevention are fixed. | planned |
-| SMR-08 | Cross-repository acceptance and promotion | Generated SalesOrder-style scenarios, property specifications, full validation, and promoted contracts prove the runtime. | planned |
+| SMR-01 | Inventory and semantic freeze | Existing CML, core StateMachine, Aggregate, UnitOfWork, and observability facts plus failing-first identities are frozen. | DONE |
+| SMR-02 | Canonical transition and predicate contract | One typed pure selection, guard, effect-plan, outcome, and ordering contract is fixed. | DONE |
+| SMR-03 | Already-parsed CML StateMachine normalization | Non-Workflow CML StateMachines normalize deterministically to the closed contract with explicit compatibility admission. | DONE |
 
 ## Acceptance
 
-- One CML declaration yields one canonical transition definition from Cozy and
-  SimpleModeler to CNCF.
-- Priority and declaration order are honored; guard false continues selection
-  and guard failure stops it.
-- Explicit initial/final-state semantics and the existing one-level
-  composite-state/named shallow-history contract survive parsing, generation,
-  ABI/projection, and execution without flattening away required meaning.
-- Named guards resolve explicitly; required expression guards do not silently
-  fall back to raw MVEL.
-- Predicate field access is checked against one bounded typed trigger context;
-  missing or incompatible trigger data is a structured failure.
-- Exactly one admitted transition is planned from current state and trigger.
-- Transition actions are executable only inside the admitted local UnitOfWork
-  boundary; external effects begin after commit.
-- Candidate state and admitted effects commit atomically or roll back together.
-- Create, update/save, patch, command, and compatibility paths enforce the
-  declared machine or reject an unsupported bypass explicitly.
-- A successful commit produces one idempotent, correlated
-  `CommittedTransition` envelope.
-- A failed or rolled-back transition produces no success envelope and no
-  persisted state change.
-- Failure observability retains machine, transition, entity, source/target,
-  event, guard/action phase, trace, and safe cause identity after rollback.
-- Representative generated `SalesOrder`/`SalesStatus` behavior crosses the
-  real CNCF execution boundary and is fixed by Executable Specifications.
-- The representative acceptance starts from CML source and uses the generated
-  provider plus ComponentFactory automatic bootstrap; it does not replace that
-  path with a hand-written provider fixture.
+- One CML declaration normalizes to one canonical transition definition with
+  stable machine, state, event, guard, action, and transition identities.
+- Priority/declaration order, guard non-match, guard failure, explicit
+  initial/final state, and one-level composite/named shallow-history semantics
+  (including direct-leaf path ownership) are preserved without raw-expression
+  fallback.
+- Predicate evaluation is typed, bounded, pure, deterministic, and receives
+  one explicit trigger-context schema.
+- Invalid or ambiguous declarations fail with deterministic diagnostics.
+- The accepted handoff gives Phase 63.1 exact model and compatibility
+  semantics; it does not claim generated ABI or runtime execution.
+
+## Phase Plan Gate: PROCEED
+
+- target: calibrated expected duration centered on 6h; allowed ceiling 8h
+- estimate_calibration: no comparable completed Phase; pre-split 16--21h estimate is partitioned by the existing eight-stage dependency chain
+- planning_demand: protected-decision
+- recommended_parent_profile: gpt-5.6-terra / xhigh
+- profile_cost_role: expensive reasoning kernel
+- expensive_reasoning_kernel: canonical typed predicate, transition identity, compatibility, and CML-normalization contract
+- frozen_profile_transition_handoff: produces the accepted canonical contract for Phase 63.1
+- parent_reasoning_mode_policy: standard
+- estimated_at_recommended_profile: 5.5--6.5h; within the 8h ceiling
+- incoming_semantic_handoffs: []
+- merge_attempts_for_every_sub_4h_child: none
+- rebalance_attempts_for_every_sub_5h_child: none
+- adjacent_merge_structural_rejection_evidence: none
+- profile_cost_only_rejection_forbidden: true
+- short_child_basis: none
+- overhead_tradeoff: two added release handoffs prevent generation, UnitOfWork execution, and workflow-facing delivery from re-deciding the contract
+- agent_reasoning_mode_policy: default standard; consider pro only at an eligible agent launch when the active interface supports it and frozen quality-first evidence justifies it
+- runtime_suitability: re-evaluate in the Phase execution task
+- source: applied split from Phase 63
 
 ## Non-Goals
 
-- Workflow orchestration or WorkflowInstance progression.
-- Executable preconditions, postconditions, or Aggregate invariants owned by
-  Phase 65.
-- Timer, schedule, parallel, human-task, compensation, or connector semantics.
-- Deep history, orthogonal regions, arbitrary-depth composite states,
-  choice/junction/fork/join expansion, or a general UML statechart language.
-- External network, process, database, or service I/O inside a transition
-  action.
-- Replacing core StateMachine primitives or introducing a second transition
-  selector in CNCF.
-- A general-purpose expression, scripting, rules, or workflow language.
-
-## Development Candidate Alignment
-
-| Strategy item | Phase 63 relationship | Retained candidate scope |
-| --- | --- | --- |
-| 9.2 Event Mechanism Follow-ups | Defines the StateMachine-specific committed envelope only. | Generic transaction lanes, reception policies, and JCL events remain future work. |
-| 9.4 Metrics and Observability | Supplies minimum correlated transition/rollback evidence. | Platform retention, exporters, dashboards, durable metrics, and operations remain future work. |
-| 9.7 Error Model Follow-ups | Adds only required closed StateMachine outcomes/facets. | Broad taxonomy cleanup, compatibility policy, catalogs, CLI mapping, and trace UX remain future work. |
-| 9.10 Compensation Recovery Events | Keeps external effects after commit and compensation explicit. | Compensation-of-compensation and human recovery events remain future work. |
-| 9.53 ComponentFactory Purity | May consume minimal named guard/action implementation evidence. | General Factory purity and capability-evidence policy remain unassigned. |
-| Aggregate method `IMPLEMENTATION` candidates | Selects the `state-machine`/`state-transition` built-in slice. | General implementation kinds, inline/external Scala, other patterns, and broad factory reuse remain provisional. |
+- Generated transition definitions or ABI propagation (Phase 63.1).
+- CNCF candidate-state execution, UnitOfWork commit/rollback, or persistence
+  behavior (Phase 63.1).
+- `CommittedTransition`, Event/Job handoff, observability projections, or
+  cross-repository runtime acceptance (Phase 63.2).
+- Workflow orchestration, executable DbC, timers, parallel/human tasks,
+  compensation, connectors, arbitrary scripting, or external I/O.
+- Cozy's independently closed Phase 63 is Multi-CML provenance
+  (`MCML-63-01`--`MCML-63-02`); its closed Phase 63.1 successor owns
+  `MCML-63-03`--`MCML-63-04`. Neither is this Phase's StateMachine work. The
+  shared number is not a handoff, predecessor, successor, validation claim, or
+  authority. This Phase neither reopens nor consumes that provenance closure.
+- Cozy's current, separate Phase 63 CML Workflow grammar workstream owns
+  Workflow DSL syntax, parser admission, `CompositeStateMachineCml`,
+  `WorkflowCmlSpec`, and local workflow-state evidence. This Phase may change only the
+  already-parsed non-Workflow StateMachine projection bridge when necessary to
+  preserve the canonical contract; it must not reinterpret or migrate Workflow
+  grammar.
 
 ## Planning References
 
 - [Phase 63 Checklist](phase-63-checklist.md)
+- [Phase 63.1](phase-63.1.md)
+- [Phase 63.2](phase-63.2.md)
 - [Provisional Specification](../notes/cml-statemachine-runtime-completion-provisional-specification.md)
-- [Sequencing Record](../journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md)
 - [State Machine Boundary Contract](../design/statemachine-boundary-contract.md)
-- [Execution Platform Boundary](../design/execution-platform-boundary.md)
-- [Phase 4](phase-4.md)
-- [Aggregate Method Implementation Strategy](../notes/aggregate-method-implementation-strategy.md)

@@ -1,263 +1,157 @@
-# Phase 63 Checklist - CML StateMachine Runtime Completion
+# Phase 63 Checklist - CML StateMachine Contract and Normalization
 
-status=planned
-phase=[Phase 63 - CML StateMachine Runtime Completion](phase-63.md)
+status=in-progress
+phase=[Phase 63 - CML StateMachine Contract and Normalization](phase-63.md)
 
-This checklist is the authoritative Phase 63 state ledger after Phase 63
-starts. Only one stage may be `IN_PROGRESS` at a time. No stage starts before
-Phase 62 closes.
+This ledger owns only `SMR-01` through `SMR-03`. Phase 63.1 owns `SMR-04`
+and `SMR-05`; Phase 63.2 owns `SMR-06` through `SMR-08`. Only one stage may
+be `IN_PROGRESS` at a time.
 
 ## SMR-01: Inventory and Semantic Freeze
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: Cozy, SimpleModeler, SimpleModeling, CNCF, StateMachine, Aggregate,
   UnitOfWork, and observability maintainers
-- Entry rule: Phase 62 is closed.
-- Completion rule: Current semantics, gaps, bypasses, and exact failing-first
-  acceptance identities are frozen before implementation.
+- Entry rule: Phase 63 is authorized to start.
+- Update rule: Reopen before changing the frozen non-Workflow semantic
+  inventory, compatibility boundary, or failing-first acceptance identities.
+- Completion rule: Current semantics, bypasses, retained boundaries, and exact
+  failing-first acceptance identities are frozen.
 
-- [ ] Inventory CML StateMachine grammar/AST for state, event, transition,
-  source/target, priority, guard, action/effect, entry, and exit declarations.
-- [ ] Inventory implicit/explicit initial and final-state behavior, one-level
-  composite states, named shallow history, history-field writes, and any
-  flattening or identity loss across projections.
-- [ ] Inventory event payload and runtime `TransitionEvent` context shapes used
-  by expression and named guards, including missing/type-mismatch behavior.
-- [ ] Inventory SimpleModeler transition generation, generated action bodies,
-  named/expression guards, priority/declaration order, metadata, and ABI.
-- [ ] Inventory core `StateMachine`, `TransitionDecider`, `Guard`, and `Effect`
-  semantics and the CNCF `TransitionSelector`/planner/provider/hook path.
-- [ ] Identify duplicate selection semantics and freeze the canonical reuse or
-  adapter boundary.
-- [ ] Inventory raw MVEL execution, missing named-guard resolution, defaulted
-  priority, no-op generated actions, and transition identity loss.
-- [ ] Inventory create, update/save, patch, command, direct/unversioned,
-  migration, retry, and replay paths for enforcement bypass.
-- [ ] Inventory the provisional Aggregate `IMPLEMENTATION` paths
-  `pattern:state-machine` and `pattern:state-transition`, then freeze which
-  minimal shared implementation interface Phase 63 actually selects.
-- [ ] Inventory staged/published transition events and CallTree behavior on
-  commit, action failure, persistence failure, cancellation, and rollback.
-- [ ] Freeze the actual generated-provider bootstrap path from ComponentFactory
-  to the save/update/command UnitOfWork hooks, and identify tests that replace
-  it with manually injected providers.
-- [ ] Freeze the boundary between local transition effects and post-commit
-  external work.
-- [ ] Reconcile strategy candidates 9.2, 9.4, 9.7, 9.10, and 9.53 so Phase 63
-  consumes only its explicit minimum and does not close retained candidate
-  scope.
-- [ ] Keep other Aggregate implementation kinds, patterns, inline Scala, and
-  broad factory/Operation reuse outside Phase 63 unless separately admitted.
-- [ ] Register failing-first Executable Specifications for every Phase 63
-  acceptance group and cross-repository surface.
+- [x] Inventory CML StateMachine grammar/AST and existing generated transition
+  rules, including state/event/transition identity, priority, guards, actions,
+  initial/final states, and one-level composite/named shallow history.
+- [x] Inventory core `StateMachine`, `TransitionDecider`, `Guard`, and `Effect`
+  semantics and every CNCF planning/provider/hook entry that consumes them.
+- [x] Freeze duplicate-selection, raw-MVEL, missing named-binding, defaulted
+  priority, no-op action, and identity-loss facts without designing a second
+  transition engine.
+- [x] Freeze the minimal `pattern:state-machine` / `pattern:state-transition`
+  Aggregate implementation boundary and retain all other implementation kinds.
+- [x] Register failing-first specifications for contract, normalization,
+  diagnostics, compatibility, and downstream generation consumers.
 
 Evidence:
-- Pending.
+- `docs/spec/cml-statemachine-normalization-contract.md` fixes the non-Workflow
+  normalization boundary, semantic (non-EntityId) identity, strict ordering,
+  predicate, action, topology, legacy-expression, and diagnostic rules.
+- `docs/phase/phase-63-execution-plan.md` freezes the core/CNCF/Cozy source
+  inventory and expressly excludes Cozy's active Workflow grammar workstream.
+- The first focused specifications are
+  `TransitionDeciderSpec` and `ModelerStateMachineProjectionSpec`; no aggregate
+  suite is claimed in this Phase.
 
 ## SMR-02: Canonical Transition and Predicate Contract
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: core StateMachine, CML semantic-model, and CNCF adapter maintainers
 - Entry rule: SMR-01 is DONE.
-- Completion rule: Pure selection, guard, effect, result, ordering, and failure
-  semantics are fixed without parallel transition engines.
+- Update rule: Reopen before changing the closed predicate grammar, canonical
+  selection semantics, nominal identities, or unexecuted effect-plan contract.
+- Completion rule: Pure selection, guard, effect-plan, result, ordering, and
+  failure semantics are fixed without parallel engines.
 
-- [ ] Fix core StateMachine as the canonical pure transition-selection owner.
-- [ ] Fix deterministic ordering by `(priority asc, declarationOrder asc)`.
-- [ ] Preserve guard false as candidate non-match and guard failure as terminal
+- [x] Fix core StateMachine as canonical pure transition-selection owner and
+  ordering by `(priority asc, declarationOrder asc)`.
+- [x] Preserve guard false as candidate non-match and guard failure as terminal
   selection failure.
-- [ ] Define a closed, typed, versioned, side-effect-free `PredicateProgram`
-  with bounded depth, size, path, numeric, string, and collection behavior.
-- [ ] Define named guard identity and explicit `GuardBindingResolver` behavior.
-- [ ] Define stable machine, transition, state, event, guard, and action ids.
-- [ ] Define machine version, explicit initial state, terminal/final states,
-  one-level composite-state structure, and named shallow-history semantics in
-  the canonical closed model.
-- [ ] Define the bounded typed trigger-context schema available to predicates,
-  including missing, unknown, and incompatible field behavior.
-- [ ] Define `TransitionPlan`, candidate state, admitted local effect plan, and
-  success/failure result vocabulary.
-- [ ] Prohibit ambient service, provider, datastore, filesystem, process,
-  network, environment, clock, randomness, reflection, and script effects.
-- [ ] Add property-based determinism, malformed predicate, limit, candidate
-  overlap, and failure-priority specifications.
+- [x] Define the closed, typed, versioned, side-effect-free `PredicateProgram`
+  and explicit named `GuardBindingResolver` contract.
+- [x] Define stable machine, transition, state, event, guard, action, and
+  trigger-context identities, versions, limits, and failure vocabulary.
+- [x] Define `TransitionPlan`, candidate state, admitted local effect plan, and
+  structured success/failure results while prohibiting ambient effects.
+- [x] Preserve explicit initial/final states and existing one-level
+  composite/named shallow-history semantics.
+- [x] Add determinism, malformed predicate, overlap, limit, and
+  failure-priority specifications.
 
 Evidence:
-- Pending.
+- `TransitionDeciderSpec` passed as `P63-SMR02-LIB-VAL-002`, receipt
+  `15acdaa9dc906c70ffa8cef114ece6dc7fdb417c5620b83a29d53d9e20bca5a0`, and
+  fixes strict ordering, false-guard continuation, terminal guard failure,
+  identity, and unexecuted `TransitionPlan` behavior.
+- `PredicateProgramSpec` passed as `P63-SMR02-MODEL-VAL-003`, receipt
+  `a8a2564433f6ca15e273ef92c8c0ec01958f4b47878341851df0067b256d6af4`, and
+  covers the closed v1 predicate/trigger-context contract plus the composite-error
+  and normalized action/diagnostic repairs.
+- `PredicateProgramSpec` passed as `P63-SMR02-MODEL-VAL-006`, receipt
+  `a2491166c13e97b7aef041792cf5f63e3bb660d3da021e20433c4eb034658db7`, before
+  the later normalization-boundary repair; it additionally rejects a
+  same-machine unrelated state claimed as a composite direct leaf,
+  shallow-history fallback, or history-write leaf.
+- `PredicateProgramSpec` passed on the repaired current SimpleModeler tree as
+  `P63-SMR02-NW-FIX-MODEL-VAL-002`, receipt
+  `a21cb9bc3821a6e18e9507281106f1511a7a761b7958c837dd5ff2a111f66d50`
+  (`validated_tree_sha256`
+  `c2a44b7142178c3678867998f41c27f5551ab82ba9071a88daaf800583e88873`).
+  It rejects an absent explicit initial state, a composite declared beneath a
+  composite direct leaf, raw or oversized action-binding references, and
+  retains a valid dotted action-binding reference.
+- `GuardRuntimeSpec` and `TransitionSelectorPropertySpec` passed as
+  `P63-SMR02-CNCF-VAL-003`, receipt
+  `fa45ec2cbb800158960a174b923cc0465559167d81ddacbde12e019984776dd8`.
 
-## SMR-03: CML Parsing and Normalization
+## SMR-03: Already-parsed CML StateMachine Normalization
 
 Stage Status:
-- Current status: PLANNED
-- Owner: Cozy and CML parser/modeler maintainers
+- Current status: DONE
+- Owner: Cozy modeler maintainers
+- Coordination boundary: Cozy's separate Multi-CML provenance and current CML
+  Workflow grammar workstreams own Workflow DSL syntax, parser admission,
+  `CompositeStateMachineCml`, `WorkflowCmlSpec`, and workflow evidence. This
+  Stage owns only the already-parsed non-Workflow StateMachine projection bridge
+  needed for the canonical transition contract.
 - Entry rule: SMR-02 is DONE.
+- Update rule: Reopen before changing non-Workflow projection, its deterministic
+  diagnostics, or the explicit legacy-expression compatibility admission.
 - Completion rule: CML declarations normalize to the canonical closed model
-  with stable identity and deterministic diagnostics.
+  with deterministic diagnostics and explicit legacy admission.
 
-- [ ] Normalize machine/state/event/transition identity and source position.
-- [ ] Normalize explicit initial/final declarations and define versioned legacy
-  admission when a declaration is absent or previously inferred by order.
-- [ ] Preserve the existing one-level composite-state and named
-  shallow-history structure without flattening away parent/leaf identity.
-- [ ] Normalize event payload/trigger context into the typed schema consumed by
-  `PredicateProgram` and named bindings.
-- [ ] Normalize explicit priority and declaration order without constant
-  defaulting that discards source intent.
-- [ ] Normalize expression guards to `PredicateProgram`.
-- [ ] Normalize named guards/actions as explicit binding references.
-- [ ] Normalize entry, exit, and transition action phases.
-- [ ] Reject duplicate ids, missing states/events, invalid targets, invalid
+- [x] Normalize machine/state/event/transition identity, source location,
+  initial/final states, one-level hierarchy/history, typed trigger context,
+  priority, declaration order, guards, and action phases.
+- [x] Admit closed typed predicates and named guards/actions as explicit
+  binding references; reject legacy raw expressions deterministically.
+- [x] Reject duplicate identities, missing references, invalid targets or
   priorities, unsupported predicates, and ambiguous bindings.
-- [ ] Define explicit compatibility admission for legacy CML and generated
-  raw-expression rules.
-- [ ] Add Given/When/Then and ScalaCheck parser/normalization/diagnostic specs.
+- [x] Define compatibility admission for legacy CML and generated
+  raw-expression rules without silently preserving raw execution.
+- [x] Add Given/When/Then and ScalaCheck normalization and diagnostic specs.
 
 Evidence:
-- Pending.
-
-## SMR-04: SimpleModeler Generation and ABI
-
-Stage Status:
-- Current status: PLANNED
-- Owner: SimpleModeler and generated-component maintainers
-- Entry rule: SMR-03 is DONE.
-- Completion rule: Generated code carries executable typed transition
-  definitions and stable metadata without required no-op/raw-string behavior.
-
-- [ ] Generate canonical transition definitions with stable ids and ordering.
-- [ ] Generate canonical machine version, initial/final states,
-  composite/history structure, typed trigger-context metadata, and state path.
-- [ ] Generate typed predicate programs and named guard/action references.
-- [ ] Generate executable local transition actions or explicit resolver
-  bindings instead of placeholder no-op behavior.
-- [ ] Preserve source/target/event/priority/declaration order and source
-  location through metadata, Help, Record, and JSON.
-- [ ] Define generated ABI/version admission for old and new components.
-- [ ] Reject generation when a required transition cannot be represented.
-- [ ] Add deterministic generated-source, metadata, ABI, compilation, Record,
-  and JSON Executable Specifications.
-
-Evidence:
-- Pending.
-
-## SMR-05: Atomic CNCF Transition Execution
-
-Stage Status:
-- Current status: PLANNED
-- Owner: CNCF StateMachine, Aggregate, persistence, and UnitOfWork maintainers
-- Entry rule: SMR-04 is DONE.
-- Completion rule: One CNCF path plans and commits an admitted transition
-  exactly once with atomic local state/effect behavior.
-
-- [ ] Adapt CNCF planning to canonical core transition selection rather than
-  reimplementing it.
-- [ ] Load current entity state and validate source-state applicability.
-- [ ] Evaluate guards and construct exactly one candidate transition plan.
-- [ ] Construct candidate entity state without mutating persisted state.
-- [ ] Execute exit, transition, and entry local effects in the frozen order.
-- [ ] Place candidate state, admitted local effects, persistence, and outcome
-  staging in one UnitOfWork.
-- [ ] Keep named shallow-history record validation and writes in the same
-  candidate-state/UnitOfWork contract without synthesizing hidden fields.
-- [ ] Ensure action, persistence, cancellation, and interruption failures roll
-  back state and successful-event staging.
-- [ ] Cover create, update/save, patch, command, direct/unversioned, retry, and
-  compatibility routes; reject unsafe bypass explicitly.
-- [ ] Add property-based exactly-once, atomicity, ordering, retry, replay,
-  cancellation, and rollback specifications.
-
-Evidence:
-- Pending.
-
-## SMR-06: Trigger Binding and Committed Transition
-
-Stage Status:
-- Current status: PLANNED
-- Owner: CNCF Operation, event, StateMachine, and UnitOfWork maintainers
-- Entry rule: SMR-05 is DONE.
-- Completion rule: Trigger bindings are explicit and only a committed
-  transition produces the canonical downstream envelope.
-
-- [ ] Define explicit Operation/event-to-machine trigger binding.
-- [ ] Bind each trigger to one versioned typed context schema used consistently
-  by transition selection, predicates, diagnostics, and replay.
-- [ ] Reject name-based or status-field inference where no binding exists.
-- [ ] Define `CommittedTransition` fields for component, entity type/id,
-  machine, transition, source/target, trigger/event, operation, commit,
-  correlation, trace/span, and occurrence identity.
-- [ ] Publish/stage the envelope only after the owning UnitOfWork commits.
-- [ ] Give the envelope a stable idempotency/replay identity.
-- [ ] Guarantee failed, rejected, non-matching, or rolled-back transitions emit
-  no success envelope.
-- [ ] Preserve the envelope through Event and Job handoff without changing its
-  semantic identity.
-- [ ] Add commit-order, duplicate, replay, retry, and rollback specs.
-
-Evidence:
-- Pending.
-
-## SMR-07: Failure Observability and Compatibility
-
-Stage Status:
-- Current status: PLANNED
-- Owner: SimpleModeling error, CNCF observability, HTTP, shell/CLI, and
-  compatibility maintainers
-- Entry rule: SMR-06 is DONE.
-- Completion rule: Every outcome is structurally observable and legacy
-  behavior is explicit without leaking state or expression values.
-
-- [ ] Define closed structured outcomes for invalid source, no match,
-  ambiguity, guard admission/evaluation, action, target, persistence, and
-  rollback failure.
-- [ ] Attach bounded safe machine, transition, state, event, entity,
-  operation, phase, trace/span, job/task, exception/cause, and commit facets.
-- [ ] Preserve interruption/fatal priority at Throwable boundaries.
-- [ ] Define a failure-observability path that survives domain rollback.
-- [ ] Keep raw state, input, event payload, credentials, secrets, expression
-  source, and evaluated values out of public diagnostics.
-- [ ] Define DetailCode, Record, JSON, Help/meta, CallTree, metric, and audit
-  projections.
-- [ ] Define legacy raw-expression/generated-component admission and migration.
-- [ ] Add non-leakage, transport-boundary, rollback-visibility, and
-  compatibility Executable Specifications.
-
-Evidence:
-- Pending.
-
-## SMR-08: Cross-Repository Acceptance and Promotion
-
-Stage Status:
-- Current status: PLANNED
-- Owner: Cozy, SimpleModeler, SimpleModeling, CNCF, sample, and documentation
-  maintainers
-- Entry rule: SMR-07 is DONE.
-- Completion rule: The real generated/runtime path passes complete validation
-  and verified contracts are promoted from notes.
-
-- [ ] Add a generated `SalesOrder` entity with `SalesStatus` StateMachine and
-  representative positive/negative transitions.
-- [ ] Prove explicit initial/final behavior and representative one-level
-  composite/named shallow-history behavior through generation and runtime.
-- [ ] Prove priority, declaration-order, named/expression guards, actions,
-  create/update/patch/command routes, atomic rollback, and success envelopes.
-- [ ] Prove guard non-match, guard failure, action failure, persistence failure,
-  interruption, retry/replay, and diagnostic non-leakage.
-- [ ] Run affected focused suites and full suites serially under project rules.
-- [ ] Validate downstream generated sample/CAR behavior where admitted.
-- [ ] Prove the exact CML -> Cozy -> SimpleModeler -> generated
-  `CollectionTransitionRuleProvider` -> ComponentFactory automatic bootstrap ->
-  UnitOfWork -> persisted state -> post-commit `CommittedTransition` path.
-- [ ] Reject a manually constructed transition provider as evidence for the
-  preceding end-to-end acceptance, while retaining such fixtures for focused
-  CNCF adapter specifications.
-- [ ] Re-review naming, ABI, lifecycle, observability, and compatibility debt.
-- [ ] Reconcile final implementation evidence with every linked development
-  candidate and update candidate status without implicit absorption.
-- [ ] Promote verified architecture to `docs/design` and behavior to
-  `docs/spec`; keep unsupported claims provisional.
-- [ ] Record exact repository, test-count, artifact, and revision evidence.
-
-Evidence:
-- Pending.
+- `P63-SMR03-MODEL-REFRESH-004` refreshed the earlier changed
+  `simplemodeler_2.12:1.1.26-SNAPSHOT` locally, receipt
+  `899bd5599b4b30f3f89aa6711bf42244ecc954866834c9ff83a3c0e64a404142`.
+- `ModelerStateMachineProjectionSpec` passed as `P63-SMR03-COZY-VAL-009`,
+  receipt `57723b5cff86d847f0cc7445c9a2c45ad2152b023a97abc1e444424e9806e57e`,
+  before the later producer repair. The retained terminal
+  `P63-SMR03-COZY-VAL-008` compile failure preceded the explicit optional
+  initial-state repair and is superseded by that receipt.
+- The repaired current producer was refreshed locally as
+  `P63-SMR03-NW-FIX-MODEL-REFRESH-001`, receipt
+  `13f83c9576787bc90d9c52fc0b27772d24608c706bea59e99d3b73588191e77c`
+  (`validated_tree_sha256`
+  `c2a44b7142178c3678867998f41c27f5551ab82ba9071a88daaf800583e88873`).
+  `ModelerStateMachineProjectionSpec` then passed as
+  `P63-SMR03-NW-FIX-COZY-VAL-001`, receipt
+  `392b87fa6b2ae464be49d33f3580b7e2cbee46f8fb98141ba58af30a60c4aef7`
+  (`validated_tree_sha256`
+  `d492eedaa1c9ddb4ed848fffebebfbead56fc49739059fe81318f199869e7118`).
+  These receipts cover the non-Workflow bridge only; they do not run or claim
+  Cozy Workflow grammar or Multi-CML provenance validation.
+- On 2026-09-18, the current non-Workflow source trees were rerun through
+  isolated repository-local serial SBT attempts: `TransitionDeciderSpec` (15
+  succeeded), `GuardRuntimeSpec` plus `TransitionSelectorPropertySpec` (13
+  succeeded), `PredicateProgramSpec` (31 succeeded), and
+  `ModelerStateMachineProjectionSpec` (16 succeeded). Every attempt completed
+  with `lock=released`; this is focused evidence, not Phase 63.2's deferred
+  repository-full validation and not evidence for Cozy's separate Workflow
+  grammar workstream.
+- The resulting review-passed direct local Step commits are simplemodeling-lib
+  `2647ee8`, SimpleModeler `eb056a8`, CNCF `d78b80c0`, and Cozy `b00bbdf`.
+  They are intentionally repository-labelled evidence rather than a shared
+  Phase-63 state, so CNCF's StateMachine work cannot consume or mutate Cozy's
+  independently numbered Multi-CML or Workflow workstreams.
