@@ -7,10 +7,14 @@ This ledger owns only `SMR-01` through `SMR-03`. Phase 63.1 owns `SMR-04`
 and `SMR-05`; Phase 63.2 owns `SMR-06` through `SMR-08`. Only one stage may
 be `IN_PROGRESS` at a time.
 
-Closure: `phase63_closure_review_001` returned CLOSE-READY on 2026-09-18 with
-no Current Boundary Blockers, Hygiene, or Development Candidates. This is a
-repository-labelled direct closure, not a shared Phase-number state. The
-repository-full suite remains Phase 63.2's explicit responsibility.
+Closure: the earlier repository-labelled `phase63_closure_review_001` is
+historical evidence. The current closure authority is
+`P63-FULL-REVIEW-20260918-001`, bound to the four-repository V3 Phase-base
+record `04f17c44852ef61471ce05be518a25bc48b6a56219326771c3650906ad3e30d3`.
+It found no Current Boundary Blocker and retained two nonblocking Hygiene
+records in the canonical Phase 63 Hygiene journal. The repository-full suite
+remains Phase 63.2's explicit aggregate responsibility and is not claimed
+here.
 
 ## SMR-01: Inventory and Semantic Freeze
 
@@ -157,9 +161,14 @@ Evidence:
   grammar workstream.
 - The resulting review-passed direct local Step commits are simplemodeling-lib
   `2647ee8`, SimpleModeler `eb056a8`, CNCF `d78b80c0`, and Cozy `b00bbdf`
-  plus `6619adc`. The last Cozy Step makes the normalizer a tracked component,
-  retains entity-aware `HISTORY-FIELD` validation, and rejects missing history
-  fields and undeclared triggers deterministically. These commits are
-  intentionally repository-labelled evidence rather than a shared Phase-63
-  state, so CNCF's StateMachine work cannot consume or mutate Cozy's
-  independently numbered Multi-CML or Workflow workstreams.
+  plus `6619adc` and `c27b957`. `c27b957` adds the direct-AST fixture required
+  to exercise normalizer ownership of an undeclared event after parser
+  admission. The isolated post-commit attempt
+  `P63-SMR03-POSTCOMMIT-VAL-005` passed
+  `ModelerStateMachineProjectionSpec` with 23 succeeded and `lock=released`.
+  The final Cozy Step makes the normalizer a tracked component, retains
+  entity-aware `HISTORY-FIELD` validation, and rejects missing history fields
+  and undeclared triggers deterministically. These commits are intentionally
+  repository-labelled evidence rather than a shared Phase-63 state, so CNCF's
+  StateMachine work cannot consume or mutate Cozy's independently numbered
+  Multi-CML or Workflow workstreams.

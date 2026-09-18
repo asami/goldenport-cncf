@@ -3,9 +3,12 @@
 status=complete
 planned_at=2026-08-12
 closed_at=2026-09-18
-closure_mode=repository-labelled-direct
-closure_review=phase63_closure_review_001
-closure_commits=["2647ee8","eb056a8","d78b80c0","b00bbdf","6619adc","995525f7"]
+closure_mode=phase-goal-v3-reconciled-release
+closure_review=P63-FULL-REVIEW-20260918-001
+closure_release_binding=PHASE-63-V3-CLOSURE-20260918
+phase_base_authority=cncf.phase-base-authority.v3
+phase_base_authority_sha256=04f17c44852ef61471ce05be518a25bc48b6a56219326771c3650906ad3e30d3
+closure_commits=["2647ee8","eb056a8","d78b80c0","b00bbdf","6619adc","c27b957","995525f7","7174e851"]
 split_at=2026-09-17
 split_full_test_policy=final-only
 split_full_validation_method=sbt-full-suite
@@ -37,13 +40,22 @@ accepted contract for generation and runtime execution.
 
 ## Closure Record
 
-Closed on 2026-09-18 after the direct isolated final review
-`phase63_closure_review_001` found no Current Boundary Blocker. The closure
-binds only the repository-labelled implementation commits recorded above; it
-does not use the shared Phase-number workflow state and cannot affect Cozy's
-separately numbered Multi-CML or Workflow workstreams. Focused executable
-evidence is recorded in the checklist and execution plan. The repository-full
-suite remains explicitly deferred to Phase 63.2 and is not asserted here.
+The direct repository-labelled closure `phase63_closure_review_001` and commit
+`7174e851` are retained as historical evidence. They are superseded as the
+current Phase 63 closure authority by the V3 four-repository Phase-base record
+`04f17c44852ef61471ce05be518a25bc48b6a56219326771c3650906ad3e30d3` and
+the independent `P63-FULL-REVIEW-20260918-001` disposition. That review found
+no Current Boundary Blocker. It retained two nonblocking Hygiene records in
+the canonical Phase 63 Hygiene journal: `HYG-P63-CNCF-SPEC-GWT-LEGACY` and
+`HYG-P63-CORE-SPEC-PRIVATE-TERM-NAMES`.
+
+The release bound by `PHASE-63-V3-CLOSURE-20260918` is documentation-only; it
+does not reinterpret Cozy's separately numbered Multi-CML or Workflow
+workstreams. Focused executable evidence, including the post-commit
+undeclared-event normalization acceptance, is recorded in the checklist and
+execution plan. The configured repository-full suite is explicitly
+`deferred-not-run` for the named aggregate owner Phase 63.2; no full-suite
+success is claimed by this Phase.
 
 ## Approved Split
 
