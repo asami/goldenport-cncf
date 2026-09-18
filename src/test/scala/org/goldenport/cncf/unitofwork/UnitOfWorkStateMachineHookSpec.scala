@@ -1,5 +1,6 @@
 package org.goldenport.cncf.unitofwork
 
+import java.time.Instant
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{
@@ -13,7 +14,7 @@ import org.goldenport.cncf.context.{
   ScopeKind,
   TraceId
 }
-import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
+import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, EntityVersionedMutationCheckpoint}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.goldenport.cncf.entity.{
   EntityPersistent,
@@ -22,10 +23,10 @@ import org.goldenport.cncf.entity.{
   EntityStore,
   EntityStoreSpace
 }
-import org.goldenport.cncf.event.EventEngine
+import org.goldenport.cncf.event.{EventEngine, ReceptionDomainEvent, TransitionLifecycleEvent}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.testutil.EntityRevisionFixture
-import org.goldenport.cncf.statemachine.TransitionValidationHook
+import org.goldenport.cncf.statemachine.{ExecutionPlan, PlannedTransitionValidationHook, ResolvedAction, StateMachinePlannerProvider, TransitionEvent, TransitionValidationHook}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -143,6 +144,84 @@ final class UnitOfWorkStateMachineHookSpec
         })
 
       loadedage shouldBe Consequence.success(Some(30))
+    }
+
+    "discard planned lifecycle success events when detached persistence fails before publication" in {
+      Given("a successful planned transition and a datastore that fails before publishing its detached update")
+      val datastorespace = new DataStoreSpace().useDataStore(
+        new _FailingBeforePublishDataStore
+      )
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val provider = new _SuccessfulPlanProvider
+      val hook = new PlannedTransitionValidationHook(provider)
+      val context = _execution_context(datastorespace, entitystorespace, hook)
+      given ExecutionContext = context
+      given EntityPersistent[PersonEntity] = _person_persistent
+      EntityRevisionSpecSupport.registerRevisionBinding(
+        context,
+        _cid,
+        _person_persistent,
+        EntityRevisionRepresentation.Detached
+      )
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+        "test",
+        "sm_rollback",
+        _cid,
+        entropy = "sm_rollback"
+      )
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            EntityRevisionFixture.entitySeed(
+              DataStore.CollectionId.EntityStore(_cid),
+              PersonEntity(id, "jiro", 40).toRecord()
+            )
+          )
+        )
+      )
+      val uow = new UnitOfWork(context, EventEngine.noop(DataStore.noop()))
+      val preexisting = ReceptionDomainEvent(
+        "preexisting",
+        "domain-event",
+        Map.empty,
+        Map.empty,
+        Instant.EPOCH
+      )
+      uow.stageEvent(preexisting)
+
+      When("the planned transition succeeds but versioned detached persistence fails before publication")
+      val result = new UnitOfWorkInterpreter(uow).interpret(
+        UnitOfWorkOp.EntityStoreUpdateDetached(
+          PersonEntity(id, "jiro", 41),
+          Some(EntityRevision.INITIAL),
+          summon[EntityPersistent[PersonEntity]]
+        )
+      )
+
+      Then("the failure preserves stored state and prior events but removes one-time lifecycle success events")
+      result match {
+        case Consequence.Failure(conclusion) =>
+          conclusion.display should include ("injected before-publish failure")
+        case other =>
+          fail(s"expected injected before-publish failure, got $other")
+      }
+      provider.executionTrace shouldBe Vector("exit", "transition", "entry")
+      uow.pendingEvents shouldBe Vector(preexisting)
+      uow.pendingEvents.collect {
+        case event: TransitionLifecycleEvent => event
+      } shouldBe Vector.empty
+
+      val loadedage =
+        for {
+          cid  <- context.entityStoreSpace.dataStoreCollection(id)
+          dsid <- context.entityStoreSpace.dataStoreEntryId(id)
+          ds   <- context.dataStoreSpace.dataStore(cid)
+          rec  <- ds.load(cid, dsid)
+        } yield rec.flatMap(_.asMap.get("age").collect {
+          case n: Int => n
+        })
+
+      loadedage shouldBe Consequence.success(Some(40))
     }
   }
 
@@ -274,5 +353,71 @@ final class UnitOfWorkStateMachineHookSpec
       val _ = (id, patch, tc)
       Consequence.unit
     }
+  }
+
+  private final class _SuccessfulPlanProvider extends StateMachinePlannerProvider {
+    private var _execution_trace = Vector.empty[String]
+
+    def executionTrace: Vector[String] = _execution_trace
+
+    def planForSave[T](
+        entity: T,
+        tc: EntityPersistent[T],
+        event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(None)
+    }
+
+    def planForUpdate[T](
+        entity: T,
+        tc: EntityPersistent[T],
+        event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(
+        Some(
+          ExecutionPlan(
+            exitActions = Vector(_record[T]("exit")),
+            transitionAction = Some(_record[T]("transition")),
+            entryActions = Vector(_record[T]("entry"))
+          )
+        )
+      )
+    }
+
+    def planForUpdateById[P](
+        id: EntityId,
+        patch: P,
+        tc: org.goldenport.cncf.entity.EntityPersistentUpdate[P],
+        event: TransitionEvent
+    )(using ExecutionContext): Consequence[
+      Option[ExecutionPlan[(EntityId, P), TransitionEvent]]
+    ] = {
+      val _ = (id, patch, tc, event)
+      Consequence.success(None)
+    }
+
+    private def _record[S](label: String): ResolvedAction[S, TransitionEvent] =
+      new ResolvedAction[S, TransitionEvent] {
+        def run(state: S, event: TransitionEvent): Consequence[Unit] = {
+          val _ = (state, event)
+          _execution_trace = _execution_trace :+ label
+          Consequence.unit
+        }
+      }
+  }
+
+  private final class _FailingBeforePublishDataStore
+      extends DataStore.InMemoryDataStore(CommitRecorder.noop) {
+    override protected def versioned_mutation_checkpoint(
+        checkpoint: EntityVersionedMutationCheckpoint
+    ): Consequence[Unit] =
+      checkpoint match {
+        case EntityVersionedMutationCheckpoint.BeforePublish =>
+          Consequence.dataStoreUnavailable("injected before-publish failure")
+        case _ =>
+          Consequence.unit
+      }
   }
 }

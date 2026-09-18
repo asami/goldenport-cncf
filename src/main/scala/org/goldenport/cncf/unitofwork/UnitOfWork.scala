@@ -240,6 +240,14 @@ class UnitOfWork(
 
   def pendingEvents: Vector[DomainEvent] = _pending_events
 
+  private[unitofwork] def pendingEventsCheckpoint: Vector[DomainEvent] =
+    _pending_events
+
+  private[unitofwork] def restorePendingEvents(
+    checkpoint: Vector[DomainEvent]
+  ): Unit =
+    _pending_events = checkpoint
+
   def stageOperationEvaluationSupplementalC(
     intent: OperationEvaluationSupplementalIntent
   ): Consequence[Unit] =

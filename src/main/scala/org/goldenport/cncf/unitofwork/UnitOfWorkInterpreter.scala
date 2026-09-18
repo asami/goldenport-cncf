@@ -507,6 +507,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
               )
             )
           _ <- _authorize(m.authorization, Some(loadrecord))
+          pendingeventscheckpoint = uow.pendingEventsCheckpoint
           _ <- current match {
             case Some(record) =>
               _transition_validation_hook.beforeUpdate[t](
@@ -518,7 +519,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             case None =>
               _transition_validation_hook.beforeUpdate[t](m.entity, m.tc)
           }
-          carrier <- _entity_store_space.updateDetached(m)
+          carrier <- _restore_pending_events_on_persistence_failure(
+            pendingeventscheckpoint
+          )(
+            _entity_store_space.updateDetached(m)
+          )
         } yield {
           _entity_space_evict(id)
           _entity_space_put(carrier.entity, m.tc)
@@ -1477,6 +1482,25 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     }
     result
   }
+
+  private def _restore_pending_events_on_persistence_failure[A](
+      checkpoint: Vector[org.goldenport.cncf.event.DomainEvent]
+  )(
+      persistence: => Consequence[A]
+  ): Consequence[A] =
+    try {
+      persistence match {
+        case failure: Consequence.Failure[A] =>
+          uow.restorePendingEvents(checkpoint)
+          failure
+        case result =>
+          result
+      }
+    } catch {
+      case e: Throwable =>
+        uow.restorePendingEvents(checkpoint)
+        throw e
+    }
 
   private def _load_record(
     id: EntityId
