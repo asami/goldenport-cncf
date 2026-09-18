@@ -1,16 +1,17 @@
 package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- *  version Mar. 19, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Sep. 18, 2026
  * @author  ASAMI, Tomoharu
  */
-final class GuardRuntimeSpec extends AnyWordSpec with Matchers {
+final class GuardRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "RefGuard" should {
     "resolve and evaluate named guard" in {
       val resolver = new GuardBindingResolver[Int, Int] {
@@ -68,5 +69,43 @@ final class GuardRuntimeSpec extends AnyWordSpec with Matchers {
       guard shouldBe a[ExpressionGuard[?, ?]]
     }
   }
-}
 
+  "GuardRuntime.buildNormalized" should {
+    "admit a named guard binding" in {
+      Given("a named guard binding")
+      val resolver = new GuardBindingResolver[Int, Int] {
+        def resolve(name: String): Consequence[Guard[Int, Int]] =
+          Consequence.success(new Guard[Int, Int] {
+            def eval(state: Int, event: Int): Consequence[Boolean] =
+              Consequence.success(name == "named" && state == event)
+          })
+      }
+
+      When("the normalized path builds and evaluates it")
+      val result = GuardRuntime.buildNormalized[Int, Int](
+        GuardExpr.Ref("named"),
+        resolver
+      ).flatMap(_.eval(2, 2))
+
+      Then("the binding provides the guard behavior")
+      result shouldBe Consequence.success(true)
+    }
+
+    "reject a legacy raw expression" in {
+      Given("a raw expression retained for legacy compatibility")
+      val resolver = new GuardBindingResolver[Int, Int] {
+        def resolve(name: String): Consequence[Guard[Int, Int]] =
+          Consequence.operationInvalid(s"unexpected: $name")
+      }
+
+      When("the normalized path is asked to build it")
+      val result = GuardRuntime.buildNormalized[Int, Int](
+        GuardExpr.Expression("state > 0"),
+        resolver
+      )
+
+      Then("normalization fails closed")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+  }
+}
