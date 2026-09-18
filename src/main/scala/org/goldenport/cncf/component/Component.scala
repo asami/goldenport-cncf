@@ -80,6 +80,8 @@ abstract class Component() extends Component.Core.Holder {
   private var _health_contributors: Vector[Component.HealthContributor] = Vector.empty
   private var _state_machine_planner_provider: StateMachinePlannerProvider =
     StateMachinePlannerProvider.noop
+  private var _state_machine_definitions: Vector[CmlStateMachineDefinition] =
+    Vector.empty
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
   private var _event_reception: Option[EventReception] = None
@@ -383,7 +385,16 @@ abstract class Component() extends Component.Core.Holder {
   }
 
   // Cozy-generated component metadata hooks (event/reception DSL).
-  def stateMachineDefinitions: Vector[CmlStateMachineDefinition] = Vector.empty
+  def stateMachineDefinitions: Vector[CmlStateMachineDefinition] =
+    _state_machine_definitions
+
+  def withStateMachineDefinitions(
+    definitions: Vector[CmlStateMachineDefinition]
+  ): Component = {
+    _state_machine_definitions = definitions
+    this
+  }
+
   def eventReceptionDefinitions: Vector[CmlEventDefinition] = Vector.empty
   def eventRoutingDefinitions: Vector[CmlRoutingDefinition] = Vector.empty
   def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty

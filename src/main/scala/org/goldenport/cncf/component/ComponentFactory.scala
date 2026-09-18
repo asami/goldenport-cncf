@@ -26,7 +26,7 @@ import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, E
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.view.{Browser, ContextualBrowserCount, ContextualBrowserFind, ContextualBrowserQuery, ContextualViewBuilder, ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
-import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
+import org.goldenport.cncf.statemachine.{CmlStateMachineDefinitionProvider, CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
@@ -584,6 +584,7 @@ final class ComponentFactory(
     component: Component,
     plans: Vector[EntityRuntimePlan[Any]]
   ): Unit = {
+    _bootstrap_state_machine_definitions(component)
     val provider = new CollectionStateMachinePlannerProvider(component.stateMachinePlannerProvider)
     val rules = _default_collection_transition_rules(component, plans)
     val saverulesbycollection = rules.collect {
@@ -607,6 +608,20 @@ final class ComponentFactory(
     }
 
     val _ = component.withStateMachinePlannerProvider(provider)
+  }
+
+  private def _bootstrap_state_machine_definitions(
+    component: Component
+  ): Unit = {
+    val provider = component match {
+      case m: CmlStateMachineDefinitionProvider => Some(m)
+      case _ => component.factory.collect {
+        case m: CmlStateMachineDefinitionProvider => m
+      }
+    }
+    provider.foreach { m =>
+      component.withStateMachineDefinitions(m.stateMachineDefinitions)
+    }
   }
 
   private def _to_transition_rule_any(p: CollectionTransitionRule[Any]): TransitionRule[Any] =

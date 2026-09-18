@@ -6,7 +6,7 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
-import org.goldenport.cncf.statemachine.{CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
+import org.goldenport.cncf.statemachine.{CmlNormalizedStateMachine, CmlStateMachineDefinition, CmlStateMachineDefinitionProvider, CmlStateMachineIdentity, CmlStateMachineStateDefinition, CmlStateMachineStateIdentity, CmlStateMachineStateKind, CmlStateMachineStatePath, CmlStateMachineVersion, CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -57,13 +57,64 @@ final class ComponentFactoryStateMachineBootstrapSpec
         case _ =>
           fail("component should expose the transition rule provider contract")
       }
+      bootstrapped.stateMachineDefinitions shouldBe Vector(_normalized_definition)
+    }
+
+    "copy factory-provided state machine definitions when the component does not provide them" in {
+      Given("a component without definitions and a factory providing one typed definition")
+      val factorydefinition = _normalized_definition.copy(
+        name = "factory-owned",
+        normalized = None
+      )
+      val componentfactory = new StateMachineDefinitionFactory(Vector(factorydefinition))
+      val component = _initialized_component(new Component() {}, componentfactory)
+      val factory = new ComponentFactory()
+
+      When("the component is bootstrapped through the public consequence boundary")
+      val bootstrapped =
+        factory
+          .bootstrapC(component)
+          .toOption
+          .getOrElse(fail("component bootstrap should succeed"))
+
+      Then("bootstrap copies the factory definition into the component")
+      bootstrapped.stateMachineDefinitions shouldBe Vector(factorydefinition)
+    }
+
+    "prefer component-provided state machine definitions over factory definitions" in {
+      Given("a component and its factory providing different typed definition vectors")
+      val componentdefinition = _normalized_definition.copy(
+        name = "component-owned",
+        normalized = None
+      )
+      val factorydefinition = _normalized_definition.copy(
+        name = "factory-owned",
+        normalized = None
+      )
+      val componentfactory = new StateMachineDefinitionFactory(Vector(factorydefinition))
+      val component = new Component() with CmlStateMachineDefinitionProvider {
+        override def stateMachineDefinitions: Vector[CmlStateMachineDefinition] =
+          Vector(componentdefinition)
+      }
+      val initialized = _initialized_component(component, componentfactory)
+      val factory = new ComponentFactory()
+
+      When("the component is bootstrapped through the public consequence boundary")
+      val bootstrapped =
+        factory
+          .bootstrapC(initialized)
+          .toOption
+          .getOrElse(fail("component bootstrap should succeed"))
+
+      Then("bootstrap keeps the component definition")
+      bootstrapped.stateMachineDefinitions shouldBe Vector(componentdefinition)
     }
   }
 
   private def _component_with_transition_rules(
     trace: ArrayBuffer[String]
   ): Component = {
-    val component = new Component() with CollectionTransitionRuleProvider {
+    val component = new Component() with CollectionTransitionRuleProvider with CmlStateMachineDefinitionProvider {
       override def stateMachineTransitionRules: Vector[CollectionTransitionRule[Any]] =
         Vector(
           CollectionTransitionRule[Any](
@@ -82,6 +133,9 @@ final class ComponentFactoryStateMachineBootstrapSpec
             expectedHistoryRecordWrites = Vector(org.goldenport.cncf.statemachine.HistoryRecordWrite("Review", "Draft"))
           )
         )
+
+      override def stateMachineDefinitions: Vector[CmlStateMachineDefinition] =
+        Vector(_normalized_definition)
     }
 
     val core = Component.Core.create(
@@ -89,6 +143,63 @@ final class ComponentFactoryStateMachineBootstrapSpec
       componentId = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
       instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec")),
       protocol = Protocol.empty
+    )
+    val params = ComponentInit(
+      subsystem = TestComponentFactory.emptySubsystem("state_machine_bootstrap_spec"),
+      core = core,
+      origin = ComponentOrigin.Builtin
+    )
+    component.initialize(params)
+  }
+
+  private final class StateMachineDefinitionFactory(
+    definitions: Vector[CmlStateMachineDefinition]
+  ) extends Component.Factory
+    with CmlStateMachineDefinitionProvider {
+    override def stateMachineDefinitions: Vector[CmlStateMachineDefinition] = definitions
+
+    override protected def create_Component(params: ComponentCreate): Component =
+      throw new UnsupportedOperationException("test fixture factory does not create components")
+
+    override protected def create_Core(
+      params: ComponentCreate,
+      comp: Component
+    ): Component.Core =
+      throw new UnsupportedOperationException("test fixture factory does not create component cores")
+  }
+
+  private def _normalized_definition: CmlStateMachineDefinition = {
+    val machine = CmlStateMachineIdentity("lifecycle")
+    val state = CmlStateMachineStateIdentity(
+      machine,
+      CmlStateMachineStatePath(Vector("Draft"))
+    )
+    CmlStateMachineDefinition(
+      name = "lifecycle",
+      normalized = Some(CmlNormalizedStateMachine(
+        identity = machine,
+        version = CmlStateMachineVersion(1),
+        initialState = state,
+        states = Vector(CmlStateMachineStateDefinition(
+          identity = state,
+          kind = CmlStateMachineStateKind.Leaf
+        )),
+        transitions = Vector.empty,
+        terminalTransitions = Vector.empty
+      ))
+    )
+  }
+
+  private def _initialized_component(
+    component: Component,
+    componentFactory: Component.Factory
+  ): Component = {
+    val core = Component.Core.create(
+      name = "org.goldenport.cncf.test.StateMachineBootstrapSpec",
+      componentId = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec")),
+      protocol = Protocol.empty,
+      factory = componentFactory
     )
     val params = ComponentInit(
       subsystem = TestComponentFactory.emptySubsystem("state_machine_bootstrap_spec"),
