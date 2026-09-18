@@ -1,7 +1,11 @@
 # Phase 63 - CML StateMachine Contract and Normalization
 
-status=in-progress
+status=complete
 planned_at=2026-08-12
+closed_at=2026-09-18
+closure_mode=repository-labelled-direct
+closure_review=phase63_closure_review_001
+closure_commits=["2647ee8","eb056a8","d78b80c0","b00bbdf","6619adc","995525f7"]
 split_at=2026-09-17
 split_full_test_policy=final-only
 split_full_validation_method=sbt-full-suite
@@ -30,6 +34,16 @@ It closes only when CML normalization produces the one closed transition and
 predicate model with stable identities, ordering, validation, compatibility
 admission, and failing-first specifications. Phase 63.1 alone may consume that
 accepted contract for generation and runtime execution.
+
+## Closure Record
+
+Closed on 2026-09-18 after the direct isolated final review
+`phase63_closure_review_001` found no Current Boundary Blocker. The closure
+binds only the repository-labelled implementation commits recorded above; it
+does not use the shared Phase-number workflow state and cannot affect Cozy's
+separately numbered Multi-CML or Workflow workstreams. Focused executable
+evidence is recorded in the checklist and execution plan. The repository-full
+suite remains explicitly deferred to Phase 63.2 and is not asserted here.
 
 ## Approved Split
 

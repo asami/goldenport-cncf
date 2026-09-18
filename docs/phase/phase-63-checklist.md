@@ -1,11 +1,16 @@
 # Phase 63 Checklist - CML StateMachine Contract and Normalization
 
-status=in-progress
+status=complete
 phase=[Phase 63 - CML StateMachine Contract and Normalization](phase-63.md)
 
 This ledger owns only `SMR-01` through `SMR-03`. Phase 63.1 owns `SMR-04`
 and `SMR-05`; Phase 63.2 owns `SMR-06` through `SMR-08`. Only one stage may
 be `IN_PROGRESS` at a time.
+
+Closure: `phase63_closure_review_001` returned CLOSE-READY on 2026-09-18 with
+no Current Boundary Blockers, Hygiene, or Development Candidates. This is a
+repository-labelled direct closure, not a shared Phase-number state. The
+repository-full suite remains Phase 63.2's explicit responsibility.
 
 ## SMR-01: Inventory and Semantic Freeze
 
@@ -146,12 +151,15 @@ Evidence:
   isolated repository-local serial SBT attempts: `TransitionDeciderSpec` (15
   succeeded), `GuardRuntimeSpec` plus `TransitionSelectorPropertySpec` (13
   succeeded), `PredicateProgramSpec` (31 succeeded), and
-  `ModelerStateMachineProjectionSpec` (16 succeeded). Every attempt completed
+  `ModelerStateMachineProjectionSpec` (23 succeeded). Every attempt completed
   with `lock=released`; this is focused evidence, not Phase 63.2's deferred
   repository-full validation and not evidence for Cozy's separate Workflow
   grammar workstream.
 - The resulting review-passed direct local Step commits are simplemodeling-lib
-  `2647ee8`, SimpleModeler `eb056a8`, CNCF `d78b80c0`, and Cozy `b00bbdf`.
-  They are intentionally repository-labelled evidence rather than a shared
-  Phase-63 state, so CNCF's StateMachine work cannot consume or mutate Cozy's
+  `2647ee8`, SimpleModeler `eb056a8`, CNCF `d78b80c0`, and Cozy `b00bbdf`
+  plus `6619adc`. The last Cozy Step makes the normalizer a tracked component,
+  retains entity-aware `HISTORY-FIELD` validation, and rejects missing history
+  fields and undeclared triggers deterministically. These commits are
+  intentionally repository-labelled evidence rather than a shared Phase-63
+  state, so CNCF's StateMachine work cannot consume or mutate Cozy's
   independently numbered Multi-CML or Workflow workstreams.

@@ -1,6 +1,6 @@
 # Phase 63 Execution Plan — CML StateMachine Contract and Normalization
 
-status=in-progress
+status=complete
 phase=[Phase 63](phase-63.md)
 checklist=[Phase 63 Checklist](phase-63-checklist.md)
 
@@ -104,10 +104,18 @@ the CNCF `GuardRuntimeSpec` and `TransitionSelectorPropertySpec`
 (`phase63-cncf-focused-test-20260918-002`, 13 succeeded), the SimpleModeler
 `PredicateProgramSpec` (`phase63-model-focused-test-20260918-002`, 31
 succeeded), and Cozy's non-Workflow `ModelerStateMachineProjectionSpec`
-(`cncf-cozy-focused-test-20260918-001`, 16 succeeded). Each completed with
+(`phase63-cozy-focused-test-20260918-003`, 23 succeeded). Each completed with
 `lock=released`. The accepted implementation steps are respectively
-`2647ee8`, `d78b80c0`, `eb056a8`, and `b00bbdf`; every commit contains only
-its reviewed source/test paths. These are repository-labelled direct evidence,
-not a shared Phase-63 authority: they avoid the collision with Cozy's separate
-Phase 63 workstream. They do not claim a Phase release, a repository-full
-suite, or ownership of Cozy's separate Workflow grammar workstream.
+`2647ee8`, `d78b80c0`, `eb056a8`, `b00bbdf`, and `6619adc`; every commit
+contains only its reviewed source/test paths. `6619adc` makes the Cozy
+normalization bridge self-contained and covers missing `HISTORY-FIELD`,
+undeclared-event, and entity-owned history-field rejection. These are
+repository-labelled direct evidence, not a shared Phase-63 authority: they
+avoid the collision with Cozy's separate Phase 63 workstream. They do not
+claim a repository-full suite or ownership of Cozy's separate Workflow grammar
+workstream.
+
+The direct isolated final closure review `phase63_closure_review_001` found no
+Current Boundary Blocker across SMR-01 through SMR-03. This changes only the
+CNCF Phase 63 status record; it neither starts nor validates Phase 63.1 or
+Phase 63.2, and it cannot consume or alter Cozy's same-numbered workstreams.
