@@ -70,3 +70,11 @@ These references support navigation, review, observability, and higher-level pro
 > Business Process organizes business intent and activity. Workflow provides executable coordination. CNCF executes Workflow semantics and preserves higher-level provenance without turning Business Process or Bounded Context into runtime boundaries.
 
 This direction complements the existing rule that CNCF preserves authoritative Workflow semantics while higher-level tools own human-oriented projections.
+
+## Business Model as System Context
+
+Business Modeling exists to clarify the business context in which the target System operates. It provides upstream context and scaffolding for System Modeling rather than a second runtime model.
+
+CNCF should therefore preserve provenance needed to trace executable artifacts back to Business Process, Use Case, Capability, Problem Domain, and Bounded Context where supplied by generated models. This evidence allows higher-level tools to validate Business Model / System Model alignment without making CNCF responsible for Business Modeling itself.
+
+Runtime correctness remains governed by CNCF contracts. Business/System alignment is a modeling and verification concern layered above the runtime boundary.
