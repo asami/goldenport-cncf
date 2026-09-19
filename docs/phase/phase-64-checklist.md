@@ -25,8 +25,9 @@ Phase 64 closes only the minimum Composite StateMachine / Workflow foundation re
 - [ ] Delegate local atomic execution to 64.1 and planner/interpreter/testability to 64.2.
 
 ## SWF-05 Minimal Workflow specialization
-- [ ] Freeze WorkflowDefinitionIdentity / WorkflowInstanceIdentity.
-- [ ] Freeze revision, lifecycle/current progression, correlation/causation and minimal history-reference contract.
+- [ ] Freeze semantic WorkflowDefinitionIdentity / WorkflowInstanceIdentity.
+- [ ] Freeze lifecycle/current progression and correlation/causation semantics needed by Phase 77.
+- [ ] Leave independently durable revision/history/store/suspension semantics to Phase 77.
 - [ ] Add no Workflow-only concept that can be represented as Composite StateMachine semantics.
 
 ## SWF-06 ComponentFactory admission
@@ -40,7 +41,7 @@ Phase 64 closes only the minimum Composite StateMachine / Workflow foundation re
 
 ## SWF-08 Handoff and deferral
 - [ ] Freeze exact Phase 77 consumer handoff.
-- [ ] Record that Continuation/API-SPI/public protocol/Skill projection are Phase 77 concerns.
+- [ ] Record that durable WorkflowInstance revision/history/store, ActionExecution, Continuation/resume, API/SPI provider runtime, typed protocol Value Objects/JSON encoding and Skill projection are Phase 77 concerns.
 - [ ] Record Retry/Timeout and other runtime-control features as later phases.
 - [ ] Record 2PC/compensation/recovery as Phase 85.
 - [ ] Record Workflow-to-Workflow orchestration and advanced integration as later work.
