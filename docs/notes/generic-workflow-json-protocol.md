@@ -1,10 +1,12 @@
-# Generic Workflow JSON Protocol
+# Generic Workflow Protocol Model and JSON Encoding
 
 Status: normative design input for Phase 77
 
 ## Purpose
 
-CNCF Workflow / StateMachine runtime と Skill、CLI、UI、AI/Human participant の間に、application/domain 非依存の基本 JSON protocol を定義する。
+CNCF Workflow / StateMachine runtime の application/domain 非依存な typed protocol model を Value Object として定義し、JSON をその標準 wire encoding の一つとして定義する。
+
+JSON は正本ではない。Scala/JVM 内部では Value Object を直接受け渡し、Skill/Codex、REST、MCP、CLI/UI 等の境界で同じ Value Object を encode/decode する。
 
 sm-workflow はこの protocol の consumer/application であり、Goal/Phase/Step 等の software-development 語彙は generic protocol に含めない。
 
@@ -284,3 +286,93 @@ Workflow は concrete model 名を guard/transition 条件として使用しな�
 StartResult / Continuation / Terminal 等は `presentation` を持ち、Codex console や UI が current situation、next action、reason、progress を人間向けに表示できる。
 
 presentation は canonical control data ではない。Skill/runtime は表示文字列を parse して operation、state、reasoning level、completion を判断してはならない。
+
+
+## Canonical Value Object model
+
+CNCF protocol の正本は typed Value Object である。
+
+```text
+WorkflowStartRequest[I]
+WorkflowStartResult[W, O]
+WorkflowHandle
+
+Continuation[W, O]
+  WorkOrderContinuation[W]
+  DecisionContinuation
+  WaitContinuation
+  TerminalContinuation[O]
+
+WorkOrder[W]
+ExecutionRequirement
+WorkResult[R]
+Evidence
+ExecutionEvidence
+Presentation
+```
+
+generic CNCF fields と application-specific payload を型合成する。application payload を untyped arbitrary JSON として CNCF core に持ち込まない。
+
+概念的には:
+
+```scala
+WorkflowStartRequest[I]
+WorkOrder[W]
+WorkResult[R]
+TerminalResult[O]
+```
+
+の `I/W/R/O` を component/application が所有する。wire boundary では schema identity/version と codec を用いて検証する。
+
+## Encoding boundary
+
+```text
+CNCF Value Objects
+   +-- direct Scala/JVM use
+   +-- JSON Codec -> Codex / Skill / REST / CLI / UI
+   +-- MCP projection
+   `-- future transport projection
+```
+
+同一 process/JVM 内で JSON round trip を強制しない。JSON encode/decode によってのみ成立する semantics を作らない。
+
+## Workflow composition
+
+Scala program 内で Outer Workflow と Inner Workflow を typed Value Object で接続できることを protocol model の設計制約とする。
+
+```text
+OuterWorkflow
+  -> typed InnerStartInput
+  -> InnerWorkflowInstance
+  -> typed InnerTerminalResult
+  -> OuterWorkflow
+```
+
+Inner Workflow は単なる opaque Action に潰さず、必要に応じて独立した WorkflowInstance identity / revision / history / continuation を持てる。
+
+Outer/Inner の関係には少なくとも causal correlation を保持できるようにする。
+
+```text
+OuterWorkflowInstance O-100
+  child invocation
+       |
+       v
+InnerWorkflowInstance I-200
+  parent/cause = O-100
+       |
+       v
+Terminal[InnerResult]
+       |
+       v
+OuterWorkflowInstance O-100
+```
+
+Inner が WORK_ORDER / DECISION / WAIT で suspend しても Outer が execution thread を保持する必要はない。Outer は child completion を待つ durable progression boundary として扱える。
+
+Outer は Inner の private state を読み取って progression を決めない。composition contract は typed start input と typed terminal result、および generic lifecycle/correlation contract である。
+
+同一 JVM では typed direct invocation、remote boundary では同じ protocol model の encoding/projection を利用できることを保証する。
+
+## Application specialization
+
+CNCF Value Object は fixed generic fields と application-owned typed payload の合成である。sm-workflow は GoalPhaseStartInput 等を型引数/application payload として供給するだけで、generic Continuation や WorkflowHandle を再定義しない。
