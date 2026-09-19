@@ -49,7 +49,7 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic `Invoc
 - CNCF owns ABI version admission, ComponentFactory discovery, StateMachine Provided API dispatch, Required SPI provider resolution, Action execution, Continuation/resume runtime contracts, provider admission, and deterministic progression.
 - Workflow reuses/projects the StateMachine foundation; CNCF does not add a parallel Workflow-specific API/SPI or Continuation engine.
 - An entity-local StateMachine owns only lifecycle data persisted with that entity. WorkflowInstance process persistence remains independently owned.
-- A consuming component binds WorkflowInstance persistence, retention, lease/idempotency policy, public operations and client behavior.
+- Phase 77 defines the provider-neutral independently durable WorkflowInstance persistence SPI and revision/history/suspension contract. A consuming component supplies the concrete datastore/provider, migration, retention and lease policy plus public client behavior.
 - Component implementation code supplies Required SPI implementations through Providers. `ComponentFactory` is the construction/injection boundary: the component overrides generated/standard Provider factory methods to create component-specific Providers rather than overriding individual Workflow/StateMachine Actions.
 - Generic Skill Workflow Support projects suspended external SPI operations into Skill commands/WorkOrders. Domain-specific software-development policy remains in `sm-workflow`.
 
@@ -59,7 +59,7 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic `Invoc
 | --- | --- | --- |
 | CWF-77-01 | Freeze supported Cozy StateMachine/Workflow ABI versions, admission diagnostics, and compatibility policy. | planned |
 | CWF-77-02 | Discover generated definitions and StateMachine API/SPI metadata through ComponentFactory while preserving source identity. | planned |
-| CWF-77-03 | Bind admitted Workflow definitions to Phase 64's separate WorkflowInstance persistence SPI and identity/revision/history contract. | planned |
+| CWF-77-03 | Bind Phase 64's semantic WorkflowDefinition/WorkflowInstance identity/progression model to Phase 77's independently durable WorkflowInstance persistence SPI and revision/history contract. | planned |
 | CWF-77-04 | Implement deterministic StateMachine progression and bounded next-Action selection without inferring semantics from names/effects. | planned |
 | CWF-77-05 | Implement ActionExecution handling for `Completed`, `Suspended`, and `Failed`, reusing the existing typed `ExecProgram[UnitOfWorkOp, A]` path for internal Actions. | planned |
 | CWF-77-06 | Implement Required SPI provider resolution contracts and the ComponentFactory Provider-construction developer API for local/direct, external-continuation, and deterministic test providers. | planned |
