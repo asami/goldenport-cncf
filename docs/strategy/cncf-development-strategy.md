@@ -1814,7 +1814,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
 | DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
 | DEV-009 | `docs/journal/2026/08/2026-08-19-conclusion-diagnostics-availability-kind-development-task.md` | Explicit availability-kind diagnostic keys for not-running, connection-refused, and unreachable conclusions. | STRATEGY_ITEM | [9.4](#94-metrics-and-observability) | CANDIDATE |
-| DEV-010 | User direction on 2026-09-16 | Admit first-class Cozy-generated CML `WORKFLOW` definitions through ComponentFactory and expose an explicit automatic-versus-semantic progression contract without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md), after Cozy Phase 62 and CNCF Phases 64/64.2 | ADOPTED |
+| DEV-010 | User direction on 2026-09-16, refined on 2026-09-18 | Admit Cozy-generated CML `WORKFLOW` as a projection over the reusable StateMachine API/SPI runtime, with ComponentFactory provider construction, independent WorkflowInstance persistence, durable Continuation, and an IoC-injected Continuation SPI for Skill/Human/UI/remote execution without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md), after Cozy Phases 62.1-62.3 and CNCF Phases 64/64.2 | ADOPTED |
 
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
@@ -1869,7 +1869,7 @@ Future event/runtime development item.
 
 Alignment with Phases 63-65:
 
-- Phase 63 owns the StateMachine-specific post-commit
+- Phase 63.2 owns the StateMachine-specific post-commit
   `CommittedTransition` envelope and the rule that rollback emits no successful
   transition.
 - Phase 64 consumes that envelope for Workflow with bounded idempotent delivery.
@@ -2202,7 +2202,7 @@ Future error-model hardening item.
 
 Alignment with Phases 63-65:
 
-- Phase 63 owns the closed StateMachine outcome/facet vocabulary needed by its
+- Phase 63.2 owns the closed StateMachine outcome/facet vocabulary needed by its
   runtime; Phase 65 owns contract violation and evaluator/admission semantics.
 - Phase 64 reuses those failures and the existing Job/Workflow vocabulary; it
   does not introduce a parallel generic taxonomy.
@@ -2263,7 +2263,7 @@ Future platform development item.
 
 Alignment with Phases 63-64:
 
-- Phase 63 keeps external effects outside the local transition UnitOfWork, and
+- Phase 63.1 keeps external effects outside the local transition UnitOfWork, and
   Phase 64 does not add an implicit compensation engine.
 - A compensating business action, when required, is an explicit Operation and
   StateMachine transition. Compensation-of-compensation and human recovery
@@ -2286,7 +2286,7 @@ Alignment with Phase 64:
 
 - `entityKind = workflow` classifies a stateful business Entity such as
   `SalesOrder`; it is not synonymous with WorkflowEngine `WorkflowInstance`.
-- Phase 63 supplies the verified business-Entity transition lifecycle, while
+- Phase 63.2 supplies the verified business-Entity transition lifecycle, while
   Phase 64 owns separate WorkflowInstance identity, persistence, history,
   concurrency, retry/replay, and Job linkage.
 - Phase 64 does not require either object to be memory-resident and does not
@@ -4726,7 +4726,19 @@ Alignment with Phase 63:
   component code.
 
 ### 9.54 CML StateMachine Runtime Completion
-Planned for Phase 63 after Phase 62 closes.
+Planned as the serial Phase 63, 63.1, and 63.2 sequence. It has no dependency
+on Phase 62; its foundations are the StateMachine, CML generation, CNCF
+transition, Aggregate, UnitOfWork, and CallTree contracts.
+
+Applied split ownership:
+
+- Phase 63 owns the canonical typed transition/predicate contract and CML
+  normalization.
+- Phase 63.1 owns generated definitions/ABI and atomic CNCF
+  candidate-state/local-effect/UnitOfWork execution.
+- Phase 63.2 owns explicit committed-transition delivery, failure
+  observability/compatibility, cross-repository acceptance, and the aggregate
+  repository full suite.
 
 - Historical basis:
   - Phase 4 and the draft StateMachine boundary established canonical core
@@ -4760,7 +4772,7 @@ Planned for Phase 63 after Phase 62 closes.
     paths cannot silently bypass the machine; and
   - guard non-match, guard failure, action failure, persistence failure,
     rollback, and interruption retain different structured meanings.
-- Initial scope:
+- Sequence scope:
   - Cozy normalization and SimpleModeler generated definitions/ABI;
   - the `pattern:state-machine`/`pattern:state-transition` vertical slice from
     the provisional Aggregate method implementation candidates, without
@@ -4774,15 +4786,16 @@ Planned for Phase 63 after Phase 62 closes.
   - Workflow progression, executable DbC, timers, parallel/human tasks,
     compensation, connectors, distributed transactions, and arbitrary scripts.
 - Planning references:
-  - `docs/phase/phase-63.md`;
-  - `docs/phase/phase-63-checklist.md`;
+  - `docs/phase/phase-63.md` / `phase-63-checklist.md`;
+  - `docs/phase/phase-63.1.md` / `phase-63.1-checklist.md`;
+  - `docs/phase/phase-63.2.md` / `phase-63.2-checklist.md`;
   - `docs/notes/cml-statemachine-runtime-completion-provisional-specification.md`;
   - `docs/notes/aggregate-method-implementation-strategy.md`;
     and
   - `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md`.
 
 ### 9.55 StateMachine-Workflow Alignment
-Planned for Phase 64 after Phase 63 closes.
+Planned for Phase 64 after Phase 63.2 closes.
 
 - Historical basis:
   - Phase 14 delivered a lightweight event-triggered, entity-status-based
@@ -5171,37 +5184,47 @@ from unnecessary hash-based control inside ordinary application data flow.
   - [Phase 69.4](../phase/phase-69.4.md); and
   - [Phase 74](../phase/phase-74.md).
 
-### 9.64 First-Class CML WORKFLOW Admission and Progression
+### 9.64 StateMachine API/SPI Runtime and Skill-Driven Workflow
 
-Planned as [Phase 77](../phase/phase-77.md), after Cozy Phase 62 and the
+Planned as [Phase 77](../phase/phase-77.md), after Cozy Phase 62.3 and the
 Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
 
-- Cozy owns the first-class CML `WORKFLOW` declaration, normalization, static
-  validation, source identity, generated ABI, and producer fixture. CNCF does
-  not parse CML or reconstruct Workflow meaning from names or status fields.
-- CNCF admits the generated definition by explicit ABI version, discovers it
-  through ComponentFactory, and preserves the established Composite
-  StateMachine, typed Action, `ExecProgram`, and `UnitOfWorkOp` boundaries.
-- Generated progression metadata explicitly distinguishes automatic transitions
-  from typed Work Order, Decision, and Wait boundaries. The CNCF evaluator is
-  deterministic and bounded, returns a single boundary, and fails closed on
-  ambiguity, cycles, unavailable state, or unsupported semantics.
+- Cozy Phase 62 owns first-class CML `WORKFLOW` source/lowering; Phase 62.1
+  owns generic StateMachine Provided API / Required SPI and ActionExecution;
+  Phase 62.2 owns generated ABI/bootstrap metadata; Phase 62.3 owns the real
+  producer fixture and CNCF handoff. CNCF does not parse CML or reconstruct
+  Workflow meaning from names or status fields.
+- CNCF admits the generated definition and API/SPI metadata, discovers them
+  through ComponentFactory, and preserves Composite StateMachine, typed Action,
+  `ExecProgram`, and `UnitOfWorkOp` boundaries.
+- Required SPI is the protocol-independent typed operation contract. Provider
+  SPI is the ComponentFactory construction/implementation boundary.
+  `ActionExecution` reports `Completed`, `Suspended(Continuation)`, or `Failed`;
+  no Workflow-wide protocol mode or semantic `InvocationBinding` is introduced.
+- Continuation Protocol is the durable external execution path used after
+  suspension. Continuation SPI Projection is the IoC port that exposes a
+  persisted `ContinuationRequest` to an injected Skill/Human/UI/remote adapter
+  and accepts a typed `ContinuationResult` for fail-closed resume.
+- Suspension is persisted before external claim. Concrete delivery, claim/
+  lease, model selection, and host scheduling do not become StateMachine
+  semantics and no external participant is invoked inside the persistence
+  transaction.
 - CNCF binds the generated ABI to Phase 64's independent WorkflowInstance
-  persistence SPI: entity-local StateMachine state remains entity-owned, while
-  a WorkflowInstance has its own identity/revision/history and idempotently
-  correlates to committed entity transitions. A shared physical database
-  requires separate logical store ownership; entity fields and shared-table
-  ownership are not substitutes.
-- A consuming component binds that SPI and owns external execution policy.
-  Textus `sm-workflow` therefore supplies the component-local SQLite store and
-  owns WorkflowRun/WorkOrder lifecycle, `advance`, leases, public protocols,
-  skills, and Codex-cost accounting.
-- This Phase neither replaces Phase 64's Composite StateMachine runtime nor
-  adds BPMN/DAG, arbitrary scripting, raw callbacks, a parallel Action algebra,
-  or a CNCF-local Workflow source language.
+  persistence SPI. Entity-local StateMachine state remains entity-owned; a
+  WorkflowInstance has its own identity/revision/history and idempotent
+  committed-transition and Continuation-result correlation.
+- Generic Skill Workflow Support projects the Continuation SPI without becoming
+  its source of truth. Textus `sm-workflow` supplies consumer persistence and
+  software-development-specific WorkflowRun/WorkOrder policy.
+- This Phase neither adds BPMN/DAG, arbitrary scripting, raw callbacks, a
+  parallel Action algebra, a CNCF-local Workflow language, full assemble
+  connection/transport, nor UI/Flutter generation.
 - Planning references:
   - [Phase 77](../phase/phase-77.md);
   - [Phase 77 Checklist](../phase/phase-77-checklist.md);
   - [Phase 64](../phase/phase-64.md);
   - [Phase 64.2](../phase/phase-64.2.md); and
-  - `asami/cozy/docs/phase/phase-62.md`.
+  - `asami/cozy/docs/phase/phase-62.md`;
+  - `asami/cozy/docs/phase/phase-62.1.md`;
+  - `asami/cozy/docs/phase/phase-62.2.md`; and
+  - `asami/cozy/docs/phase/phase-62.3.md`.

@@ -170,6 +170,17 @@ Current baseline:
 - [Phase 75 Checklist](phase-75-checklist.md) is the implementation ledger.
   This addition selects no active phase and changes no existing phase status.
 
+## Planned StateMachine Runtime Sequence
+
+- [Phase 63](phase-63.md), [Phase 63.1](phase-63.1.md), and
+  [Phase 63.2](phase-63.2.md) are the planned, serial CML StateMachine
+  sequence. Phase 63 freezes contract/normalization, Phase 63.1 owns
+  generation and atomic execution, and Phase 63.2 owns committed-transition
+  delivery, observability, cross-repository acceptance, and the aggregate full
+  suite. Phase 64 begins only after Phase 63.2 closes.
+- Ledgers: [63](phase-63-checklist.md), [63.1](phase-63.1-checklist.md), and
+  [63.2](phase-63.2-checklist.md). No child has started.
+
 ## Planned Hash Responsibility Review
 
 - [Phase 76 - Hash Responsibility and Integrity Boundary Review](phase-76.md)
@@ -178,17 +189,18 @@ Current baseline:
 - [Phase 76 Checklist](phase-76-checklist.md) owns inventory, remediation,
   validation, and closure in CNCF; only external-owner work is handed off.
 
-## Planned First-Class CML WORKFLOW Admission
+## Planned StateMachine API/SPI and Skill-Driven Workflow Runtime
 
-- [Phase 77 - First-Class CML WORKFLOW ABI Admission and Progression Contract](phase-77.md)
-  is planned and not started. It consumes Cozy Phase 62's generated `WORKFLOW`
-  definition after the Phase 64/64.2 prerequisites, admits it through
-  ComponentFactory, and provides an explicit deterministic progression boundary.
+- [Phase 77 - StateMachine API/SPI Runtime and First Skill-Driven Workflow Vertical Slice](phase-77.md)
+  is planned and not started. It consumes Cozy Phase 62.1's API/SPI and
+  ActionExecution contract, Phase 62.2's generated ABI, and Phase 62.3's
+  producer fixture/handoff after the Phase 64/64.2 prerequisites.
 - [Phase 77 Checklist](phase-77-checklist.md) owns ABI admission, generated
-  discovery, the independent WorkflowInstance persistence contract, evaluation,
-  Action integration, and CML-first consumer evidence. Entity StateMachine
-  persistence remains entity-owned; Textus `sm-workflow` supplies the separate
-  SQLite-backed WorkflowRun store and skill behavior.
+  discovery, Provider SPI construction, the independent WorkflowInstance
+  persistence contract, durable Continuation, and the Continuation SPI IoC port
+  used by Generic Skill Workflow Support. Entity StateMachine persistence
+  remains entity-owned; Textus `sm-workflow` supplies its consumer persistence
+  and software-development-specific behavior.
 
 ## Related Rules
 

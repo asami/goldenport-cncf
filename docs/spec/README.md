@@ -28,6 +28,7 @@ Current runtime/I18N specs:
 - `rule-engine-inference-runtime.md`
 - `resource-reference-dsl.md`
 - `process-execution-runtime.md`
+- `cml-statemachine-normalization-contract.md`
 
 Current HTTP/Form operation specs:
 

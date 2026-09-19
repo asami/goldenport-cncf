@@ -18,7 +18,7 @@ There is no Workflow-wide orchestration/continuation mode.
 
 Required typed operations that may be supplied by external participants form the Workflow SPI.
 
-A Workflow SPI specification includes:
+A protocol-independent Required SPI specification includes:
 
 - operation identity
 - typed input/result
@@ -38,8 +38,24 @@ RequiredOperation
 
 A local provider can complete synchronously/asynchronously under runtime control. An external provider causes suspension and returns a durable Continuation. A test provider enables deterministic executable Workflow specifications.
 
+## Continuation SPI and IoC
+
+Continuation Protocol does not replace Required SPI. After a suspension is
+persisted, Continuation SPI projects the Required SPI contract as a generic
+`ContinuationRequest` and accepts a typed `ContinuationResult` through an
+adapter injected by ComponentFactory/provider construction.
+
+```text
+Required SPI -> Provider -> Suspended(Continuation)
+  -> Continuation SPI -> injected external adapter
+  -> ContinuationResult -> resume
+```
+
+The adapter may target Skill, Human, UI, or remote execution. Delivery, lease,
+model selection, and host scheduling remain outside Workflow semantics.
+
 ## Generic Skill Workflow
 
-CNCF Generic Skill Workflow Support projects suspended Workflow SPI operations into compact Skill commands/WorkOrders. The Skill projection is not the source of truth; the Workflow SPI and Continuation are.
+CNCF Generic Skill Workflow Support projects Continuation SPI requests into compact Skill commands/WorkOrders. The Skill projection is not the source of truth; Required SPI, the durable Continuation, and WorkflowInstance state are.
 
 This keeps software-development-specific semantics in `sm-workflow` while allowing other Skill workflows to use the same required-interface runtime.

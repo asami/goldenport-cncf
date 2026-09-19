@@ -2,18 +2,22 @@
 
 ## Position
 
-Generic Skill Workflow Support is a CNCF runtime/application-support layer above the generic Workflow Invocation/Continuation mechanisms.
+Generic Skill Workflow Support is a CNCF runtime/application-support layer above the generic Continuation SPI IoC boundary.
 
 It MUST NOT redefine Workflow/StateMachine semantics. It projects generic runtime contracts into a form convenient for Skill/AI drivers.
 
 ## Generic contracts inherited from Workflow runtime
 
-- WorkflowInvocationContract
-- Participant / InvocationBinding
-- Continuation identity
+- Required SPI operation identity and typed input/result
+- Provider-independent Continuation SPI Projection
+- Continuation and run identity
 - ContextBundle / ContextSnapshot / ContextReference
 - CompletionContract / EvidenceContract
 - lease / idempotent resume / stale rejection
+
+Participant and capability metadata may constrain Provider/host selection, but
+there is no semantic `InvocationBinding` or orchestration/continuation mode.
+The selected Provider reports `Completed`, `Suspended`, or `Failed`.
 
 ## Skill-oriented projections
 
@@ -28,7 +32,7 @@ SkillEvidence
 SkillExecutionHint
 ```
 
-These are projections/profiles over generic contracts, not independent sources of truth.
+These are projections/profiles over Continuation SPI, not independent sources of truth.
 
 `SkillExecutionHint` should express model-independent requirements such as work kind, capability, complexity, risk and review policy. Concrete model/provider/reasoning names belong to host dispatch policy, not durable Workflow semantics.
 
