@@ -65,7 +65,18 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic `Invoc
 | CWF-77-06 | Implement Required SPI provider resolution contracts and the ComponentFactory Provider-construction developer API for local/direct, external-continuation, and deterministic test providers. | planned |
 | CWF-77-07 | Implement durable Continuation creation/resume validation including identity, revision/ContextSnapshot, typed result, completion/evidence, stale and duplicate rejection boundaries. | planned |
 | CWF-77-08 | Provide Generic Skill Workflow projection for suspended external SPI operations without exposing internal deterministic Actions as WorkOrders. | planned |
-| CWF-77-09 | Prove the CML-first producer-to-CNCF path with Cozy's real fixture and freeze the `sm-workflow` consumer handoff. | planned |
+| CWF-77-09 | Define and prove the generic Workflow JSON protocol: Start/Handle/Continuation/Result/Terminal, Presentation, and abstract ExecutionRequirement/reasoning level. | planned |
+| CWF-77-10 | Prove the CML-first producer-to-CNCF path with Cozy's real fixture and freeze the `sm-workflow` consumer handoff. | planned |
+
+## Generic JSON Protocol Boundary
+
+Phase 77 owns the application-neutral JSON envelope used across Skill/CLI/UI/participant boundaries. The normative design is [Generic Workflow JSON Protocol](../notes/generic-workflow-json-protocol.md).
+
+The protocol includes typed StartRequest/StartResult, WorkflowHandle, Continuation (`WORK_ORDER | DECISION | WAIT | TERMINAL`), typed application payload envelopes, Result/Evidence, human-readable Presentation, and abstract ExecutionRequirement including model-independent reasoning level.
+
+Concrete model/provider/reasoning-effort mapping is not Workflow semantics. Skill/Host policy maps the abstract requirement to a concrete execution profile and may return that choice as execution evidence.
+
+sm-workflow specializes payload schemas and presentation for software-development workflows; it does not redefine the generic envelope.
 
 ## WorkflowInstance Persistence Boundary
 
@@ -148,6 +159,8 @@ This is the primary Phase 77 acceptance path and the handoff consumed by `sm-wor
 - Resume then permits internal closing/commit Actions to execute and reach terminal state.
 - Deterministic test provider binding can exercise the same StateMachine semantics without an actual AI/UI provider.
 - No Workflow-wide orchestration/continuation mode or InvocationBinding switch is required.
+- Generic JSON start -> continuation -> result -> continuation -> terminal round trips are executable and versioned; Presentation is renderable but never parsed for control.
+- Abstract reasoning requirements can be mapped by a Skill/Host policy without embedding concrete model names in Workflow semantics.
 - Cross-repository evidence records exact Cozy source, generated ABI, CNCF revisions, and the `sm-workflow` consumer handoff.
 
 ## Phase Boundary to Phase 80
