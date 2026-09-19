@@ -70,9 +70,13 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic `Invoc
 
 ## Generic JSON Protocol Boundary
 
+Phase 77 completion explicitly includes the full public/runtime JSON round trip, not only internal StateMachine execution.
+
 Phase 77 owns the application-neutral JSON envelope used across Skill/CLI/UI/participant boundaries. The normative design is [Generic Workflow JSON Protocol](../notes/generic-workflow-json-protocol.md).
 
 The protocol includes typed StartRequest/StartResult, WorkflowHandle, Continuation (`WORK_ORDER | DECISION | WAIT | TERMINAL`), typed application payload envelopes, Result/Evidence, human-readable Presentation, and abstract ExecutionRequirement including model-independent reasoning level.
+
+For a `WORK_ORDER`, `WorkOrder.executionRequirement.reasoningLevel` carries the abstract reasoning requirement. The initial closed vocabulary is `ROUTINE | STANDARD | DEEP | CRITICAL`. DECISION / WAIT / TERMINAL do not normally carry a reasoning level because they are not worker-execution requests.
 
 Concrete model/provider/reasoning-effort mapping is not Workflow semantics. Skill/Host policy maps the abstract requirement to a concrete execution profile and may return that choice as execution evidence.
 
@@ -160,6 +164,8 @@ This is the primary Phase 77 acceptance path and the handoff consumed by `sm-wor
 - Deterministic test provider binding can exercise the same StateMachine semantics without an actual AI/UI provider.
 - No Workflow-wide orchestration/continuation mode or InvocationBinding switch is required.
 - Generic JSON start -> continuation -> result -> continuation -> terminal round trips are executable and versioned; Presentation is renderable but never parsed for control.
+- WORK_ORDER can carry abstract `executionRequirement.reasoningLevel` plus capability/risk requirements without concrete model names.
+- Start/Continuation/Terminal presentation provides enough structured human-facing context for Codex console/UI to show current situation, next action, reason and progress.
 - Abstract reasoning requirements can be mapped by a Skill/Host policy without embedding concrete model names in Workflow semantics.
 - Cross-repository evidence records exact Cozy source, generated ABI, CNCF revisions, and the `sm-workflow` consumer handoff.
 
