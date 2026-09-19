@@ -1,9 +1,16 @@
 # Phase 64.1 - Local UnitOfWork Atomic Execution Foundation
 
-status=planned
+status=superseded
 planned_at=2026-09-05
 revised_at=2026-09-20
 parent=[Phase 64 - Minimal Composite StateMachine / Workflow Foundation](phase-64.md)
+
+superseded_by=[Phase 63.1](phase-63.1.md) atomic StateMachine execution contract
+
+> This planned Phase is retained as historical scope evidence. Phase 63.1 is
+> closed and already owns the required local UnitOfWork atomic execution;
+> Phase 64.2 consumes that completed contract directly. Phase 64.1 is not on
+> the Phase 77 / sm-workflow Phase 1 critical path and must not be reopened.
 
 ## Purpose
 

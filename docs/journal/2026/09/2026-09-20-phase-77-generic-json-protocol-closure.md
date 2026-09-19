@@ -1,13 +1,13 @@
 # Phase 77 Generic JSON Protocol Closure Decisions
 
 Date: 2026-09-20
-Status: superseded in protocol scope by
-[Phase 77 Minimum Skill Continuation JSON Contract](2026-09-20-phase-77-minimum-skill-continuation-json-contract.md)
+Status: partially adopted for the Phase 77 minimum; broad remainder deferred
 
-> This journal preserves the earlier broad Phase 77 proposal. Phase 77 now
-> retains only the minimum schema-versioned, fail-closed Continuation wire
-> contract; the Start, Presentation, reasoning-vocabulary, and broad protocol
-> parts below are later-phase extensions.
+> This journal preserves the earlier broad Phase 77 proposal. The minimum typed
+> Start/Continuation/WorkOrder/Terminal subset, initial abstract reasoning
+> vocabulary, `MinimalPresentation`, and fail-closed Skill/Codex JSON encoding
+> are now Phase 77 requirements. Broad API/UI/transport/orchestration portions
+> remain later-phase extensions; see [Phase 64/77 Critical-Path Reconciliation](2026-09-20-phase-64-77-critical-path-reconciliation.md).
 
 ## Context
 

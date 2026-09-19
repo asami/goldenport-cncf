@@ -5,7 +5,7 @@ Planned: 2026-09-20
 
 ## Goal
 
-Add advanced Workflow runtime facilities after the Phase 64 -> 64.1 -> 64.2 -> 77 -> sm-workflow executable-specification path has established real consumer evidence.
+Add advanced Workflow runtime facilities after the Phase 63.1/63.2 -> 64 -> 64.2 -> 77 -> sm-workflow executable-specification path has established real consumer evidence. Phase 64.1 is superseded planning history, not a critical-path predecessor.
 
 This Phase is not a prerequisite for CNCF Phase 77 or sm-workflow Phase 1.
 

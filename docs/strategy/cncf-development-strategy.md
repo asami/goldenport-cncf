@@ -1814,7 +1814,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
 | DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
 | DEV-009 | `docs/journal/2026/08/2026-08-19-conclusion-diagnostics-availability-kind-development-task.md` | Explicit availability-kind diagnostic keys for not-running, connection-refused, and unreachable conclusions. | STRATEGY_ITEM | [9.4](#94-metrics-and-observability) | CANDIDATE |
-| DEV-010 | User direction on 2026-09-16, refined on 2026-09-18 | Admit Cozy-generated CML `WORKFLOW` as a projection over the reusable StateMachine API/SPI runtime, with ComponentFactory provider construction, independent WorkflowInstance persistence, durable Continuation, and an IoC-injected Continuation SPI for Skill/Human/UI/remote execution without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md), after Cozy Phases 62.1-62.3 and CNCF Phases 64/64.2 | ADOPTED |
+| DEV-010 | User direction on 2026-09-16, refined on 2026-09-20 | Admit Cozy-generated CML `WORKFLOW` as a projection over the reusable StateMachine API/SPI runtime, with ComponentFactory provider construction, independent WorkflowInstance persistence, durable Continuation, and the minimum typed Workflow protocol/Skill-Codex JSON encoding for `sm-workflow`, without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md), after Cozy Phases 62.1-62.3 and CNCF Phases 64/64.2 | ADOPTED |
 
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
@@ -5214,15 +5214,21 @@ Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
   WorkflowInstance has its own identity/revision/history and idempotent
   committed-transition and Continuation-result correlation.
 - Generic Skill Workflow Support projects the Continuation SPI without becoming
-  its source of truth. Phase 77 freezes the minimum schema-versioned,
-  fail-closed `ContinuationRequest`/`ContinuationResult` JSON wire contract,
-  including Workflow/Continuation identity, expected revision, ContextSnapshot,
-  typed input/result, Completion/Evidence, and the minimum `WorkflowHandle`.
-  Textus `sm-workflow` supplies consumer persistence and software-development-
-  specific WorkflowRun/WorkOrder policy.
-- Broad generic Start APIs, rich Presentation, broad reasoning-level vocabulary,
-  parent/child Workflow composition, orchestration, and REST/MCP/UI protocol
-  surfaces are later-phase extensions.
+  its source of truth. Phase 77 freezes the minimum typed
+  `WorkflowStartRequest`/`WorkflowStartResult`, `WorkflowHandle`, and closed
+  `Continuation = WORK_ORDER | DECISION | WAIT | TERMINAL` model, with typed
+  WorkResult/Evidence and application-owned payloads. Its Skill/Codex encoding
+  is schema-versioned and fail-closed; `ContinuationRequest`/
+  `ContinuationResult` preserve Workflow/Continuation identity, expected
+  revision, ContextSnapshot, typed input/result, and Completion/Evidence.
+  `WorkOrder.ExecutionRequirement` includes the initial abstract
+  `ROUTINE`/`STANDARD`/`DEEP`/`CRITICAL` vocabulary, and `MinimalPresentation`
+  projects situation/next action/reason/progress without controlling Workflow
+  semantics. Textus `sm-workflow` supplies consumer persistence and
+  software-development-specific WorkflowRun/WorkOrder policy.
+- Broad Start/API expansion beyond this minimum, rich Presentation/UI,
+  additional reasoning vocabulary, parent/child Workflow composition,
+  orchestration, and REST/MCP/UI protocol surfaces are later-phase extensions.
 - This Phase neither adds BPMN/DAG, arbitrary scripting, raw callbacks, a
   parallel Action algebra, a CNCF-local Workflow language, full assemble
   connection/transport, nor UI/Flutter generation.

@@ -1,10 +1,13 @@
 # Generic Workflow Protocol Model and JSON Encoding
 
-Status: later-phase design input
+Status: later-phase design input, with a minimum Phase 77 subset adopted
 
-> Phase 77 admits only the minimum Skill Continuation wire contract recorded in
-> [Phase 77 Minimum Skill Continuation JSON Contract](../journal/2026/09/2026-09-20-phase-77-minimum-skill-continuation-json-contract.md).
-> The broad protocol model in this note remains a later-phase design input.
+> Phase 77 admits the minimum typed `WorkflowStartRequest`/
+> `WorkflowStartResult`, `WorkflowHandle`, closed `Continuation`, `WorkOrder`,
+> `WorkResult`/`Evidence`, `MinimalPresentation`, and initial abstract
+> reasoning vocabulary required for `sm-workflow` Phase 1. Its Skill/Codex JSON
+> encoding is fail closed. The broader protocol model in this note remains a
+> later-phase design input; see [Phase 77](../phase/phase-77.md).
 
 ## Purpose
 

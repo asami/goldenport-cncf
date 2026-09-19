@@ -2,7 +2,7 @@
 
 status = proposed, non-normative
 date = 2026-09-05
-target_phase = 64.1
+target_phase = 85
 
 ## Purpose
 
@@ -184,7 +184,7 @@ Provider credentials and sensitive payloads remain excluded.
 
 ## Compatibility with StateMachine Commit Semantics
 
-Phase 64.1 must preserve Phase 63's commit authority. A `CommittedTransition`
+Phase 85 must preserve the completed Phase 63.1/63.2 commit authority. A `CommittedTransition`
 is published only when the transition's required atomic segment has committed.
 
 After-commit failures do not retroactively uncommit the transition. They are
@@ -192,7 +192,7 @@ handled by retry, compensation, corrective action, or explicit recovery.
 
 ## Open Decisions
 
-1. Existing CNCF support for XA/JTA/2PC and whether Phase 64.1 implements or
+1. Existing CNCF support for XA/JTA/2PC and whether Phase 85 implements or
    only defines the capability contract.
 2. Exact atomic-segment declaration/derivation from generated Action Programs.
 3. Compensation stack/graph persistence representation.

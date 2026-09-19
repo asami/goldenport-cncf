@@ -58,14 +58,14 @@ CurrentProgression
 Correlation / Causation
 ```
 
-This is a semantic/runtime model, not yet the independently durable WorkflowInstance store. Phase 77 owns persisted revision/history, suspension state, Continuation identity, ContextSnapshot, replay/stale protection, and the minimum schema-versioned fail-closed Continuation JSON wire contract. Broad generic protocol extensions remain later-phase work.
+This is a semantic/runtime model, not yet the independently durable WorkflowInstance store. Phase 77 owns persisted revision/history, suspension state, Continuation identity, ContextSnapshot, replay/stale protection, and the minimum typed Workflow protocol with schema-versioned fail-closed Skill/Codex JSON encoding. Broad protocol expansion remains later-phase work.
 
 ## Action execution boundary
 
 Phase 64 defines how constituent/composite logical actions compose and where execution attaches, but detailed execution substrate is split:
 
-- Phase 64.1: local UnitOfWork atomic commit/rollback foundation.
-- Phase 64.2: ExecProgram planning, deterministic test/simulation interpreter, and production alignment.
+- Phase 63.1: completed local UnitOfWork atomic commit/rollback contract, consumed without reopening or duplicating it.
+- Phase 64.2: incremental ExecProgram planning, deterministic test/simulation interpreter, production alignment, and Composite/Workflow executable acceptance.
 
 Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external participant protocol work.
 
@@ -76,7 +76,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 | SWF-01 | Inventory StateMachine / Composite StateMachine / Workflow concepts and classify each as reused, composite-general, minimal Workflow-only, or runtime-policy. | planned |
 | SWF-02 | Freeze constituent role/identity, configuration schema, deterministic composite-state derivation and derived-transition identity. | planned |
 | SWF-03 | Admit generated composite rules and fail closed for ambiguous/unsupported runtime configuration. | planned |
-| SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, delegating execution substrate to 64.1/64.2. | planned |
+| SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, consuming the completed Phase 63.1 atomic-execution contract and delegating incremental planner/interpreter work to 64.2. | planned |
 | SWF-05 | Freeze minimal Workflow specialization and semantic WorkflowDefinition/WorkflowInstance identity, lifecycle/progression and correlation contract; durable revision/history/store semantics are Phase 77. | planned |
 | SWF-06 | Freeze the CML-first generated semantic-contract handoff without CML reparsing; Phase 77 owns generated API/SPI admission and ComponentFactory bootstrap. | planned |
 | SWF-07 | Prove one real CML fixture through the Phase 63.2 committed constituent transition -> derived composite transition -> action-program boundary -> minimal Workflow progression. | planned |
@@ -93,7 +93,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 - Minimal Workflow definition/instance identity, lifecycle/progression and correlation can be represented without introducing a second Workflow language/runtime; durable revision/history/store semantics remain Phase 77.
 - No external participant/Skill/Continuation protocol is required to close Phase 64.
 - A real CML fixture reaches the handoff required by Phase 77 using deterministic testable execution boundaries.
-- Phase 77 can add generated API/SPI admission, Provider execution, durable Continuation/resume, and the minimum Skill projection required by the sm-workflow vertical slice without changing Phase 64 semantics.
+- Phase 77 can add generated API/SPI admission, Provider execution, durable Continuation/resume, the minimum typed Workflow protocol/JSON encoding, and the minimum Skill projection required by the sm-workflow vertical slice without changing Phase 64 semantics.
 
 ## Explicitly deferred
 
@@ -115,7 +115,7 @@ The following are not Phase 64 completion requirements:
 
 Phase 64 begins after Phase 63.2 closes. If the post-Phase-63.2 gap review identifies missing hierarchical-state/shallow-history runtime support, that dedicated StateMachine follow-up must be completed before Phase 64 relies on those semantics.
 
-After Phase 64, 64.1 and 64.2 provide the minimal execution/test substrate. Phase 77 then owns the independently durable WorkflowInstance persistence SPI, generated API/SPI admission, the Provider runtime, ActionExecution, bounded advance, Continuation/resume, the minimum schema-versioned fail-closed Continuation JSON wire contract, the minimum Generic Skill projection, and the sm-workflow consumer handoff. Broad generic Workflow protocol/encoding and orchestration extensions are later phases.
+Phase 64.2 follows Phase 64 while directly consuming the completed Phase 63.1 local atomic-execution contract; Phase 64.1 is retained only as superseded planning history. Phase 77 then owns the independently durable WorkflowInstance persistence SPI, generated API/SPI admission, the Provider runtime, ActionExecution, bounded advance, Continuation/resume, the minimum typed Workflow protocol and schema-versioned fail-closed Skill/Codex JSON encoding, the minimum Generic Skill projection, and the sm-workflow consumer handoff. Broad protocol expansion and orchestration extensions are later phases.
 
 Advanced Workflow runtime capabilities are owned by dedicated later phases.
 
@@ -123,7 +123,7 @@ Advanced Workflow runtime capabilities are owned by dedicated later phases.
 
 - [Phase 64 Checklist](phase-64-checklist.md)
 - [Phase 63.2](phase-63.2.md)
-- [Phase 64.1](phase-64.1.md)
+- [Phase 64.1 — superseded planning record](phase-64.1.md)
 - [Phase 64.2](phase-64.2.md)
 - [Phase 77](phase-77.md)
 - [StateMachine / Workflow alignment](../notes/statemachine-workflow-alignment-provisional-specification.md)

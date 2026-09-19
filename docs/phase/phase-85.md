@@ -9,7 +9,7 @@ Extend the local atomic UnitOfWork foundation with advanced distributed transact
 
 ## Dependency
 
-- Phase 64.1 local UnitOfWork atomic foundation.
+- Phase 63.1 completed local UnitOfWork atomic-execution contract.
 - Phase 64.2 program planning/interpreter foundation.
 - May be refined using operational evidence from Workflow consumers.
 

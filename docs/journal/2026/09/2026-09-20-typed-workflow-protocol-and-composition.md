@@ -1,12 +1,12 @@
 # Typed Workflow Protocol, JSON Encoding, and Workflow Composition
 
 Date: 2026-09-20
-Status: later-phase design input
+Status: partially adopted for the Phase 77 minimum; composition remains later-phase design input
 
-> Phase 77 retains only the minimum Skill Continuation wire contract recorded
-> in [Phase 77 Minimum Skill Continuation JSON Contract](2026-09-20-phase-77-minimum-skill-continuation-json-contract.md).
-> The typed Start model, broad JSON encodings, and parent/child composition
-> described below are later-phase extensions.
+> Phase 77 adopts the minimum typed Start/Continuation/WorkOrder/Terminal
+> model and its fail-closed Skill/Codex JSON encoding. The broad encodings and
+> parent/child composition described below remain later-phase extensions; see
+> [Phase 64/77 Critical-Path Reconciliation](2026-09-20-phase-64-77-critical-path-reconciliation.md).
 
 ## Decision
 

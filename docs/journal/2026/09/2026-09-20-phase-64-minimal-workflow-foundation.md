@@ -18,7 +18,12 @@ Phase 64 は constituent composition、composite-state derivation、derived tran
 - remote transport/service discovery;
 - advanced operational administration.
 
-Action execution substrate は 64.1 local atomic foundation と 64.2 ExecProgram/planner/test interpreter に分離した。API/SPI、typed Workflow Protocol、Continuation、Skill projection は Phase 77 が所有する。2PC/compensation/recovery は Phase 85 が所有する。
+Action execution substrate は、完了済み Phase 63.1 の local atomic
+commit/rollback contract を Phase 64.2 が直接消費し、Phase 64.2 が
+ExecProgram/planner/test interpreter の増分を所有する形へ再整合した。
+Phase 64.1 は superseded な planning history として残す。API/SPI、minimum
+typed Workflow Protocol、Continuation、Skill projection は Phase 77 が所有する。
+2PC/compensation/recovery は Phase 85 が所有する。
 
 さらに advanced Workflow runtime/composition/integration の受け皿として Phase 86 を新設した。Phase 86 は Phase 77 / sm-workflow Phase 1 の前提ではなく、sm-workflow 疎通・実運用 evidence から具体化する。
 

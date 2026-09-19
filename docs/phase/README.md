@@ -170,16 +170,20 @@ Current baseline:
 - [Phase 75 Checklist](phase-75-checklist.md) is the implementation ledger.
   This addition selects no active phase and changes no existing phase status.
 
-## Planned StateMachine Runtime Sequence
+## Completed StateMachine Runtime Sequence
 
 - [Phase 63](phase-63.md), [Phase 63.1](phase-63.1.md), and
-  [Phase 63.2](phase-63.2.md) are the planned, serial CML StateMachine
-  sequence. Phase 63 freezes contract/normalization, Phase 63.1 owns
-  generation and atomic execution, and Phase 63.2 owns committed-transition
-  delivery, observability, cross-repository acceptance, and the aggregate full
-  suite. Phase 64 begins only after Phase 63.2 closes.
+  [Phase 63.2](phase-63.2.md) are complete. Phase 63 froze
+  contract/normalization, Phase 63.1 owns the completed generation and local
+  atomic execution contract, and Phase 63.2 owns the completed
+  `CommittedTransition` delivery, observability, cross-repository acceptance,
+  and aggregate full suite.
+- [Phase 64](phase-64.md) consumes the Phase 63.2 handoff; [Phase 64.2](phase-64.2.md)
+  consumes Phase 63.1's atomic-execution contract directly. [Phase 64.1](phase-64.1.md)
+  is a superseded historical planning record and is not on the `sm-workflow`
+  Phase 1 critical path.
 - Ledgers: [63](phase-63-checklist.md), [63.1](phase-63.1-checklist.md), and
-  [63.2](phase-63.2-checklist.md). No child has started.
+  [63.2](phase-63.2-checklist.md).
 
 ## Planned Hash Responsibility Review
 
@@ -197,11 +201,12 @@ Current baseline:
   producer fixture/handoff after the Phase 64/64.2 prerequisites.
 - [Phase 77 Checklist](phase-77-checklist.md) owns ABI admission, generated
   discovery, Provider SPI construction, the independent WorkflowInstance
-  persistence contract, durable Continuation, the minimum schema-versioned
-  fail-closed Continuation JSON wire contract, and the Continuation SPI IoC port
-  used by Generic Skill Workflow Support. Entity StateMachine persistence
-  remains entity-owned; Textus `sm-workflow` supplies its consumer persistence
-  and software-development-specific behavior.
+  persistence contract, durable Continuation, the minimum typed
+  Start/Continuation/WorkOrder/Terminal protocol and its schema-versioned
+  fail-closed Skill/Codex JSON encoding, and the Continuation SPI IoC port used
+  by Generic Skill Workflow Support. Entity StateMachine persistence remains
+  entity-owned; Textus `sm-workflow` supplies its consumer persistence and
+  software-development-specific behavior.
 
 ## Related Rules
 

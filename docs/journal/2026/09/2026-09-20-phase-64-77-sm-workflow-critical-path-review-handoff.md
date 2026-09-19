@@ -213,3 +213,10 @@ sm-workflow Phase 1
 ## Required next action
 
 Reconcile Phase 64.1 / 64.2 dependencies and Phase 77 protocol scope against this handoff. Update affected checklists, notes/journals, and sm-workflow Phase 1 dependency wording consistently. Do not expand the critical path with later operational features.
+
+## Reconciliation status
+
+The requested reconciliation was recorded on 2026-09-20 in
+[Phase 64/77 Critical-Path Reconciliation](2026-09-20-phase-64-77-critical-path-reconciliation.md).
+The current Phase/checklist ledgers retain the minimum typed protocol while
+leaving the broad operational surface out of the `sm-workflow` Phase 1 path.

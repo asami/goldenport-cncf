@@ -3,7 +3,7 @@
 status=planned
 phase=[Phase 64](phase-64.md)
 
-Phase 64 closes only the minimum Composite StateMachine / Workflow foundation required by Phase 77 and sm-workflow Phase 1. No stage starts before Phase 63.2 closes.
+Phase 64 closes only the minimum Composite StateMachine / Workflow foundation required by Phase 77 and sm-workflow Phase 1. It consumes the completed Phase 63.1 local atomic-execution contract and starts only after Phase 63.2 closes.
 
 The acceptance path consumes, but never reinterprets or executes ahead of, the Phase 63.2 post-commit handoff:
 
@@ -32,7 +32,7 @@ Phase 77 -> ABI admission -> ComponentFactory -> Provider/Continuation runtime
 ## SWF-04 Action composition
 - [ ] Preserve constituent/composite action ordering and provenance.
 - [ ] Use the shared typed executable-program boundary.
-- [ ] Delegate local atomic execution to 64.1 and planner/interpreter/testability to 64.2.
+- [ ] Consume the completed Phase 63.1 local atomic-execution contract without reopening or duplicating it; delegate incremental planner/interpreter/testability to 64.2.
 
 ## SWF-05 Minimal Workflow specialization
 - [ ] Freeze semantic WorkflowDefinitionIdentity / WorkflowInstanceIdentity.
@@ -52,8 +52,8 @@ Phase 77 -> ABI admission -> ComponentFactory -> Provider/Continuation runtime
 
 ## SWF-08 Handoff and deferral
 - [ ] Freeze exact Phase 77 consumer handoff.
-- [ ] Record that generated API/SPI admission, ActionExecution, Provider runtime, Continuation/resume, the minimum schema-versioned fail-closed Continuation JSON wire contract, and the minimum Skill projection required by the sm-workflow vertical slice are Phase 77 concerns.
-- [ ] Record broad generic Workflow protocol/JSON surfaces, parent/child Workflow composition, and orchestration extensions as later-phase concerns.
+- [ ] Record that generated API/SPI admission, ActionExecution, Provider runtime, Continuation/resume, the minimum typed Workflow protocol and schema-versioned fail-closed Skill/Codex JSON encoding, and the minimum Skill projection required by the sm-workflow vertical slice are Phase 77 concerns.
+- [ ] Record broad Start/API expansion, rich Presentation/UI, broad reasoning vocabulary, parent/child Workflow composition, and orchestration/REST/MCP surfaces as later-phase concerns.
 - [ ] Record Retry/Timeout and other runtime-control features as later phases.
 - [ ] Record 2PC/compensation/recovery as Phase 85.
 - [ ] Record Workflow-to-Workflow orchestration and advanced integration as later work.
@@ -61,4 +61,4 @@ Phase 77 -> ABI admission -> ComponentFactory -> Provider/Continuation runtime
 
 ## Closure
 
-Phase 64 is complete when the generated Composite StateMachine / minimal Workflow semantics and real fixture are sufficient for 64.1/64.2 execution/test foundations and the Phase 77 handoff, without implementing advanced operational Workflow facilities.
+Phase 64 is complete when the generated Composite StateMachine / minimal Workflow semantics and real fixture are sufficient for Phase 64.2's incremental execution/test foundation and the Phase 77 handoff, without reopening Phase 63.1 or implementing advanced operational Workflow facilities.

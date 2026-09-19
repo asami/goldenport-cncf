@@ -3,7 +3,7 @@
 status=planned
 phase=[Phase 77](phase-77.md)
 
-This checklist is aligned with the consolidated Phase 77. Historical protocol/binding addenda remain design history; closure does not require a Workflow-wide orchestration/continuation mode or semantic `InvocationBinding` switch.
+This checklist is aligned with the consolidated Phase 77. It includes the minimum typed Workflow protocol and Skill/Codex JSON encoding required by `sm-workflow` Phase 1, but not broad protocol expansion. Historical protocol/binding addenda remain design history; closure does not require a Workflow-wide orchestration/continuation mode or semantic `InvocationBinding` switch.
 
 ## CWF-77-01: Generated ABI Admission
 
@@ -100,9 +100,10 @@ Stage Status:
 - Owner: CNCF Generic Skill Workflow Support owner
 - Update rule: Close only after an externally claimable Continuation SPI request can be projected to a Skill command without making Skill concepts canonical StateMachine semantics.
 
-- [ ] Project a `ContinuationRequest` into a compact Skill command/WorkOrder with typed input/result and Completion/Evidence information.
-- [ ] Preserve model-independent capability/complexity/risk/review metadata where available.
-- [ ] Keep concrete model/provider/reasoning-level selection in host dispatch policy.
+- [ ] Project a `ContinuationRequest` into the closed `WORK_ORDER` Continuation form with typed WorkOrder input/result and Completion/Evidence information.
+- [ ] Preserve model-independent capability/complexity/risk/review metadata and the initial abstract `ReasoningLevel` vocabulary: `ROUTINE`, `STANDARD`, `DEEP`, and `CRITICAL`.
+- [ ] Keep concrete model/provider/reasoning-level selection in host dispatch policy and record it only as execution evidence.
+- [ ] Project `MinimalPresentation` with current situation, next action, optional reason, and available progress; never use it as Workflow control input.
 - [ ] Allow control-plane advance/status/submit operations to be called directly without a child AI invocation.
 - [ ] Do not emit internal deterministic Actions as Skill WorkOrders merely because a Skill drives the Workflow.
 - [ ] Normalize Skill worker output into a typed `ContinuationResult`/Evidence rather than requiring parent conversation-history transfer.
@@ -114,11 +115,11 @@ Stage Status:
 - Owner: CNCF Phase 77 coordinating with Cozy Phase 62.3 and `sm-workflow`
 - Update rule: Close only after the real Cozy fixture executes the complete internal -> suspended external -> resumed -> internal path through the IoC boundary.
 
-- [ ] Exercise Cozy Phase 62.3's real `BuildProject -> RunTests -> ReviewChange -> CommitChanges`-equivalent fixture through ComponentFactory and the admitted StateMachine runtime.
+- [ ] Exercise Cozy Phase 62.3's real `WorkflowStartRequest -> bounded BuildProject/RunTests progression -> WorkflowStartResult/WorkflowHandle/WORK_ORDER -> ReviewChange resume -> CommitChanges -> TERMINAL`-equivalent fixture through ComponentFactory and the admitted StateMachine runtime.
 - [ ] Where the fixture is entity-triggered, enter it only through the Phase 63.2 `CommittedTransition` and Phase 64 binding, never a raw event or Operation shortcut.
 - [ ] Prove Build/Test and Commit/closing Actions are interpreted as UnitOfWork programs, not direct callbacks.
 - [ ] Prove ReviewChange resolves to external SPI, persists its durable Continuation, and becomes externally claimable only after commit.
-- [ ] Submit a typed `ContinuationResult` and prove the same suspended Action resumes in a fresh UnitOfWork and StateMachine transition proceeds.
+- [ ] Submit a typed `ContinuationResult`/`WorkResult` and prove the same suspended Action resumes in a fresh UnitOfWork and StateMachine transition proceeds to a typed terminal result.
 - [ ] Bind a deterministic test Provider to ReviewChange and prove the same StateMachine semantics execute without an actual AI/Skill provider.
 
 ## CWF-77-09: CML-First Evidence and Consumer Handoff
@@ -126,24 +127,27 @@ Stage Status:
 Stage Status:
 - Current status: OPEN
 - Owner: CNCF Phase 77 coordinating with Cozy Phase 62.1-62.3 and Textus `sm-workflow`
-- Update rule: Close only after reproducible cross-repository evidence, the minimum Continuation JSON wire contract, and the exact consumer handoff are frozen.
+- Update rule: Close only after reproducible cross-repository evidence, the minimum typed Workflow protocol/Skill-Codex JSON encoding, and the exact consumer handoff are frozen.
 
 - [ ] Record exact Cozy 62.1 schema, 62.2 generated ABI, 62.3 fixture/handoff, CNCF revision and admitted schema compatibility evidence.
 - [ ] Prove WorkflowInstance persistence remains independently owned from entity StateMachine persistence across create, suspension, resume, replay, restart and recovery cases.
-- [ ] Record the Generic Skill projection and `sm-workflow` consumer contract without claiming `sm-workflow` SQLite/CLI completion.
+- [ ] Record the minimum typed Start/Continuation/WorkOrder/Terminal protocol, Generic Skill projection, and `sm-workflow` consumer contract without claiming `sm-workflow` SQLite/CLI completion.
 - [ ] Verify no Workflow-wide orchestration/continuation mode or semantic `InvocationBinding` is required by the final runtime path.
 - [ ] Complete focused validation, executable specifications, regression validation, independent review, clean re-review where required, and release closure.
-- [ ] Do not claim broad generic Start APIs, rich Presentation, broad reasoning-level vocabulary, parent/child Workflow composition, orchestration, REST/MCP/UI, or Flutter completion.
+- [ ] Do not claim broad Start/API expansion beyond the minimum typed Start request/result, rich Presentation/UI, additional reasoning vocabulary, parent/child Workflow composition, orchestration, REST/MCP/UI, or Flutter completion.
 
-## CWF-77-10: Minimum Continuation JSON Wire Contract
+## CWF-77-10: Minimum Typed Workflow Protocol and Skill/Codex JSON Encoding
 
 Stage Status:
 - Current status: OPEN
 - Owner: CNCF StateMachine / Workflow runtime owner
-- Update rule: Close only after a separate Skill process/turn can exchange a schema-versioned, fail-closed Continuation request/result without JSON becoming the canonical domain model.
+- Update rule: Close only after the minimum typed Start/Continuation/WorkOrder/Terminal model and its schema-versioned, fail-closed Skill/Codex JSON encoding can drive a separate-process/turn exchange without JSON becoming the canonical domain model.
 
-- [ ] Encode/decode `ContinuationRequest` and `ContinuationResult` with schema identity/version and fail closed on unknown or incompatible input.
+- [ ] Define `WorkflowStartRequest[I]` / `WorkflowStartResult[W, O]`, `WorkflowHandle`, and the closed `Continuation = WORK_ORDER | DECISION | WAIT | TERMINAL` model with application-owned typed payloads.
+- [ ] Encode/decode the admitted Start, `ContinuationRequest`, and `ContinuationResult`/`WorkResult` forms with schema identity/version and fail closed on unknown or incompatible input.
 - [ ] Preserve Workflow/Continuation identity, expected revision, ContextSnapshot, typed input/result, and Completion/Evidence requirements.
 - [ ] Provide the minimum `WorkflowHandle` representation for terminal/suspension state reference.
+- [ ] Define `WorkOrder.ExecutionRequirement` with the initial abstract `ROUTINE` / `STANDARD` / `DEEP` / `CRITICAL` vocabulary and prevent concrete profile selection from controlling progression.
+- [ ] Define `MinimalPresentation` for current situation, next action, optional reason, and available progress; prevent it from controlling progression.
 - [ ] Reject incorrect identity, stale revision/snapshot, incompatible typed payload, missing evidence, and duplicate/incompatible result according to the durable Continuation contract.
-- [ ] Keep broad generic Start APIs, rich Presentation, broad reasoning-level vocabulary, parent/child composition, orchestration, and REST/MCP/UI surfaces out of Phase 77.
+- [ ] Keep broad Start/API expansion, rich Presentation/UI, additional reasoning vocabulary, parent/child composition, orchestration, and REST/MCP/UI surfaces out of Phase 77.

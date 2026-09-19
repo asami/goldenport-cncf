@@ -2,13 +2,15 @@
 
 status=planned
 planned_at=2026-09-05
-revised_at=2026-09-08
-depends_on=[Phase 64.1](phase-64.1.md)
+revised_at=2026-09-20
+depends_on=[Phase 63.1](phase-63.1.md) completed atomic-execution contract and [Phase 64](phase-64.md) semantic foundation
 producer=asami/cozy Phase 47.2 sequence (47.2, 47.2.1, 47.2.2)
 
 ## Purpose
 
-Extend CNCF's existing Free × UnitOfWork execution model so CML
+Extend CNCF's existing Free × UnitOfWork execution model, consuming the
+completed Phase 63.1 atomic commit/rollback contract rather than reimplementing
+it, so CML
 StateMachine, Composite StateMachine, and Workflow logical actions compile into
 and execute through the canonical `UnitOfWorkOp` algebra, while making the
 resulting behavior first-class testable without production infrastructure.
@@ -22,7 +24,7 @@ CML StateMachine / Composite StateMachine / Workflow
   -> Cozy/SimpleModeler logical action resolution
   -> ExecProgram[A]
        = Program[UnitOfWorkOp, A]
-  -> UnitOfWork program analysis / planning
+  -> UnitOfWork program analysis / planning over the Phase 63.1 atomic boundary
   -> Test / Simulation Interpreter
   -> Production UnitOfWork Interpreter / Drivers
 ```
@@ -289,7 +291,7 @@ Acceptance must prove at least:
 - deterministic UnitOfWork planning;
 - injected failure in the program corresponding to `recordAuthorization`
   aborts the atomic transition;
-- non-local/external effects are classified explicitly as outside the Phase 64.1 local atomic guarantee;
+- non-local/external effects are classified explicitly as outside the completed Phase 63.1 local atomic guarantee;
 - no real database/network provider is required for model/interpreter tests;
 - production and test execution consume the same canonical program shape; and
 - no parallel `ActionOp` execution algebra is required.
@@ -332,7 +334,7 @@ Acceptance must prove at least:
 ## References
 
 - `phase-64.md`
-- `phase-64.1.md`
+- `phase-63.1.md`
 - `../design/free-unitofwork-execution-model.md`
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala`
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/types.scala`

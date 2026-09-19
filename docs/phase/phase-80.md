@@ -26,6 +26,9 @@ Phase 80 では次を新規実装項目として数えない。
 - stale / duplicate result rejection.
 - bounded deterministic `advance`.
 - Generic Skill projection of semantic suspended SPI operations.
+- minimum typed Start/Continuation/WorkOrder/Terminal protocol, including the
+  initial abstract reasoning vocabulary, `MinimalPresentation`, and fail-closed
+  Skill/Codex JSON encoding.
 - deterministic test provider.
 - `sm-workflow` consumer handoff.
 
@@ -41,7 +44,7 @@ Phase 80 は実運用 evidence を入力として、Phase 77 の foundation 上�
 4. AI / Human / remote participant integration using the same Phase 77 Continuation identity.
 5. UI/client continuation retrieval and resumption ergonomics.
 6. provider/invocation placement policy that remains outside Workflow semantics.
-7. additional Generic Skill Workflow metadata such as model-independent capability / complexity / risk / review hints.
+7. richer Generic Skill Workflow metadata beyond Phase 77's model-independent capability / complexity / risk / review hints.
 8. future local/remote transport or Workflow-to-Workflow integration preparation where justified.
 
 ## Normative compatibility rule
