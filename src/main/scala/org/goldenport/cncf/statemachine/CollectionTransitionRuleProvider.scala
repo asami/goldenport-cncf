@@ -7,7 +7,8 @@ package org.goldenport.cncf.statemachine
  * optionally provide transition rules directly through this interface.
  *
  * @since   Mar. 19, 2026
- * @version Aug. 14, 2026
+ *  version Aug. 14, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TransitionTrigger {
@@ -45,7 +46,8 @@ final case class CollectionTransitionRule[S](
 
   def isStructural: Boolean =
     stateFieldName.isDefined && fromState.isDefined &&
-      (toState.isDefined || historyCompositeName.isDefined)
+      (toState.isDefined || historyCompositeName.isDefined ||
+        binding.exists(_.target == CmlStateMachineTransitionTarget.Final))
 }
 
 final case class HistoryRecordWrite(

@@ -52,7 +52,8 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Aug.  1, 2026
+ *  version Aug.  1, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -338,17 +339,49 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
                 .getOrElse(m.tc.authorizationRecord(m.entity))
             )
           }
-        val result = _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
-          _transition_validation_hook
-            .beforeSave[t](m.entity, m.tc)
-            .flatMap(_ => _entity_store_space.save(m))
-            .map { snapshot =>
+        val result =
+          if (_transition_validation_hook ne TransitionValidationHook.noop)
+            for {
+              current <- _load_record(id)
+              currentloadrecord = () =>
+                Consequence.success(
+                  Some(
+                    current
+                      .map(record => m.tc.authorizationRecord(m.entity, record))
+                      .getOrElse(m.tc.authorizationRecord(m.entity))
+                  )
+                )
+              _ <- _authorize(m.authorization, Some(currentloadrecord))
+              _ <- current match {
+                case Some(record) =>
+                  _transition_validation_hook.beforeSave[t](
+                    m.entity,
+                    m.tc,
+                    record,
+                    m.tc.toStoreRecord(m.entity)
+                  )
+                case None =>
+                  _transition_validation_hook.beforeSave[t](m.entity, m.tc)
+              }
+              snapshot <- _entity_store_space.save(m)
+            } yield {
               _entity_space_evict(id)
               _entity_space_put(snapshot.entity, m.tc)
               _view_space_invalidate_all()
               snapshot
             }
-        )
+          else
+            _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
+              _transition_validation_hook
+                .beforeSave[t](m.entity, m.tc)
+                .flatMap(_ => _entity_store_space.save(m))
+                .map { snapshot =>
+                  _entity_space_evict(id)
+                  _entity_space_put(snapshot.entity, m.tc)
+                  _view_space_invalidate_all()
+                  snapshot
+                }
+            )
         _reconcile_versioned_failure(id, result)
       }
 
@@ -367,17 +400,48 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             )
           }
         val result =
-          _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
-            _transition_validation_hook
-              .beforeSave[t](m.entity, m.tc)
-              .flatMap(_ => _entity_store_space.saveDetached(m))
-              .map { carrier =>
-                _entity_space_evict(id)
-                _entity_space_put(carrier.entity, m.tc)
-                _view_space_invalidate_all()
-                carrier
+          if (_transition_validation_hook ne TransitionValidationHook.noop)
+            for {
+              current <- _load_record(id)
+              currentloadrecord = () =>
+                Consequence.success(
+                  Some(
+                    current
+                      .map(record => m.tc.authorizationRecord(m.entity, record))
+                      .getOrElse(m.tc.authorizationRecord(m.entity))
+                  )
+                )
+              _ <- _authorize(m.authorization, Some(currentloadrecord))
+              _ <- current match {
+                case Some(record) =>
+                  _transition_validation_hook.beforeSave[t](
+                    m.entity,
+                    m.tc,
+                    record,
+                    m.tc.toStoreRecord(m.entity)
+                  )
+                case None =>
+                  _transition_validation_hook.beforeSave[t](m.entity, m.tc)
               }
-          )
+              carrier <- _entity_store_space.saveDetached(m)
+            } yield {
+              _entity_space_evict(id)
+              _entity_space_put(carrier.entity, m.tc)
+              _view_space_invalidate_all()
+              carrier
+            }
+          else
+            _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
+              _transition_validation_hook
+                .beforeSave[t](m.entity, m.tc)
+                .flatMap(_ => _entity_store_space.saveDetached(m))
+                .map { carrier =>
+                  _entity_space_evict(id)
+                  _entity_space_put(carrier.entity, m.tc)
+                  _view_space_invalidate_all()
+                  carrier
+                }
+            )
         _reconcile_versioned_failure(id, result)
       }
 
@@ -395,23 +459,59 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
                 .getOrElse(m.tc.authorizationRecord(m.entity))
             )
           }
-        val result = _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
-          _transition_validation_hook
-            .beforeSave[t](m.entity, m.tc)
-            .flatMap(_ =>
-              _entity_store_space.saveManaged(
+        val result =
+          if (_transition_validation_hook ne TransitionValidationHook.noop)
+            for {
+              current <- _load_record(id)
+              currentloadrecord = () =>
+                Consequence.success(
+                  Some(
+                    current
+                      .map(record => m.tc.authorizationRecord(m.entity, record))
+                      .getOrElse(m.tc.authorizationRecord(m.entity))
+                  )
+                )
+              _ <- _authorize(m.authorization, Some(currentloadrecord))
+              _ <- current match {
+                case Some(record) =>
+                  _transition_validation_hook.beforeSave[t](
+                    m.entity,
+                    m.tc,
+                    record,
+                    m.tc.toStoreRecord(m.entity)
+                  )
+                case None =>
+                  _transition_validation_hook.beforeSave[t](m.entity, m.tc)
+              }
+              saved <- _entity_store_space.saveManaged(
                 m.entity,
                 m.tc,
                 m.executionPolicy
               )
-            )
-            .map { saved =>
+            } yield {
               _entity_space_evict(id)
               _entity_space_put(saved, m.tc)
               _view_space_invalidate_all()
               saved
             }
-        )
+          else
+            _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
+              _transition_validation_hook
+                .beforeSave[t](m.entity, m.tc)
+                .flatMap(_ =>
+                  _entity_store_space.saveManaged(
+                    m.entity,
+                    m.tc,
+                    m.executionPolicy
+                  )
+                )
+                .map { saved =>
+                  _entity_space_evict(id)
+                  _entity_space_put(saved, m.tc)
+                  _view_space_invalidate_all()
+                  saved
+                }
+            )
         _reconcile_versioned_failure(id, result)
       }
 

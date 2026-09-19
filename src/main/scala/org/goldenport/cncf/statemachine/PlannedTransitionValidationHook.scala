@@ -130,6 +130,39 @@ final class PlannedTransitionValidationHook(
     } yield ()
   }
 
+  override def beforeSave[T](
+    entity: T,
+    tc: EntityPersistent[T],
+    current: Record,
+    proposed: Record
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    val event = TransitionEvent(
+      "save",
+      Some(tc.id(entity)),
+      Some(current),
+      Some(proposed),
+      ctx.executionControl.invocation
+    )
+    for {
+      plan <- _observe_planning_result(
+        event,
+        Some(tc.id(entity).collection.name),
+        _validate_selected_operation_binding(
+          plannerProvider.planForSaveOutcome(entity, tc, event),
+          event
+        )
+      )
+      _ <- plan.fold(Consequence.unit) { p =>
+        ExecutionPlanExecutor.execute(
+          p,
+          entity,
+          event,
+          _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
+        )
+      }
+    } yield ()
+  }
+
   def beforeUpdate[T](
     entity: T,
     tc: EntityPersistent[T]
@@ -284,6 +317,9 @@ final class PlannedTransitionValidationHook(
           entityid <- transitionevent.targetId
           operationid <- _committed_operation_id(binding, transitionevent)
         } _stage_committed_transition(binding, entityid, operationid)
+        plan.selectedTransitionBinding.foreach { binding =>
+          _stage_selected_termination_failure(transitionevent, collection, binding)
+        }
       }
 
       def failed(
@@ -381,6 +417,32 @@ final class PlannedTransitionValidationHook(
         stage,
         outcome,
         binding
+      )
+    }
+
+  private def _stage_selected_termination_failure(
+    transitionevent: TransitionEvent,
+    collection: Option[String],
+    binding: CmlTransitionBinding
+  )(using ctx: ExecutionContext): Unit =
+    ctx.runtime.unitOfWork.stagePostAbortEventC { (outcome, _) =>
+      val failure = Consequence.stateConflict("selected transition was not committed") match {
+        case Consequence.Failure(conclusion) => conclusion
+        case _ => throw new IllegalStateException("state conflict must produce a failure conclusion")
+      }
+      val lifecycleoutcome = outcome match {
+        case org.goldenport.cncf.unitofwork.UnitOfWork.PostAbortOutcome.Persistence =>
+          TransitionLifecycleFailureOutcome.Persistence
+        case org.goldenport.cncf.unitofwork.UnitOfWork.PostAbortOutcome.Rollback =>
+          TransitionLifecycleFailureOutcome.Rollback
+      }
+      TransitionLifecycleEvent.transitionFailed(
+        transitionevent,
+        collection,
+        failure,
+        TransitionLifecycleFailureStage.Action,
+        lifecycleoutcome,
+        Some(binding)
       )
     }
 

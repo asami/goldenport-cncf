@@ -184,6 +184,59 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       } shouldBe empty
     }
 
+    "persist one safe Rollback failure for a selected transition without a committed success" in {
+      Given("a selected transition bound to a runtime UnitOfWork with an in-memory EventStore")
+      val store = EventStore.inMemory
+      val base = ExecutionContext.create()
+      lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(base, runtime)
+      lazy val unitofwork = new UnitOfWork(
+        context,
+        EventEngine.noop(DataStore.noop(), eventstore = store)
+      )
+      lazy val runtime: RuntimeContext = new RuntimeContext(
+        core = base.runtime.core,
+        unitofworksupplier = () => unitofwork,
+        unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+        commitaction = uow => {
+          val _ = uow.commit()
+          ()
+        },
+        abortaction = uow => {
+          val _ = uow.rollback()
+          ()
+        },
+        disposeaction = _ => (),
+        token = "planned-transition-selected-rollback-spec"
+      )
+      given ExecutionContext = context
+      given EntityPersistent[_Person] = _person_persistent
+      val hook = new PlannedTransitionValidationHook(new ProviderWithBoundPlan(_binding))
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          "test",
+          "hook_selected_rollback",
+          _cid,
+          entropy = "hook_selected_rollback"
+        ),
+        "hanako"
+      )
+
+      When("the selected transition completes its actions and the UnitOfWork explicitly rolls back")
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val rollbackresult = unitofwork.rollback()
+
+      Then("one taxonomy-only Rollback record preserves the selected binding while no committed envelope is emitted")
+      result shouldBe Consequence.unit
+      rollbackresult.isSuccess shouldBe true
+      val failures = store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
+      failures should have size 1
+      failures.head.lane shouldBe EventLane.NonTransactional
+      failures.head.payload.get("transition.failure.outcome") shouldBe Some(TransitionLifecycleFailureOutcome.Rollback.value)
+      failures.head.payload.get("transition.source") shouldBe Some("Draft")
+      failures.head.payload.values.mkString(" ") should not include "selected transition was not committed"
+      store.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
+    }
+
     "persist one safe transition-failed record after hook failure rolls back" in {
       Given("a failing planned transition hook bound to a runtime UnitOfWork with an in-memory EventStore")
       val store = EventStore.inMemory

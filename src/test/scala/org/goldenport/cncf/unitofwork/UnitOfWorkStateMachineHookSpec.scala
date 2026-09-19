@@ -93,6 +93,96 @@ final class UnitOfWorkStateMachineHookSpec
       hook.beforeUpdateCount shouldBe 1
     }
 
+    "provide persisted and proposed records to an existing detached save" in {
+      Given("a persisted entity and a record-aware transition hook")
+      val datastorespace   = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val hook             = new RecordAwareSaveHook
+      val context          = _execution_context(datastorespace, entitystorespace, hook)
+      given ExecutionContext = context
+      given EntityPersistent[PersonEntity] = _person_persistent
+      EntityRevisionSpecSupport.registerRevisionBinding(
+        context,
+        _cid,
+        _person_persistent,
+        EntityRevisionRepresentation.Detached
+      )
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+        "test",
+        "sm_save_existing",
+        _cid,
+        entropy = "sm_save_existing"
+      )
+      val current = PersonEntity(id, "taro", 20).toRecord()
+      val proposed = PersonEntity(id, "taro", 21)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            EntityRevisionFixture.entitySeed(
+              DataStore.CollectionId.EntityStore(_cid),
+              current
+            )
+          )
+        )
+      )
+      val uow = new UnitOfWork(context, EventEngine.noop(DataStore.noop()))
+
+      When("saving the detached mutation through the UnitOfWork interpreter")
+      val result = new UnitOfWorkInterpreter(uow).execute(
+        UnitOfWorkOp.EntityStoreSaveDetached(
+          proposed,
+          Some(EntityRevision.INITIAL),
+          summon[EntityPersistent[PersonEntity]]
+        )
+      )
+
+      Then("the hook receives the persisted current record and complete proposed record")
+      result.entity shouldBe proposed
+      hook.recordAwareSaveCount shouldBe 1
+      hook.legacySaveCount shouldBe 0
+      hook.currentRecords shouldBe Vector(EntityRevisionFixture.persistedRecord(current))
+      hook.proposedRecords shouldBe Vector(proposed.toRecord())
+    }
+
+    "retain the legacy save hook path when managed save creates an entity" in {
+      Given("a record-aware transition hook and an entity without a persisted record")
+      val datastorespace   = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val hook             = new RecordAwareSaveHook
+      val context          = _execution_context(datastorespace, entitystorespace, hook)
+      given ExecutionContext = context
+      given EntityPersistent[PersonEntity] = _person_persistent
+      EntityRevisionSpecSupport.registerRevisionBinding(
+        context,
+        _cid,
+        _person_persistent,
+        EntityRevisionRepresentation.Detached
+      )
+      val id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+        "test",
+        "sm_save_create",
+        _cid,
+        entropy = "sm_save_create"
+      )
+      val entity = PersonEntity(id, "hanako", 30)
+      val uow = new UnitOfWork(context, EventEngine.noop(DataStore.noop()))
+
+      When("saving the new managed entity through the UnitOfWork interpreter")
+      val result = new UnitOfWorkInterpreter(uow).execute(
+        UnitOfWorkOp.EntityStoreSaveManaged(
+          entity,
+          summon[EntityPersistent[PersonEntity]]
+        )
+      )
+
+      Then("the legacy hook path is retained without record-aware transition selection")
+      result shouldBe entity
+      hook.recordAwareSaveCount shouldBe 0
+      hook.legacySaveCount shouldBe 1
+      hook.currentRecords shouldBe empty
+      hook.proposedRecords shouldBe empty
+    }
+
     "block update when pre-check fails" in {
       Given("runtime context with a rejecting transition hook")
       val datastorespace     = DataStoreSpace.default()
@@ -487,6 +577,57 @@ final class UnitOfWorkStateMachineHookSpec
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (entity, tc)
       Consequence.stateConflict("transition pre-check failed")
+    }
+
+    def beforeUpdateById[P](
+        id: EntityId,
+        patch: P,
+        tc: org.goldenport.cncf.entity.EntityPersistentUpdate[P]
+    )(using ExecutionContext): Consequence[Unit] = {
+      val _ = (id, patch, tc)
+      Consequence.unit
+    }
+  }
+
+  private final class RecordAwareSaveHook extends TransitionValidationHook {
+    private var _legacy_save_count = 0
+    private var _record_aware_save_count = 0
+    private var _current_records = Vector.empty[Record]
+    private var _proposed_records = Vector.empty[Record]
+
+    def legacySaveCount: Int = _legacy_save_count
+    def recordAwareSaveCount: Int = _record_aware_save_count
+    def currentRecords: Vector[Record] = _current_records
+    def proposedRecords: Vector[Record] = _proposed_records
+
+    def beforeSave[T](
+        entity: T,
+        tc: org.goldenport.cncf.entity.EntityPersistent[T]
+    )(using ExecutionContext): Consequence[Unit] = {
+      val _ = (entity, tc)
+      _legacy_save_count = _legacy_save_count + 1
+      Consequence.unit
+    }
+
+    override def beforeSave[T](
+        entity: T,
+        tc: org.goldenport.cncf.entity.EntityPersistent[T],
+        current: Record,
+        proposed: Record
+    )(using ExecutionContext): Consequence[Unit] = {
+      val _ = (entity, tc)
+      _record_aware_save_count = _record_aware_save_count + 1
+      _current_records = _current_records :+ current
+      _proposed_records = _proposed_records :+ proposed
+      Consequence.unit
+    }
+
+    def beforeUpdate[T](
+        entity: T,
+        tc: org.goldenport.cncf.entity.EntityPersistent[T]
+    )(using ExecutionContext): Consequence[Unit] = {
+      val _ = (entity, tc)
+      Consequence.unit
     }
 
     def beforeUpdateById[P](

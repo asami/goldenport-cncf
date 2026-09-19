@@ -54,6 +54,7 @@ class UnitOfWork(
   private var _pending_events: Vector[DomainEvent] = Vector.empty
   private var _post_commit_callbacks: Vector[TransactionContext.TransactionContextId => Consequence[Unit]] = Vector.empty
   private var _post_abort_callbacks: Vector[TransactionContext.TransactionContextId => Consequence[Unit]] = Vector.empty
+  private var _post_abort_outcome_callbacks: Vector[(UnitOfWork.PostAbortOutcome, TransactionContext.TransactionContextId) => Consequence[Unit]] = Vector.empty
   private val _operation_evaluation_supplemental_buffer = operationevaluationsupplementalbuffer
   private var _last_commit_result: Option[Consequence[CommitResult]] = None
   private var _last_commit_termination: Option[UnitOfWorkTermination] = None
@@ -136,8 +137,10 @@ class UnitOfWork(
   ): Consequence[CommitResult] = {
     var termination = UnitOfWorkTermination.Aborted
     var postcommitcontrol: Option[Throwable] = None
+    var transactionid: Option[TransactionContext.TransactionContextId] = None
     val result = try {
       val tx = TransactionContext.create(context.transactionContext, context.clock, context.idGeneration)
+      transactionid = Some(tx.id)
       val all = _pending_events ++ events.toVector
       eventengine.stage(all, EventRecordFactory.from(context))
       recorder.record("UnitOfWork.prepare")
@@ -153,8 +156,15 @@ class UnitOfWork(
           eventengine.abort(tx) // TODO
           tx.abort()
           val callbacks = _post_abort_callbacks
+          val outcomecallbacks = _post_abort_outcome_callbacks
           _clear_pending_commit_state()
-          _run_post_abort_callbacks_c(Consequence.stateConflict(reason), callbacks, tx.id)
+          val aborted = _run_post_abort_callbacks_c(Consequence.stateConflict(reason), callbacks, tx.id)
+          _run_post_abort_outcome_callbacks_c(
+            aborted,
+            outcomecallbacks,
+            UnitOfWork.PostAbortOutcome.Persistence,
+            tx.id
+          )
         case None =>
           recorder.record("UnitOfWork.commit")
           tx.commit()
@@ -170,8 +180,17 @@ class UnitOfWork(
           postcommitcontrol = Some(e)
           Consequence.Failure(Conclusion.from(e))
         } else {
+          val failed = Consequence.Failure[CommitResult](Conclusion.from(e))
+          val outcomecallbacks = _post_abort_outcome_callbacks
           _clear_pending_commit_state()
-          Consequence.Failure(Conclusion.from(e))
+          transactionid.map { id =>
+            _run_post_abort_outcome_callbacks_c(
+              failed,
+              outcomecallbacks,
+              UnitOfWork.PostAbortOutcome.Persistence,
+              id
+            )
+          }.getOrElse(failed)
         }
     }
     val completed = try {
@@ -205,8 +224,15 @@ class UnitOfWork(
       eventengine.abort(tx) // TODO
       tx.abort()
       val callbacks = _post_abort_callbacks
+      val outcomecallbacks = _post_abort_outcome_callbacks
       _clear_pending_commit_state()
-      _run_post_abort_callbacks_c(Consequence.success(()), callbacks, tx.id)
+      val aborted = _run_post_abort_callbacks_c(Consequence.success(()), callbacks, tx.id)
+      _run_post_abort_outcome_callbacks_c(
+        aborted,
+        outcomecallbacks,
+        UnitOfWork.PostAbortOutcome.Rollback,
+        tx.id
+      )
     } catch {
       case e: Throwable =>
         Consequence.Failure(Conclusion.from(e))
@@ -311,6 +337,13 @@ class UnitOfWork(
       eventengine.emit(Vector(event(transactionid)), EventRecordFactory.from(context)).map(_ => ())
     }
 
+  private[cncf] def stagePostAbortEventC(
+    event: (UnitOfWork.PostAbortOutcome, TransactionContext.TransactionContextId) => DomainEvent
+  ): Unit =
+    _post_abort_outcome_callbacks = _post_abort_outcome_callbacks :+ { (outcome, transactionid) =>
+      eventengine.emit(Vector(event(outcome, transactionid)), EventRecordFactory.from(context)).map(_ => ())
+    }
+
   def executionContext: ExecutionContext = context
 
   private def _complete_c[A](
@@ -332,6 +365,7 @@ class UnitOfWork(
     _pending_events = Vector.empty
     _post_commit_callbacks = Vector.empty
     _post_abort_callbacks = Vector.empty
+    _post_abort_outcome_callbacks = Vector.empty
   }
 
   private def _run_post_commit_callbacks_c(
@@ -372,6 +406,18 @@ class UnitOfWork(
       case Consequence.Success(_) => result
     }
 
+  private def _run_post_abort_outcome_callbacks_c[A](
+    result: Consequence[A],
+    callbacks: Vector[(UnitOfWork.PostAbortOutcome, TransactionContext.TransactionContextId) => Consequence[Unit]],
+    outcome: UnitOfWork.PostAbortOutcome,
+    transactionid: TransactionContext.TransactionContextId
+  ): Consequence[A] =
+    _run_post_abort_callbacks_c(
+      result,
+      callbacks.map(callback => transaction => callback(outcome, transaction)),
+      transactionid
+    )
+
   private def _attach_cleanup_diagnostic(
     control: Throwable,
     completed: Consequence[CommitResult]
@@ -398,6 +444,11 @@ object UnitOfWork {
   type AbortResult = Unit
   type Message = String
   type Entity = EntityPersistable
+
+  private[cncf] enum PostAbortOutcome {
+    case Persistence
+    case Rollback
+  }
 
   def simple(
     datastore: DataStore,

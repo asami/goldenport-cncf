@@ -45,7 +45,8 @@ final case class TransitionRule[S](
 
   def isStructural: Boolean =
     stateFieldName.isDefined && fromState.isDefined &&
-      (toState.isDefined || historyCompositeName.isDefined)
+      (toState.isDefined || historyCompositeName.isDefined ||
+        binding.exists(_.target == CmlStateMachineTransitionTarget.Final))
 }
 
 final class CollectionStateMachinePlanner[S](
@@ -111,7 +112,49 @@ final class CollectionStateMachinePlanner[S](
           !_same_state_value(current.getAny(fieldname), proposed.getAny(fieldname))
         }
         changedfields match {
-          case Vector() => TransitionPlanningResult.NoTransition[S]()
+          case Vector() =>
+            val eligiblecandidates = structuralrules.zipWithIndex.collect {
+              case (rule, i)
+                  if _is_terminal(rule) &&
+                    _matches_explicit_operation(rule, event) =>
+                TransitionCandidate(rule, priority = rule.priority, declarationOrder = rule.declarationOrder + i)
+            }.toVector
+            val candidates = eligiblecandidates.filter { candidate =>
+              candidate.transition.stateFieldName.exists { fieldname =>
+                _matches_state(current.getAny(fieldname), candidate.transition.fromState, candidate.transition.fromStateValue)
+              }
+            }
+            candidates.headOption match {
+              case Some(candidate) =>
+                candidate.transition.stateFieldName match {
+                  case Some(fieldname) =>
+                    _select_structural_candidate(
+                      state,
+                      event,
+                      current,
+                      proposed,
+                      proposed.getAny(fieldname),
+                      fieldname,
+                      current.getAny(fieldname),
+                      candidates
+                    )
+                  case None =>
+                    TransitionPlanningResult.NoTransition[S]()
+                }
+              case None if eligiblecandidates.isEmpty =>
+                TransitionPlanningResult.NoTransition[S]()
+              case None =>
+                eligiblecandidates.head.transition.stateFieldName match {
+                  case Some(fieldname) =>
+                    _rejected_from(
+                      TransitionLifecycleFailureOutcome.Source,
+                      _state_conflict(fieldname, current.getAny(fieldname), proposed.getAny(fieldname)),
+                      None
+                    )
+                  case None =>
+                    TransitionPlanningResult.NoTransition[S]()
+                }
+            }
           case Vector(fieldname) =>
             val currentvalue = current.getAny(fieldname)
             val proposedvalue = proposed.getAny(fieldname)
@@ -229,7 +272,8 @@ final class CollectionStateMachinePlanner[S](
   ): Boolean =
     structuralrules.exists { rule =>
       if (rule.trigger == TransitionTrigger.Operation)
-        _matches_explicit_operation(rule, event)
+        _matches_explicit_operation(rule, event) &&
+          !(_is_terminal(rule) && event.currentRecord.isEmpty)
       else
         true
     }
@@ -276,7 +320,18 @@ final class CollectionStateMachinePlanner[S](
     proposed: Record,
     proposedstate: Option[Any]
   ): Consequence[Boolean] =
-    rule.historyCompositeName match {
+    if (_is_terminal(rule))
+      rule.stateFieldName match {
+        case Some(fieldname) if _same_state_value(current.getAny(fieldname), proposed.getAny(fieldname)) =>
+          _validate_history_record_writes(
+            proposed,
+            rule.historyFieldName,
+            rule.expectedHistoryRecordWrites
+          ).map(_ => true)
+        case _ =>
+          Consequence.success(false)
+      }
+    else rule.historyCompositeName match {
       case Some(composite) =>
         _history_transition_target(rule, current, composite).flatMap { expected =>
           if (_matches_state(proposedstate, Some(expected), rule.historyDirectLeafValues.get(expected)))
@@ -298,6 +353,11 @@ final class CollectionStateMachinePlanner[S](
         else
           Consequence.success(false)
     }
+
+  private def _is_terminal(
+    rule: TransitionRule[S]
+  ): Boolean =
+    rule.binding.exists(_.target == CmlStateMachineTransitionTarget.Final)
 
   private def _history_transition_target(
     rule: TransitionRule[S],

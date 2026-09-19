@@ -14,7 +14,8 @@ import org.goldenport.record.Record
  *
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait TransitionValidationHook {
@@ -22,6 +23,16 @@ trait TransitionValidationHook {
     entity: T,
     tc: EntityPersistent[T]
   )(using ExecutionContext): Consequence[Unit]
+
+  def beforeSave[T](
+    entity: T,
+    tc: EntityPersistent[T],
+    current: Record,
+    proposed: Record
+  )(using ExecutionContext): Consequence[Unit] = {
+    val _ = (current, proposed)
+    beforeSave(entity, tc)
+  }
 
   def beforeUpdate[T](
     entity: T,

@@ -1,6 +1,6 @@
 # State Machine Boundary Contract
 
-Status: draft
+Status: accepted Phase 63 boundary
 
 ## Purpose
 
@@ -10,17 +10,25 @@ Define canonical boundaries for state machine handling across DSL, AST, core mod
 
 Processing flow is fixed:
 
-DSL
-  -> AST
+non-Workflow CML declaration
+  -> parsed AST
+  -> closed normalized StateMachine model
   -> core model (`org.goldenport.statemachine`)
-  -> CNCF runtime adapter/executor
+  -> CNCF adapter
 
 Responsibilities:
 
-- DSL: textual declaration surface only.
-- AST: parsed/normalized intermediate representation only.
+- CML: textual non-Workflow declaration surface only.
+- AST/normalizer: parsed source to the closed typed model and deterministic
+  diagnostics only.
 - core model: canonical pure semantics and deterministic transition decision.
-- CNCF: binding resolution, runtime context integration, effect execution lifecycle.
+- CNCF: explicit binding/adaptation boundary; it does not redefine selection.
+- Workflow: a separate orchestration owner. Cozy's Workflow grammar and state
+  are not StateMachine-normalization inputs or outputs.
+
+The normative normalized-model, identity, predicate, compatibility, topology,
+and diagnostic rules are in
+`docs/spec/cml-statemachine-normalization-contract.md`.
 
 ## Core Contract (`org.goldenport.statemachine`)
 
@@ -31,25 +39,39 @@ Canonical primitives:
 - `Transition`
 - `Guard`
 - `Effect`
+- `StateMachineIdentity` and `TransitionIdentity`
+- `TransitionPlan` and `TransitionSelectionOutcome`
+
+The CML semantic-model boundary owns the remaining closed declaration types:
+state, trigger, guard, and action identities; `PredicateProgram`; and the
+explicit trigger context. Those are declaration semantics, not Entity IDs or
+runtime object identities.
 
 Core invariants:
 
 - no CNCF dependency
 - no runtime context dependency
 - deterministic transition ordering by `(priority asc, declarationOrder asc)`
+- `orderedCanonical` / `decideCanonical` reject absent, inconsistent, or
+  duplicate canonical declaration identity; legacy `ordered` / `decide` retain
+  only their existing collection-order compatibility behavior
 - `guard=false` is non-match
 - guard evaluation failure is propagated as failure
+- canonical selection returns an unexecuted candidate-state/effect plan or an
+  explicit no-match outcome
+- no raw-expression evaluation or runtime access through the pure contract
 
 ## CNCF Adapter Contract
 
-CNCF must not redefine core primitives.
+CNCF must not redefine core selection or normalize arbitrary source text.
 
 CNCF responsibilities:
 
-- resolve named guards (`GuardBindingResolver`)
-- resolve named effects (`EffectBindingResolver`)
-- adapt core `Effect` to CNCF execution plan (`EffectAdapter`)
-- execute planned actions within existing runtime hooks
+- adapt typed trigger-context values to the core contract
+- resolve named guards only through `GuardBindingResolver`
+- represent legacy raw expression as an explicit non-admitted compatibility
+  result, never an MVEL fallback on the new path
+- defer effect execution and UnitOfWork lifecycle changes to Phase 63.1
 
 ## Determinism and Error Semantics
 
@@ -68,7 +90,7 @@ Error semantics:
 Allowed extensions:
 
 - additional resolver strategies (scope/FQ/global)
-- execution planner enrichment (entry/exit/transition phases)
+- generation and execution planner enrichment in Phase 63.1
 - introspection projection adapters
 - workflow-facing adapters that consume state machine context without moving workflow ownership into the state machine layer
 
@@ -97,6 +119,7 @@ product-boundary rule, see:
 
 ## Non-Goals
 
-- full workflow engine orchestration inside the state machine layer
+- full workflow engine orchestration or CML Workflow grammar inside the state
+  machine layer
 - persistence redesign
 - core primitive duplication inside CNCF

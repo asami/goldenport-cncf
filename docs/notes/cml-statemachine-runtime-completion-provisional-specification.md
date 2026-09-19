@@ -2,11 +2,11 @@
 
 status = proposed, non-normative
 date = 2026-08-12
-target_phase = 63
+target_phases = 63, 63.1, 63.2
 
 ## Status and Authority
 
-This note records the provisional contract for Phase 63. It does not override
+This note records the provisional contract for the Phase 63 split sequence. It does not override
 current source, generated ABI, design/specification, or Executable
 Specifications. Accepted behavior must be promoted to `docs/design` and
 `docs/spec` after implementation and verification.
@@ -22,8 +22,8 @@ generated no-op actions, named guard resolution, priority propagation, raw
 MVEL expression evaluation, duplicate core/CNCF selection logic, bypassing
 execution routes, and failure visibility after rollback.
 
-Phase 63 makes the existing model genuinely executable before Workflow or DbC
-depends on it.
+The Phase 63 split sequence makes the existing model genuinely executable
+before Workflow or DbC depends on it.
 
 ## Ownership
 
@@ -254,7 +254,7 @@ semantic identity and redaction rules.
 
 ## Workflow and DbC Boundaries
 
-Phase 63 stops at a committed local transition.
+Phase 63.2 stops at a committed local transition.
 
 - Phase 64 Workflow consumes `CommittedTransition` and chooses a next
   Operation; it does not change the transition algorithm.
@@ -265,26 +265,26 @@ Phase 63 stops at a committed local transition.
 
 ## Development Candidate Alignment
 
-Phase 63 absorbs no broad future candidate implicitly.
+The Phase 63 split sequence absorbs no broad future candidate implicitly.
 
 - Strategy 9.2 retains generic transaction outcome lanes, reception policy,
   same-job continuation, source overrides, and JCL event orchestration. Phase
-  63 defines only the StateMachine-specific committed envelope.
+  63.2 defines only the StateMachine-specific committed envelope.
 - Strategy 9.4 retains platform retention, cleanup, authorization, exporters,
-  dashboards, durable metrics, and operationalization. Phase 63 supplies only
+  dashboards, durable metrics, and operationalization. Phase 63.2 supplies only
   its required transition/rollback diagnostic evidence.
 - Strategy 9.7 retains general taxonomy hardening, catalog generation,
-  application/CLI codes, and trace UX. Phase 63 adds only closed transition
+  application/CLI codes, and trace UX. Phase 63.2 adds only closed transition
   outcomes and facets required for execution.
 - Strategy 9.10 retains compensation-of-compensation and human recovery
-  events. Phase 63 only ensures external effects occur after commit.
+  events. Phase 63.1 only ensures external effects occur after commit.
 - Strategy 9.53 retains general ComponentFactory purity/capability-evidence
-  policy. A Phase 63 named guard/action binding may consume a minimal compatible
+  policy. A Phase 63.1 named guard/action binding may consume a minimal compatible
   evidence adapter but cannot settle the generic Factory contract.
 - The Aggregate method implementation note contributes only its
   `pattern:state-machine`/`pattern:state-transition` slice. General
   implementation kinds, inline/external Scala, other built-in patterns, and
-  broad factory/Operation reuse remain provisional outside Phase 63.
+  broad factory/Operation reuse remain provisional outside the Phase 63 sequence.
 
 ## Compatibility
 
@@ -298,7 +298,7 @@ Phase 63 absorbs no broad future candidate implicitly.
 
 ## Executable Specification Matrix
 
-Phase 63 evidence should cover:
+The Phase 63 split sequence evidence should cover:
 
 - deterministic priority/declaration order;
 - multiple candidates and guard false/failure;
@@ -342,6 +342,10 @@ Phase 63 evidence should cover:
 
 - `docs/phase/phase-63.md`
 - `docs/phase/phase-63-checklist.md`
+- `docs/phase/phase-63.1.md`
+- `docs/phase/phase-63.1-checklist.md`
+- `docs/phase/phase-63.2.md`
+- `docs/phase/phase-63.2-checklist.md`
 - `docs/notes/statemachine-workflow-alignment-provisional-specification.md`
 - `docs/notes/cml-executable-design-by-contract-provisional-specification.md`
 - `docs/notes/aggregate-method-implementation-strategy.md`

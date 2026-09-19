@@ -7,8 +7,8 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore}
-import org.goldenport.cncf.statemachine.{CmlStateMachineIdentity, CmlStateMachineStateIdentity, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding}
+import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleFailureOutcome, TransitionLifecycleFailureStage}
+import org.goldenport.cncf.statemachine.{CmlStateMachineIdentity, CmlStateMachineStateIdentity, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding, TransitionEvent}
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Aug. 12, 2026
  *  version Aug. 12, 2026
- * @version Sep. 18, 2026
+ *  version Sep. 18, 2026
+ * @version Sep. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkPostCommitConsequenceSpec
@@ -247,6 +248,48 @@ final class UnitOfWorkPostCommitConsequenceSpec
         )
         unitofwork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Aborted)
       }
+
+      "emit one safe Persistence transition failure when prepare rejects a selected transition" in {
+        Given("a selected transition failure callback, private persistence text, and a UnitOfWork whose EventEngine rejects prepare")
+        val recorder = new RecordingCommitRecorder
+        val store = EventStore.inMemory
+        given ExecutionContext = ExecutionContext.create()
+        val collection = EntityCollectionId("test", "sm", "person")
+        val entityid = summon[ExecutionContext].idGeneration.entityId(collection, "prepare-rejection-selected-transition")
+        val privatepersistencetext = "jdbc:secret://not-for-observability"
+        val failure = Consequence.stateConflict(privatepersistencetext) match {
+          case Consequence.Failure(conclusion) => conclusion
+          case _ => fail("state conflict must produce a failure conclusion")
+        }
+        val unitofwork = _rejected_unit_of_work(recorder, store)
+        unitofwork.stagePostAbortEventC { (outcome, _) =>
+          val lifecycleoutcome = outcome match {
+            case UnitOfWork.PostAbortOutcome.Persistence => TransitionLifecycleFailureOutcome.Persistence
+            case UnitOfWork.PostAbortOutcome.Rollback => TransitionLifecycleFailureOutcome.Rollback
+          }
+          TransitionLifecycleEvent.transitionFailed(
+            TransitionEvent("update", Some(entityid)),
+            Some(collection.name),
+            failure,
+            TransitionLifecycleFailureStage.Action,
+            lifecycleoutcome,
+            Some(_binding(collection))
+          )
+        }
+
+        When("prepare rejects before the selected transition can commit")
+        val result = unitofwork.commit()
+
+        Then("one taxonomy-only Persistence record is emitted and no committed success envelope is stored")
+        result.isFaillure shouldBe true
+        val failures = store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
+        failures should have size 1
+        failures.head.lane shouldBe EventLane.NonTransactional
+        failures.head.payload.get("transition.failure.outcome") shouldBe Some(TransitionLifecycleFailureOutcome.Persistence.value)
+        failures.head.payload.get("transition.source") shouldBe Some("Draft")
+        failures.head.payload.values.mkString(" ") should not include privatepersistencetext
+        store.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
+      }
     }
   }
 
@@ -257,7 +300,10 @@ final class UnitOfWorkPostCommitConsequenceSpec
       recorder
     )
 
-  private def _rejected_unit_of_work(recorder: RecordingCommitRecorder): UnitOfWork =
+  private def _rejected_unit_of_work(
+    recorder: RecordingCommitRecorder,
+    store: EventStore = EventStore.inMemory
+  ): UnitOfWork =
     new UnitOfWork(
       ExecutionContext.create(),
       Proxy.newProxyInstance(
@@ -273,6 +319,10 @@ final class UnitOfWorkPostCommitConsequenceSpec
               case "abort" =>
                 recorder.record("EventEngine.abort")
                 null
+              case "emit" =>
+                val events = args(0).asInstanceOf[Seq[org.goldenport.cncf.event.DomainEvent]]
+                val factory = args(1).asInstanceOf[org.goldenport.cncf.event.EventRecordFactory]
+                store.append(events.map(factory.create(_, EventLane.NonTransactional)))
               case name =>
                 throw new IllegalStateException(s"unexpected EventEngine method: $name")
             }

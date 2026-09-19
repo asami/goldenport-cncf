@@ -280,6 +280,81 @@ final class CollectionStateMachinePlannerProviderSpec
       selected shouldBe Consequence.success(None)
     }
 
+    "select a terminal explicit operation transition without changing its generated numeric state" in {
+      Given("a terminal Suspended transition bound to entity.saveSalesOrder")
+      val rule = _final_operation_rule
+      val planner = new CollectionStateMachinePlanner(Vector(rule))
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "operation_final", _cid, entropy = "operation_final"), "taro", age = 20)
+      val base = TransitionEvent(
+        name = "save",
+        targetId = Some(person.id),
+        currentRecord = Some(Record.data("status" -> 4)),
+        proposedRecord = Some(Record.data("status" -> 4))
+      )
+      val matching = base.copy(invocation = Some(_invocation("org.example.Person.entity.saveSalesOrder")))
+      val mutated = matching.copy(proposedRecord = Some(Record.data("status" -> 5)))
+      val wrong = base.copy(invocation = Some(_invocation("org.example.Person.entity.updateSalesOrder")))
+      val invalidsource = matching.copy(
+        currentRecord = Some(Record.data("status" -> 5)),
+        proposedRecord = Some(Record.data("status" -> 5))
+      )
+
+      When("the unchanged, mutating, wrong, and invalid-source explicit invocations are planned")
+      val selected = planner.plan(person, matching)
+      val mutationrejected = planner.plan(person, mutated)
+      val wrongrejected = planner.plan(person, wrong)
+      val sourcefailure = planner.planWithOutcome(person, invalidsource)
+
+      Then("only the unchanged matching source selects the typed final binding and operation trigger")
+      selected shouldBe Consequence.success(Some(rule.plan.copy(
+        selectedTransitionBinding = Some(_final_operation_binding),
+        selectedTransitionTrigger = Some(TransitionTrigger.Operation)
+      )))
+      mutationrejected shouldBe a[Consequence.Failure[_]]
+      wrongrejected shouldBe Consequence.success(None)
+      sourcefailure match {
+        case TransitionPlanningResult.Rejected(outcome, _, _) =>
+          outcome shouldBe TransitionLifecycleFailureOutcome.Source
+        case _ => fail("the matching terminal invocation should reject an invalid source")
+      }
+    }
+
+    "ignore a terminal explicit operation transition when creation has no current record" in {
+      Given("a terminal Suspended transition bound to entity.saveSalesOrder")
+      val planner = new CollectionStateMachinePlanner(Vector(_final_operation_rule))
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "operation_final_create", _cid, entropy = "operation_final_create"), "taro", age = 20)
+      val event = TransitionEvent(
+        name = "save",
+        targetId = Some(person.id),
+        proposedRecord = Some(Record.data("status" -> 4)),
+        invocation = Some(_invocation("org.example.Person.entity.saveSalesOrder"))
+      )
+
+      When("the matching generated create operation is planned without a current record")
+      val selected = planner.plan(person, event)
+
+      Then("the terminal transition is not selected during entity creation")
+      selected shouldBe Consequence.success(None)
+    }
+
+    "require a proposed record for a terminal explicit operation transition after creation" in {
+      Given("a terminal Suspended transition and an existing generated entity record")
+      val planner = new CollectionStateMachinePlanner(Vector(_final_operation_rule))
+      val person = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "operation_final_missing_proposed", _cid, entropy = "operation_final_missing_proposed"), "taro", age = 20)
+      val event = TransitionEvent(
+        name = "save",
+        targetId = Some(person.id),
+        currentRecord = Some(Record.data("status" -> 4)),
+        invocation = Some(_invocation("org.example.Person.entity.saveSalesOrder"))
+      )
+
+      When("the matching terminal operation is planned without a proposed record")
+      val selected = planner.plan(person, event)
+
+      Then("structural terminal validation rejects the malformed existing-record update")
+      selected shouldBe a[Consequence.Failure[_]]
+    }
+
     "reject a state change with no declared structural transition" in {
       Given("a lifecycle that allows Draft to Published only")
       val planner = new CollectionStateMachinePlanner(Vector(
@@ -554,6 +629,50 @@ final class CollectionStateMachinePlannerProviderSpec
       fromState = Some("Draft"),
       toState = Some("Published"),
       binding = Some(_explicit_operation_binding),
+      trigger = TransitionTrigger.Operation
+    )
+
+  private val _final_operation_binding: CmlTransitionBinding = {
+    val machine = CmlStateMachineIdentity("lifecycle")
+    val trigger = CmlStateMachineTriggerIdentity(machine, "operation:entity.saveSalesOrder")
+    val source = CmlStateMachineStateIdentity(machine, CmlStateMachineStatePath(Vector("Suspended")))
+    val contextidentity = CmlStateMachineTriggerContextIdentity(trigger)
+    val context = CmlStateMachineTriggerContext(
+      identity = contextidentity,
+      version = CmlStateMachineVersion(1),
+      fields = Vector("eventName", "targetIdentifier", "currentState", "candidateState").map { name =>
+        CmlStateMachineTriggerContextField(
+          CmlStateMachineTriggerContextFieldIdentity(contextidentity, name),
+          CmlStateMachineScalarType.StringValue
+        )
+      }
+    )
+    CmlTransitionBinding(
+      componentId = org.goldenport.cncf.component.ComponentId("org.example.Person"),
+      entityType = _cid,
+      machine = machine,
+      version = CmlStateMachineVersion(1),
+      transition = CmlStateMachineTransitionIdentity(machine, 1),
+      source = source,
+      target = CmlStateMachineTransitionTarget.Final,
+      trigger = trigger,
+      operation = Some(CmlStateMachineOperationIdentity("entity", "saveSalesOrder")),
+      triggerContext = Some(context)
+    )
+  }
+
+  private def _final_operation_rule: TransitionRule[Person] =
+    TransitionRule(
+      eventName = "operation:entity.saveSalesOrder",
+      priority = 0,
+      declarationOrder = 1,
+      guard = None,
+      plan = ExecutionPlan.empty[Person, TransitionEvent],
+      machineName = Some("lifecycle"),
+      stateFieldName = Some("status"),
+      fromState = Some("Suspended"),
+      fromStateValue = Some(4),
+      binding = Some(_final_operation_binding),
       trigger = TransitionTrigger.Operation
     )
 
