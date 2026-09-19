@@ -41,6 +41,73 @@ Textus が「何を、どの順序で、どの完了条件まで実行するか�
 
 既存の Workflow Execution Protocol に従い、OpenClaw は Codex と同様に Continuation Participant / External Driver になり得る。WorkflowRun の状態、revision、continuation identity、idempotency、stale-result rejection などは CNCF Runtime の責務に置く。
 
+## Execution authority and integration boundary
+
+Textus から起動された OpenClaw Job/Worker は、物理的には OpenClaw 側で実行されるが、論理的には Textus Workflow の Execution Authority 下に置く。
+
+Textus Workflow が所有するもの:
+
+- current Workflow / GoalPhase
+- Goal と Completion Contract
+- Result acceptance
+- Workflow state transition
+- retry / failure / escalation policy
+- continuation identity / revision / idempotency
+- Workflow 全体の completion
+- execution evidence correlation
+
+OpenClaw は Goal 内部の遂行方法について自由度を持つ。Browser、PC、SaaS/API、AI、Codex などを状況に応じて利用できるが、OpenClaw 自身の判断だけで Workflow の論理状態を進めない。
+
+```text
+Textus Job Engine
+       |
+       v
+Textus Workflow             <- Execution Authority
+       |
+       | Goal + Continuation
+       |
+       +-- dispatch ----------> OpenClaw Worker
+       |                         |
+       |                         +-- Browser / PC
+       |                         +-- SaaS / API
+       |                         +-- AI / Codex
+       |                         |
+       |       result/evidence  |
+       <------------------------+
+       |
+       v
+Completion validation
+       |
+       v
+State transition
+```
+
+OpenClaw が Goal の完了を報告しても、それだけでは Workflow completion とはしない。Textus Runtime が handle/revision、Completion Contract、Result/Evidence を検証し、受理した場合のみ次の transition を commit する。
+
+### Integration direction
+
+現時点の推奨接続方式は、方向ごとに責務を分ける。
+
+- Textus -> OpenClaw: HTTP/Webhook 等で Worker を dispatch する。
+- OpenClaw -> Textus: MCP を標準入口として Operation、Job、Workflow Continuation を利用する。
+- Workflow の意味論的な往復: Continuation Protocol を用いる。
+
+```text
+Textus Workflow
+      |
+      | dispatch (HTTP/Webhook)
+      v
+OpenClaw Worker
+      |
+      | MCP: operation / advanceWorkflow
+      v
+Textus Runtime
+```
+
+Webhook や MCP は transport / adapter の選択であり、Workflow semantics そのものには固定しない。Textus 側では Participant / External Driver SPI を維持し、将来 HTTP、Queue、その他の transport を利用しても同一の Workflow/Continuation semantics を保てるようにする。
+
+この境界により、Codex と OpenClaw はともに Continuation Participant として扱える。Codex は software-development-oriented worker、OpenClaw は general-purpose digital worker という実行能力の違いを持つが、Textus から見た論理的な制御契約は共有できる。
+
 ## Progressive determinization
 
 初期段階では仕様が曖昧な処理を OpenClaw + AI によって仮運用してよい。
