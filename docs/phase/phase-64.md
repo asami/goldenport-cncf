@@ -30,7 +30,7 @@ Phase 64 owns model/runtime semantics that are necessary before the API/SPI and 
 - derived composite-transition identity and causal correlation;
 - deterministic ordering/provenance of constituent and composite actions;
 - minimal Workflow specialization only where Composite StateMachine semantics are insufficient;
-- minimal WorkflowInstance identity/progression contract needed to bind later durable runtime;
+- minimal WorkflowDefinition/WorkflowInstance semantic identity and progression model needed by the later Phase 77 durable store contract;
 - CML-generated definition admission/bootstrap and end-to-end fixture evidence.
 
 Phase 64 does not own rich operational workflow facilities. Those are later phases.
@@ -53,14 +53,12 @@ Phase 64 freezes only the minimum process identity/progression concepts required
 ```text
 WorkflowDefinitionIdentity
 WorkflowInstanceIdentity
-WorkflowRevision
 WorkflowLifecycle
 CurrentProgression
 Correlation / Causation
-Minimal History Reference
 ```
 
-This is not yet the public Skill/JSON/REST protocol and does not include external participant suspension semantics.
+This is a semantic/runtime model, not yet the independently durable WorkflowInstance store. Phase 77 owns persisted revision/history, suspension state, Continuation identity, ContextSnapshot, replay/stale protection, and the public typed protocol model/encodings.
 
 ## Action execution boundary
 
@@ -79,7 +77,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 | SWF-02 | Freeze constituent role/identity, configuration schema, deterministic composite-state derivation and derived-transition identity. | planned |
 | SWF-03 | Admit generated composite rules and fail closed for ambiguous/unsupported runtime configuration. | planned |
 | SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, delegating execution substrate to 64.1/64.2. | planned |
-| SWF-05 | Freeze minimal Workflow specialization and WorkflowInstance identity/revision/progression/correlation contract. | planned |
+| SWF-05 | Freeze minimal Workflow specialization and semantic WorkflowDefinition/WorkflowInstance identity, lifecycle/progression and correlation contract; durable revision/history/store semantics are Phase 77. | planned |
 | SWF-06 | Admit CML-generated Composite StateMachine/Workflow definitions through ComponentFactory without CML reparsing or handwritten canonical definitions. | planned |
 | SWF-07 | Prove one real CML fixture through constituent transition -> derived composite transition -> action program boundary -> minimal Workflow progression. | planned |
 | SWF-08 | Freeze exact Phase 77 handoff and explicitly record deferred advanced facilities. | planned |
@@ -92,7 +90,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 - Ambiguous or unsupported configurations fail closed.
 - Derived composite transition is correlated to its causal committed constituent transition/configuration change.
 - Constituent/composite actions preserve deterministic order and provenance and use the shared typed executable-program boundary.
-- Minimal Workflow identity/revision/progression can be represented without introducing a second Workflow language/runtime.
+- Minimal Workflow definition/instance identity, lifecycle/progression and correlation can be represented without introducing a second Workflow language/runtime; durable revision/history/store semantics remain Phase 77.
 - No external participant/Skill/Continuation protocol is required to close Phase 64.
 - A real CML fixture reaches the handoff required by Phase 77 using deterministic testable execution boundaries.
 - Phase 77 can add API/SPI, durable Continuation, typed protocol Value Objects and Skill projection without changing Phase 64 semantics.
@@ -101,7 +99,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 
 The following are not Phase 64 completion requirements:
 
-- rich Workflow persistence/retention/lease policy;
+- independently durable WorkflowInstance persistence, revision/history, retention and lease policy;
 - durable external participant Continuation/resume;
 - public Workflow JSON/REST/MCP/Skill protocol;
 - AI/Human participant invocation and UI continuation;
@@ -117,7 +115,7 @@ The following are not Phase 64 completion requirements:
 
 Phase 64 begins after Phase 63 closes. If the post-Phase-63 gap review identifies missing hierarchical-state/shallow-history runtime support, that dedicated StateMachine follow-up must be completed before Phase 64 relies on those semantics.
 
-After Phase 64, 64.1 and 64.2 provide the minimal execution/test substrate. Phase 77 then provides the API/SPI runtime, typed Workflow protocol model/JSON encoding, Continuation and sm-workflow consumer handoff.
+After Phase 64, 64.1 and 64.2 provide the minimal execution/test substrate. Phase 77 then owns the independently durable WorkflowInstance persistence SPI (identity + persisted revision/history/current suspension), StateMachine API/SPI provider runtime, ActionExecution, bounded advance, Continuation/resume, typed Workflow protocol Value Objects/JSON encoding, Generic Skill projection and sm-workflow consumer handoff.
 
 Advanced Workflow runtime capabilities are owned by dedicated later phases.
 
