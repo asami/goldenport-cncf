@@ -233,3 +233,54 @@ mapping table 自体は application/host configuration であり CNCF Workflow d
 - unknown required protocol semantics は fail closed。
 - additive presentation fields は Workflow semantics を変更しない。
 - application payload は typed schema identity を必須とし、generic runtime が domain JSON を推測しない。
+
+
+## Phase 77 protocol closure decisions
+
+Phase 77 の consumer handoff は StateMachine runtime API だけでなく、Skill/CLI/UI が利用する generic JSON protocol を含む。
+
+### Protocol round trip
+
+```text
+StartRequest
+  -> StartResult(handle + continuation)
+  -> Continuation(WORK_ORDER)
+  -> typed WorkResult / Evidence
+  -> next Continuation
+  -> ...
+  -> Continuation(TERMINAL + typed result)
+```
+
+application は各 `input/result.payload` の schema を所有するが、envelope、identity、revision、continuation kind、execution requirement、presentation、evidence contract は CNCF が所有する。
+
+### Reasoning requirement placement
+
+抽象思考レベルは Continuation 全体ではなく、実行作業を表す `WORK_ORDER.workOrder.executionRequirement.reasoningLevel` に置く。
+
+```json
+{
+  "kind": "WORK_ORDER",
+  "workOrder": {
+    "operationId": "review",
+    "executionRequirement": {
+      "reasoningLevel": "DEEP",
+      "capabilities": ["..."],
+      "riskLevel": "HIGH"
+    }
+  }
+}
+```
+
+DECISION / WAIT / TERMINAL は worker execution を要求しないため、通常 reasoningLevel を持たない。将来別種の execution requirement が必要になっても Continuation kind の意味を崩さず拡張する。
+
+### Mapping boundary
+
+CNCF は `ROUTINE | STANDARD | DEEP | CRITICAL` という model-independent requirement を返す。Skill/Host が versioned mapping policy により concrete profile/model/reasoning effort へ写像する。
+
+Workflow は concrete model 名を guard/transition 条件として使用しない。実際に選択された profile/model/effort は execution evidence として記録可能だが、canonical semantics にはしない。
+
+### Human-readable progress
+
+StartResult / Continuation / Terminal 等は `presentation` を持ち、Codex console や UI が current situation、next action、reason、progress を人間向けに表示できる。
+
+presentation は canonical control data ではない。Skill/runtime は表示文字列を parse して operation、state、reasoning level、completion を判断してはならない。
