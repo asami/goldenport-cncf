@@ -197,7 +197,8 @@ Current baseline:
   producer fixture/handoff after the Phase 64/64.2 prerequisites.
 - [Phase 77 Checklist](phase-77-checklist.md) owns ABI admission, generated
   discovery, Provider SPI construction, the independent WorkflowInstance
-  persistence contract, durable Continuation, and the Continuation SPI IoC port
+  persistence contract, durable Continuation, the minimum schema-versioned
+  fail-closed Continuation JSON wire contract, and the Continuation SPI IoC port
   used by Generic Skill Workflow Support. Entity StateMachine persistence
   remains entity-owned; Textus `sm-workflow` supplies its consumer persistence
   and software-development-specific behavior.

@@ -103,11 +103,11 @@ CNCF must provide deterministic test boundaries for:
 - transition selection and rejection;
 - composite-state derivation;
 - compiled `ExecProgram` ordering/provenance;
-- UnitOfWork program analysis and transaction segmentation;
+- UnitOfWork program analysis and local atomic segmentation;
 - failure injection;
 - abort/rollback behavior;
-- compensation planning/execution behavior;
-- retry/idempotency identity;
+- local atomic abort/rollback behavior;
+- stable occurrence/correlation identity;
 - external Operation/Job/HTTP/process intent; and
 - correlation/observability metadata.
 
@@ -123,7 +123,7 @@ ExecProgram[UnitOfWorkOp]
       |
       v
 UnitOfWork Analysis / Planner
-  local atomic / 2PC / compensatable / irreversible segments
+  local atomic / non-local deferred classification
       |
       +--> Test Interpreter / Fake Drivers
       +--> Simulation Interpreter
@@ -161,9 +161,7 @@ metadata and produces an explicit execution plan, conceptually:
 ```text
 ExecutionPlan
   +-- LocalAtomicSegment
-  +-- DistributedAtomicSegment
-  +-- AfterCommitCompensatableSegment
-  +-- IrreversibleSegment
+  +-- NonLocalDeferredSegment
 ```
 
 Planning must preserve:
@@ -173,9 +171,9 @@ Planning must preserve:
 - constituent/composite provenance;
 - causal ordering;
 - target/resource identity;
-- transaction requirement/capability;
-- reversibility and compensation relation;
-- idempotency/correlation identity;
+- local atomicity requirement/capability;
+- non-local/deferred classification;
+- correlation identity;
 - authorization context; and
 - source/model identity.
 
@@ -220,10 +218,7 @@ Tests must be able to:
 - expose planner segmentation;
 - return configured typed results;
 - fail a selected operation occurrence deterministically;
-- distinguish retryable and non-retryable failures;
 - report whether the root transition commits or aborts;
-- expose planned compensations in reverse causal order where required;
-- simulate compensation success/failure;
 - avoid real external I/O by default;
 - preserve stable logical occurrence/correlation ids; and
 - emit the same structured outcome categories used by production execution.
@@ -275,7 +270,6 @@ as:
 - every committed transition ends in a declared state;
 - repeated duplicate trigger delivery does not duplicate logical progression;
 - the same deterministic model input produces the same `ExecProgram` and plan;
-- compensation corresponds to successfully completed compensatable intents;
 - a failed atomic segment cannot publish a committed transition; and
 - a committed constituent transition derives the same composite outcome as the
   generated rule contract.
@@ -295,9 +289,7 @@ Acceptance must prove at least:
 - deterministic UnitOfWork planning;
 - injected failure in the program corresponding to `recordAuthorization`
   aborts the atomic transition;
-- compensatable `reserveShipment` maps to `releaseShipment` recovery work when a
-  later non-atomic step fails;
-- compensation failure remains explicit recovery work, not hidden rollback;
+- non-local/external effects are classified explicitly as outside the Phase 64.1 local atomic guarantee;
 - no real database/network provider is required for model/interpreter tests;
 - production and test execution consume the same canonical program shape; and
 - no parallel `ActionOp` execution algebra is required.
@@ -308,12 +300,12 @@ Acceptance must prove at least:
 | --- | --- | --- | --- |
 | UTP-01 | Existing Free/UoW inventory | `UnitOfWorkOp`, `ExecProgram`, `ExecUowM`, direct/declarative DSLs, interpreter/drivers, metadata, and current tests are inventoried. | planned |
 | UTP-02 | CML compilation ABI | Cozy Phase 47.2.1 logical-action binding/compilation contract to `ExecProgram` is admitted/versioned. | planned |
-| UTP-03 | Operation effect classification | Existing `UnitOfWorkOp` cases are classified for local/2PC/after-commit/compensatable/irreversible planning where relevant. | planned |
-| UTP-04 | Planner model | Explicit segment planning, ordering, capability admission, idempotency, and compensation planning are frozen. | planned |
+| UTP-03 | Operation effect classification | Existing `UnitOfWorkOp` cases are classified for local-atomic versus non-local/deferred execution where relevant. | planned |
+| UTP-04 | Planner model | Explicit local-atomic planning, ordering, capability admission, and non-local/deferred classification are frozen. | planned |
 | UTP-05 | Deterministic test runtime | Program inspection, fake drivers, typed result stubbing, and failure injection are defined/implemented. | planned |
 | UTP-06 | Production interpreter alignment | Production execution preserves the same logical program/plan identities and structured outcomes. | planned |
 | UTP-07 | StateMachine acceptance | Simple/local StateMachine success/rejection/abort behavior is proven through compiled `ExecProgram` without production I/O. | planned |
-| UTP-08 | Composite/Workflow acceptance | Derived composite transition, lower/upper programs, compensation, duplicate handling, and recovery are proven with the shared fixture. | planned |
+| UTP-08 | Composite/Workflow acceptance | Derived composite transition and lower/upper programs are proven through deterministic local/test execution with the shared fixture; advanced compensation/recovery is deferred. | planned |
 | UTP-09 | Algebra gap review | Any required new `UnitOfWorkOp` primitive is justified as generic CNCF functionality or rejected. | planned |
 
 ## Acceptance
@@ -324,7 +316,6 @@ Acceptance must prove at least:
 - Test and production paths consume the same structured executable intent.
 - Failure injection can target executable-intent occurrences deterministically.
 - Atomic failure aborts the root transition according to the admitted plan.
-- Compensation is observable as new executable intent, not hidden rollback.
 - Planner output is inspectable before execution.
 - Runtime nondeterminism is injectable where it affects observable behavior.
 
@@ -336,8 +327,7 @@ Acceptance must prove at least:
 - Replacing integration/end-to-end tests.
 - Building a universal simulation engine.
 - Deterministic replay of arbitrary user code.
-- Making external systems transactional when their capabilities do not support
-  it.
+- Advanced distributed transaction, compensation, and recovery semantics owned by the dedicated follow-up Phase.
 
 ## References
 
@@ -347,7 +337,6 @@ Acceptance must prove at least:
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala`
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/types.scala`
 - `../design/unitofwork-program-planning.md`
-- `../notes/action-transaction-compensation-runtime-provisional-specification.md`
-- `asami/cozy/docs/phase/phase-47.2.md`
+- - `asami/cozy/docs/phase/phase-47.2.md`
 - `asami/cozy/docs/phase/phase-47.2.1.md`
 - `asami/cozy/docs/phase/phase-47.2.2.md`

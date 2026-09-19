@@ -5209,13 +5209,20 @@ Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
   lease, model selection, and host scheduling do not become StateMachine
   semantics and no external participant is invoked inside the persistence
   transaction.
-- CNCF binds the generated ABI to Phase 64's independent WorkflowInstance
-  persistence SPI. Entity-local StateMachine state remains entity-owned; a
+- CNCF Phase 77 defines and binds the generated ABI to its independent
+  WorkflowInstance persistence SPI. Entity-local StateMachine state remains entity-owned; a
   WorkflowInstance has its own identity/revision/history and idempotent
   committed-transition and Continuation-result correlation.
 - Generic Skill Workflow Support projects the Continuation SPI without becoming
-  its source of truth. Textus `sm-workflow` supplies consumer persistence and
-  software-development-specific WorkflowRun/WorkOrder policy.
+  its source of truth. Phase 77 freezes the minimum schema-versioned,
+  fail-closed `ContinuationRequest`/`ContinuationResult` JSON wire contract,
+  including Workflow/Continuation identity, expected revision, ContextSnapshot,
+  typed input/result, Completion/Evidence, and the minimum `WorkflowHandle`.
+  Textus `sm-workflow` supplies consumer persistence and software-development-
+  specific WorkflowRun/WorkOrder policy.
+- Broad generic Start APIs, rich Presentation, broad reasoning-level vocabulary,
+  parent/child Workflow composition, orchestration, and REST/MCP/UI protocol
+  surfaces are later-phase extensions.
 - This Phase neither adds BPMN/DAG, arbitrary scripting, raw callbacks, a
   parallel Action algebra, a CNCF-local Workflow language, full assemble
   connection/transport, nor UI/Flutter generation.
