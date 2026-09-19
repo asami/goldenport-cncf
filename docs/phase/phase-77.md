@@ -150,6 +150,14 @@ This is the primary Phase 77 acceptance path and the handoff consumed by `sm-wor
 - No Workflow-wide orchestration/continuation mode or InvocationBinding switch is required.
 - Cross-repository evidence records exact Cozy source, generated ABI, CNCF revisions, and the `sm-workflow` consumer handoff.
 
+## Phase Boundary to Phase 80
+
+Phase 77 is the minimum complete runtime foundation required for `sm-workflow` to begin its Phase 1 executable-specification work. Closing Phase 77 must therefore produce a stable consumer handoff; `sm-workflow` does not wait for Phase 80.
+
+Phase 80 is a follow-up extension phase. It may enrich invocation/protocol ergonomics, context projection, participant integration, and additional runtime facilities, but it must not redefine the StateMachine API/SPI, ActionExecution, durable Continuation/resume, deterministic progression, Generic Skill projection, or consumer handoff established here.
+
+In particular, Phase 77 requires no Workflow-wide Orchestration/Continuation mode and no semantic `InvocationBinding` switch. Later extensions must remain compatible with this foundation.
+
 ## Non-Goals
 
 - Parsing CML or independently reconstructing Workflow semantics in CNCF.
