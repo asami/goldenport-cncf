@@ -51,6 +51,15 @@ and the independent full review remain intact, while no repository full suite
 is claimed. Phase 63.2 remains responsible for the one aggregate full suite;
 it must explicitly decide how to accept this forced predecessor.
 
+### Forced audit-projection repair
+
+The original forced baseline commit did not persist its required
+`CNCF-Force-Release-*` trailer projection despite the verified force record.
+This follow-up records no implementation, specification, or validation result:
+it creates a new forced audit baseline with the same exception ID so the later
+aggregate owner can verify the predecessor without rewriting history. The
+forced disposition and `exceptions-recorded` assurance remain unchanged.
+
 ## Work Stack and Validation Boundary
 
 | ID | Stage | Outcome | Status |
