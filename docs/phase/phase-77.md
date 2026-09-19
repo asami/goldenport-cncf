@@ -68,19 +68,21 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic `Invoc
 | CWF-77-09 | Define and prove the generic Workflow JSON protocol: Start/Handle/Continuation/Result/Terminal, Presentation, and abstract ExecutionRequirement/reasoning level. | planned |
 | CWF-77-10 | Prove the CML-first producer-to-CNCF path with Cozy's real fixture and freeze the `sm-workflow` consumer handoff. | planned |
 
-## Generic JSON Protocol Boundary
+## Typed Workflow Protocol Model and JSON Encoding
 
-Phase 77 completion explicitly includes the full public/runtime JSON round trip, not only internal StateMachine execution.
+Phase 77 completion includes an application-neutral typed Workflow protocol model. JSON is the standard Codex/Skill/wire encoding of that model, not the canonical domain model.
 
-Phase 77 owns the application-neutral JSON envelope used across Skill/CLI/UI/participant boundaries. The normative design is [Generic Workflow JSON Protocol](../notes/generic-workflow-json-protocol.md).
+Phase 77 owns typed Value Objects for the application-neutral Workflow protocol used across direct Scala composition and Skill/CLI/UI/participant boundaries. The normative design is [Generic Workflow Protocol Model and JSON Encoding](../notes/generic-workflow-json-protocol.md).
 
-The protocol includes typed StartRequest/StartResult, WorkflowHandle, Continuation (`WORK_ORDER | DECISION | WAIT | TERMINAL`), typed application payload envelopes, Result/Evidence, human-readable Presentation, and abstract ExecutionRequirement including model-independent reasoning level.
+The protocol includes typed StartRequest/StartResult, WorkflowHandle, Continuation (`WORK_ORDER | DECISION | WAIT | TERMINAL`), typed application payloads, Result/Evidence, human-readable Presentation, and abstract ExecutionRequirement including model-independent reasoning level. Generic CNCF fields and application-specific payload types are composed in the Value Object model; JSON codecs preserve schema identity/version at wire boundaries.
 
 For a `WORK_ORDER`, `WorkOrder.executionRequirement.reasoningLevel` carries the abstract reasoning requirement. The initial closed vocabulary is `ROUTINE | STANDARD | DEEP | CRITICAL`. DECISION / WAIT / TERMINAL do not normally carry a reasoning level because they are not worker-execution requests.
 
 Concrete model/provider/reasoning-effort mapping is not Workflow semantics. Skill/Host policy maps the abstract requirement to a concrete execution profile and may return that choice as execution evidence.
 
-sm-workflow specializes payload schemas and presentation for software-development workflows; it does not redefine the generic envelope.
+sm-workflow supplies software-development payload types/codecs and presentation specialization; it does not redefine the generic protocol Value Objects.
+
+The model must also remain composable inside Scala: an Outer Workflow can start an Inner Workflow with a typed input and receive a typed terminal result without a JSON round trip. Inner WorkflowInstance identity/revision/history/continuation remain independently durable, with parent/child causal correlation. Phase 77 need not implement rich child-workflow orchestration, but its types and persistence/correlation contracts must not preclude it.
 
 ## WorkflowInstance Persistence Boundary
 
@@ -163,7 +165,10 @@ This is the primary Phase 77 acceptance path and the handoff consumed by `sm-wor
 - Resume then permits internal closing/commit Actions to execute and reach terminal state.
 - Deterministic test provider binding can exercise the same StateMachine semantics without an actual AI/UI provider.
 - No Workflow-wide orchestration/continuation mode or InvocationBinding switch is required.
-- Generic JSON start -> continuation -> result -> continuation -> terminal round trips are executable and versioned; Presentation is renderable but never parsed for control.
+- Typed Value Object start -> continuation -> result -> continuation -> terminal round trips are executable and versioned; their JSON encoding round trips without semantic loss, and Presentation is renderable but never parsed for control.
+- The same protocol Value Objects can be used directly inside Scala/JVM without mandatory JSON encode/decode.
+- Application-specific start/work/result/terminal payloads remain typed and are composed with CNCF generic fields rather than represented as core untyped JSON.
+- Protocol identity/correlation design permits an independently durable Inner WorkflowInstance to be invoked by an Outer Workflow and return a typed terminal result without exposing Inner private state.
 - WORK_ORDER can carry abstract `executionRequirement.reasoningLevel` plus capability/risk requirements without concrete model names.
 - Start/Continuation/Terminal presentation provides enough structured human-facing context for Codex console/UI to show current situation, next action, reason and progress.
 - Abstract reasoning requirements can be mapped by a Skill/Host policy without embedding concrete model names in Workflow semantics.
