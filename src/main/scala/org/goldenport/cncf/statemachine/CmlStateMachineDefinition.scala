@@ -1,6 +1,7 @@
 package org.goldenport.cncf.statemachine
 
 import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.context.ExecutionInvocationIdentity
 import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
@@ -69,6 +70,19 @@ final case class CmlStateMachineTriggerIdentity(
   require(CmlStateMachineAbi.isName(name), "StateMachine trigger identity name must be nonempty")
 }
 
+/**
+ * The service/operation suffix of an explicit StateMachine operation trigger.
+ * The component identity remains on [[CmlTransitionBinding]], preventing a
+ * second rendered selector format from entering the generated ABI.
+ */
+final case class CmlStateMachineOperationIdentity(
+  service: String,
+  operation: String
+) {
+  require(CmlStateMachineAbi.isOperationSegment(service), "StateMachine operation service must be one nonempty segment")
+  require(CmlStateMachineAbi.isOperationSegment(operation), "StateMachine operation name must be one nonempty segment")
+}
+
 /*
  * Complete generated-CML identity for a transition selected by the runtime.
  * It intentionally carries declarations only: a planner attaches it to the
@@ -83,7 +97,9 @@ final case class CmlTransitionBinding(
   transition: CmlStateMachineTransitionIdentity,
   source: CmlStateMachineStateIdentity,
   target: CmlStateMachineTransitionTarget,
-  trigger: CmlStateMachineTriggerIdentity
+  trigger: CmlStateMachineTriggerIdentity,
+  operation: Option[CmlStateMachineOperationIdentity] = None,
+  triggerContext: Option[CmlStateMachineTriggerContext] = None
 ) {
   require(transition.machine == machine, "StateMachine transition binding must belong to its machine")
   require(source.machine == machine, "StateMachine transition binding source must belong to its machine")
@@ -92,6 +108,30 @@ final case class CmlTransitionBinding(
     CmlStateMachineAbi.targetMachine(target).forall(_ == machine),
     "StateMachine transition binding target must belong to its machine"
   )
+  require(
+    triggerContext.forall(_.identity.trigger == trigger),
+    "StateMachine transition binding trigger context must belong to its trigger"
+  )
+  require(
+    triggerContext.forall(_.version == version),
+    "StateMachine transition binding trigger context must have the binding version"
+  )
+  require(
+    operation.forall(_ => triggerContext.nonEmpty),
+    "Explicit StateMachine operation binding requires its typed trigger context"
+  )
+
+  /**
+   * Explicit operation bindings are authorized by the execution invocation
+   * identity, never by a transition event name or record-derived value.
+   */
+  def matchesOperationInvocation(
+    invocation: Option[ExecutionInvocationIdentity]
+  ): Boolean =
+    operation.fold(true) { value =>
+      val selector = Vector(componentId.name.trim, value.service, value.operation).mkString(".")
+      invocation.exists(_.operationSelector.trim == selector)
+    }
 }
 
 final case class CmlStateMachineTriggerContextIdentity(
@@ -429,6 +469,9 @@ final case class CmlNormalizedStateMachine(
 
 private object CmlStateMachineAbi {
   def isName(value: String): Boolean = value.trim.nonEmpty
+
+  def isOperationSegment(value: String): Boolean =
+    Option(value).exists(x => x.trim.nonEmpty && !x.contains("."))
 
   def unique[A](values: Vector[A]): Boolean = values.distinct.size == values.size
 

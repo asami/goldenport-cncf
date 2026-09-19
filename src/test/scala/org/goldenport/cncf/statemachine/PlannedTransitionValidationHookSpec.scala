@@ -1,12 +1,12 @@
 package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext}
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionInvocationIdentity, RuntimeContext}
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.datastore.DataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
-import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleFailureStage, TransitionLifecycleKind}
+import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleFailureOutcome, TransitionLifecycleFailureStage, TransitionLifecycleKind}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -119,6 +119,45 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       Then("the selected plan carries the typed rule binding while the hook operation remains the original update")
       selected.flatMap(_.selectedTransitionBinding) shouldBe Some(_binding)
       operation.name shouldBe "update"
+    }
+
+    "commit an explicit binding with the actual selector and fail closed before executing a mismatched direct plan" in {
+      Given("selected explicit binding plans and independently controlled matching and mismatched invocations")
+      given EntityPersistent[_Person] = _person_persistent
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_operation", _cid, entropy = "hook_operation"),
+        "ichiro"
+      )
+      val selector = "org.example.Person.entity.updateSalesOrder"
+      val matchingstore = EventStore.inMemory
+      val mismatchedstore = EventStore.inMemory
+      val matchingcontext = _operation_context(matchingstore, selector)
+      val mismatchedcontext = _operation_context(mismatchedstore, "org.example.Person.entity.updateSalesOrderRecord")
+      val provider = new ProviderWithBoundPlan(_explicit_operation_binding)
+      val hook = new PlannedTransitionValidationHook(provider)
+
+      When("the hook completes a matching plan and rejects a mismatched direct provider plan")
+      val matchingresult = hook.beforeUpdate(entity, _person_persistent)(using matchingcontext)
+      val matchingcommit = matchingcontext.runtime.unitOfWork.commit()
+      val mismatchedresult = hook.beforeUpdate(entity, _person_persistent)(using mismatchedcontext)
+      val mismatchedrollback = mismatchedcontext.runtime.unitOfWork.rollback()
+
+      Then("the committed envelope uses the actual selector while the mismatch fails before action execution")
+      matchingresult shouldBe Consequence.unit
+      matchingcommit.isSuccess shouldBe true
+      val matchingrecords = matchingstore.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty)
+      matchingrecords should have size 1
+      matchingrecords.head.payload.get("operation.id") shouldBe Some(selector)
+      mismatchedresult shouldBe a[Consequence.Failure[_]]
+      mismatchedrollback.isSuccess shouldBe true
+      provider.executionTrace shouldBe Vector("transition")
+      mismatchedcontext.runtime.unitOfWork.pendingEvents.collect {
+        case e: TransitionLifecycleEvent => e
+      } shouldBe empty
+      val mismatchfailures = mismatchedstore.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
+      mismatchfailures should have size 1
+      mismatchfailures.head.payload.get("transition.failure.stage") shouldBe Some(TransitionLifecycleFailureStage.Planning.value)
+      mismatchedstore.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
     }
 
     "emit transition-failed on action failure" in {
@@ -248,6 +287,57 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       failures.head.payload.values.mkString(" ") should not include "planner secret in spec"
       store.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
     }
+
+    "persist a typed planning rejection outcome after rollback" in {
+      Given("a typed planner rejection bound to a runtime UnitOfWork with an in-memory EventStore")
+      val store = EventStore.inMemory
+      val base = ExecutionContext.create()
+      lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(base, runtime)
+      lazy val runtime: RuntimeContext = new RuntimeContext(
+        core = base.runtime.core,
+        unitofworksupplier = () => new UnitOfWork(
+          context,
+          EventEngine.noop(DataStore.noop(), eventstore = store)
+        ),
+        unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+        commitaction = uow => {
+          val _ = uow.commit()
+          ()
+        },
+        abortaction = uow => {
+          val _ = uow.rollback()
+          ()
+        },
+        disposeaction = _ => (),
+        token = "planned-transition-typed-rejection-spec"
+      )
+      given ExecutionContext = context
+      given EntityPersistent[_Person] = _person_persistent
+      val hook = new PlannedTransitionValidationHook(new TypedPlanningRejectionProvider)
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          "test",
+          "hook_typed_rejection",
+          _cid,
+          entropy = "hook_typed_rejection"
+        ),
+        "hanako"
+      )
+
+      When("the typed planner rejection is returned and the runtime UnitOfWork rolls back")
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val rollbackresult = summon[ExecutionContext].runtime.unitOfWork.rollback()
+
+      Then("the safe typed outcome is projected without private text or a committed success")
+      result shouldBe a[Consequence.Failure[_]]
+      rollbackresult.isSuccess shouldBe true
+      val failures = store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
+      failures should have size 1
+      failures.head.payload.get("transition.failure.stage") shouldBe Some(TransitionLifecycleFailureStage.Planning.value)
+      failures.head.payload.get("transition.failure.outcome") shouldBe Some(TransitionLifecycleFailureOutcome.Target.value)
+      failures.head.payload.values.mkString(" ") should not include "typed planner private failure"
+      store.query(EventStore.Query(kind = Some("committed-transition"))).toOption.getOrElse(Vector.empty) shouldBe empty
+    }
   }
 
   private final case class _Person(id: EntityId, name: String) {
@@ -289,6 +379,84 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       trigger = CmlStateMachineTriggerIdentity(machine, "approve")
     )
   }
+
+  private val _explicit_operation_binding: CmlTransitionBinding = {
+    val machine = CmlStateMachineIdentity("person-lifecycle")
+    val trigger = CmlStateMachineTriggerIdentity(machine, "operation:entity.updateSalesOrder")
+    val source = CmlStateMachineStateIdentity(machine, CmlStateMachineStatePath(Vector("Draft")))
+    val target = CmlStateMachineStateIdentity(machine, CmlStateMachineStatePath(Vector("Approved")))
+    val contextidentity = CmlStateMachineTriggerContextIdentity(trigger)
+    val context = CmlStateMachineTriggerContext(
+      identity = contextidentity,
+      version = CmlStateMachineVersion(1),
+      fields = Vector("eventName", "targetIdentifier", "currentState", "candidateState").map { name =>
+        CmlStateMachineTriggerContextField(
+          CmlStateMachineTriggerContextFieldIdentity(contextidentity, name),
+          CmlStateMachineScalarType.StringValue
+        )
+      }
+    )
+    CmlTransitionBinding(
+      componentId = ComponentId("org.example.Person"),
+      entityType = _cid,
+      machine = machine,
+      version = CmlStateMachineVersion(1),
+      transition = CmlStateMachineTransitionIdentity(machine, 0),
+      source = source,
+      target = CmlStateMachineTransitionTarget.State(target),
+      trigger = trigger,
+      operation = Some(CmlStateMachineOperationIdentity("entity", "updateSalesOrder")),
+      triggerContext = Some(context)
+    )
+  }
+
+  private def _operation_context(
+    store: EventStore,
+    selector: String
+  ): ExecutionContext = {
+    val base = ExecutionContext.create()
+    lazy val context: ExecutionContext = _with_invocation(
+      ExecutionContext.withRuntimeContext(base, runtime),
+      selector
+    )
+    lazy val runtime: RuntimeContext = new RuntimeContext(
+      core = base.runtime.core,
+      unitofworksupplier = () => new UnitOfWork(
+        context,
+        EventEngine.noop(DataStore.noop(), eventstore = store)
+      ),
+      unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+      commitaction = uow => {
+        val _ = uow.commit()
+        ()
+      },
+      abortaction = uow => {
+        val _ = uow.rollback()
+        ()
+      },
+      disposeaction = _ => (),
+      token = s"planned-transition-operation-$selector"
+    )
+    context
+  }
+
+  private def _with_invocation(
+    context: ExecutionContext,
+    selector: String
+  ): ExecutionContext =
+    context match {
+      case instance: ExecutionContext.Instance =>
+        new ExecutionContext.Instance(
+          instance.core,
+          instance.cncfCore.copy(
+            executionControl = instance.cncfCore.executionControl.copy(
+              invocation = Some(ExecutionInvocationIdentity("hook-operation", 1L, selector, explicit = true))
+            )
+          )
+        )
+      case _ =>
+        fail("The planned-transition hook specification requires a CNCF execution context instance.")
+    }
 
   private final class _ProviderWithPlan extends StateMachinePlannerProvider {
     private var _called = false
@@ -424,6 +592,10 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
   private final class ProviderWithBoundPlan(
     binding: CmlTransitionBinding
   ) extends StateMachinePlannerProvider {
+    private var _execution_trace = Vector.empty[String]
+
+    def executionTrace: Vector[String] = _execution_trace
+
     def planForSave[T](
       entity: T,
       tc: EntityPersistent[T],
@@ -446,6 +618,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
             transitionAction = Some(new ResolvedAction[T, TransitionEvent] {
               def run(state: T, transitionevent: TransitionEvent): Consequence[Unit] = {
                 val _ = (state, transitionevent)
+                _execution_trace = _execution_trace :+ "transition"
                 Consequence.unit
               }
             }),
@@ -465,5 +638,54 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       val _ = (id, patch, tc, event)
       Consequence.success(None)
     }
+  }
+
+  private final class TypedPlanningRejectionProvider extends StateMachinePlannerProvider {
+    def planForSave[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(None)
+    }
+
+    def planForUpdate[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      planForUpdateOutcome(entity, tc, event).toConsequence
+    }
+
+    override def planForUpdateOutcome[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): TransitionPlanningResult[T] = {
+      val _ = (entity, tc, event)
+      _typed_planning_rejection[T]
+    }
+
+    def planForUpdateById[P](
+      id: EntityId,
+      patch: P,
+      tc: EntityPersistentUpdate[P],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[(EntityId, P), TransitionEvent]]] = {
+      val _ = (id, patch, tc, event)
+      Consequence.success(None)
+    }
+
+    private def _typed_planning_rejection[T]: TransitionPlanningResult[T] =
+      Consequence.stateConflict("typed planner private failure") match {
+        case Consequence.Failure(conclusion) =>
+          TransitionPlanningResult.Rejected(
+            TransitionLifecycleFailureOutcome.Target,
+            conclusion,
+            Some(_binding)
+          )
+      }
   }
 }

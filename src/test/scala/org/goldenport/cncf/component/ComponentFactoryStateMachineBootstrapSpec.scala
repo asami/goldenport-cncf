@@ -5,8 +5,9 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.entity.EntityPersistent
-import org.goldenport.cncf.statemachine.{CmlNormalizedStateMachine, CmlStateMachineDefinition, CmlStateMachineDefinitionProvider, CmlStateMachineIdentity, CmlStateMachineStateDefinition, CmlStateMachineStateIdentity, CmlStateMachineStateKind, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding, CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
+import org.goldenport.cncf.context.ExecutionInvocationIdentity
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
+import org.goldenport.cncf.statemachine.{CmlNormalizedStateMachine, CmlStateMachineDefinition, CmlStateMachineDefinitionProvider, CmlStateMachineIdentity, CmlStateMachineOperationIdentity, CmlStateMachineScalarType, CmlStateMachineStateDefinition, CmlStateMachineStateIdentity, CmlStateMachineStateKind, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerContext, CmlStateMachineTriggerContextField, CmlStateMachineTriggerContextFieldIdentity, CmlStateMachineTriggerContextIdentity, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding, CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -86,6 +87,46 @@ final class ComponentFactoryStateMachineBootstrapSpec
       bootstrapped.stateMachineDefinitions shouldBe Vector(factorydefinition)
     }
 
+    "register an Operation rule with save, update, and update-by-id planners while retaining the invocation gate" in {
+      Given("a component with one explicit entity.updateSpecEntity operation transition")
+      val component = _component_with_operation_rule()
+      val bootstrapped = new ComponentFactory().bootstrapC(component).toOption.getOrElse(
+        fail("operation-rule component bootstrap should succeed")
+      )
+      given org.goldenport.cncf.context.ExecutionContext = bootstrapped.logic.executionContext()
+      val entity = SpecEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "operation_bootstrap", _cid, entropy = "operation_bootstrap"), "taro")
+      val matching = Some(_invocation("org.goldenport.cncf.test.StateMachineBootstrapSpec.entity.updateSpecEntity"))
+
+      When("each existing mutation planner sees matching and missing invocation identities")
+      val save = component.stateMachinePlannerProvider.planForSave(
+        entity,
+        _entity_persistent,
+        TransitionEvent("save", Some(entity.id), invocation = matching)
+      )
+      val update = component.stateMachinePlannerProvider.planForUpdate(
+        entity,
+        _entity_persistent,
+        TransitionEvent("update", Some(entity.id), invocation = matching)
+      )
+      val updatebyid = component.stateMachinePlannerProvider.planForUpdateById(
+        entity.id,
+        Record.empty,
+        _record_update_persistent,
+        TransitionEvent("updateById", Some(entity.id), invocation = matching)
+      )
+      val rejected = component.stateMachinePlannerProvider.planForUpdate(
+        entity,
+        _entity_persistent,
+        TransitionEvent("update", Some(entity.id))
+      )
+
+      Then("the bound rule is exposed to all existing mutation routes but selected only by the actual operation identity")
+      Vector(save.toOption.flatten, update.toOption.flatten, updatebyid.toOption.flatten).foreach { selected =>
+        selected.flatMap(_.selectedTransitionBinding) shouldBe Some(_operation_binding)
+      }
+      rejected.toOption.flatten shouldBe None
+    }
+
     "prefer component-provided state machine definitions over factory definitions" in {
       Given("a component and its factory providing different typed definition vectors")
       val componentdefinition = _normalized_definition.copy(
@@ -158,6 +199,35 @@ final class ComponentFactoryStateMachineBootstrapSpec
     component.initialize(params)
   }
 
+  private def _component_with_operation_rule(): Component = {
+    val component = new Component() with CollectionTransitionRuleProvider {
+      override def stateMachineTransitionRules: Vector[CollectionTransitionRule[Any]] =
+        Vector(
+          CollectionTransitionRule[Any](
+            collectionName = "default",
+            trigger = TransitionTrigger.Operation,
+            eventName = "operation:entity.updateSpecEntity",
+            priority = 0,
+            declarationOrder = 0,
+            guard = None,
+            plan = ExecutionPlan.empty[Any, TransitionEvent],
+            binding = Some(_operation_binding)
+          )
+        )
+    }
+    val core = Component.Core.create(
+      name = "org.goldenport.cncf.test.StateMachineBootstrapSpec",
+      componentId = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
+      instanceId = ComponentInstanceId.default(ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec")),
+      protocol = Protocol.empty
+    )
+    component.initialize(ComponentInit(
+      subsystem = TestComponentFactory.emptySubsystem("state_machine_operation_bootstrap_spec"),
+      core = core,
+      origin = ComponentOrigin.Builtin
+    ))
+  }
+
   private final class StateMachineDefinitionFactory(
     definitions: Vector[CmlStateMachineDefinition]
   ) extends Component.Factory
@@ -218,6 +288,36 @@ final class ComponentFactoryStateMachineBootstrapSpec
     )
   }
 
+  private val _operation_binding: CmlTransitionBinding = {
+    val machine = CmlStateMachineIdentity("lifecycle")
+    val trigger = CmlStateMachineTriggerIdentity(machine, "operation:entity.updateSpecEntity")
+    val source = CmlStateMachineStateIdentity(machine, CmlStateMachineStatePath(Vector("Draft")))
+    val target = CmlStateMachineStateIdentity(machine, CmlStateMachineStatePath(Vector("Approved")))
+    val contextidentity = CmlStateMachineTriggerContextIdentity(trigger)
+    val context = CmlStateMachineTriggerContext(
+      identity = contextidentity,
+      version = CmlStateMachineVersion(1),
+      fields = Vector("eventName", "targetIdentifier", "currentState", "candidateState").map { name =>
+        CmlStateMachineTriggerContextField(
+          CmlStateMachineTriggerContextFieldIdentity(contextidentity, name),
+          CmlStateMachineScalarType.StringValue
+        )
+      }
+    )
+    CmlTransitionBinding(
+      componentId = ComponentId("org.goldenport.cncf.test.StateMachineBootstrapSpec"),
+      entityType = _cid,
+      machine = machine,
+      version = CmlStateMachineVersion(1),
+      transition = CmlStateMachineTransitionIdentity(machine, 0),
+      source = source,
+      target = CmlStateMachineTransitionTarget.State(target),
+      trigger = trigger,
+      operation = Some(CmlStateMachineOperationIdentity("entity", "updateSpecEntity")),
+      triggerContext = Some(context)
+    )
+  }
+
   private def _initialized_component(
     component: Component,
     componentFactory: Component.Factory
@@ -270,4 +370,16 @@ final class ComponentFactoryStateMachineBootstrapSpec
       }
     }
   }
+
+  private val _record_update_persistent: EntityPersistentUpdate[Record] = new EntityPersistentUpdate[Record] {
+    def collection(entity: Record): EntityCollectionId = {
+      val _ = entity
+      _cid
+    }
+    def toRecord(entity: Record): Record = entity
+    def fromRecord(record: Record): Consequence[Record] = Consequence.success(record)
+  }
+
+  private def _invocation(selector: String): ExecutionInvocationIdentity =
+    ExecutionInvocationIdentity("operation-bootstrap", 1L, selector, explicit = true)
 }

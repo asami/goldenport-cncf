@@ -588,10 +588,10 @@ final class ComponentFactory(
     val provider = new CollectionStateMachinePlannerProvider(component.stateMachinePlannerProvider)
     val rules = _default_collection_transition_rules(component, plans)
     val saverulesbycollection = rules.collect {
-      case m if m.trigger == TransitionTrigger.Save => m
+      case m if m.trigger == TransitionTrigger.Save || m.trigger == TransitionTrigger.Operation => m
     }.groupBy(_.collectionName)
     val updaterulesbycollection = rules.collect {
-      case m if m.trigger == TransitionTrigger.Update => m
+      case m if m.trigger == TransitionTrigger.Update || m.trigger == TransitionTrigger.Operation => m
     }.groupBy(_.collectionName)
 
     saverulesbycollection.foreach { case (name, groupedrules) =>
@@ -643,7 +643,8 @@ final class ComponentFactory(
       historyDirectLeafValues = p.historyDirectLeafValues,
       historyFallbackLeaf = p.historyFallbackLeaf,
       expectedHistoryRecordWrites = p.expectedHistoryRecordWrites,
-      binding = p.binding
+      binding = p.binding,
+      trigger = p.trigger
     )
 
   private def _bootstrap_entities_with_plan(

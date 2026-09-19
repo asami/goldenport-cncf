@@ -129,4 +129,58 @@ object StateMachineRuleBuilder {
       expectedHistoryRecordWrites = expectedHistoryRecordWrites,
       binding = binding
     )
+
+  /**
+   * An explicit generated operation binding is registered on every existing
+   * mutation planner.  Eligibility is still decided by the planner from the
+   * typed binding and the actual execution invocation.
+   */
+  def operationRule[S](
+    collectionName: String,
+    eventName: String,
+    priority: Int = 0,
+    declarationOrder: Int = 0,
+    guard: Option[Guard[S, TransitionEvent]] = None,
+    plan: ExecutionPlan[S, TransitionEvent],
+    binding: CmlTransitionBinding,
+    machineName: Option[String] = None,
+    stateFieldName: Option[String] = None,
+    fromState: Option[String] = None,
+    fromStateValue: Option[Int] = None,
+    toState: Option[String] = None,
+    toStateValue: Option[Int] = None,
+    historyCompositeName: Option[String] = None,
+    historyFieldName: Option[String] = None,
+    historyDirectLeaves: Vector[String] = Vector.empty,
+    historyDirectLeafValues: Map[String, Int] = Map.empty,
+    historyFallbackLeaf: Option[String] = None,
+    expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty
+  ): CollectionTransitionRule[Any] = {
+    require(
+      binding.operation.nonEmpty && binding.triggerContext.nonEmpty,
+      "Operation transition rules require an explicit CML operation binding and typed trigger context"
+    )
+    CollectionTransitionRule[Any](
+      collectionName = collectionName,
+      trigger = TransitionTrigger.Operation,
+      eventName = eventName,
+      priority = priority,
+      declarationOrder = declarationOrder,
+      guard = guard.asInstanceOf[Option[Guard[Any, TransitionEvent]]],
+      plan = plan.asInstanceOf[ExecutionPlan[Any, TransitionEvent]],
+      machineName = machineName,
+      stateFieldName = stateFieldName,
+      fromState = fromState,
+      fromStateValue = fromStateValue,
+      toState = toState,
+      toStateValue = toStateValue,
+      historyCompositeName = historyCompositeName,
+      historyFieldName = historyFieldName,
+      historyDirectLeaves = historyDirectLeaves,
+      historyDirectLeafValues = historyDirectLeafValues,
+      historyFallbackLeaf = historyFallbackLeaf,
+      expectedHistoryRecordWrites = expectedHistoryRecordWrites,
+      binding = Some(binding)
+    )
+  }
 }

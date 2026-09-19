@@ -16,7 +16,8 @@ final case class ExecutionPlan[S, E](
   exitActions: Vector[ResolvedAction[S, E]],
   transitionAction: Option[ResolvedAction[S, E]],
   entryActions: Vector[ResolvedAction[S, E]],
-  selectedTransitionBinding: Option[CmlTransitionBinding] = None
+  selectedTransitionBinding: Option[CmlTransitionBinding] = None,
+  selectedTransitionTrigger: Option[TransitionTrigger] = None
 )
 
 object ExecutionPlan {

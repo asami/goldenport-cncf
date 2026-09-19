@@ -5,7 +5,7 @@ import org.goldenport.Conclusion
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionContextId}
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.job.{JobId, TaskId}
-import org.goldenport.cncf.statemachine.TransitionEvent
+import org.goldenport.cncf.statemachine.{CmlStateMachineTransitionTarget, CmlTransitionBinding, TransitionEvent}
 
 /*
  * Canonical transition lifecycle envelope for EV-01.
@@ -26,6 +26,18 @@ enum TransitionLifecycleFailureStage(val value: String) {
   case Action extends TransitionLifecycleFailureStage("action")
 }
 
+/** Closed, safe classification for a transition lifecycle failure. */
+enum TransitionLifecycleFailureOutcome(val value: String) {
+  case Source extends TransitionLifecycleFailureOutcome("source")
+  case NoMatch extends TransitionLifecycleFailureOutcome("no-match")
+  case Ambiguity extends TransitionLifecycleFailureOutcome("ambiguity")
+  case Guard extends TransitionLifecycleFailureOutcome("guard")
+  case Action extends TransitionLifecycleFailureOutcome("action")
+  case Target extends TransitionLifecycleFailureOutcome("target")
+  case Persistence extends TransitionLifecycleFailureOutcome("persistence")
+  case Rollback extends TransitionLifecycleFailureOutcome("rollback")
+}
+
 final case class TransitionLifecycleCorrelation(
   executionContextId: ExecutionContextId,
   traceId: String,
@@ -39,13 +51,21 @@ final case class TransitionLifecycleTransition(
   event: String,
   transition: Option[String],
   collection: Option[String],
-  targetId: Option[EntityId]
+  targetId: Option[EntityId],
+  machineVersion: Option[Int] = None,
+  transitionDeclarationOrder: Option[Int] = None,
+  source: Option[String] = None,
+  targetKind: Option[String] = None,
+  target: Option[String] = None,
+  trigger: Option[String] = None,
+  operationSelector: Option[String] = None
 )
 
 final case class TransitionLifecycleFailure(
   taxonomy: String,
   message: Option[String],
-  stage: TransitionLifecycleFailureStage = TransitionLifecycleFailureStage.Action
+  stage: TransitionLifecycleFailureStage = TransitionLifecycleFailureStage.Action,
+  outcome: TransitionLifecycleFailureOutcome = TransitionLifecycleFailureOutcome.Action
 )
 
 final case class TransitionLifecycleEvent(
@@ -65,33 +85,37 @@ object TransitionLifecycleEvent {
 
   def beforeTransition(
     event: TransitionEvent,
-    collection: Option[String]
+    collection: Option[String],
+    binding: Option[CmlTransitionBinding] = None
   )(using ctx: ExecutionContext): TransitionLifecycleEvent =
-    _create(TransitionLifecycleKind.BeforeTransition, event, collection, None)
+    _create(TransitionLifecycleKind.BeforeTransition, event, collection, binding, None)
 
   def afterTransition(
     event: TransitionEvent,
-    collection: Option[String]
+    collection: Option[String],
+    binding: Option[CmlTransitionBinding] = None
   )(using ctx: ExecutionContext): TransitionLifecycleEvent =
-    _create(TransitionLifecycleKind.AfterTransition, event, collection, None)
+    _create(TransitionLifecycleKind.AfterTransition, event, collection, binding, None)
 
   def transitionFailed(
     event: TransitionEvent,
     collection: Option[String],
     failure: Conclusion,
-    stage: TransitionLifecycleFailureStage = TransitionLifecycleFailureStage.Action
+    stage: TransitionLifecycleFailureStage = TransitionLifecycleFailureStage.Action,
+    outcome: TransitionLifecycleFailureOutcome = TransitionLifecycleFailureOutcome.Action,
+    binding: Option[CmlTransitionBinding] = None
   )(using ctx: ExecutionContext): TransitionLifecycleEvent =
     _create(
       TransitionLifecycleKind.TransitionFailed,
-      event,
-      collection,
+      event, collection, binding,
       Some(
         TransitionLifecycleFailure(
           taxonomy = failure.observation.taxonomy.print,
           // Keep the compatibility field structurally present without exporting
           // an action, guard, persistence, or provider failure's raw text.
           message = None,
-          stage = stage
+          stage = stage,
+          outcome = outcome
         )
       )
     )
@@ -100,6 +124,7 @@ object TransitionLifecycleEvent {
     kind: TransitionLifecycleKind,
     event: TransitionEvent,
     collection: Option[String],
+    binding: Option[CmlTransitionBinding],
     failure: Option[TransitionLifecycleFailure]
   )(using ctx: ExecutionContext): TransitionLifecycleEvent = {
     val ob = ctx.observability
@@ -115,15 +140,43 @@ object TransitionLifecycleEvent {
         spanId = ob.spanId.map(_.print),
         correlationId = ob.correlationId.map(_.print)
       ),
-      transition = TransitionLifecycleTransition(
-        machine = None,
-        state = None,
-        event = event.name,
-        transition = None,
-        collection = collection,
-        targetId = event.targetId
-      ),
+      transition = _transition(event, collection, binding),
       failure = failure
     )
   }
+
+  private def _transition(
+    event: TransitionEvent,
+    collection: Option[String],
+    binding: Option[CmlTransitionBinding]
+  ): TransitionLifecycleTransition = {
+    val target = binding.map(_target)
+    TransitionLifecycleTransition(
+      machine = binding.map(_.machine.name),
+      state = binding.map(_.source.path.render),
+      event = event.name,
+      transition = binding.map(_.transition.declarationOrder.toString),
+      collection = collection,
+      targetId = event.targetId,
+      machineVersion = binding.map(_.version.value),
+      transitionDeclarationOrder = binding.map(_.transition.declarationOrder),
+      source = binding.map(_.source.path.render),
+      targetKind = target.map(_._1),
+      target = target.map(_._2),
+      trigger = binding.map(_.trigger.name),
+      operationSelector = binding.flatMap { value =>
+        value.operation.map { operation =>
+          Vector(value.componentId.name, operation.service, operation.operation).mkString(".")
+        }
+      }
+    )
+  }
+
+  private def _target(binding: CmlTransitionBinding): (String, String) =
+    binding.target match {
+      case CmlStateMachineTransitionTarget.State(state) => "state" -> state.path.render
+      case CmlStateMachineTransitionTarget.ShallowHistory(target) =>
+        "shallow-history" -> target.composite.path.render
+      case CmlStateMachineTransitionTarget.Final => "final" -> ""
+    }
 }

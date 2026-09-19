@@ -296,10 +296,12 @@ final class UnitOfWorkStateMachineHookSpec
       Then("one non-transactional record retains only the safe taxonomy")
       result.isSuccess shouldBe true
       lifecycle.failure.flatMap(_.message) shouldBe None
+      lifecycle.failure.map(_.outcome) shouldBe Some(org.goldenport.cncf.event.TransitionLifecycleFailureOutcome.Action)
       val records = store.query(EventStore.Query(kind = Some("transition-failed"))).toOption.getOrElse(Vector.empty)
       records should have size 1
       records.head.lane shouldBe EventLane.NonTransactional
       records.head.payload.get("transition.failure.taxonomy").map(_.toString).getOrElse("") should not be empty
+      records.head.payload.get("transition.failure.outcome") shouldBe Some("action")
       records.head.payload.values.mkString(" ") should not include privateactiontext
     }
 

@@ -67,7 +67,9 @@ final case class EventRecord(
   status: EventRecord.Status,
   lane: EventLane,
   sequence: Long = 0L
-)
+) {
+  private[event] var _delivery_lookup_key: Option[CommittedDeliveryLookupKey] = None
+}
 
 object EventRecord {
   enum Status(val value: String) {
@@ -108,18 +110,26 @@ final case class EventRecordFactory(
         val failurepayload = e.failure.map { failure =>
           Map(
             "transition.failure.taxonomy" -> failure.taxonomy,
-            "transition.failure.stage" -> failure.stage.value
+            "transition.failure.stage" -> failure.stage.value,
+            "transition.failure.outcome" -> failure.outcome.value
           )
         }.getOrElse(Map.empty)
         EventRecord(
           id = e.id,
           name = e.name,
           kind = e.kind.value,
-          payload = Map(
-            "transition.event" -> e.transition.event,
-            "transition.collection" -> e.transition.collection.getOrElse(""),
-            "transition.targetId" -> e.transition.targetId.map(_.print).getOrElse("")
-          ) ++ failurepayload,
+          payload = Map("transition.event" -> e.transition.event) ++
+            e.transition.collection.map("transition.collection" -> _) ++
+            e.transition.targetId.map(id => "transition.targetId" -> id.print) ++
+            e.transition.machine.map("machine.name" -> _) ++
+            e.transition.machineVersion.map("machine.version" -> _) ++
+            e.transition.transitionDeclarationOrder.map("transition.declarationOrder" -> _) ++
+            e.transition.source.map("transition.source" -> _) ++
+            e.transition.targetKind.map("transition.target.kind" -> _) ++
+            e.transition.target.map("transition.target" -> _) ++
+            e.transition.trigger.map("transition.trigger" -> _) ++
+            e.transition.operationSelector.map("operation.id" -> _) ++
+            failurepayload,
           attributes = Map(
             "traceId" -> e.correlation.traceId,
             "spanId" -> e.correlation.spanId.getOrElse(""),
@@ -132,7 +142,7 @@ final case class EventRecordFactory(
         )
       case e: CommittedTransition =>
         val target = _committed_transition_target(e)
-        EventRecord(
+        val record = EventRecord(
           id = e.id,
           name = e.name,
           kind = e.kind,
@@ -162,6 +172,8 @@ final case class EventRecordFactory(
           status = EventRecord.Status.Stored,
           lane = lane
         )
+        record._delivery_lookup_key = e._delivery_lookup_key
+        record
       case e: ActionEvent =>
         EventRecord(
           id = _event_id(e, occurredat),
@@ -261,15 +273,18 @@ object EventStore {
   private final class InMemory extends EventStore {
     private val _records = mutable.ArrayBuffer.empty[EventRecord]
     private val _index = mutable.HashMap.empty[EventId, EventRecord]
+    private val _committed_delivery_index = mutable.HashMap.empty[CommittedDeliveryLookupKey, EventRecord]
     private var _sequence = 0L
 
     def append(records: Seq[EventRecord]): Consequence[Vector[EventRecord]] = synchronized {
       val stored = records.toVector.map { r =>
-        _index.get(r.id).getOrElse {
+        _index.get(r.id).orElse(r._delivery_lookup_key.flatMap(_committed_delivery_index.get)).getOrElse {
           _sequence = _sequence + 1
           val x = r.copy(sequence = _sequence)
+          x._delivery_lookup_key = r._delivery_lookup_key
           _records += x
           _index.update(x.id, x)
+          x._delivery_lookup_key.foreach(_committed_delivery_index.update(_, x))
           x
         }
       }

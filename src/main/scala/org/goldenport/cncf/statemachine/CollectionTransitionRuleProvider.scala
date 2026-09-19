@@ -11,7 +11,7 @@ package org.goldenport.cncf.statemachine
  * @author  ASAMI, Tomoharu
  */
 enum TransitionTrigger {
-  case Save, Update
+  case Save, Update, Operation
 }
 
 final case class CollectionTransitionRule[S](
@@ -36,6 +36,13 @@ final case class CollectionTransitionRule[S](
   expectedHistoryRecordWrites: Vector[HistoryRecordWrite] = Vector.empty,
   binding: Option[CmlTransitionBinding] = None
 ) {
+  require(
+    trigger != TransitionTrigger.Operation || binding.exists { value =>
+      value.operation.nonEmpty && value.triggerContext.nonEmpty
+    },
+    "Operation transition rules require an explicit CML operation binding and typed trigger context"
+  )
+
   def isStructural: Boolean =
     stateFieldName.isDefined && fromState.isDefined &&
       (toState.isDefined || historyCompositeName.isDefined)

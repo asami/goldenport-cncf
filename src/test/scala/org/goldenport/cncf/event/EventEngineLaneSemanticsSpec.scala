@@ -2,7 +2,7 @@ package org.goldenport.cncf.event
 
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.cncf.component.ComponentId
-import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionInvocationIdentity, IdGenerationContext}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.statemachine.{CmlStateMachineIdentity, CmlStateMachineStateIdentity, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, TransactionContext}
@@ -120,8 +120,8 @@ final class EventEngineLaneSemanticsSpec
       record.payload.keySet should not contain "payload"
     }
 
-    "retain one occurrence when an issued committed transition is re-emitted" in {
-      Given("a deterministic execution context, one committed transition, and an independent committed transition")
+    "retain one stored occurrence when an explicit committed delivery is replayed with a fresh event id" in {
+      Given("a deterministic execution context, one explicit delivery identity, and an independent committed transition")
       val instant = Instant.parse("2026-09-18T10:30:00Z")
       val clock = Clock.fixed(instant, ZoneOffset.UTC)
       val ids = IdGenerationContext.deterministic(
@@ -133,22 +133,51 @@ final class EventEngineLaneSemanticsSpec
       val collection = EntityCollectionId("test", "sm", "person")
       val entityid = ids.entityId(collection, "committed-transition-retry-entity")
       val tx = TransactionContext.create(summon[ExecutionContext].transactionContext, clock, ids)
-      val event = CommittedTransition.create(entityid, _binding(collection), "update", tx.id)
+      val invocation = ExecutionInvocationIdentity(
+        key = "committed-transition-replay",
+        ordinal = 1L,
+        operationSelector = "org.example.Person.entity.update",
+        explicit = true
+      )
+      val pending = CommittedTransition.pending(
+        entityid,
+        _binding(collection),
+        "update",
+        Some(invocation)
+      )
+      val event = pending.deliver(tx.id)
+      val replaypending = CommittedTransition.pending(
+        entityid,
+        _binding(collection),
+        "update",
+        Some(invocation)
+      )
+      val replayevent = replaypending.deliver(tx.id)
       val independentevent = CommittedTransition.create(entityid, _binding(collection), "update", tx.id)
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(), eventstore = store)
       val factory = EventRecordFactory.from(summon[ExecutionContext])
 
-      When("the issued transition is emitted twice through the non-transactional lane and another transition is emitted")
+      When("the explicit delivery and its fresh-id replay are emitted with another independent transition")
       val first = engine.emit(Vector(event), factory)
-      val retried = engine.emit(Vector(event), factory)
+      val retried = engine.emit(Vector(replayevent), factory)
       val independent = engine.emit(Vector(independentevent), factory)
       val queried = store.query(EventStore.Query())
       val replayed = store.replay(EventStore.Query())
+      val stored = first.toOption.getOrElse(Vector.empty).head
 
-      Then("the retry returns the original issued identity and sequence")
+      Then("the replay returns the original stored identity and sequence rather than its fresh id")
       first.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector((event.id, 1L))
       retried.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector((event.id, 1L))
+      replayevent.id should not equal event.id
+
+      And("the explicit invocation discriminator remains outside public occurrence and record Product rendering")
+      pending.productIterator.mkString should not include invocation.key
+      pending.toString should not include invocation.key
+      event.productIterator.mkString should not include invocation.key
+      event.toString should not include invocation.key
+      stored.productIterator.mkString should not include invocation.key
+      stored.toString should not include invocation.key
 
       And("query and replay retain one occurrence for the retried event and one for the independent event")
       independent.toOption.getOrElse(Vector.empty).map(record => (record.id, record.sequence)) shouldBe Vector((independentevent.id, 2L))
