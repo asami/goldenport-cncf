@@ -5,6 +5,11 @@ phase=[Phase 64](phase-64.md)
 
 Phase 64 closes only the minimum Composite StateMachine / Workflow foundation required by Phase 77 and sm-workflow Phase 1. It consumes the completed Phase 63.1 local atomic-execution contract and starts only after Phase 63.2 closes.
 
+SWF-01 through SWF-06 are accepted. SWF-07 reuses the already closed
+[Cozy Phase 62.3 producer handoff](https://github.com/asami/cozy/blob/main/docs/phase/phase-62.3.md).
+No new Cozy Phase is an entry condition, and accepted Steps do not require a
+replacement Phase 64 goal.
+
 The acceptance path consumes, but never reinterprets or executes ahead of, the Phase 63.2 post-commit handoff:
 
 ```text
@@ -103,21 +108,47 @@ Stage Status:
 - Completion rule: preserve the CML-first generated semantic-contract handoff without CML reparsing, leave generated API/SPI admission and `ComponentFactory` bootstrap to Phase 77, and do not accept handwritten definitions as canonical end-to-end evidence.
 - Update rule: preserve this accepted result until the ordinary Step 64-S6 commit.
 
-Evidence: [Composite Workflow Generated Semantic Handoff](../design/composite-workflow-generated-semantic-handoff.md) records the sealed Step review disposition digest `b177d55228453e4c84e3a702511036edd37ae337afa6d41d4cf2a30c5375cc5a`. Phase 64 remains in progress with SWF-07–08 planned.
+Evidence: [Composite Workflow Generated Semantic Handoff](../design/composite-workflow-generated-semantic-handoff.md) records the sealed Step review disposition digest `b177d55228453e4c84e3a702511036edd37ae337afa6d41d4cf2a30c5375cc5a`. Phase 64 remains in progress; SWF-07 consumes the closed Cozy Phase 62.3 fixture and SWF-08 follows it.
 
 ## SWF-07 Real fixture
-- [ ] Prove Phase 63.2 committed constituent transition -> derived composite transition.
-- [ ] Prove typed lower/upper action composition and deterministic test boundary.
-- [ ] Prove minimal Workflow progression required for Phase 77 handoff.
+- [x] Pin the released Cozy Phase 62.3 CML fixture, generated Workflow ABI,
+      schema/version, and producer validation evidence.
+- [x] Prove the minimum typed action/progression boundary required for Phase 77
+      using that fixture, without a new Cozy producer implementation.
+- [x] Prove that an entity-triggered entry accepts only the Phase 63.2
+      `CommittedTransition`; do not force that trigger onto the explicitly
+      started Skill-driven Phase 62.3 fixture.
+- [x] Record any actual ABI incompatibility precisely. In its absence, do not
+      expand Cozy or create generalized producer diagnostics.
+
+Stage Status:
+
+- Current status: ACCEPTED.
+- Owner: CNCF Phase 64 for the bounded fixture composition and runtime proof;
+  Cozy Phase 62.3 remains the immutable producer evidence owner.
+- Entry rule: consume the accepted Cozy Phase 62.3 revision, generated ABI
+  schema/version, source/fixture identity, and validation evidence already
+  recorded by that closure.
+- Resume rule: continue directly at SWF-07; do not reopen SWF-01 through SWF-06.
+- Scope rule: add only the smallest CNCF-side fixture adapter or executable
+  specification needed to connect the released producer fixture to the
+  Phase 63.2/64 boundary. Do not request generalized Cozy metadata or static
+  analysis unless a concrete ABI incompatibility is demonstrated.
+- Rejection rule: handwritten replacement definitions, CML reparsing, and name
+  inference do not satisfy the dependency.
 
 ## SWF-08 Handoff and deferral
-- [ ] Freeze exact Phase 77 consumer handoff.
-- [ ] Record that generated API/SPI admission, ActionExecution, Provider runtime, Continuation/resume, the minimum typed Workflow protocol and schema-versioned fail-closed Skill/Codex JSON encoding, and the minimum Skill projection required by the sm-workflow vertical slice are Phase 77 concerns.
-- [ ] Record broad Start/API expansion, rich Presentation/UI, broad reasoning vocabulary, parent/child Workflow composition, and orchestration/REST/MCP surfaces as later-phase concerns.
-- [ ] Record Retry/Timeout and other runtime-control features as later phases.
-- [ ] Record 2PC/compensation/recovery as Phase 85.
-- [ ] Record Workflow-to-Workflow orchestration and advanced integration as later work.
-- [ ] If Phase 63.2 closure reveals hierarchy/history runtime gaps, require the dedicated follow-up before relying on those semantics.
+- [x] Freeze exact Phase 77 consumer handoff.
+- [x] Record the exact accepted Cozy Phase 62.3 producer handoff consumed by
+      SWF-07.
+- [x] Record that generated API/SPI admission, ActionExecution, Provider runtime, Continuation/resume, the minimum typed Workflow protocol and schema-versioned fail-closed Skill/Codex JSON encoding, and the minimum Skill projection required by the sm-workflow vertical slice are Phase 77 concerns.
+- [x] Record broad Start/API expansion, rich Presentation/UI, broad reasoning vocabulary, parent/child Workflow composition, and orchestration/REST/MCP surfaces as later-phase concerns.
+- [x] Record Retry/Timeout and other runtime-control features as later phases.
+- [x] Record 2PC/compensation/recovery as Phase 85.
+- [x] Record Workflow-to-Workflow orchestration and advanced integration as later work.
+- [x] If Phase 63.2 closure reveals hierarchy/history runtime gaps, require the dedicated follow-up before relying on those semantics.
+
+Evidence: [Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md) pins the accepted producer identity, ABI/schema, fixture and validation evidence; binds it to the existing Phase 63.2 `CommittedTransition` boundary without miscasting the fixture's explicit Skill-driven start; and records the Phase 77 consumer handoff and later-phase deferrals. Phase 64 remains `in_progress` until its ordinary closure.
 
 ## Closure
 

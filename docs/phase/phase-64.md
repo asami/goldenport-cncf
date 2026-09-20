@@ -4,12 +4,19 @@ status=in_progress
 planned_at=2026-08-12
 revised_at=2026-09-20
 depends_on=[Phase 63.2](phase-63.2.md)
+external_producer=[Cozy Phase 62.3](https://github.com/asami/cozy/blob/main/docs/phase/phase-62.3.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 64 Checklist](phase-64-checklist.md)
 
 ## Purpose
 
 Provide the minimum Composite StateMachine and Workflow semantics required by CNCF Phase 77 and the sm-workflow Phase 1 executable-specification path. It consumes the completed Phase 63.2 `CommittedTransition` handoff without executing ahead of that post-commit boundary.
+
+SWF-01 through SWF-06 are accepted and remain valid. The real-fixture boundary
+uses the already closed Cozy Phase 62.3 generated Workflow ABI and fixture; a
+new Cozy Phase is not a prerequisite. Phase 64 resumes at SWF-07 by composing
+that released producer evidence with the accepted Phase 63.2
+`CommittedTransition` and Phase 64 semantic contracts.
 
 Workflow remains a specialization/profile of Composite StateMachine. Phase 64 does not build a general-purpose workflow engine or advanced operational runtime.
 
@@ -79,8 +86,8 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 | SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, consuming the completed Phase 63.1 atomic-execution contract and delegating incremental planner/interpreter work to 64.2. | accepted |
 | SWF-05 | Freeze minimal Workflow specialization and semantic WorkflowDefinition/WorkflowInstance identity, lifecycle/progression and correlation contract; durable revision/history/store semantics are Phase 77. | accepted |
 | SWF-06 | Freeze the CML-first generated semantic-contract handoff without CML reparsing; Phase 77 owns generated API/SPI admission and ComponentFactory bootstrap. | accepted |
-| SWF-07 | Prove one real CML fixture through the Phase 63.2 committed constituent transition -> derived composite transition -> action-program boundary -> minimal Workflow progression. | planned |
-| SWF-08 | Freeze exact Phase 77 handoff and explicitly record deferred advanced facilities. | planned |
+| SWF-07 | Reuse the closed Cozy Phase 62.3 generated Workflow fixture and prove the minimum Phase 63.2 committed-transition -> Phase 64 semantic/action boundary required by Phase 77. | accepted |
+| SWF-08 | Freeze exact Phase 77 handoff and explicitly record deferred advanced facilities. | accepted |
 
 ## Acceptance
 
@@ -93,6 +100,10 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 - Minimal Workflow definition/instance identity, lifecycle/progression and correlation can be represented without introducing a second Workflow language/runtime; durable revision/history/store semantics remain Phase 77.
 - No external participant/Skill/Continuation protocol is required to close Phase 64.
 - A real CML fixture reaches the handoff required by Phase 77 using deterministic testable execution boundaries.
+- For the `sm-workflow` critical path, the real CML fixture is the released Cozy
+  Phase 62.3 Workflow producer fixture. Phase 64 does not require a new
+  generalized Composite StateMachine sidecar when the Phase 77 entry contract
+  can be proved from that released ABI and the accepted CNCF boundaries.
 - Phase 77 can add generated API/SPI admission, Provider execution, durable Continuation/resume, the minimum typed Workflow protocol/JSON encoding, and the minimum Skill projection required by the sm-workflow vertical slice without changing Phase 64 semantics.
 
 ## Explicitly deferred
@@ -110,10 +121,30 @@ The following are not Phase 64 completion requirements:
 - Workflow-to-Workflow orchestration/composition runtime;
 - remote transport/service discovery/deployment binding;
 - advanced operational observability/administration.
+- generalized Cozy producer sidecars and producer-wide reachability, coverage,
+  overlap, ambiguity, or completeness diagnostics beyond the Phase 62.3 ABI;
+- a second Composite/Workflow fixture that does not change the Phase 77 or
+  `sm-workflow` consumer contract.
 
 ## Dependencies and follow-up
 
 Phase 64 begins after Phase 63.2 closes. If the post-Phase-63.2 gap review identifies missing hierarchical-state/shallow-history runtime support, that dedicated StateMachine follow-up must be completed before Phase 64 relies on those semantics.
+
+SWF-07 reuses the released producer contract and real CML fixture from
+[Cozy Phase 62.3](https://github.com/asami/cozy/blob/main/docs/phase/phase-62.3.md).
+It must not require generalized producer metadata, diagnostics, or a new Cozy
+Phase merely to restate the already accepted Phase 64 contracts. The minimum
+CNCF-owned proof binds that released fixture to the Phase 63.2
+`CommittedTransition` boundary and the action/progression handoff required by
+Phase 77. If this proof exposes an actual ABI incompatibility, record the exact
+missing field or behavior before reopening producer work. Speculative producer
+generalization is not a blocker.
+
+[Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md)
+pins the accepted SWF-07/08 evidence, preserves the distinction between the
+fixture's explicit Skill-driven start and the Phase 63.2 entity-triggered
+`CommittedTransition` entrance, and records the Phase 77 consumer deferrals.
+Phase 64 remains `in_progress` until its ordinary closure.
 
 Phase 64.2 follows Phase 64 while directly consuming the completed Phase 63.1 local atomic-execution contract; Phase 64.1 is retained only as superseded planning history. Phase 77 then owns the independently durable WorkflowInstance persistence SPI, generated API/SPI admission, the Provider runtime, ActionExecution, bounded advance, Continuation/resume, the minimum typed Workflow protocol and schema-versioned fail-closed Skill/Codex JSON encoding, the minimum Generic Skill projection, and the sm-workflow consumer handoff. Broad protocol expansion and orchestration extensions are later phases.
 
@@ -126,4 +157,6 @@ Advanced Workflow runtime capabilities are owned by dedicated later phases.
 - [Phase 64.1 — superseded planning record](phase-64.1.md)
 - [Phase 64.2](phase-64.2.md)
 - [Phase 77](phase-77.md)
+- [Closed Cozy Phase 62.3 producer handoff](https://github.com/asami/cozy/blob/main/docs/phase/phase-62.3.md)
+- [Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md)
 - [StateMachine / Workflow alignment](../notes/statemachine-workflow-alignment-provisional-specification.md)
