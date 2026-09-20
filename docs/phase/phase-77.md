@@ -184,6 +184,25 @@ Phase 77 defers broad Start/API expansion beyond this typed entry/result,
 rich Presentation/UI, additional reasoning vocabulary, parent/child Workflow
 composition, orchestration, and REST/MCP/UI protocol surfaces to later phases.
 
+### Application payload extension and ownership
+
+The generic Workflow DTO is an envelope, not an application domain model. Its type parameters are explicit application-owned extension points. A consumer such as `sm-workflow` specializes them with its own typed start/work/result/terminal payloads while CNCF retains ownership of Workflow/Continuation identity, `WorkflowHandle`, revision/idempotency, `ContextSnapshot`, Completion/Evidence, `ExecutionRequirement`, `ExecutionEvidence`, Presentation, and stale/duplicate resume rules.
+
+Conceptually:
+
+```text
+WorkflowStartRequest[ApplicationStart]
+WORK_ORDER -> WorkOrder[ApplicationWork]
+WorkResult[ApplicationResult]
+TERMINAL[ApplicationOutcome]
+```
+
+Application payloads must not redefine generic handle, continuation, revision, snapshot, idempotency, or Evidence envelope semantics. Conversely CNCF must not interpret application-specific planning/domain semantics contained in those payloads.
+
+For `sm-workflow`, `SmExecutionContext` is application-owned bounded execution semantics projected by its Skill/profile layer; CNCF `ContextSnapshot` carries/snapshots that input for execution identity, freshness, persistence, and resume validation. `Phase`, `Checklist`, closure/planning semantics, and Skill-owned Workflow mapping are not generic CNCF DTO concepts and must not be introduced into Phase 77 merely to support the reference consumer. An optional source correlation may be carried as opaque application data for traceability but must not control progression.
+
+The Phase 77 consumer handoff must therefore freeze both sides of the seam: the generic envelope/extension rules owned by CNCF and the rule that application payload schemas remain consumer-owned.
+
 ## WorkflowInstance Persistence Boundary
 
 `WorkflowInstance` is a separately durable process record with stable instance identity, definition identity/version, revision, lifecycle state, current progression/suspension, append-only history, and causal correlation. Phase 77 defines its provider-neutral persistence SPI and exercises that contract for the accepted vertical slice.
