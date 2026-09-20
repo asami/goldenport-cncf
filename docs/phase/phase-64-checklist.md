@@ -28,10 +28,20 @@ Stage Status:
 Evidence: [Composite StateMachine / Workflow Semantic Inventory](../design/composite-workflow-semantic-inventory.md) records the sealed Step review disposition digest `566d9146076175e6fefb92809b6ef9548462d7d9d57da99f51c0074ebb61f34a`. Phase 64 remains in progress with SWF-02–08 planned.
 
 ## SWF-02 Composite identity and derivation
-- [ ] Freeze constituent role/identity and configuration schema.
-- [ ] Freeze deterministic composite-state derivation.
-- [ ] Freeze derived composite-transition identity and causal correlation.
-- [ ] Consume the Phase 63.2 `CommittedTransition` only as the post-commit constituent-transition input.
+- [x] Freeze constituent role/identity and configuration schema.
+- [x] Freeze deterministic composite-state derivation.
+- [x] Freeze derived composite-transition identity and causal correlation.
+- [x] Consume the Phase 63.2 `CommittedTransition` only as the post-commit constituent-transition input.
+
+Stage Status:
+
+- Current status: ACCEPTED.
+- Owner: CNCF semantic-boundary owner under Phase 64 closure authority.
+- Entry rule: entered only after completed Phase 63.2 post-commit input is available.
+- Completion rule: role/identity, configuration, deterministic derivation, and post-commit causal correlation are accepted.
+- Update rule: preserve this accepted result until the ordinary Step 64-S2 commit.
+
+Evidence: [Composite StateMachine Identity and Derivation](../design/composite-state-machine-identity-and-derivation.md) records the sealed Step re-review disposition digest `f034e3593ad328b6be971a6494a71e4db354c929143748f0cc192ec308abac09`. Phase 64 remains in progress with SWF-03–08 planned.
 
 ## SWF-03 Admission
 - [ ] Consume generated CML contracts without reparsing CML.
