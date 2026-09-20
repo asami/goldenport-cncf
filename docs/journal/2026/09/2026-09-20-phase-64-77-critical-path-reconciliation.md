@@ -27,14 +27,21 @@ Phase 77 retains the smallest typed Workflow protocol needed by the consumer:
 - closed `Continuation = WORK_ORDER | DECISION | WAIT | TERMINAL`;
 - typed WorkOrder/WorkResult, Completion/Evidence, and application-owned
   payloads;
-- `ExecutionRequirement` with `ROUTINE`, `STANDARD`, `DEEP`, and `CRITICAL`;
-- `MinimalPresentation` for console visibility only; and
+- `ExecutionRequirement` with small typed capability/risk requirements and
+  `ROUTINE`, `STANDARD`, `DEEP`, and `CRITICAL`;
+- typed `ExecutionEvidence` for Skill/Host-dispatched WorkResult completion;
+- common `Presentation` with title/current situation and optional
+  summary/next action/reason/progress for console visibility only; and
 - schema-versioned, fail-closed Skill/Codex JSON encoding.
 
 Concrete worker-profile mapping remains Host/Skill policy and evidence, not
 Workflow progression semantics. Broad Start/API expansion, rich UI,
 additional reasoning vocabulary, parent/child composition, orchestration, and
 REST/MCP/UI transport remain later work.
+
+The exact common-contract decision, including the `ExecutionEvidence` and
+`WorkflowInteraction` boundaries, is recorded in
+[Phase 77 Common Contract Reconciliation Decision](2026-09-20-phase-77-common-contract-reconciliation-decision.md).
 
 The authoritative current work scope is recorded in
 [Phase 64](../../../phase/phase-64.md), [Phase 64.2](../../../phase/phase-64.2.md),

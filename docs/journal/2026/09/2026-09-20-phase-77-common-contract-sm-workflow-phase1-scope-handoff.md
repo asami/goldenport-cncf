@@ -271,3 +271,11 @@ Retry/Timeout and other convenience/runtime-control features are introduced from
       -> sm-workflow Phase 1 executable specifications
    ```
 7. Do not add Phase 80/85/86, Retry/Timeout, or other advanced facilities to this critical path.
+
+## Reconciliation status
+
+The accepted minimum-common-contract decision is recorded in
+[Phase 77 Common Contract Reconciliation Decision](2026-09-20-phase-77-common-contract-reconciliation-decision.md).
+It retains `Presentation` title/summary support and typed `ExecutionEvidence`,
+while keeping provider policy, rich UI, and operational hardening outside the
+Phase 77 / sm-workflow Phase 1 critical path.

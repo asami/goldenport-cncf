@@ -103,7 +103,8 @@ Stage Status:
 - [ ] Project a `ContinuationRequest` into the closed `WORK_ORDER` Continuation form with typed WorkOrder input/result and Completion/Evidence information.
 - [ ] Preserve model-independent capability/complexity/risk/review metadata and the initial abstract `ReasoningLevel` vocabulary: `ROUTINE`, `STANDARD`, `DEEP`, and `CRITICAL`.
 - [ ] Keep concrete model/provider/reasoning-level selection in host dispatch policy and record it only as execution evidence.
-- [ ] Project `MinimalPresentation` with current situation, next action, optional reason, and available progress; never use it as Workflow control input.
+- [ ] Project the minimum common `Presentation`: required title/current situation plus optional summary/next action/reason/progress; never use it as Workflow control input.
+- [ ] Normalize a Skill/Host-dispatched WorkOrder completion into typed `ExecutionEvidence` without making concrete worker/profile selection a Workflow control input.
 - [ ] Allow control-plane advance/status/submit operations to be called directly without a child AI invocation.
 - [ ] Do not emit internal deterministic Actions as Skill WorkOrders merely because a Skill drives the Workflow.
 - [ ] Normalize Skill worker output into a typed `ContinuationResult`/Evidence rather than requiring parent conversation-history transfer.
@@ -147,7 +148,8 @@ Stage Status:
 - [ ] Encode/decode the admitted Start, `ContinuationRequest`, and `ContinuationResult`/`WorkResult` forms with schema identity/version and fail closed on unknown or incompatible input.
 - [ ] Preserve Workflow/Continuation identity, expected revision, ContextSnapshot, typed input/result, and Completion/Evidence requirements.
 - [ ] Provide the minimum `WorkflowHandle` representation for terminal/suspension state reference.
-- [ ] Define `WorkOrder.ExecutionRequirement` with the initial abstract `ROUTINE` / `STANDARD` / `DEEP` / `CRITICAL` vocabulary and prevent concrete profile selection from controlling progression.
-- [ ] Define `MinimalPresentation` for current situation, next action, optional reason, and available progress; prevent it from controlling progression.
+- [ ] Define `WorkOrder.ExecutionRequirement` with small typed `CapabilityRequirement` / `RiskLevel` and the initial abstract `ROUTINE` / `STANDARD` / `DEEP` / `CRITICAL` vocabulary; prevent concrete profile selection from controlling progression and do not introduce a policy engine or UI dispatch surface.
+- [ ] Encode/decode typed `ExecutionEvidence` for a Skill/Host-dispatched WorkResult, including requested requirement, selected worker profile, and mapping-policy version; reject a missing or incompatible evidence form where that dispatch contract requires it.
+- [ ] Define the minimum common `Presentation`: required title/current situation plus optional summary/next action/reason/`Progress`; prevent it from controlling progression.
 - [ ] Reject incorrect identity, stale revision/snapshot, incompatible typed payload, missing evidence, and duplicate/incompatible result according to the durable Continuation contract.
 - [ ] Keep broad Start/API expansion, rich Presentation/UI, additional reasoning vocabulary, parent/child composition, orchestration, and REST/MCP/UI surfaces out of Phase 77.

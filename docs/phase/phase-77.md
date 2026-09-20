@@ -106,7 +106,9 @@ Continuation
 
 ContinuationResult[R] / WorkResult[R]
 Evidence
-MinimalPresentation
+ExecutionEvidence
+Presentation
+Progress
 ```
 
 - `WorkflowStartRequest` and `WorkflowStartResult` start only an admitted
@@ -123,13 +125,20 @@ MinimalPresentation
 - `WorkflowHandle` provides the minimum stable reference to the Workflow and
   its terminal or suspension state.
 - `ExecutionRequirement` includes model-independent capability/risk
-  requirements and the initial closed `ReasoningLevel` vocabulary:
+  requirements (`CapabilityRequirement` and `RiskLevel`) and the initial closed
+  `ReasoningLevel` vocabulary:
   `ROUTINE`, `STANDARD`, `DEEP`, and `CRITICAL`. Skill/Host maps this request
   to a concrete model/provider/reasoning effort and may return that mapping as
   execution evidence; it is not Workflow transition semantics.
-- `MinimalPresentation` can project current situation, next action, optional
-  reason, and available progress for console visibility. It is never parsed
-  for Workflow control.
+- `WorkResult` carries typed `Evidence`. A Skill/Host-dispatched `WORK_ORDER`
+  additionally carries `ExecutionEvidence` recording the requested abstract
+  requirement, selected worker profile, and mapping-policy version. A
+  deterministic/local Provider records no invented worker profile. Neither
+  evidence form is a guard, transition input, or provider-selection policy.
+- `Presentation` is the minimum common human-readable Value Object: required
+  `title` and `currentSituation`, plus optional `summary`, `nextAction`,
+  `reason`, and `Progress`. It is never parsed for Workflow control. Rich UI
+  layout and rendering remain outside this Phase.
 - Start/resume rejects unknown schema/version, incompatible typed payload,
   incorrect identity, stale revision/snapshot, missing required evidence, and
   duplicate/incompatible result according to the durable Continuation contract.
@@ -201,7 +210,7 @@ projection is not the source of truth; Required SPI, the durable Continuation,
 and WorkflowInstance state are canonical.
 
 The Skill layer exposes work kind, `ExecutionRequirement`, typed
-input/result, Completion/Evidence, and `MinimalPresentation`. It maps the
+input/result, Completion/Evidence, `ExecutionEvidence`, and `Presentation`. It maps the
 initial abstract `ReasoningLevel` vocabulary to a concrete worker profile;
 concrete model/provider/reasoning selection remains host dispatch policy.
 
@@ -238,7 +247,9 @@ For an entity-triggered instance, initial correlation originates only in the Pha
 - Every admitted executable Action in the reference path is interpreted through `ExecProgram[UnitOfWorkOp, ActionExecution]`; no direct callback/effect execution remains in the canonical path.
 - Suspension is durable before external claim, and resume runs in a fresh UnitOfWork with stale and duplicate rejection.
 - The minimum typed Start/Continuation/WorkOrder/Terminal protocol and its schema-versioned, fail-closed Skill/Codex JSON encoding are executable across a separate Skill process/turn without making JSON the canonical domain model.
-- A WorkOrder carries the initial abstract `ROUTINE` / `STANDARD` / `DEEP` / `CRITICAL` reasoning requirement, and `MinimalPresentation` is available for console visibility without controlling progression.
+- A WorkOrder carries small typed capability/risk requirements and the initial abstract `ROUTINE` / `STANDARD` / `DEEP` / `CRITICAL` reasoning requirement. It does not create a policy engine, provider dispatch contract, or UI capability model.
+- A Skill-produced WorkResult records typed `ExecutionEvidence` without making concrete worker selection a Workflow control input.
+- `Presentation` provides required title/current situation plus optional summary/next action/reason/progress for common console visibility without controlling progression.
 - Broad Start/API expansion, rich Presentation/UI, additional reasoning vocabulary, parent/child Workflow composition, orchestration, and REST/MCP/UI protocol surfaces are later-phase work.
 - Cross-repository evidence records exact Cozy source, generated ABI, CNCF revisions, and the `sm-workflow` consumer handoff.
 
@@ -278,5 +289,6 @@ Current design:
 - [Minimum Skill Continuation JSON Contract](../journal/2026/09/2026-09-20-phase-77-minimum-skill-continuation-json-contract.md)
 - [Phase 64/77 sm-workflow Critical-Path Review Handoff](../journal/2026/09/2026-09-20-phase-64-77-sm-workflow-critical-path-review-handoff.md)
 - [Phase 64/77 Critical-Path Reconciliation](../journal/2026/09/2026-09-20-phase-64-77-critical-path-reconciliation.md)
+- [Phase 77 Common Contract Reconciliation Decision](../journal/2026/09/2026-09-20-phase-77-common-contract-reconciliation-decision.md)
 
 Historical protocol/binding addenda and journals remain as design history. Where they conflict with this consolidated Phase 77, this document and the StateMachine API/SPI runtime foundation are normative.

@@ -5222,10 +5222,13 @@ Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
   `ContinuationResult` preserve Workflow/Continuation identity, expected
   revision, ContextSnapshot, typed input/result, and Completion/Evidence.
   `WorkOrder.ExecutionRequirement` includes the initial abstract
-  `ROUTINE`/`STANDARD`/`DEEP`/`CRITICAL` vocabulary, and `MinimalPresentation`
-  projects situation/next action/reason/progress without controlling Workflow
-  semantics. Textus `sm-workflow` supplies consumer persistence and
-  software-development-specific WorkflowRun/WorkOrder policy.
+  `ROUTINE`/`STANDARD`/`DEEP`/`CRITICAL` vocabulary, small typed
+  `CapabilityRequirement`/`RiskLevel`, and typed `ExecutionEvidence` for a
+  Skill/Host-dispatched completion. The common `Presentation` requires title
+  and current situation and may include summary/next action/reason/progress;
+  none of these projections or concrete worker selections controls Workflow
+  semantics. Textus `sm-workflow` supplies application payloads and
+  software-development-specific Workflow policy.
 - Broad Start/API expansion beyond this minimum, rich Presentation/UI,
   additional reasoning vocabulary, parent/child Workflow composition,
   orchestration, and REST/MCP/UI protocol surfaces are later-phase extensions.
