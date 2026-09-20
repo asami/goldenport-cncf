@@ -60,9 +60,19 @@ Stage Status:
 Evidence: [Producer-Generated Rule Admission Contract](../design/composite-state-machine-generated-rule-admission.md) records the sealed focused re-review disposition digest `86bc82a1b27dc83ce2407b1b5ffb2f3c8184ac2eaa55a5d6aa833370d43c6fb4`. Phase 64 remains in progress with SWF-04–08 planned.
 
 ## SWF-04 Action composition
-- [ ] Preserve constituent/composite action ordering and provenance.
-- [ ] Use the shared typed executable-program boundary.
-- [ ] Consume the completed Phase 63.1 local atomic-execution contract without reopening or duplicating it; delegate incremental planner/interpreter/testability to 64.2.
+- [x] Preserve constituent/composite action ordering and provenance.
+- [x] Use the shared typed executable-program boundary.
+- [x] Consume the completed Phase 63.1 local atomic-execution contract without reopening or duplicating it; delegate incremental planner/interpreter/testability to 64.2.
+
+Stage Status:
+
+- Current status: ACCEPTED.
+- Owner: CNCF semantic-boundary owner under Phase 64 closure authority.
+- Entry rule: enter after the sealed typed action contract and the Phase 63.1/63.2 causal boundary are available.
+- Completion rule: deterministic constituent/composite action ordering and provenance use the shared typed `ExecProgram` boundary, consume the Phase 63.1 contract, and leave planner/interpreter work to 64.2.
+- Update rule: preserve this accepted result until the ordinary Step 64-S4 commit.
+
+Evidence: [Composite StateMachine Action Composition](../design/composite-state-machine-action-composition.md) records the sealed Step review disposition digest `485d5190a7259944c024f28954376920c9feb8a068704ace60f2972815666cee`. Phase 64 remains in progress with SWF-05–08 planned.
 
 ## SWF-05 Minimal Workflow specialization
 - [ ] Freeze semantic WorkflowDefinitionIdentity / WorkflowInstanceIdentity.

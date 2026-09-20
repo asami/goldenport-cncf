@@ -76,7 +76,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 | SWF-01 | Inventory StateMachine / Composite StateMachine / Workflow concepts and classify each as reused, composite-general, minimal Workflow-only, or runtime-policy. | accepted |
 | SWF-02 | Freeze constituent role/identity, configuration schema, deterministic composite-state derivation and derived-transition identity. | accepted |
 | SWF-03 | Admit generated composite rules and fail closed for ambiguous/unsupported runtime configuration. | accepted |
-| SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, consuming the completed Phase 63.1 atomic-execution contract and delegating incremental planner/interpreter work to 64.2. | planned |
+| SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, consuming the completed Phase 63.1 atomic-execution contract and delegating incremental planner/interpreter work to 64.2. | accepted |
 | SWF-05 | Freeze minimal Workflow specialization and semantic WorkflowDefinition/WorkflowInstance identity, lifecycle/progression and correlation contract; durable revision/history/store semantics are Phase 77. | planned |
 | SWF-06 | Freeze the CML-first generated semantic-contract handoff without CML reparsing; Phase 77 owns generated API/SPI admission and ComponentFactory bootstrap. | planned |
 | SWF-07 | Prove one real CML fixture through the Phase 63.2 committed constituent transition -> derived composite transition -> action-program boundary -> minimal Workflow progression. | planned |
