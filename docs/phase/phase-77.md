@@ -14,6 +14,13 @@ Phase 77 consumes Phase 64's minimum Composite StateMachine/Workflow semantics a
 
 The first vertical slice is Skill-driven Workflow execution: internal deterministic Actions complete in the runtime, an external semantic SPI Action suspends as a durable Continuation, a typed Skill result resumes the StateMachine, and internal closing Actions complete normally.
 
+Phase 77 also introduces `JudgmentAction` as the common semantic Action for a
+context-dependent judgment. It is distinct from an `OperationAction`, which
+performs deterministic work. `JudgmentAction` describes the judgment request
+and its typed result; it does not name Codex, jev, or another execution product.
+The initial reference execution uses Codex through the existing Generic Skill /
+Continuation boundary, while later providers such as jev remain replaceable.
+
 ```text
 CML WORKFLOW
   -> Cozy generated StateMachine/Workflow ABI
@@ -46,6 +53,36 @@ Workflow Runtime
 ```
 
 There is no Workflow-wide Orchestration/Continuation mode and no semantic `InvocationBinding = ORCHESTRATION | CONTINUATION` switch. Continuation is the durable suspension outcome of an Action/provider execution that requires an external result.
+
+### Action semantic taxonomy
+
+```text
+Action
+  OperationAction  -> perform deterministic work
+  JudgmentAction   -> request a contextual judgment
+
+JudgmentAction
+  goal
+  context
+  alternatives
+  criteria
+  expected result
+
+JudgmentResult
+  decision
+  rationale
+  evidence
+```
+
+`JudgmentAction` returns one of its admitted alternatives with rationale and
+evidence. The Action executor or external worker does not choose the next
+Action or mutate Workflow state directly. StateMachine guards and transitions
+interpret the admitted `JudgmentResult` and retain all progression authority.
+
+Action semantics and execution placement are separate axes. A
+`JudgmentAction` may be completed by a deterministic test Provider, suspended
+for Codex through a Skill-facing Continuation, or later handled by jev, a human,
+or another Provider without changing the Workflow definition.
 
 ## Ownership Boundary
 
@@ -176,6 +213,12 @@ Required SPI
 
 A local/test provider may return `Completed(Result)` through the canonical program. An external provider produces `Suspended(Continuation)` without performing external work before the program is interpreted. Provider placement does not duplicate State/Guard/Operation/Result semantics.
 
+For a `JudgmentAction`, the Required SPI input preserves the typed goal,
+context, alternatives, criteria, and expected-result contract. Its Provider
+returns or resumes with a typed `JudgmentResult`. Provider selection is not
+encoded in the Action type: Codex is the Phase 77 reference external worker,
+not part of the canonical model or ABI identity.
+
 ### Component implementation / Provider construction
 
 The component-programmer-facing implementation boundary is Provider construction through `ComponentFactory`.
@@ -223,7 +266,9 @@ WorkflowStartRequest[BuildProjectInput]
   -> bounded deterministic start/advance
        BuildProject  -> internal provider -> Completed
        RunTests      -> internal provider -> Completed
-       ReviewChange  -> external SPI -> Suspended(WORK_ORDER Continuation)
+       ReviewChange  -> JudgmentAction -> external SPI
+                     -> Suspended(WORK_ORDER Continuation)
+                     -> Codex reference execution -> JudgmentResult
   -> WorkflowStartResult[ReviewWorkOrder, CommitOutcome]
        WorkflowHandle + first Continuation
 ReviewResult  -> ContinuationResult -> fresh-UnitOfWork resume
@@ -243,6 +288,13 @@ For an entity-triggered instance, initial correlation originates only in the Pha
 - Typed ReviewResult resumes the same suspended Action only when identity/revision/snapshot/contracts match.
 - Resume then permits internal closing/commit Actions to execute and reach terminal state.
 - Deterministic test provider binding can exercise the same StateMachine semantics without an actual AI/UI provider.
+- `JudgmentAction` and `JudgmentResult` are provider-neutral typed semantics;
+  goal/context/alternatives/criteria and decision/rationale/evidence survive
+  the Skill/Codex JSON round trip.
+- The initial Codex-backed judgment returns only an admitted judgment result;
+  StateMachine guards/transitions alone choose the next state or Action.
+- Replacing Codex with jev, a human, or another Provider requires no Workflow
+  definition or public Action-contract change.
 - No Workflow-wide orchestration/continuation mode or InvocationBinding switch is required.
 - Every admitted executable Action in the reference path is interpreted through `ExecProgram[UnitOfWorkOp, ActionExecution]`; no direct callback/effect execution remains in the canonical path.
 - Suspension is durable before external claim, and resume runs in a fresh UnitOfWork with stale and duplicate rejection.
@@ -290,5 +342,6 @@ Current design:
 - [Phase 64/77 sm-workflow Critical-Path Review Handoff](../journal/2026/09/2026-09-20-phase-64-77-sm-workflow-critical-path-review-handoff.md)
 - [Phase 64/77 Critical-Path Reconciliation](../journal/2026/09/2026-09-20-phase-64-77-critical-path-reconciliation.md)
 - [Phase 77 Common Contract Reconciliation Decision](../journal/2026/09/2026-09-20-phase-77-common-contract-reconciliation-decision.md)
+- [JudgmentAction for Phase 77 and sm-workflow Phase 1](../journal/2026/09/2026-09-20-judgment-action-phase-77-sm-workflow-phase-1.md)
 
 Historical protocol/binding addenda and journals remain as design history. Where they conflict with this consolidated Phase 77, this document and the StateMachine API/SPI runtime foundation are normative.
