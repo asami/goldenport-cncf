@@ -44,10 +44,20 @@ Stage Status:
 Evidence: [Composite StateMachine Identity and Derivation](../design/composite-state-machine-identity-and-derivation.md) records the sealed Step re-review disposition digest `f034e3593ad328b6be971a6494a71e4db354c929143748f0cc192ec308abac09`. Phase 64 remains in progress with SWF-03–08 planned.
 
 ## SWF-03 Admission
-- [ ] Consume generated CML contracts without reparsing CML.
-- [ ] Fail closed for ambiguous/unsupported composite configuration.
-- [ ] Preserve source/model identity.
-- [ ] Preserve the typed generated semantic contract without generated API/SPI admission or `ComponentFactory` bootstrap; those are Phase 77 concerns.
+- [x] Consume generated CML contracts without reparsing CML.
+- [x] Fail closed for ambiguous/unsupported composite configuration.
+- [x] Preserve source/model identity.
+- [x] Preserve the typed generated semantic contract without generated API/SPI admission or `ComponentFactory` bootstrap; those are Phase 77 concerns.
+
+Stage Status:
+
+- Current status: ACCEPTED.
+- Owner: CNCF semantic-boundary owner under Phase 64 closure authority.
+- Entry rule: enter only through the sealed producer-generated typed contract.
+- Completion rule: consume CML without reparsing, fail-closed admission, preserve source/model identity, and preserve the typed semantic contract without generated API/SPI admission or `ComponentFactory` bootstrap.
+- Update rule: preserve this accepted result until the ordinary Step 64-S3 commit.
+
+Evidence: [Producer-Generated Rule Admission Contract](../design/composite-state-machine-generated-rule-admission.md) records the sealed focused re-review disposition digest `86bc82a1b27dc83ce2407b1b5ffb2f3c8184ac2eaa55a5d6aa833370d43c6fb4`. Phase 64 remains in progress with SWF-04–08 planned.
 
 ## SWF-04 Action composition
 - [ ] Preserve constituent/composite action ordering and provenance.
