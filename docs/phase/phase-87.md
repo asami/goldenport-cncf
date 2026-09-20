@@ -1,118 +1,82 @@
-# Phase 87: Generalized Composite StateMachine Artifact Admission
+# Phase 87: Workflow Management Web Console
 
-status=planned
-execution_priority=deferred_until_sm_workflow_vertical_slice
-entry_condition=concrete_consumer_requirement
-planned_at=2026-09-21
-producer=[Cozy Phase 66](https://github.com/asami/cozy/blob/main/docs/phase/phase-66.md)
-runtime_baseline=[Phase 77](phase-77.md)
-checklist=[Phase 87 Checklist](phase-87-checklist.md)
+Status: planned
+Planned: 2026-09-20
 
-## Purpose
+## Goal
 
-Admit the generalized Composite StateMachine semantic artifact produced by
-Cozy Phase 66, validate its schema and compatibility fail closed, expose it
-through normal CNCF discovery, and project its admitted semantics into the
-Composite StateMachine runtime without parsing CML or inferring missing facts.
+Establish Aggregate, View (Read Model), and Workflow as the three primary semantic navigation axes of the CNCF Web Console, and add Workflow Management as a standard runtime-management surface. Keep Job Management as the cross-cutting asynchronous execution-management and diagnostic capability.
 
-Phase 87 is the CNCF consumer half of a future producer/consumer sequence:
+The management surface observes every WorkflowInstance known to the CNCF Workflow runtime regardless of whether its current or past execution is managed by JobEngine. sm-workflow is the first representative consumer, not the owner of a separate dashboard.
 
-```text
-Cozy Phase 66
-  generalized Composite StateMachine semantic artifact
-        -> CNCF Phase 87
-             admission
-             compatibility diagnostics
-             ComponentFactory discovery
-             runtime projection
-```
+## Dependency
 
-This sequence is not on the Phase 64 -> Phase 64.2 -> Phase 77 ->
-`sm-workflow` Phase 1 critical path.
+- Phase 64 / 77 Workflow runtime contracts are the semantic authority for Workflow instances and progression.
+- Phase 69.6 Job user/operator experience remains the authority for Job-specific Web management.
+- Phase 80/86 extensions are not prerequisites unless implementation evidence identifies a concrete required contract.
 
-## Entry condition
+## Scope
 
-Phase 87 must not start until all of the following hold:
+1. Organize Dashboard navigation around Aggregate, View (Read Model), and Workflow runtime projections.
+2. Keep Job Management cross-cutting: correlate Jobs with Aggregate, View, and Workflow execution evidence without treating Job as a fourth application-model axis.
+3. Add a Web Console Workflow overview/list.
+4. Show all observable running and retained completed Workflow instances, including instances with no Job association.
+5. Provide filtering using stable runtime metadata, initially including Component/Subsystem, Workflow definition, lifecycle status, and current State/GoalPhase where available.
+6. Provide Workflow instance detail with current state, transition/progression history, action/continuation evidence, result, failure/retry diagnostics, timestamps, and correlation identifiers supported by the canonical runtime.
+7. Link Workflow action/execution evidence to related Jobs when a Job exists, without making Job ownership a prerequisite for Workflow visibility.
+8. Provide reverse correlation from Job management to originating/related Workflow execution where canonical correlation evidence exists.
+9. Reuse the CNCF Web Console, authorization, redaction, polling/update, and presentation infrastructure rather than creating an sm-workflow-specific UI.
+10. Add Executable Specifications for enumeration, filtering, detail projection, Job/non-Job visibility, authorization/redaction, and representative sm-workflow metadata.
 
-1. the first `sm-workflow` vertical slice has reached a stable result;
-2. a concrete consumer requirement identifies semantic data not supplied by
-   the current released Workflow/Composite artifacts;
-3. Cozy Phase 66 has produced an accepted versioned artifact and handoff for
-   that requirement; and
-4. the then-current CNCF runtime baseline and compatibility policy have been
-   inventoried.
+## Core boundary
 
-The existence of the broad Phase 64 SWF-06 design is not sufficient entry
-evidence. Re-estimate and split this Phase only after the concrete requirement
-and Cozy handoff are available.
+Aggregate, View, and Workflow are the primary application-semantic axes. Job Management is a cross-cutting runtime-management layer over asynchronous execution:
 
-## Input contract
+    CNCF Web Console
+      +-- Dashboard
+      |     +-- Aggregates
+      |     +-- Views (Read Models)
+      |     +-- Workflows
+      +-- Jobs
 
-The admitted Cozy artifact is expected to carry, as required by the concrete
-consumer:
+    WorkflowInstance
+      +-- Action/Execution
+            +-- optional related Job
 
-- artifact schema and generator identity/version;
-- Composite StateMachine definition identity and pinned version;
-- exact constituent roles, referenced definition versions, subjects, and
-  configuration;
-- complete typed derivation rules with stable identity, exact inputs, outputs,
-  declaration order, and provenance;
-- typed logical action and occurrence descriptors with ownership, order,
-  correlation/causation, execution metadata, and provenance;
-- source/model/location provenance; and
-- typed producer diagnostics for reachability, coverage, overlap, ambiguity,
-  and incompleteness.
+- Aggregate expresses write/domain state and consistency boundaries.
+- View expresses read/projection state.
+- Workflow expresses process/state progression.
+- Job expresses asynchronous execution lifecycle.
+- A Workflow Action is not inherently a Job.
+- A Job need not belong to a Workflow.
+- Job-managed and non-Job-managed Workflow execution are both first-class Workflow Management subjects.
 
-The Cozy Value Objects and semantic artifact are upstream authority. CNCF owns
-admission and runtime projection, not CML syntax or producer reconstruction.
+## Designed/Observed model navigation
 
-## Work stack
+Textus CBD Support is the Designed Model surface; the CNCF Web Console is the Observed Model surface. Phase 87 must preserve stable Aggregate/View/Workflow identity and provide bidirectional links between the two surfaces when authoritative mapping is available. Missing or ambiguous mapping must remain explicit and must not be reconstructed heuristically.
 
-| ID | Outcome | Status |
-| --- | --- | --- |
-| GCSA-87-01 | Inventory the accepted Cozy Phase 66 handoff and freeze supported schema/generator/definition compatibility. | planned |
-| GCSA-87-02 | Implement typed fail-closed admission and structured rejection diagnostics. | planned |
-| GCSA-87-03 | Bind admitted artifacts to ComponentFactory discovery without name inference or handwritten substitution. | planned |
-| GCSA-87-04 | Project admitted constituent/configuration/rule/action/provenance semantics into the existing Composite StateMachine runtime. | planned |
-| GCSA-87-05 | Prove positive, incompatible, incomplete, ambiguous, foreign, stale-version, and provenance rejection fixtures. | planned |
-| GCSA-87-06 | Freeze the concrete consumer handoff and record all still-deferred runtime extensions. | planned |
+## sm-workflow acceptance
 
-## Admission rules
+sm-workflow should be usable as a representative external consumer:
 
-- Unknown or incompatible artifact/schema/generator versions fail closed.
-- Definition and constituent versions are exact; CNCF does not substitute the
-  current registry version.
-- Missing rules, diagnostics, action occurrences, or required provenance are
-  not reconstructed from CML, names, source text, or handwritten definitions.
-- Producer diagnostics remain attributable and are not replaced by a
-  CNCF-local second analysis language.
-- ComponentFactory exposes only admitted artifacts.
-- Runtime projection preserves identity, configuration, derivation,
-  correlation/causation, ordering, and provenance without redefining them.
+- its Workflow instances appear through the generic CNCF Workflow Management surface;
+- users can filter to sm-workflow using canonical component/runtime metadata;
+- no sm-workflow-specific dashboard model or shadow execution registry is introduced;
+- Skill integration remains MCP-facing and independent from the human Web management surface.
 
 ## Non-goals
 
-- Blocking or reopening Phase 64, Phase 77, or `sm-workflow` Phase 1.
-- Parsing CML inside CNCF.
-- Defining Cozy syntax, IR, generator behavior, or producer diagnostics.
-- Reimplementing the Phase 77 Workflow API/SPI, Provider, Continuation, or
-  persistence runtime.
-- Retry, timeout, scheduling, compensation, recovery, orchestration, REST,
-  MCP, UI, or Flutter expansion.
-- Admitting unrelated Cozy worktree changes merely because they are near the
-  producer implementation.
+- Redefining Workflow/StateMachine semantics.
+- Making Workflow a subtype of Job or Job a mandatory Workflow execution mechanism.
+- Introducing an sm-workflow-specific Web application.
+- Duplicating Phase 69.6 Job management functionality.
+- Adding a second Workflow persistence, history, or observability model solely for the UI.
 
-## Completion
+## Planning references
 
-Completion requires an accepted Cozy Phase 66 handoff, versioned fail-closed
-admission, ComponentFactory discovery, runtime projection, focused and
-repository-appropriate validation, independent review, and the exact concrete
-consumer handoff. No completion is implied by Phase 64 documentation alone.
-
-## References
-
-- [Phase 87 Checklist](phase-87-checklist.md)
-- [Phase 64 minimum/future split](phase-64.md)
-- [Phase 77 runtime baseline](phase-77.md)
-- [Phase 64 generalized-artifact deferral decision](../journal/2026/09/2026-09-21-phase-64-generalized-artifact-deferral.md)
-- [Future Cozy Phase 66 producer](https://github.com/asami/cozy/blob/main/docs/phase/phase-66.md)
+- [Phase 69.6](phase-69.6.md)
+- [Phase 77](phase-77.md)
+- [Phase 80](phase-80.md)
+- [Phase 86](phase-86.md)
+- [Workflow Management Web Console Note](../notes/workflow-management-web-console.md)
+- [Workflow and Job Management Boundary Journal](../journal/2026/09/2026-09-20-workflow-job-management-web-boundary.md)

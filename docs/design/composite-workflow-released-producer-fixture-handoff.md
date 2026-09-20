@@ -6,7 +6,7 @@ phase=64
 swf=[SWF-07, SWF-08]
 producer=Cozy Phase 62.3
 deferred_generalized_producer=Cozy Phase 66
-deferred_generalized_consumer=CNCF Phase 87
+deferred_generalized_consumer=CNCF Phase 89
 
 ## Pinned producer evidence
 
@@ -83,7 +83,7 @@ facts from names, reparse CML, or create a handwritten replacement.
 That limitation is outside the first `sm-workflow` vertical-slice contract.
 Future production of the generalized artifact belongs to Cozy Phase 66. Future
 CNCF schema admission, compatibility diagnostics, ComponentFactory discovery,
-and runtime projection belong to Phase 87. Both Phases have an evidence-bound
+and runtime projection belong to Phase 89. Both Phases have an evidence-bound
 entry after the first `sm-workflow` vertical slice and do not block Phase 64,
 Phase 77, or `sm-workflow` Phase 1.
 

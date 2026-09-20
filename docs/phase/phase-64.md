@@ -11,7 +11,7 @@ revised_at=2026-09-21
 depends_on=[Phase 63.2](phase-63.2.md)
 external_producer=[Cozy Phase 62.3](https://github.com/asami/cozy/blob/main/docs/phase/phase-62.3.md)
 deferred_generalized_producer=[Cozy Phase 66](https://github.com/asami/cozy/blob/main/docs/phase/phase-66.md)
-deferred_generalized_consumer=[Phase 87](phase-87.md)
+deferred_generalized_consumer=[Phase 89](phase-89.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 64 Checklist](phase-64-checklist.md)
 
@@ -30,7 +30,7 @@ the Phase 77 / `sm-workflow` minimum but does not itself carry the complete
 generalized Composite StateMachine configuration, derivation, causal/action
 provenance, version pins, and producer diagnostics described by the full SWF-06
 design. That future producer capability is owned by Cozy Phase 66; CNCF
-admission and runtime projection of that artifact are owned by Phase 87. Both
+admission and runtime projection of that artifact are owned by Phase 89. Both
 start only after the first `sm-workflow` vertical slice and a concrete consumer
 requirement. They do not block this Phase, Phase 77, or `sm-workflow` Phase 1.
 
@@ -56,7 +56,7 @@ Phase 64 owns model/runtime semantics that are necessary before the API/SPI and 
 - minimal WorkflowDefinition/WorkflowInstance semantic identity and progression model needed by the later Phase 77 durable store contract;
 - the CML-first generated Workflow subset required by Phase 77 and its
   end-to-end fixture evidence; the generalized Composite StateMachine artifact
-  is a future Cozy Phase 66 producer and Phase 87 consumer boundary.
+  is a future Cozy Phase 66 producer and Phase 89 consumer boundary.
 
 Phase 64 does not own rich operational workflow facilities. Those are later phases.
 
@@ -103,7 +103,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 | SWF-03 | Admit generated composite rules and fail closed for ambiguous/unsupported runtime configuration. | accepted |
 | SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, consuming the completed Phase 63.1 atomic-execution contract and delegating incremental planner/interpreter work to 64.2. | accepted |
 | SWF-05 | Freeze minimal Workflow specialization and semantic WorkflowDefinition/WorkflowInstance identity, lifecycle/progression and correlation contract; durable revision/history/store semantics are Phase 77. | accepted |
-| SWF-06 | Freeze the CML-first semantic handoff design without CML reparsing; accept the released Workflow subset for Phase 77 and defer the generalized Composite artifact implementation/admission to Cozy Phase 66 and CNCF Phase 87. | accepted design / generalized artifact deferred |
+| SWF-06 | Freeze the CML-first semantic handoff design without CML reparsing; accept the released Workflow subset for Phase 77 and defer the generalized Composite artifact implementation/admission to Cozy Phase 66 and CNCF Phase 89. | accepted design / generalized artifact deferred |
 | SWF-07 | Reuse the closed Cozy Phase 62.3 generated Workflow fixture and prove the minimum Phase 63.2 committed-transition -> Phase 64 semantic/action boundary required by Phase 77. | accepted |
 | SWF-08 | Freeze exact Phase 77 handoff and explicitly record deferred advanced facilities. | accepted |
 
@@ -147,7 +147,7 @@ The following are not Phase 64 completion requirements:
 - production of the complete generalized Composite StateMachine semantic
   artifact, owned by Cozy Phase 66;
 - version admission, compatibility diagnostics, ComponentFactory discovery,
-  and CNCF runtime projection of that generalized artifact, owned by Phase 87.
+  and CNCF runtime projection of that generalized artifact, owned by Phase 89.
 
 ## Dependencies and follow-up
 
@@ -178,7 +178,7 @@ activate the independent future sequence:
 ```text
 Cozy Phase 66
   generalized Composite StateMachine semantic artifact
-        -> CNCF Phase 87
+        -> CNCF Phase 89
              admission / compatibility / discovery / runtime projection
 ```
 
@@ -196,5 +196,5 @@ Advanced Workflow runtime capabilities are owned by dedicated later phases.
 - [Closed Cozy Phase 62.3 producer handoff](https://github.com/asami/cozy/blob/main/docs/phase/phase-62.3.md)
 - [Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md)
 - [Future Cozy Phase 66 generalized producer](https://github.com/asami/cozy/blob/main/docs/phase/phase-66.md)
-- [Phase 87 generalized artifact admission](phase-87.md)
+- [Phase 89 generalized artifact admission](phase-89.md)
 - [StateMachine / Workflow alignment](../notes/statemachine-workflow-alignment-provisional-specification.md)

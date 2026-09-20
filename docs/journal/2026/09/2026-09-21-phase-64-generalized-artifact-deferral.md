@@ -25,7 +25,7 @@ Separate the immediate minimum from the future generalized contract.
 - The broad SWF-06 generalized artifact remains a valid future design target,
   but its production and admission are not Phase 64 completion requirements.
 - Cozy Phase 66 owns future artifact production.
-- CNCF Phase 87 owns future schema admission, compatibility diagnostics,
+- CNCF Phase 89 owns future schema admission, compatibility diagnostics,
   ComponentFactory discovery, and runtime projection.
 - Both future Phases start only after the first `sm-workflow` vertical slice
   and a concrete consumer requirement.
@@ -60,7 +60,7 @@ The independent future path is:
 stable first sm-workflow vertical slice
   + concrete consumer requirement
   -> Cozy Phase 66
-  -> CNCF Phase 87
+  -> CNCF Phase 89
 ```
 
 Commit `c41aef9` remains in history. This decision and the corrected handoff
@@ -83,4 +83,4 @@ The exception is limited to `fresh-full-suite-not-refreshed`. It does not
 reinterpret or delete prior evidence, claim that the older receipt covers later
 bytes, waive the accepted review, or authorize future reuse. The forced release
 contains only the eight Phase 64 closure/planning documents, including the
-future Phase 87 plan; it contains no Scala or test change.
+future Phase 89 plan; it contains no Scala or test change.

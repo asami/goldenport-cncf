@@ -1,9 +1,9 @@
-# Phase 87 Checklist: Generalized Composite StateMachine Artifact Admission
+# Phase 89 Checklist: Generalized Composite StateMachine Artifact Admission
 
 status=planned
-phase=[Phase 87](phase-87.md)
+phase=[Phase 89](phase-89.md)
 
-This is a future execution ledger. It is not active until Phase 87's
+This is a future execution ledger. It is not active until Phase 89's
 evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
 
 ## Entry
@@ -15,14 +15,14 @@ evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
 - [ ] The current CNCF runtime and compatibility baseline are inventoried.
 - [ ] A fresh bounded estimate and any necessary split are accepted.
 
-## GCSA-87-01: Compatibility inventory
+## GCSA-89-01: Compatibility inventory
 
 - [ ] Pin artifact schema, generator, definition, constituent, rule, and action
       identities/versions from the Cozy Phase 66 handoff.
 - [ ] Freeze supported and incompatible version behavior.
 - [ ] Preserve source/model/location provenance and producer diagnostics.
 
-## GCSA-87-02: Fail-closed admission
+## GCSA-89-02: Fail-closed admission
 
 - [ ] Admit complete compatible artifacts through typed CNCF Value Objects.
 - [ ] Reject unknown/incompatible schema or generator versions.
@@ -31,14 +31,14 @@ evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
 - [ ] Emit structured rejection diagnostics without CML parsing, name
       inference, current-version substitution, or handwritten repair.
 
-## GCSA-87-03: Discovery
+## GCSA-89-03: Discovery
 
 - [ ] Register only admitted artifacts through ComponentFactory.
 - [ ] Detect absent, duplicate, and incompatible artifact registrations.
 - [ ] Preserve exact artifact, definition, source, and producer identity in
       discovery results.
 
-## GCSA-87-04: Runtime projection
+## GCSA-89-04: Runtime projection
 
 - [ ] Project exact constituents, configuration, and derivation rules into the
       existing Composite StateMachine runtime.
@@ -48,7 +48,7 @@ evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
       language.
 - [ ] Do not modify Phase 77 Workflow API/SPI or persistence semantics.
 
-## GCSA-87-05: Executable specifications
+## GCSA-89-05: Executable specifications
 
 - [ ] Prove one accepted Cozy Phase 66 artifact through admission, discovery,
       runtime projection, and the concrete consumer path.
@@ -58,7 +58,7 @@ evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
 - [ ] Prove no CML parser, name inference, or handwritten canonical substitute
       is used.
 
-## GCSA-87-06: Handoff and closure
+## GCSA-89-06: Handoff and closure
 
 - [ ] Run the validation and independent review required by the newly frozen
       execution plan.
@@ -66,4 +66,4 @@ evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
       digest, fixture identity, and validation evidence.
 - [ ] Freeze the concrete consumer handoff.
 - [ ] Confirm Phase 64, Phase 77, and the first `sm-workflow` vertical slice
-      remain closed/unchanged and were not prerequisites reopened by Phase 87.
+      remain closed/unchanged and were not prerequisites reopened by Phase 89.

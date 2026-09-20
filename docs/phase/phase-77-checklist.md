@@ -59,6 +59,13 @@ Stage Status:
 - [ ] Detect ambiguity, cycle/bound overflow, unavailable required input, stale state and unsupported execution as structured failures.
 - [ ] Remove or adapt the canonical runtime's direct `ResolvedAction.run(...): Consequence[Unit]` / `Effect.execute` path; prove the same Action cannot execute both directly and through UnitOfWork.
 - [ ] Keep retry scheduling, client-turn policy and concrete model selection outside StateMachine semantics.
+- [ ] Distinguish provider-neutral `OperationAction` (do) and
+  `JudgmentAction` (decide) semantics without introducing a Workflow-wide
+  execution mode or a provider-specific Action subtype.
+- [ ] Admit a typed `JudgmentResult` containing an allowed decision, rationale,
+  and evidence; reject unknown alternatives or incompatible result payloads.
+- [ ] Prove the StateMachine, not the judgment worker, maps the admitted
+  decision to the next transition, state, or Action.
 
 ## CWF-77-05: StateMachine API/SPI Provider Runtime
 
@@ -122,6 +129,14 @@ Stage Status:
 - [ ] Prove ReviewChange resolves to external SPI, persists its durable Continuation, and becomes externally claimable only after commit.
 - [ ] Submit a typed `ContinuationResult`/`WorkResult` and prove the same suspended Action resumes in a fresh UnitOfWork and StateMachine transition proceeds to a typed terminal result.
 - [ ] Bind a deterministic test Provider to ReviewChange and prove the same StateMachine semantics execute without an actual AI/Skill provider.
+- [ ] Bind ReviewChange as a `JudgmentAction` carrying typed goal, context,
+  alternatives, criteria, and expected-result metadata.
+- [ ] Exercise Codex as the initial external judgment worker through the
+  Generic Skill / durable Continuation boundary and preserve typed decision,
+  rationale, and evidence across the fail-closed JSON round trip.
+- [ ] Prove provider replacement (Codex to a deterministic fixture, jev/human
+  test double, or another admitted Provider) does not change Workflow
+  definition identity or transition semantics.
 
 ## CWF-77-09: CML-First Evidence and Consumer Handoff
 

@@ -106,7 +106,7 @@ Evidence: [Minimal Workflow specialization](../design/minimal-workflow-specializ
 - [x] Distinguish the released Workflow subset needed by Phase 77 from the
       complete generalized Composite artifact.
 - [x] Assign future generalized artifact production to Cozy Phase 66 and its
-      CNCF admission/runtime projection to Phase 87, without blocking the
+      CNCF admission/runtime projection to Phase 89, without blocking the
       `sm-workflow` critical path.
 
 Stage Status:
@@ -117,7 +117,7 @@ Stage Status:
 - Completion rule: preserve the CML-first design, accept the released Workflow
   subset required by Phase 77, leave its API/SPI admission and
   `ComponentFactory` bootstrap to Phase 77, and route the complete generalized
-  artifact through Cozy Phase 66 and CNCF Phase 87 without handwritten
+  artifact through Cozy Phase 66 and CNCF Phase 89 without handwritten
   substitution.
 - Update rule: preserve this accepted result until the ordinary Step 64-S6 commit.
 
@@ -135,7 +135,7 @@ Evidence: [Composite Workflow Generated Semantic Handoff](../design/composite-wo
       configuration, derivation, causal/action provenance, version pins, and
       producer diagnostics required by the broad SWF-06 design.
 - [x] Confirm that those omissions do not change the Phase 77 / `sm-workflow`
-      minimum and defer them to Cozy Phase 66 and CNCF Phase 87.
+  minimum and defer them to Cozy Phase 66 and CNCF Phase 89.
 
 Stage Status:
 
@@ -163,11 +163,11 @@ Stage Status:
 - [x] Record 2PC/compensation/recovery as Phase 85.
 - [x] Record Workflow-to-Workflow orchestration and advanced integration as later work.
 - [x] If Phase 63.2 closure reveals hierarchy/history runtime gaps, require the dedicated follow-up before relying on those semantics.
-- [x] Record Cozy Phase 66 as the future generalized producer and CNCF Phase 87
+- [x] Record Cozy Phase 66 as the future generalized producer and CNCF Phase 89
       as its admission/runtime-projection consumer; neither blocks Phase 77 or
       `sm-workflow` Phase 1.
 
-Evidence: [Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md) pins the accepted producer identity, ABI/schema, fixture and validation evidence; binds it to the existing Phase 63.2 `CommittedTransition` boundary without miscasting the fixture's explicit Skill-driven start; and records the Phase 77 consumer handoff and later-phase deferrals. This completes Phase 64's released-Workflow-subset closure; the generalized artifact remains owned by future Cozy Phase 66 and CNCF Phase 87 work.
+Evidence: [Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md) pins the accepted producer identity, ABI/schema, fixture and validation evidence; binds it to the existing Phase 63.2 `CommittedTransition` boundary without miscasting the fixture's explicit Skill-driven start; and records the Phase 77 consumer handoff and later-phase deferrals. This completes Phase 64's released-Workflow-subset closure; the generalized artifact remains owned by future Cozy Phase 66 and CNCF Phase 89 work.
 
 ## Closure
 

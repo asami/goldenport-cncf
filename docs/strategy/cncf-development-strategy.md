@@ -4798,7 +4798,7 @@ Applied split ownership:
 Completed in Phase 64 after Phase 63.2 closed. Phase 64 accepts the released
 Cozy Phase 62.3 Workflow subset required by Phase 77 and the first
 `sm-workflow` vertical slice; the complete generalized Composite StateMachine
-artifact remains a future Cozy Phase 66 / CNCF Phase 87 sequence.
+artifact remains a future Cozy Phase 66 / CNCF Phase 89 sequence.
 
 - Historical basis:
   - Phase 14 delivered a lightweight event-triggered, entity-status-based
@@ -4842,7 +4842,7 @@ artifact remains a future Cozy Phase 66 / CNCF Phase 87 sequence.
   - Phase 77 WorkflowInstance persistence, history, Job links, replay/recovery,
     API/SPI admission, Provider execution, and protocol/runtime work;
   - the generalized Composite StateMachine producer artifact in Cozy Phase 66
-    and its CNCF admission/runtime projection in Phase 87; and
+    and its CNCF admission/runtime projection in Phase 89; and
   - BPMN/DAG, branch/loop/parallel, timer-rich, human-task, compensation,
     connector-heavy, and cross-organization orchestration; these use an
     explicit specialist-engine boundary.
@@ -5253,7 +5253,7 @@ Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
 
 ### 9.65 Generalized Composite StateMachine Artifact Admission
 
-Planned as [Phase 87](../phase/phase-87.md), paired with Cozy Phase 66 and
+Planned as [Phase 89](../phase/phase-89.md), paired with Cozy Phase 66 and
 deliberately outside the first `sm-workflow` vertical-slice critical path.
 
 - Phase 64 freezes the broad semantic direction but accepts only the released
@@ -5262,7 +5262,7 @@ deliberately outside the first `sm-workflow` vertical-slice critical path.
   StateMachine semantic artifact containing exact constituents/configuration,
   typed derivation rules and actions, version pins, provenance, deterministic
   encoding, and producer diagnostics.
-- CNCF Phase 87 owns schema/generator/definition compatibility admission,
+- CNCF Phase 89 owns schema/generator/definition compatibility admission,
   structured fail-closed rejection, ComponentFactory discovery, and projection
   into the existing Composite StateMachine runtime.
 - CNCF never reparses CML, reconstructs missing fields from names, substitutes
@@ -5270,10 +5270,10 @@ deliberately outside the first `sm-workflow` vertical-slice critical path.
 - Both Phases have an evidence-bound entry: the first `sm-workflow` vertical
   slice must be stable and a concrete consumer must identify missing semantic
   data and its use.
-- Phase 87 does not reopen Phase 64 or Phase 77 and does not reimplement the
+- Phase 89 does not reopen Phase 64 or Phase 77 and does not reimplement the
   Workflow API/SPI, Provider, Continuation, or persistence runtime.
 - Planning references:
-  - [Phase 87](../phase/phase-87.md);
-  - [Phase 87 Checklist](../phase/phase-87-checklist.md);
+  - [Phase 89](../phase/phase-89.md);
+  - [Phase 89 Checklist](../phase/phase-89-checklist.md);
   - [Phase 64 generalized-artifact deferral](../journal/2026/09/2026-09-21-phase-64-generalized-artifact-deferral.md); and
   - `asami/cozy/docs/phase/phase-66.md`.

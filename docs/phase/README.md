@@ -17,7 +17,7 @@ Current baseline:
 
 - Planned post-`sm-workflow` producer/consumer sequence: Cozy Phase 66 produces
   the generalized Composite StateMachine semantic artifact and
-  [Phase 87](phase-87.md) admits it into CNCF. Both require a stable first
+  [Phase 89](phase-89.md) admits it into CNCF. Both require a stable first
   `sm-workflow` vertical slice plus a concrete consumer requirement; neither
   blocks Phase 64, Phase 77, or `sm-workflow` Phase 1.
 - Latest closed phase: `phase-70.1.md` - documentation-only retirement of the
