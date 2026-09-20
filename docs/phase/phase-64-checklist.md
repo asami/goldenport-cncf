@@ -91,9 +91,19 @@ Stage Status:
 Evidence: [Minimal Workflow specialization](../design/minimal-workflow-specialization.md) records the sealed Step review disposition digest `2165bdb3f9c71ad3147e623e70570657be36e6022aa87868788713e728e52e57`. Phase 64 remains in progress with SWF-06–08 planned.
 
 ## SWF-06 Generated semantic-contract handoff
-- [ ] Freeze a CML-first generated Composite StateMachine/Workflow semantic-contract handoff without CML reparsing.
-- [ ] Leave generated API/SPI admission and `ComponentFactory` bootstrap to Phase 77.
-- [ ] Do not accept handwritten definitions as canonical end-to-end evidence.
+- [x] Freeze a CML-first generated Composite StateMachine/Workflow semantic-contract handoff without CML reparsing.
+- [x] Leave generated API/SPI admission and `ComponentFactory` bootstrap to Phase 77.
+- [x] Do not accept handwritten definitions as canonical end-to-end evidence.
+
+Stage Status:
+
+- Current status: ACCEPTED.
+- Owner: CNCF semantic-boundary owner under Phase 64 closure authority.
+- Entry rule: enter after the sealed CML-first typed handoff is available.
+- Completion rule: preserve the CML-first generated semantic-contract handoff without CML reparsing, leave generated API/SPI admission and `ComponentFactory` bootstrap to Phase 77, and do not accept handwritten definitions as canonical end-to-end evidence.
+- Update rule: preserve this accepted result until the ordinary Step 64-S6 commit.
+
+Evidence: [Composite Workflow Generated Semantic Handoff](../design/composite-workflow-generated-semantic-handoff.md) records the sealed Step review disposition digest `b177d55228453e4c84e3a702511036edd37ae337afa6d41d4cf2a30c5375cc5a`. Phase 64 remains in progress with SWF-07–08 planned.
 
 ## SWF-07 Real fixture
 - [ ] Prove Phase 63.2 committed constituent transition -> derived composite transition.
