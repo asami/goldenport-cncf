@@ -5,7 +5,7 @@ Planned: 2026-09-20
 
 ## Goal
 
-Add Workflow Management to the CNCF Web Console as a standard runtime-management surface, alongside the existing Dashboard and Job Management experience.
+Establish Aggregate, View (Read Model), and Workflow as the three primary semantic navigation axes of the CNCF Web Console, and add Workflow Management as a standard runtime-management surface. Keep Job Management as the cross-cutting asynchronous execution-management and diagnostic capability.
 
 The management surface observes every WorkflowInstance known to the CNCF Workflow runtime regardless of whether its current or past execution is managed by JobEngine. sm-workflow is the first representative consumer, not the owner of a separate dashboard.
 
@@ -17,33 +17,43 @@ The management surface observes every WorkflowInstance known to the CNCF Workflo
 
 ## Scope
 
-1. Add a Web Console Workflow overview/list.
-2. Show all observable running and retained completed Workflow instances, including instances with no Job association.
-3. Provide filtering using stable runtime metadata, initially including Component/Subsystem, Workflow definition, lifecycle status, and current State/GoalPhase where available.
-4. Provide Workflow instance detail with current state, transition/progression history, action/continuation evidence, result, failure/retry diagnostics, timestamps, and correlation identifiers supported by the canonical runtime.
-5. Link Workflow action/execution evidence to related Jobs when a Job exists, without making Job ownership a prerequisite for Workflow visibility.
-6. Provide reverse correlation from Job management to originating/related Workflow execution where canonical correlation evidence exists.
-7. Reuse the CNCF Web Console, authorization, redaction, polling/update, and presentation infrastructure rather than creating an sm-workflow-specific UI.
-8. Add Executable Specifications for enumeration, filtering, detail projection, Job/non-Job visibility, authorization/redaction, and representative sm-workflow metadata.
+1. Organize Dashboard navigation around Aggregate, View (Read Model), and Workflow runtime projections.
+2. Keep Job Management cross-cutting: correlate Jobs with Aggregate, View, and Workflow execution evidence without treating Job as a fourth application-model axis.
+3. Add a Web Console Workflow overview/list.
+4. Show all observable running and retained completed Workflow instances, including instances with no Job association.
+5. Provide filtering using stable runtime metadata, initially including Component/Subsystem, Workflow definition, lifecycle status, and current State/GoalPhase where available.
+6. Provide Workflow instance detail with current state, transition/progression history, action/continuation evidence, result, failure/retry diagnostics, timestamps, and correlation identifiers supported by the canonical runtime.
+7. Link Workflow action/execution evidence to related Jobs when a Job exists, without making Job ownership a prerequisite for Workflow visibility.
+8. Provide reverse correlation from Job management to originating/related Workflow execution where canonical correlation evidence exists.
+9. Reuse the CNCF Web Console, authorization, redaction, polling/update, and presentation infrastructure rather than creating an sm-workflow-specific UI.
+10. Add Executable Specifications for enumeration, filtering, detail projection, Job/non-Job visibility, authorization/redaction, and representative sm-workflow metadata.
 
 ## Core boundary
 
-Workflow Management and Job Management are peer management views over different runtime concepts:
+Aggregate, View, and Workflow are the primary application-semantic axes. Job Management is a cross-cutting runtime-management layer over asynchronous execution:
 
     CNCF Web Console
       +-- Dashboard
+      |     +-- Aggregates
+      |     +-- Views (Read Models)
+      |     +-- Workflows
       +-- Jobs
-      +-- Workflows
 
     WorkflowInstance
       +-- Action/Execution
             +-- optional related Job
 
+- Aggregate expresses write/domain state and consistency boundaries.
+- View expresses read/projection state.
 - Workflow expresses process/state progression.
 - Job expresses asynchronous execution lifecycle.
 - A Workflow Action is not inherently a Job.
 - A Job need not belong to a Workflow.
 - Job-managed and non-Job-managed Workflow execution are both first-class Workflow Management subjects.
+
+## Designed/Observed model navigation
+
+Textus CBD Support is the Designed Model surface; the CNCF Web Console is the Observed Model surface. Phase 87 must preserve stable Aggregate/View/Workflow identity and provide bidirectional links between the two surfaces when authoritative mapping is available. Missing or ambiguous mapping must remain explicit and must not be reconstructed heuristically.
 
 ## sm-workflow acceptance
 
