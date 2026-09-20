@@ -15,6 +15,11 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- Planned post-`sm-workflow` producer/consumer sequence: Cozy Phase 66 produces
+  the generalized Composite StateMachine semantic artifact and
+  [Phase 87](phase-87.md) admits it into CNCF. Both require a stable first
+  `sm-workflow` vertical slice plus a concrete consumer requirement; neither
+  blocks Phase 64, Phase 77, or `sm-workflow` Phase 1.
 - Latest closed phase: `phase-70.1.md` - documentation-only retirement of the
   superseded duplicate activation plan. Phase 70 remains the authoritative
   accepted implementation.
@@ -178,8 +183,10 @@ Current baseline:
   atomic execution contract, and Phase 63.2 owns the completed
   `CommittedTransition` delivery, observability, cross-repository acceptance,
   and aggregate full suite.
-- [Phase 64](phase-64.md) consumes the Phase 63.2 handoff; [Phase 64.2](phase-64.2.md)
-  consumes Phase 63.1's atomic-execution contract directly. [Phase 64.1](phase-64.1.md)
+- [Phase 64](phase-64.md) is complete: it consumes the Phase 63.2 handoff and
+  closes the released Cozy Phase 62.3 Workflow subset required by Phase 77 and
+  the first `sm-workflow` vertical slice. [Phase 64.2](phase-64.2.md) consumes
+  Phase 63.1's atomic-execution contract directly. [Phase 64.1](phase-64.1.md)
   is a superseded historical planning record and is not on the `sm-workflow`
   Phase 1 critical path.
 - Ledgers: [63](phase-63-checklist.md), [63.1](phase-63.1-checklist.md), and

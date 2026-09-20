@@ -1,9 +1,12 @@
 # Composite Workflow Released Producer Fixture Handoff
 
 status=accepted
+scope=phase77-sm-workflow-minimum
 phase=64
 swf=[SWF-07, SWF-08]
 producer=Cozy Phase 62.3
+deferred_generalized_producer=Cozy Phase 66
+deferred_generalized_consumer=CNCF Phase 87
 
 ## Pinned producer evidence
 
@@ -26,17 +29,21 @@ definition for the producer contract.
 
 The accepted handoff supplies the `workflow-producer-v1` ABI, bootstrap schema,
 fixture identity, executable-specification evidence, and focused receipt used
-for SWF-07/08.  The final closure keeps that fixture byte-identical and
-strengthens validation at its distinct executable-specification SHA without an
-ABI change.  Therefore no concrete ABI incompatibility is demonstrated at the
-Phase 64 boundary.  Generalized producer diagnostics or producer metadata are
-not required.
+for the Phase 77 / `sm-workflow` minimum in SWF-07/08. The final closure keeps
+that fixture byte-identical and strengthens validation at its distinct
+executable-specification SHA without an ABI change.
+
+This evidence does not claim that the Workflow ABI is the complete generalized
+Composite StateMachine semantic artifact described by the broad SWF-06 design.
+The full-review correction recorded on 2026-09-21 supersedes the earlier
+statement that no concrete ABI limitation existed.
 
 ## Minimum source facts consumed
 
 The released fixture proves the following producer-side facts:
 
-- composite derivation is driven by declared constituent configuration;
+- the Workflow identity, version, states, action identities, and source
+  locations are generated from the admitted CML fixture;
 - the action sequence is `BuildProject -> RunTests -> ReviewChange -> CommitChanges`;
 - `ReviewChange` declares Required SPI `review-change-capability`; and
 - the generated service relation is
@@ -49,20 +56,36 @@ those remain consumer evidence owned by Phase 77.
 
 ## CNCF boundary binding
 
-This handoff binds the released producer facts only to these accepted CNCF
-contracts:
+This handoff binds the released producer facts only to the minimum CNCF
+contracts needed by Phase 77:
 
 - the existing Phase 63.2 entity-triggered entrance consumes the post-commit
   `CommittedTransition`;
-- SWF-02's constituent configuration and deterministic composite derivation;
-- SWF-04's typed constituent/composite action ordering and provenance;
-- SWF-05's minimal Workflow definition/instance identity and progression; and
-- SWF-06's CML-first generated semantic handoff without reparsing.
+- SWF-04's typed action ordering boundary to the extent represented by the
+  released Workflow action sequence;
+- SWF-05's minimal Workflow definition identity and progression vocabulary;
+  and
+- the released Workflow subset of SWF-06's CML-first handoff.
 
 The fixture itself starts explicitly through its Skill-driven entry.  That start
 is not recast as an entity-triggered entrance, and this acceptance does not add
 another entrance trigger.  `CommittedTransition` remains the only
 entity-triggered entry fact consumed by the Phase 63.2/64 boundary.
+
+## Observed limitation and future owner
+
+The pinned Workflow ABI does not carry the complete generalized Composite
+StateMachine configuration, derivation rules, causal/action provenance,
+constituent definition version pins, or reachability/coverage/overlap producer
+diagnostics required by the broad SWF-06 design. CNCF must not infer those
+facts from names, reparse CML, or create a handwritten replacement.
+
+That limitation is outside the first `sm-workflow` vertical-slice contract.
+Future production of the generalized artifact belongs to Cozy Phase 66. Future
+CNCF schema admission, compatibility diagnostics, ComponentFactory discovery,
+and runtime projection belong to Phase 87. Both Phases have an evidence-bound
+entry after the first `sm-workflow` vertical slice and do not block Phase 64,
+Phase 77, or `sm-workflow` Phase 1.
 
 ## Phase 77 consumer handoff and deferrals
 
@@ -89,5 +112,7 @@ contract.
 scenario changes in this documentation slice; the pinned producer
 executable-specification and focused receipt are prior accepted evidence only.
 
-SWF-07 and SWF-08 are accepted on this evidence.  Phase 64 remains
-`in_progress` until its ordinary closure.
+SWF-07 and SWF-08 are accepted only for the Phase 77 / `sm-workflow` minimum on
+this evidence. The generalized artifact remains explicitly unclaimed. Phase 64
+is complete for this minimum; its generalized producer/consumer successor work
+remains deferred.

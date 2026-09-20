@@ -1,6 +1,9 @@
 # Phase 64 Checklist - Minimal Composite StateMachine / Workflow Foundation
 
-status=in_progress
+status=completed
+outcome=success
+closure_mode=forced-release
+closure_exception=fresh-full-suite-not-refreshed
 phase=[Phase 64](phase-64.md)
 
 Phase 64 closes only the minimum Composite StateMachine / Workflow foundation required by Phase 77 and sm-workflow Phase 1. It consumes the completed Phase 63.1 local atomic-execution contract and starts only after Phase 63.2 closes.
@@ -30,7 +33,7 @@ Stage Status:
 - Completion rule: the exclusive four-way inventory is accepted with no advanced Workflow expansion.
 - Update rule: preserve this accepted result until the ordinary Step 64-S1 commit.
 
-Evidence: [Composite StateMachine / Workflow Semantic Inventory](../design/composite-workflow-semantic-inventory.md) records the sealed Step review disposition digest `566d9146076175e6fefb92809b6ef9548462d7d9d57da99f51c0074ebb61f34a`. Phase 64 remains in progress with SWF-02–08 planned.
+Evidence: [Composite StateMachine / Workflow Semantic Inventory](../design/composite-workflow-semantic-inventory.md) records the sealed Step review disposition digest `566d9146076175e6fefb92809b6ef9548462d7d9d57da99f51c0074ebb61f34a`. Subsequent SWF-02–08 entries provide the Phase completion ledger.
 
 ## SWF-02 Composite identity and derivation
 - [x] Freeze constituent role/identity and configuration schema.
@@ -46,7 +49,7 @@ Stage Status:
 - Completion rule: role/identity, configuration, deterministic derivation, and post-commit causal correlation are accepted.
 - Update rule: preserve this accepted result until the ordinary Step 64-S2 commit.
 
-Evidence: [Composite StateMachine Identity and Derivation](../design/composite-state-machine-identity-and-derivation.md) records the sealed Step re-review disposition digest `f034e3593ad328b6be971a6494a71e4db354c929143748f0cc192ec308abac09`. Phase 64 remains in progress with SWF-03–08 planned.
+Evidence: [Composite StateMachine Identity and Derivation](../design/composite-state-machine-identity-and-derivation.md) records the sealed Step re-review disposition digest `f034e3593ad328b6be971a6494a71e4db354c929143748f0cc192ec308abac09`. Subsequent SWF-03–08 entries provide the Phase completion ledger.
 
 ## SWF-03 Admission
 - [x] Consume generated CML contracts without reparsing CML.
@@ -62,7 +65,7 @@ Stage Status:
 - Completion rule: consume CML without reparsing, fail-closed admission, preserve source/model identity, and preserve the typed semantic contract without generated API/SPI admission or `ComponentFactory` bootstrap.
 - Update rule: preserve this accepted result until the ordinary Step 64-S3 commit.
 
-Evidence: [Producer-Generated Rule Admission Contract](../design/composite-state-machine-generated-rule-admission.md) records the sealed focused re-review disposition digest `86bc82a1b27dc83ce2407b1b5ffb2f3c8184ac2eaa55a5d6aa833370d43c6fb4`. Phase 64 remains in progress with SWF-04–08 planned.
+Evidence: [Producer-Generated Rule Admission Contract](../design/composite-state-machine-generated-rule-admission.md) records the sealed focused re-review disposition digest `86bc82a1b27dc83ce2407b1b5ffb2f3c8184ac2eaa55a5d6aa833370d43c6fb4`. Subsequent SWF-04–08 entries provide the Phase completion ledger.
 
 ## SWF-04 Action composition
 - [x] Preserve constituent/composite action ordering and provenance.
@@ -77,7 +80,7 @@ Stage Status:
 - Completion rule: deterministic constituent/composite action ordering and provenance use the shared typed `ExecProgram` boundary, consume the Phase 63.1 contract, and leave planner/interpreter work to 64.2.
 - Update rule: preserve this accepted result until the ordinary Step 64-S4 commit.
 
-Evidence: [Composite StateMachine Action Composition](../design/composite-state-machine-action-composition.md) records the sealed Step review disposition digest `485d5190a7259944c024f28954376920c9feb8a068704ace60f2972815666cee`. Phase 64 remains in progress with SWF-05–08 planned.
+Evidence: [Composite StateMachine Action Composition](../design/composite-state-machine-action-composition.md) records the sealed Step review disposition digest `485d5190a7259944c024f28954376920c9feb8a068704ace60f2972815666cee`. Subsequent SWF-05–08 entries provide the Phase completion ledger.
 
 ## SWF-05 Minimal Workflow specialization
 - [x] Freeze semantic WorkflowDefinitionIdentity / WorkflowInstanceIdentity.
@@ -93,22 +96,31 @@ Stage Status:
 - Completion rule: pinned definition/instance identity, three-state lifecycle/current progression plus correlation/causation, durable revision/history/store/suspension remaining Phase 77, and no Workflow-only concept representable as Composite StateMachine semantics.
 - Update rule: preserve this accepted result until the ordinary Step 64-S5 commit.
 
-Evidence: [Minimal Workflow specialization](../design/minimal-workflow-specialization.md) records the sealed Step review disposition digest `2165bdb3f9c71ad3147e623e70570657be36e6022aa87868788713e728e52e57`. Phase 64 remains in progress with SWF-06–08 planned.
+Evidence: [Minimal Workflow specialization](../design/minimal-workflow-specialization.md) records the sealed Step review disposition digest `2165bdb3f9c71ad3147e623e70570657be36e6022aa87868788713e728e52e57`. Subsequent SWF-06–08 entries provide the Phase completion ledger.
 
 ## SWF-06 Generated semantic-contract handoff
 - [x] Freeze a CML-first generated Composite StateMachine/Workflow semantic-contract handoff without CML reparsing.
 - [x] Leave generated API/SPI admission and `ComponentFactory` bootstrap to Phase 77.
 - [x] Do not accept handwritten definitions as canonical end-to-end evidence.
+- [x] Distinguish the released Workflow subset needed by Phase 77 from the
+      complete generalized Composite artifact.
+- [x] Assign future generalized artifact production to Cozy Phase 66 and its
+      CNCF admission/runtime projection to Phase 87, without blocking the
+      `sm-workflow` critical path.
 
 Stage Status:
 
-- Current status: ACCEPTED.
+- Current status: ACCEPTED DESIGN; GENERALIZED ARTIFACT DEFERRED.
 - Owner: CNCF semantic-boundary owner under Phase 64 closure authority.
 - Entry rule: enter after the sealed CML-first typed handoff is available.
-- Completion rule: preserve the CML-first generated semantic-contract handoff without CML reparsing, leave generated API/SPI admission and `ComponentFactory` bootstrap to Phase 77, and do not accept handwritten definitions as canonical end-to-end evidence.
+- Completion rule: preserve the CML-first design, accept the released Workflow
+  subset required by Phase 77, leave its API/SPI admission and
+  `ComponentFactory` bootstrap to Phase 77, and route the complete generalized
+  artifact through Cozy Phase 66 and CNCF Phase 87 without handwritten
+  substitution.
 - Update rule: preserve this accepted result until the ordinary Step 64-S6 commit.
 
-Evidence: [Composite Workflow Generated Semantic Handoff](../design/composite-workflow-generated-semantic-handoff.md) records the sealed Step review disposition digest `b177d55228453e4c84e3a702511036edd37ae337afa6d41d4cf2a30c5375cc5a`. Phase 64 remains in progress; SWF-07 consumes the closed Cozy Phase 62.3 fixture and SWF-08 follows it.
+Evidence: [Composite Workflow Generated Semantic Handoff](../design/composite-workflow-generated-semantic-handoff.md) records the sealed Step review disposition digest `b177d55228453e4c84e3a702511036edd37ae337afa6d41d4cf2a30c5375cc5a`. SWF-07 consumes the closed Cozy Phase 62.3 fixture and SWF-08 records the bounded Phase 77 handoff.
 
 ## SWF-07 Real fixture
 - [x] Pin the released Cozy Phase 62.3 CML fixture, generated Workflow ABI,
@@ -118,12 +130,15 @@ Evidence: [Composite Workflow Generated Semantic Handoff](../design/composite-wo
 - [x] Prove that an entity-triggered entry accepts only the Phase 63.2
       `CommittedTransition`; do not force that trigger onto the explicitly
       started Skill-driven Phase 62.3 fixture.
-- [x] Record any actual ABI incompatibility precisely. In its absence, do not
-      expand Cozy or create generalized producer diagnostics.
+- [x] Record that the pinned Workflow ABI omits the full generalized Composite
+      configuration, derivation, causal/action provenance, version pins, and
+      producer diagnostics required by the broad SWF-06 design.
+- [x] Confirm that those omissions do not change the Phase 77 / `sm-workflow`
+      minimum and defer them to Cozy Phase 66 and CNCF Phase 87.
 
 Stage Status:
 
-- Current status: ACCEPTED.
+- Current status: ACCEPTED FOR PHASE 77 / `sm-workflow` MINIMUM.
 - Owner: CNCF Phase 64 for the bounded fixture composition and runtime proof;
   Cozy Phase 62.3 remains the immutable producer evidence owner.
 - Entry rule: consume the accepted Cozy Phase 62.3 revision, generated ABI
@@ -147,9 +162,19 @@ Stage Status:
 - [x] Record 2PC/compensation/recovery as Phase 85.
 - [x] Record Workflow-to-Workflow orchestration and advanced integration as later work.
 - [x] If Phase 63.2 closure reveals hierarchy/history runtime gaps, require the dedicated follow-up before relying on those semantics.
+- [x] Record Cozy Phase 66 as the future generalized producer and CNCF Phase 87
+      as its admission/runtime-projection consumer; neither blocks Phase 77 or
+      `sm-workflow` Phase 1.
 
-Evidence: [Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md) pins the accepted producer identity, ABI/schema, fixture and validation evidence; binds it to the existing Phase 63.2 `CommittedTransition` boundary without miscasting the fixture's explicit Skill-driven start; and records the Phase 77 consumer handoff and later-phase deferrals. Phase 64 remains `in_progress` until its ordinary closure.
+Evidence: [Released producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md) pins the accepted producer identity, ABI/schema, fixture and validation evidence; binds it to the existing Phase 63.2 `CommittedTransition` boundary without miscasting the fixture's explicit Skill-driven start; and records the Phase 77 consumer handoff and later-phase deferrals. This completes Phase 64's released-Workflow-subset closure; the generalized artifact remains owned by future Cozy Phase 66 and CNCF Phase 87 work.
 
 ## Closure
 
 Phase 64 is complete when the generated Composite StateMachine / minimal Workflow semantics and real fixture are sufficient for Phase 64.2's incremental execution/test foundation and the Phase 77 handoff, without reopening Phase 63.1 or implementing advanced operational Workflow facilities.
+
+Closure result: success. The user explicitly selected forced release on
+2026-09-21 because the workflow could not provide a fresh final full-suite
+receipt without restarting heavyweight validation. The exception waives only
+that fresh receipt: accepted Step evidence, `P64-FULL-REVIEW-001`, the pinned
+Cozy Phase 62.3 fixture evidence, and the final documentation integrity checks
+remain preserved. No new Scala or test bytes are included in this closure.

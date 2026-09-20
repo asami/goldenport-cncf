@@ -4795,7 +4795,10 @@ Applied split ownership:
   - `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md`.
 
 ### 9.55 StateMachine-Workflow Alignment
-Planned for Phase 64 after Phase 63.2 closes.
+Completed in Phase 64 after Phase 63.2 closed. Phase 64 accepts the released
+Cozy Phase 62.3 Workflow subset required by Phase 77 and the first
+`sm-workflow` vertical slice; the complete generalized Composite StateMachine
+artifact remains a future Cozy Phase 66 / CNCF Phase 87 sequence.
 
 - Historical basis:
   - Phase 14 delivered a lightweight event-triggered, entity-status-based
@@ -4829,14 +4832,17 @@ Planned for Phase 64 after Phase 63.2 closes.
     idempotent progression decision; and
   - Phase 14 raw-event/status-field and JCL synthetic triggers remain explicit
     compatibility/entry variants, not inferred committed transitions.
-- Initial scope:
+- Completed Phase 64 scope:
   - typed committed-transition trigger and CML Workflow binding;
-  - generated Workflow definitions/ABI and sequential next-Operation choice;
-  - WorkflowInstance persistence, history, Job links, replay, and recovery;
-  - domain/workflow state projection, security, observability, and redaction;
-    and
-  - generated `SalesOrder`/`SalesStatus`/`SalesOrderWorkflow` acceptance.
+  - generated Workflow definition/ABI subset and sequential next-Operation
+    vocabulary; and
+  - separate StateMachine/Workflow semantic identity and bounded Phase 77
+    consumer handoff without CML reparsing.
 - Deferred scope:
+  - Phase 77 WorkflowInstance persistence, history, Job links, replay/recovery,
+    API/SPI admission, Provider execution, and protocol/runtime work;
+  - the generalized Composite StateMachine producer artifact in Cozy Phase 66
+    and its CNCF admission/runtime projection in Phase 87; and
   - BPMN/DAG, branch/loop/parallel, timer-rich, human-task, compensation,
     connector-heavy, and cross-organization orchestration; these use an
     explicit specialist-engine boundary.
@@ -5244,3 +5250,30 @@ Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
   - `asami/cozy/docs/phase/phase-62.1.md`;
   - `asami/cozy/docs/phase/phase-62.2.md`; and
   - `asami/cozy/docs/phase/phase-62.3.md`.
+
+### 9.65 Generalized Composite StateMachine Artifact Admission
+
+Planned as [Phase 87](../phase/phase-87.md), paired with Cozy Phase 66 and
+deliberately outside the first `sm-workflow` vertical-slice critical path.
+
+- Phase 64 freezes the broad semantic direction but accepts only the released
+  Cozy Phase 62.3 Workflow subset needed by Phase 77 and `sm-workflow` Phase 1.
+- Cozy Phase 66 is the future producer of a generalized, versioned Composite
+  StateMachine semantic artifact containing exact constituents/configuration,
+  typed derivation rules and actions, version pins, provenance, deterministic
+  encoding, and producer diagnostics.
+- CNCF Phase 87 owns schema/generator/definition compatibility admission,
+  structured fail-closed rejection, ComponentFactory discovery, and projection
+  into the existing Composite StateMachine runtime.
+- CNCF never reparses CML, reconstructs missing fields from names, substitutes
+  current registry versions, or creates a handwritten canonical artifact.
+- Both Phases have an evidence-bound entry: the first `sm-workflow` vertical
+  slice must be stable and a concrete consumer must identify missing semantic
+  data and its use.
+- Phase 87 does not reopen Phase 64 or Phase 77 and does not reimplement the
+  Workflow API/SPI, Provider, Continuation, or persistence runtime.
+- Planning references:
+  - [Phase 87](../phase/phase-87.md);
+  - [Phase 87 Checklist](../phase/phase-87-checklist.md);
+  - [Phase 64 generalized-artifact deferral](../journal/2026/09/2026-09-21-phase-64-generalized-artifact-deferral.md); and
+  - `asami/cozy/docs/phase/phase-66.md`.
