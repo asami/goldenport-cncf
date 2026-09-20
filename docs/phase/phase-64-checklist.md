@@ -75,10 +75,20 @@ Stage Status:
 Evidence: [Composite StateMachine Action Composition](../design/composite-state-machine-action-composition.md) records the sealed Step review disposition digest `485d5190a7259944c024f28954376920c9feb8a068704ace60f2972815666cee`. Phase 64 remains in progress with SWF-05–08 planned.
 
 ## SWF-05 Minimal Workflow specialization
-- [ ] Freeze semantic WorkflowDefinitionIdentity / WorkflowInstanceIdentity.
-- [ ] Freeze lifecycle/current progression and correlation/causation semantics needed by Phase 77.
-- [ ] Leave independently durable revision/history/store/suspension semantics to Phase 77.
-- [ ] Add no Workflow-only concept that can be represented as Composite StateMachine semantics.
+- [x] Freeze semantic WorkflowDefinitionIdentity / WorkflowInstanceIdentity.
+- [x] Freeze lifecycle/current progression and correlation/causation semantics needed by Phase 77.
+- [x] Leave independently durable revision/history/store/suspension semantics to Phase 77.
+- [x] Add no Workflow-only concept that can be represented as Composite StateMachine semantics.
+
+Stage Status:
+
+- Current status: ACCEPTED.
+- Owner: CNCF semantic-boundary owner under Phase 64 closure authority.
+- Entry rule: enter after the sealed Workflow-profile identity and the Phase 63.2/SWF-02 causal boundary are available.
+- Completion rule: pinned definition/instance identity, three-state lifecycle/current progression plus correlation/causation, durable revision/history/store/suspension remaining Phase 77, and no Workflow-only concept representable as Composite StateMachine semantics.
+- Update rule: preserve this accepted result until the ordinary Step 64-S5 commit.
+
+Evidence: [Minimal Workflow specialization](../design/minimal-workflow-specialization.md) records the sealed Step review disposition digest `2165bdb3f9c71ad3147e623e70570657be36e6022aa87868788713e728e52e57`. Phase 64 remains in progress with SWF-06–08 planned.
 
 ## SWF-06 Generated semantic-contract handoff
 - [ ] Freeze a CML-first generated Composite StateMachine/Workflow semantic-contract handoff without CML reparsing.
