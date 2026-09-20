@@ -2,7 +2,8 @@
 
 status=completed
 outcome=success
-closure_mode=forced-release
+release_disposition=forced
+assurance=exceptions-recorded
 closure_exception=fresh-full-suite-not-refreshed
 closure_exception_authority=user-explicit-2026-09-21
 planned_at=2026-08-12

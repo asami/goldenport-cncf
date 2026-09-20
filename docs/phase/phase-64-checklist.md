@@ -2,7 +2,8 @@
 
 status=completed
 outcome=success
-closure_mode=forced-release
+release_disposition=forced
+assurance=exceptions-recorded
 closure_exception=fresh-full-suite-not-refreshed
 phase=[Phase 64](phase-64.md)
 

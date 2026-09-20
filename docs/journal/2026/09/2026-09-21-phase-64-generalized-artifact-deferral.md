@@ -69,8 +69,11 @@ valid pinned Workflow fixture evidence.
 
 ## Closure exception
 
-Phase 64 was closed with `outcome=success` and
-`closure_mode=forced-release` under the user's explicit 2026-09-21 direction.
+Phase 64 was closed with `outcome=success`, `release_disposition=forced`, and
+`assurance=exceptions-recorded` under the user's explicit 2026-09-21
+direction. A successful V1 force-release commit makes the resulting baseline
+eligible for successor continuation without representing the missing assurance
+as complete.
 The normal release adapter required a fresh repository-full SBT receipt because
 Scala and test commits followed the older Phase 63.2 receipt. Re-running the
 full suite would have restarted heavyweight closure processing after all Phase
