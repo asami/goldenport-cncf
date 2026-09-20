@@ -10,13 +10,15 @@ Define the detailed design direction for adding Workflow Management to the exist
 
 ## Management model
 
-The Web Console has three related but distinct views:
+The Web Console uses three primary application-semantic axes:
 
-- **Dashboard**: runtime-wide overview and navigation.
-- **Job Management**: asynchronous execution lifecycle, result, diagnostics, recovery/control, and Job-specific operational evidence.
-- **Workflow Management**: process/state progression, current position, history, continuation/action evidence, result, and cross-runtime correlation.
+- **Aggregate**: write/domain state, Aggregate instances, constituent Entities, events, consistency boundaries, and related Commands.
+- **View (Read Model)**: projection state, source Entities/Aggregates, Queries, freshness/version evidence, and read-side diagnostics.
+- **Workflow**: process/state progression, current position, history, continuation/action evidence, result, and cross-runtime correlation.
 
-Jobs and Workflows are peers. Their relationship is correlation, not containment as a universal rule.
+These axes provide the runtime/Observed Model counterpart of the Aggregate, View, and Workflow projections in Textus CBD Support.
+
+**Job Management** is not a fourth application-model axis. It is the cross-cutting execution-management and diagnostic layer for asynchronous work. A Job may be reached from an Aggregate command, View projection/update, or Workflow action when stable correlation evidence exists. Jobs and Workflows remain independent runtime concepts: their relationship is correlation, not universal containment.
 
 ## Visibility invariant
 
@@ -42,7 +44,7 @@ A Workflow Action/Execution may optionally correlate with a Job.
                   |
                   +-- Job Management detail
 
-The canonical correlation should be bidirectional when the underlying contracts provide enough evidence: Workflow detail to related Job detail, and Job detail to related WorkflowInstance / ActionExecution.
+The canonical correlation should be bidirectional when the underlying contracts provide enough evidence: Workflow detail to related Job detail, and Job detail to related WorkflowInstance / ActionExecution. Equivalent stable links should connect Jobs to affected Aggregates and Views when the runtime contract exposes those identities.
 
 The UI must not infer association from timestamps, names, labels, or scanning bounded Job lists. Correlation must use stable runtime identity/evidence.
 
@@ -69,7 +71,16 @@ The Web layer should consume a canonical management/read contract. REST may be t
       +-- MCP -------> Skill / AI
       +-- typed API -> programmatic consumers
 
-All presentations must observe the same Workflow identity and lifecycle semantics.
+All presentations must observe the same Aggregate, View, Workflow, and lifecycle identities.
+
+## Designed Model / Observed Model navigation
+
+Textus CBD Support owns the designed-model projections; the CNCF Web Console owns runtime observation and management. Where stable model/runtime identities and authorized destinations are available, navigation should be bidirectional:
+
+- CBD Support Aggregate/View/Workflow model -> corresponding CNCF runtime overview or instance;
+- CNCF Aggregate/View/Workflow runtime evidence -> corresponding CBD Support model projection.
+
+The UI must expose an unavailable or ambiguous mapping rather than infer one from names, labels, or diagram position.
 
 ## sm-workflow
 
@@ -93,6 +104,9 @@ The Web Console is for human observation/operation; MCP is for Skill/AI interact
 
 Executable Specifications should demonstrate at least:
 
+- Aggregate, View, and Workflow are available as the primary Dashboard navigation axes;
+- Job Management remains a cross-cutting execution/diagnostic layer rather than a fourth model axis;
+- stable Designed Model / Observed Model links are preserved in both directions where available;
 - a Workflow with no Job is listed and inspectable;
 - a Workflow with one or more related Jobs is listed independently and links to those Jobs;
 - unrelated standalone Jobs remain valid Job Management subjects;
