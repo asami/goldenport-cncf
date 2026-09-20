@@ -12,6 +12,13 @@ Admit Cozy's first-class generated CML `WORKFLOW`/StateMachine ABI through CNCF 
 
 Phase 77 consumes Phase 64's minimum Composite StateMachine/Workflow semantics and Phase 64.2's canonical `ExecProgram[UnitOfWorkOp, A]` contract. It owns the provider-neutral independently durable WorkflowInstance persistence SPI required by the vertical slice. For an entity-triggered Workflow, the only lifecycle input is the successful Phase 63.2 `CommittedTransition` handoff; attempted or rolled-back transitions do not start or advance a Workflow.
 
+Phase 64.2 closed with a forced minimum baseline rather than a replay of its
+full historical acceptance workflow. Consequently, Phase 77 also owns the
+remaining formal producer-ABI admission, production-interpreter alignment, and
+StateMachine/Composite/Workflow executable acceptance. CWF-77-01 and
+CWF-77-04 through CWF-77-09 are the normative receiving work items; Phase 77
+must not treat those outcomes as already proven by the Phase 64.2 closure.
+
 The first vertical slice is Skill-driven Workflow execution: internal deterministic Actions complete in the runtime, an external semantic SPI Action suspends as a durable Continuation, a typed Skill result resumes the StateMachine, and internal closing Actions complete normally.
 
 Phase 77 also introduces `JudgmentAction` as the common semantic Action for a
@@ -88,7 +95,7 @@ or another Provider without changing the Workflow definition.
 
 - Cozy Phase 62 owns CML `WORKFLOW` source and StateMachine lowering; Phase 62.1 owns the generic StateMachine Provided API / Required SPI and ActionExecution contracts, Phase 62.2 the generated ABI/bootstrap metadata, and Phase 62.3 the producer fixture and CNCF handoff.
 - CNCF Phase 63.2 owns the StateMachine-specific post-commit `CommittedTransition` source contract; it does not start or execute Workflows.
-- CNCF Phase 64 owns minimum Composite/Workflow semantics and pure derivation. CNCF Phase 64.2 owns the canonical `ExecProgram[UnitOfWorkOp, A]` planning/interpreter boundary.
+- CNCF Phase 64 owns minimum Composite/Workflow semantics and pure derivation. CNCF Phase 64.2 owns the canonical `ExecProgram[UnitOfWorkOp, A]` planning and deterministic-recording baseline; Phase 77 completes production-interpreter alignment and executable consumer acceptance.
 - CNCF Phase 77 owns the provider-neutral independently durable WorkflowInstance persistence SPI, generated ABI admission, ComponentFactory discovery, Provided API dispatch, Required SPI Provider resolution, Action execution through the canonical program, durable Continuation/resume, and deterministic progression.
 - Workflow reuses/projects the StateMachine foundation; CNCF does not add a parallel Workflow-specific API/SPI or Continuation engine.
 - An entity-local StateMachine owns only lifecycle data persisted with that entity. WorkflowInstance process persistence remains independently owned.

@@ -1,8 +1,13 @@
 # Phase 64.2 - UnitOfWork Program Planning, Interpreter, and Testability
 
-status=planned
+status=completed
+outcome=success
+closure_mode=forced-release
+closure_exception=formal-consumer-acceptance-not-replayed
+closure_exception_authority=user-explicit-2026-09-21
+closed_at=2026-09-21
 planned_at=2026-09-05
-revised_at=2026-09-20
+revised_at=2026-09-21
 depends_on=[Phase 63.1](phase-63.1.md) completed atomic-execution contract and [Phase 64](phase-64.md) semantic foundation
 producer=asami/cozy Phase 47.2 sequence (47.2, 47.2.1, 47.2.2)
 
@@ -30,6 +35,33 @@ CML StateMachine / Composite StateMachine / Workflow
 ```
 
 `UnitOfWorkOp[A]` remains the single source of truth for executable intents.
+
+## Forced Minimum Closure — 2026-09-21
+
+Phase 64.2 is closed at the minimum stable boundary required to start Phase 77.
+This is an explicitly authorized exceptional closure: it does not replay the
+normal full-suite, comprehensive-review, or formal consumer-admission workflow.
+
+The accepted baseline is the deterministic planning and recording foundation
+introduced by commit `f3a220ad3cada8a1a7eeee7e2df5fc570a92b136`, together
+with the local-atomic/non-local-deferred scope decision recorded by commit
+`76a452405a8d02bd837d90877fa390bea37267fa`.
+
+The closure accepts only the following claims:
+
+- `UnitOfWorkOp` remains the canonical executable algebra;
+- existing operations can be classified and planned into local-atomic and
+  non-local/deferred segments;
+- the deterministic recorder exposes ordered occurrences, configured results,
+  and injected failures without production infrastructure; and
+- no second StateMachine/Workflow execution algebra is introduced.
+
+Formal Cozy ABI admission, production-interpreter alignment, and the executable
+StateMachine/Composite/Workflow acceptance are not claimed by this closure.
+They are explicitly owned by Phase 77, whose CWF-77-01 and CWF-77-04 through
+CWF-77-09 work items admit the producer ABI and prove the first executable
+vertical slice. This transfer is a responsibility handoff, not a claim that
+those outcomes are already complete.
 
 ## Cozy Phase 47.2 split coordination — 2026-09-08
 
@@ -278,12 +310,14 @@ as:
 
 No single property-test library is mandated.
 
-## Representative Acceptance
+## Historical Representative Acceptance Target
 
 Use the shared Order/Payment/Shipment CML fixture from Cozy Phase 47.2.2 after
 the Phase 47.2.1 compiler/ABI handoff.
 
-Acceptance must prove at least:
+The original combined Phase expected the following proof. The forced minimum
+closure does not claim it; the executable consumer proof is transferred to
+Phase 77:
 
 - pure derivation of `ReadyToShip` from constituent configuration;
 - lower `recordAuthorization` and upper `reserveShipment` logical action order;
@@ -300,26 +334,28 @@ Acceptance must prove at least:
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| UTP-01 | Existing Free/UoW inventory | `UnitOfWorkOp`, `ExecProgram`, `ExecUowM`, direct/declarative DSLs, interpreter/drivers, metadata, and current tests are inventoried. | planned |
-| UTP-02 | CML compilation ABI | Cozy Phase 47.2.1 logical-action binding/compilation contract to `ExecProgram` is admitted/versioned. | planned |
-| UTP-03 | Operation effect classification | Existing `UnitOfWorkOp` cases are classified for local-atomic versus non-local/deferred execution where relevant. | planned |
-| UTP-04 | Planner model | Explicit local-atomic planning, ordering, capability admission, and non-local/deferred classification are frozen. | planned |
-| UTP-05 | Deterministic test runtime | Program inspection, fake drivers, typed result stubbing, and failure injection are defined/implemented. | planned |
-| UTP-06 | Production interpreter alignment | Production execution preserves the same logical program/plan identities and structured outcomes. | planned |
-| UTP-07 | StateMachine acceptance | Simple/local StateMachine success/rejection/abort behavior is proven through compiled `ExecProgram` without production I/O. | planned |
-| UTP-08 | Composite/Workflow acceptance | Derived composite transition and lower/upper programs are proven through deterministic local/test execution with the shared fixture; advanced compensation/recovery is deferred. | planned |
-| UTP-09 | Algebra gap review | Any required new `UnitOfWorkOp` primitive is justified as generic CNCF functionality or rejected. | planned |
+| UTP-01 | Existing Free/UoW inventory | `UnitOfWorkOp`, `ExecProgram`, `ExecUowM`, direct/declarative DSLs, interpreter/drivers, metadata, and current tests are inventoried. | accepted-baseline |
+| UTP-02 | CML compilation ABI | Cozy Phase 47.2.1 logical-action binding/compilation contract to `ExecProgram` is admitted/versioned. | delegated-to-phase-77 |
+| UTP-03 | Operation effect classification | Existing `UnitOfWorkOp` cases are classified for local-atomic versus non-local/deferred execution where relevant. | accepted-baseline |
+| UTP-04 | Planner model | Explicit local-atomic planning, ordering, capability admission, and non-local/deferred classification are frozen. | accepted-baseline |
+| UTP-05 | Deterministic test runtime | Program inspection, fake drivers, typed result stubbing, and failure injection are defined/implemented. | accepted-baseline |
+| UTP-06 | Production interpreter alignment | Production execution preserves the same logical program/plan identities and structured outcomes. | delegated-to-phase-77 |
+| UTP-07 | StateMachine acceptance | Simple/local StateMachine success/rejection/abort behavior is proven through compiled `ExecProgram` without production I/O. | delegated-to-phase-77 |
+| UTP-08 | Composite/Workflow acceptance | Derived composite transition and lower/upper programs are proven through deterministic local/test execution with the shared fixture; advanced compensation/recovery is deferred. | delegated-to-phase-77 |
+| UTP-09 | Algebra gap review | Any required new `UnitOfWorkOp` primitive is justified as generic CNCF functionality or rejected. | accepted-no-new-algebra |
 
 ## Acceptance
 
 - `UnitOfWorkOp` remains the canonical execution algebra.
-- StateMachine/Workflow actions compile to `ExecProgram` rather than a parallel
-  Action algebra.
-- Test and production paths consume the same structured executable intent.
-- Failure injection can target executable-intent occurrences deterministically.
-- Atomic failure aborts the root transition according to the admitted plan.
-- Planner output is inspectable before execution.
-- Runtime nondeterminism is injectable where it affects observable behavior.
+- The planner classifies existing operations without creating a parallel Action
+  algebra.
+- Planner output and recorded operation occurrences are inspectable before or
+  without production execution.
+- Failure injection can target recorded executable-intent occurrences
+  deterministically.
+- Production/test alignment, root-transition abort behavior, and the complete
+  StateMachine/Composite/Workflow execution path remain Phase 77 acceptance
+  obligations and are not asserted by this forced closure.
 
 ## Non-Goals
 
@@ -339,6 +375,7 @@ Acceptance must prove at least:
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala`
 - `../../src/main/scala/org/goldenport/cncf/unitofwork/types.scala`
 - `../design/unitofwork-program-planning.md`
-- - `asami/cozy/docs/phase/phase-47.2.md`
+- [Phase 64.2 Forced Minimum Closure](../journal/2026/09/2026-09-21-phase-64.2-forced-minimum-closure.md)
+- `asami/cozy/docs/phase/phase-47.2.md`
 - `asami/cozy/docs/phase/phase-47.2.1.md`
 - `asami/cozy/docs/phase/phase-47.2.2.md`

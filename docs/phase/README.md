@@ -185,10 +185,13 @@ Current baseline:
   and aggregate full suite.
 - [Phase 64](phase-64.md) is complete: it consumes the Phase 63.2 handoff and
   closes the released Cozy Phase 62.3 Workflow subset required by Phase 77 and
-  the first `sm-workflow` vertical slice. [Phase 64.2](phase-64.2.md) consumes
-  Phase 63.1's atomic-execution contract directly. [Phase 64.1](phase-64.1.md)
-  is a superseded historical planning record and is not on the `sm-workflow`
-  Phase 1 critical path.
+  the first `sm-workflow` vertical slice. [Phase 64.2](phase-64.2.md) is also
+  complete under an explicitly authorized forced minimum closure: it accepts
+  the existing deterministic UnitOfWork planning/recording foundation and
+  transfers formal ABI admission plus production StateMachine/Composite/
+  Workflow execution acceptance to Phase 77. [Phase 64.1](phase-64.1.md) is a
+  superseded historical planning record and is not on the `sm-workflow` Phase
+  1 critical path.
 - Ledgers: [63](phase-63-checklist.md), [63.1](phase-63.1-checklist.md), and
   [63.2](phase-63.2-checklist.md).
 
@@ -205,7 +208,8 @@ Current baseline:
 - [Phase 77 - StateMachine API/SPI Runtime and First Skill-Driven Workflow Vertical Slice](phase-77.md)
   is planned and not started. It consumes Cozy Phase 62.1's API/SPI and
   ActionExecution contract, Phase 62.2's generated ABI, and Phase 62.3's
-  producer fixture/handoff after the Phase 64/64.2 prerequisites.
+  producer fixture/handoff after the completed Phase 64 and forced-minimum
+  Phase 64.2 prerequisites.
 - [Phase 77 Checklist](phase-77-checklist.md) owns ABI admission, generated
   discovery, Provider SPI construction, the independent WorkflowInstance
   persistence contract, durable Continuation, the minimum typed

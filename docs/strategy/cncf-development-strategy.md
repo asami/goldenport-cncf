@@ -5193,7 +5193,12 @@ from unnecessary hash-based control inside ordinary application data flow.
 ### 9.64 StateMachine API/SPI Runtime and Skill-Driven Workflow
 
 Planned as [Phase 77](../phase/phase-77.md), after Cozy Phase 62.3 and the
-Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites.
+Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites. Phase
+64.2 is closed at a forced minimum baseline: its deterministic planning and
+recording foundation is accepted, while formal ABI admission, production
+interpreter alignment, and executable StateMachine/Composite/Workflow
+acceptance are explicit Phase 77 obligations rather than retroactive Phase
+64.2 claims.
 
 - Cozy Phase 62 owns first-class CML `WORKFLOW` source/lowering; Phase 62.1
   owns generic StateMachine Provided API / Required SPI and ActionExecution;
