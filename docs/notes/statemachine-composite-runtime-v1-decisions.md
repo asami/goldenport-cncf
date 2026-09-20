@@ -8,6 +8,25 @@ Date: 2026-09-05
 Freeze the five cross-cutting decisions agreed while refining CML Composite
 StateMachine/Workflow and CNCF runtime integration.
 
+## Phase 64 scope fence
+
+The [Composite StateMachine / Workflow Semantic Inventory](../design/composite-workflow-semantic-inventory.md)
+is the authoritative SWF-01 classification for Phase 64. This note preserves
+broader historical/runtime reasoning and cannot turn any deferred concern into
+a Phase 64 requirement; the Phase 64 document and checklist remain the closure
+authority.
+
+Phase 64 consumes the Phase 63.1 local atomic-execution contract and the Phase
+63.2 `CommittedTransition` only after commit, without reopening or executing
+ahead of either. `ExecProgram` remains the shared executable boundary. Cozy
+owns CML grammar/normalization and producer semantics; Phase 64.2 owns
+planner/test-interpreter/production alignment; Phase 77 owns generated API/SPI
+admission, `ComponentFactory` bootstrap, Provider/Action execution, durable
+persistence/revision/history, protocol, and continuation/resume; Phase 85 owns
+2PC, compensation, and recovery. The decisions below therefore do not
+authorize new CML syntax, a parallel action algebra, durable behavior, provider
+behavior, or a general-purpose Workflow runtime in Phase 64.
+
 ## 1. Sequential Semantics by Default
 
 v1 Composite StateMachine processing is deterministic and sequential.
@@ -191,3 +210,11 @@ pinned CML definition
 This baseline is intentionally conservative. Parallel semantics, automatic
 multi-step compensation orchestration, and live instance migration can be added
 later as explicit features without weakening v1 guarantees.
+
+The durable, recovery, compensation, and migration material above is retained
+as design history and later-phase context. It is not a Phase 64 implementation
+claim; any such concern requires the owner named by the SWF-01 inventory.
+
+## Related Documents
+
+- [Phase 64 SWF-01 Semantic Inventory](../design/composite-workflow-semantic-inventory.md)

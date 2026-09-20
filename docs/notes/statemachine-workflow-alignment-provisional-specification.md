@@ -14,6 +14,26 @@ It does not override verified StateMachine behavior, generated ABI, source code,
 or Executable Specifications. Accepted behavior moves to `docs/design` and
 `docs/spec` after cross-repository verification.
 
+## Phase 64 scope fence
+
+The [Composite StateMachine / Workflow Semantic Inventory](../design/composite-workflow-semantic-inventory.md)
+is the authoritative SWF-01 classification for Phase 64. This note remains
+broader provisional and research material. Its examples, open decisions, and
+future-facing runtime discussion cannot turn a deferred concern into a Phase 64
+requirement. The Phase 64 document and checklist remain the closure authority.
+
+For Phase 64, Workflow is only a Composite StateMachine specialization/profile.
+Phase 64 consumes the Phase 63.1 local atomic-execution contract and the Phase
+63.2 `CommittedTransition` after commit; it does not reopen or execute ahead of
+either input. The current executable boundary is the existing `ExecProgram`,
+not a parallel action algebra. Cozy owns CML grammar, normalization, and
+producer semantics; Phase 64.2 owns planner/test-interpreter/production
+alignment; Phase 77 owns generated API/SPI admission, `ComponentFactory`
+bootstrap, Provider/Action execution, durable persistence/revision/history,
+protocol, and continuation/resume; Phase 85 owns 2PC, compensation, and
+recovery. This note does not authorize CML syntax invention, durable behavior,
+provider behavior, or a general-purpose Workflow runtime.
+
 ## Core Model
 
 The working classification is:
@@ -180,6 +200,11 @@ planned atomically, but no external effect may be executed before the commit
 whose fact triggers it.
 
 ## Typed Action Algebra / Free Program
+
+The following sketch is retained as historical research reasoning. It does not
+admit a new `ActionOp` algebra for Phase 64: the existing typed
+`ExecProgram[UnitOfWorkOp, A]` boundary remains the sole executable boundary,
+with planning/interpreter/production alignment assigned to Phase 64.2.
 
 The canonical generated action contract should be a typed logical program, not
 an arbitrary Scala function or provider callback.
@@ -485,6 +510,7 @@ Evidence should cover:
 
 ## Related Documents
 
+- [Phase 64 SWF-01 Semantic Inventory](../design/composite-workflow-semantic-inventory.md)
 - `docs/phase/phase-64.md`
 - `docs/phase/phase-64-checklist.md`
 - `docs/phase/phase-63.md`

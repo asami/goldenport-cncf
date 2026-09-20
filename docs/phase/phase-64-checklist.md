@@ -1,6 +1,6 @@
 # Phase 64 Checklist - Minimal Composite StateMachine / Workflow Foundation
 
-status=planned
+status=in_progress
 phase=[Phase 64](phase-64.md)
 
 Phase 64 closes only the minimum Composite StateMachine / Workflow foundation required by Phase 77 and sm-workflow Phase 1. It consumes the completed Phase 63.1 local atomic-execution contract and starts only after Phase 63.2 closes.
@@ -14,8 +14,18 @@ Phase 77 -> ABI admission -> ComponentFactory -> Provider/Continuation runtime
 ```
 
 ## SWF-01 Semantic inventory
-- [ ] Classify required concepts as StateMachine reuse, Composite-general, minimal Workflow-only, or runtime-policy.
-- [ ] Reject speculative advanced Workflow features from this Phase.
+- [x] Classify required concepts as StateMachine reuse, Composite-general, minimal Workflow-only, or runtime-policy.
+- [x] Reject speculative advanced Workflow features from this Phase.
+
+Stage Status:
+
+- Current status: ACCEPTED.
+- Owner: CNCF semantic-boundary owner under Phase 64 closure authority.
+- Entry rule: completed Phase 63.1 local atomic-execution and Phase 63.2 committed-transition inputs are available.
+- Completion rule: the exclusive four-way inventory is accepted with no advanced Workflow expansion.
+- Update rule: preserve this accepted result until the ordinary Step 64-S1 commit.
+
+Evidence: [Composite StateMachine / Workflow Semantic Inventory](../design/composite-workflow-semantic-inventory.md) records the sealed Step review disposition digest `566d9146076175e6fefb92809b6ef9548462d7d9d57da99f51c0074ebb61f34a`. Phase 64 remains in progress with SWF-02–08 planned.
 
 ## SWF-02 Composite identity and derivation
 - [ ] Freeze constituent role/identity and configuration schema.

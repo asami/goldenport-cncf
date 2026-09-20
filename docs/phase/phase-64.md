@@ -1,6 +1,6 @@
 # Phase 64 - Minimal Composite StateMachine / Workflow Foundation
 
-status=planned
+status=in_progress
 planned_at=2026-08-12
 revised_at=2026-09-20
 depends_on=[Phase 63.2](phase-63.2.md)
@@ -73,7 +73,7 @@ Phase 64 must not absorb 2PC, compensation, recovery, Retry/Timeout, or external
 
 | ID | Outcome | Status |
 | --- | --- | --- |
-| SWF-01 | Inventory StateMachine / Composite StateMachine / Workflow concepts and classify each as reused, composite-general, minimal Workflow-only, or runtime-policy. | planned |
+| SWF-01 | Inventory StateMachine / Composite StateMachine / Workflow concepts and classify each as reused, composite-general, minimal Workflow-only, or runtime-policy. | accepted |
 | SWF-02 | Freeze constituent role/identity, configuration schema, deterministic composite-state derivation and derived-transition identity. | planned |
 | SWF-03 | Admit generated composite rules and fail closed for ambiguous/unsupported runtime configuration. | planned |
 | SWF-04 | Freeze typed constituent/composite action composition, ordering and provenance, consuming the completed Phase 63.1 atomic-execution contract and delegating incremental planner/interpreter work to 64.2. | planned |
