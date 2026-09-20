@@ -6,7 +6,7 @@ phase=[Phase 87](../../../phase/phase-87.md)
 
 ## Decision
 
-Add Workflow Management as a standard CNCF Web Console capability alongside Dashboard and Job Management.
+Adopt **Aggregate / View (Read Model) / Workflow** as the three primary application-semantic axes of the CNCF Web Console. Workflow Management is added within this structure, while Job Management remains the cross-cutting asynchronous execution-management and diagnostic capability.
 
 The decisive boundary is that Workflow Management observes **all CNCF Workflow runtime instances**, not only Workflows whose execution is managed by JobEngine.
 
@@ -23,8 +23,10 @@ Making the Web surface sm-workflow-specific would duplicate runtime-management i
 
 The retained model is:
 
-- **Workflow** manages process/state progression.
-- **Job** manages asynchronous execution lifecycle.
+- **Aggregate** exposes write/domain state and consistency boundaries.
+- **View** exposes read/projection state and Query-facing evidence.
+- **Workflow** exposes process/state progression.
+- **Job** manages asynchronous execution lifecycle across those semantic axes.
 - Workflow Action/Execution may have related Job occurrences according to the admitted runtime contract.
 - A Workflow does not require a Job.
 - A Job does not require a Workflow.
@@ -38,8 +40,10 @@ The existing CNCF Web management family should evolve as:
 
     CNCF Web Console
       Dashboard
-      Jobs
-      Workflows
+        Aggregates
+        Views (Read Models)
+        Workflows
+      Jobs (cross-cutting execution management)
 
 Workflow Management provides generic list/detail/history/result views and cross-links to Job Management where correlation exists.
 
@@ -56,6 +60,17 @@ sm-workflow is the first representative consumer and validation target:
                                           +--> Workflow Web Management
 
 Skill/MCP interaction and human/Web observation are separate presentations over the same runtime truth.
+
+## Designed Model / Observed Model boundary
+
+Textus CBD Support presents the Designed Model through Aggregate, View, and Workflow projections. The CNCF Web Console presents the corresponding Observed Model using the same stable identities where contracts permit.
+
+Bidirectional navigation is required when authoritative links exist:
+
+- CBD Support model projection -> CNCF runtime overview/instance;
+- CNCF runtime evidence -> CBD Support model projection.
+
+A missing or ambiguous mapping remains explicit. Neither surface may synthesize identity from names, timestamps, labels, or layout.
 
 ## Planning consequence
 
