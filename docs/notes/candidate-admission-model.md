@@ -22,7 +22,8 @@ StateMachine / Workflow
      -> sufficient: admit
      -> insufficient: Admission Gap
 Admission Gap
-  -> Continuation / deterministic operation / Decision
+  -> required semantic Action / deterministic operation / Decision
+  -> semantic Action may suspend through lower Continuation runtime
   -> revised Candidate or new Evidence
 Admission
   -> Transition
@@ -62,3 +63,18 @@ CNCF remains domain-neutral: Candidate/Admission concepts must not introduce sof
 - provider/model choice is not transition semantics.
 
 CAM is expected to be validated first through sm-workflow and then generalized through CNCF/Cozy contracts without making sm-workflow-specific concepts generic.
+
+
+## Layering decision
+
+CAM Admission semantics are implemented above the generic Continuation runtime. Phase 77 owns suspension/resume mechanics and remains usable by strict StateMachines that do not use CAM. Phase 90 owns optional Candidate/Admission semantics.
+
+An Admission Gap is never itself a Continuation. Admission Evaluation selects a required semantic Action, deterministic operation, or Decision. Only when that semantic Action requires an external result does the lower Phase 77 runtime return `Suspended(Continuation)`.
+
+```text
+Admission Gap (Phase 90 semantics)
+  -> semantic Action
+       -> Suspended(Continuation) (Phase 77 mechanics)
+```
+
+This separation is normative so CNCF can support both flexible AI-assisted admission workflows and rigid deterministic StateMachines on the same runtime foundation.
