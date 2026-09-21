@@ -44,6 +44,7 @@ import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
 import org.goldenport.cncf.usernotification.UserNotificationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import org.goldenport.cncf.workflow.WorkflowDefinition
+import org.goldenport.cncf.workflow.GeneratedWorkflowAbi
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -63,7 +64,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jun. 18, 2026
  *  version Aug. 13, 2026
  *  version Aug. 31, 2026
- * @version Sep.  7, 2026
+ * @version Sep. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -81,6 +82,8 @@ abstract class Component() extends Component.Core.Holder {
   private var _state_machine_planner_provider: StateMachinePlannerProvider =
     StateMachinePlannerProvider.noop
   private var _state_machine_definitions: Vector[CmlStateMachineDefinition] =
+    Vector.empty
+  private var _admitted_generated_workflow_metadata: Vector[GeneratedWorkflowAbi.Definition] =
     Vector.empty
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
@@ -392,6 +395,16 @@ abstract class Component() extends Component.Core.Holder {
     definitions: Vector[CmlStateMachineDefinition]
   ): Component = {
     _state_machine_definitions = definitions
+    this
+  }
+
+  def admittedGeneratedWorkflowMetadata: Vector[GeneratedWorkflowAbi.Definition] =
+    _admitted_generated_workflow_metadata
+
+  def withAdmittedGeneratedWorkflowMetadata(
+    metadata: Vector[GeneratedWorkflowAbi.Definition]
+  ): Component = {
+    _admitted_generated_workflow_metadata = metadata
     this
   }
 

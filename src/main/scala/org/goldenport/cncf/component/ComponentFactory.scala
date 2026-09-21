@@ -31,6 +31,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.goldenport.cncf.workflow.WorkflowDefinition
+import org.goldenport.cncf.workflow.{GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider}
 import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
 
@@ -42,7 +43,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Aug. 14, 2026
+ * @version Sep. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -136,6 +137,7 @@ final class ComponentFactory(
       if (plans.nonEmpty) plans.map(_.entityName)
       else _entity_collection_names(component)
     for {
+      _ <- _bootstrap_generated_workflow_metadata_c(component)
       _ <- _validate_entity_runtime_plan_names_c(component, rawplans)
       revisionbindings <- _resolve_revision_bindings_c(component, entitynames)
       concurrencypolicies <-
@@ -621,6 +623,26 @@ final class ComponentFactory(
     }
     provider.foreach { m =>
       component.withStateMachineDefinitions(m.stateMachineDefinitions)
+    }
+  }
+
+  private def _bootstrap_generated_workflow_metadata_c(
+    component: Component
+  ): Consequence[Unit] = {
+    val provider = component match {
+      case m: GeneratedWorkflowMetadataProvider => Some(m)
+      case _ => component.factory.collect {
+        case m: GeneratedWorkflowMetadataProvider => m
+      }
+    }
+    provider match {
+      case Some(m) =>
+        GeneratedWorkflowAbi.admitC(m.generatedWorkflowDefinitions).map { definitions =>
+          component.withAdmittedGeneratedWorkflowMetadata(definitions)
+          ()
+        }
+      case None =>
+        Consequence.unit
     }
   }
 
