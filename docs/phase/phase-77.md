@@ -1,373 +1,126 @@
-# Phase 77 - StateMachine API/SPI Runtime and First Skill-Driven Workflow Vertical Slice
+# Phase 77 - Generated Workflow ABI, ComponentFactory Discovery, and WorkflowInstance Persistence SPI
 
-status=planned
+status=closed
+split_full_test_policy=final-only
+split_full_validation_method=sbt-full-suite
+split_validation_bootstrap=none
+validation_ownership=aggregate-deferred
+aggregate_validation_owner=PHASE-77.2
+aggregate_validation_sequence=["PHASE-77","PHASE-77.1","PHASE-77.2"]
+repository_full_suite=deferred-not-run
 planned_at=2026-09-16
+split_at=2026-09-21
+closed_at=2026-09-21
 depends_on=[Phase 64](phase-64.md), [Phase 64.2](phase-64.2.md), and Cozy Phase 62.3 producer handoff
+successor=[Phase 77.1](phase-77.1.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md#964-statemachine-api-spi-runtime-and-skill-driven-workflow)
 checklist=[Phase 77 Checklist](phase-77-checklist.md)
 
 ## Purpose
 
-Admit Cozy's first-class generated CML `WORKFLOW`/StateMachine ABI through CNCF without reparsing CML or creating a second Workflow language, and implement the reusable StateMachine API/SPI execution foundation consumed by Workflow and future StateMachine-based facilities.
+Phase 77 is the first child of the split StateMachine API/SPI and
+Skill-driven Workflow delivery sequence. It admits Cozy's generated CML
+`WORKFLOW`/StateMachine ABI without CML reparsing, discovers admitted metadata
+through `ComponentFactory`, and freezes the provider-neutral independently
+durable `WorkflowInstance` persistence SPI.
 
-Phase 77 consumes Phase 64's minimum Composite StateMachine/Workflow semantics and Phase 64.2's canonical `ExecProgram[UnitOfWorkOp, A]` contract. It owns the provider-neutral independently durable WorkflowInstance persistence SPI required by the vertical slice. For an entity-triggered Workflow, the only lifecycle input is the successful Phase 63.2 `CommittedTransition` handoff; attempted or rolled-back transitions do not start or advance a Workflow.
+The resulting handoff is the only authority for Phase 77.1 to implement
+ActionExecution/Provider/Continuation runtime behavior. It does not execute
+Actions, expose Continuation work, or project a Skill WorkOrder.
 
-Phase 64.2 closed with a forced minimum baseline rather than a replay of its
-full historical acceptance workflow. Consequently, Phase 77 also owns the
-remaining formal producer-ABI admission, production-interpreter alignment, and
-StateMachine/Composite/Workflow executable acceptance. CWF-77-01 and
-CWF-77-04 through CWF-77-09 are the normative receiving work items; Phase 77
-must not treat those outcomes as already proven by the Phase 64.2 closure.
-
-The first vertical slice is Skill-driven Workflow execution: internal deterministic Actions complete in the runtime, an external semantic SPI Action suspends as a durable Continuation, a typed Skill result resumes the StateMachine, and internal closing Actions complete normally.
-
-Phase 77 also introduces `JudgmentAction` as the common semantic Action for a
-context-dependent judgment. It is distinct from an `OperationAction`, which
-performs deterministic work. `JudgmentAction` describes the judgment request
-and its typed result; it does not name Codex, jev, or another execution product.
-The initial reference execution uses Codex through the existing Generic Skill /
-Continuation boundary, while later providers such as jev remain replaceable.
-
-```text
-CML WORKFLOW
-  -> Cozy generated StateMachine/Workflow ABI
-  -> Phase 64 Composite/Workflow semantic contract
-  -> CNCF ABI admission + ComponentFactory bootstrap
-  -> StateMachine API/SPI Runtime
-       -> selected Action -> ExecProgram[UnitOfWorkOp, ActionExecution]
-       -> internal provider -> Completed(Result)
-       -> external provider -> Suspended(Continuation)
-       -> failed provider   -> Failed(Error)
-  -> Workflow projection / component-owned durable runtime
-```
-
-## Canonical runtime model
-
-```text
-StateMachine Runtime
-  Provided API dispatch
-  Required SPI provider resolution
-  State / Action / Transition
-  ActionExecution
-    Completed(Result)
-    Suspended(Continuation)
-    Failed(Error)
-  Continuation / typed resume
-        ^
-        |
-Workflow Runtime
-  process-oriented projection and metadata
-```
-
-There is no Workflow-wide Orchestration/Continuation mode and no semantic `InvocationBinding = ORCHESTRATION | CONTINUATION` switch. Continuation is the durable suspension outcome of an Action/provider execution that requires an external result.
-
-### Action semantic taxonomy
-
-```text
-Action
-  OperationAction  -> perform deterministic work
-  JudgmentAction   -> request a contextual judgment
-
-JudgmentAction
-  goal
-  context
-  alternatives
-  criteria
-  expected result
-
-JudgmentResult
-  decision
-  rationale
-  evidence
-```
-
-`JudgmentAction` returns one of its admitted alternatives with rationale and
-evidence. The Action executor or external worker does not choose the next
-Action or mutate Workflow state directly. StateMachine guards and transitions
-interpret the admitted `JudgmentResult` and retain all progression authority.
-
-Action semantics and execution placement are separate axes. A
-`JudgmentAction` may be completed by a deterministic test Provider, suspended
-for Codex through a Skill-facing Continuation, or later handled by jev, a human,
-or another Provider without changing the Workflow definition.
-
-## Ownership Boundary
-
-- Cozy Phase 62 owns CML `WORKFLOW` source and StateMachine lowering; Phase 62.1 owns the generic StateMachine Provided API / Required SPI and ActionExecution contracts, Phase 62.2 the generated ABI/bootstrap metadata, and Phase 62.3 the producer fixture and CNCF handoff.
-- CNCF Phase 63.2 owns the StateMachine-specific post-commit `CommittedTransition` source contract; it does not start or execute Workflows.
-- CNCF Phase 64 owns minimum Composite/Workflow semantics and pure derivation. CNCF Phase 64.2 owns the canonical `ExecProgram[UnitOfWorkOp, A]` planning and deterministic-recording baseline; Phase 77 completes production-interpreter alignment and executable consumer acceptance.
-- CNCF Phase 77 owns the provider-neutral independently durable WorkflowInstance persistence SPI, generated ABI admission, ComponentFactory discovery, Provided API dispatch, Required SPI Provider resolution, Action execution through the canonical program, durable Continuation/resume, and deterministic progression.
-- Workflow reuses/projects the StateMachine foundation; CNCF does not add a parallel Workflow-specific API/SPI or Continuation engine.
-- An entity-local StateMachine owns only lifecycle data persisted with that entity. WorkflowInstance process persistence remains independently owned.
-- Phase 77 defines the provider-neutral independently durable WorkflowInstance persistence SPI and its persisted revision/history/current-suspension contract. A consuming component supplies the concrete datastore/provider, migration, retention and lease policy plus public client behavior.
-- Component implementation code supplies Required SPI implementations through Providers. `ComponentFactory` is the construction/injection boundary: component-specific Providers implement typed Required SPI operations rather than overriding individual Workflow/StateMachine Actions.
-- Generic Skill Workflow Support projects externally claimable Continuation SPI requests into Skill commands/WorkOrders. Domain-specific software-development policy remains in `sm-workflow`.
-
-## Terminology and Continuation Boundary
-
-- **Required SPI** is the protocol-independent typed operation contract.
-- **Provider SPI** is the component-programmer implementation boundary constructed and injected through `ComponentFactory`.
-- **Continuation Protocol** is entered only when ActionExecution returns `Suspended(Continuation)`.
-- **Continuation SPI Projection** is the durable external IoC port over that suspended Required SPI operation.
-
-A host may inject a Skill, Human, UI, or remote adapter through Provider construction. Participant/capability metadata may constrain Provider or host selection, but there is no semantic `InvocationBinding` or Workflow-wide protocol mode.
-
-## Work Stack
+## Scope
 
 | ID | Outcome | Status |
 | --- | --- | --- |
-| CWF-77-01 | Freeze supported Cozy 62.1-62.3 StateMachine/Workflow ABI versions, admission diagnostics, and compatibility policy. | planned |
-| CWF-77-02 | Discover generated definitions and StateMachine API/SPI metadata through ComponentFactory while preserving source identity. | planned |
-| CWF-77-03 | Bind Phase 64's semantic WorkflowDefinition/WorkflowInstance identity/progression to Phase 77's provider-neutral independently durable persistence SPI and executable runtime. | planned |
-| CWF-77-04 | Implement deterministic StateMachine progression and bounded next-Action selection without inferring semantics from names/effects. | planned |
-| CWF-77-05 | Lower and interpret every admitted executable Action through `ExecProgram[UnitOfWorkOp, ActionExecution]`; direct callback/effect execution is not accepted. | planned |
-| CWF-77-06 | Implement Required SPI Provider resolution and ComponentFactory Provider construction for local/direct, external-continuation, and deterministic test providers. | planned |
-| CWF-77-07 | Implement durable Continuation creation/resume with atomic suspension persistence, after-commit claim, fresh-UnitOfWork resume, and stale/duplicate rejection. | planned |
-| CWF-77-08 | Provide the minimum Generic Skill Workflow projection over the Continuation SPI without exposing internal deterministic Actions as WorkOrders. | planned |
-| CWF-77-09 | Prove Cozy's real internal -> suspended external -> resumed -> internal vertical slice and freeze the `sm-workflow` consumer handoff. | planned |
-| CWF-77-10 | Freeze the minimum typed Workflow protocol and its schema-versioned, fail-closed Skill/Codex JSON encoding; record exact CML-first cross-repository evidence and defer only broad protocol expansion. | planned |
+| CWF-77-01 | Freeze supported Cozy 62.1-62.3 StateMachine/Workflow ABI versions, admission diagnostics, and compatibility policy. | done |
+| CWF-77-02 | Discover generated definitions and StateMachine API/SPI metadata through ComponentFactory while preserving source identity. | done |
+| CWF-77-03 | Freeze the provider-neutral independently durable WorkflowInstance persistence SPI, identity/revision/history constraints, and correlation boundary. | done |
 
-## Minimum Typed Workflow Protocol and Skill/Codex JSON Wire Contract
+## Closure contract
 
-Phase 77 includes the smallest application-neutral typed protocol needed to
-start a Workflow, expose its next semantic boundary, accept a later Skill
-result, and reach a typed terminal result. Value Objects/algebraic types are
-the canonical Workflow model; JSON is the schema-versioned, fail-closed
-Skill/Codex wire encoding. This is not a broad public REST/MCP/UI protocol
-surface or a general-purpose Start API expansion.
+Phase 77 closes only when the following are accepted:
 
-```text
-WorkflowStartRequest[I]
-  -> WorkflowStartResult[W, O]
-       WorkflowHandle
-       Continuation[W, O]
+- supported generated ABI versions, provenance, required semantics, and
+  fail-closed incompatibility diagnostics are executable;
+- `ComponentFactory` discovers admitted generated definitions plus Provided API
+  and Required SPI metadata without handwritten canonical definitions; and
+- the generic WorkflowInstance persistence SPI fixes definition/instance
+  identity, revision, lifecycle/progression state, append-only history,
+  correlation/causation, current suspension shape, and the boundary that keeps
+  entity StateMachine storage from becoming the authoritative process store.
 
-Continuation
-  WORK_ORDER -> WorkOrder[W] -> ExecutionRequirement
-  DECISION
-  WAIT
-  TERMINAL[O]
+The closure handoff is `CWF77-FOUNDATION`: the admitted generated ABI,
+ComponentFactory metadata, and WorkflowInstance SPI contract. Phase 77.1 must
+consume that handoff and must stop if it is incompatible; it may not infer CML
+semantics or substitute a handwritten Workflow definition.
 
-ContinuationResult[R] / WorkResult[R]
-Evidence
-ExecutionEvidence
-Presentation
-Progress
-```
+## Split plan record — 2026-09-21
 
-- `WorkflowStartRequest` and `WorkflowStartResult` start only an admitted
-  Workflow and return its `WorkflowHandle` plus first `Continuation` or typed
-  terminal result; application input/output payloads remain application-owned.
-- `Continuation` is a closed set of `WORK_ORDER`, `DECISION`, `WAIT`, and
-  `TERMINAL`; `ContinuationRequest` is the externally claimable encoding of a
-  durable suspended WorkOrder, and `ContinuationResult`/`WorkResult` supplies
-  its typed completion.
-- Request, result, and externally exchanged WorkOrder encodings carry schema
-  identity/version and use fail-closed JSON codecs. They preserve Workflow and
-  Continuation identity, expected revision, `ContextSnapshot`, typed
-  input/result, and Completion/Evidence requirements.
-- `WorkflowHandle` provides the minimum stable reference to the Workflow and
-  its terminal or suspension state.
-- `ExecutionRequirement` includes model-independent capability/risk
-  requirements (`CapabilityRequirement` and `RiskLevel`) and the initial closed
-  `ReasoningLevel` vocabulary:
-  `ROUTINE`, `STANDARD`, `DEEP`, and `CRITICAL`. Skill/Host maps this request
-  to a concrete model/provider/reasoning effort and may return that mapping as
-  execution evidence; it is not Workflow transition semantics.
-- `WorkResult` carries typed `Evidence`. A Skill/Host-dispatched `WORK_ORDER`
-  additionally carries `ExecutionEvidence` recording the requested abstract
-  requirement, selected worker profile, and mapping-policy version. A
-  deterministic/local Provider records no invented worker profile. Neither
-  evidence form is a guard, transition input, or provider-selection policy.
-- `Presentation` is the minimum common human-readable Value Object: required
-  `title` and `currentSituation`, plus optional `summary`, `nextAction`,
-  `reason`, and `Progress`. It is never parsed for Workflow control. Rich UI
-  layout and rendering remain outside this Phase.
-- Start/resume rejects unknown schema/version, incompatible typed payload,
-  incorrect identity, stale revision/snapshot, missing required evidence, and
-  duplicate/incompatible result according to the durable Continuation contract.
+The ordinary Phase entry gate returned `SPLIT_REQUIRED` before goal creation:
+960 expected minutes (1200-minute conservative upper bound) exceeds the
+360-minute target and 480-minute ceiling. The applied split reasons are
+`time-bound` and `reasoning-cost-isolation`; source goal status is
+`none / no-goal-pre-entry`.
 
-Phase 77 defers broad Start/API expansion beyond this typed entry/result,
-rich Presentation/UI, additional reasoning vocabulary, parent/child Workflow
-composition, orchestration, and REST/MCP/UI protocol surfaces to later phases.
+The serial sequence is `PHASE-77 -> PHASE-77.1 -> PHASE-77.2`. This Phase is
+estimated at 300 minutes (240-390) with no comparable completed ordinary Phase
+for calibration; Phase 64.2 is a forced minimum closure and is not a
+calibration source. The ABI/source-identity/persistence decision is the
+sequence's protected reasoning kernel, with recommended parent profile
+`gpt-5.6-terra / xhigh`. Phase 77.1 and Phase 77.2 consume frozen handoffs at
+the lower-cost `gpt-5.6-terra / high` profile. All children retain the standard
+parent reasoning-mode policy.
 
-### Application payload extension and ownership
+The split adds two planning/checklist pairs, two independent reviews, and two
+release commits. It avoids repeating protected ABI/persistence reasoning across
+the runtime and consumer-handoff work. No completed Phase 77 work existed to
+move.
 
-The generic Workflow DTO is an envelope, not an application domain model. Its type parameters are explicit application-owned extension points. A consumer such as `sm-workflow` specializes them with its own typed start/work/result/terminal payloads while CNCF retains ownership of Workflow/Continuation identity, `WorkflowHandle`, revision/idempotency, `ContextSnapshot`, Completion/Evidence, `ExecutionRequirement`, `ExecutionEvidence`, Presentation, and stale/duplicate resume rules.
+## Non-goals
 
-Conceptually:
+- StateMachine Action progression, Provider execution, or direct-effect-path
+  removal; these are Phase 77.1.
+- Durable Continuation claim/resume, Skill projection, JSON protocol codecs,
+  the reference vertical slice, or the `sm-workflow` handoff; these are Phase
+  77.1 or Phase 77.2 as recorded in their checklists.
+- CML parsing, a second Workflow DSL, a default datastore provider, concrete
+  model selection, broad API/UI/transport/orchestration expansion, or the
+  generalized Composite artifact owned by Cozy Phase 66 and CNCF Phase 89.
 
-```text
-WorkflowStartRequest[ApplicationStart]
-WORK_ORDER -> WorkOrder[ApplicationWork]
-WorkResult[ApplicationResult]
-TERMINAL[ApplicationOutcome]
-```
+## Validation and release
 
-Application payloads must not redefine generic handle, continuation, revision, snapshot, idempotency, or Evidence envelope semantics. Conversely CNCF must not interpret application-specific planning/domain semantics contained in those payloads.
+This is an aggregate-deferred member of the serial sequence. It still requires
+focused validation, independent review, a closure ledger, and a phase-release
+commit. The single repository-wide `sbt --batch test` runs only at the frozen
+Phase 77.2 release tree.
 
-For `sm-workflow`, `SmExecutionContext` is application-owned bounded execution semantics projected by its Skill/profile layer; CNCF `ContextSnapshot` carries/snapshots that input for execution identity, freshness, persistence, and resume validation. `Phase`, `Checklist`, closure/planning semantics, and Skill-owned Workflow mapping are not generic CNCF DTO concepts and must not be introduced into Phase 77 merely to support the reference consumer. An optional source correlation may be carried as opaque application data for traceability but must not control progression.
+## Closure evidence
 
-The Phase 77 consumer handoff must therefore freeze both sides of the seam: the generic envelope/extension rules owned by CNCF and the rule that application payload schemas remain consumer-owned.
-
-## WorkflowInstance Persistence Boundary
-
-`WorkflowInstance` is a separately durable process record with stable instance identity, definition identity/version, revision, lifecycle state, current progression/suspension, append-only history, and causal correlation. Phase 77 defines its provider-neutral persistence SPI and exercises that contract for the accepted vertical slice.
-
-Entity StateMachine persistence remains authoritative only for entity state. Workflow progression never uses an entity StateMachine status as its process checkpoint. A physical database may host both only through separate logical store/schema ownership and explicitly configured transaction integration.
-
-When a committed entity transition creates or resumes a WorkflowInstance, the committed-transition occurrence is the durable correlation/idempotency key. External SPI resume similarly uses Continuation identity plus expected revision/snapshot so replay cannot duplicate completion or silently execute a stale result.
-
-## UnitOfWork Execution Boundary
-
-Phase 64 semantic contracts select composite/workflow Actions without performing effects. Every admitted executable Action in the Phase 77 vertical slice is represented as `ExecProgram[UnitOfWorkOp, ActionExecution]` and interpreted through the Phase 64.2 UnitOfWork boundary. Direct `ResolvedAction.run(...): Consequence[Unit]` or `Effect.execute` paths are legacy compatibility only and must not cause an accepted Action to execute twice.
-
-Suspension records WorkflowInstance progression and the Continuation atomically in the active UnitOfWork. A Continuation SPI request becomes externally claimable only after commit. `resume` begins a fresh UnitOfWork, validates identity, expected revision and ContextSnapshot, records its typed result idempotently, and atomically commits resulting state, history, and events.
-
-## StateMachine API/SPI Runtime Contract
-
-A generated Required SPI operation carries stable operation identity, typed input/result, and generic Context/Completion/Evidence/capability requirements admitted from Cozy's ABI.
-
-Provider placement is resolved outside StateMachine semantics:
-
-```text
-Required SPI
-  -> LocalProvider
-  -> ExternalContinuationProvider
-  -> DeterministicTestProvider
-```
-
-A local/test provider may return `Completed(Result)` through the canonical program. An external provider produces `Suspended(Continuation)` without performing external work before the program is interpreted. Provider placement does not duplicate State/Guard/Operation/Result semantics.
-
-For a `JudgmentAction`, the Required SPI input preserves the typed goal,
-context, alternatives, criteria, and expected-result contract. Its Provider
-returns or resumes with a typed `JudgmentResult`. Provider selection is not
-encoded in the Action type: Codex is the Phase 77 reference external worker,
-not part of the canonical model or ABI identity.
-
-### Component implementation / Provider construction
-
-The component-programmer-facing implementation boundary is Provider construction through `ComponentFactory`.
-
-A component does not implement a Workflow/StateMachine Action by overriding one factory method per Action. Generated/admitted Workflow metadata identifies Required SPI operations; the component supplies their implementation by overriding generated/standard Provider factory methods on its `ComponentFactory` and returning component-specific Provider implementations.
-
-Conceptually:
-
-```text
-CML Workflow / StateMachine
-  -> Action
-  -> Required SPI
-  -> runtime ProviderBinding
-  -> ComponentFactory provider factory method
-  -> component-specific Provider
-  -> typed Required SPI implementation
-```
-
-The Provider may implement a coherent group of related Required SPI operations. Runtime binding remains operation/SPI-specific, so test or external Providers can replace selected bindings without changing Workflow semantics.
-
-`ComponentFactory` owns Provider construction and dependency injection; the Provider owns Required SPI implementation; the StateMachine/Workflow runtime owns provider resolution, Action execution and progression. Generated CML metadata must not embed arbitrary Scala functions or Provider instances.
-
-`advance` executes bounded internal progress: it selects the next admitted Action, executes internal providers, feeds Completed results back into the StateMachine, and continues until a suspension, terminal state, declared wait/failure boundary, ambiguity/cycle/safety bound, or other explicit policy stop is reached.
-
-`resume` validates Continuation identity, WorkflowInstance revision, ContextSnapshot, typed result, Completion/Evidence contract and duplicate/stale conditions before completing the suspended Action and returning its result to StateMachine transition semantics.
-
-## Generic Skill Workflow Boundary
-
-CNCF projects an externally claimable Continuation SPI request into a compact
-Skill-facing `WorkOrder` within the closed `Continuation` protocol. The
-projection is not the source of truth; Required SPI, the durable Continuation,
-and WorkflowInstance state are canonical.
-
-The Skill layer exposes work kind, `ExecutionRequirement`, typed
-input/result, Completion/Evidence, `ExecutionEvidence`, and `Presentation`. It maps the
-initial abstract `ReasoningLevel` vocabulary to a concrete worker profile;
-concrete model/provider/reasoning selection remains host dispatch policy.
-
-Control-plane operations such as advance/status/submit do not require a child AI invocation. Internal build/test/git-style Actions are not emitted as Skill WorkOrders merely because a Skill drives the overall Workflow.
-
-## Reference vertical slice
-
-```text
-WorkflowStartRequest[BuildProjectInput]
-  -> bounded deterministic start/advance
-       BuildProject  -> internal provider -> Completed
-       RunTests      -> internal provider -> Completed
-       ReviewChange  -> JudgmentAction -> external SPI
-                     -> Suspended(WORK_ORDER Continuation)
-                     -> Codex reference execution -> JudgmentResult
-  -> WorkflowStartResult[ReviewWorkOrder, CommitOutcome]
-       WorkflowHandle + first Continuation
-ReviewResult  -> ContinuationResult -> fresh-UnitOfWork resume
-CommitChanges -> internal provider -> Completed
-TERMINAL[CommitOutcome]
-```
-
-For an entity-triggered instance, initial correlation originates only in the Phase 63.2 `CommittedTransition` through Phase 64's binding. This is the primary Phase 77 acceptance path and the handoff consumed by `sm-workflow`.
-
-## Completion Conditions
-
-- CNCF admits a real Cozy-generated StateMachine/Workflow ABI by supported version and fails closed for incompatible required semantics.
-- ComponentFactory discovers generated definitions/API/SPI metadata without CML reparsing.
-- StateMachine Provided API and Required SPI are runtime concepts reusable by Workflow without a parallel Workflow-specific interface model.
-- Internal Actions progress through `Completed(Result)` without Skill/model invocation.
-- External Review SPI suspends durably and returns a typed Continuation.
-- Typed ReviewResult resumes the same suspended Action only when identity/revision/snapshot/contracts match.
-- Resume then permits internal closing/commit Actions to execute and reach terminal state.
-- Deterministic test provider binding can exercise the same StateMachine semantics without an actual AI/UI provider.
-- `JudgmentAction` and `JudgmentResult` are provider-neutral typed semantics;
-  goal/context/alternatives/criteria and decision/rationale/evidence survive
-  the Skill/Codex JSON round trip.
-- The initial Codex-backed judgment returns only an admitted judgment result;
-  StateMachine guards/transitions alone choose the next state or Action.
-- Replacing Codex with jev, a human, or another Provider requires no Workflow
-  definition or public Action-contract change.
-- No Workflow-wide orchestration/continuation mode or InvocationBinding switch is required.
-- Every admitted executable Action in the reference path is interpreted through `ExecProgram[UnitOfWorkOp, ActionExecution]`; no direct callback/effect execution remains in the canonical path.
-- Suspension is durable before external claim, and resume runs in a fresh UnitOfWork with stale and duplicate rejection.
-- The minimum typed Start/Continuation/WorkOrder/Terminal protocol and its schema-versioned, fail-closed Skill/Codex JSON encoding are executable across a separate Skill process/turn without making JSON the canonical domain model.
-- A WorkOrder carries small typed capability/risk requirements and the initial abstract `ROUTINE` / `STANDARD` / `DEEP` / `CRITICAL` reasoning requirement. It does not create a policy engine, provider dispatch contract, or UI capability model.
-- A Skill-produced WorkResult records typed `ExecutionEvidence` without making concrete worker selection a Workflow control input.
-- `Presentation` provides required title/current situation plus optional summary/next action/reason/progress for common console visibility without controlling progression.
-- Broad Start/API expansion, rich Presentation/UI, additional reasoning vocabulary, parent/child Workflow composition, orchestration, and REST/MCP/UI protocol surfaces are later-phase work.
-- Cross-repository evidence records exact Cozy source, generated ABI, CNCF revisions, and the `sm-workflow` consumer handoff.
-
-## Phase Boundary to Phase 80
-
-Phase 77 is the minimum complete runtime foundation required for `sm-workflow` to begin its Phase 1 executable-specification work. Closing Phase 77 must therefore produce a stable consumer handoff; `sm-workflow` does not wait for Phase 80.
-
-Phase 80 and later phases may extend the minimum typed Workflow protocol/JSON encoding with broad Start/API expansion, rich presentation/context ergonomics, additional reasoning vocabulary, parent/child composition, participant integration, and orchestration or REST/MCP/UI protocol surfaces, but must not redefine the StateMachine API/SPI, ActionExecution, durable Continuation/resume, deterministic progression, minimum typed protocol, Generic Skill projection, or consumer handoff established here.
-
-In particular, Phase 77 requires no Workflow-wide Orchestration/Continuation mode and no semantic `InvocationBinding` switch. Later extensions must remain compatible with this foundation.
-
-## Non-Goals
-
-- Parsing CML or independently reconstructing Workflow semantics in CNCF.
-- A second Workflow DSL, BPMN/DAG language, arbitrary scripts, or opaque callbacks.
-- Default SQLite/datastore provider, consumer-owned migration/retention, or `sm-workflow` public CLI implementation.
-- Concrete AI model selection/dispatch policy.
-- Broad Start/API expansion beyond the minimum typed Start request/result, rich Presentation/UI, additional reasoning vocabulary, parent/child Workflow composition, orchestration, and REST/MCP/UI protocol extensions.
-- Full assemble API/SPI binding syntax/runtime.
-- Workflow-to-Workflow generated proxy, Local/REST Workflow connector, service discovery or deployment binding.
-- UI Workflow/Flutter generation or client offline synchronization.
+- Phase-base recovery exception: the normal recovery helper rejected the
+  already-committed Steps because their acceptance-state checklist updates were
+  deferred to this release. Under the explicit user directive to bypass that
+  unrecoverable helper defect, the Phase base is fixed to
+  `92cdab9e98743090f53eaff0ff1e62475a92942c`, the sole parent of the first
+  committed Phase Step `d3e7fca8cf12d06b117ca3a5176e01c3c8417b1c`; it is not
+  the current release HEAD.
+- Step 77-S1 admitted the generated Workflow ABI and ComponentFactory discovery
+  contract in `d3e7fca8cf12d06b117ca3a5176e01c3c8417b1c`; focused receipt
+  `P77-S1A-VAL-006` passed its nine generated-ABI specifications.
+- Step 77-S1B defined the provider-neutral WorkflowInstance persistence SPI in
+  `e3e592b1d14091d6d7ee52dde4e8ab7c4de50c5e`; focused receipt
+  `P77-S1B-VAL-008` passed all six persistence specifications with the shared
+  SBT lock released.
+- `P77-PHASE-FULL-REVIEW-001` accepted the complete Phase tree with no Current
+  Boundary Blocker. Its Hygiene follow-ups are recorded in
+  [Phase 77 hygiene follow-up](../journal/2026/09/2026-09-21-phase-77-hygiene-follow-up.md).
+- `repository_full_suite=deferred-not-run`: the Phase 77.2 release tree remains
+  the sole aggregate repository-full-suite owner for the frozen
+  `PHASE-77 -> PHASE-77.1 -> PHASE-77.2` sequence.
 
 ## References
 
-Current design:
-
-- [Phase 64](phase-64.md)
-- [Phase 64.2](phase-64.2.md)
+- [Phase 64](phase-64.md) and [Phase 64.2](phase-64.2.md)
 - [Phase 77 Checklist](phase-77-checklist.md)
-- `docs/notes/statemachine-api-spi-runtime.md`
-- `docs/notes/workflow-spi-runtime.md`
-- `docs/notes/generic-skill-workflow-support.md`
-- `asami/cozy/docs/phase/phase-62.md`
-- `asami/cozy/docs/phase/phase-62.1.md`
-- `asami/cozy/docs/phase/phase-62.2.md`
-- `asami/cozy/docs/phase/phase-62.3.md`
-- [Minimum Skill Continuation JSON Contract](../journal/2026/09/2026-09-20-phase-77-minimum-skill-continuation-json-contract.md)
-- [Phase 64/77 sm-workflow Critical-Path Review Handoff](../journal/2026/09/2026-09-20-phase-64-77-sm-workflow-critical-path-review-handoff.md)
-- [Phase 64/77 Critical-Path Reconciliation](../journal/2026/09/2026-09-20-phase-64-77-critical-path-reconciliation.md)
-- [Phase 77 Common Contract Reconciliation Decision](../journal/2026/09/2026-09-20-phase-77-common-contract-reconciliation-decision.md)
-- [JudgmentAction for Phase 77 and sm-workflow Phase 1](../journal/2026/09/2026-09-20-judgment-action-phase-77-sm-workflow-phase-1.md)
-
-Historical protocol/binding addenda and journals remain as design history. Where they conflict with this consolidated Phase 77, this document and the StateMachine API/SPI runtime foundation are normative.
+- [Phase 77.1](phase-77.1.md) and [Phase 77.2](phase-77.2.md)
+- [Released Workflow producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md)
+- [Phase 64.2 forced minimum closure](../journal/2026/09/2026-09-21-phase-64.2-forced-minimum-closure.md)
