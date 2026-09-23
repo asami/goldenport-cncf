@@ -28,3 +28,13 @@ Introduce Service Bus as a CNCF Runtime component and expose its essential opera
 ## Reference executable scenario
 
 Validate temporal decoupling with sm-workflow development monitoring: journal significant lifecycle/approval events, allow Control Center to consume/catch up asynchronously, and drive StateMachine subscribers where configured. Human approval remains an authenticated operation/admission request; its accepted outcome is published as an authoritative event.
+
+## Journal providers
+
+- Define a Journal SPI independent of transport.
+- Implement SQLite as a first-class zero-setup/local authoritative journal provider.
+- Implement PostgreSQL as the server/ops authoritative journal provider.
+- Use explicit provider configuration; do not silently switch providers based on discovery.
+- MacBook Air profile uses a local SQLite file because PostgreSQL is not used there.
+- Mac mini profile uses PostgreSQL `ops` for Service Bus operational journal persistence; `dev` remains separate.
+- Preserve commit-before-delivery semantics for JournalPolicy.AUTHORITATIVE on both providers.
