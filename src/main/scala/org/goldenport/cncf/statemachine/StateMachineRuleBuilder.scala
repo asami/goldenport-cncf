@@ -1,6 +1,8 @@
 package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.unitofwork.ExecUowM
+import org.goldenport.cncf.workflow.ActionExecution
 
 /*
  * Builder helpers for generated/component-defined transition rules.
@@ -11,21 +13,21 @@ import org.goldenport.Consequence
  */
 object StateMachineRuleBuilder {
   def action[S](
-    f: (S, TransitionEvent) => Consequence[Unit]
+    f: (S, TransitionEvent) => ExecUowM[ActionExecution]
   ): ResolvedAction[S, TransitionEvent] =
     new ResolvedAction[S, TransitionEvent] {
-      def run(state: S, event: TransitionEvent): Consequence[Unit] =
+      def program(state: S, event: TransitionEvent): ExecUowM[ActionExecution] =
         f(state, event)
     }
 
   def plan[S](
-    exit: Vector[ResolvedAction[S, TransitionEvent]] = Vector.empty,
-    transition: Option[ResolvedAction[S, TransitionEvent]] = None,
-    entry: Vector[ResolvedAction[S, TransitionEvent]] = Vector.empty
+    exit: Vector[ResolvedAction[S, TransitionEvent]] = Vector.empty[ResolvedAction[S, TransitionEvent]],
+    transitionActions: Vector[ResolvedAction[S, TransitionEvent]] = Vector.empty[ResolvedAction[S, TransitionEvent]],
+    entry: Vector[ResolvedAction[S, TransitionEvent]] = Vector.empty[ResolvedAction[S, TransitionEvent]]
   ): ExecutionPlan[S, TransitionEvent] =
     ExecutionPlan(
       exitActions = exit,
-      transitionAction = transition,
+      transitionActions = transitionActions,
       entryActions = entry
     )
 

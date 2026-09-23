@@ -1,11 +1,14 @@
 package org.goldenport.cncf.component
 
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentUpdate
 import org.goldenport.cncf.statemachine.{ExecutionPlan, PlannedTransitionValidationHook, ResolvedAction, StateMachinePlannerProvider, TransitionEvent}
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
+import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationResult, StateMachineResultTypeReference}
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -88,16 +91,16 @@ final class ComponentLogicStateMachineHookSpec
       val _ = (entity, tc, event)
       _called = true
       val action = new ResolvedAction[T, TransitionEvent] {
-        def run(state: T, ev: TransitionEvent): Consequence[Unit] = {
+        def program(state: T, ev: TransitionEvent): ExecUowM[ActionExecution] = {
           val _ = (state, ev)
-          Consequence.unit
+          _completed_program
         }
       }
       Consequence.success(
         Some(
           ExecutionPlan(
             exitActions = Vector(action),
-            transitionAction = None,
+            transitionActions = Vector.empty,
             entryActions = Vector.empty
           )
         )
@@ -114,4 +117,14 @@ final class ComponentLogicStateMachineHookSpec
       Consequence.success(None)
     }
   }
+
+  private def _completed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Completed(
+        StateMachineOperationResult(
+          StateMachineResultTypeReference("test.result"),
+          ContextReference("result", "1")
+        )
+      )
+    )
 }

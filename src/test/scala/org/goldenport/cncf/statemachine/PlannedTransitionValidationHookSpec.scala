@@ -1,13 +1,15 @@
 package org.goldenport.cncf.statemachine
 
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionInvocationIdentity, RuntimeContext}
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.datastore.DataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleFailureOutcome, TransitionLifecycleFailureStage, TransitionLifecycleKind}
-import org.goldenport.cncf.unitofwork.UnitOfWork
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkOp}
+import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationFailure, StateMachineOperationResult, StateMachineResultTypeReference}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -99,7 +101,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         priority = 0,
         declarationOrder = 0,
         guard = None,
-        plan = ExecutionPlan(Vector.empty, None, Vector.empty),
+        plan = ExecutionPlan(Vector.empty, Vector.empty, Vector.empty),
         stateFieldName = Some("status"),
         fromState = Some("Draft"),
         toState = Some("Approved"),
@@ -411,6 +413,23 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     }
   }
 
+  private def _completed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Completed(
+        StateMachineOperationResult(
+          StateMachineResultTypeReference("test.result"),
+          ContextReference("result", "1")
+        )
+      )
+    )
+
+  private def _failed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Failed(
+        StateMachineOperationFailure("transition_failed", "transition failed in spec", Vector.empty)
+      )
+    )
+
   private val _binding: CmlTransitionBinding = {
     val machine = CmlStateMachineIdentity("person-lifecycle")
     val source = CmlStateMachineStateIdentity(
@@ -541,7 +560,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         Some(
           ExecutionPlan(
             exitActions = Vector(exit),
-            transitionAction = Some(transition),
+            transitionActions = Vector(transition),
             entryActions = Vector(entry)
           )
         )
@@ -560,10 +579,10 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
 
     private def _record[S](label: String): ResolvedAction[S, TransitionEvent] =
       new ResolvedAction[S, TransitionEvent] {
-        def run(state: S, event: TransitionEvent): Consequence[Unit] = {
+        def program(state: S, event: TransitionEvent): ExecUowM[ActionExecution] = {
           val _ = (state, event)
           _execution_trace = _execution_trace :+ label
-          Consequence.unit
+          _completed_program
         }
       }
   }
@@ -585,16 +604,16 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
       val _ = (entity, tc, event)
       val failaction = new ResolvedAction[T, TransitionEvent] {
-        def run(state: T, event: TransitionEvent): Consequence[Unit] = {
+        def program(state: T, event: TransitionEvent): ExecUowM[ActionExecution] = {
           val _ = (state, event)
-          Consequence.stateConflict("transition failed in spec")
+          _failed_program
         }
       }
       Consequence.success(
         Some(
           ExecutionPlan(
             exitActions = Vector.empty,
-            transitionAction = Some(failaction),
+            transitionActions = Vector(failaction),
             entryActions = Vector.empty
           )
         )
@@ -668,11 +687,11 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         Some(
           ExecutionPlan(
             exitActions = Vector.empty,
-            transitionAction = Some(new ResolvedAction[T, TransitionEvent] {
-              def run(state: T, transitionevent: TransitionEvent): Consequence[Unit] = {
+            transitionActions = Vector(new ResolvedAction[T, TransitionEvent] {
+              def program(state: T, transitionevent: TransitionEvent): ExecUowM[ActionExecution] = {
                 val _ = (state, transitionevent)
                 _execution_trace = _execution_trace :+ "transition"
-                Consequence.unit
+                _completed_program
               }
             }),
             entryActions = Vector.empty,

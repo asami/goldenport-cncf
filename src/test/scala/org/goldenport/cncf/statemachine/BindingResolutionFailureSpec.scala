@@ -1,7 +1,10 @@
 package org.goldenport.cncf.statemachine
 
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.Conclusion
+import org.goldenport.cncf.Program
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
+import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationResult, StateMachineResultTypeReference}
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.observation.Taxonomy
 import org.scalatest.GivenWhenThen
@@ -41,9 +44,9 @@ final class BindingResolutionFailureSpec
 
     "return failure for ambiguous action binding with taxonomy/facets" in {
       Given("an action binding resolver with duplicated action names")
-      val effect = _noop_effect
+      val action = _noop_action
       val resolver = new _ActionResolver(
-        Map("dupAction" -> Vector(effect, effect))
+        Map("dupAction" -> Vector(action, action))
       )
 
       When("resolving an ambiguous action binding name")
@@ -110,18 +113,18 @@ final class BindingResolutionFailureSpec
     }
   }
 
-  private val _noop_effect: ActionEffect[Int, TransitionEvent] =
-    new ActionEffect[Int, TransitionEvent] {
-      def execute(state: Int, event: TransitionEvent): Consequence[Unit] = {
+  private val _noop_action: ResolvedAction[Int, TransitionEvent] =
+    new ResolvedAction[Int, TransitionEvent] {
+      def program(state: Int, event: TransitionEvent): ExecUowM[ActionExecution] = {
         val _ = (state, event)
-        Consequence.unit
+        _completed_program
       }
     }
 
   private final class _ActionResolver(
-    values: Map[String, Vector[ActionEffect[Int, TransitionEvent]]]
+    values: Map[String, Vector[ResolvedAction[Int, TransitionEvent]]]
   ) extends ActionBindingResolver[Int, TransitionEvent] {
-    def resolve(name: String): Consequence[ActionEffect[Int, TransitionEvent]] =
+    def resolve(name: String): Consequence[ResolvedAction[Int, TransitionEvent]] =
       values.get(name).map(_.toVector).getOrElse(Vector.empty) match {
         case Vector(single) => Consequence.success(single)
         case Vector() =>
@@ -139,6 +142,16 @@ final class BindingResolutionFailureSpec
           )
       }
   }
+
+  private def _completed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Completed(
+        StateMachineOperationResult(
+          StateMachineResultTypeReference("test.result"),
+          ContextReference("result", "1")
+        )
+      )
+    )
 
   private final class _GuardResolver[S, E](
     values: Map[String, Vector[Guard[S, E]]]

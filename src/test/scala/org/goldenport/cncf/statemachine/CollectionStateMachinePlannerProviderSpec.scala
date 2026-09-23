@@ -1,8 +1,11 @@
 package org.goldenport.cncf.statemachine
 
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionInvocationIdentity}
 import org.goldenport.cncf.event.TransitionLifecycleFailureOutcome
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
+import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationResult, StateMachineResultTypeReference}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.record.Record
@@ -61,7 +64,12 @@ final class CollectionStateMachinePlannerProviderSpec
       Then("the higher-priority plan is selected and runs in lifecycle order")
       selected shouldBe a[Consequence.Success[_]]
       val plan = selected.TAKE.getOrElse(fail("plan should be selected"))
-      ExecutionPlanExecutor.execute(plan, person, event) shouldBe Consequence.unit
+      ExecutionPlanExecutor.execute(
+        plan,
+        person,
+        event,
+        summon[ExecutionContext].runtime.unitOfWorkInterpreter
+      ) shouldBe Consequence.unit
       trace.toVector shouldBe Vector("high-exit", "high-transition", "high-entry")
     }
 
@@ -754,7 +762,7 @@ final class CollectionStateMachinePlannerProviderSpec
   ): ExecutionPlan[S, TransitionEvent] =
     ExecutionPlan(
       exitActions = Vector(_record[S](s"$label-exit", trace)),
-      transitionAction = Some(_record[S](s"$label-transition", trace)),
+      transitionActions = Vector(_record[S](s"$label-transition", trace)),
       entryActions = Vector(_record[S](s"$label-entry", trace))
     )
 
@@ -763,12 +771,22 @@ final class CollectionStateMachinePlannerProviderSpec
     trace: scala.collection.mutable.ArrayBuffer[String]
   ): ResolvedAction[S, TransitionEvent] =
     new ResolvedAction[S, TransitionEvent] {
-      def run(state: S, event: TransitionEvent): Consequence[Unit] = {
+      def program(state: S, event: TransitionEvent): ExecUowM[ActionExecution] = {
         val _ = (state, event)
         trace += label
-        Consequence.unit
+        _completed_program
       }
     }
+
+  private def _completed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Completed(
+        StateMachineOperationResult(
+          StateMachineResultTypeReference("test.result"),
+          ContextReference("result", "1")
+        )
+      )
+    )
 
   private final class LegacyFailureProvider extends StateMachinePlannerProvider {
     def planForSave[T](

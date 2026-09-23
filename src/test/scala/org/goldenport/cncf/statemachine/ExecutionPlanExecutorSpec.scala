@@ -1,116 +1,199 @@
 package org.goldenport.cncf.statemachine
 
+import java.nio.file.Paths
 import scala.collection.mutable.ArrayBuffer
-import org.goldenport.Consequence
+import cats.~>
+import cats.free.Free
+import cats.syntax.functor.*
+import org.goldenport.{Conclusion, Consequence, ConsequenceT}
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
+import org.goldenport.cncf.workflow.{ActionExecution, CompletionContract, ContextBundle, ContextContract, ContextReference, ContextSnapshot, Continuation, ContinuationIdentity, EvidenceContract, StateMachineOperationFailure, StateMachineOperationIdentity, StateMachineOperationResult, StateMachineRequiredOperation, StateMachineRequiredOperationIdentity, StateMachineRequiredOperationMetadata, StateMachineResultTypeReference, StateMachineRevision, StateMachineRunIdentity}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 19, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Sep. 22, 2026
  * @author  ASAMI, Tomoharu
  */
-final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers {
+final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "ExecutionPlanExecutor" should {
-    "run actions in exit -> transition -> entry order" in {
+    "interpret completed actions in exit -> transition -> entry order" in {
+      Given("an execution plan whose ordered actions construct typed UnitOfWork programs")
       val trace = ArrayBuffer.empty[String]
-      val exit1 = _action[String, String]("exit-1", trace)
-      val exit2 = _action[String, String]("exit-2", trace)
-      val transition = _action[String, String]("transition", trace)
-      val entry1 = _action[String, String]("entry-1", trace)
-
       val plan = ExecutionPlan[String, String](
-        exitActions = Vector(exit1, exit2),
-        transitionAction = Some(transition),
-        entryActions = Vector(entry1)
+        exitActions = Vector(_action("exit-1"), _action("exit-2")),
+        transitionActions = Vector(_action("transition-1"), _action("transition-2")),
+        entryActions = Vector(_action("entry-1"))
       )
+      val interpreter = _interpreter(trace)
+      trace.toVector shouldBe empty
 
-      val result = ExecutionPlanExecutor.execute(plan, "state", "event")
+      When("the composed plan is interpreted through the supplied interpreter")
+      val result = ExecutionPlanExecutor.execute(plan, "state", "event", interpreter)
 
+      Then("only the interpreter executes every completed action in lifecycle and declared transition order")
       result shouldBe Consequence.unit
-      trace.toVector shouldBe Vector("exit-1", "exit-2", "transition", "entry-1")
+      trace.toVector shouldBe Vector("exit-1", "exit-2", "transition-1", "transition-2", "entry-1")
     }
 
-    "stop on action failure and propagate failure" in {
+    "continue after a completed action outcome" in {
+      Given("a plan with completed exit and transition action programs")
       val trace = ArrayBuffer.empty[String]
-      val exit1 = _action[String, String]("exit-1", trace)
-      val transition = new ResolvedAction[String, String] {
-        def run(state: String, event: String): Consequence[Unit] = {
-          val _ = (state, event)
-          trace += "transition"
-          Consequence.stateConflict("transition failed")
-        }
-      }
-      val entry1 = _action[String, String]("entry-1", trace)
       val plan = ExecutionPlan[String, String](
-        exitActions = Vector(exit1),
-        transitionAction = Some(transition),
-        entryActions = Vector(entry1)
+        exitActions = Vector(_action("exit")),
+        transitionActions = Vector(_action("transition")),
+        entryActions = Vector(_action("entry"))
       )
 
-      val result = ExecutionPlanExecutor.execute(plan, "state", "event")
+      When("the supplied interpreter evaluates the composed program")
+      val result = ExecutionPlanExecutor.execute(plan, "state", "event", _interpreter(trace))
 
-      result shouldBe a[Consequence.Failure[_]]
-      trace.toVector shouldBe Vector("exit-1", "transition")
+      Then("each later action is reached after the preceding Completed outcome")
+      result shouldBe Consequence.unit
+      trace.toVector shouldBe Vector("exit", "transition", "entry")
     }
 
-    "stop immediately when exit action fails" in {
+    "short circuit at a structured suspended outcome" in {
+      Given("a plan whose earlier transition action returns a typed suspension")
       val trace = ArrayBuffer.empty[String]
-      val exit1 = new ResolvedAction[String, String] {
-        def run(state: String, event: String): Consequence[Unit] = {
-          val _ = (state, event)
-          trace += "exit-1"
-          Consequence.stateConflict("exit failed")
-        }
-      }
-      val transition = _action[String, String]("transition", trace)
-      val entry1 = _action[String, String]("entry-1", trace)
+      val observer = new Observer
       val plan = ExecutionPlan[String, String](
-        exitActions = Vector(exit1),
-        transitionAction = Some(transition),
-        entryActions = Vector(entry1)
+        exitActions = Vector(_action("exit")),
+        transitionActions = Vector(
+          _action("transition-1"),
+          _action("transition-suspended", _suspended),
+          _action("transition-later")
+        ),
+        entryActions = Vector(_action("entry"))
       )
 
-      val result = ExecutionPlanExecutor.execute(plan, "state", "event")
+      When("the composed plan is interpreted")
+      val result = ExecutionPlanExecutor.execute(plan, "state", "event", _interpreter(trace), observer)
 
-      result shouldBe a[Consequence.Failure[_]]
-      trace.toVector shouldBe Vector("exit-1")
+      Then("the suspension stops later transition and entry actions without a success or failure lifecycle completion")
+      result shouldBe Consequence.unit
+      trace.toVector shouldBe Vector("exit", "transition-1", "transition-suspended")
+      observer.beforeCount shouldBe 1
+      observer.afterCount shouldBe 0
+      observer.failures shouldBe empty
     }
 
-    "propagate entry failure after exit and transition" in {
+    "short circuit a typed failed outcome into one lifecycle failure observation" in {
+      Given("a plan whose earlier transition action returns a typed failure")
       val trace = ArrayBuffer.empty[String]
-      val exit1 = _action[String, String]("exit-1", trace)
-      val transition = _action[String, String]("transition", trace)
-      val entry1 = new ResolvedAction[String, String] {
-        def run(state: String, event: String): Consequence[Unit] = {
-          val _ = (state, event)
-          trace += "entry-1"
-          Consequence.stateConflict("entry failed")
-        }
-      }
+      val observer = new Observer
       val plan = ExecutionPlan[String, String](
-        exitActions = Vector(exit1),
-        transitionAction = Some(transition),
-        entryActions = Vector(entry1)
+        exitActions = Vector(_action("exit")),
+        transitionActions = Vector(
+          _action("transition-1"),
+          _action("transition-failed", _failed),
+          _action("transition-later")
+        ),
+        entryActions = Vector(_action("entry"))
       )
 
-      val result = ExecutionPlanExecutor.execute(plan, "state", "event")
+      When("the composed plan is interpreted")
+      val result = ExecutionPlanExecutor.execute(plan, "state", "event", _interpreter(trace), observer)
 
+      Then("the typed failure stops later transition and entry actions and is observed exactly once")
       result shouldBe a[Consequence.Failure[_]]
-      trace.toVector shouldBe Vector("exit-1", "transition", "entry-1")
+      trace.toVector shouldBe Vector("exit", "transition-1", "transition-failed")
+      observer.beforeCount shouldBe 1
+      observer.afterCount shouldBe 0
+      observer.failures should have size 1
     }
   }
 
-  private def _action[S, E](
+  private def _action(
     label: String,
-    trace: ArrayBuffer[String]
-  ): ResolvedAction[S, E] =
-    new ResolvedAction[S, E] {
-      def run(state: S, event: E): Consequence[Unit] = {
+    outcome: ActionExecution = _completed
+  ): ResolvedAction[String, String] =
+    new ResolvedAction[String, String] {
+      def program(state: String, event: String): ExecUowM[ActionExecution] = {
         val _ = (state, event)
-        trace += label
-        Consequence.unit
+        ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.LocalDataDir(label))).map(_ => outcome)
       }
     }
+
+  private def _interpreter(
+    trace: ArrayBuffer[String]
+  ): UnitOfWorkOp ~> Consequence =
+    new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] =
+        operation match {
+          case UnitOfWorkOp.LocalDataDir(label) =>
+            trace += label
+            Consequence.success(Paths.get(label)).asInstanceOf[Consequence[A]]
+          case _ =>
+            throw new UnsupportedOperationException("unexpected UnitOfWork operation in execution-plan spec")
+        }
+    }
+
+  private val _completed: ActionExecution =
+    ActionExecution.Completed(
+      StateMachineOperationResult(
+        StateMachineResultTypeReference("test.result"),
+        ContextReference("result", "1")
+      )
+    )
+
+  private val _suspended: ActionExecution =
+    ActionExecution.Suspended(
+      Continuation(
+        StateMachineRunIdentity("run-1"),
+        ContinuationIdentity("continuation-1"),
+        StateMachineRevision("1"),
+        StateMachineRequiredOperation(
+          StateMachineRequiredOperationIdentity("test.capability"),
+          "test.action",
+          StateMachineOperationIdentity("test", "operation"),
+          None,
+          None,
+          StateMachineRequiredOperationMetadata(
+            ContextContract("test.context", Vector.empty, Vector.empty),
+            CompletionContract("test.completion", Vector.empty),
+            EvidenceContract("test.evidence", Vector.empty),
+            Vector.empty
+          )
+        ),
+        ContextBundle("test context", Vector.empty, Vector.empty, ContextSnapshot("1"))
+      )
+    )
+
+  private val _failed: ActionExecution =
+    ActionExecution.Failed(StateMachineOperationFailure("transition_failed", "test failure", Vector.empty))
+
+  private final class Observer extends TransitionLifecycleObserver[String, String] {
+    private var _before = 0
+    private var _after = 0
+    private var _failures = Vector.empty[Conclusion]
+
+    def beforeCount: Int = _before
+    def afterCount: Int = _after
+    def failures: Vector[Conclusion] = _failures
+
+    def before(plan: ExecutionPlan[String, String], state: String, event: String): Unit = {
+      val _ = (plan, state, event)
+      _before += 1
+    }
+
+    def after(plan: ExecutionPlan[String, String], state: String, event: String): Unit = {
+      val _ = (plan, state, event)
+      _after += 1
+    }
+
+    def failed(
+      plan: ExecutionPlan[String, String],
+      state: String,
+      event: String,
+      failure: Conclusion
+    ): Unit = {
+      val _ = (plan, state, event)
+      _failures :+= failure
+    }
+  }
 }

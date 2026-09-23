@@ -311,7 +311,7 @@ object StateMachineProjection {
       "guard" -> _legacy_guard_record(rule.guard),
       "actions" -> Record.data(
         "exit" -> rule.plan.exitActions.size,
-        "transition" -> rule.plan.transitionAction.size,
+        "transition" -> rule.plan.transitionActions.size,
         "entry" -> rule.plan.entryActions.size
       )
     )

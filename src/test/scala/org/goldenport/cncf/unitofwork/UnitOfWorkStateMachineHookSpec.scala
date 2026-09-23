@@ -2,7 +2,8 @@ package org.goldenport.cncf.unitofwork
 
 import java.time.{Clock, Instant, ZoneOffset}
 import cats.~>
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.Program
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.context.{
   CorrelationId,
@@ -29,6 +30,7 @@ import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, E
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.testutil.EntityRevisionFixture
 import org.goldenport.cncf.statemachine.{ExecutionPlan, PlannedTransitionValidationHook, ResolvedAction, StateMachinePlannerProvider, TransitionEvent, TransitionValidationHook}
+import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationResult, StateMachineResultTypeReference}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -664,7 +666,7 @@ final class UnitOfWorkStateMachineHookSpec
         Some(
           ExecutionPlan(
             exitActions = Vector(_record[T]("exit")),
-            transitionAction = Some(_record[T]("transition")),
+            transitionActions = Vector(_record[T]("transition")),
             entryActions = Vector(_record[T]("entry"))
           )
         )
@@ -685,13 +687,23 @@ final class UnitOfWorkStateMachineHookSpec
 
     private def _record[S](label: String): ResolvedAction[S, TransitionEvent] =
       new ResolvedAction[S, TransitionEvent] {
-        def run(state: S, event: TransitionEvent): Consequence[Unit] = {
+        def program(state: S, event: TransitionEvent): ExecUowM[ActionExecution] = {
           val _ = (state, event)
           _execution_trace = _execution_trace :+ label
-          Consequence.unit
+          _completed_program
         }
       }
   }
+
+  private def _completed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Completed(
+        StateMachineOperationResult(
+          StateMachineResultTypeReference("test.result"),
+          ContextReference("result", "1")
+        )
+      )
+    )
 
   private final class _FailingBeforePublishDataStore
       extends DataStore.InMemoryDataStore(CommitRecorder.noop) {

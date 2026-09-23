@@ -124,6 +124,7 @@ final class PlannedTransitionValidationHook(
           p,
           entity,
           event,
+          ctx.runtime.unitOfWorkInterpreter,
           _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
         )
       }
@@ -157,6 +158,7 @@ final class PlannedTransitionValidationHook(
           p,
           entity,
           event,
+          ctx.runtime.unitOfWorkInterpreter,
           _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
         )
       }
@@ -182,6 +184,7 @@ final class PlannedTransitionValidationHook(
           p,
           entity,
           event,
+          ctx.runtime.unitOfWorkInterpreter,
           _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
         )
       }
@@ -215,6 +218,7 @@ final class PlannedTransitionValidationHook(
           p,
           entity,
           event,
+          ctx.runtime.unitOfWorkInterpreter,
           _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
         )
       }
@@ -242,6 +246,7 @@ final class PlannedTransitionValidationHook(
           p,
           state,
           event,
+          ctx.runtime.unitOfWorkInterpreter,
           _lifecycle_observer[(EntityId, P)](event, Some(id.collection.name))
         )
       }
@@ -277,6 +282,7 @@ final class PlannedTransitionValidationHook(
           p,
           state,
           event,
+          ctx.runtime.unitOfWorkInterpreter,
           _lifecycle_observer[(EntityId, P)](event, Some(id.collection.name))
         )
       }

@@ -1,8 +1,11 @@
 package org.goldenport.cncf.statemachine
 
 import scala.collection.mutable.ArrayBuffer
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
+import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationResult, StateMachineResultTypeReference}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.record.Record
@@ -44,15 +47,15 @@ final class StateMachineRuleBuilderSpec
       val plan = StateMachineRuleBuilder.plan[_Entity](
         exit = Vector(StateMachineRuleBuilder.action { (_, _) =>
           trace += "exit"
-          Consequence.unit
+          _completed_program
         }),
-        transition = Some(StateMachineRuleBuilder.action { (_, _) =>
+        transitionActions = Vector(StateMachineRuleBuilder.action { (_, _) =>
           trace += "transition"
-          Consequence.unit
+          _completed_program
         }),
         entry = Vector(StateMachineRuleBuilder.action { (_, _) =>
           trace += "entry"
-          Consequence.unit
+          _completed_program
         })
       )
       val rule = StateMachineRuleBuilder.updateRule(
@@ -82,7 +85,12 @@ final class StateMachineRuleBuilderSpec
       val selected = provider.planForUpdate(entity, _entityPersistent, event)
       val selectedPlan = selected.TAKE.getOrElse(fail("plan should be selected"))
       Then("the plan executes its exit, transition, and entry actions in order")
-      ExecutionPlanExecutor.execute(selectedPlan, entity, event) shouldBe Consequence.unit
+      ExecutionPlanExecutor.execute(
+        selectedPlan,
+        entity,
+        event,
+        summon[ExecutionContext].runtime.unitOfWorkInterpreter
+      ) shouldBe Consequence.unit
       trace.toVector shouldBe Vector("exit", "transition", "entry")
     }
 
@@ -116,4 +124,14 @@ final class StateMachineRuleBuilderSpec
       }
     }
   }
+
+  private def _completed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Completed(
+        StateMachineOperationResult(
+          StateMachineResultTypeReference("test.result"),
+          ContextReference("result", "1")
+        )
+      )
+    )
 }

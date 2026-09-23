@@ -57,6 +57,7 @@ final class StateMachineProjectionSpec
       second.get("historyComposite") shouldBe Some("Review")
       second.get("historyField") shouldBe Some("lifecycleHistory")
       second.get("historyFallbackLeaf") shouldBe Some("Pending")
+      _record(second("actions")).asMap.get("transition") shouldBe Some(2)
     }
 
     "project state machine definitions into states/events" in {
@@ -200,6 +201,17 @@ final class StateMachineProjectionSpec
     }
   }
 
+  private val _projection_action: ResolvedAction[Any, TransitionEvent] =
+    new ResolvedAction[Any, TransitionEvent] {
+      def program(
+        state: Any,
+        event: TransitionEvent
+      ): org.goldenport.cncf.unitofwork.ExecUowM[org.goldenport.cncf.workflow.ActionExecution] = {
+        val _ = (state, event)
+        throw new UnsupportedOperationException("projection-only action must not be invoked")
+      }
+    }
+
   private def _component_with_rules(): Component = {
     val component = new Component() with CollectionTransitionRuleProvider {
       override def stateMachineTransitionRules: Vector[CollectionTransitionRule[Any]] =
@@ -211,7 +223,11 @@ final class StateMachineProjectionSpec
             priority = 2,
             declarationOrder = 1,
             guard = Some(ExpressionGuard("event.name == 'update'", (_, _) => Map("event" -> Map("name" -> "update")))),
-            plan = ExecutionPlan.empty[Any, TransitionEvent],
+            plan = ExecutionPlan[Any, TransitionEvent](
+              exitActions = Vector.empty,
+              transitionActions = Vector(_projection_action, _projection_action),
+              entryActions = Vector.empty
+            ),
             machineName = Some("lifecycle"),
             stateFieldName = Some("status"),
             fromState = Some("Draft"),

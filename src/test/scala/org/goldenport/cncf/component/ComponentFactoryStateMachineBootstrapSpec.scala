@@ -1,7 +1,8 @@
 package org.goldenport.cncf.component
 
 import scala.collection.mutable.ArrayBuffer
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.Program
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -9,6 +10,8 @@ import org.goldenport.cncf.context.ExecutionInvocationIdentity
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.cncf.statemachine.{CmlNormalizedStateMachine, CmlStateMachineDefinition, CmlStateMachineDefinitionProvider, CmlStateMachineIdentity, CmlStateMachineOperationIdentity, CmlStateMachineScalarType, CmlStateMachineStateDefinition, CmlStateMachineStateIdentity, CmlStateMachineStateKind, CmlStateMachineStatePath, CmlStateMachineTransitionIdentity, CmlStateMachineTransitionTarget, CmlStateMachineTriggerContext, CmlStateMachineTriggerContextField, CmlStateMachineTriggerContextFieldIdentity, CmlStateMachineTriggerContextIdentity, CmlStateMachineTriggerIdentity, CmlStateMachineVersion, CmlTransitionBinding, CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
+import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationResult, StateMachineResultTypeReference}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -172,7 +175,7 @@ final class ComponentFactoryStateMachineBootstrapSpec
             guard = None,
             plan = ExecutionPlan[Any, TransitionEvent](
               exitActions = Vector(_record_action("exit", trace)),
-              transitionAction = Some(_record_action("transition", trace)),
+              transitionActions = Vector(_record_action("transition", trace)),
               entryActions = Vector(_record_action("entry", trace))
             ),
             historyFieldName = Some("lifecycleHistory"),
@@ -342,12 +345,22 @@ final class ComponentFactoryStateMachineBootstrapSpec
     trace: ArrayBuffer[String]
   ): ResolvedAction[Any, TransitionEvent] =
     new ResolvedAction[Any, TransitionEvent] {
-      override def run(state: Any, event: TransitionEvent): Consequence[Unit] = {
+      override def program(state: Any, event: TransitionEvent): ExecUowM[ActionExecution] = {
         val _ = (state, event)
         trace += label
-        Consequence.unit
+        _completed_program
       }
     }
+
+  private def _completed_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Completed(
+        StateMachineOperationResult(
+          StateMachineResultTypeReference("test.result"),
+          ContextReference("result", "1")
+        )
+      )
+    )
 
   private final case class SpecEntity(
     id: EntityId,
