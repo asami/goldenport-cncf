@@ -7,3 +7,7 @@ Decision: CNCF Service Bus journal persistence will have a provider SPI with SQL
 MacBook Air uses a local SQLite journal because local PostgreSQL/OpenTelemetry are intentionally absent. Mac mini uses PostgreSQL `ops` for the operational journal; PostgreSQL `dev` remains separate for development use.
 
 Provider selection is explicit rather than discovery-based. AUTHORITATIVE events are committed through the configured provider before subscriber delivery. This preserves the same event semantics across laptop/offline and server deployments.
+
+## Existing EventBus baseline
+
+This capability extends the existing CNCF `EventBus` / `EventEngine` implementation. Existing `EventPublishOption(persistent)` and persist-before-dispatch behavior are the migration baseline; new JournalPolicy/provider/transport concepts should be introduced compatibly rather than by creating a second independent bus.
