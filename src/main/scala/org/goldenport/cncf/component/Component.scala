@@ -44,7 +44,7 @@ import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
 import org.goldenport.cncf.usernotification.UserNotificationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import org.goldenport.cncf.workflow.WorkflowDefinition
-import org.goldenport.cncf.workflow.GeneratedWorkflowAbi
+import org.goldenport.cncf.workflow.{GeneratedWorkflowAbi, StateMachineProviderResolver, StateMachineProviderSource}
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -85,6 +85,8 @@ abstract class Component() extends Component.Core.Holder {
     Vector.empty
   private var _admitted_generated_workflow_metadata: Vector[GeneratedWorkflowAbi.Definition] =
     Vector.empty
+  private var _state_machine_provider_resolver: StateMachineProviderResolver =
+    StateMachineProviderResolver.empty
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
   private var _event_reception: Option[EventReception] = None
@@ -405,6 +407,16 @@ abstract class Component() extends Component.Core.Holder {
     metadata: Vector[GeneratedWorkflowAbi.Definition]
   ): Component = {
     _admitted_generated_workflow_metadata = metadata
+    this
+  }
+
+  def stateMachineProviderResolver: StateMachineProviderResolver =
+    _state_machine_provider_resolver
+
+  def withStateMachineProviderResolver(
+    resolver: StateMachineProviderResolver
+  ): Component = {
+    _state_machine_provider_resolver = resolver
     this
   }
 
@@ -879,7 +891,7 @@ object Component {
     }
   }
 
-  abstract class Factory {
+  abstract class Factory extends StateMachineProviderSource {
     def serviceFactory: ServiceFactory = ServiceFactory.empty
 
     // Internal aggregate-assembly DSL lookup. Keep final until a concrete Component extension needs a narrower reviewed contract.

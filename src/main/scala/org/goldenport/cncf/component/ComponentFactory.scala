@@ -31,7 +31,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.goldenport.cncf.workflow.WorkflowDefinition
-import org.goldenport.cncf.workflow.{GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider}
+import org.goldenport.cncf.workflow.{GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider, StateMachineProviderResolver, StateMachineProviderSource}
 import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
 
@@ -138,6 +138,7 @@ final class ComponentFactory(
       else _entity_collection_names(component)
     for {
       _ <- _bootstrap_generated_workflow_metadata_c(component)
+      _ <- _bootstrap_state_machine_provider_resolver_c(component)
       _ <- _validate_entity_runtime_plan_names_c(component, rawplans)
       revisionbindings <- _resolve_revision_bindings_c(component, entitynames)
       concurrencypolicies <-
@@ -639,6 +640,29 @@ final class ComponentFactory(
       case Some(m) =>
         GeneratedWorkflowAbi.admitC(m.generatedWorkflowDefinitions).map { definitions =>
           component.withAdmittedGeneratedWorkflowMetadata(definitions)
+          ()
+        }
+      case None =>
+        Consequence.unit
+    }
+  }
+
+  private def _bootstrap_state_machine_provider_resolver_c(
+    component: Component
+  ): Consequence[Unit] = {
+    val source = component match {
+      case m: StateMachineProviderSource => Some(m)
+      case _ => component.factory.collect {
+        case m: StateMachineProviderSource => m
+      }
+    }
+    source match {
+      case Some(m) =>
+        StateMachineProviderResolver.create(
+          m.stateMachineProviderBindings,
+          m.stateMachineProviders
+        ).map { resolver =>
+          component.withStateMachineProviderResolver(resolver)
           ()
         }
       case None =>

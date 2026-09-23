@@ -22,6 +22,7 @@ import org.goldenport.cncf.blob.{
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
+import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 
 /*
@@ -44,6 +45,13 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 sealed trait UnitOfWorkOp[A]
 
 object UnitOfWorkOp {
+
+  // ------------------------------------------------------------
+  // State machine Provider operations
+  // ------------------------------------------------------------
+  final case class StateMachineProviderExecute(
+    request: ProviderExecutionRequest
+  ) extends UnitOfWorkOp[ActionExecution]
 
   // ------------------------------------------------------------
   // Authorization operations

@@ -126,6 +126,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         uow.stageOperationEvaluationSupplementalC(intent)
       }
 
+    case UnitOfWorkOp.StateMachineProviderExecute(request) =>
+      _with_calltree("uow:state-machine:provider:execute") {
+        _component_required.flatMap { component =>
+          component.stateMachineProviderResolver
+            .resolve(request.requiredOperation.identity)
+            .map(_.execute(request))
+        }
+      }
+
     case UnitOfWorkOp.HttpGet(path, headers, properties) =>
       _with_calltree("uow:http:get") {
         Consequence(_http_driver.get(path, headers, properties))

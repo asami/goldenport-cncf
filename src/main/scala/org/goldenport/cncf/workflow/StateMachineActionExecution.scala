@@ -72,6 +72,15 @@ final case class StateMachineRequiredOperation(
   metadata: StateMachineRequiredOperationMetadata
 )
 
+/** Identity of a provider selected to satisfy a Required SPI operation. */
+final case class ProviderIdentity(value: String)
+
+/** Binding is deliberately limited to Required SPI identity -> Provider identity. */
+final case class StateMachineProviderBinding(
+  requiredOperation: StateMachineRequiredOperationIdentity,
+  provider: ProviderIdentity
+)
+
 final case class StateMachineOperationResult(
   typeReference: StateMachineResultTypeReference,
   contextReference: ContextReference
@@ -82,6 +91,26 @@ final case class StateMachineOperationFailure(
   message: String,
   evidence: Vector[ContextReference]
 )
+
+/** Typed operation input represented through a durable context reference. */
+final case class StateMachineOperationInput(
+  typeReference: StateMachineInputTypeReference,
+  contextReference: ContextReference
+)
+
+/** Provider execution request with no execution-mode selection. */
+final case class ProviderExecutionRequest(
+  runId: StateMachineRunIdentity,
+  requiredOperation: StateMachineRequiredOperation,
+  input: Option[StateMachineOperationInput],
+  context: ContextBundle
+)
+
+/** A Provider selects one closed ActionExecution outcome for each request. */
+trait StateMachineProvider {
+  def identity: ProviderIdentity
+  def execute(request: ProviderExecutionRequest): ActionExecution
+}
 
 final case class StateMachineRunIdentity(value: String)
 
