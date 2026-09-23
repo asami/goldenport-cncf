@@ -44,7 +44,7 @@ import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
 import org.goldenport.cncf.usernotification.UserNotificationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import org.goldenport.cncf.workflow.WorkflowDefinition
-import org.goldenport.cncf.workflow.{GeneratedWorkflowAbi, StateMachineProviderResolver, StateMachineProviderSource}
+import org.goldenport.cncf.workflow.{ContinuationRuntime, ContinuationRuntimeSource, GeneratedWorkflowAbi, StateMachineProviderResolver, StateMachineProviderSource}
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -87,6 +87,7 @@ abstract class Component() extends Component.Core.Holder {
     Vector.empty
   private var _state_machine_provider_resolver: StateMachineProviderResolver =
     StateMachineProviderResolver.empty
+  private var _continuation_runtime: ContinuationRuntime = ContinuationRuntime.empty
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
   private var _event_reception: Option[EventReception] = None
@@ -417,6 +418,16 @@ abstract class Component() extends Component.Core.Holder {
     resolver: StateMachineProviderResolver
   ): Component = {
     _state_machine_provider_resolver = resolver
+    this
+  }
+
+  def continuationRuntime: ContinuationRuntime =
+    _continuation_runtime
+
+  def withContinuationRuntime(
+    runtime: ContinuationRuntime
+  ): Component = {
+    _continuation_runtime = Option(runtime).getOrElse(ContinuationRuntime.empty)
     this
   }
 
@@ -891,7 +902,7 @@ object Component {
     }
   }
 
-  abstract class Factory extends StateMachineProviderSource {
+  abstract class Factory extends StateMachineProviderSource with ContinuationRuntimeSource {
     def serviceFactory: ServiceFactory = ServiceFactory.empty
 
     // Internal aggregate-assembly DSL lookup. Keep final until a concrete Component extension needs a narrower reviewed contract.

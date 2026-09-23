@@ -31,7 +31,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.goldenport.cncf.workflow.WorkflowDefinition
-import org.goldenport.cncf.workflow.{GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider, StateMachineProviderResolver, StateMachineProviderSource}
+import org.goldenport.cncf.workflow.{ContinuationRuntimeSource, GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider, StateMachineProviderResolver, StateMachineProviderSource}
 import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
 
@@ -139,6 +139,7 @@ final class ComponentFactory(
     for {
       _ <- _bootstrap_generated_workflow_metadata_c(component)
       _ <- _bootstrap_state_machine_provider_resolver_c(component)
+      _ <- _bootstrap_continuation_runtime_c(component)
       _ <- _validate_entity_runtime_plan_names_c(component, rawplans)
       revisionbindings <- _resolve_revision_bindings_c(component, entitynames)
       concurrencypolicies <-
@@ -667,6 +668,30 @@ final class ComponentFactory(
         }
       case None =>
         Consequence.unit
+    }
+  }
+
+  private def _bootstrap_continuation_runtime_c(
+    component: Component
+  ): Consequence[Unit] = {
+    val source = component match {
+      case m: ContinuationRuntimeSource => Some(m)
+      case _ => component.factory.collect {
+        case m: ContinuationRuntimeSource => m
+      }
+    }
+    source match {
+      case Some(m) =>
+        m.continuationRuntimeOption match {
+          case Some(runtime) if runtime != null =>
+            component.withContinuationRuntime(runtime)
+            Consequence.unit
+          case Some(_) =>
+            Consequence.componentInvalid("continuation runtime source returned null")
+          case None =>
+            Consequence.unit
+        }
+      case None => Consequence.unit
     }
   }
 
