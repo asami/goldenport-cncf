@@ -23,3 +23,7 @@ Provider selection is explicit configuration. Do not automatically switch persis
 For JournalPolicy.AUTHORITATIVE, the event becomes an authoritative operational fact only after the selected JournalProvider successfully commits it. Delivery to subscribers follows successful commit. JournalPolicy.NONE messages bypass persistent journal storage.
 
 The SPI should support append/commit and the query primitives required by correlation/timeline/Control Center without exposing provider-specific details.
+
+## Existing EventBus baseline
+
+This capability extends the existing CNCF `EventBus` / `EventEngine` implementation. Existing `EventPublishOption(persistent)` and persist-before-dispatch behavior are the migration baseline; new JournalPolicy/provider/transport concepts should be introduced compatibly rather than by creating a second independent bus.
