@@ -22,3 +22,11 @@ Initial SUBSYSTEM delivery is in-memory. SYSTEM scope is a future transport conc
 ## Reference scenario
 
 sm-workflow publishes authoritative lifecycle/admission events. Control Center consumes them asynchronously for Web/mobile/watch monitoring. A human approval is sent back as an authenticated operation to sm-workflow; the accepted result is again published as an authoritative event. sm-workflow does not depend on a watch/mobile client, and clients do not depend on Codex/OpenClaw internals.
+
+## Existing implementation baseline
+
+CNCF already implements `org.goldenport.cncf.event.EventBus` and related Event Runtime facilities. The current baseline includes publish/register-subscribe, deterministic synchronous dispatch, filtering by event name/kind/selector, authorization-aware dispatch, Action dispatch integration, and optional persistence through `EventPublishOption(persistent)` and `EventEngine.emit`. Persistent publication already performs persistence before subscriber dispatch.
+
+The design in this document is therefore an **extension of the existing EventBus**, not the introduction of a parallel bus implementation. The term "Service Bus" may describe the architectural role, but the CNCF runtime API/model should evolve from the existing EventBus unless a later implementation need justifies a separate abstraction.
+
+Planned evolution includes replacing/generalizing the boolean persistence option with JournalPolicy semantics, Journal SPI providers (SQLite/PostgreSQL), correlation/causation, journal query/timeline, SUBSYSTEM/SYSTEM scope, external Transport SPI (future Kafka/Kinesis), and Dashboard/Control Center operational integration.
