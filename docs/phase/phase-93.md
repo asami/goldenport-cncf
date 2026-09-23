@@ -24,3 +24,7 @@ Introduce Service Bus as a CNCF Runtime component and expose its essential opera
 - Automatic recovery from the journal.
 - Kafka/Kinesis implementation in the initial implementation.
 - Full system-level operational analysis UI; that belongs to Textus Control Center.
+
+## Reference executable scenario
+
+Validate temporal decoupling with sm-workflow development monitoring: journal significant lifecycle/approval events, allow Control Center to consume/catch up asynchronously, and drive StateMachine subscribers where configured. Human approval remains an authenticated operation/admission request; its accepted outcome is published as an authoritative event.
