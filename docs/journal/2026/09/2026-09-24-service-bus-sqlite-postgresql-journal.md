@@ -11,3 +11,7 @@ Provider selection is explicit rather than discovery-based. AUTHORITATIVE events
 ## Existing EventBus baseline
 
 This capability extends the existing CNCF `EventBus` / `EventEngine` implementation. Existing `EventPublishOption(persistent)` and persist-before-dispatch behavior are the migration baseline; new JournalPolicy/provider/transport concepts should be introduced compatibly rather than by creating a second independent bus.
+
+## Subsystem database boundary
+
+SQLite journal storage is refined to one physical database per Subsystem. This supports MacBook Air scenarios where roughly ten Subsystems may run concurrently without concentrating all writers on one SQLite file. PostgreSQL on server-oriented hosts may remain physically shared while preserving logical Subsystem identity/partitioning. Control Center should query through the Journal abstraction rather than depend on either layout.
