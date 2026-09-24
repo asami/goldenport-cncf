@@ -5,13 +5,13 @@ Planned: 2026-09-20
 
 ## Goal
 
-Add advanced Workflow runtime facilities after the Phase 63.1/63.2 -> 64 -> 64.2 -> 77 -> sm-workflow executable-specification path has established real consumer evidence. Phase 64.1 is superseded planning history, not a critical-path predecessor.
+Add advanced Workflow runtime facilities after the Phase 63.1/63.2 -> 64 -> 64.2 -> 77 -> 77.1 -> 77.2 -> sm-workflow executable-specification path has established real consumer evidence. Phase 64.1 is superseded planning history, not a critical-path predecessor.
 
-This Phase is not a prerequisite for CNCF Phase 77 or sm-workflow Phase 1.
+This Phase is not a prerequisite for the CNCF Phase 77 -> 77.1 -> 77.2 sequence or sm-workflow Phase 1.
 
 ## Candidate scope
 
-- Workflow-to-Workflow invocation/composition runtime beyond the Phase 77 type/correlation compatibility constraint;
+- Workflow-to-Workflow invocation/composition runtime beyond the Phase 77.2 type/correlation compatibility constraint;
 - parent/child WorkflowInstance lifecycle management and durable child-completion waiting;
 - richer Workflow persistence/retention/lease administration where not already owned elsewhere;
 - advanced operational observability and administration;
@@ -21,7 +21,7 @@ This Phase is not a prerequisite for CNCF Phase 77 or sm-workflow Phase 1.
 
 ## Constraints
 
-- Reuse Phase 77 typed Workflow protocol Value Objects.
+- Reuse Phase 77.2 typed Workflow protocol Value Objects.
 - Preserve direct Scala typed composition and wire encoding equivalence.
 - Do not introduce a second Workflow language.
 - Do not duplicate Retry/Timeout/lifecycle-control phases or Phase 85 transaction/recovery responsibilities.

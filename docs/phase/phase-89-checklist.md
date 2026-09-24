@@ -46,7 +46,7 @@ evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
       metadata, and provenance.
 - [ ] Preserve producer diagnostics without introducing a second CNCF analysis
       language.
-- [ ] Do not modify Phase 77 Workflow API/SPI or persistence semantics.
+- [ ] Do not modify Phase 77-sequence Workflow API/SPI or persistence semantics.
 
 ## GCSA-89-05: Executable specifications
 
@@ -65,5 +65,5 @@ evidence-bound entry condition and the Cozy Phase 66 handoff are satisfied.
 - [ ] Record exact Cozy/CNCF revisions, schema/generator versions, artifact
       digest, fixture identity, and validation evidence.
 - [ ] Freeze the concrete consumer handoff.
-- [ ] Confirm Phase 64, Phase 77, and the first `sm-workflow` vertical slice
+- [ ] Confirm Phase 64, the Phase 77 -> 77.1 -> 77.2 sequence, and the first `sm-workflow` vertical slice
       remain closed/unchanged and were not prerequisites reopened by Phase 89.

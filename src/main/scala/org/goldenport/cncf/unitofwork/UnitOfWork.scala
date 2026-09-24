@@ -28,6 +28,7 @@ import org.goldenport.cncf.operation.evaluation.{
   OperationEvaluationSupplementalBuffer,
   OperationEvaluationSupplementalIntent
 }
+import org.goldenport.cncf.workflow.{AtomicWorkflowSuspensionEngine, WorkflowInstanceAtomicTransitionV1}
 
 /*
  * @since   Apr. 11, 2025
@@ -37,7 +38,7 @@ import org.goldenport.cncf.operation.evaluation.{
  *  version Mar. 24, 2026
  *  version Apr. 28, 2026
  *  version Aug. 12, 2026
- * @version Sep. 19, 2026
+ * @version Sep. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -265,6 +266,19 @@ class UnitOfWork(
 
   def stageEvents(events: Seq[DomainEvent]): Unit =
     _pending_events = _pending_events ++ events.toVector
+
+  /** The default EventEngine cannot join a WorkflowInstance suspension commit. */
+  def stageAtomicSuspensionC(
+    intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent
+  ): Consequence[Unit] =
+    eventengine match {
+      case atomic: AtomicWorkflowSuspensionEngine =>
+        WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent).flatMap(atomic.stageSuspensionC)
+      case _ =>
+        Consequence.stateConflict(
+          "Atomic workflow suspension requires one proven shared UnitOfWork transaction domain"
+        )
+    }
 
   def pendingEvents: Vector[DomainEvent] = _pending_events
 

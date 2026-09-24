@@ -15,6 +15,14 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- The first `sm-workflow` vertical slice has priority over shared Workflow
+  transaction redesign. [Phase 77.1](phase-77.1.md) and
+  [Phase 77.2](phase-77.2.md) use an explicitly loose post-commit Continuation
+  baseline. [Phase 92](phase-92.md) owns the later durable shared transaction
+  domain; it is not a prerequisite for that first slice and is independent
+  of Phase 89. The `sm-workflow` plans already name CNCF Phase 90 for
+  Candidate-Admission and Phase 91 for Execution/Failure Model work; this
+  deferral does not reuse those numbers or remove those dependencies.
 - Planned post-`sm-workflow` producer/consumer sequence: Cozy Phase 66 produces
   the generalized Composite StateMachine semantic artifact and
   [Phase 89](phase-89.md) admits it into CNCF. Both require a stable first
@@ -205,19 +213,29 @@ Current baseline:
 
 ## Planned StateMachine API/SPI and Skill-Driven Workflow Runtime
 
-- [Phase 77 - StateMachine API/SPI Runtime and First Skill-Driven Workflow Vertical Slice](phase-77.md)
-  is planned and not started. It consumes Cozy Phase 62.1's API/SPI and
-  ActionExecution contract, Phase 62.2's generated ABI, and Phase 62.3's
-  producer fixture/handoff after the completed Phase 64 and forced-minimum
-  Phase 64.2 prerequisites.
-- [Phase 77 Checklist](phase-77-checklist.md) owns ABI admission, generated
-  discovery, Provider SPI construction, the independent WorkflowInstance
-  persistence contract, durable Continuation, the minimum typed
-  Start/Continuation/WorkOrder/Terminal protocol and its schema-versioned
-  fail-closed Skill/Codex JSON encoding, and the Continuation SPI IoC port used
-  by Generic Skill Workflow Support. Entity StateMachine persistence remains
-  entity-owned; Textus `sm-workflow` supplies its consumer persistence and
+The originally estimated 960-minute Phase 77 was split before goal creation
+into the planned, serial [Phase 77](phase-77.md) ->
+[Phase 77.1](phase-77.1.md) -> [Phase 77.2](phase-77.2.md) sequence. It
+consumes Cozy Phase 62.1's API/SPI and ActionExecution contract, Phase 62.2's
+generated ABI, and Phase 62.3's producer fixture/handoff after the completed
+Phase 64 and forced-minimum Phase 64.2 prerequisites.
+
+- [Phase 77 Checklist](phase-77-checklist.md) owns generated ABI admission,
+  ComponentFactory discovery, and the independent WorkflowInstance persistence
+  SPI.
+- [Phase 77.1 Checklist](phase-77.1-checklist.md) owns ActionExecution,
+  Provider runtime, durable Continuation, and fail-closed resume.
+- [Phase 77.2 Checklist](phase-77.2-checklist.md) owns the Generic Skill
+  projection, typed Start/Continuation/WorkOrder/Terminal protocol,
+  schema-versioned fail-closed Skill/Codex JSON, the real producer-fixture
+  vertical slice, and the `sm-workflow` consumer handoff. It is the sole
+  repository-wide full-suite validation owner. Entity StateMachine persistence
+  remains entity-owned; Textus `sm-workflow` supplies consumer persistence and
   software-development-specific behavior.
+- [Phase 92 Checklist](phase-92-checklist.md) owns the deferred single-commit
+  domain spanning EventStore, DataStore, WorkflowInstance, Continuation, and
+  UnitOfWork. Its atomicity proof is outside the serial Phase 77 sequence and
+  must not block the first `sm-workflow` vertical slice.
 
 ## Related Rules
 

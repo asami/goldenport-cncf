@@ -4,17 +4,17 @@ Status: planned
 
 ## Goal
 
-Phase 77 で完成した StateMachine API/SPI Runtime と最初の Skill-driven Workflow vertical slice を安定した基盤として、実運用から必要性が確認された Workflow invocation / participant / context integration の拡張機能を追加する。
+Phase 77 -> 77.1 -> 77.2 の順に完成した StateMachine API/SPI Runtime と最初の Skill-driven Workflow vertical slice を安定した基盤として、実運用から必要性が確認された Workflow invocation / participant / context integration の拡張機能を追加する。
 
-Phase 80 は `sm-workflow Phase 1` の前提ではない。sm-workflow は CNCF Phase 77 の consumer handoff を受けた時点で executable specification の実装を開始できる。
+Phase 80 は `sm-workflow Phase 1` の前提ではない。sm-workflow は CNCF Phase 77.2 の consumer handoff を受けた時点で executable specification の実装を開始できる。
 
 ## Dependency
 
-- CNCF Phase 77 closed and consumer handoff frozen.
+- CNCF Phase 77.2 closed and consumer handoff frozen, after Phases 77 and 77.1.
 - Cozy Phase 62 generated Workflow ABI.
-- Phase 77 の StateMachine API/SPI、`ActionExecution = Completed | Suspended | Failed`、durable Continuation/resume、deterministic progression semantics を再定義しない。
+- Phase 77 sequence の StateMachine API/SPI、`ActionExecution = Completed | Suspended | Failed`、durable Continuation/resume、deterministic progression semantics を再定義しない。
 
-## Baseline inherited from Phase 77
+## Baseline inherited from the Phase 77 sequence
 
 Phase 80 では次を新規実装項目として数えない。
 
@@ -32,19 +32,19 @@ Phase 80 では次を新規実装項目として数えない。
 - deterministic test provider.
 - `sm-workflow` consumer handoff.
 
-これらは Phase 77 の completion condition である。
+これらは Phase 77.2 を最終所有者とする Phase 77 sequence の completion condition である。
 
 ## Extension candidates
 
-Phase 80 は実運用 evidence を入力として、Phase 77 の foundation 上に必要なものだけを追加する。
+Phase 80 は実運用 evidence を入力として、Phase 77 sequence の foundation 上に必要なものだけを追加する。
 
 1. richer `WorkflowInvocationContract` projection.
 2. bounded `ContextBundle / ContextReference / ContextSnapshot` ergonomics.
 3. richer Completion / Evidence projection and validation.
-4. AI / Human / remote participant integration using the same Phase 77 Continuation identity.
+4. AI / Human / remote participant integration using the same Phase 77.1 Continuation identity.
 5. UI/client continuation retrieval and resumption ergonomics.
 6. provider/invocation placement policy that remains outside Workflow semantics.
-7. richer Generic Skill Workflow metadata beyond Phase 77's model-independent capability / complexity / risk / review hints.
+7. richer Generic Skill Workflow metadata beyond Phase 77.2's model-independent capability / complexity / risk / review hints.
 8. future local/remote transport or Workflow-to-Workflow integration preparation where justified.
 
 ## Normative compatibility rule
@@ -54,7 +54,7 @@ There is no Workflow-wide Orchestration/Continuation mode and no semantic
 
 Direct/local execution and external continuation are provider/runtime placement choices for an admitted Required SPI operation. They do not change StateMachine / Workflow semantics.
 
-Any historical Phase 80 addendum that describes a semantic ORCHESTRATION/CONTINUATION binding is superseded by Phase 77 and this document.
+Any historical Phase 80 addendum that describes a semantic ORCHESTRATION/CONTINUATION binding is superseded by the Phase 77 sequence and this document.
 
 ## Scheduling
 
@@ -63,7 +63,7 @@ Phase 80 is deliberately outside the critical path for `sm-workflow Phase 1`.
 ```text
 Cozy Phase 62 (closed)
         ↓
-CNCF Phase 77
+CNCF Phase 77 -> Phase 77.1 -> Phase 77.2
         ↓
 sm-workflow Phase 1 executable specification
 
@@ -76,11 +76,11 @@ Phase 80 should be refined from the Phase 1 / skill connectivity work rather tha
 
 ## Acceptance direction
 
-Acceptance criteria are to be frozen when concrete extension candidates are selected from operational evidence. At minimum, all selected extensions must preserve Phase 77 semantics and existing sm-workflow executable specifications.
+Acceptance criteria are to be frozen when concrete extension candidates are selected from operational evidence. At minimum, all selected extensions must preserve Phase 77-sequence semantics and existing sm-workflow executable specifications.
 
 ## Non-goals
 
-- Reimplementing Phase 77.
+- Reimplementing the Phase 77 sequence.
 - Blocking sm-workflow Phase 1.
 - Creating a second Workflow DSL or Workflow-specific parallel StateMachine runtime.
 - Semantic protocol-mode switches.

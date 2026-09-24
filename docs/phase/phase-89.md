@@ -5,7 +5,7 @@ execution_priority=deferred_until_sm_workflow_vertical_slice
 entry_condition=concrete_consumer_requirement
 planned_at=2026-09-21
 producer=[Cozy Phase 66](https://github.com/asami/cozy/blob/main/docs/phase/phase-66.md)
-runtime_baseline=[Phase 77](phase-77.md)
+runtime_baseline=[Phase 77.2](phase-77.2.md)
 checklist=[Phase 89 Checklist](phase-89-checklist.md)
 
 ## Purpose
@@ -27,8 +27,8 @@ Cozy Phase 66
              runtime projection
 ```
 
-This sequence is not on the Phase 64 -> Phase 64.2 -> Phase 77 ->
-`sm-workflow` Phase 1 critical path.
+This sequence is not on the Phase 64 -> Phase 64.2 -> Phase 77 -> Phase 77.1
+-> Phase 77.2 -> `sm-workflow` Phase 1 critical path.
 
 ## Entry condition
 
@@ -92,10 +92,11 @@ admission and runtime projection, not CML syntax or producer reconstruction.
 
 ## Non-goals
 
-- Blocking or reopening Phase 64, Phase 77, or `sm-workflow` Phase 1.
+- Blocking or reopening Phase 64, the Phase 77 -> 77.1 -> 77.2 sequence, or
+  `sm-workflow` Phase 1.
 - Parsing CML inside CNCF.
 - Defining Cozy syntax, IR, generator behavior, or producer diagnostics.
-- Reimplementing the Phase 77 Workflow API/SPI, Provider, Continuation, or
+- Reimplementing the Phase 77-sequence Workflow API/SPI, Provider, Continuation, or
   persistence runtime.
 - Retry, timeout, scheduling, compensation, recovery, orchestration, REST,
   MCP, UI, or Flutter expansion.
@@ -113,6 +114,6 @@ consumer handoff. No completion is implied by Phase 64 documentation alone.
 
 - [Phase 89 Checklist](phase-89-checklist.md)
 - [Phase 64 minimum/future split](phase-64.md)
-- [Phase 77 runtime baseline](phase-77.md)
+- [Phase 77.2 runtime baseline](phase-77.2.md)
 - [Phase 64 generalized-artifact deferral decision](../journal/2026/09/2026-09-21-phase-64-generalized-artifact-deferral.md)
 - [Future Cozy Phase 66 producer](https://github.com/asami/cozy/blob/main/docs/phase/phase-66.md)

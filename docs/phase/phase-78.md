@@ -4,7 +4,7 @@ status=planned
 planned_at=2026-09-16
 reconciled_at=2026-09-18
 development_item=DEV-011
-predecessor=[Phase 77](phase-77.md)
+predecessor=[Phase 77.2](phase-77.2.md)
 checklist=[Phase 78 Checklist](phase-78-checklist.md)
 
 ## Purpose

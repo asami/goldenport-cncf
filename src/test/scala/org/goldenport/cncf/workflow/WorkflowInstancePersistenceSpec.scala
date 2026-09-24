@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 21, 2026
- * @version Sep. 21, 2026
+ * @version Sep. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowInstancePersistenceSpec
@@ -48,6 +48,7 @@ final class WorkflowInstancePersistenceSpec
   )
 
   private val _e6 = afterWord("in spec:workflow-instance-persistence, example:E6, rules:CWF-77-03, phase:77, slice:77-S1B")
+  private val _e7 = afterWord("in spec:workflow-instance-atomic-transition-v1, example:E7, rules:CWF-77-06C, phase:77.1, slice:77.1-06C1")
 
   "Workflow instance persistence SPI" should {
     "E1 bind only admitted generated ABI provenance into the independent SPI family" must _e1 {
@@ -212,6 +213,73 @@ final class WorkflowInstancePersistenceSpec
         admission.data("generated-code") shouldBe GeneratedWorkflowAbi.DiagnosticCode.UnsupportedWorkflowRevision.value
         forgedDiagnostic.code shouldBe DiagnosticCode.InvalidDefinitionIdentity
         forgedRecordDiagnostic.code shouldBe DiagnosticCode.InvalidDefinitionIdentity
+      }
+    }
+
+    "E7 admit only a versioned, correlated suspension intent" must _e7 {
+      "derive the next WorkflowInstance record and reject foreign, claimed, or stale Continuations" in {
+        Given("an admitted current instance, a suspension history entry, and an available Continuation")
+        val binding = _take(WorkflowInstancePersistence.bindDefinitionC(_definition()))
+        val current = _initial_record(binding)
+        val boundary = SuspensionBoundary(
+          ContinuationIdentity("continuation-one"),
+          InstanceRevision(1L),
+          ContextSnapshotReference("snapshot-one"),
+          CompletionReference("completion-one"),
+          EvidenceReference("evidence-one"),
+          CorrelationReference("resume-one")
+        )
+        val entry = _active_entry("one").copy(suspension = Some(boundary))
+        val available = _continuation_record("continuation-one")
+        val intent = WorkflowInstanceAtomicTransitionV1.SuspensionIntent(
+          WorkflowInstanceAtomicTransitionV1.schemaVersion,
+          _same_store_configuration,
+          current,
+          current.revision,
+          entry,
+          available
+        )
+
+        When("the pure versioned boundary admits the matched intent")
+        val admitted = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent)
+
+        Then("only immutable next-state facts are derived")
+        admitted.toOption.map(_.next.revision) shouldBe Some(InstanceRevision(1L))
+        admitted.toOption.flatMap(_.next.suspension) shouldBe Some(boundary)
+        admitted.toOption.map(_.continuation) shouldBe Some(available)
+
+        When("the schema, suspension, Continuation identity, claim state, or expected revision is incompatible")
+        val unsupported = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
+          intent.copy(schemaVersion = "unsupported")
+        )
+        val noSuspension = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
+          intent.copy(entry = _active_entry("one"))
+        )
+        val foreign = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
+          intent.copy(continuation = _continuation_record("foreign"))
+        )
+        val claimed = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
+          intent.copy(continuation = available.copy(
+            status = ContinuationRuntimePersistence.Status.Claimed,
+            claimId = Some("claim-one")
+          ))
+        )
+        val stale = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
+          intent.copy(expectedRevision = InstanceRevision(1L))
+        )
+
+        Then("each invalid intent fails before it can be staged")
+        Vector(unsupported, noSuspension, foreign, claimed, stale).forall(_.isFaillure) shouldBe true
+
+        When("the current split-commit UnitOfWork is asked to stage the same suspension")
+        val ordinaryUnitOfWork = new org.goldenport.cncf.unitofwork.UnitOfWork(
+          org.goldenport.cncf.context.ExecutionContext.create()
+        )
+        val staged = ordinaryUnitOfWork.stageAtomicSuspensionC(intent)
+
+        Then("it fails closed before staging any event or publishing a Continuation")
+        staged.isFaillure shouldBe true
+        ordinaryUnitOfWork.pendingEvents shouldBe empty
       }
     }
 

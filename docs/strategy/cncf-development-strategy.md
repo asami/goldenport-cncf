@@ -1814,7 +1814,8 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-007 | `docs/journal/2026/07/2026-07-31-phase-53-cs02c-catalog-handoff-and-selection-admission.md` | Generic capability-definition validation and external Metadata Factory contribution. | STRATEGY_ITEM | [9.50](#950-cml-componentstyle-executioncontext-and-capability-resolution) | CANDIDATE |
 | DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
 | DEV-009 | `docs/journal/2026/08/2026-08-19-conclusion-diagnostics-availability-kind-development-task.md` | Explicit availability-kind diagnostic keys for not-running, connection-refused, and unreachable conclusions. | STRATEGY_ITEM | [9.4](#94-metrics-and-observability) | CANDIDATE |
-| DEV-010 | User direction on 2026-09-16, refined on 2026-09-20 | Admit Cozy-generated CML `WORKFLOW` as a projection over the reusable StateMachine API/SPI runtime, with ComponentFactory provider construction, independent WorkflowInstance persistence, durable Continuation, and the minimum typed Workflow protocol/Skill-Codex JSON encoding for `sm-workflow`, without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md), after Cozy Phases 62.1-62.3 and CNCF Phases 64/64.2 | ADOPTED |
+| DEV-010 | User direction on 2026-09-16, refined on 2026-09-20 | Admit Cozy-generated CML `WORKFLOW` as a projection over the reusable StateMachine API/SPI runtime, with ComponentFactory provider construction, independent WorkflowInstance persistence, durable Continuation, and the minimum typed Workflow protocol/Skill-Codex JSON encoding for `sm-workflow`, without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md) -> [Phase 77.1](../phase/phase-77.1.md) -> [Phase 77.2](../phase/phase-77.2.md), after Cozy Phases 62.1-62.3 and CNCF Phases 64/64.2 | ADOPTED |
+| DEV-011 | User priority direction on 2026-09-24 | Defer the single durable transaction domain for EventStore, DataStore, WorkflowInstance, Continuation, and UnitOfWork until after a stable first `sm-workflow` vertical slice; use an explicitly loose post-commit baseline in the Phase 77 sequence. | NEW_PHASE | [Phase 92](../phase/phase-92.md), independent of Phases 89–91 and outside the first `sm-workflow` critical path | ADOPTED |
 
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
@@ -5192,40 +5193,44 @@ from unnecessary hash-based control inside ordinary application data flow.
 
 ### 9.64 StateMachine API/SPI Runtime and Skill-Driven Workflow
 
-Planned as [Phase 77](../phase/phase-77.md), after Cozy Phase 62.3 and the
-Phase 64 / 64.2 Composite StateMachine and UnitOfWork prerequisites. Phase
-64.2 is closed at a forced minimum baseline: its deterministic planning and
-recording foundation is accepted, while formal ABI admission, production
-interpreter alignment, and executable StateMachine/Composite/Workflow
-acceptance are explicit Phase 77 obligations rather than retroactive Phase
-64.2 claims.
+Planned as the serial [Phase 77](../phase/phase-77.md) ->
+[Phase 77.1](../phase/phase-77.1.md) -> [Phase 77.2](../phase/phase-77.2.md)
+sequence, after Cozy Phase 62.3 and the Phase 64 / 64.2 Composite StateMachine
+and UnitOfWork prerequisites. Phase 64.2 is closed at a forced minimum
+baseline: its deterministic planning and recording foundation is accepted,
+while formal ABI admission, production interpreter alignment, and executable
+StateMachine/Composite/Workflow acceptance are explicit Phase 77-sequence
+obligations rather than retroactive Phase 64.2 claims.
 
 - Cozy Phase 62 owns first-class CML `WORKFLOW` source/lowering; Phase 62.1
   owns generic StateMachine Provided API / Required SPI and ActionExecution;
   Phase 62.2 owns generated ABI/bootstrap metadata; Phase 62.3 owns the real
   producer fixture and CNCF handoff. CNCF does not parse CML or reconstruct
   Workflow meaning from names or status fields.
-- CNCF admits the generated definition and API/SPI metadata, discovers them
-  through ComponentFactory, and preserves Composite StateMachine, typed Action,
-  `ExecProgram`, and `UnitOfWorkOp` boundaries.
-- Required SPI is the protocol-independent typed operation contract. Provider
-  SPI is the ComponentFactory construction/implementation boundary.
-  `ActionExecution` reports `Completed`, `Suspended(Continuation)`, or `Failed`;
-  no Workflow-wide protocol mode or semantic `InvocationBinding` is introduced.
-- Continuation Protocol is the durable external execution path used after
-  suspension. Continuation SPI Projection is the IoC port that exposes a
-  persisted `ContinuationRequest` to an injected Skill/Human/UI/remote adapter
-  and accepts a typed `ContinuationResult` for fail-closed resume.
-- Suspension is persisted before external claim. Concrete delivery, claim/
+- Phase 77 admits the generated definition and API/SPI metadata, discovers them
+  through ComponentFactory, preserves Composite StateMachine boundaries, and
+  binds the generated ABI to its independent WorkflowInstance persistence SPI.
+  Entity-local StateMachine state remains entity-owned; a WorkflowInstance has
+  its own identity/revision/history and idempotent committed-transition and
+  Continuation-result correlation.
+- Phase 77.1 owns the protocol-independent typed Required SPI operation
+  contract and the ComponentFactory Provider construction/implementation
+  boundary. It lowers executable Actions through `ExecProgram` and
+  `UnitOfWorkOp`; `ActionExecution` reports `Completed`,
+  `Suspended(Continuation)`, or `Failed`, with no Workflow-wide protocol mode
+  or semantic `InvocationBinding`.
+- Phase 77.1 owns the durable Continuation Protocol and the Continuation SPI
+  Projection IoC port. Suspension is persisted before external claim, and a
+  typed `ContinuationResult` resumes fail closed. Concrete delivery, claim/
   lease, model selection, and host scheduling do not become StateMachine
   semantics and no external participant is invoked inside the persistence
-  transaction.
-- CNCF Phase 77 defines and binds the generated ABI to its independent
-  WorkflowInstance persistence SPI. Entity-local StateMachine state remains entity-owned; a
-  WorkflowInstance has its own identity/revision/history and idempotent
-  committed-transition and Continuation-result correlation.
-- Generic Skill Workflow Support projects the Continuation SPI without becoming
-  its source of truth. Phase 77 freezes the minimum typed
+  transaction. For the first `sm-workflow` slice, UnitOfWork commit followed
+  by Continuation persistence is explicitly loose rather than jointly atomic;
+  a failed or indeterminate post-commit write is an incomplete outcome, never
+  an atomic rollback or successful external publication.
+- Phase 77.2 owns Generic Skill Workflow Support's projection of that
+  Continuation SPI without making Skill its source of truth. It freezes the
+  minimum typed
   `WorkflowStartRequest`/`WorkflowStartResult`, `WorkflowHandle`, and closed
   `Continuation = WORK_ORDER | DECISION | WAIT | TERMINAL` model, with typed
   WorkResult/Evidence and application-owned payloads. Its Skill/Codex encoding
@@ -5243,12 +5248,22 @@ acceptance are explicit Phase 77 obligations rather than retroactive Phase
 - Broad Start/API expansion beyond this minimum, rich Presentation/UI,
   additional reasoning vocabulary, parent/child Workflow composition,
   orchestration, and REST/MCP/UI protocol surfaces are later-phase extensions.
-- This Phase neither adds BPMN/DAG, arbitrary scripting, raw callbacks, a
+- The Phase 77 sequence neither adds BPMN/DAG, arbitrary scripting, raw callbacks, a
   parallel Action algebra, a CNCF-local Workflow language, full assemble
   connection/transport, nor UI/Flutter generation.
+- The single durable transaction domain across EventStore, DataStore,
+  WorkflowInstance, Continuation, and UnitOfWork is deferred to
+  [Phase 92](../phase/phase-92.md). It is not an acceptance prerequisite for
+  Phase 77.1, Phase 77.2, or the first `sm-workflow` vertical slice.
 - Planning references:
   - [Phase 77](../phase/phase-77.md);
   - [Phase 77 Checklist](../phase/phase-77-checklist.md);
+  - [Phase 77.1](../phase/phase-77.1.md) and
+    [Phase 77.1 Checklist](../phase/phase-77.1-checklist.md);
+  - [Phase 77.2](../phase/phase-77.2.md) and
+    [Phase 77.2 Checklist](../phase/phase-77.2-checklist.md);
+  - [Phase 92](../phase/phase-92.md) and
+    [Phase 92 Checklist](../phase/phase-92-checklist.md);
   - [Phase 64](../phase/phase-64.md);
   - [Phase 64.2](../phase/phase-64.2.md); and
   - `asami/cozy/docs/phase/phase-62.md`;
@@ -5262,7 +5277,8 @@ Planned as [Phase 89](../phase/phase-89.md), paired with Cozy Phase 66 and
 deliberately outside the first `sm-workflow` vertical-slice critical path.
 
 - Phase 64 freezes the broad semantic direction but accepts only the released
-  Cozy Phase 62.3 Workflow subset needed by Phase 77 and `sm-workflow` Phase 1.
+  Cozy Phase 62.3 Workflow subset needed by the Phase 77 sequence and
+  `sm-workflow` Phase 1.
 - Cozy Phase 66 is the future producer of a generalized, versioned Composite
   StateMachine semantic artifact containing exact constituents/configuration,
   typed derivation rules and actions, version pins, provenance, deterministic
@@ -5275,10 +5291,28 @@ deliberately outside the first `sm-workflow` vertical-slice critical path.
 - Both Phases have an evidence-bound entry: the first `sm-workflow` vertical
   slice must be stable and a concrete consumer must identify missing semantic
   data and its use.
-- Phase 89 does not reopen Phase 64 or Phase 77 and does not reimplement the
+- Phase 89 does not reopen Phase 64 or the Phase 77 sequence and does not reimplement the
   Workflow API/SPI, Provider, Continuation, or persistence runtime.
 - Planning references:
   - [Phase 89](../phase/phase-89.md);
   - [Phase 89 Checklist](../phase/phase-89-checklist.md);
   - [Phase 64 generalized-artifact deferral](../journal/2026/09/2026-09-21-phase-64-generalized-artifact-deferral.md); and
   - `asami/cozy/docs/phase/phase-66.md`.
+
+### 9.66 Shared Workflow Transaction Domain
+
+Planned as [Phase 92](../phase/phase-92.md), independent of Phases 89–91 and
+deferred until the first `sm-workflow` vertical slice is stable. The Phase 77
+sequence deliberately uses a loose UnitOfWork-commit then Continuation-write
+boundary and never claims that WorkflowInstance, Continuation, EventStore,
+DataStore, and UnitOfWork effects share a commit.
+
+Phase 92 owns the versioned shared-domain capability, a durable backend,
+opt-in UnitOfWork enlistment, mixed-store rejection, and executable proof of
+prepare rejection, rollback, indeterminate commit, restart recovery, and
+post-commit claim visibility. The Phase 77 `create/load/append` SPI and Cozy
+producer ABI remain closed. The current atomic-transition prototypes are
+candidate code only, not accepted Phase 77.1/77.2 behavior.
+
+Planning references: [Phase 92](../phase/phase-92.md) and
+[Phase 92 Checklist](../phase/phase-92-checklist.md).

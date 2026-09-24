@@ -13,7 +13,7 @@ Extend the local atomic UnitOfWork foundation with advanced distributed transact
 - Phase 64.2 program planning/interpreter foundation.
 - May be refined using operational evidence from Workflow consumers.
 
-This Phase is not a prerequisite for CNCF Phase 77 or sm-workflow Phase 1.
+This Phase is not a prerequisite for the CNCF Phase 77 -> 77.1 -> 77.2 sequence or sm-workflow Phase 1.
 
 ## Scope
 
@@ -59,4 +59,4 @@ CNCF guarantees execution facts and durable escalation. It does not invent busin
 - automatic Saga synthesis;
 - compensation-of-compensation chains as a mandatory v1 feature;
 - owning application-specific recovery workflow;
-- blocking Phase 77 / sm-workflow Phase 1.
+- blocking the Phase 77 -> 77.1 -> 77.2 sequence / sm-workflow Phase 1.
