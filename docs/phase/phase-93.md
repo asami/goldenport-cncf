@@ -46,3 +46,11 @@ CNCF already implements `org.goldenport.cncf.event.EventBus` and related Event R
 The design in this document is therefore an **extension of the existing EventBus**, not the introduction of a parallel bus implementation. The term "Service Bus" may describe the architectural role, but the CNCF runtime API/model should evolve from the existing EventBus unless a later implementation need justifies a separate abstraction.
 
 Planned evolution includes replacing/generalizing the boolean persistence option with JournalPolicy semantics, Journal SPI providers (SQLite/PostgreSQL), correlation/causation, journal query/timeline, SUBSYSTEM/SYSTEM scope, external Transport SPI (future Kafka/Kinesis), and Dashboard/Control Center operational integration.
+
+## SQLite physical boundary
+
+- Default to one SQLite journal database per Subsystem, rather than one host-wide SQLite database.
+- Support hosts such as MacBook Air running around ten concurrent Subsystems without funneling all writers into one SQLite writer lock.
+- Use WAL/busy-timeout defaults appropriate for local concurrent access.
+- PostgreSQL may be physically shared across Subsystems but must preserve subsystemId/logical journal partitioning.
+- Keep Journal query/API semantics independent of the physical provider layout.
