@@ -22,7 +22,7 @@ import org.goldenport.cncf.blob.{
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
-import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest}
+import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 
 /*
@@ -51,6 +51,10 @@ object UnitOfWorkOp {
   // ------------------------------------------------------------
   final case class StateMachineProviderExecute(
     request: ProviderExecutionRequest
+  ) extends UnitOfWorkOp[ActionExecution]
+
+  final case class StateMachineProvidedApiExecute(
+    request: StateMachineProvidedApiRequest
   ) extends UnitOfWorkOp[ActionExecution]
 
   // ------------------------------------------------------------

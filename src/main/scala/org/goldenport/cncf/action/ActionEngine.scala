@@ -157,7 +157,7 @@ class ActionEngine(
                   ec.operationEvaluation.correlation.map(_.attemptId)
                 executed match {
                   case Consequence.Success(response) =>
-                    runtime.commitC(evaluationattemptid).map(_ => response)
+                    runtime.commitC(evaluationattemptid).flatMap(_ => call.afterCommitResponseC(response))
                   case Consequence.Failure(primary) =>
                     runtime.abortC(evaluationattemptid) match {
                       case Consequence.Success(_) => Consequence.Failure(primary)

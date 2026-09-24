@@ -31,7 +31,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.goldenport.cncf.workflow.WorkflowDefinition
-import org.goldenport.cncf.workflow.{ContinuationRuntimeSource, GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider, StateMachineProviderResolver, StateMachineProviderSource}
+import org.goldenport.cncf.workflow.{ContinuationRuntimeSource, ContinuationSpiAdapter, IssuedWorkOrderPersistence, GeneratedProvidedApiAbi, GeneratedProvidedApiMetadataProvider, GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider, StateMachineProvidedApiDispatcher, StateMachineProvidedApiProgramSource, StateMachineProviderResolver, StateMachineProviderSource}
 import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
 
@@ -68,6 +68,18 @@ final class ComponentFactory(
 
   def bootstrap(component: Component): Component =
     _or_raise(bootstrapC(component))
+
+  /** Bind an application-owned external result adapter to this Component's injected runtime. */
+  def bindContinuationSpiAdapterC[W, S, R](
+    component: Component,
+    issuedPersistence: IssuedWorkOrderPersistence[W],
+    adapter: ContinuationSpiAdapter[W, S, R]
+  ): Consequence[ContinuationSpiAdapter.Bound[W, S, R]] =
+    if (component == null || component.coreOption.isEmpty)
+      Consequence.configurationInvalid("Continuation SPI adapter requires a Component")
+    else ContinuationSpiAdapter.bindC(
+      component.componentId, component.continuationRuntime, issuedPersistence, adapter
+    )
 
   def bootstrapC(component: Component): Consequence[Component] =
     if (component.collectionsBootstrapped) {
@@ -138,6 +150,8 @@ final class ComponentFactory(
       else _entity_collection_names(component)
     for {
       _ <- _bootstrap_generated_workflow_metadata_c(component)
+      _ <- _bootstrap_generated_provided_api_metadata_c(component)
+      _ <- _bootstrap_state_machine_provided_api_dispatcher_c(component)
       _ <- _bootstrap_state_machine_provider_resolver_c(component)
       _ <- _bootstrap_continuation_runtime_c(component)
       _ <- _validate_entity_runtime_plan_names_c(component, rawplans)
@@ -648,6 +662,28 @@ final class ComponentFactory(
     }
   }
 
+  private def _bootstrap_generated_provided_api_metadata_c(
+    component: Component
+  ): Consequence[Unit] = {
+    val provider = component match {
+      case m: GeneratedProvidedApiMetadataProvider => Some(m)
+      case _ => component.factory.collect {
+        case m: GeneratedProvidedApiMetadataProvider => m
+      }
+    }
+    provider match {
+      case Some(m) =>
+        GeneratedProvidedApiAbi.admitC(
+          m.generatedProvidedApiDefinitions,
+          component.admittedGeneratedWorkflowMetadata
+        ).map { definitions =>
+          component.withAdmittedGeneratedProvidedApiMetadata(definitions)
+          ()
+        }
+      case None => Consequence.unit
+    }
+  }
+
   private def _bootstrap_state_machine_provider_resolver_c(
     component: Component
   ): Consequence[Unit] = {
@@ -668,6 +704,25 @@ final class ComponentFactory(
         }
       case None =>
         Consequence.unit
+    }
+  }
+
+  private def _bootstrap_state_machine_provided_api_dispatcher_c(
+    component: Component
+  ): Consequence[Unit] = {
+    val source = component match {
+      case m: StateMachineProvidedApiProgramSource => Some(m)
+      case _ => component.factory.collect {
+        case m: StateMachineProvidedApiProgramSource => m
+      }
+    }
+    StateMachineProvidedApiDispatcher.createC(
+      component.admittedGeneratedProvidedApiMetadata,
+      component.admittedGeneratedWorkflowMetadata,
+      source.toVector.flatMap(_.stateMachineProvidedApiPrograms)
+    ).map { dispatcher =>
+      component.withStateMachineProvidedApiDispatcher(dispatcher)
+      ()
     }
   }
 

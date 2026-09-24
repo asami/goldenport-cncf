@@ -1,8 +1,12 @@
 package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.workflow.{CompletionContract, ContextBundle, ContextReference, ContextSnapshot, ContinuationIdentity, EvidenceContract, StateMachineOperationIdentity, StateMachineRequiredOperationIdentity, StateMachineResultTypeReference, StateMachineRevision, StateMachineRunIdentity}
 import org.goldenport.cncf.workflow.CandidateAdmissionProducerAbi
-import org.goldenport.cncf.workflow.CandidateAdmissionProducerAbi.{AdmittedJudgmentResult, AlternativeIdentity, Evidence, EvidenceFreshness, EvidenceProvenance, EvidenceScope, JudgmentActionIdentity, JudgmentResult, Rationale}
+import org.goldenport.cncf.workflow.CandidateAdmissionProducerAbi.{AdmittedJudgmentResult, AlternativeIdentity, Evidence, EvidenceFreshness, EvidenceProvenance, EvidenceScope, JudgmentActionIdentity, JudgmentResult, Rationale, TypeIdentity, TypedJudgmentResultV1}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, WorkflowDefinitionIdentity, WorkflowDefinitionRevision}
+import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -55,6 +59,106 @@ final class CandidateAdmissionRouterSpec
       val routed = CandidateAdmissionRouter.routeC(result, routes)
       Then("the router reports the stable MissingTarget diagnostic")
       _diagnostic(routed).code shouldBe DiagnosticCode.MissingTarget
+    }
+
+    "route an admitted typed result without letting its worker choose the target" in {
+      Given("a typed result admitted against the declared Operation result type")
+      val artifact = _success(CandidateAdmissionProducerAbi.parseC(_fixture))
+      val base = JudgmentResult(
+        JudgmentActionIdentity("judge-payment"), AlternativeIdentity("approve"),
+        Rationale("decision-rationale"), Evidence("payment-evidence"),
+        EvidenceScope("order"), EvidenceFreshness("current"), EvidenceProvenance("payment-ledger")
+      )
+      val result = _success(CandidateAdmissionProducerAbi.admitTypedJudgmentResultC(
+        artifact,
+        TypedJudgmentResultV1(CandidateAdmissionProducerAbi.acceptedTypedJudgmentResultSchemaVersion,
+          base, TypeIdentity("PaymentResult"), ContextReference("payment-result", "1"))
+      ))
+      val target = CmlStateMachineTransitionTarget.State(_approved)
+      val routes = Vector(Route(JudgmentActionIdentity("judge-payment"), AlternativeIdentity("approve"), target))
+
+      When("the StateMachine routes the admitted decision")
+      _success(CandidateAdmissionRouter.routeTypedC(result, routes)) shouldBe target
+    }
+
+    "admit a separate-turn JudgmentResult against the issued WorkOrder before routing" in {
+      val artifact = _success(CandidateAdmissionProducerAbi.parseC(_fixture))
+      val handle = WorkflowHandle(
+        ComponentId("org.goldenport.cncf.test.OrderComponent"), WorkflowDefinitionIdentity("OrderProgress"),
+        WorkflowDefinitionRevision("workflow-v1"), InstanceIdentity("order-1")
+      )
+      val run = StateMachineRunIdentity("order-run")
+      val continuation = ContinuationIdentity("payment-review")
+      val revision = StateMachineRevision("1")
+      val context = ContextBundle("payment", Vector.empty, Vector.empty, ContextSnapshot("payment-v1"))
+      val request = ContinuationRequest[String](
+        run, continuation, revision, StateMachineRequiredOperationIdentity("capture-payment-capability"),
+        StateMachineOperationIdentity("OrderService", "capturePayment"), None,
+        Some(StateMachineResultTypeReference("PaymentResult")), context,
+        CompletionContract("payment-completion", Vector.empty),
+        EvidenceContract("payment-evidence", Vector.empty),
+        StateMachineOperationIdentity("OrderService", "submitPaymentReview")
+      )
+      val issued = WorkflowInteraction[String, Nothing](
+        handle, WorkflowContinuation.WorkOrder(
+          request,
+          ExecutionRequirement(Vector.empty, RiskLevel("standard"), ReasoningLevel.Standard, true),
+          MinimalPresentation("Review payment", "Waiting for judgment")
+        )
+      )
+      val base = JudgmentResult(
+        JudgmentActionIdentity("judge-payment"), AlternativeIdentity("approve"),
+        Rationale("decision-rationale"), Evidence("payment-evidence"),
+        EvidenceScope("order"), EvidenceFreshness("current"), EvidenceProvenance("payment-ledger")
+      )
+      val typed = TypedJudgmentResultV1(
+        CandidateAdmissionProducerAbi.acceptedTypedJudgmentResultSchemaVersion,
+        base, TypeIdentity("PaymentResult"), ContextReference("payment-result", "1")
+      )
+      val submitted = ContinuationResult(
+        handle, run, continuation, revision, context.snapshot,
+        TypedValue("PaymentResult", typed), ContextReference("payment-result", "1"),
+        Vector.empty, ExecutionEvidence(Vector.empty)
+      )
+      val approved = CmlStateMachineTransitionTarget.State(_approved)
+      val rejected = CmlStateMachineTransitionTarget.State(_rejected)
+      val routes = Vector(
+        Route(JudgmentActionIdentity("judge-payment"), AlternativeIdentity("approve"), approved),
+        Route(JudgmentActionIdentity("judge-payment"), AlternativeIdentity("reject"), rejected)
+      )
+
+      _success(routeSubmittedC(artifact, issued, submitted, routes)) shouldBe approved
+      val rejectedResult = submitted.copy(result = TypedValue("PaymentResult", typed.copy(
+        result = base.copy(selectedAlternative = AlternativeIdentity("reject"))
+      )))
+      _success(routeSubmittedC(artifact, issued, rejectedResult, routes)) shouldBe rejected
+      routeSubmittedC(artifact, issued, submitted.copy(
+        result = TypedValue("WrongResult", typed)
+      ), routes) shouldBe a[Consequence.Failure[_]]
+      routeSubmittedC(artifact, issued, submitted.copy(
+        result = TypedValue("PaymentResult", typed.copy(payloadType = TypeIdentity("WrongResult")))
+      ), routes) shouldBe a[Consequence.Failure[_]]
+      routeSubmittedC(artifact, issued, submitted.copy(
+        result = TypedValue("PaymentResult", typed.copy(
+          result = base.copy(selectedAlternative = AlternativeIdentity("unknown"))
+        ))
+      ), routes) shouldBe a[Consequence.Failure[_]]
+      routeSubmittedC(artifact, issued, submitted.copy(
+        handle = handle.copy(instanceIdentity = InstanceIdentity("another-order"))
+      ), routes) shouldBe a[Consequence.Failure[_]]
+      routeSubmittedC(artifact, issued, submitted.copy(
+        resultReference = ContextReference("different-result", "1")
+      ), routes) shouldBe a[Consequence.Failure[_]]
+      val foreignHandle = handle.copy(workflowIdentity = WorkflowDefinitionIdentity("OtherWorkflow"))
+      routeSubmittedC(artifact, issued.copy(handle = foreignHandle),
+        submitted.copy(handle = foreignHandle), routes) shouldBe a[Consequence.Failure[_]]
+      val work = issued.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
+      routeSubmittedC(artifact, issued.copy(current = work.copy(request = work.request.copy(
+        operation = StateMachineOperationIdentity("OrderService", "otherOperation")
+      ))), submitted, routes) shouldBe a[Consequence.Failure[_]]
+      routeSubmittedC(artifact, issued.copy(current = work.copy(request = work.request.copy(
+        requiredOperation = StateMachineRequiredOperationIdentity("other-capability")
+      ))), submitted, routes) shouldBe a[Consequence.Failure[_]]
     }
   }
 

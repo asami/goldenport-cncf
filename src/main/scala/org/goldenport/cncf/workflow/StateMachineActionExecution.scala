@@ -1,5 +1,7 @@
 package org.goldenport.cncf.workflow
 
+import org.goldenport.cncf.unitofwork.ExecUowM
+
 /*
  * Provider-neutral StateMachine action outcome values.
  *
@@ -110,6 +112,29 @@ final case class ProviderExecutionRequest(
 trait StateMachineProvider {
   def identity: ProviderIdentity
   def execute(request: ProviderExecutionRequest): ActionExecution
+}
+
+/** Opt-in contract for a direct Provider that performs no external work.
+  * Effectful implementations must instead supply a UnitOfWork program.
+  */
+trait StateMachineDeterministicProvider extends StateMachineProvider
+
+/**
+ * An effectful Provider supplies typed UnitOfWork intent. The interpreter
+ * evaluates this program in the active UnitOfWork; direct invocation is a
+ * fail-closed compatibility outcome, not an alternate execution route.
+ */
+trait StateMachineProgramProvider extends StateMachineProvider {
+  def program(request: ProviderExecutionRequest): ExecUowM[ActionExecution]
+
+  final override def execute(request: ProviderExecutionRequest): ActionExecution =
+    ActionExecution.Failed(
+      StateMachineOperationFailure(
+        "cncf.provider.requires-unitofwork",
+        "StateMachine program Provider requires UnitOfWork interpretation",
+        Vector.empty
+      )
+    )
 }
 
 final case class StateMachineRunIdentity(value: String)

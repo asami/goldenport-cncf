@@ -318,6 +318,9 @@ class UnitOfWork(
   def stagePostCommitC(callback: => Consequence[Unit]): Unit =
     _stage_post_commit_with_transaction_c(_ => callback)
 
+  def stagePostAbortC(callback: => Consequence[Unit]): Unit =
+    _post_abort_callbacks = _post_abort_callbacks :+ (_ => callback)
+
   private def _stage_post_commit_with_transaction_c(
     callback: TransactionContext.TransactionContextId => Consequence[Unit]
   ): Unit =

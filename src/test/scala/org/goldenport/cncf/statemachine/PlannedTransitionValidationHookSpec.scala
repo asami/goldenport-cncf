@@ -9,7 +9,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.cncf.event.{CommittedTransition, EventEngine, EventLane, EventStore, TransitionLifecycleEvent, TransitionLifecycleFailureOutcome, TransitionLifecycleFailureStage, TransitionLifecycleKind}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkOp}
-import org.goldenport.cncf.workflow.{ActionExecution, ContextReference, StateMachineOperationFailure, StateMachineOperationResult, StateMachineResultTypeReference}
+import org.goldenport.cncf.workflow.{ActionExecution, CompletionContract, ContextBundle, ContextContract, ContextReference, ContextSnapshot, Continuation, ContinuationIdentity, EvidenceContract, StateMachineOperationFailure, StateMachineOperationIdentity, StateMachineOperationResult, StateMachineRequiredOperation, StateMachineRequiredOperationIdentity, StateMachineRequiredOperationMetadata, StateMachineResultTypeReference, StateMachineRevision, StateMachineRunIdentity}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -181,6 +181,30 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       lifecycle.map(_.kind) shouldBe Vector(
         TransitionLifecycleKind.BeforeTransition
       )
+      summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
+        case e: CommittedTransition => e
+      } shouldBe empty
+    }
+
+    "reject suspension at the update hook until durable continuation persistence is available" in {
+      Given("a planned update whose Required SPI action returns a typed suspension")
+      given ExecutionContext = ExecutionContext.create()
+      given EntityPersistent[_Person] = _person_persistent
+      val hook = new PlannedTransitionValidationHook(new ProviderWithOutcomePlan(_suspended_program))
+      val entity = _Person(
+        org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_suspended", _cid, entropy = "hook_suspended"),
+        "hanako"
+      )
+
+      When("the update hook interprets the plan without an atomic persistence boundary")
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+
+      Then("the update fails before a successful transition can be staged")
+      result shouldBe a[Consequence.Failure[_]]
+      result.display should include ("durable continuation persistence")
+      summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
+        case e: TransitionLifecycleEvent => e.kind
+      } shouldBe Vector(TransitionLifecycleKind.BeforeTransition)
       summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
         case e: CommittedTransition => e
       } shouldBe empty
@@ -430,6 +454,31 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
     )
 
+  private def _suspended_program: ExecUowM[ActionExecution] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], ActionExecution](
+      ActionExecution.Suspended(
+        Continuation(
+          StateMachineRunIdentity("run-hook"),
+          ContinuationIdentity("continuation-hook"),
+          StateMachineRevision("1"),
+          StateMachineRequiredOperation(
+            StateMachineRequiredOperationIdentity("hook.required"),
+            "hook.action",
+            StateMachineOperationIdentity("hook", "required"),
+            None,
+            None,
+            StateMachineRequiredOperationMetadata(
+              ContextContract("hook.context", Vector.empty, Vector.empty),
+              CompletionContract("hook.completion", Vector.empty),
+              EvidenceContract("hook.evidence", Vector.empty),
+              Vector.empty
+            )
+          ),
+          ContextBundle("hook context", Vector.empty, Vector.empty, ContextSnapshot("1"))
+        )
+      )
+    )
+
   private val _binding: CmlTransitionBinding = {
     val machine = CmlStateMachineIdentity("person-lifecycle")
     val source = CmlStateMachineStateIdentity(
@@ -618,6 +667,44 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
           )
         )
       )
+    }
+
+    def planForUpdateById[P](
+      id: EntityId,
+      patch: P,
+      tc: EntityPersistentUpdate[P],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[(EntityId, P), TransitionEvent]]] = {
+      val _ = (id, patch, tc, event)
+      Consequence.success(None)
+    }
+  }
+
+  private final class ProviderWithOutcomePlan(
+    outcome: ExecUowM[ActionExecution]
+  ) extends StateMachinePlannerProvider {
+    def planForSave[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(None)
+    }
+
+    def planForUpdate[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      val action = new ResolvedAction[T, TransitionEvent] {
+        def program(state: T, event: TransitionEvent): ExecUowM[ActionExecution] = {
+          val _ = (state, event)
+          outcome
+        }
+      }
+      Consequence.success(Some(ExecutionPlan(Vector.empty, Vector(action), Vector.empty)))
     }
 
     def planForUpdateById[P](

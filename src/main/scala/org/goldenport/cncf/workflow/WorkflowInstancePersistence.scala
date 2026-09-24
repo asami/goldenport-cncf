@@ -63,7 +63,8 @@ object WorkflowInstancePersistence {
     val bootstrapAbiIdentity: BootstrapAbiIdentity,
     val producerRevision: ProducerRevision,
     val fixtureSha256: FixtureSha256,
-    private[workflow] val admittedDefinition: GeneratedWorkflowAbi.Definition
+    private[workflow] val admittedDefinition: GeneratedWorkflowAbi.Definition,
+    private[workflow] val admittedCandidateDefinition: Option[CandidateWorkflowAbi.Definition] = None
   ) {
     def validateC: Consequence[DefinitionBinding] =
       WorkflowInstancePersistence.validateC(this)
@@ -300,9 +301,38 @@ object WorkflowInstancePersistence {
       )
       }
 
+  /** Binds the separately admitted Cozy Candidate-Admission workflow and sidecar. */
+  def bindCandidateDefinitionC(
+    definition: CandidateWorkflowAbi.Definition
+  ): Consequence[DefinitionBinding] =
+    CandidateWorkflowAbi.admitC(definition).map { accepted =>
+      new DefinitionBinding(
+        workflowIdentity = WorkflowDefinitionIdentity(accepted.workflow.identity),
+        workflowRevision = WorkflowDefinitionRevision(accepted.workflow.version),
+        sourceCorrelation = SourceCorrelation(
+          SourceLocation(accepted.sourceResource, accepted.workflow.rootLine),
+          SourceLocation(accepted.sourceResource, accepted.workflow.definitionLine)
+        ),
+        producerAbiIdentity = ProducerAbiIdentity(accepted.sidecar.schemaVersion),
+        workflowAbiIdentity = WorkflowAbiIdentity(CandidateWorkflowAbi.schemaVersion),
+        bootstrapAbiIdentity = BootstrapAbiIdentity("not-applicable"),
+        producerRevision = ProducerRevision(accepted.sidecar.generator.schemaVersion),
+        fixtureSha256 = FixtureSha256(accepted.sha256),
+        admittedDefinition = null,
+        admittedCandidateDefinition = Some(accepted)
+      )
+    }
+
   def validateC(binding: DefinitionBinding): Consequence[DefinitionBinding] =
     if (binding == null)
       _failure_c(Diagnostic(DiagnosticCode.MissingAbiProvenance, Map("kind" -> "definition-binding")))
+    else if (binding.admittedCandidateDefinition.nonEmpty)
+      CandidateWorkflowAbi.admitC(binding.admittedCandidateDefinition.get).flatMap { admitted =>
+        _binding_diagnostic(binding).orElse(_candidate_binding_consistency_diagnostic(binding, admitted)) match {
+          case Some(diagnostic) => _failure_c(diagnostic)
+          case None => Consequence.success(binding)
+        }
+      }
     else
       _admit_definition_c(binding.admittedDefinition).flatMap { admitted =>
         _binding_diagnostic(binding).orElse(_binding_consistency_diagnostic(binding, admitted)) match {
@@ -396,6 +426,41 @@ object WorkflowInstancePersistence {
     }
   }
 
+  private def _candidate_binding_consistency_diagnostic(
+    binding: DefinitionBinding,
+    admitted: CandidateWorkflowAbi.Definition
+  ): Option[Diagnostic] = {
+    val expectedSource = SourceCorrelation(
+      SourceLocation(admitted.sourceResource, admitted.workflow.rootLine),
+      SourceLocation(admitted.sourceResource, admitted.workflow.definitionLine)
+    )
+    if (binding.admittedDefinition != null ||
+        binding.workflowIdentity != WorkflowDefinitionIdentity(admitted.workflow.identity) ||
+        binding.workflowRevision != WorkflowDefinitionRevision(admitted.workflow.version) ||
+        binding.sourceCorrelation != expectedSource)
+      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map("kind" -> "candidate-workflow")))
+    else {
+      val expected = Vector(
+        "producer-abi" -> admitted.sidecar.schemaVersion,
+        "workflow-abi" -> CandidateWorkflowAbi.schemaVersion,
+        "bootstrap-abi" -> "not-applicable",
+        "producer-revision" -> admitted.sidecar.generator.schemaVersion,
+        "fixture-sha256" -> admitted.sha256
+      )
+      val actual = Vector(
+        "producer-abi" -> _value(binding.producerAbiIdentity),
+        "workflow-abi" -> _value(binding.workflowAbiIdentity),
+        "bootstrap-abi" -> _value(binding.bootstrapAbiIdentity),
+        "producer-revision" -> _value(binding.producerRevision),
+        "fixture-sha256" -> _value(binding.fixtureSha256)
+      )
+      actual.zip(expected).collectFirst { case ((kind, value), (_, required)) if value != required =>
+        Diagnostic(DiagnosticCode.UnsupportedAbiProvenance,
+          Map("kind" -> kind, "actual" -> value, "expected" -> required))
+      }
+    }
+  }
+
   private def _binding_diagnostic(binding: DefinitionBinding): Option[Diagnostic] =
     if (binding == null)
       Some(Diagnostic(DiagnosticCode.MissingAbiProvenance, Map("kind" -> "definition-binding")))
@@ -423,7 +488,13 @@ object WorkflowInstancePersistence {
             "workflow" -> _definition_identity_value(binding.workflowIdentity)
           ))
       }.orElse {
-        val expected = Vector(
+        val expected = if (binding.admittedCandidateDefinition.nonEmpty) Vector(
+          "producer-abi" -> CandidateAdmissionProducerAbi.acceptedSchemaVersion,
+          "workflow-abi" -> CandidateWorkflowAbi.schemaVersion,
+          "bootstrap-abi" -> "not-applicable",
+          "producer-revision" -> CandidateAdmissionProducerAbi.acceptedSchemaVersion,
+          "fixture-sha256" -> binding.admittedCandidateDefinition.get.sha256
+        ) else Vector(
           "producer-abi" -> GeneratedWorkflowAbi.acceptedProducerAbiIdentity.value,
           "workflow-abi" -> GeneratedWorkflowAbi.acceptedWorkflowAbiIdentity.value,
           "bootstrap-abi" -> GeneratedWorkflowAbi.acceptedBootstrapSchemaIdentity.value,

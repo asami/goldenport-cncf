@@ -198,6 +198,59 @@ final class CandidateAdmissionProducerAbiSpec
       _diagnostic(unknownalternativeresult).code shouldBe DiagnosticCode.UnknownJudgmentAlternative
       _diagnostic(incompleteadmission).code shouldBe DiagnosticCode.IncompleteJudgmentResult
     }
+
+    "admit a versioned typed JudgmentResult only at the declared Operation result type" in {
+      Given("the accepted Cozy sidecar and a CNCF-owned typed result wrapper")
+      val artifact = _artifact
+      val typed = TypedJudgmentResultV1(
+        acceptedTypedJudgmentResultSchemaVersion,
+        _result(),
+        TypeIdentity("PaymentResult"),
+        ContextReference("payment-result", "1")
+      )
+
+      When("the result is admitted without interpreting expectedResult prose as a type")
+      val admitted = _success(CandidateAdmissionProducerAbi.admitTypedJudgmentResultC(artifact, typed))
+
+      Then("its declared alternative and payload reference remain typed")
+      admitted.result.selectedAlternative shouldBe AlternativeIdentity("approve")
+      admitted.payloadType shouldBe TypeIdentity("PaymentResult")
+      admitted.payload shouldBe ContextReference("payment-result", "1")
+    }
+
+    "reject an incompatible or missing typed JudgmentResult payload" in {
+      Given("a declared PaymentResult Operation result type")
+      val artifact = _artifact
+      val valid = TypedJudgmentResultV1(
+        acceptedTypedJudgmentResultSchemaVersion,
+        _result(), TypeIdentity("PaymentResult"), ContextReference("payment-result", "1")
+      )
+
+      When("schema, type, payload reference, or declared result type is absent")
+      val badSchema = CandidateAdmissionProducerAbi.admitTypedJudgmentResultC(
+        artifact, valid.copy(schemaVersion = "cncf.candidate-admission-judgment-result.v2")
+      )
+      val badType = CandidateAdmissionProducerAbi.admitTypedJudgmentResultC(
+        artifact, valid.copy(payloadType = TypeIdentity("OtherResult"))
+      )
+      val badPayload = CandidateAdmissionProducerAbi.admitTypedJudgmentResultC(
+        artifact, valid.copy(payload = ContextReference("", "1"))
+      )
+      val model = artifact.models.head
+      val noDeclaredType = CandidateAdmissionProducerAbi.admitTypedJudgmentResultC(
+        artifact.copy(models = Vector(model.copy(
+          judgments = model.judgments.map(j => j.copy(operation = j.operation.copy(resultType = None))),
+          admissions = model.admissions.map(a => a.copy(operation = a.operation.copy(resultType = None))),
+          requiredSpi = model.requiredSpi.map(s => s.copy(operation = s.operation.copy(resultType = None)))
+        ))), valid
+      )
+
+      Then("each mismatch fails closed before StateMachine routing")
+      _diagnostic(badSchema).code shouldBe DiagnosticCode.UnsupportedTypedJudgmentResultSchema
+      _diagnostic(badType).code shouldBe DiagnosticCode.IncompatibleJudgmentPayloadType
+      _diagnostic(badPayload).code shouldBe DiagnosticCode.IncompleteJudgmentPayload
+      _diagnostic(noDeclaredType).code shouldBe DiagnosticCode.MissingDeclaredJudgmentPayloadType
+    }
   }
 
   private def _artifact: Artifact = _success(CandidateAdmissionProducerAbi.parseC(_fixture))

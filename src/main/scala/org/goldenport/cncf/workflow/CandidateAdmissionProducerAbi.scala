@@ -133,6 +133,20 @@ object CandidateAdmissionProducerAbi {
     def selectedAlternative: AlternativeIdentity = value.selectedAlternative
   }
 
+  /** CNCF-owned typed result wrapper; the frozen Cozy sidecar is unchanged. */
+  final case class TypedJudgmentResultV1(
+    schemaVersion: String,
+    result: JudgmentResult,
+    payloadType: TypeIdentity,
+    payload: ContextReference
+  )
+
+  final case class AdmittedTypedJudgmentResultV1 private[workflow] (
+    result: AdmittedJudgmentResult,
+    payloadType: TypeIdentity,
+    payload: ContextReference
+  )
+
   enum DiagnosticCode(val value: String) {
     case InvalidJson extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-001")
     case InvalidShape extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-002")
@@ -154,6 +168,10 @@ object CandidateAdmissionProducerAbi {
     case UnknownJudgmentResult extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-018")
     case UnknownJudgmentAlternative extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-019")
     case IncompleteJudgmentResult extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-020")
+    case UnsupportedTypedJudgmentResultSchema extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-021")
+    case MissingDeclaredJudgmentPayloadType extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-022")
+    case IncompatibleJudgmentPayloadType extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-023")
+    case IncompleteJudgmentPayload extends DiagnosticCode("CWF77-CANDIDATE-ADMISSION-RECEIVER-024")
   }
 
   final case class Diagnostic(code: DiagnosticCode, data: Map[String, String]) {
@@ -168,6 +186,8 @@ object CandidateAdmissionProducerAbi {
   val acceptedSchemaVersion: String = "cozy.cml.candidate-admission-producer-abi.v1"
   val acceptedGeneratorIdentity: String =
     "cozy.modeler.CandidateAdmissionProducerAbiGenerator"
+  val acceptedTypedJudgmentResultSchemaVersion: String =
+    "cncf.candidate-admission-judgment-result.v1"
 
   /** Parses and admits exactly the frozen Cozy producer sidecar schema. */
   def parseC(text: String): Consequence[Artifact] =
@@ -195,6 +215,46 @@ object CandidateAdmissionProducerAbi {
       case Consequence.Failure(conclusion) =>
         Consequence.Failure(conclusion)
     }
+
+  /** Uses the declared Operation result type, never expectedResult prose, as authority. */
+  def admitTypedJudgmentResultC(
+    artifact: Artifact,
+    typed: TypedJudgmentResultV1
+  ): Consequence[AdmittedTypedJudgmentResultV1] =
+    if (typed == null || typed.schemaVersion != acceptedTypedJudgmentResultSchemaVersion)
+      _failure(Diagnostic(
+        DiagnosticCode.UnsupportedTypedJudgmentResultSchema,
+        Map("actual" -> Option(typed).map(_.schemaVersion).getOrElse(""))
+      ))
+    else
+      admitJudgmentResultC(artifact, typed.result).flatMap { admitted =>
+        val declared = artifact.models.iterator
+          .flatMap(_.judgments.iterator)
+          .find(_.identity == admitted.judgment)
+          .flatMap(_.operation.resultType)
+        declared match {
+          case None =>
+            _failure(Diagnostic(
+              DiagnosticCode.MissingDeclaredJudgmentPayloadType,
+              Map("judgment" -> admitted.judgment.value)
+            ))
+          case Some(expected) if typed.payloadType != expected =>
+            _failure(Diagnostic(
+              DiagnosticCode.IncompatibleJudgmentPayloadType,
+              Map("judgment" -> admitted.judgment.value, "expected" -> expected.value,
+                "actual" -> Option(typed.payloadType).map(_.value).getOrElse(""))
+            ))
+          case Some(_) if typed.payload == null ||
+              typed.payload.identity == null || typed.payload.identity.trim.isEmpty ||
+              typed.payload.revision == null || typed.payload.revision.trim.isEmpty =>
+            _failure(Diagnostic(
+              DiagnosticCode.IncompleteJudgmentPayload,
+              Map("judgment" -> admitted.judgment.value)
+            ))
+          case Some(_) =>
+            Consequence.success(AdmittedTypedJudgmentResultV1(admitted, typed.payloadType, typed.payload))
+        }
+      }
 
   private def _artifact_diagnostic(value: Artifact): Option[Diagnostic] =
     if (value.schemaVersion != acceptedSchemaVersion)

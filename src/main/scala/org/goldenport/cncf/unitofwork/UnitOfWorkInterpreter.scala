@@ -3,6 +3,7 @@ package org.goldenport.cncf.unitofwork
 import java.nio.file.{Files, Path, Paths}
 import cats.free.Free
 import cats.~>
+import scala.util.DynamicVariable
 import scala.util.control.NonFatal
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
@@ -27,6 +28,7 @@ import org.goldenport.cncf.observability.{
 }
 import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
+import org.goldenport.cncf.workflow.{ActionExecution, Continuation, ProviderExecutionRequest, ProviderIdentity, StateMachineDeterministicProvider, StateMachineProgramProvider, StateMachineProvider, StateMachineProvidedApiDispatcher, StateMachineProvidedApiRequest}
 import org.goldenport.cncf.security.{EntityAccessMode, OperationAccessPolicy}
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.processexecution.{
@@ -59,6 +61,18 @@ import org.simplemodeling.model.directive.Update
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   given ExecutionContext = uow.executionContext
 
+  private type StateMachineProviderInvocationKey =
+    (
+      ProviderExecutionRequest,
+      ProviderIdentity
+    )
+
+  private val _state_machine_provider_maximum_depth = 64
+  private val _state_machine_provider_call_stack =
+    new DynamicVariable[List[StateMachineProviderInvocationKey]](Nil)
+  private val _state_machine_provided_api_call_stack =
+    new DynamicVariable[List[StateMachineProvidedApiRequest]](Nil)
+
   private val _step: UnitOfWorkOp ~> Consequence =
     new (UnitOfWorkOp ~> Consequence) {
       def apply[A](op: UnitOfWorkOp[A]): Consequence[A] =
@@ -86,6 +100,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     }
   }
 
+  /** Interpret a typed program in this UnitOfWork without committing it.
+    * The caller owns commit or abort after inspecting the outcome.
+    */
+  def evaluateInActiveUnitOfWorkC[R](program: ExecUowM[R]): Consequence[R] =
+    if (program == null)
+      Consequence.stateConflict("UnitOfWork program is missing")
+    else try program.value.foldMap(_step).flatMap(identity)
+    catch {
+      case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+    }
+
   private def _abort_failure_c[R](primary: Conclusion): Consequence[R] =
     uow.abort() match {
       case Consequence.Failure(cleanup) =>
@@ -103,6 +128,59 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   def interpret[A](op: UnitOfWorkOp[A]): Consequence[A] =
     _execute(op)
+
+  /** Stage a Provided Operation for a caller that owns the UnitOfWork commit.
+    * The returned outcome must not be exposed externally before that commit succeeds.
+    */
+  def stageProvidedForExternalCommitC(request: StateMachineProvidedApiRequest): Consequence[ActionExecution] =
+    _stage_provided_for_external_commit_c(
+      request, (component, continuation) => component.continuationRuntime.stageSuspensionC(uow, continuation)
+    )
+
+  /** Persist a suspension prerequisite after commit, before publishing its Continuation. */
+  def stageProvidedForExternalCommitC(
+    request: StateMachineProvidedApiRequest,
+    beforePublish: Continuation => Consequence[Unit]
+  ): Consequence[ActionExecution] =
+    if (beforePublish == null)
+      Consequence.stateConflict("StateMachine Provided API suspension prerequisite is missing")
+    else
+      _stage_provided_for_external_commit_c(
+        request,
+        (component, continuation) => component.continuationRuntime.stageSuspensionAfterC(
+          uow, continuation, () => beforePublish(continuation)
+        )
+      )
+
+  private def _stage_provided_for_external_commit_c(
+    request: StateMachineProvidedApiRequest,
+    stageSuspension: (Component, Continuation) => Consequence[Unit]
+  ): Consequence[ActionExecution] =
+    _component_required.flatMap { component =>
+      val dispatcher = component.stateMachineProvidedApiDispatcher
+      _evaluate_state_machine_provided_api_c(request, dispatcher)
+        .flatMap(dispatcher.admitCommittingOutcomeC(request, _))
+        .map(outcome => (component, outcome))
+    }.flatMap {
+      case (component, ActionExecution.Suspended(continuation)) =>
+        stageSuspension(component, continuation).map(_ => ActionExecution.Suspended(continuation))
+      case (_, completed: ActionExecution.Completed) => Consequence.success(completed)
+      case (_, ActionExecution.Failed(failure)) =>
+        Consequence.stateConflict(s"StateMachine Provided API failed: ${Option(failure).map(_.code).getOrElse("unknown")}")
+    }
+
+  /** Explicit Provided Operation ingress; suspension is returned only after persistence succeeds. */
+  def runProvidedCommittingC(request: StateMachineProvidedApiRequest): Consequence[ActionExecution] =
+    stageProvidedForExternalCommitC(request) match {
+      case Consequence.Success(outcome) => _commit_provided_c(outcome)
+      case Consequence.Failure(primary) => _abort_failure_c(primary)
+    }
+
+  private def _commit_provided_c(outcome: ActionExecution): Consequence[ActionExecution] =
+    try uow.commit().map(_ => outcome)
+    catch {
+      case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+    }
 
   private def _execute[A](
     op: UnitOfWorkOp[A]
@@ -128,10 +206,21 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case UnitOfWorkOp.StateMachineProviderExecute(request) =>
       _with_calltree("uow:state-machine:provider:execute") {
+        _admit_state_machine_provider_request_c(request).flatMap { admitted =>
+          _component_required.flatMap { component =>
+            component.stateMachineProviderResolver
+              .resolve(admitted.requiredOperation.identity)
+              .flatMap(provider => _invoke_state_machine_provider_c(admitted, provider))
+          }
+        }
+      }
+
+    case UnitOfWorkOp.StateMachineProvidedApiExecute(request) =>
+      _with_calltree("uow:state-machine:provided-api:execute") {
         _component_required.flatMap { component =>
-          component.stateMachineProviderResolver
-            .resolve(request.requiredOperation.identity)
-            .map(_.execute(request))
+          val dispatcher = component.stateMachineProvidedApiDispatcher
+          _evaluate_state_machine_provided_api_c(request, dispatcher)
+            .flatMap(dispatcher.admitResultC(request, _))
         }
       }
 
@@ -1023,6 +1112,77 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
   }
 
+  private def _invoke_state_machine_provider_c(
+    request: ProviderExecutionRequest,
+    provider: StateMachineProvider
+  ): Consequence[ActionExecution] =
+    _with_state_machine_provider_guard_c(request, provider) {
+      provider match {
+        case programprovider: StateMachineProgramProvider =>
+          val result =
+            try
+              programprovider.program(request).value.foldMap(_step).flatMap(identity)
+            catch {
+              case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+            }
+          result.flatMap(_admit_state_machine_provider_result_c(request, _))
+        case directprovider: StateMachineDeterministicProvider =>
+          val result =
+            try Consequence.success(directprovider.execute(request))
+            catch {
+              case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+            }
+          result.flatMap(_admit_state_machine_provider_result_c(request, _))
+        case _ =>
+          Consequence.stateConflict(
+            "State-machine direct Provider must declare deterministic execution"
+          )
+      }
+    }
+
+  private def _evaluate_state_machine_provided_api_c(
+    request: StateMachineProvidedApiRequest,
+    dispatcher: StateMachineProvidedApiDispatcher
+  ): Consequence[ActionExecution] =
+    dispatcher.resolveC(request).flatMap { program =>
+      val active = _state_machine_provided_api_call_stack.value
+      if (active.contains(request))
+        Consequence.stateConflict("StateMachine Provided API invocation cycle detected")
+      else if (active.size >= 64)
+        Consequence.stateConflict("StateMachine Provided API invocation nesting exceeds 64 active calls")
+      else
+        _state_machine_provided_api_call_stack.withValue(request :: active) {
+          try program.program(request).value.foldMap(_step).flatMap(identity)
+          catch {
+            case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+          }
+        }
+    }
+
+  private def _with_state_machine_provider_guard_c(
+    request: ProviderExecutionRequest,
+    provider: StateMachineProvider
+  )(
+    body: => Consequence[ActionExecution]
+  ): Consequence[ActionExecution] = {
+    val invocationkey =
+      (
+        request,
+        provider.identity
+      )
+    val activecalls = _state_machine_provider_call_stack.value
+    if (activecalls.contains(invocationkey))
+      Consequence.stateConflict(
+        s"State-machine Provider invocation cycle detected for ${request.requiredOperation.identity} and ${provider.identity}"
+      )
+    else if (activecalls.size >= _state_machine_provider_maximum_depth)
+      Consequence.stateConflict(
+        s"State-machine Provider invocation nesting exceeds ${_state_machine_provider_maximum_depth} active calls"
+      )
+    else
+      _state_machine_provider_call_stack.withValue(invocationkey :: activecalls)(body)
+  }
+
   // private def _http_driver_(): HttpDriver =
   //   uow.http_driver.getOrElse {
   //     throw new IllegalStateException("http driver not configured")
@@ -1713,6 +1873,37 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       .getOrElse(Consequence.serviceUnavailable(
         "component context is required for blob inline image operations"
       ))
+
+  private def _admit_state_machine_provider_request_c(
+    request: ProviderExecutionRequest
+  ): Consequence[ProviderExecutionRequest] =
+    if (request == null || request.runId == null || request.requiredOperation == null ||
+        request.requiredOperation.identity == null || request.context == null)
+      Consequence.stateConflict("StateMachine Provider request is incomplete")
+    else
+      Consequence.success(request)
+
+  private def _admit_state_machine_provider_result_c(
+    request: ProviderExecutionRequest,
+    execution: ActionExecution
+  ): Consequence[ActionExecution] =
+    execution match {
+      case ActionExecution.Completed(result)
+          if result == null || result.typeReference == null || result.contextReference == null =>
+        Consequence.stateConflict("StateMachine Provider completed result is incomplete")
+      case ActionExecution.Completed(result)
+          if request.requiredOperation.resultType.exists(_ != result.typeReference) =>
+        Consequence.stateConflict("StateMachine Provider completed result type is incompatible")
+      case ActionExecution.Suspended(continuation)
+          if continuation == null || continuation.runId != request.runId ||
+            continuation.requiredOperation != request.requiredOperation ||
+            continuation.context != request.context =>
+        Consequence.stateConflict("StateMachine Provider continuation does not match the request")
+      case ActionExecution.Failed(null) | null =>
+        Consequence.stateConflict("StateMachine Provider execution outcome is incomplete")
+      case valid =>
+        Consequence.success(valid)
+    }
 
   private def _is_entity_not_found(
     conclusion: org.goldenport.Conclusion

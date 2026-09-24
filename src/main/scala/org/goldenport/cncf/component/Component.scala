@@ -44,7 +44,7 @@ import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
 import org.goldenport.cncf.usernotification.UserNotificationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import org.goldenport.cncf.workflow.WorkflowDefinition
-import org.goldenport.cncf.workflow.{ContinuationRuntime, ContinuationRuntimeSource, GeneratedWorkflowAbi, StateMachineProviderResolver, StateMachineProviderSource}
+import org.goldenport.cncf.workflow.{ContinuationRuntime, ContinuationRuntimeSource, GeneratedProvidedApiAbi, GeneratedWorkflowAbi, StateMachineProvidedApiDispatcher, StateMachineProviderResolver, StateMachineProviderSource}
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -85,6 +85,10 @@ abstract class Component() extends Component.Core.Holder {
     Vector.empty
   private var _admitted_generated_workflow_metadata: Vector[GeneratedWorkflowAbi.Definition] =
     Vector.empty
+  private var _admitted_generated_provided_api_metadata: Vector[GeneratedProvidedApiAbi.Definition] =
+    Vector.empty
+  private var _state_machine_provided_api_dispatcher: StateMachineProvidedApiDispatcher =
+    StateMachineProvidedApiDispatcher.empty
   private var _state_machine_provider_resolver: StateMachineProviderResolver =
     StateMachineProviderResolver.empty
   private var _continuation_runtime: ContinuationRuntime = ContinuationRuntime.empty
@@ -408,6 +412,26 @@ abstract class Component() extends Component.Core.Holder {
     metadata: Vector[GeneratedWorkflowAbi.Definition]
   ): Component = {
     _admitted_generated_workflow_metadata = metadata
+    this
+  }
+
+  def admittedGeneratedProvidedApiMetadata: Vector[GeneratedProvidedApiAbi.Definition] =
+    _admitted_generated_provided_api_metadata
+
+  def withAdmittedGeneratedProvidedApiMetadata(
+    metadata: Vector[GeneratedProvidedApiAbi.Definition]
+  ): Component = {
+    _admitted_generated_provided_api_metadata = metadata
+    this
+  }
+
+  def stateMachineProvidedApiDispatcher: StateMachineProvidedApiDispatcher =
+    _state_machine_provided_api_dispatcher
+
+  def withStateMachineProvidedApiDispatcher(
+    dispatcher: StateMachineProvidedApiDispatcher
+  ): Component = {
+    _state_machine_provided_api_dispatcher = dispatcher
     this
   }
 

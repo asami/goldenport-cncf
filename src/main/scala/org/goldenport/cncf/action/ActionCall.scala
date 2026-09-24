@@ -62,6 +62,10 @@ abstract class ActionCall()
 
   def execute(): Consequence[OperationResponse]
 
+  /** Projects a public response only after the UnitOfWork commit has succeeded. */
+  def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] =
+    Consequence.success(response)
+
   def commit(): Consequence[UnitOfWork.CommitResult] = {
     val uow = executionContext.runtime.unitOfWork
     uow.record("ActionCall.commit")

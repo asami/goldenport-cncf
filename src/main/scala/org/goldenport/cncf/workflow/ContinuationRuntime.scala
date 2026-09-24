@@ -2,8 +2,9 @@ package org.goldenport.cncf.workflow
 
 import java.util.UUID
 import scala.collection.mutable
+import scala.util.control.NonFatal
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.cncf.unitofwork.UnitOfWork
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkInterpreter}
 
 /**
  * CNCF-owned durable continuation boundary.  A continuation is admitted only
@@ -18,13 +19,34 @@ trait ContinuationRuntime {
     continuation: Continuation
   ): Consequence[Unit]
 
+  /** A post-commit prerequisite must succeed before the continuation becomes claimable. */
+  def stageSuspensionAfterC(
+    unitOfWork: UnitOfWork,
+    continuation: Continuation,
+    beforePublish: () => Consequence[Unit]
+  ): Consequence[Unit] =
+    Consequence.stateConflict("Continuation runtime does not support ordered suspension persistence")
+
   def claimC(identity: ContinuationIdentity): Consequence[Claim]
+
+  /** Trusted runtime rehydration of an existing claim; never a public WorkOrder field. */
+  def recoverClaimC(identity: ContinuationIdentity): Consequence[Claim] =
+    Consequence.stateConflict("Continuation runtime does not support claim recovery")
 
   def resumeC(
     claim: Claim,
     result: StateMachineOperationResult,
     freshUnitOfWork: () => UnitOfWork
   ): Consequence[Resume]
+
+  /** Resume while interpreting a selected closing Action in the same fresh UnitOfWork. */
+  def resumeWithProgramC(
+    claim: Claim,
+    result: StateMachineOperationResult,
+    freshUnitOfWork: () => UnitOfWork,
+    program: ExecUowM[ActionExecution]
+  ): Consequence[Resume] =
+    _invalid("continuation", "closing Action program is not supported by this runtime")
 
   /** Completes a claim after its fresh UnitOfWork committed but post-commit persistence failed. */
   def finalizeC(claim: Claim): Consequence[Unit]
@@ -41,10 +63,21 @@ object ContinuationRuntime {
     def claimC(identity: ContinuationIdentity): Consequence[Claim] =
       _invalid("continuation", "runtime is not configured")
 
+    override def recoverClaimC(identity: ContinuationIdentity): Consequence[Claim] =
+      _invalid("continuation", "runtime is not configured")
+
     def resumeC(
       claim: Claim,
       result: StateMachineOperationResult,
       freshUnitOfWork: () => UnitOfWork
+    ): Consequence[Resume] =
+      _invalid("continuation", "runtime is not configured")
+
+    override def resumeWithProgramC(
+      claim: Claim,
+      result: StateMachineOperationResult,
+      freshUnitOfWork: () => UnitOfWork,
+      program: ExecUowM[ActionExecution]
     ): Consequence[Resume] =
       _invalid("continuation", "runtime is not configured")
 
@@ -72,16 +105,30 @@ object ContinuationRuntime {
     def stageSuspensionC(
       unitOfWork: UnitOfWork,
       continuation: Continuation
+    ): Consequence[Unit] = stageSuspensionAfterC(unitOfWork, continuation, () => Consequence.unit)
+
+    override def stageSuspensionAfterC(
+      unitOfWork: UnitOfWork,
+      continuation: Continuation,
+      beforePublish: () => Consequence[Unit]
     ): Consequence[Unit] =
       if (unitOfWork == null || continuation == null)
         _invalid("continuation", "missing suspension boundary")
+      else if (beforePublish == null)
+        _invalid("continuation", "missing suspension persistence prerequisite")
       else if (_staged.contains(continuation.continuationId) || _available.contains(continuation.continuationId) || _completed.contains(continuation.continuationId))
         _invalid("continuation", s"duplicate continuation: ${continuation.continuationId.value}")
       else {
         _staged += continuation.continuationId
         unitOfWork.stagePostCommitC {
           _staged -= continuation.continuationId
-          _available.update(continuation.continuationId, continuation)
+          beforePublish().map { _ =>
+            _available.update(continuation.continuationId, continuation)
+            ()
+          }
+        }
+        unitOfWork.stagePostAbortC {
+          _staged -= continuation.continuationId
           Consequence.unit
         }
         Consequence.unit
@@ -102,15 +149,39 @@ object ContinuationRuntime {
         case None => _invalid("continuation", s"continuation unavailable: ${identity.value}")
       }
 
+    override def recoverClaimC(identity: ContinuationIdentity): Consequence[Claim] =
+      if (identity == null || Option(identity.value).forall(_.trim.isEmpty))
+        _invalid("continuation", "missing continuation identity")
+      else _claimed.get(identity) match {
+        case Some(claim) if validClaim(claim) && claim.continuation.continuationId == identity =>
+          Consequence.success(claim)
+        case _ => _invalid("continuation", s"continuation has no recoverable claim: ${identity.value}")
+      }
+
     def resumeC(
       claim: Claim,
       result: StateMachineOperationResult,
       freshUnitOfWork: () => UnitOfWork
     ): Consequence[Resume] =
-      if (claim == null || result == null || freshUnitOfWork == null)
+      _resume_c(claim, result, freshUnitOfWork, None)
+
+    override def resumeWithProgramC(
+      claim: Claim,
+      result: StateMachineOperationResult,
+      freshUnitOfWork: () => UnitOfWork,
+      program: ExecUowM[ActionExecution]
+    ): Consequence[Resume] =
+      if (program == null) _invalid("continuation", "closing Action program is missing")
+      else _resume_c(claim, result, freshUnitOfWork, Some(program))
+
+    private def _resume_c(
+      claim: Claim,
+      result: StateMachineOperationResult,
+      freshUnitOfWork: () => UnitOfWork,
+      program: Option[ExecUowM[ActionExecution]]
+    ): Consequence[Resume] =
+      if (!validClaim(claim) || result == null || freshUnitOfWork == null)
         _invalid("continuation", "missing resume input")
-      else if (claim.continuation == null)
-        _invalid("continuation", "claim has no continuation")
       else {
         val identity = claim.continuation.continuationId
         if (_completed.contains(identity))
@@ -121,23 +192,38 @@ object ContinuationRuntime {
             _invalid("continuation", s"continuation not claimed: ${identity.value}")
           case Some(continuation) if _claimed(identity).claimId != claim.claimId =>
             _invalid("continuation", s"claim ownership mismatch: ${identity.value}")
-          case Some(continuation) if continuation.requiredOperation.resultType.exists(_ != result.typeReference) =>
+          case Some(continuation) if continuation != claim.continuation =>
+            _invalid("continuation", s"claim continuation mismatch: ${identity.value}")
+          case Some(continuation) if !validResult(continuation, result) =>
             _claimed.remove(identity)
-            _invalid("continuation", s"incompatible result type: ${identity.value}")
+            _invalid("continuation", s"incompatible or incomplete result: ${identity.value}")
           case Some(continuation) =>
             try {
               Option(freshUnitOfWork()).map { uow =>
-                uow.stagePostCommitC {
-                  _completed += identity
-                  _available -= identity
-                  _claimed.remove(identity)
-                  Consequence.unit
-                }
-                uow.commit() match {
-                  case Consequence.Success(_) => Consequence.success(Resume(continuation, result))
+                stageClosingProgramC(uow, program) match {
+                  case Consequence.Success(_) =>
+                    uow.stagePostCommitC {
+                      _completed += identity
+                      _available -= identity
+                      _claimed.remove(identity)
+                      Consequence.unit
+                    }
+                    uow.commit() match {
+                      case Consequence.Success(_) => Consequence.success(Resume(continuation, result))
+                      case Consequence.Failure(conclusion) =>
+                        _claimed.remove(identity)
+                        Consequence.Failure[Resume](conclusion)
+                    }
                   case Consequence.Failure(conclusion) =>
-                    _claimed.remove(identity)
-                    Consequence.Failure[Resume](conclusion)
+                    val aborted = try uow.abort() catch {
+                      case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+                    }
+                    aborted match {
+                      case Consequence.Success(_) =>
+                        _claimed.remove(identity)
+                        Consequence.Failure[Resume](conclusion)
+                      case Consequence.Failure(cleanup) => Consequence.Failure[Resume](cleanup ++ conclusion)
+                    }
                 }
               }.getOrElse {
                 _claimed.remove(identity)
@@ -160,4 +246,40 @@ object ContinuationRuntime {
 
   private def _invalid[A](kind: String, message: String): Consequence[A] =
     Consequence.Failure(Conclusion.from(new IllegalArgumentException(s"$kind: $message")))
+
+  private[workflow] def stageClosingProgramC(
+    uow: UnitOfWork,
+    program: Option[ExecUowM[ActionExecution]]
+  ): Consequence[Unit] = program match {
+    case None => Consequence.unit
+    case Some(value) =>
+      new UnitOfWorkInterpreter(uow).evaluateInActiveUnitOfWorkC(value).flatMap {
+        case _: ActionExecution.Completed => Consequence.unit
+        case _: ActionExecution.Suspended =>
+          Consequence.stateConflict("closing Action cannot suspend without a new Continuation boundary")
+        case ActionExecution.Failed(failure) =>
+          Consequence.stateConflict(s"closing Action failed: ${Option(failure).map(_.code).getOrElse("unknown")}")
+      }
+  }
+
+  private[workflow] def validClaim(claim: Claim): Boolean =
+    claim != null && claim.continuation != null &&
+      claim.continuation.continuationId != null &&
+      Option(claim.continuation.continuationId.value).exists(_.trim.nonEmpty) &&
+      Option(claim.claimId).exists(_.trim.nonEmpty)
+
+  private[workflow] def validResult(
+    continuation: Continuation,
+    result: StateMachineOperationResult
+  ): Boolean =
+    continuation != null && continuation.requiredOperation != null &&
+      continuation.requiredOperation.resultType.exists(expected =>
+        expected != null && Option(expected.value).exists(_.trim.nonEmpty) &&
+          result != null && result.typeReference != null &&
+          Option(result.typeReference.value).exists(_.trim.nonEmpty) &&
+          expected == result.typeReference &&
+          result.contextReference != null &&
+          Option(result.contextReference.identity).exists(_.trim.nonEmpty) &&
+          Option(result.contextReference.revision).exists(_.trim.nonEmpty)
+      )
 }
