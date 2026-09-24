@@ -1,0 +1,17 @@
+# Service Bus SQLite/PostgreSQL Journal
+
+Date: 2026-09-24
+
+Decision: CNCF Service Bus journal persistence will have a provider SPI with SQLite and PostgreSQL as first-class implementations. PostgreSQL is not required to use authoritative journal events.
+
+MacBook Air uses a local SQLite journal because local PostgreSQL/OpenTelemetry are intentionally absent. Mac mini uses PostgreSQL `ops` for the operational journal; PostgreSQL `dev` remains separate for development use.
+
+Provider selection is explicit rather than discovery-based. AUTHORITATIVE events are committed through the configured provider before subscriber delivery. This preserves the same event semantics across laptop/offline and server deployments.
+
+## Existing EventBus baseline
+
+This capability extends the existing CNCF `EventBus` / `EventEngine` implementation. Existing `EventPublishOption(persistent)` and persist-before-dispatch behavior are the migration baseline; new JournalPolicy/provider/transport concepts should be introduced compatibly rather than by creating a second independent bus.
+
+## Subsystem database boundary
+
+SQLite journal storage is refined to one physical database per Subsystem. This supports MacBook Air scenarios where roughly ten Subsystems may run concurrently without concentrating all writers on one SQLite file. PostgreSQL on server-oriented hosts may remain physically shared while preserving logical Subsystem identity/partitioning. Control Center should query through the Journal abstraction rather than depend on either layout.

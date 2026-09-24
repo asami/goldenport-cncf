@@ -1,12 +1,12 @@
-# Phase 92 Checklist: Shared Workflow Transaction Domain
+# Phase 94 Checklist: Shared Workflow Transaction Domain
 
 status=planned
-phase=[Phase 92](phase-92.md)
+phase=[Phase 94](phase-94.md)
 
 This future ledger is not on the first `sm-workflow` vertical-slice critical
 path. The Phase 77.1 post-commit baseline remains explicitly non-atomic.
 
-## WTX-92-01: Transaction-domain contract
+## WTX-94-01: Transaction-domain contract
 
 Stage Status:
 - Current status: OPEN
@@ -18,7 +18,7 @@ Stage Status:
 - [ ] Preserve Phase 77's closed three-method persistence SPI and add only a versioned extension.
 - [ ] Reject missing, mixed, or unverifiable transaction-domain capability before staging claimable work.
 
-## WTX-92-02: Durable implementation
+## WTX-94-02: Durable implementation
 
 Stage Status:
 - Current status: OPEN
@@ -30,7 +30,7 @@ Stage Status:
 - [ ] Keep a successful commit's Continuation externally invisible until all required state is durably committed.
 - [ ] Preserve the loose baseline as an explicit compatibility boundary; do not silently reinterpret its outcome as atomic.
 
-## WTX-92-03: Failure and recovery proof
+## WTX-94-03: Failure and recovery proof
 
 Stage Status:
 - Current status: OPEN
@@ -43,7 +43,7 @@ Stage Status:
 - [ ] Prove stale revision, duplicate continuation, and mixed-store attempts fail closed.
 - [ ] Validate against a durable backend, not only an in-memory callback sequence.
 
-## WTX-92-04: Consumer migration and closure
+## WTX-94-04: Consumer migration and closure
 
 Stage Status:
 - Current status: OPEN
@@ -52,5 +52,5 @@ Stage Status:
 
 - [ ] Record the stable `sm-workflow` baseline and its exact migration need.
 - [ ] Exercise the real consumer's suspension/resume path under the shared backend.
-- [ ] Complete focused and repository-wide validation, independent review, and release evidence under the Phase 92 execution plan.
-- [ ] Confirm Phase 77.1, Phase 77.2, Cozy, and the first `sm-workflow` vertical slice were not retroactively made dependent on Phase 92.
+- [ ] Complete focused and repository-wide validation, independent review, and release evidence under the Phase 94 execution plan.
+- [ ] Confirm Phase 77.1, Phase 77.2, Cozy, and the first `sm-workflow` vertical slice were not retroactively made dependent on Phase 94.

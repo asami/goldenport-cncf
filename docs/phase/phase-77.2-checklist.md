@@ -51,7 +51,7 @@ Stage Status:
 - Update rule: Close only after reproducible cross-repository evidence, the minimum typed Workflow protocol/Skill-Codex JSON encoding, and the exact consumer handoff are frozen.
 
 - [ ] Record exact Cozy 62.1 schema, 62.2 generated ABI, 62.3 fixture/handoff, CNCF revision, and admitted schema compatibility evidence.
-- [ ] Prove WorkflowInstance persistence remains independently owned from entity StateMachine persistence across the admitted first-slice create, suspension, resume, and replay cases without claiming a joint atomic transaction. Cross-process restart and application-store recovery are sm-workflow Phase 2 integration checks; the shared-domain upgrade belongs to [Phase 92](phase-92.md).
+- [ ] Prove WorkflowInstance persistence remains independently owned from entity StateMachine persistence across the admitted first-slice create, suspension, resume, and replay cases without claiming a joint atomic transaction. Cross-process restart and application-store recovery are sm-workflow Phase 2 integration checks; the shared-domain upgrade belongs to [Phase 94](phase-94.md).
 - [ ] Record the minimum typed Start/Continuation/WorkOrder/Terminal protocol, Generic Skill projection, and `sm-workflow` consumer contract without claiming `sm-workflow` SQLite/CLI completion.
 - [ ] Verify no Workflow-wide orchestration/continuation mode or semantic `InvocationBinding` is required by the final runtime path.
 - [ ] Complete focused validation, executable specifications, regression validation, independent review, clean re-review where required, and release closure.

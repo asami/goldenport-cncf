@@ -556,3 +556,10 @@ passed seven tests with the shared SBT lock released. This is a contract and
 negative-path proof only: no conforming shared-transaction engine, durable
 backend, prepare/commit/abort proof, or recovery proof exists yet. Keep this
 Phase 92 candidate uncommitted and out of Phase 77.1 closure.
+
+## Erratum — 2026-09-25 Phase number reconciliation
+
+References above to Phase 92 as the deferred shared-transaction owner retain
+the closed checklist's original text. The work is now planned under
+[Phase 94](phase-94.md); GitHub Phase 92 remains Platform Subcomponent CAR
+Distribution. No checklist completion state is changed.

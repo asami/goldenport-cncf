@@ -28,7 +28,7 @@ The first `sm-workflow` vertical slice is the priority. It uses Phase 77.1's
 explicitly loose, post-commit Continuation baseline: external claim follows
 successful continuation persistence, while WorkflowInstance, Continuation,
 and UnitOfWork effects are not represented as one atomic commit. The durable
-shared-transaction upgrade is [Phase 92](phase-92.md), outside this Phase's
+shared-transaction upgrade is [Phase 94](phase-94.md), outside this Phase's
 entry and closure criteria.
 
 Application-specific payloads and software-development policy remain owned by
@@ -135,12 +135,12 @@ commit. Phase 77.2 final acceptance consumes the closed Phase 77.1 handoff.
 - `sm-workflow` application payload schemas, SQLite/datastore, migration,
   retention, lease policy, or public CLI implementation.
 - The shared EventStore/DataStore/WorkflowInstance/Continuation/UnitOfWork
-  transaction domain; [Phase 92](phase-92.md) owns that upgrade and must not
+  transaction domain; [Phase 94](phase-94.md) owns that upgrade and must not
   block the first `sm-workflow` vertical slice.
 
 ## References
 
-- [Phase 77](phase-77.md), [Phase 77.1](phase-77.1.md), [Phase 77.2 Checklist](phase-77.2-checklist.md), and [Phase 92](phase-92.md)
+- [Phase 77](phase-77.md), [Phase 77.1](phase-77.1.md), [Phase 77.2 Checklist](phase-77.2-checklist.md), and [Phase 94](phase-94.md)
 - [Phase 77 common contract decision](../journal/2026/09/2026-09-20-phase-77-common-contract-reconciliation-decision.md)
 - [Phase 77 minimum Skill continuation JSON contract](../journal/2026/09/2026-09-20-phase-77-minimum-skill-continuation-json-contract.md)
 - [Released Workflow producer fixture handoff](../design/composite-workflow-released-producer-fixture-handoff.md)

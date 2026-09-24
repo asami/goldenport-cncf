@@ -1815,7 +1815,7 @@ or reconciliation-only source rather than claiming a new implementation.
 | DEV-008 | `docs/journal/2026/08/2026-08-12-statemachine-workflow-dbc-phase-sequencing.md` | Reconciliation of Phase 63--65 with retained strategy candidates. | STRATEGY_ITEM | Existing [9.2](#92-event-mechanism-follow-ups), [9.4](#94-metrics-and-observability), [9.7](#97-error-model), [9.9](#99-servicecall-fallback), [9.10](#910-compensation-recovery-events), [9.11](#911-working-set-and-view-management), [9.13](#913-distributed-component-runtime), [9.14](#914-job-management-follow-ups), [9.15](#915-saga-management), [9.43](#943-transport-idempotency-and-replay), and [9.53](#953-componentfactory-purity-and-capability-implementation-evidence) records | RESOLVED |
 | DEV-009 | `docs/journal/2026/08/2026-08-19-conclusion-diagnostics-availability-kind-development-task.md` | Explicit availability-kind diagnostic keys for not-running, connection-refused, and unreachable conclusions. | STRATEGY_ITEM | [9.4](#94-metrics-and-observability) | CANDIDATE |
 | DEV-010 | User direction on 2026-09-16, refined on 2026-09-20 | Admit Cozy-generated CML `WORKFLOW` as a projection over the reusable StateMachine API/SPI runtime, with ComponentFactory provider construction, independent WorkflowInstance persistence, durable Continuation, and the minimum typed Workflow protocol/Skill-Codex JSON encoding for `sm-workflow`, without inventing a second CNCF Workflow language. | NEW_PHASE | [Phase 77](../phase/phase-77.md) -> [Phase 77.1](../phase/phase-77.1.md) -> [Phase 77.2](../phase/phase-77.2.md), after Cozy Phases 62.1-62.3 and CNCF Phases 64/64.2 | ADOPTED |
-| DEV-011 | User priority direction on 2026-09-24 | Defer the single durable transaction domain for EventStore, DataStore, WorkflowInstance, Continuation, and UnitOfWork until after a stable first `sm-workflow` vertical slice; use an explicitly loose post-commit baseline in the Phase 77 sequence. | NEW_PHASE | [Phase 92](../phase/phase-92.md), independent of Phases 89–91 and outside the first `sm-workflow` critical path | ADOPTED |
+| DEV-011 | User priority direction on 2026-09-24 | Defer the single durable transaction domain for EventStore, DataStore, WorkflowInstance, Continuation, and UnitOfWork until after a stable first `sm-workflow` vertical slice; use an explicitly loose post-commit baseline in the Phase 77 sequence. | NEW_PHASE | [Phase 94](../phase/phase-94.md), independent of Phases 89–93 and outside the first `sm-workflow` critical path | ADOPTED |
 
 | Journal source | Recorded work | Current disposition |
 | --- | --- | --- |
@@ -5253,7 +5253,7 @@ obligations rather than retroactive Phase 64.2 claims.
   connection/transport, nor UI/Flutter generation.
 - The single durable transaction domain across EventStore, DataStore,
   WorkflowInstance, Continuation, and UnitOfWork is deferred to
-  [Phase 92](../phase/phase-92.md). It is not an acceptance prerequisite for
+  [Phase 94](../phase/phase-94.md). It is not an acceptance prerequisite for
   Phase 77.1, Phase 77.2, or the first `sm-workflow` vertical slice.
 - Planning references:
   - [Phase 77](../phase/phase-77.md);
@@ -5262,8 +5262,8 @@ obligations rather than retroactive Phase 64.2 claims.
     [Phase 77.1 Checklist](../phase/phase-77.1-checklist.md);
   - [Phase 77.2](../phase/phase-77.2.md) and
     [Phase 77.2 Checklist](../phase/phase-77.2-checklist.md);
-  - [Phase 92](../phase/phase-92.md) and
-    [Phase 92 Checklist](../phase/phase-92-checklist.md);
+  - [Phase 94](../phase/phase-94.md) and
+    [Phase 94 Checklist](../phase/phase-94-checklist.md);
   - [Phase 64](../phase/phase-64.md);
   - [Phase 64.2](../phase/phase-64.2.md); and
   - `asami/cozy/docs/phase/phase-62.md`;
@@ -5301,18 +5301,18 @@ deliberately outside the first `sm-workflow` vertical-slice critical path.
 
 ### 9.66 Shared Workflow Transaction Domain
 
-Planned as [Phase 92](../phase/phase-92.md), independent of Phases 89–91 and
+Planned as [Phase 94](../phase/phase-94.md), independent of Phases 89–93 and
 deferred until the first `sm-workflow` vertical slice is stable. The Phase 77
 sequence deliberately uses a loose UnitOfWork-commit then Continuation-write
 boundary and never claims that WorkflowInstance, Continuation, EventStore,
 DataStore, and UnitOfWork effects share a commit.
 
-Phase 92 owns the versioned shared-domain capability, a durable backend,
+Phase 94 owns the versioned shared-domain capability, a durable backend,
 opt-in UnitOfWork enlistment, mixed-store rejection, and executable proof of
 prepare rejection, rollback, indeterminate commit, restart recovery, and
 post-commit claim visibility. The Phase 77 `create/load/append` SPI and Cozy
 producer ABI remain closed. The current atomic-transition prototypes are
 candidate code only, not accepted Phase 77.1/77.2 behavior.
 
-Planning references: [Phase 92](../phase/phase-92.md) and
-[Phase 92 Checklist](../phase/phase-92-checklist.md).
+Planning references: [Phase 94](../phase/phase-94.md) and
+[Phase 94 Checklist](../phase/phase-94-checklist.md).

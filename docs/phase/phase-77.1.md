@@ -634,3 +634,10 @@ without the Phase 92-only hunks and preserve unrelated dirty planning work.
 - [Phase 92: shared transaction domain](phase-92.md)
 - [Phase 64.2 forced minimum closure](../journal/2026/09/2026-09-21-phase-64.2-forced-minimum-closure.md)
 - [Phase 77 common contract decision](../journal/2026/09/2026-09-20-phase-77-common-contract-reconciliation-decision.md)
+
+## Erratum — 2026-09-25 Phase number reconciliation
+
+References above to Phase 92 as the owner of shared Workflow transaction
+atomicity retain the original closure text. That planned work was renumbered
+to [Phase 94](phase-94.md) when the GitHub Phase 92, Platform Subcomponent CAR
+Distribution, was integrated. This changes no Phase 77.1 closure claim.

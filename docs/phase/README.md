@@ -18,7 +18,7 @@ Current baseline:
 - The first `sm-workflow` vertical slice has priority over shared Workflow
   transaction redesign. [Phase 77.1](phase-77.1.md) and
   [Phase 77.2](phase-77.2.md) use an explicitly loose post-commit Continuation
-  baseline. [Phase 92](phase-92.md) owns the later durable shared transaction
+  baseline. [Phase 94](phase-94.md) owns the later durable shared transaction
   domain; it is not a prerequisite for that first slice and is independent
   of Phase 89. The `sm-workflow` plans already name CNCF Phase 90 for
   Candidate-Admission and Phase 91 for Execution/Failure Model work; this
@@ -232,7 +232,7 @@ Phase 64 and forced-minimum Phase 64.2 prerequisites.
   repository-wide full-suite validation owner. Entity StateMachine persistence
   remains entity-owned; Textus `sm-workflow` supplies consumer persistence and
   software-development-specific behavior.
-- [Phase 92 Checklist](phase-92-checklist.md) owns the deferred single-commit
+- [Phase 94 Checklist](phase-94-checklist.md) owns the deferred single-commit
   domain spanning EventStore, DataStore, WorkflowInstance, Continuation, and
   UnitOfWork. Its atomicity proof is outside the serial Phase 77 sequence and
   must not block the first `sm-workflow` vertical slice.
