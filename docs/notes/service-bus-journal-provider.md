@@ -27,3 +27,17 @@ The SPI should support append/commit and the query primitives required by correl
 ## Existing EventBus baseline
 
 This capability extends the existing CNCF `EventBus` / `EventEngine` implementation. Existing `EventPublishOption(persistent)` and persist-before-dispatch behavior are the migration baseline; new JournalPolicy/provider/transport concepts should be introduced compatibly rather than by creating a second independent bus.
+
+## Subsystem-local SQLite journals
+
+The default SQLite physical database boundary is one database per Subsystem. A host running many Subsystems therefore does not make every process contend for one SQLite writer lock.
+
+Example layout:
+
+```text
+~/.textus/subsystems/<subsystem-id>/event-journal.db
+```
+
+This also aligns journal lifecycle, backup/removal and ownership with the CNCF Subsystem boundary. SQLite should normally use WAL and a reasonable busy timeout, but cross-Subsystem sharing of one SQLite file is not the default architecture.
+
+PostgreSQL differs physically: multiple Subsystems may share the server/ops database while journal rows remain logically partitioned/identified by subsystemId. Journal API/query semantics should hide this physical difference from consumers such as Control Center.
