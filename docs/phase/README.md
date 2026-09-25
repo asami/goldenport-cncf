@@ -28,9 +28,10 @@ Current baseline:
   [Phase 89](phase-89.md) admits it into CNCF. Both require a stable first
   `sm-workflow` vertical slice plus a concrete consumer requirement; neither
   blocks Phase 64, Phase 77, or `sm-workflow` Phase 1.
-- Latest closed phase: `phase-70.1.md` - documentation-only retirement of the
-  superseded duplicate activation plan. Phase 70 remains the authoritative
-  accepted implementation.
+- Latest closed phase: [Phase 90](phase-90.md) - generic Candidate-Admission
+  runtime support with loose evidence persistence and an explicit sm-workflow
+  consumer handoff. Its final source/spec tree passed the full suite on
+  2026-09-25; real sm-workflow CML generation remains consumer-owned.
 - Phase 70 is closed with the accepted protected component activation
   implementation. Phase 70.1 is closed under `retire-superseded`; Textus BoK
   Phase 8 remains a separate consumer boundary.
