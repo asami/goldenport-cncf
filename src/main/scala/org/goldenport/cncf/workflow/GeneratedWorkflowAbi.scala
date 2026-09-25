@@ -164,6 +164,12 @@ object GeneratedWorkflowAbi {
     FixtureSha256("8d52e2116657fdc37bb1a422851e4047790efeda96831b4154ca9e46ca799827")
   val acceptedWorkflowRevision: WorkflowRevision =
     WorkflowRevision("workflow-producer-v1")
+  val placedWorkflowIdentity: WorkflowIdentity =
+    WorkflowIdentity("WorkflowProducerPlaced")
+  val acceptedPlacedFixtureSha256: FixtureSha256 =
+    FixtureSha256("88a4221e40ad07189af01992334c17682c237048c6e17bbf549ca65d9331a6f4")
+  val acceptedPlacedWorkflowRevision: WorkflowRevision =
+    WorkflowRevision("workflow-producer-placed-v1")
 
   /** Closed vocabulary from `cozy.cml.statemachine-workflow-abi.v1`. */
   val requiredSchemaShapes: Map[String, Set[String]] = Map(
@@ -212,7 +218,10 @@ object GeneratedWorkflowAbi {
 
   private def _definition_diagnostic(
     definition: Definition
-  ): Option[Diagnostic] =
+  ): Option[Diagnostic] = {
+    val placed = definition.workflow.identity == placedWorkflowIdentity
+    val expectedfixture = if (placed) acceptedPlacedFixtureSha256 else acceptedFixtureSha256
+    val expectedrevision = if (placed) acceptedPlacedWorkflowRevision else acceptedWorkflowRevision
     if (definition.producerAbiIdentity != acceptedProducerAbiIdentity)
       Some(_identity_diagnostic(
         DiagnosticCode.UnsupportedProducerAbi,
@@ -245,19 +254,19 @@ object GeneratedWorkflowAbi {
         definition.producerRevision.value,
         definition.workflow.identity.value
       ))
-    else if (definition.fixtureSha256 != acceptedFixtureSha256)
+    else if (definition.fixtureSha256 != expectedfixture)
       Some(_identity_diagnostic(
         DiagnosticCode.UnsupportedFixtureSha256,
         "fixture-sha256",
-        acceptedFixtureSha256.value,
+        expectedfixture.value,
         definition.fixtureSha256.value,
         definition.workflow.identity.value
       ))
-    else if (definition.workflow.revision != acceptedWorkflowRevision)
+    else if (definition.workflow.revision != expectedrevision)
       Some(_identity_diagnostic(
         DiagnosticCode.UnsupportedWorkflowRevision,
         "workflow-revision",
-        acceptedWorkflowRevision.value,
+        expectedrevision.value,
         definition.workflow.revision.value,
         definition.workflow.identity.value
       ))
@@ -267,6 +276,7 @@ object GeneratedWorkflowAbi {
         .orElse(_provenance_diagnostic(definition))
         .orElse(_required_spi_diagnostic(definition))
         .orElse(_schema_shape_diagnostic(definition))
+  }
 
   private def _identity_diagnostic(
     code: DiagnosticCode,

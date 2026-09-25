@@ -495,11 +495,11 @@ object WorkflowInstancePersistence {
           "producer-revision" -> CandidateAdmissionProducerAbi.acceptedSchemaVersion,
           "fixture-sha256" -> binding.admittedCandidateDefinition.get.sha256
         ) else Vector(
-          "producer-abi" -> GeneratedWorkflowAbi.acceptedProducerAbiIdentity.value,
-          "workflow-abi" -> GeneratedWorkflowAbi.acceptedWorkflowAbiIdentity.value,
-          "bootstrap-abi" -> GeneratedWorkflowAbi.acceptedBootstrapSchemaIdentity.value,
-          "producer-revision" -> GeneratedWorkflowAbi.acceptedProducerRevision.value,
-          "fixture-sha256" -> GeneratedWorkflowAbi.acceptedFixtureSha256.value
+          "producer-abi" -> binding.admittedDefinition.producerAbiIdentity.value,
+          "workflow-abi" -> binding.admittedDefinition.workflowAbiIdentity.value,
+          "bootstrap-abi" -> binding.admittedDefinition.bootstrapSchemaIdentity.value,
+          "producer-revision" -> binding.admittedDefinition.producerRevision.value,
+          "fixture-sha256" -> binding.admittedDefinition.fixtureSha256.value
         )
         provenance.zip(expected).collectFirst {
           case ((kind, actual), (_, required)) if actual != required =>

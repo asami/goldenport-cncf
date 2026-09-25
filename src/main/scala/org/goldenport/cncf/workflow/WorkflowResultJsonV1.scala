@@ -36,7 +36,8 @@ object WorkflowResultJsonV1 {
         "executionEvidence" -> Json.obj(
           "references" -> Json.arr(value.evidence.references.map(_reference)*),
           "workerIdentity" -> _optional(value.evidence.workerIdentity),
-          "modelIdentity" -> _optional(value.evidence.modelIdentity)
+          "modelIdentity" -> _optional(value.evidence.modelIdentity),
+          "skillDispatch" -> value.evidence.skillDispatch.map(_skill_dispatch).getOrElse(Json.Null)
         )
       ).noSpaces
     }
@@ -64,10 +65,11 @@ object WorkflowResultJsonV1 {
         _ <- _expect(payload != null, "null Workflow result payload")
         reference <- _decodeReference(result("reference"))
         facts <- _decodeReferences(root("completionFacts"))
-        evidence <- _fields(root("executionEvidence"), Set("references", "workerIdentity", "modelIdentity"))
+        evidence <- _fields(root("executionEvidence"), Set("references", "workerIdentity", "modelIdentity", "skillDispatch"))
         references <- _decodeReferences(evidence("references"))
         worker <- _optional_string(evidence, "workerIdentity")
         model <- _optional_string(evidence, "modelIdentity")
+        dispatch <- _decode_skill_dispatch(evidence("skillDispatch"))
       } yield ContinuationResult(
         handle,
         StateMachineRunIdentity(run),
@@ -77,7 +79,7 @@ object WorkflowResultJsonV1 {
         TypedValue(resultType, payload),
         reference,
         facts,
-        ExecutionEvidence(references, worker, model)
+        ExecutionEvidence(references, worker, model, dispatch)
       )
       decoded.fold(Consequence.stateConflict(_), _validate_envelope_c)
     }
@@ -95,14 +97,49 @@ object WorkflowResultJsonV1 {
         value.evidence.references.exists(x => !_valid_reference(x)) ||
         value.evidence.references.distinct.size != value.evidence.references.size ||
         value.evidence.workerIdentity == null || value.evidence.modelIdentity == null ||
+        value.evidence.skillDispatch == null ||
         value.evidence.workerIdentity.exists(x => x == null || x.trim.isEmpty) ||
-        value.evidence.modelIdentity.exists(x => x == null || x.trim.isEmpty))
+        value.evidence.modelIdentity.exists(x => x == null || x.trim.isEmpty) ||
+        value.evidence.skillDispatch.exists(x => x == null || x.validateC.toOption.isEmpty))
       Consequence.stateConflict("Workflow result JSON envelope is incomplete or inconsistent")
     else value.handle.validateC.flatMap(_ => value.result.validateC.map(_ => value))
 
   private def _valid_reference(value: ContextReference): Boolean =
     value != null && value.identity != null && value.identity.trim.nonEmpty &&
       value.revision != null && value.revision.trim.nonEmpty
+
+  private def _skill_dispatch(value: SkillDispatchEvidence): Json = Json.obj(
+    "requestedRequirement" -> Json.obj(
+      "capabilities" -> Json.arr(value.requestedRequirement.capabilities.map(x => Json.fromString(x.identity))*),
+      "risk" -> Json.fromString(value.requestedRequirement.risk.value),
+      "reasoning" -> Json.fromString(value.requestedRequirement.reasoning.value),
+      "reviewRequired" -> Json.fromBoolean(value.requestedRequirement.reviewRequired)
+    ),
+    "selectedWorkerProfile" -> Json.fromString(value.selectedWorkerProfile),
+    "mappingPolicyVersion" -> Json.fromString(value.mappingPolicyVersion)
+  )
+
+  private def _decode_skill_dispatch(json: Json): Either[String, Option[SkillDispatchEvidence]] =
+    if (json.isNull) Right(None)
+    else for {
+      fields <- _fields(json, Set("requestedRequirement", "selectedWorkerProfile", "mappingPolicyVersion"))
+      requirementFields <- _fields(fields("requestedRequirement"), Set("capabilities", "risk", "reasoning", "reviewRequired"))
+      capabilitiesJson <- requirementFields("capabilities").asArray.toRight("Skill capabilities must be an array")
+      capabilities <- capabilitiesJson.foldLeft[Either[String, Vector[CapabilityRequirement]]](Right(Vector.empty)) {
+        case (acc, item) => for {
+          prior <- acc
+          identity <- item.asString.filter(_.trim.nonEmpty).toRight("invalid Skill capability")
+        } yield prior :+ CapabilityRequirement(identity)
+      }
+      risk <- _string(requirementFields, "risk")
+      reasoning <- _string(requirementFields, "reasoning")
+      level <- ReasoningLevel.values.find(_.value == reasoning).toRight("unsupported Skill reasoning level")
+      review <- requirementFields("reviewRequired").asBoolean.toRight("Skill reviewRequired must be boolean")
+      profile <- _string(fields, "selectedWorkerProfile")
+      policy <- _string(fields, "mappingPolicyVersion")
+    } yield Some(SkillDispatchEvidence(
+      ExecutionRequirement(capabilities, RiskLevel(risk), level, review), profile, policy
+    ))
 
   private[workflow] def _handle(value: WorkflowHandle): Json = Json.obj(
     "componentIdentity" -> Json.fromString(value.componentIdentity.name),
