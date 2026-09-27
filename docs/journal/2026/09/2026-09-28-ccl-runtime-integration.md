@@ -59,3 +59,23 @@ The important near-term requirement is that semantic type, multiplicity, source 
 Future CNCF work should decide the evaluator API/SPI, execution-context representation, pre-state snapshot semantics, evaluation failure model, Guard/Workflow/Admission integration, evidence policy, and observability.
 
 No phase closure dependency is introduced by this journal yet; this is an initial handoff from the CCL design work.
+
+
+## Consequence and Absence Decision
+Two runtime decisions were added.
+
+First, CCL excludes `null`. Absence is represented by CML multiplicity and therefore arrives at runtime as part of the resolved CML/CCL semantics rather than as a special CCL value.
+
+Second, CCL evaluation failure uses the existing Consequence abstraction.
+
+For Constraint execution this gives three materially different outcomes:
+
+```
+success(true)  -> satisfied
+success(false) -> unsatisfied
+failure        -> evaluation failed
+```
+
+The owning runtime concept must preserve this distinction. In particular, a false guard is not a guard-evaluation failure, and an unsatisfied Admission condition is not an Admission evaluator failure.
+
+This removes the need for an OCL-style `invalid` value or a new CCL-specific result hierarchy.
