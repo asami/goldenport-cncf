@@ -89,3 +89,25 @@ Consequence failure
 These outcomes must not be collapsed. Their interpretation remains owned by the execution context. For example, a false StateMachine guard means a transition is not eligible, while a Consequence failure means guard evaluation failed. Likewise, an unsatisfied Admission condition and an Admission evaluation failure are different outcomes.
 
 CCL has no runtime `null` value. Absence is represented by CML multiplicity before and during evaluation.
+
+
+## ConstraintContext Runtime Binding
+CML/CCL derives a ConstraintContextSchema from the Constraint placement. CNCF binds runtime values to that schema rather than inventing an independent evaluation environment.
+
+Conceptually:
+
+```
+CML model placement
+  -> ConstraintContextSchema
+       -> CCL static resolution
+       -> CNCF ConstraintContextInstance
+            -> Consequence[CML value]
+```
+
+The schema may contain subject/self, parameters, variables, result, and temporal views such as pre-state. At runtime a ConstraintContextInstance supplies the corresponding values.
+
+Implicit `self` is a source-level/static-resolution convenience. Runtime evaluation should consume the resolved semantic expression, so it does not need to repeat unqualified-name lookup rules.
+
+Placement also determines execution meaning. Operation.preconditions, Operation.postconditions, Transition.guard, Workflow conditions, and Admission conditions may all reference the same Constraint representation while CNCF applies the appropriate execution policy.
+
+For postconditions, pre-state is best understood as a temporal view of context bindings. The exact snapshot mechanism remains an execution-model follow-up.
