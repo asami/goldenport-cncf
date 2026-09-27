@@ -79,3 +79,15 @@ failure        -> evaluation failed
 The owning runtime concept must preserve this distinction. In particular, a false guard is not a guard-evaluation failure, and an unsatisfied Admission condition is not an Admission evaluator failure.
 
 This removes the need for an OCL-style `invalid` value or a new CCL-specific result hierarchy.
+
+
+## ConstraintContext Schema to Runtime Instance
+The CCL design now treats ConstraintContext as the binding contract between CML semantics and CNCF execution.
+
+CML derives a ConstraintContextSchema from the placement of a Constraint. CCL uses that schema for static name/type resolution, including implicit self. CNCF later creates a ConstraintContextInstance containing actual runtime values for the same bindings.
+
+This means runtime evaluation receives a resolved semantic expression and bound context; it does not redo source-level implicit-self or name-resolution rules.
+
+The owning placement also carries execution semantics: a Constraint referenced by Transition.guard is interpreted as transition eligibility, while one referenced by Operation.preconditions is an operation contract condition. Constraint itself can remain small and shared.
+
+Pre-state for postconditions is consequently viewed as a temporal view of context bindings; the concrete snapshot implementation remains open.
