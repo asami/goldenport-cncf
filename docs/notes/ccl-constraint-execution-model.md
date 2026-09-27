@@ -61,3 +61,31 @@ Source/model references should survive into executable metadata where practical 
 - coexistence of interpreted evaluation and compiled projection
 
 These are follow-up topics. This note establishes the runtime boundary, not a complete runtime specification.
+
+
+## Consequence Semantics
+CCL evaluation failure is represented by the existing Consequence mechanism. CNCF should not introduce a CCL-specific Failure/Result hierarchy for this purpose.
+
+Conceptually:
+
+```
+evaluate(expression, context)
+  -> Consequence[CML value]
+```
+
+For a Constraint, the runtime distinction is:
+
+```
+Consequence success + true
+  -> constraint satisfied
+
+Consequence success + false
+  -> constraint evaluated successfully but is not satisfied
+
+Consequence failure
+  -> constraint evaluation itself failed
+```
+
+These outcomes must not be collapsed. Their interpretation remains owned by the execution context. For example, a false StateMachine guard means a transition is not eligible, while a Consequence failure means guard evaluation failed. Likewise, an unsatisfied Admission condition and an Admission evaluation failure are different outcomes.
+
+CCL has no runtime `null` value. Absence is represented by CML multiplicity before and during evaluation.
