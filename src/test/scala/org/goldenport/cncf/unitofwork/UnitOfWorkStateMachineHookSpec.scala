@@ -41,8 +41,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
  *  version Jul. 25, 2026
- *  version Sep. 17, 2026
- * @version Sep. 19, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec
@@ -57,7 +56,7 @@ final class UnitOfWorkStateMachineHookSpec
       Given("runtime context with a counting transition hook")
       val datastorespace     = DataStoreSpace.default()
       val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val hook               = new _CountingHook
+      val hook               = new CountingHook
       val context            = _execution_context(datastorespace, entitystorespace, hook)
       given ExecutionContext = context
       given EntityPersistent[PersonEntity] = _person_persistent
@@ -189,7 +188,7 @@ final class UnitOfWorkStateMachineHookSpec
       Given("runtime context with a rejecting transition hook")
       val datastorespace     = DataStoreSpace.default()
       val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val hook               = new _RejectingUpdateHook
+      val hook               = new RejectingUpdateHook
       val context            = _execution_context(datastorespace, entitystorespace, hook)
       given ExecutionContext = context
       given EntityPersistent[PersonEntity] = _person_persistent
@@ -244,10 +243,10 @@ final class UnitOfWorkStateMachineHookSpec
     "discard planned lifecycle success events when detached persistence fails before publication" in {
       Given("a successful planned transition and a datastore that fails before publishing its detached update")
       val datastorespace = new DataStoreSpace().useDataStore(
-        new _FailingBeforePublishDataStore
+        new FailingBeforePublishDataStore
       )
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val provider = new _SuccessfulPlanProvider
+      val provider = new SuccessfulPlanProvider
       val hook = new PlannedTransitionValidationHook(provider)
       val context = _execution_context(datastorespace, entitystorespace, hook)
       given ExecutionContext = context
@@ -533,7 +532,7 @@ final class UnitOfWorkStateMachineHookSpec
       }
     }
 
-  private final class _CountingHook extends TransitionValidationHook {
+  private final class CountingHook extends TransitionValidationHook {
     private var _before_update_count = 0
     def beforeUpdateCount: Int       = _before_update_count
 
@@ -564,7 +563,7 @@ final class UnitOfWorkStateMachineHookSpec
     }
   }
 
-  private final class _RejectingUpdateHook extends TransitionValidationHook {
+  private final class RejectingUpdateHook extends TransitionValidationHook {
     def beforeSave[T](
         entity: T,
         tc: org.goldenport.cncf.entity.EntityPersistent[T]
@@ -642,7 +641,7 @@ final class UnitOfWorkStateMachineHookSpec
     }
   }
 
-  private final class _SuccessfulPlanProvider extends StateMachinePlannerProvider {
+  private final class SuccessfulPlanProvider extends StateMachinePlannerProvider {
     private var _execution_trace = Vector.empty[String]
 
     def executionTrace: Vector[String] = _execution_trace
@@ -705,7 +704,7 @@ final class UnitOfWorkStateMachineHookSpec
       )
     )
 
-  private final class _FailingBeforePublishDataStore
+  private final class FailingBeforePublishDataStore
       extends DataStore.InMemoryDataStore(CommitRecorder.noop) {
     override protected def versioned_mutation_checkpoint(
         checkpoint: EntityVersionedMutationCheckpoint

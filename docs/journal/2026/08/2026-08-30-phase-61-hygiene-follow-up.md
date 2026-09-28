@@ -53,3 +53,26 @@ Phase 61 acceptance or beginning a successor Phase.
   61.
 - Source identity: `HYG-61-IC02-002`; Phase 61 mandatory full review of
   `da8e51bb4b5cf48bf35ed7d05d3741646f177eab..86361c11db588bd4d63836af331372937f955868`.
+
+## Hygiene Batch Admission — 2026-09-28
+
+Hygiene Triage: HANDED_OFF
+Hygiene ID: HYG-61-IC02-001
+Handoff Journal: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Handed Off On: 2026-09-28
+Hygiene Status: RESOLVED
+Resolution Batch: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Validated On: 2026-09-28
+Validation Evidence: cncf-hygiene-full-575ba1af14e74b16; receipt e4bf67dad562898b46fcce7a2c0b586098790f5b7757dc74565272f2569709d8; final focused review a762cd8f7af7905460eb54eb96d595130c5b6dd82396193ab1e40e3e38e26d1f
+Acceptance Commit: reported externally after the grouped acceptance commit
+
+
+Hygiene Triage: HANDED_OFF
+Hygiene ID: HYG-61-IC02-002
+Handoff Journal: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Handed Off On: 2026-09-28
+Hygiene Status: RESOLVED
+Resolution Batch: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Validated On: 2026-09-28
+Validation Evidence: cncf-hygiene-full-575ba1af14e74b16; receipt e4bf67dad562898b46fcce7a2c0b586098790f5b7757dc74565272f2569709d8; final focused review a762cd8f7af7905460eb54eb96d595130c5b6dd82396193ab1e40e3e38e26d1f
+Acceptance Commit: reported externally after the grouped acceptance commit

@@ -338,3 +338,321 @@ The goal of this structure is to ensure that:
 - Handover can happen with zero verbal explanation
 
 Accurate work management directly impacts both development speed and quality.
+
+## Ledger Inventory — 2026-09-28
+
+This dated navigation inventory lists every phase/checklist Markdown file
+present on 2026-09-28 and copies its top-level status literally. A missing
+status is reported rather than inferred. The older `Current baseline` and
+closed-phase lists above are historical snapshots where they differ from
+these ledgers. For example, the Phase 69.4 active pointer above predates its
+closed ledger. Each phase and checklist remains the authority for its own
+acceptance, successor, and resume evidence. This inventory changes no status.
+
+| Ledger | Declared status |
+| --- | --- |
+| [phase-2.85-checklist](phase-2.85-checklist.md) | No top-level status declared |
+| [phase-2.85-demo-readiness](phase-2.85-demo-readiness.md) | status = closed |
+| [phase-3.1-checklist](phase-3.1-checklist.md) | No top-level status declared |
+| [phase-3.1.1-checklist](phase-3.1.1-checklist.md) | No top-level status declared |
+| [phase-3.1.1](phase-3.1.1.md) | status = closed |
+| [phase-3.1](phase-3.1.md) | status = done |
+| [phase-3.2](phase-3.2.md) | status = done |
+| [phase-3.3-checklist](phase-3.3-checklist.md) | No top-level status declared |
+| [phase-3.3](phase-3.3.md) | status = closed |
+| [phase-3](phase-3.md) | status = closed |
+| [phase-4-checklist](phase-4-checklist.md) | No top-level status declared |
+| [phase-4](phase-4.md) | status = close |
+| [phase-5-checklist](phase-5-checklist.md) | No top-level status declared |
+| [phase-5](phase-5.md) | status = close |
+| [phase-6-checklist](phase-6-checklist.md) | No top-level status declared |
+| [phase-6](phase-6.md) | status = close |
+| [phase-7-checklist](phase-7-checklist.md) | No top-level status declared |
+| [phase-7](phase-7.md) | status = close |
+| [phase-8-checklist](phase-8-checklist.md) | No top-level status declared |
+| [phase-8](phase-8.md) | status = close |
+| [phase-9-checklist](phase-9-checklist.md) | No top-level status declared |
+| [phase-9](phase-9.md) | status = close |
+| [phase-10-checklist](phase-10-checklist.md) | No top-level status declared |
+| [phase-10](phase-10.md) | status = close |
+| [phase-11-checklist](phase-11-checklist.md) | No top-level status declared |
+| [phase-11](phase-11.md) | status = complete |
+| [phase-12-checklist](phase-12-checklist.md) | No top-level status declared |
+| [phase-12](phase-12.md) | status = complete |
+| [phase-13-checklist](phase-13-checklist.md) | No top-level status declared |
+| [phase-13](phase-13.md) | status = closed |
+| [phase-14-checklist](phase-14-checklist.md) | No top-level status declared |
+| [phase-14](phase-14.md) | status = closed |
+| [phase-15-checklist](phase-15-checklist.md) | No top-level status declared |
+| [phase-15](phase-15.md) | status = closed |
+| [phase-16-checklist](phase-16-checklist.md) | No top-level status declared |
+| [phase-16](phase-16.md) | status = closed |
+| [phase-17-checklist](phase-17-checklist.md) | No top-level status declared |
+| [phase-17](phase-17.md) | status = closed |
+| [phase-18-checklist](phase-18-checklist.md) | Status: DONE |
+| [phase-18](phase-18.md) | status = closed |
+| [phase-19-checklist](phase-19-checklist.md) | Status: DONE |
+| [phase-19](phase-19.md) | status = closed |
+| [phase-20-checklist](phase-20-checklist.md) | Status: DONE |
+| [phase-20](phase-20.md) | status = closed |
+| [phase-21-checklist](phase-21-checklist.md) | Status: DONE |
+| [phase-21](phase-21.md) | status = closed |
+| [phase-22-checklist](phase-22-checklist.md) | Status: DONE |
+| [phase-22](phase-22.md) | status = closed |
+| [phase-23-checklist](phase-23-checklist.md) | Status: DONE |
+| [phase-23](phase-23.md) | status = closed |
+| [phase-24-checklist](phase-24-checklist.md) | Status: DONE |
+| [phase-24](phase-24.md) | status = closed |
+| [phase-25-checklist](phase-25-checklist.md) | Status: DONE |
+| [phase-25](phase-25.md) | status = closed |
+| [phase-26-checklist](phase-26-checklist.md) | Status: DONE |
+| [phase-26](phase-26.md) | status = closed |
+| [phase-27-checklist](phase-27-checklist.md) | Status: DONE |
+| [phase-27](phase-27.md) | status = completed |
+| [phase-28-checklist](phase-28-checklist.md) | No top-level status declared |
+| [phase-28](phase-28.md) | status = closed |
+| [phase-29-checklist](phase-29-checklist.md) | No top-level status declared |
+| [phase-29](phase-29.md) | status = closed |
+| [phase-30-checklist](phase-30-checklist.md) | Status: DONE |
+| [phase-30](phase-30.md) | status = closed |
+| [phase-31-checklist](phase-31-checklist.md) | Status: DONE |
+| [phase-31](phase-31.md) | status = closed |
+| [phase-32-checklist](phase-32-checklist.md) | Status: DONE |
+| [phase-32](phase-32.md) | status = closed |
+| [phase-33-checklist](phase-33-checklist.md) | Status: DONE |
+| [phase-33](phase-33.md) | status = closed |
+| [phase-34-checklist](phase-34-checklist.md) | Status: DONE (Jul. 17, 2026) |
+| [phase-34](phase-34.md) | status = closed |
+| [phase-35-checklist](phase-35-checklist.md) | Status: DONE (Jul. 17, 2026) |
+| [phase-35](phase-35.md) | status = closed |
+| [phase-36-checklist](phase-36-checklist.md) | Status: DONE |
+| [phase-36](phase-36.md) | status = closed |
+| [phase-37-checklist](phase-37-checklist.md) | Status: DONE |
+| [phase-37](phase-37.md) | status = closed |
+| [phase-38-checklist](phase-38-checklist.md) | Status: DONE |
+| [phase-38](phase-38.md) | status = closed |
+| [phase-39-checklist](phase-39-checklist.md) | Status: DONE |
+| [phase-39](phase-39.md) | status = closed |
+| [phase-40-checklist](phase-40-checklist.md) | Status: DONE |
+| [phase-40](phase-40.md) | status = closed |
+| [phase-41-checklist](phase-41-checklist.md) | Status: DONE |
+| [phase-41](phase-41.md) | status = closed |
+| [phase-42-checklist](phase-42-checklist.md) | Status: DONE |
+| [phase-42](phase-42.md) | status = closed |
+| [phase-43-checklist](phase-43-checklist.md) | Status: DONE |
+| [phase-43](phase-43.md) | status = closed |
+| [phase-44-checklist](phase-44-checklist.md) | Status: DONE |
+| [phase-44](phase-44.md) | status = closed |
+| [phase-45-checklist](phase-45-checklist.md) | status=closed |
+| [phase-45](phase-45.md) | status=closed |
+| [phase-46-checklist](phase-46-checklist.md) | No top-level status declared |
+| [phase-46](phase-46.md) | status=closed |
+| [phase-47-checklist](phase-47-checklist.md) | status=closed |
+| [phase-47](phase-47.md) | status=closed |
+| [phase-48-checklist](phase-48-checklist.md) | status=closed |
+| [phase-48](phase-48.md) | status=closed |
+| [phase-49-checklist](phase-49-checklist.md) | status=closed |
+| [phase-49](phase-49.md) | status=closed |
+| [phase-50-checklist](phase-50-checklist.md) | status=closed |
+| [phase-50](phase-50.md) | status=closed |
+| [phase-51-checklist](phase-51-checklist.md) | status=closed |
+| [phase-51](phase-51.md) | status=closed |
+| [phase-52-checklist](phase-52-checklist.md) | status=closed |
+| [phase-52](phase-52.md) | status=closed |
+| [phase-53-checklist](phase-53-checklist.md) | status=closed |
+| [phase-53](phase-53.md) | status=closed |
+| [phase-54-checklist](phase-54-checklist.md) | status=closed |
+| [phase-54](phase-54.md) | status=closed |
+| [phase-55-checklist](phase-55-checklist.md) | status=closed |
+| [phase-55](phase-55.md) | status=closed |
+| [phase-56-checklist](phase-56-checklist.md) | status=closed |
+| [phase-56](phase-56.md) | status=closed |
+| [phase-57-checklist](phase-57-checklist.md) | status=closed |
+| [phase-57.1-checklist](phase-57.1-checklist.md) | status=closed |
+| [phase-57.1](phase-57.1.md) | status=closed |
+| [phase-57.2-checklist](phase-57.2-checklist.md) | status=closed |
+| [phase-57.2](phase-57.2.md) | status=closed |
+| [phase-57.3-checklist](phase-57.3-checklist.md) | status=done |
+| [phase-57.3](phase-57.3.md) | status=done |
+| [phase-57.4-checklist](phase-57.4-checklist.md) | status=done |
+| [phase-57.4](phase-57.4.md) | status=done |
+| [phase-57.5-checklist](phase-57.5-checklist.md) | status=done |
+| [phase-57.5](phase-57.5.md) | status=done |
+| [phase-57](phase-57.md) | status=closed |
+| [phase-58-checklist](phase-58-checklist.md) | status=closed |
+| [phase-58.1-checklist](phase-58.1-checklist.md) | status=done |
+| [phase-58.1](phase-58.1.md) | status=done |
+| [phase-58.2-checklist](phase-58.2-checklist.md) | status=done |
+| [phase-58.2](phase-58.2.md) | status=done |
+| [phase-58.3-checklist](phase-58.3-checklist.md) | status=done |
+| [phase-58.3](phase-58.3.md) | status=done |
+| [phase-58.4-checklist](phase-58.4-checklist.md) | status=done |
+| [phase-58.4](phase-58.4.md) | status=done |
+| [phase-58.5-checklist](phase-58.5-checklist.md) | status=done |
+| [phase-58.5](phase-58.5.md) | status=done |
+| [phase-58.6-checklist](phase-58.6-checklist.md) | status=done |
+| [phase-58.6.1-checklist](phase-58.6.1-checklist.md) | status=closed |
+| [phase-58.6.1](phase-58.6.1.md) | status=closed |
+| [phase-58.6](phase-58.6.md) | status=done |
+| [phase-58.7-checklist](phase-58.7-checklist.md) | status=closed |
+| [phase-58.7](phase-58.7.md) | status=closed |
+| [phase-58.8-checklist](phase-58.8-checklist.md) | status=closed |
+| [phase-58.8](phase-58.8.md) | status=closed |
+| [phase-58.9-checklist](phase-58.9-checklist.md) | status=closed |
+| [phase-58.9](phase-58.9.md) | status=closed |
+| [phase-58](phase-58.md) | status=closed |
+| [phase-59-checklist](phase-59-checklist.md) | status=closed |
+| [phase-59.1-checklist](phase-59.1-checklist.md) | status=closed |
+| [phase-59.1](phase-59.1.md) | status=closed |
+| [phase-59.2-checklist](phase-59.2-checklist.md) | status=closed |
+| [phase-59.2.1-checklist](phase-59.2.1-checklist.md) | status=closed |
+| [phase-59.2.1](phase-59.2.1.md) | status=closed |
+| [phase-59.2.2-checklist](phase-59.2.2-checklist.md) | status=closed |
+| [phase-59.2.2](phase-59.2.2.md) | status=closed |
+| [phase-59.2.3-checklist](phase-59.2.3-checklist.md) | status=closed |
+| [phase-59.2.3](phase-59.2.3.md) | status=closed |
+| [phase-59.2](phase-59.2.md) | status=closed |
+| [phase-59.3-checklist](phase-59.3-checklist.md) | status=closed |
+| [phase-59.3](phase-59.3.md) | status=closed |
+| [phase-59.4-checklist](phase-59.4-checklist.md) | status=closed |
+| [phase-59.4](phase-59.4.md) | status=closed |
+| [phase-59.5-checklist](phase-59.5-checklist.md) | status=closed |
+| [phase-59.5](phase-59.5.md) | status=closed |
+| [phase-59.6-checklist](phase-59.6-checklist.md) | status=closed |
+| [phase-59.6](phase-59.6.md) | status=closed |
+| [phase-59.7-checklist](phase-59.7-checklist.md) | status=closed |
+| [phase-59.7](phase-59.7.md) | status=closed |
+| [phase-59.8-checklist](phase-59.8-checklist.md) | status=closed |
+| [phase-59.8](phase-59.8.md) | status=closed |
+| [phase-59.9-checklist](phase-59.9-checklist.md) | status=closed |
+| [phase-59.9](phase-59.9.md) | status=closed |
+| [phase-59.10-checklist](phase-59.10-checklist.md) | status=closed |
+| [phase-59.10](phase-59.10.md) | status=closed |
+| [phase-59](phase-59.md) | status=closed |
+| [phase-60-checklist](phase-60-checklist.md) | status=closed |
+| [phase-60.1-checklist](phase-60.1-checklist.md) | status=closed |
+| [phase-60.1](phase-60.1.md) | status=closed |
+| [phase-60.2-checklist](phase-60.2-checklist.md) | status=closed |
+| [phase-60.2](phase-60.2.md) | status=closed |
+| [phase-60.3-checklist](phase-60.3-checklist.md) | status=closed |
+| [phase-60.3](phase-60.3.md) | status=closed |
+| [phase-60.4-checklist](phase-60.4-checklist.md) | status=closed |
+| [phase-60.4](phase-60.4.md) | status=closed |
+| [phase-60.5-checklist](phase-60.5-checklist.md) | status=closed |
+| [phase-60.5](phase-60.5.md) | status=closed |
+| [phase-60.6-checklist](phase-60.6-checklist.md) | status=closed |
+| [phase-60.6](phase-60.6.md) | status=closed |
+| [phase-60.7-checklist](phase-60.7-checklist.md) | status=closed |
+| [phase-60.7](phase-60.7.md) | status=closed |
+| [phase-60.8-checklist](phase-60.8-checklist.md) | status=closed |
+| [phase-60.8](phase-60.8.md) | status=closed |
+| [phase-60](phase-60.md) | status=closed |
+| [phase-61-checklist](phase-61-checklist.md) | status=closed |
+| [phase-61.1-checklist](phase-61.1-checklist.md) | status=closed |
+| [phase-61.1](phase-61.1.md) | status=closed |
+| [phase-61.2-checklist](phase-61.2-checklist.md) | status=closed |
+| [phase-61.2](phase-61.2.md) | status=closed |
+| [phase-61.3-checklist](phase-61.3-checklist.md) | status=closed |
+| [phase-61.3](phase-61.3.md) | status=closed |
+| [phase-61.4-checklist](phase-61.4-checklist.md) | status=closed |
+| [phase-61.4](phase-61.4.md) | status=closed |
+| [phase-61.5-checklist](phase-61.5-checklist.md) | status=closed |
+| [phase-61.5.1-checklist](phase-61.5.1-checklist.md) | status=closed |
+| [phase-61.5.1](phase-61.5.1.md) | status=closed |
+| [phase-61.5](phase-61.5.md) | status=closed |
+| [phase-61.6-checklist](phase-61.6-checklist.md) | status=closed |
+| [phase-61.6](phase-61.6.md) | status=closed |
+| [phase-61](phase-61.md) | status=closed |
+| [phase-62-checklist](phase-62-checklist.md) | status=planned |
+| [phase-62.1-checklist](phase-62.1-checklist.md) | status=planned |
+| [phase-62.1](phase-62.1.md) | status=planned |
+| [phase-62](phase-62.md) | status=planned |
+| [phase-63-checklist](phase-63-checklist.md) | status=complete |
+| [phase-63-execution-plan](phase-63-execution-plan.md) | status=complete |
+| [phase-63.1-checklist](phase-63.1-checklist.md) | status=complete |
+| [phase-63.1](phase-63.1.md) | status=complete |
+| [phase-63.2-checklist](phase-63.2-checklist.md) | status=completed |
+| [phase-63.2](phase-63.2.md) | status=completed |
+| [phase-63](phase-63.md) | status=complete |
+| [phase-64-checklist](phase-64-checklist.md) | status=completed |
+| [phase-64.1](phase-64.1.md) | status=superseded |
+| [phase-64.2](phase-64.2.md) | status=completed |
+| [phase-64](phase-64.md) | status=completed |
+| [phase-65-checklist](phase-65-checklist.md) | status=planned |
+| [phase-65](phase-65.md) | status=planned |
+| [phase-66-checklist](phase-66-checklist.md) | status=planned |
+| [phase-66](phase-66.md) | status=planned |
+| [phase-67-checklist](phase-67-checklist.md) | status=planned |
+| [phase-67](phase-67.md) | status=planned |
+| [phase-68-checklist](phase-68-checklist.md) | status=planned |
+| [phase-68](phase-68.md) | status=planned |
+| [phase-69-checklist](phase-69-checklist.md) | status=closed |
+| [phase-69.1-checklist](phase-69.1-checklist.md) | status=closed |
+| [phase-69.1](phase-69.1.md) | status=closed |
+| [phase-69.2-checklist](phase-69.2-checklist.md) | status=completed |
+| [phase-69.2](phase-69.2.md) | status=completed |
+| [phase-69.3-checklist](phase-69.3-checklist.md) | status=closed |
+| [phase-69.3](phase-69.3.md) | status=closed |
+| [phase-69.4-checklist](phase-69.4-checklist.md) | status=closed |
+| [phase-69.4](phase-69.4.md) | status=closed |
+| [phase-69.5-checklist](phase-69.5-checklist.md) | status=planned |
+| [phase-69.5](phase-69.5.md) | status=planned |
+| [phase-69.6-checklist](phase-69.6-checklist.md) | status=planned |
+| [phase-69.6](phase-69.6.md) | status=planned |
+| [phase-69.7-checklist](phase-69.7-checklist.md) | status=planned |
+| [phase-69.7](phase-69.7.md) | status=planned |
+| [phase-69](phase-69.md) | status=closed |
+| [phase-70-checklist](phase-70-checklist.md) | status=closed |
+| [phase-70.1-checklist](phase-70.1-checklist.md) | status=closed |
+| [phase-70.1](phase-70.1.md) | status=closed |
+| [phase-70](phase-70.md) | status=closed |
+| [phase-71-checklist](phase-71-checklist.md) | status=planned |
+| [phase-71](phase-71.md) | status=planned |
+| [phase-72-checklist](phase-72-checklist.md) | status=planned |
+| [phase-72](phase-72.md) | status=planned |
+| [phase-73-checklist](phase-73-checklist.md) | status=planned |
+| [phase-73](phase-73.md) | status=planned |
+| [phase-74-checklist](phase-74-checklist.md) | status=closed |
+| [phase-74.1-checklist](phase-74.1-checklist.md) | status=closed |
+| [phase-74.1](phase-74.1.md) | status=closed |
+| [phase-74.2-checklist](phase-74.2-checklist.md) | status=closed |
+| [phase-74.2](phase-74.2.md) | status=closed |
+| [phase-74.3-checklist](phase-74.3-checklist.md) | status=closed |
+| [phase-74.3](phase-74.3.md) | status=closed |
+| [phase-74](phase-74.md) | status=closed |
+| [phase-75-checklist](phase-75-checklist.md) | status=planned |
+| [phase-75](phase-75.md) | status=planned |
+| [phase-76-checklist](phase-76-checklist.md) | status=planned |
+| [phase-76](phase-76.md) | status=planned |
+| [phase-77-checklist](phase-77-checklist.md) | status=closed |
+| [phase-77.1-checklist](phase-77.1-checklist.md) | status=closed |
+| [phase-77.1](phase-77.1.md) | status=closed |
+| [phase-77.2-checklist](phase-77.2-checklist.md) | status=planned |
+| [phase-77.2](phase-77.2.md) | status=planned |
+| [phase-77](phase-77.md) | status=closed |
+| [phase-78-checklist](phase-78-checklist.md) | status=planned |
+| [phase-78](phase-78.md) | status=planned |
+| [phase-79](phase-79.md) | status=planned |
+| [phase-80-participant-invocation-addendum](phase-80-participant-invocation-addendum.md) | Status: planned / normative addendum to Phase 80 |
+| [phase-80-skill-workflow-support-addendum](phase-80-skill-workflow-support-addendum.md) | Status: planned / normative addendum to Phase 80 |
+| [phase-80-statemachine-api-spi-addendum](phase-80-statemachine-api-spi-addendum.md) | Status: planned / normative refinement |
+| [phase-80-workflow-api-proxy-roadmap-addendum](phase-80-workflow-api-proxy-roadmap-addendum.md) | Status: planned / forward-compatibility clarification |
+| [phase-80-workflow-spi-addendum](phase-80-workflow-spi-addendum.md) | Status: planned / normative refinement |
+| [phase-80](phase-80.md) | Status: planned |
+| [phase-81](phase-81.md) | Status: planned |
+| [phase-82](phase-82.md) | Status: planned |
+| [phase-83](phase-83.md) | Status: planned |
+| [phase-84](phase-84.md) | Status: planned |
+| [phase-85](phase-85.md) | Status: planned |
+| [phase-86](phase-86.md) | Status: planned |
+| [phase-87](phase-87.md) | Status: planned |
+| [phase-88](phase-88.md) | Status: planned |
+| [phase-89-checklist](phase-89-checklist.md) | status=planned |
+| [phase-89](phase-89.md) | status=planned |
+| [phase-90-checklist](phase-90-checklist.md) | status=planned |
+| [phase-90](phase-90.md) | status=planned |
+| [phase-91](phase-91.md) | No top-level status declared |
+| [phase-92](phase-92.md) | No top-level status declared |
+| [phase-93](phase-93.md) | No top-level status declared |
+| [phase-94-checklist](phase-94-checklist.md) | status=planned |
+| [phase-94](phase-94.md) | status=planned |

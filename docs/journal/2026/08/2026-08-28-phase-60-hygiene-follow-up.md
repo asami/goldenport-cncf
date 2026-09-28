@@ -81,3 +81,26 @@ Phase 60 acceptance or successor scope.
 - Source identity: `HYG-P607-001`; Phase 60.7 full review of
   `d4771a43f2950ebcee481341fb2db3ddb9696e0c..4cbd331d5a3f341b67e876fb85c402dfaa9ac563`
   and focused closure re-review of the accepted CPB repair delta.
+
+## Hygiene Batch Admission — 2026-09-28
+
+Hygiene Triage: HANDED_OFF
+Hygiene ID: HYG-BASELINE-001
+Handoff Journal: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Handed Off On: 2026-09-28
+Hygiene Status: RESOLVED
+Resolution Batch: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Validated On: 2026-09-28
+Validation Evidence: cncf-hygiene-full-575ba1af14e74b16; receipt e4bf67dad562898b46fcce7a2c0b586098790f5b7757dc74565272f2569709d8; final focused review a762cd8f7af7905460eb54eb96d595130c5b6dd82396193ab1e40e3e38e26d1f
+Acceptance Commit: reported externally after the grouped acceptance commit
+
+
+Hygiene Triage: HANDED_OFF
+Hygiene ID: HYG-P607-001
+Handoff Journal: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Handed Off On: 2026-09-28
+Hygiene Status: RESOLVED
+Resolution Batch: goldenport-cncf:docs/journal/2026/09/2026-09-28-hygiene-resolution-batch-handoff.md
+Validated On: 2026-09-28
+Validation Evidence: cncf-hygiene-full-575ba1af14e74b16; receipt e4bf67dad562898b46fcce7a2c0b586098790f5b7757dc74565272f2569709d8; final focused review a762cd8f7af7905460eb54eb96d595130c5b6dd82396193ab1e40e3e38e26d1f
+Acceptance Commit: reported externally after the grouped acceptance commit

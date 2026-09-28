@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Sep. 17, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineRuleBuilderSpec
@@ -31,7 +31,7 @@ final class StateMachineRuleBuilderSpec
     "build update rule with ref guard and execute plan" in {
       Given("a state-machine update rule with a reference guard and execution plan")
       given ExecutionContext = ExecutionContext.create()
-      given EntityPersistent[_Entity] = _entityPersistent
+      given EntityPersistent[_Entity] = _entity_persistent
 
       val trace = ArrayBuffer.empty[String]
       val guardresolver = new GuardBindingResolver[_Entity, TransitionEvent] {
@@ -82,7 +82,7 @@ final class StateMachineRuleBuilderSpec
       val entity = _Entity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b1", _cid, entropy = "b1"), "taro")
       val event = TransitionEvent("update", Some(entity.id))
       When("the provider selects and executes the update plan")
-      val selected = provider.planForUpdate(entity, _entityPersistent, event)
+      val selected = provider.planForUpdate(entity, _entity_persistent, event)
       val selectedPlan = selected.TAKE.getOrElse(fail("plan should be selected"))
       Then("the plan executes its exit, transition, and entry actions in order")
       ExecutionPlanExecutor.execute(
@@ -111,7 +111,7 @@ final class StateMachineRuleBuilderSpec
     def toRecord: Record = Record.dataAuto("id" -> id, "name" -> name)
   }
 
-  private val _entityPersistent: EntityPersistent[_Entity] = new EntityPersistent[_Entity] {
+  private val _entity_persistent: EntityPersistent[_Entity] = new EntityPersistent[_Entity] {
     def id(e: _Entity): EntityId = e.id
     def toRecord(e: _Entity): Record = e.toRecord
     def fromRecord(r: Record): Consequence[_Entity] = {

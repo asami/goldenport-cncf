@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 14, 2026
  *  version Apr. 26, 2026
- * @version Sep. 17, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreImportSeedSpec
@@ -24,7 +24,7 @@ final class EntityStoreImportSeedSpec
   with Matchers
   with GivenWhenThen {
 
-  private val collectionId = EntityCollectionId("test", "a", "import_seed_person")
+  private val _collection_id = EntityCollectionId("test", "a", "import_seed_person")
 
   "EntityStoreSpace.importSeed" should {
     "import entities and make them loadable through the entity-store route" in {
@@ -33,7 +33,7 @@ final class EntityStoreImportSeedSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PersonEntity] = _person_persistent
-      val e1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", collectionId, entropy = "p1"), "taro")
+      val e1 = PersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "p1", _collection_id, entropy = "p1"), "taro")
 
       val seed = EntityStoreSeed(
         Vector(
@@ -57,15 +57,15 @@ final class EntityStoreImportSeedSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[StoreStylePersonEntity] = _store_style_person_persistent
-      val e1 = StoreStylePersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "s1", storeStyleCollectionId, entropy = "s1"), "hanako")
+      val e1 = StoreStylePersonEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "s1", _store_style_collection_id, entropy = "s1"), "hanako")
 
       When("importing the seed")
       val imported = entitystorespace.importSeed(EntityStoreSeed(Vector(EntityStoreSeedEntry(e1))))
       val stored = for {
         _ <- imported
-        ds <- datastorespace.dataStore(DataStore.CollectionId.EntityStore(storeStyleCollectionId))
+        ds <- datastorespace.dataStore(DataStore.CollectionId.EntityStore(_store_style_collection_id))
         rec <- ds.load(
-          DataStore.CollectionId.EntityStore(storeStyleCollectionId),
+          DataStore.CollectionId.EntityStore(_store_style_collection_id),
           DataStore.EntryId(e1.id)
         )
       } yield rec
@@ -141,7 +141,7 @@ final class EntityStoreImportSeedSpec
       }
     }
 
-  private val storeStyleCollectionId = EntityCollectionId("test", "a", "import_seed_store_style_person")
+  private val _store_style_collection_id = EntityCollectionId("test", "a", "import_seed_store_style_person")
 
   private final case class StoreStylePersonEntity(
     id: EntityId,

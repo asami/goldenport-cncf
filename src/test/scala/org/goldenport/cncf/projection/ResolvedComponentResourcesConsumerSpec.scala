@@ -13,22 +13,26 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
- * Failing-first executable acceptance specification for
- * RSC08-CONSUMER-PROJECTION (Phase 58.7 / RSC-08 / RSC-08A RED).
+ * Executable acceptance specification for
+ * RSC08-CONSUMER-PROJECTION (Phase 58.7 / RSC-08 / RSC-08A).
  *
- * The consumer projection vocabulary is deliberately referenced before its
- * production implementation.  This specification fixes the shared Help and
+ * The implemented consumer projection contract fixes the shared Help and
  * Admin inventory/access boundary while keeping resolution and authorization
  * owned by their existing repository contracts.
  *
  * @since   Aug. 22, 2026
- * @version Aug. 26, 2026
+ *  version Aug. 26, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedComponentResourcesConsumerSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
+  private val _rsc08_group_1 = afterWord("in spec:component-resource-subcomponent, example:RSC08-G1, rules:RSC-08, phase:58.7, slice:RSC-08A")
+  private val _rsc08_group_2 = afterWord("in spec:component-resource-subcomponent, example:RSC08-G2, rules:RSC-08, phase:58.7, slice:RSC-08A")
+  private val _rsc08_group_3 = afterWord("in spec:component-resource-subcomponent, example:RSC08-G3, rules:RSC-08, phase:58.7, slice:RSC-08A")
+
 
   private val _namespace = "org.goldenport.cncf.phase58"
   private val _release = "0.1.0-SNAPSHOT"
@@ -70,7 +74,7 @@ final class ResolvedComponentResourcesConsumerSpec
     "in spec:resolved-component-resources-consumer, example:E2, rules:DOC05-A-AC04, phase:59.5, slice:DOC05-A-S02"
   )
 
-  "RSC08-AC-01 Help and Admin consumer projections" should {
+  "RSC08-AC-01 Help and Admin consumer projections" should _rsc08_group_1 {
     "which preserve identical safe identity, state, and provenance views for the complete fixture" in {
       Given("a named Subsystem and supplied resolved resources for the parent, Documentation, SourceCode, external-platform, and ordinary Subcomponent fixtures")
       val composition = _composition
@@ -148,7 +152,7 @@ final class ResolvedComponentResourcesConsumerSpec
     }
   }
 
-  "RSC08-AC-02 supplied resolved-resource boundary" should {
+  "RSC08-AC-02 supplied resolved-resource boundary" should _rsc08_group_2 {
     "which keeps inventory independent of archives repositories caches and development-tree scans" in {
       Given("only an explicitly supplied ResolvedComponentResources value in deterministic input order and a named Subsystem identity")
       val resolved = _resolved
@@ -178,7 +182,7 @@ final class ResolvedComponentResourcesConsumerSpec
     }
   }
 
-  "RSC08-AC-03 inventory visibility and authorized content access" should {
+  "RSC08-AC-03 inventory visibility and authorized content access" should _rsc08_group_3 {
     "which keeps a restricted resource visible while delegating access through the authorization policy" in {
       Given("a visible restricted Documentation resource and a request carrying its supplied content")
       val composition = _composition

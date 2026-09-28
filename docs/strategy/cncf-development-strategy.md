@@ -5316,3 +5316,17 @@ candidate code only, not accepted Phase 77.1/77.2 behavior.
 
 Planning references: [Phase 94](../phase/phase-94.md) and
 [Phase 94 Checklist](../phase/phase-94-checklist.md).
+
+## Status Navigation Erratum — 2026-09-28
+
+The `Process Status Pointers` and `Current Phase Status Snapshot` sections
+above record their original planning snapshots. In particular, the Phase 48
+active pointer is historical. A historical snapshot or closed Phase anchor
+must not be used to reopen work or infer the current resume point.
+
+The [phase index](../phase/README.md#ledger-inventory--2026-09-28) inventories
+the current phase/checklist files and their declared status, including
+closed, active, planned, and unspecified records. Each linked ledger owns
+its status and evidence; the index is navigation, not a second acceptance
+authority. Later phase ledgers take precedence over an older strategy
+snapshot. No Phase status or acceptance evidence is changed by this erratum.

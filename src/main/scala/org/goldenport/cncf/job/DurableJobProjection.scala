@@ -10,7 +10,7 @@ import org.goldenport.Consequence
  * or any other live execution object.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 14, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobProjectionEvidence(
@@ -120,7 +120,7 @@ private[job] object DurableJobProjection {
     record: JobRecord,
     evidence: DurableJobProjectionEvidence
   ): Consequence[DurableJobRecord] =
-    _bodyV2(record, evidence) match {
+    _body_v2(record, evidence) match {
       case Left(message) => Consequence.argumentInvalid(s"durable v2 projection refused: $message")
       case Right(body) => DurableJobRecord.createV2(body)
     }
@@ -171,7 +171,7 @@ private[job] object DurableJobProjection {
       retention = evidence.retention
     )
 
-  private def _bodyV2(
+  private def _body_v2(
     record: JobRecord,
     evidence: DurableJobProjectionEvidence
   ): Either[String, DurableJobRecordBody] =

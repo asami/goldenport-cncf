@@ -578,3 +578,13 @@ Stage Status:
 
 Evidence:
 - Pending.
+
+## Status Navigation Erratum — 2026-09-28
+
+The pre-split plans, successor statements, and resume pointers above are
+historical snapshots. They do not select the currently active work. The
+Phase 59 series closure is recorded in [Phase 59.10](phase-59.10.md) and
+its [checklist](phase-59.10-checklist.md). Consult the dated ledger inventory
+in the [phase index](README.md) and each linked phase/checklist for current
+status and acceptance evidence. This erratum does not change an accepted
+Phase status or its original evidence.

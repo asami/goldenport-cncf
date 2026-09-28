@@ -13,8 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- *  version Mar. 20, 2026
- * @version Sep. 18, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventEngineLaneSemanticsSpec
@@ -25,11 +24,11 @@ final class EventEngineLaneSemanticsSpec
   "EventEngine lanes" should {
     "persist transactional events only after commit" in {
       Given("event engine with in-memory event store")
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val tx = TransactionContext.create(ExecutionContext.create().transactionContext)
-      val e1 = _TestEvent("tx-1")
+      val e1 = TestEvent("tx-1")
 
       When("event is staged and prepared")
       engine.stage(Vector(e1))
@@ -49,10 +48,10 @@ final class EventEngineLaneSemanticsSpec
 
     "persist non-transactional events independently" in {
       Given("event engine with in-memory event store")
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val e1 = _TestEvent("ntx-1")
+      val e1 = TestEvent("ntx-1")
 
       When("event is emitted through non-transactional lane")
       val emitted = engine.emit(Vector(e1))
@@ -234,9 +233,9 @@ final class EventEngineLaneSemanticsSpec
     )
   }
 
-  private final case class _TestEvent(name: String) extends DomainEvent
+  private final case class TestEvent(name: String) extends DomainEvent
 
-  private final class _InMemoryCommitRecorder extends CommitRecorder {
+  private final class InMemoryCommitRecorder extends CommitRecorder {
     private val _entries = scala.collection.mutable.ArrayBuffer.empty[String]
     def record(message: String): Unit = _entries += message
     def entries: Vector[String] = _entries.toVector
