@@ -16,9 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 12, 2026
- *  version Aug. 12, 2026
- *  version Sep. 18, 2026
- * @version Sep. 19, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkPostCommitConsequenceSpec

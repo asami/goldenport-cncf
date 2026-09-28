@@ -339,7 +339,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
       given ExecutionContext = context
       given EntityPersistent[Person] = _person_persistent
-      val hook = new PlannedTransitionValidationHook(new _ProviderWithPlanningFailure)
+      val hook = new PlannedTransitionValidationHook(new ProviderWithPlanningFailure)
       val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "test",
@@ -717,7 +717,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     }
   }
 
-  private final class _ProviderWithPlanningFailure extends StateMachinePlannerProvider {
+  private final class ProviderWithPlanningFailure extends StateMachinePlannerProvider {
     def planForSave[T](
       entity: T,
       tc: EntityPersistent[T],

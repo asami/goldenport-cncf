@@ -262,7 +262,7 @@ private[http] trait WebDescriptorParsingPart { self: WebDescriptor.type =>
 
   private def _page_customization(record: Record): PageCustomization =
   {
-    val modeRaw = _string(record, "mode").orElse(_string(record, "pageMode")).orElse(_string(record, "page-mode"))
+    val moderaw = _string(record, "mode").orElse(_string(record, "pageMode")).orElse(_string(record, "page-mode"))
     val displayraw = _string(record, "display").orElse(_string(record, "pageDisplay")).orElse(_string(record, "page-display"))
     val profileraw = _profile_raw(record)
     PageCustomization(
@@ -270,8 +270,8 @@ private[http] trait WebDescriptorParsingPart { self: WebDescriptor.type =>
       heading = _string(record, "heading"),
       subtitle = _string(record, "subtitle").orElse(_string(record, "description")),
       layout = _string(record, "layout"),
-      mode = modeRaw.flatMap(PageMode.parse),
-      modeRaw = modeRaw,
+      mode = moderaw.flatMap(PageMode.parse),
+      modeRaw = moderaw,
       display = displayraw.flatMap(PageDisplay.parse),
       displayRaw = displayraw,
       profile = profileraw.flatMap(WebUxProfile.parse),
@@ -295,7 +295,7 @@ private[http] trait WebDescriptorParsingPart { self: WebDescriptor.type =>
       name <- record.getString("name").map(_.trim).filter(_.nonEmpty)
     } yield {
       val root = record.getString("root").map(_.trim).filter(_.nonEmpty)
-      val compositionRaw =
+      val compositionraw =
         _string(record, "composition")
           .orElse(_string(record, "webComposition"))
           .orElse(_string(record, "web-composition"))
@@ -317,8 +317,8 @@ private[http] trait WebDescriptorParsingPart { self: WebDescriptor.type =>
         theme = _theme(record),
         assets = _assets(record),
         layout = _string(record, "layout"),
-        composition = compositionRaw.flatMap(ComponentWebComposition.parse).getOrElse(ComponentWebComposition.Disabled),
-        compositionRaw = compositionRaw,
+        composition = compositionraw.flatMap(ComponentWebComposition.parse).getOrElse(ComponentWebComposition.Disabled),
+        compositionRaw = compositionraw,
         pageDisplay = pagedisplayraw.flatMap(PageDisplay.parse),
         pageDisplayRaw = pagedisplayraw,
         profile = profileraw.flatMap(WebUxProfile.parse),
