@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 21, 2026
- * @version Sep. 25, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowInstancePersistenceSpec
@@ -203,6 +203,7 @@ final class WorkflowInstancePersistenceSpec
           binding.producerRevision,
           binding.fixtureSha256,
           definition,
+          None,
           None
         ).asInstanceOf[DefinitionBinding]
         val forgedDiagnostic = _diagnostic(forged.validateC)

@@ -11,7 +11,7 @@ import org.goldenport.cncf.workflow.{ActionExecution, Continuation, Continuation
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 20, 2026
- * @version Sep. 18, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ResolvedAction[S, E] {
@@ -192,7 +192,7 @@ object ExecutionPlanExecutor {
         )
         failure match {
           case Consequence.Failure(conclusion) => observer.failed(plan, state, event, conclusion)
-          case _ => ()
+          case null => ()
         }
         failure
     }

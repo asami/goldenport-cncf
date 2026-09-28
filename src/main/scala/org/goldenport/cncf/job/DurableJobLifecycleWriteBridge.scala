@@ -6,12 +6,12 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 
 /*
- * Closed lifecycle boundary for the only durable writes admitted by JM69-03L.
+ * Closed lifecycle boundary for the durable writes admitted by JM69-03N and JM69-03O.
  * The source supplies closed evidence and access independently of the bridge;
  * the bridge does not derive durable facts from live execution objects.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 11, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] enum DurableJobLifecycleWriteBoundary {

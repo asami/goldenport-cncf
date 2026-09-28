@@ -23,7 +23,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 /*
  * @since   May. 11, 2026
  *  version Aug.  4, 2026
- * @version Sep. 17, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class DiagnosticPayloadExternalizationConfig(
@@ -145,17 +145,17 @@ object DiagnosticPayloadExternalizationConfig {
 }
 
 object DiagnosticPayloadReferenceCodec {
-  private val BlobPrefix = "blob-"
+  private val _blob_prefix = "blob-"
 
   def encodeBlobRef(ref: BlobStorageRef): String =
-    BlobPrefix + Base64.getUrlEncoder.withoutPadding.encodeToString(ref.print.getBytes(StandardCharsets.UTF_8))
+    _blob_prefix + Base64.getUrlEncoder.withoutPadding.encodeToString(ref.print.getBytes(StandardCharsets.UTF_8))
 
   def decodeBlobRef(id: String): Option[BlobStorageRef] =
-    if (!id.startsWith(BlobPrefix))
+    if (!id.startsWith(_blob_prefix))
       None
     else
       try {
-        val bytes = Base64.getUrlDecoder.decode(id.stripPrefix(BlobPrefix))
+        val bytes = Base64.getUrlDecoder.decode(id.stripPrefix(_blob_prefix))
         BlobStorageRef.parse(new String(bytes, StandardCharsets.UTF_8)).toOption
       } catch {
         case NonFatal(_) => None
@@ -194,7 +194,7 @@ object DiagnosticPayloadExternalizer {
   )(
     body: => A
   ): A =
-    withOperation(operation, None, RuntimeConfig.defaultOperationMode)(body)
+    _with_operation(operation, None, RuntimeConfig.defaultOperationMode)(body)
 
   def withOperation[A](
     operation: String,
@@ -202,7 +202,7 @@ object DiagnosticPayloadExternalizer {
   )(
     body: => A
   ): A =
-    withOperation(operation, Some(params), RuntimeConfig.defaultOperationMode)(body)
+    _with_operation(operation, Some(params), RuntimeConfig.defaultOperationMode)(body)
 
   def withOperation[A](
     operation: String,
@@ -211,7 +211,7 @@ object DiagnosticPayloadExternalizer {
   )(
     body: => A
   ): A =
-    withOperation(operation, Some(params), operationMode)(body)
+    _with_operation(operation, Some(params), operationMode)(body)
 
   def withOperation[A](
     operation: String,
@@ -219,9 +219,9 @@ object DiagnosticPayloadExternalizer {
   )(
     body: => A
   ): A =
-    withOperation(operation, None, operationMode)(body)
+    _with_operation(operation, None, operationMode)(body)
 
-  private def withOperation[A](
+  private def _with_operation[A](
     operation: String,
     params: Option[ResolvedParameters],
     operationMode: OperationMode
@@ -245,7 +245,7 @@ object DiagnosticPayloadExternalizer {
   private[cncf] def currentOperationMode: Option[OperationMode] =
     Option(_scope.get()).map(_.operationMode)
 
-  private def currentOverride: Option[RequestOverride] =
+  private def _current_override: Option[RequestOverride] =
     Option(_scope.get()).flatMap(_.overrideConfig)
 
   def fromGlobal: DiagnosticPayloadExternalizer =
@@ -408,7 +408,7 @@ final case class DiagnosticPayloadExternalizer(
     effectiveConfig.normalizedDestination(operationMode).getOrElse("disabled")
 
   private def _effective_config: DiagnosticPayloadExternalizationConfig =
-    DiagnosticPayloadExternalizer.currentOverride match {
+    DiagnosticPayloadExternalizer._current_override match {
       case Some(overrideConfig) if config.allowRequestOverride =>
         config.copy(
           enabled = overrideConfig.enabled.getOrElse(config.enabled),

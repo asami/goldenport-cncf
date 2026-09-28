@@ -1,6 +1,7 @@
 package org.goldenport.cncf.unitofwork
 
 import org.scalacheck.{Gen, Prop, Test}
+import org.goldenport.cncf.workflow.{CompletionContract, ContextBundle, ContextContract, ContextSnapshot, EvidenceContract, ProviderExecutionRequest, StateMachineOperationIdentity, StateMachineProvidedApiRequest, StateMachineRequiredOperation, StateMachineRequiredOperationIdentity, StateMachineRequiredOperationMetadata, StateMachineRunIdentity}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -9,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for metadata-independent UnitOfWork planning.
  *
  * @since   Sep.  8, 2026
- * @version Sep.  8, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramPlanningSpec
@@ -23,6 +24,45 @@ final class UnitOfWorkProgramPlanningSpec
   private val _control = UnitOfWorkOp.Authorize(_authorization)
   private val _local = UnitOfWorkOp.LocalDataDir("component")
   private val _external = UnitOfWorkOp.HttpGet("/external")
+  private val _context = ContextBundle(
+    "planning context",
+    Vector.empty,
+    Vector.empty,
+    ContextSnapshot("1")
+  )
+  private val _required_operation = StateMachineRequiredOperation(
+    StateMachineRequiredOperationIdentity("planning.required"),
+    "planning.action",
+    StateMachineOperationIdentity("planning.service", "required"),
+    None,
+    None,
+    StateMachineRequiredOperationMetadata(
+      ContextContract("planning.context", Vector.empty, Vector.empty),
+      CompletionContract("planning.completion", Vector.empty),
+      EvidenceContract("planning.evidence", Vector.empty),
+      Vector.empty
+    )
+  )
+  private val _provider_request = ProviderExecutionRequest(
+    StateMachineRunIdentity("planning.run"),
+    _required_operation,
+    None,
+    _context
+  )
+  private val _provider_operation = UnitOfWorkOp.StateMachineProviderExecute(
+    _provider_request
+  )
+  private val _provided_api_request = StateMachineProvidedApiRequest(
+    "planning.workflow",
+    "1",
+    StateMachineRunIdentity("planning.run"),
+    StateMachineOperationIdentity("planning.service", "provided"),
+    None,
+    _context
+  )
+  private val _provided_api_operation = UnitOfWorkOp.StateMachineProvidedApiExecute(
+    _provided_api_request
+  )
 
   "UnitOfWorkProgramPlanner" should {
     "classify representative control, local, and external operations" in {
@@ -75,6 +115,38 @@ final class UnitOfWorkProgramPlanningSpec
       )
     }
 
+    "retain typed state-machine operations in mixed local and external segments" in {
+      Given("well-formed Provider and Provided API requests in a mixed operation sequence")
+      val operations = Vector(
+        _local,
+        _provider_operation,
+        _provided_api_operation,
+        _external,
+        _provider_operation,
+        _local
+      )
+
+      When("the mixed operation sequence is planned")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+
+      Then("state-machine dispatch remains Local and the external occurrence remains an isolated boundary")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.ordinal) shouldBe Vector(0, 1, 2, 3, 4, 5)
+      plan.occurrences.map(_.effectClass) shouldBe Vector(
+        UnitOfWorkEffectClass.Local,
+        UnitOfWorkEffectClass.Local,
+        UnitOfWorkEffectClass.Local,
+        UnitOfWorkEffectClass.External,
+        UnitOfWorkEffectClass.Local,
+        UnitOfWorkEffectClass.Local
+      )
+      plan.segments shouldBe Vector(
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(3)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(3)),
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(4))
+      )
+    }
+
     "retain repeated equal operations with their input order and ordinals" in {
       Given("two equal occurrences of one local operation")
       val repeated = UnitOfWorkOp.LocalDataDir("same")
@@ -104,9 +176,15 @@ final class UnitOfWorkProgramPlanningSpec
     }
 
     "preserve arbitrary safe category order without merging across external occurrences" in {
-      Given("generated sequences made only from control, local, and external representatives")
+      Given("generated sequences made from all bounded control, local, external, and state-machine representatives")
       val operations = Gen.listOf(
-        Gen.oneOf(_control, _local, _external)
+        Gen.oneOf(
+          _control,
+          _local,
+          _external,
+          _provider_operation,
+          _provided_api_operation
+        )
       ).map(_.toVector)
 
       When("each generated sequence is planned")

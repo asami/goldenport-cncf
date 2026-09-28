@@ -8,15 +8,14 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
- * Failing-first executable acceptance specification for
+ * Executable acceptance specification for
  * RSC04-RESOLUTION-PROVENANCE (Phase 58.3 / RSC-04 / RSC-04A).
  *
- * The resolver vocabulary exercised here is successor-owned inside the
- * frozen RSC-01 invariants.  This specification intentionally precedes the
- * production resolver and therefore remains RED until that vocabulary exists.
+ * The implemented resolver vocabulary is exercised inside the frozen
+ * RSC-01 invariants, preserving deterministic provenance and terminal outcomes.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 21, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedComponentResourcesSpec

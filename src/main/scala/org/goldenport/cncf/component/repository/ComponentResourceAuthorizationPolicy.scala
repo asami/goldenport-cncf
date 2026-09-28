@@ -9,7 +9,7 @@ import org.goldenport.cncf.component._
  * Authorization and integrity policy for resolved component resources.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 21, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentResourceAccessDisposition:
@@ -205,9 +205,9 @@ object ComponentResourceAuthorizationPolicy:
     if entries.exists(entry => entry.linkTarget.isDefined || _unsafe_path(entry.path)) then
       Some(ComponentResourceAccessDiagnosticKind.UnsafeArchive)
     else
-      val rawPaths = entries.map(_.path)
-      val normalizedPaths = rawPaths.map(_normalize_path)
-      if rawPaths.distinct.size != rawPaths.size || normalizedPaths.distinct.size != normalizedPaths.size then
+      val rawpaths = entries.map(_.path)
+      val normalizedpaths = rawpaths.map(_normalize_path)
+      if rawpaths.distinct.size != rawpaths.size || normalizedpaths.distinct.size != normalizedpaths.size then
         Some(ComponentResourceAccessDiagnosticKind.AmbiguousArchive)
       else
         None

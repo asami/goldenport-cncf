@@ -11,7 +11,7 @@ import org.goldenport.record.Record
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Jul. 16, 2026
- * @version Sep. 19, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionEvent(
@@ -434,7 +434,7 @@ final class PlannedTransitionValidationHook(
     ctx.runtime.unitOfWork.stagePostAbortEventC { (outcome, _) =>
       val failure = Consequence.stateConflict("selected transition was not committed") match {
         case Consequence.Failure(conclusion) => conclusion
-        case _ => throw new IllegalStateException("state conflict must produce a failure conclusion")
+        case null => throw new IllegalStateException("state conflict must produce a failure conclusion")
       }
       val lifecycleoutcome = outcome match {
         case org.goldenport.cncf.unitofwork.UnitOfWork.PostAbortOutcome.Persistence =>

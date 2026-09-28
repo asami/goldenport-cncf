@@ -13,6 +13,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.cncf.mcp.client.*
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.testutil.RuntimeOutputCapture
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.syntax.all.*
 import org.scalatest.GivenWhenThen
@@ -24,7 +25,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Streamable HTTP client boundaries.
  *
  * @since   Jul. 21, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpStreamableHttpInteroperabilitySpec
@@ -44,35 +46,37 @@ final class McpStreamableHttpInteroperabilitySpec
       )
 
       When("the client initializes, accepts the 202 notification acknowledgement, lists, and calls a tool")
-      val result = EmberServerBuilder
-        .default[IO]
-        .withHost(Host.fromString("127.0.0.1").getOrElse(fail("loopback host is invalid")))
-        .withPort(Port.fromInt(0).getOrElse(fail("ephemeral loopback port is invalid")))
-        .withHttpWebSocketApp(wsb => route.routes(wsb).orNotFound)
-        .build
-        .use { server =>
-          IO.blocking {
-            val endpoint = s"http://127.0.0.1:${server.address.getPort}/mcp"
-            val clientresult = _client_round_trip_c(endpoint)
-            val unsupported = _post(
-              endpoint,
-              """{"jsonrpc":"2.0","id":"unsupported","method":"initialize","params":{"protocolVersion":"2026-03-19"}}""",
-              None
-            )
-            val requestshapednotification = _post(
-              endpoint,
-              """{"jsonrpc":"2.0","id":"bad-notification","method":"notifications/initialized"}""",
-              Some(McpProtocolRevision.PREFERRED.print)
-            )
-            val unknownnotification = _post(
-              endpoint,
-              """{"jsonrpc":"2.0","method":"notifications/unknown"}""",
-              Some(McpProtocolRevision.PREFERRED.print)
-            )
-            (clientresult, unsupported, requestshapednotification, unknownnotification)
+      val result = RuntimeOutputCapture.capture {
+        EmberServerBuilder
+          .default[IO]
+          .withHost(Host.fromString("127.0.0.1").getOrElse(fail("loopback host is invalid")))
+          .withPort(Port.fromInt(0).getOrElse(fail("ephemeral loopback port is invalid")))
+          .withHttpWebSocketApp(wsb => route.routes(wsb).orNotFound)
+          .build
+          .use { server =>
+            IO.blocking {
+              val endpoint = s"http://127.0.0.1:${server.address.getPort}/mcp"
+              val clientresult = _client_round_trip_c(endpoint)
+              val unsupported = _post(
+                endpoint,
+                """{"jsonrpc":"2.0","id":"unsupported","method":"initialize","params":{"protocolVersion":"2026-03-19"}}""",
+                None
+              )
+              val requestshapednotification = _post(
+                endpoint,
+                """{"jsonrpc":"2.0","id":"bad-notification","method":"notifications/initialized"}""",
+                Some(McpProtocolRevision.PREFERRED.print)
+              )
+              val unknownnotification = _post(
+                endpoint,
+                """{"jsonrpc":"2.0","method":"notifications/unknown"}""",
+                Some(McpProtocolRevision.PREFERRED.print)
+              )
+              (clientresult, unsupported, requestshapednotification, unknownnotification)
+            }
           }
-        }
-        .unsafeRunSync()
+          .unsafeRunSync()
+      }.value
 
       Then("the complete production lifecycle succeeds and negative messages remain bounded")
       val (catalog, invocation) = _success(result._1)

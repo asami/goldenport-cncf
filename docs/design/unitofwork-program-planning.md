@@ -51,6 +51,7 @@ result types are taken from
 | --- | --- | --- |
 | Authorization / supplemental evaluation | `Authorize`; `StageOperationEvaluationSupplemental` | Control |
 | HTTP / shell / process | `HttpGet`; `HttpPost`; `HttpPostBag`; `HttpPut`; `ShellCommandExec`; `ProcessExec` | External |
+| State-machine Provider / Provided API | `StateMachineProviderExecute`; `StateMachineProvidedApiExecute` | Local |
 | DataStore | `DataStoreLoad`; `DataStoreSave`; `DataStoreDelete` | Local |
 | Embedded datastore and local data resource | `LocalDataDir`; `EmbeddedDataStoreOpen`; `EmbeddedDataStoreRead`; `EmbeddedDataStoreUpdate`; `EmbeddedDataStoreMigrate` | Local |
 | EntityStore | `EntityStoreCreate`; `EntityStoreClaimOrLoad`; `EntityStoreUpsert`; `EntityStoreLoad`; `EntityStoreLoadSnapshot`; `EntityStoreLoadDetached`; `EntityStoreLoadDirect`; `EntityStoreSave`; `EntityStoreSaveDetached`; `EntityStoreSaveManaged`; `EntityStoreSaveUnversioned`; `EntityStoreUpsertUnversioned`; `EntityStoreUpdate`; `EntityStoreUpdateDetached`; `EntityStoreUpdateById`; `EntityStoreUpdateByIdObserved`; `EntityStoreUpdateByIdDetached`; `EntityStoreConditionalTransition`; `EntityStoreUpdateUnversioned`; `EntityStoreUpdateByIdUnversioned`; `EntityStoreDelete`; `EntityStoreRestore`; `EntityStoreDeleteHard`; `EntityStoreSearch`; `EntityStoreSearchDirect`; `EntityStoreSearchInternal`; `EntityStoreUniqueValueExists`; `EntityStoreResolveIdentity` | Local |
@@ -60,6 +61,11 @@ result types are taken from
 current algebra and is included in the inventory. The table classifies
 operations by executable intent, not by the visibility of the case or by the
 metadata carried in its fields.
+
+Component-owned Provider and Provided API dispatch is Local. A provider
+resolver or Provided API dispatcher does not change the base class of the
+dispatch operation; nested HTTP, shell, or process intents retain their own
+External classification when they are represented as separate operations.
 
 ## Minimal additive planner contract
 

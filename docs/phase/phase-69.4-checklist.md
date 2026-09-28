@@ -32,3 +32,16 @@ Evidence:
 
 - [x] JM69-06 is DONE with lightweight immutable definition lifecycle evidence.
 - [x] Phase 69.5 receives the frozen lightweight handoff.
+
+## Contract Navigation and Evidence Erratum — 2026-09-28
+
+The canonical contract now resides at
+[JobDefinition Lightweight Lifecycle Contract](../spec/job-definition-lifecycle-contract.md).
+The former governance filename above remains a compatibility link.
+
+The accepted checklist already cites
+`P69.4-JM69-06-PHASE-TEST-FIX-001-FOCUSED-VAL-002`. The obsolete
+`P69.4-JM69-06C-VAL-008` reference described by the Hygiene follow-up is
+absent from this current ledger. Historical `VAL-016` evidence does not replace
+the accepted lightweight repair evidence. This erratum changes neither the
+closed Phase status nor the original acceptance claims.

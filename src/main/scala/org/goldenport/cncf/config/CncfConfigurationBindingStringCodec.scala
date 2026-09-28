@@ -12,7 +12,8 @@ import org.goldenport.configuration.{ConfigurationBindingQualifierCodec, Configu
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfConfigurationBindingQualifierCodec
@@ -32,7 +33,7 @@ object CncfConfigurationBindingQualifierCodec
         Consequence.success(Some(s"s/${_encode_segment(subsystem.subsystem.subsystem)}/${_encode_segment(subsystem.subsystem.instance)}"))
       case component: CncfConfigurationTarget.ComponentInstance =>
         Consequence.success(Some(s"i/${_encode_segment(component.subsystem.subsystem)}/${_encode_segment(component.subsystem.instance)}/${_encode_segment(component.component.name)}/${_encode_segment(component.component.instance)}"))
-      case _ => Consequence.configurationInvalid("CNCF configuration binding target is invalid")
+      case null => Consequence.configurationInvalid("CNCF configuration binding target is invalid")
     }
 
   private def _decode_qualified(value: String): Consequence[CncfConfigurationTarget] =

@@ -11,7 +11,9 @@ import scala.collection.mutable
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.component.{Component, ComponentActivation, ComponentActivationContext, ComponentActivationDiagnostic, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.http.Http4sHttpServer
+import org.goldenport.cncf.log.LogBackendHolder
 import org.goldenport.cncf.subsystem.{Subsystem, SystemNode}
+import org.goldenport.cncf.testutil.RuntimeOutputCapture
 import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep.  8, 2026
- * @version Sep.  8, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ServerOperationActivationSpec
@@ -40,6 +42,7 @@ final class ServerOperationActivationSpec
         val privatelocator = "private-locator://CA70/activation/8d3f4a"
         val descriptor = _descriptor_path("canonical")
         val originaltestruntimeproperty = sys.props.get("textus.test")
+        val originalbackend = LogBackendHolder.backend
         val originalboundproperties = _bound_properties
         var assembly: Option[ServerAssembly] = None
 
@@ -78,6 +81,7 @@ final class ServerOperationActivationSpec
         Then("the public HTTP bound and readiness property set and test-only runtime flag are restored for other runtime owners")
         _bound_properties shouldBe originalboundproperties
         sys.props.get("textus.test") shouldBe originaltestruntimeproperty
+        LogBackendHolder.backend shouldBe originalbackend
       }
     }
 
@@ -89,6 +93,7 @@ final class ServerOperationActivationSpec
         val privatelocator = "private-locator://CA70/legacy/8d3f4a"
         val descriptor = _descriptor_path("legacy")
         val originaltestruntimeproperty = sys.props.get("textus.test")
+        val originalbackend = LogBackendHolder.backend
         val originalboundproperties = _bound_properties
         var assembly: Option[ServerAssembly] = None
 
@@ -126,6 +131,7 @@ final class ServerOperationActivationSpec
         Then("the public HTTP bound and readiness property set and test-only runtime flag are restored for other runtime owners")
         _bound_properties shouldBe originalboundproperties
         sys.props.get("textus.test") shouldBe originaltestruntimeproperty
+        LogBackendHolder.backend shouldBe originalbackend
       }
     }
 
@@ -136,6 +142,7 @@ final class ServerOperationActivationSpec
         val callbackboundproperties = new AtomicReference[Map[String, Option[String]]](Map.empty)
         val descriptor = _descriptor_path("canonical-success")
         val originaltestruntimeproperty = sys.props.get("textus.test")
+        val originalbackend = LogBackendHolder.backend
         val originalportproperty = sys.props.get(Http4sHttpServer.PORT_PROPERTY_KEY)
         val originalboundproperties = _bound_properties
         val adapter = new Http4sHttpServer.RuntimeStartTestAdapter
@@ -177,6 +184,7 @@ final class ServerOperationActivationSpec
         Then("the canonical test restores the HTTP properties, descriptor, runtime flag, and thread-scoped adapter ownership")
         _bound_properties shouldBe originalboundproperties
         sys.props.get("textus.test") shouldBe originaltestruntimeproperty
+        LogBackendHolder.backend shouldBe originalbackend
         sys.props.get(Http4sHttpServer.PORT_PROPERTY_KEY) shouldBe originalportproperty
         Files.exists(descriptor) shouldBe false
         assembly.foreach(_.subsystem.systemNode.state shouldBe SystemNode.State.Stopped)
@@ -190,6 +198,7 @@ final class ServerOperationActivationSpec
         val callbackboundproperties = new AtomicReference[Map[String, Option[String]]](Map.empty)
         val descriptor = _descriptor_path("legacy-success")
         val originaltestruntimeproperty = sys.props.get("textus.test")
+        val originalbackend = LogBackendHolder.backend
         val originalportproperty = sys.props.get(Http4sHttpServer.PORT_PROPERTY_KEY)
         val originalboundproperties = _bound_properties
         val adapter = new Http4sHttpServer.RuntimeStartTestAdapter
@@ -231,6 +240,7 @@ final class ServerOperationActivationSpec
         Then("the legacy test restores the HTTP properties, descriptor, runtime flag, and thread-scoped adapter ownership")
         _bound_properties shouldBe originalboundproperties
         sys.props.get("textus.test") shouldBe originaltestruntimeproperty
+        LogBackendHolder.backend shouldBe originalbackend
         sys.props.get(Http4sHttpServer.PORT_PROPERTY_KEY) shouldBe originalportproperty
         Files.exists(descriptor) shouldBe false
         assembly.foreach(_.subsystem.systemNode.state shouldBe SystemNode.State.Stopped)
@@ -444,7 +454,7 @@ final class ServerOperationActivationSpec
   private def _without_test_runtime_flag[A](body: => A): A = {
     val previous = sys.props.get("textus.test")
     System.clearProperty("textus.test")
-    try body
+    try RuntimeOutputCapture.capture(body).value
     finally {
       previous match {
         case Some(value) => System.setProperty("textus.test", value)

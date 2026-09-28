@@ -15,7 +15,7 @@ import org.goldenport.cncf.job.{JobBatchDefinition, JobDefinition, JobDefinition
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
-import org.goldenport.cncf.testutil.SubsystemTestFixture
+import org.goldenport.cncf.testutil.{RuntimeOutputCapture, SubsystemTestFixture}
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
@@ -31,7 +31,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
  *  version Aug. 13, 2026
- * @version Sep. 17, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -42,11 +42,13 @@ final class JclJobControlComponentSpec
   private val _collection_id = EntityCollectionId("jcl", "sales", "salesOrder")
 
   "JobControlComponent JCL surface" should {
-    "describe a valid jobs[] YAML into normalized record form" in {
-      Given("a valid action-only JCL definition")
-      _with_fixture() { fixture =>
-      val body =
-        """jobs:
+    "source formats and admission" which {
+      "describe a valid jobs[] YAML into normalized record form" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E1, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a valid action-only JCL definition")
+          _with_fixture() { fixture =>
+          val body =
+            """jobs:
           |  - name: first
           |    target:
           |      action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -65,30 +67,32 @@ final class JclJobControlComponentSpec
 	          |        step: first
 	          |""".stripMargin
 
-      When("job_control.job.describe_job_definition is invoked")
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
-        arguments = List(Argument("body", body))
-      )
+          When("job_control.job.describe_job_definition is invoked")
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
+            arguments = List(Argument("body", body))
+          )
 
-      Then("the normalized record preserves jobs, target, parameters, and failure hook")
-      val record = _record(response)
-      val jobs = _records(record.asMap("jobs"))
-      jobs.size shouldBe 1
-      jobs.head.getString("name") shouldBe Some("first")
-      jobs.head.getRecord("target").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.ok")
-      jobs.head.getRecord("submit").flatMap(_.getString("persistence")) shouldBe Some("Ephemeral")
-      jobs.head.getRecord("on-failure").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.hook")
-      jobs.head.getRecord("compensation").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.compensate")
+          Then("the normalized record preserves jobs, target, parameters, and failure hook")
+          val record = _record(response)
+          val jobs = _records(record.asMap("jobs"))
+          jobs.size shouldBe 1
+          jobs.head.getString("name") shouldBe Some("first")
+          jobs.head.getRecord("target").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.ok")
+          jobs.head.getRecord("submit").flatMap(_.getString("persistence")) shouldBe Some("Ephemeral")
+          jobs.head.getRecord("on-failure").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.hook")
+          jobs.head.getRecord("compensation").flatMap(_.getString("action")) shouldBe Some("org.goldenport.cncf.test.JclFixture.command.compensate")
+          }
+        }
       }
-    }
 
-    "describe JCL from non-YAML structured formats" in {
-      Given("valid JSON, XML, and HOCON JCL definitions")
-      _with_fixture() { fixture =>
-      val json =
-        """{
+      "describe JCL from non-YAML structured formats" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E2, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("valid JSON, XML, and HOCON JCL definitions")
+          _with_fixture() { fixture =>
+          val json =
+            """{
           |  "jobs": [
           |    {
           |      "name": "json-first",
@@ -101,8 +105,8 @@ final class JclJobControlComponentSpec
           |    }
           |  ]
           |}""".stripMargin
-      val xml =
-        """<root>
+          val xml =
+            """<root>
           |  <job>
           |    <name>xml-first</name>
           |    <target>
@@ -113,8 +117,8 @@ final class JclJobControlComponentSpec
           |    </parameters>
           |  </job>
           |</root>""".stripMargin
-      val hocon =
-        """jobs = [
+          val hocon =
+            """jobs = [
           |  {
           |    name = "hocon-first"
           |    target {
@@ -127,60 +131,62 @@ final class JclJobControlComponentSpec
           |]
           |""".stripMargin
 
-      When("describe_job_definition is invoked with explicit JCL formats")
-      val jsonresponse = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
-        arguments = List(Argument("body", json), Argument("jclFormat", "json"))
-      )
-      val xmlresponse = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
-        arguments = List(Argument("body", xml), Argument("jclFormat", "xml"))
-      )
-      val hoconresponse = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
-        arguments = List(Argument("body", hocon), Argument("jclFormat", "hocon"))
-      )
+          When("describe_job_definition is invoked with explicit JCL formats")
+          val jsonresponse = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
+            arguments = List(Argument("body", json), Argument("jclFormat", "json"))
+          )
+          val xmlresponse = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
+            arguments = List(Argument("body", xml), Argument("jclFormat", "xml"))
+          )
+          val hoconresponse = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
+            arguments = List(Argument("body", hocon), Argument("jclFormat", "hocon"))
+          )
 
-      Then("both inputs are normalized to the same JCL record surface")
-      _records(_record(jsonresponse).asMap("jobs")).head.getString("name") shouldBe Some("json-first")
-      _record(xmlresponse).getRecord("job").flatMap(_.getString("name")) shouldBe Some("xml-first")
-      _records(_record(hoconresponse).asMap("jobs")).head.getString("name") shouldBe Some("hocon-first")
+          Then("both inputs are normalized to the same JCL record surface")
+          _records(_record(jsonresponse).asMap("jobs")).head.getString("name") shouldBe Some("json-first")
+          _record(xmlresponse).getRecord("job").flatMap(_.getString("name")) shouldBe Some("xml-first")
+          _records(_record(hoconresponse).asMap("jobs")).head.getString("name") shouldBe Some("hocon-first")
+          }
+        }
       }
-    }
 
-    "reject unsafe structured sources and invalid executable scalars before submission" in {
-      Given("a tagged YAML constructor, XML external entity, HOCON include and substitution, and nonconforming scalar values")
-      val yamltaggedconstructor =
-        """!!java.util.LinkedHashMap
+      "reject unsafe structured sources and invalid executable scalars before submission" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E3, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a tagged YAML constructor, XML external entity, HOCON include and substitution, and nonconforming scalar values")
+          val yamltaggedconstructor =
+            """!!java.util.LinkedHashMap
           |job:
           |  name: tagged-constructor
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
-      val xmlexternalentity =
-        """<?xml version="1.0"?>
+          val xmlexternalentity =
+            """<?xml version="1.0"?>
           |<!DOCTYPE root [<!ENTITY external SYSTEM "file:///jcl-must-not-read">]>
           |<root><job><name>&external;</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target></job></root>""".stripMargin
-      val xmlxinclude =
-        """<root xmlns:xi="http://www.w3.org/2001/XInclude">
+          val xmlxinclude =
+            """<root xmlns:xi="http://www.w3.org/2001/XInclude">
           |  <job><name>xinclude</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target></job>
           |  <xi:include href="file:///jcl-must-not-read.xml" parse="xml"/>
           |</root>""".stripMargin
-      val xmlschemalocation =
-        """<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          val xmlschemalocation =
+            """<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           |      xsi:schemaLocation="urn:jcl file:///jcl-must-not-read.xsd">
           |  <job><name>schema-location</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target></job>
           |</root>""".stripMargin
-      val xmlnonamespaceschemalocation =
-        """<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          val xmlnonamespaceschemalocation =
+            """<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           |      xsi:noNamespaceSchemaLocation="file:///jcl-must-not-read.xsd">
           |  <job><name>no-namespace-schema-location</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target></job>
           |</root>""".stripMargin
-      val yamlaliases =
-        """job:
+          val yamlaliases =
+            """job:
           |  name: alias-boundary
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -190,9 +196,9 @@ final class JclJobControlComponentSpec
           |        action: org.goldenport.cncf.test.JclFixture.command.ok
           |      - *shared
           |""".stripMargin +
-          Vector.fill(50)("      - *shared").mkString("\n")
-      val yamlrecursivekey =
-        """job:
+              Vector.fill(50)("      - *shared").mkString("\n")
+          val yamlrecursivekey =
+            """job:
           |  name: recursive-key-boundary
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -200,43 +206,43 @@ final class JclJobControlComponentSpec
           |    self: *recursive-key
           |  : recursive
           |""".stripMargin
-      val yamlnesting =
-        "job:\n" +
-          "  name: nesting-boundary\n" +
-          "  target:\n" +
-          (1 to 51).map { depth =>
-            val indent = "  ".repeat(depth + 1)
-            s"${indent}<<:"
-          }.mkString("\n") +
-          "\n" + "  ".repeat(53) + "action: org.goldenport.cncf.test.JclFixture.command.ok"
-      val yamlcodepoints =
-        "job:\n" +
-          "  name: code-point-boundary\n" +
-          "  target:\n" +
-          "    action: org.goldenport.cncf.test.JclFixture.command.ok\n" +
-          "  parameters:\n" +
-          "    payload: " + "x".repeat(3 * 1024 * 1024 + 1)
-      val hoconinclude =
-        """include file("jcl-must-not-read.conf")
+          val yamlnesting =
+            "job:\n" +
+              "  name: nesting-boundary\n" +
+              "  target:\n" +
+              (1 to 51).map { depth =>
+                val indent = "  ".repeat(depth + 1)
+                s"${indent}<<:"
+              }.mkString("\n") +
+              "\n" + "  ".repeat(53) + "action: org.goldenport.cncf.test.JclFixture.command.ok"
+          val yamlcodepoints =
+            "job:\n" +
+              "  name: code-point-boundary\n" +
+              "  target:\n" +
+              "    action: org.goldenport.cncf.test.JclFixture.command.ok\n" +
+              "  parameters:\n" +
+              "    payload: " + "x".repeat(3 * 1024 * 1024 + 1)
+          val hoconinclude =
+            """include file("jcl-must-not-read.conf")
           |job {
           |  name = "invalid-include"
           |  target { action = "org.goldenport.cncf.test.JclFixture.command.ok" }
           |}
           |""".stripMargin
-      val hoconsubstitution =
-        """job {
+          val hoconsubstitution =
+            """job {
           |  name = ${JCL_UNRESOLVED_NAME}
           |  target { action = "org.goldenport.cncf.test.JclFixture.command.ok" }
           |}
           |""".stripMargin
-      val numerictext =
-        """job:
+          val numerictext =
+            """job:
           |  name: 42
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
-      val textualboolean =
-        """job:
+          val textualboolean =
+            """job:
           |  name: invalid-persistent
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -248,112 +254,120 @@ final class JclJobControlComponentSpec
           |        persistent: "true"
           |""".stripMargin
 
-      When("the inputs are parsed at the JCL source boundary")
-      val xmlrejected = JobBatchDefinition.parse(xmlexternalentity, RecordFormat.Xml) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val xmlxincluderejected = JobBatchDefinition.parse(xmlxinclude, RecordFormat.Xml) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val xmlschemalocationrejected = JobBatchDefinition.parse(xmlschemalocation, RecordFormat.Xml) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val xmlnonamespaceschemalocationrejected =
-        JobBatchDefinition.parse(xmlnonamespaceschemalocation, RecordFormat.Xml) match {
-          case Consequence.Failure(_) => true
-          case Consequence.Success(_) => false
+          When("the inputs are parsed at the JCL source boundary")
+          val xmlrejected = RuntimeOutputCapture.capture {
+            JobBatchDefinition.parse(xmlexternalentity, RecordFormat.Xml) match {
+              case Consequence.Failure(_) => true
+              case Consequence.Success(_) => false
+            }
+          }.value
+          val xmlxincluderejected = JobBatchDefinition.parse(xmlxinclude, RecordFormat.Xml) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val xmlschemalocationrejected = JobBatchDefinition.parse(xmlschemalocation, RecordFormat.Xml) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val xmlnonamespaceschemalocationrejected =
+            JobBatchDefinition.parse(xmlnonamespaceschemalocation, RecordFormat.Xml) match {
+              case Consequence.Failure(_) => true
+              case Consequence.Success(_) => false
+            }
+          val yamlaliasesrejected = JobBatchDefinition.parseYaml(yamlaliases) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val yamlrecursivekeyrejected = JobBatchDefinition.parseYaml(yamlrecursivekey) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val yamlnestingrejected = JobBatchDefinition.parseYaml(yamlnesting) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val yamlcodepointsrejected = JobBatchDefinition.parseYaml(yamlcodepoints) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val yamltaggedconstructorrejected = JobBatchDefinition.parseYaml(yamltaggedconstructor) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val hoconincluderejected = JobBatchDefinition.parse(hoconinclude, RecordFormat.Hocon) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val hoconsubstitutionrejected = JobBatchDefinition.parse(hoconsubstitution, RecordFormat.Hocon) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val numerictextrejected = JobBatchDefinition.parseYaml(numerictext) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val textualbooleanrejected = JobBatchDefinition.parseYaml(textualboolean) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+
+          Then("XML DOCTYPE and external-entity input is rejected without dereferencing it")
+          xmlrejected shouldBe true
+
+          And("XML XInclude, schemaLocation, and noNamespaceSchemaLocation are rejected before conversion")
+          xmlxincluderejected shouldBe true
+          xmlschemalocationrejected shouldBe true
+          xmlnonamespaceschemalocationrejected shouldBe true
+
+          And("canonical JCL YAML exceeding the 50-alias, 50-level nesting, and 3 MiB code-point limits fails in preflight")
+          yamlaliasesrejected shouldBe true
+          yamlnestingrejected shouldBe true
+          yamlcodepointsrejected shouldBe true
+
+          And("recursive YAML keys are rejected by the safe constructor before record conversion")
+          yamlrecursivekeyrejected shouldBe true
+
+          And("tagged YAML is rejected by the safe constructor before record conversion")
+          yamltaggedconstructorrejected shouldBe true
+
+          And("HOCON includes and unresolved substitutions are rejected without fallback resolution")
+          hoconincluderejected shouldBe true
+          hoconsubstitutionrejected shouldBe true
+
+          And("numeric text fields and textual Boolean values are rejected before semantic compilation")
+          numerictextrejected shouldBe true
+          textualbooleanrejected shouldBe true
         }
-      val yamlaliasesrejected = JobBatchDefinition.parseYaml(yamlaliases) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
       }
-      val yamlrecursivekeyrejected = JobBatchDefinition.parseYaml(yamlrecursivekey) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val yamlnestingrejected = JobBatchDefinition.parseYaml(yamlnesting) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val yamlcodepointsrejected = JobBatchDefinition.parseYaml(yamlcodepoints) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val yamltaggedconstructorrejected = JobBatchDefinition.parseYaml(yamltaggedconstructor) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val hoconincluderejected = JobBatchDefinition.parse(hoconinclude, RecordFormat.Hocon) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val hoconsubstitutionrejected = JobBatchDefinition.parse(hoconsubstitution, RecordFormat.Hocon) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val numerictextrejected = JobBatchDefinition.parseYaml(numerictext) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val textualbooleanrejected = JobBatchDefinition.parseYaml(textualboolean) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-
-      Then("XML DOCTYPE and external-entity input is rejected without dereferencing it")
-      xmlrejected shouldBe true
-
-      And("XML XInclude, schemaLocation, and noNamespaceSchemaLocation are rejected before conversion")
-      xmlxincluderejected shouldBe true
-      xmlschemalocationrejected shouldBe true
-      xmlnonamespaceschemalocationrejected shouldBe true
-
-      And("canonical JCL YAML exceeding the 50-alias, 50-level nesting, and 3 MiB code-point limits fails in preflight")
-      yamlaliasesrejected shouldBe true
-      yamlnestingrejected shouldBe true
-      yamlcodepointsrejected shouldBe true
-
-      And("recursive YAML keys are rejected by the safe constructor before record conversion")
-      yamlrecursivekeyrejected shouldBe true
-
-      And("tagged YAML is rejected by the safe constructor before record conversion")
-      yamltaggedconstructorrejected shouldBe true
-
-      And("HOCON includes and unresolved substitutions are rejected without fallback resolution")
-      hoconincluderejected shouldBe true
-      hoconsubstitutionrejected shouldBe true
-
-      And("numeric text fields and textual Boolean values are rejected before semantic compilation")
-      numerictextrejected shouldBe true
-      textualbooleanrejected shouldBe true
     }
 
-    "issue JobDefinition IDs independently of business keys" in {
-      Given("one deterministic ordinary issuance context")
-      val ids = IdGenerationContext.deterministic(
-        IdGenerationContext.IdNamespace("jcl", "job_definition"),
-        "job-definition-identity"
-      )
+    "definition identities and persisted lookup" which {
+      "issue JobDefinition IDs independently of business keys" must afterWord("in spec:job-definition-lifecycle-contract, example:JCL-E4, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("one deterministic ordinary issuance context")
+          val ids = IdGenerationContext.deterministic(
+            IdGenerationContext.IdNamespace("jcl", "job_definition"),
+            "job-definition-identity"
+          )
 
-      When("two definitions with punctuation-bearing business keys are issued")
-      val dashed = JobDefinitionId.issue(ids)
-      val underscored = JobDefinitionId.issue(ids)
+          When("two definitions with punctuation-bearing business keys are issued")
+          val dashed = JobDefinitionId.issue(ids)
+          val underscored = JobDefinitionId.issue(ids)
 
-      Then("their stored identities are distinct and both fix the JobDefinition collection")
-      dashed should not be underscored
-      dashed.collection shouldBe JobEntityCollections.JobDefinition
-      underscored.collection shouldBe JobEntityCollections.JobDefinition
-    }
+          Then("their stored identities are distinct and both fix the JobDefinition collection")
+          dashed should not be underscored
+          dashed.collection shouldBe JobEntityCollections.JobDefinition
+          underscored.collection shouldBe JobEntityCollections.JobDefinition
+        }
+      }
 
-    "store and submit a JSON JobDefinition without reparsing it as YAML" in {
-      Given("a JSON JCL job definition")
-      _with_fixture() { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val json =
-        """{
+      "store and submit a JSON JobDefinition without reparsing it as YAML" must afterWord("in spec:job-definition-lifecycle-contract, example:JCL-E5, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a JSON JCL job definition")
+          _with_fixture() { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val json =
+            """{
           |  "job": {
           |    "name": "stored-json",
           |    "target": {
@@ -365,128 +379,134 @@ final class JclJobControlComponentSpec
           |  }
           |}""".stripMargin
 
-      When("the definition is created with jclFormat=json and submitted by reference")
-      val created = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
-        arguments = List(
-          Argument("key", "stored-json"),
-          Argument("status", "active"),
-          Argument("jclFormat", "json"),
-          Argument("body", json)
-        )
-      )
-      val submitted = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", "jobDefinitionRef: stored-json"))
-      )
+          When("the definition is created with jclFormat=json and submitted by reference")
+          val created = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
+            arguments = List(
+              Argument("key", "stored-json"),
+              Argument("status", "active"),
+              Argument("jclFormat", "json"),
+              Argument("body", json)
+            )
+          )
+          val submitted = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", "jobDefinitionRef: stored-json"))
+          )
 
-      Then("the stored format is retained and the referenced definition runs")
-      _record(created).getString("jclFormat") shouldBe Some("json")
-      _strings(_record(submitted), "submitted-job-ids").size shouldBe 1
-      fixture.trace.toVector.lastOption shouldBe Some("ok:orderId=stored-json-1")
+          Then("the stored format is retained and the referenced definition runs")
+          _record(created).getString("jclFormat") shouldBe Some("json")
+          _strings(_record(submitted), "submitted-job-ids").size shouldBe 1
+          fixture.trace.toVector.lastOption shouldBe Some("ok:orderId=stored-json-1")
+          }
+        }
       }
-    }
 
-    "resolve stored JobDefinition identities by exact persisted business key" in {
-      Given("two normally issued punctuation-bearing definitions and one explicitly bridged existing definition")
-      _with_fixture() { fixture =>
-      val jobcontrolselector =
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job"
-      val body =
-        """job:
+      "resolve stored JobDefinition identities by exact persisted business key" must afterWord("in spec:job-definition-lifecycle-contract, example:JCL-E6, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("two normally issued punctuation-bearing definitions and one explicitly bridged existing definition")
+          _with_fixture() { fixture =>
+          val jobcontrolselector =
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job"
+          val body =
+            """job:
           |  name: collision-definition
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
 
-      When("the three records are seeded before the JobControl definition cache is populated")
-      val jobcontrolcomponent = _component_for(
-        fixture.subsystem,
-        s"$jobcontrolselector.get_job_definition"
-      )
-      given ExecutionContext = jobcontrolcomponent.logic.executionContext()
-      val dashedid = JobDefinitionId.issue(summon[ExecutionContext].idGeneration)
-      val underscoredid = JobDefinitionId.issue(summon[ExecutionContext].idGeneration)
-      val bridgedid = JobDefinitionId.bridgeFromParts(
-        "cncf",
-        "bridged_definition",
-        java.time.Instant.EPOCH,
-        "bridgedfixture"
-      ).toOption.getOrElse(fail("bridged JobDefinition fixture id is invalid"))
-      def _definition_(id: JobDefinitionId, key: String) = JobDefinitionEntity.create(
-        id = id,
-        key = key,
-        jclSource = body,
-        profile = None,
-        flowSource = None,
-        eventsSource = None,
-        onEventSource = None,
-        status = org.goldenport.cncf.job.JobDefinitionStatus.Active,
-        targetAction = Some("org.goldenport.cncf.test.JclFixture.command.ok"),
-        now = summon[ExecutionContext].clock.instant()
-      )
-      val dashedentity = _definition_(dashedid, "a-b")
-      val underscoredentity = _definition_(underscoredid, "a_b")
-      val bridgedentity = _definition_(bridgedid, "bridged-existing")
-      Vector(dashedentity, underscoredentity, bridgedentity).foreach { entity =>
-        EntityStore.standard().create(entity)(using
-          EntityPersistentCreate.fromPersistent(JobDefinitionEntity.entityPersistent),
-          summon[ExecutionContext]
-        ) match {
-          case Consequence.Success(_) => ()
-          case Consequence.Failure(conclusion) => fail(conclusion.show)
+          When("the three records are seeded before the JobControl definition cache is populated")
+          val jobcontrolcomponent = _component_for(
+            fixture.subsystem,
+            s"$jobcontrolselector.get_job_definition"
+          )
+          given ExecutionContext = jobcontrolcomponent.logic.executionContext()
+          val dashedid = JobDefinitionId.issue(summon[ExecutionContext].idGeneration)
+          val underscoredid = JobDefinitionId.issue(summon[ExecutionContext].idGeneration)
+          val bridgedid = JobDefinitionId.bridgeFromParts(
+            "cncf",
+            "bridged_definition",
+            java.time.Instant.EPOCH,
+            "bridgedfixture"
+          ).toOption.getOrElse(fail("bridged JobDefinition fixture id is invalid"))
+          def _definition_(id: JobDefinitionId, key: String) = JobDefinitionEntity.create(
+            id = id,
+            key = key,
+            jclSource = body,
+            profile = None,
+            flowSource = None,
+            eventsSource = None,
+            onEventSource = None,
+            status = org.goldenport.cncf.job.JobDefinitionStatus.Active,
+            targetAction = Some("org.goldenport.cncf.test.JclFixture.command.ok"),
+            now = summon[ExecutionContext].clock.instant()
+          )
+          val dashedentity = _definition_(dashedid, "a-b")
+          val underscoredentity = _definition_(underscoredid, "a_b")
+          val bridgedentity = _definition_(bridgedid, "bridged-existing")
+          Vector(dashedentity, underscoredentity, bridgedentity).foreach { entity =>
+            EntityStore.standard().create(entity)(using
+              EntityPersistentCreate.fromPersistent(JobDefinitionEntity.entityPersistent),
+              summon[ExecutionContext]
+            ) match {
+              case Consequence.Success(_) => ()
+              case Consequence.Failure(conclusion) => fail(conclusion.show)
+            }
+          }
+          val resolveddash = _record(_execute(
+            fixture.subsystem,
+            s"$jobcontrolselector.get_job_definition",
+            arguments = List(Argument("key", "a-b"))
+          ))
+          val resolvedunderscore = _record(_execute(
+            fixture.subsystem,
+            s"$jobcontrolselector.get_job_definition",
+            arguments = List(Argument("key", "a_b"))
+          ))
+          val resolvedbridged = _record(_execute(
+            fixture.subsystem,
+            s"$jobcontrolselector.get_job_definition",
+            arguments = List(Argument("key", "bridged-existing"))
+          ))
+
+          When("a trimmed duplicate of an exact stored key is created")
+          val duplicatedash = _execute_result(
+            fixture.subsystem,
+            s"$jobcontrolselector.create_job_definition",
+            arguments = List(
+              Argument("key", " a-b "),
+              Argument("status", "active"),
+              Argument("body", body)
+            )
+          )
+
+          Then("the cold cache lookup loads each persisted stored identity rather than deriving one from its key")
+          dashedentity.id should not be underscoredentity.id
+          resolveddash.getString("id") shouldBe Some(dashedentity.id.value)
+          resolveddash.getString("key") shouldBe Some("a-b")
+          resolvedunderscore.getString("id") shouldBe Some(underscoredentity.id.value)
+          resolvedunderscore.getString("key") shouldBe Some("a_b")
+
+          And("the explicit bridge remains the persisted typed identity of the recovered record")
+          resolvedbridged.getString("id") shouldBe Some(bridgedentity.id.value)
+          resolvedbridged.getString("key") shouldBe Some("bridged-existing")
+
+          And("a trimmed duplicate is rejected without changing either distinct definition")
+          duplicatedash shouldBe a[Consequence.Failure[_]]
+          }
         }
-      }
-      val resolveddash = _record(_execute(
-        fixture.subsystem,
-        s"$jobcontrolselector.get_job_definition",
-        arguments = List(Argument("key", "a-b"))
-      ))
-      val resolvedunderscore = _record(_execute(
-        fixture.subsystem,
-        s"$jobcontrolselector.get_job_definition",
-        arguments = List(Argument("key", "a_b"))
-      ))
-      val resolvedbridged = _record(_execute(
-        fixture.subsystem,
-        s"$jobcontrolselector.get_job_definition",
-        arguments = List(Argument("key", "bridged-existing"))
-      ))
-
-      When("a trimmed duplicate of an exact stored key is created")
-      val duplicatedash = _execute_result(
-        fixture.subsystem,
-        s"$jobcontrolselector.create_job_definition",
-        arguments = List(
-          Argument("key", " a-b "),
-          Argument("status", "active"),
-          Argument("body", body)
-        )
-      )
-
-      Then("the cold cache lookup loads each persisted stored identity rather than deriving one from its key")
-      dashedentity.id should not be underscoredentity.id
-      resolveddash.getString("id") shouldBe Some(dashedentity.id.value)
-      resolveddash.getString("key") shouldBe Some("a-b")
-      resolvedunderscore.getString("id") shouldBe Some(underscoredentity.id.value)
-      resolvedunderscore.getString("key") shouldBe Some("a_b")
-
-      And("the explicit bridge remains the persisted typed identity of the recovered record")
-      resolvedbridged.getString("id") shouldBe Some(bridgedentity.id.value)
-      resolvedbridged.getString("key") shouldBe Some("bridged-existing")
-
-      And("a trimmed duplicate is rejected without changing either distinct definition")
-      duplicatedash shouldBe a[Consequence.Failure[_]]
       }
     }
 
-    "describe canonical job YAML with event/action profile" in {
-      Given("a canonical single-job JCL definition")
-      _with_fixture() { fixture =>
-      val body =
-        """job:
+    "finite grammar and profile compatibility" which {
+      "describe canonical job YAML with event/action profile" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E7, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a canonical single-job JCL definition")
+          _with_fixture() { fixture =>
+          val body =
+            """job:
           |  name: profile-job
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -503,42 +523,44 @@ final class JclJobControlComponentSpec
           |                occurrence: possible
           |""".stripMargin
 
-      When("job_control.job.describe_job_definition is invoked")
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
-        arguments = List(Argument("body", body))
-      )
+          When("job_control.job.describe_job_definition is invoked")
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
+            arguments = List(Argument("body", body))
+          )
 
-      Then("the normalized record uses canonical job shape and preserves eventChain")
-      val record = _record(response)
-      val job = record.getRecord("job").getOrElse(fail("job record missing"))
-      job.getString("name") shouldBe Some("profile-job")
-      val profile = job.getRecord("profile").getOrElse(fail("profile missing"))
-      profile.getString("expectedStatus") shouldBe Some("Succeeded")
-      val chain = _records(profile.asMap("eventChain"))
-      chain.size shouldBe 1
-      chain.head.getString("action") shouldBe Some("org.goldenport.cncf.test.JclFixture.command.ok")
-      val emits = _records(chain.head.asMap("emits"))
-      emits.head.getString("event") shouldBe Some("order.accepted")
-      _records(emits.head.asMap("receivers")).head.getString("guard") shouldBe Some("order.hasHook")
+          Then("the normalized record uses canonical job shape and preserves eventChain")
+          val record = _record(response)
+          val job = record.getRecord("job").getOrElse(fail("job record missing"))
+          job.getString("name") shouldBe Some("profile-job")
+          val profile = job.getRecord("profile").getOrElse(fail("profile missing"))
+          profile.getString("expectedStatus") shouldBe Some("Succeeded")
+          val chain = _records(profile.asMap("eventChain"))
+          chain.size shouldBe 1
+          chain.head.getString("action") shouldBe Some("org.goldenport.cncf.test.JclFixture.command.ok")
+          val emits = _records(chain.head.asMap("emits"))
+          emits.head.getString("event") shouldBe Some("order.accepted")
+          _records(emits.head.asMap("receivers")).head.getString("guard") shouldBe Some("order.hasHook")
+          }
+        }
       }
-    }
 
-    "reject invalid workflow-like or malformed YAML shapes" in {
-      Given("invalid JCL payloads")
-      _with_fixture() { fixture =>
-      val missingjobs =
-        """job:
+      "reject invalid workflow-like or malformed YAML shapes" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E8, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("invalid JCL payloads")
+          _with_fixture() { fixture =>
+          val missingjobs =
+            """job:
           |  name: invalid
           |""".stripMargin
-      val bothroots =
-        """job:
+          val bothroots =
+            """job:
           |  name: invalid
           |jobs: []
           |""".stripMargin
-      val bothtargetkinds =
-        """jobs:
+          val bothtargetkinds =
+            """jobs:
           |  - name: invalid
           |    target:
           |      action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -546,22 +568,22 @@ final class JclJobControlComponentSpec
           |        definition: sales-order-approval
           |        registration: approval
           |""".stripMargin
-      val workflowmissingregistration =
-        """jobs:
+          val workflowmissingregistration =
+            """jobs:
           |  - name: invalid
           |    target:
           |      workflow:
           |        definition: sales-order-approval
           |""".stripMargin
-      val branchshape =
-        """jobs:
+          val branchshape =
+            """jobs:
           |  - name: invalid
           |    target:
           |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |      branch: x
           |""".stripMargin
-      val invalidprofile =
-        """job:
+          val invalidprofile =
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -573,26 +595,28 @@ final class JclJobControlComponentSpec
           |            occurrence: always
           |""".stripMargin
 
-      When("describe is invoked with unsupported payloads")
-      val r1 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", missingjobs)
-      val r2 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", bothtargetkinds)
-      val r3 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", branchshape)
-      val r4 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", workflowmissingregistration)
-      val r5 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", bothroots)
-      val r6 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", invalidprofile)
+          When("describe is invoked with unsupported payloads")
+          val r1 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", missingjobs)
+          val r2 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", bothtargetkinds)
+          val r3 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", branchshape)
+          val r4 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", workflowmissingregistration)
+          val r5 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", bothroots)
+          val r6 = _execute_result(fixture.subsystem, s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition", invalidprofile)
 
-      Then("the payloads fail deterministically")
-      Vector(r1, r2, r3, r4, r5, r6).foreach {
-        case Consequence.Failure(_) => succeed
-        case other => fail(s"expected failure but got $other")
+          Then("the payloads fail deterministically")
+          Vector(r1, r2, r3, r4, r5, r6).foreach {
+            case Consequence.Failure(_) => succeed
+            case other => fail(s"expected failure but got $other")
+          }
+          }
+        }
       }
-      }
-    }
 
-    "compile the complete finite executable JCL grammar without executing it" in {
-      Given("a canonical single-job executable definition with ordered flow, emissions, and handlers")
-      val body =
-        """job:
+      "compile the complete finite executable JCL grammar without executing it" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E9, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a canonical single-job executable definition with ordered flow, emissions, and handlers")
+          val body =
+            """job:
           |  name: executable-job
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -627,63 +651,67 @@ final class JclJobControlComponentSpec
           |          reason: notified
           |""".stripMargin
 
-      When("the JCL is parsed and semantically compiled")
-      val definition = JobBatchDefinition.parseYaml(body) match {
-        case Consequence.Success(batch) => batch.jobs.head
-        case Consequence.Failure(conclusion) => fail(conclusion.show)
-      }
-      val plan = definition.semanticPlan match {
-        case Consequence.Success(value) => value
-        case Consequence.Failure(conclusion) => fail(conclusion.show)
-      }
+          When("the JCL is parsed and semantically compiled")
+          val definition = JobBatchDefinition.parseYaml(body) match {
+            case Consequence.Success(batch) => batch.jobs.head
+            case Consequence.Failure(conclusion) => fail(conclusion.show)
+          }
+          val plan = definition.semanticPlan match {
+            case Consequence.Success(value) => value
+            case Consequence.Failure(conclusion) => fail(conclusion.show)
+          }
 
-      Then("the typed model preserves declaration order and normalized values")
-      definition.flow.map(_.steps.map(_.id)) shouldBe Some(Vector("load", "finalize"))
-      definition.events.map(_.emit.map(_.name)) shouldBe Some(Vector("order.accepted"))
-      definition.events.flatMap(_.emit.headOption).flatMap(_.persistent) shouldBe Some(true)
-      definition.onEvent.map(_.handlers.map(_.id)) shouldBe Some(Vector("project", "notify"))
-      definition.toRecord.getRecord("flow").flatMap(_.getAny("steps")) shouldBe defined
+          Then("the typed model preserves declaration order and normalized values")
+          definition.flow.map(_.steps.map(_.id)) shouldBe Some(Vector("load", "finalize"))
+          definition.events.map(_.emit.map(_.name)) shouldBe Some(Vector("order.accepted"))
+          definition.events.flatMap(_.emit.headOption).flatMap(_.persistent) shouldBe Some(true)
+          definition.onEvent.map(_.handlers.map(_.id)) shouldBe Some(Vector("project", "notify"))
+          definition.toRecord.getRecord("flow").flatMap(_.getAny("steps")) shouldBe defined
 
-      And("the compilation plan contains same-Job continuation values and no execution side effect")
-      plan.steps.map(_.id) shouldBe Vector("load", "finalize")
-      plan.emittedEvents.map(_.after) shouldBe Vector("finalize")
-      plan.continuations.map(_.id) shouldBe Vector("project", "notify")
-      plan.continuations.map(_.sameJob) shouldBe Vector(true, true)
-    }
-
-    "reject directly constructed JobDefinitions without exactly one target kind" in {
-      Given("typed JobDefinitions with both target kinds and with no target kind")
-      val bothtargetdefinition = JobDefinition(
-        name = "both-targets",
-        target = JobTarget(
-          action = Some("org.goldenport.cncf.test.JclFixture.command.ok"),
-          workflow = Some(JobWorkflowTarget("sales-order-approval", "approval"))
-        )
-      )
-      val notargetdefinition = JobDefinition(
-        name = "no-target",
-        target = JobTarget()
-      )
-
-      When("each typed value is semantically compiled")
-      val bothtargetrejected = bothtargetdefinition.semanticPlan match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      }
-      val notargetrejected = notargetdefinition.semanticPlan match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
+          And("the compilation plan contains same-Job continuation values and no execution side effect")
+          plan.steps.map(_.id) shouldBe Vector("load", "finalize")
+          plan.emittedEvents.map(_.after) shouldBe Vector("finalize")
+          plan.continuations.map(_.id) shouldBe Vector("project", "notify")
+          plan.continuations.map(_.sameJob) shouldBe Vector(true, true)
+        }
       }
 
-      Then("both and missing targets fail before Action or Workflow dispatch")
-      bothtargetrejected shouldBe true
-      notargetrejected shouldBe true
-    }
+      "reject directly constructed JobDefinitions without exactly one target kind" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E10, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("typed JobDefinitions with both target kinds and with no target kind")
+          val bothtargetdefinition = JobDefinition(
+            name = "both-targets",
+            target = JobTarget(
+              action = Some("org.goldenport.cncf.test.JclFixture.command.ok"),
+              workflow = Some(JobWorkflowTarget("sales-order-approval", "approval"))
+            )
+          )
+          val notargetdefinition = JobDefinition(
+            name = "no-target",
+            target = JobTarget()
+          )
 
-    "retain legacy profile-only JCL while keeping executable compilation diagnostics-only" in {
-      Given("a canonical profile-only single-job definition")
-      val body =
-        """job:
+          When("each typed value is semantically compiled")
+          val bothtargetrejected = bothtargetdefinition.semanticPlan match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+          val notargetrejected = notargetdefinition.semanticPlan match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          }
+
+          Then("both and missing targets fail before Action or Workflow dispatch")
+          bothtargetrejected shouldBe true
+          notargetrejected shouldBe true
+        }
+      }
+
+      "retain legacy profile-only JCL while keeping executable compilation diagnostics-only" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E11, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a canonical profile-only single-job definition")
+          val body =
+            """job:
           |  name: profile-only
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -693,46 +721,48 @@ final class JclJobControlComponentSpec
           |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
 
-      When("the profile-only definition is parsed and compiled")
-      val definition = JobBatchDefinition.parseYaml(body) match {
-        case Consequence.Success(batch) => batch.jobs.head
-        case Consequence.Failure(conclusion) => fail(conclusion.show)
-      }
-      val plan = definition.semanticPlan match {
-        case Consequence.Success(value) => value
-        case Consequence.Failure(conclusion) => fail(conclusion.show)
+          When("the profile-only definition is parsed and compiled")
+          val definition = JobBatchDefinition.parseYaml(body) match {
+            case Consequence.Success(batch) => batch.jobs.head
+            case Consequence.Failure(conclusion) => fail(conclusion.show)
+          }
+          val plan = definition.semanticPlan match {
+            case Consequence.Success(value) => value
+            case Consequence.Failure(conclusion) => fail(conclusion.show)
+          }
+
+          Then("profile data remains available without creating executable nodes")
+          definition.profile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
+          definition.flow shouldBe None
+          definition.events shouldBe None
+          definition.onEvent shouldBe None
+          plan.steps shouldBe Vector.empty
+          plan.emittedEvents shouldBe Vector.empty
+          plan.continuations shouldBe Vector.empty
+        }
       }
 
-      Then("profile data remains available without creating executable nodes")
-      definition.profile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
-      definition.flow shouldBe None
-      definition.events shouldBe None
-      definition.onEvent shouldBe None
-      plan.steps shouldBe Vector.empty
-      plan.emittedEvents shouldBe Vector.empty
-      plan.continuations shouldBe Vector.empty
-    }
-
-    "reject malformed, ambiguous, unsupported, and cross-field executable JCL before submission" in {
-      Given("a matrix of malformed executable definitions")
-      val oversizedsteps = (1 to 33).map { i =>
-        s"      - id: step-$i\n        action: org.goldenport.cncf.test.JclFixture.command.ok"
-      }.mkString("\n")
-      val candidates = Vector(
-        """job:
+      "reject malformed, ambiguous, unsupported, and cross-field executable JCL before submission" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E12, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a matrix of malformed executable definitions")
+          val oversizedsteps = (1 to 33).map { i =>
+            s"      - id: step-$i\n        action: org.goldenport.cncf.test.JclFixture.command.ok"
+          }.mkString("\n")
+          val candidates = Vector(
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  flow: {}
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  flow:
           |    steps: []
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -743,7 +773,7 @@ final class JclJobControlComponentSpec
           |      - id: duplicate
           |        action: second
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -752,7 +782,7 @@ final class JclJobControlComponentSpec
           |      - id: root
           |        action: first
           |""".stripMargin,
-        s"""job:
+            s"""job:
            |  name: invalid
            |  target:
            |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -760,20 +790,20 @@ final class JclJobControlComponentSpec
            |    steps:
            |$oversizedsteps
            |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  events: {}
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  events:
           |    emit: []
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -790,7 +820,7 @@ final class JclJobControlComponentSpec
           |        after: load
           |        name: second
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -804,13 +834,13 @@ final class JclJobControlComponentSpec
           |        after: missing
           |        name: first
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  onEvent: {}
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -822,7 +852,7 @@ final class JclJobControlComponentSpec
           |  onEvent:
           |    handlers: []
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -837,7 +867,7 @@ final class JclJobControlComponentSpec
           |        event: missing
           |        action: receiver
           |""".stripMargin,
-        """jobs:
+            """jobs:
           |  - name: invalid
           |    target:
           |      action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -846,7 +876,7 @@ final class JclJobControlComponentSpec
           |        - id: step
           |          action: first
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    workflow:
@@ -857,7 +887,7 @@ final class JclJobControlComponentSpec
           |      - id: step
           |        action: first
           |""".stripMargin,
-        """job:
+            """job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -867,10 +897,10 @@ final class JclJobControlComponentSpec
           |        action: first
           |        branch: forbidden
           |""".stripMargin
-      )
-      val emptysections = Vector("flow", "events", "onEvent")
-      val jsonempty = emptysections.map { section =>
-        RecordFormat.Json -> s"""{
+          )
+          val emptysections = Vector("flow", "events", "onEvent")
+          val jsonempty = emptysections.map { section =>
+            RecordFormat.Json -> s"""{
           |  "job": {
           |    "name": "invalid",
           |    "target": {
@@ -879,20 +909,20 @@ final class JclJobControlComponentSpec
           |    "$section": {}
           |  }
           |}""".stripMargin
-      }
-      val yamlempty = emptysections.map { section =>
-        RecordFormat.Yaml -> s"""job:
+          }
+          val yamlempty = emptysections.map { section =>
+            RecordFormat.Yaml -> s"""job:
           |  name: invalid
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  $section: {}
           |""".stripMargin
-      }
-      val xmlempty = emptysections.map { section =>
-        RecordFormat.Xml -> s"""<root><job><name>invalid</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target><$section/></job></root>"""
-      }
-      val hoconempty = emptysections.map { section =>
-        RecordFormat.Hocon -> s"""job {
+          }
+          val xmlempty = emptysections.map { section =>
+            RecordFormat.Xml -> s"""<root><job><name>invalid</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target><$section/></job></root>"""
+          }
+          val hoconempty = emptysections.map { section =>
+            RecordFormat.Hocon -> s"""job {
           |  name = "invalid"
           |  target {
           |    action = "org.goldenport.cncf.test.JclFixture.command.ok"
@@ -900,10 +930,10 @@ final class JclJobControlComponentSpec
           |  $section {}
           |}
           |""".stripMargin
-      }
-      val emptybyformat = jsonempty ++ yamlempty ++ xmlempty ++ hoconempty
-      val omittedbyformat = Vector(
-        RecordFormat.Json -> """{
+          }
+          val emptybyformat = jsonempty ++ yamlempty ++ xmlempty ++ hoconempty
+          val omittedbyformat = Vector(
+            RecordFormat.Json -> """{
           |  "job": {
           |    "name": "valid-json",
           |    "target": {
@@ -911,53 +941,57 @@ final class JclJobControlComponentSpec
           |    }
           |  }
           |}""".stripMargin,
-        RecordFormat.Yaml -> """job:
+            RecordFormat.Yaml -> """job:
           |  name: valid-yaml
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin,
-        RecordFormat.Xml -> """<root><job><name>valid-xml</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target></job></root>""",
-        RecordFormat.Hocon -> """job {
+            RecordFormat.Xml -> """<root><job><name>valid-xml</name><target><action>org.goldenport.cncf.test.JclFixture.command.ok</action></target></job></root>""",
+            RecordFormat.Hocon -> """job {
           |  name = "valid-hocon"
           |  target {
           |    action = "org.goldenport.cncf.test.JclFixture.command.ok"
           |  }
           |}
           |""".stripMargin
-      )
+          )
 
-      When("each malformed definition is parsed")
-      val outcomes = candidates.map(body => JobBatchDefinition.parseYaml(body) match {
-        case Consequence.Failure(_) => true
-        case Consequence.Success(_) => false
-      })
+          When("each malformed definition is parsed")
+          val outcomes = candidates.map(body => JobBatchDefinition.parseYaml(body) match {
+            case Consequence.Failure(_) => true
+            case Consequence.Success(_) => false
+          })
 
-      Then("every malformed definition is rejected deterministically before submission")
-      outcomes shouldBe Vector.fill(candidates.size)(true)
+          Then("every malformed definition is rejected deterministically before submission")
+          outcomes shouldBe Vector.fill(candidates.size)(true)
 
-      And("explicit empty executable mappings are rejected in every admitted format")
-      emptybyformat.foreach { case (format, body) =>
-        JobBatchDefinition.parse(body, format) match {
-          case Consequence.Failure(_) => succeed
-          case Consequence.Success(_) => fail(s"expected empty executable mapping to fail for ${JobBatchDefinition.formatName(format)}")
-        }
-      }
+          And("explicit empty executable mappings are rejected in every admitted format")
+          emptybyformat.foreach { case (format, body) =>
+            JobBatchDefinition.parse(body, format) match {
+              case Consequence.Failure(_) => succeed
+              case Consequence.Success(_) => fail(s"expected empty executable mapping to fail for ${JobBatchDefinition.formatName(format)}")
+            }
+          }
 
-      And("omitted executable sections remain accepted in every admitted format")
-      omittedbyformat.foreach { case (format, body) =>
-        JobBatchDefinition.parse(body, format) match {
-          case Consequence.Success(batch) => batch.jobs should have size 1
-          case Consequence.Failure(conclusion) => fail(conclusion.show)
+          And("omitted executable sections remain accepted in every admitted format")
+          omittedbyformat.foreach { case (format, body) =>
+            JobBatchDefinition.parse(body, format) match {
+              case Consequence.Success(batch) => batch.jobs should have size 1
+              case Consequence.Failure(conclusion) => fail(conclusion.show)
+            }
+          }
         }
       }
     }
 
-    "manage JobDefinition entity lifecycle and submit by reference with snapshots" in {
-      Given("a reusable JobDefinition with accepted executable JCL sections")
-      _with_fixture() { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val body =
-        """job:
+    "definition lifecycle and command snapshots" which {
+      "manage JobDefinition entity lifecycle and submit by reference with snapshots" must afterWord("in spec:job-definition-lifecycle-contract, example:JCL-E13, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a reusable JobDefinition with accepted executable JCL sections")
+          _with_fixture() { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val body =
+            """job:
           |  name: snapshot-original
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -989,87 +1023,87 @@ final class JclJobControlComponentSpec
           |          marker: old-handler
           |""".stripMargin
 
-      When("the draft definition is created, activated, searched, and submitted by ref")
-      val created = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
-        arguments = List(
-          Argument("key", "nightly-ok"),
-          Argument("body", body)
-        )
-      )
-      val activated = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.activate_job_definition",
-        arguments = List(Argument("key", "nightly-ok"))
-      )
-      val searched = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.search_job_definitions",
-        arguments = Nil
-      )
-      val submitted = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", "jobDefinitionRef: nightly-ok"))
-      )
+          When("the draft definition is created, activated, searched, and submitted by ref")
+          val created = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
+            arguments = List(
+              Argument("key", "nightly-ok"),
+              Argument("body", body)
+            )
+          )
+          val activated = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.activate_job_definition",
+            arguments = List(Argument("key", "nightly-ok"))
+          )
+          val searched = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.search_job_definitions",
+            arguments = Nil
+          )
+          val submitted = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", "jobDefinitionRef: nightly-ok"))
+          )
 
-      Then("the definition is an active lightweight management record")
-      val createdrecord = _record(created)
-      createdrecord.getString("key") shouldBe Some("nightly-ok")
-      createdrecord.getString("definitionStatus") shouldBe Some("draft")
-      val activatedrecord = _record(activated)
-      activatedrecord.getString("definitionStatus") shouldBe Some("active")
-      createdrecord.getAny("version") shouldBe empty
-      createdrecord.getAny("revision") shouldBe empty
-      createdrecord.getAny("hash") shouldBe empty
-      activatedrecord.getAny("version") shouldBe empty
-      activatedrecord.getAny("revision") shouldBe empty
-      activatedrecord.getAny("hash") shouldBe empty
-      createdrecord.getString("flow").exists(_.nonEmpty) shouldBe true
-      createdrecord.getString("onEvent").exists(_.nonEmpty) shouldBe true
-      _records(_record(searched).asMap("jobDefinitions")).map(_.getString("key")) should contain (Some("nightly-ok"))
+          Then("the definition is an active lightweight management record")
+          val createdrecord = _record(created)
+          createdrecord.getString("key") shouldBe Some("nightly-ok")
+          createdrecord.getString("definitionStatus") shouldBe Some("draft")
+          val activatedrecord = _record(activated)
+          activatedrecord.getString("definitionStatus") shouldBe Some("active")
+          createdrecord.getAny("version") shouldBe empty
+          createdrecord.getAny("revision") shouldBe empty
+          createdrecord.getAny("hash") shouldBe empty
+          activatedrecord.getAny("version") shouldBe empty
+          activatedrecord.getAny("revision") shouldBe empty
+          activatedrecord.getAny("hash") shouldBe empty
+          createdrecord.getString("flow").exists(_.nonEmpty) shouldBe true
+          createdrecord.getString("onEvent").exists(_.nonEmpty) shouldBe true
+          _records(_record(searched).asMap("jobDefinitions")).map(_.getString("key")) should contain (Some("nightly-ok"))
 
-      And("the submitted Job keeps an immutable definition snapshot")
-      val jobid = _strings(_record(submitted), "submitted-job-ids").head
-      val parsedjobid = org.goldenport.cncf.job.JobId.parse(jobid).toOption.get
-      val model = fixture.subsystem.jobEngine.queryVisible(parsedjobid).toOption.flatten.getOrElse(fail("job missing"))
-      val initialsource = createdrecord.getString("jclSource").getOrElse(fail("initial source missing"))
-      val initialtaskcount = model.tasks.totalCount
-      val initialtasks = model.tasks.tasks
-      val snapshot = model.debug.jobDefinitionSnapshot.getOrElse(fail("definition snapshot missing"))
-      snapshot.id shouldBe createdrecord.getString("id").getOrElse(fail("definition id missing"))
-      snapshot.key shouldBe "nightly-ok"
-      snapshot.jclSource shouldBe Some(initialsource)
-      snapshot.jclFormat shouldBe createdrecord.getString("jclFormat")
-      model.debug.parameters.get("jcl.jobDefinition.key") shouldBe Some("nightly-ok")
-      model.debug.parameters.get("jcl.jobDefinition.source") shouldBe Some(initialsource)
-      model.debug.parameters.get("jcl.jobDefinition.version") shouldBe empty
-      model.debug.parameters.get("jcl.jobDefinition.revision") shouldBe empty
-      model.debug.parameters.get("jcl.jobDefinition.hash") shouldBe empty
-      model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
-      model.status shouldBe JobStatus.Succeeded
-      initialtaskcount shouldBe 3
-      initialtasks.map(_.operation) shouldBe Vector(
-        Some("org.goldenport.cncf.test.JclFixture.command.ok"),
-        Some("org.goldenport.cncf.test.JclFixture.command.hook"),
-        Some("org.goldenport.cncf.test.JclFixture.command.compensate")
-      )
-      initialtasks.forall(_.status == org.goldenport.cncf.job.JobTaskStatus.Succeeded) shouldBe true
-      initialtasks(2).parentTaskId shouldBe Some(initialtasks(1).taskId)
-      fixture.trace.toVector shouldBe Vector(
-        "ok:marker=old-root",
-        "hook:marker=old-flow",
-        "compensate:marker=old-handler"
-      )
-      fixture.trace.toVector should not contain "ok:marker=new-root"
-      fixture.trace.toVector should not contain "hook:marker=new-flow"
-      fixture.trace.toVector should not contain "compensate:marker=new-handler"
-      fixture.subsystem.eventStore.query(EventStore.Query(name = Some("snapshot.old"))).toOption.getOrElse(Vector.empty) should have size 1
+          And("the submitted Job keeps an immutable definition snapshot")
+          val jobid = _strings(_record(submitted), "submitted-job-ids").head
+          val parsedjobid = org.goldenport.cncf.job.JobId.parse(jobid).toOption.get
+          val model = fixture.subsystem.jobEngine.queryVisible(parsedjobid).toOption.flatten.getOrElse(fail("job missing"))
+          val initialsource = createdrecord.getString("jclSource").getOrElse(fail("initial source missing"))
+          val initialtaskcount = model.tasks.totalCount
+          val initialtasks = model.tasks.tasks
+          val snapshot = model.debug.jobDefinitionSnapshot.getOrElse(fail("definition snapshot missing"))
+          snapshot.id shouldBe createdrecord.getString("id").getOrElse(fail("definition id missing"))
+          snapshot.key shouldBe "nightly-ok"
+          snapshot.jclSource shouldBe Some(initialsource)
+          snapshot.jclFormat shouldBe createdrecord.getString("jclFormat")
+          model.debug.parameters.get("jcl.jobDefinition.key") shouldBe Some("nightly-ok")
+          model.debug.parameters.get("jcl.jobDefinition.source") shouldBe Some(initialsource)
+          model.debug.parameters.get("jcl.jobDefinition.version") shouldBe empty
+          model.debug.parameters.get("jcl.jobDefinition.revision") shouldBe empty
+          model.debug.parameters.get("jcl.jobDefinition.hash") shouldBe empty
+          model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
+          model.status shouldBe JobStatus.Succeeded
+          initialtaskcount shouldBe 3
+          initialtasks.map(_.operation) shouldBe Vector(
+            Some("org.goldenport.cncf.test.JclFixture.command.ok"),
+            Some("org.goldenport.cncf.test.JclFixture.command.hook"),
+            Some("org.goldenport.cncf.test.JclFixture.command.compensate")
+          )
+          initialtasks.forall(_.status == org.goldenport.cncf.job.JobTaskStatus.Succeeded) shouldBe true
+          initialtasks(2).parentTaskId shouldBe Some(initialtasks(1).taskId)
+          fixture.trace.toVector shouldBe Vector(
+            "ok:marker=old-root",
+            "hook:marker=old-flow",
+            "compensate:marker=old-handler"
+          )
+          fixture.trace.toVector should not contain "ok:marker=new-root"
+          fixture.trace.toVector should not contain "hook:marker=new-flow"
+          fixture.trace.toVector should not contain "compensate:marker=new-handler"
+          fixture.subsystem.eventStore.query(EventStore.Query(name = Some("snapshot.old"))).toOption.getOrElse(Vector.empty) should have size 1
 
-      When("the same active definition is updated to a different valid executable source, retired, and obtained")
-      val replacementbody =
-        """job:
+          When("the same active definition is updated to a different valid executable source, retired, and obtained")
+          val replacementbody =
+            """job:
           |  name: snapshot-replacement
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -1096,159 +1130,167 @@ final class JclJobControlComponentSpec
           |        parameters:
           |          marker: new-handler
           |""".stripMargin
-      _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.update_job_definition",
-        arguments = List(
-          Argument("key", "nightly-ok"),
-          Argument("body", replacementbody)
-        )
-      )
-      val updatedrecord = _record(_execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_definition",
-        arguments = List(Argument("key", "nightly-ok"))
-      ))
-      val retiredrecord = _record(_execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.retire_job_definition",
-        arguments = List(Argument("key", "nightly-ok"))
-      ))
-      val currentrecord = _record(_execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_definition",
-        arguments = List(Argument("key", "nightly-ok"))
-      ))
+          _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.update_job_definition",
+            arguments = List(
+              Argument("key", "nightly-ok"),
+              Argument("body", replacementbody)
+            )
+          )
+          val updatedrecord = _record(_execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_definition",
+            arguments = List(Argument("key", "nightly-ok"))
+          ))
+          val retiredrecord = _record(_execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.retire_job_definition",
+            arguments = List(Argument("key", "nightly-ok"))
+          ))
+          val currentrecord = _record(_execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.get_job_definition",
+            arguments = List(Argument("key", "nightly-ok"))
+          ))
 
-      Then("the retired management record preserves its changed definition content while the submitted Job remains unchanged")
-      updatedrecord.getString("definitionStatus") shouldBe Some("active")
-      retiredrecord.getString("definitionStatus") shouldBe Some("retired")
-      retiredrecord.getAny("version") shouldBe empty
-      retiredrecord.getAny("revision") shouldBe empty
-      retiredrecord.getAny("hash") shouldBe empty
-      currentrecord.getString("key") shouldBe Some("nightly-ok")
-      currentrecord.getString("definitionStatus") shouldBe Some("retired")
-      currentrecord.getAny("version") shouldBe empty
-      currentrecord.getAny("revision") shouldBe empty
-      currentrecord.getAny("hash") shouldBe empty
-      currentrecord.getString("jclSource") shouldBe Some(replacementbody)
-      val retained = fixture.subsystem.jobEngine.queryVisible(parsedjobid).toOption.flatten.getOrElse(fail("retained job missing"))
-      retained.status shouldBe JobStatus.Succeeded
-      retained.debug.jobDefinitionSnapshot shouldBe Some(snapshot)
-      retained.tasks.totalCount shouldBe initialtaskcount
-      retained.tasks.tasks shouldBe initialtasks
-      fixture.trace.toVector shouldBe Vector(
-        "ok:marker=old-root",
-        "hook:marker=old-flow",
-        "compensate:marker=old-handler"
-      )
-      fixture.subsystem.eventStore.query(EventStore.Query(name = Some("snapshot.old"))).toOption.getOrElse(Vector.empty) should have size 1
-      fixture.subsystem.eventStore.query(EventStore.Query(name = Some("snapshot.new"))).toOption.getOrElse(Vector.empty) shouldBe empty
+          Then("the retired management record preserves its changed definition content while the submitted Job remains unchanged")
+          updatedrecord.getString("definitionStatus") shouldBe Some("active")
+          retiredrecord.getString("definitionStatus") shouldBe Some("retired")
+          retiredrecord.getAny("version") shouldBe empty
+          retiredrecord.getAny("revision") shouldBe empty
+          retiredrecord.getAny("hash") shouldBe empty
+          currentrecord.getString("key") shouldBe Some("nightly-ok")
+          currentrecord.getString("definitionStatus") shouldBe Some("retired")
+          currentrecord.getAny("version") shouldBe empty
+          currentrecord.getAny("revision") shouldBe empty
+          currentrecord.getAny("hash") shouldBe empty
+          currentrecord.getString("jclSource") shouldBe Some(replacementbody)
+          val retained = fixture.subsystem.jobEngine.queryVisible(parsedjobid).toOption.flatten.getOrElse(fail("retained job missing"))
+          retained.status shouldBe JobStatus.Succeeded
+          retained.debug.jobDefinitionSnapshot shouldBe Some(snapshot)
+          retained.tasks.totalCount shouldBe initialtaskcount
+          retained.tasks.tasks shouldBe initialtasks
+          fixture.trace.toVector shouldBe Vector(
+            "ok:marker=old-root",
+            "hook:marker=old-flow",
+            "compensate:marker=old-handler"
+          )
+          fixture.subsystem.eventStore.query(EventStore.Query(name = Some("snapshot.old"))).toOption.getOrElse(Vector.empty) should have size 1
+          fixture.subsystem.eventStore.query(EventStore.Query(name = Some("snapshot.new"))).toOption.getOrElse(Vector.empty) shouldBe empty
+          }
+        }
       }
-    }
 
-    "attach operation JobDefinition snapshots during normal Command launch" in {
-      Given("an operation bound to an active JobDefinition")
-      _with_fixture(
-        operationExecution = Map("ok" -> "sync-job"),
-        operationJobDefinitionRefs = Map("ok" -> "op-bound-ok")
-      ) { fixture =>
-      val body =
-        """job:
+      "attach operation JobDefinition snapshots during normal Command launch" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E14, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("an operation bound to an active JobDefinition")
+          _with_fixture(
+            operationExecution = Map("ok" -> "sync-job"),
+            operationJobDefinitionRefs = Map("ok" -> "op-bound-ok")
+          ) { fixture =>
+          val body =
+            """job:
           |  name: operation-bound-ok
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  profile:
           |    expectedStatus: succeeded
           |""".stripMargin
-      _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
-        arguments = List(
-          Argument("key", "op-bound-ok"),
-          Argument("status", "active"),
-          Argument("body", body)
-        )
-      )
+          _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
+            arguments = List(
+              Argument("key", "op-bound-ok"),
+              Argument("status", "active"),
+              Argument("body", body)
+            )
+          )
 
-      When("the operation is executed through ComponentLogic")
-      val component = _component_for(fixture.subsystem, "org.goldenport.cncf.test.JclFixture.command.ok")
-      val request = _build_request(fixture.subsystem.resolver, "org.goldenport.cncf.test.JclFixture.command.ok", Nil)
-      val action = component.logic.makeOperationRequest(request).toOption.collect {
-        case action: Action => action
-      }.getOrElse(fail("action missing"))
-      val ctx = component.logic.executionContext()
-      val response = component.logic.executeAction(action, ctx)
-      given ExecutionContext = ctx
+          When("the operation is executed through ComponentLogic")
+          val component = _component_for(fixture.subsystem, "org.goldenport.cncf.test.JclFixture.command.ok")
+          val request = _build_request(fixture.subsystem.resolver, "org.goldenport.cncf.test.JclFixture.command.ok", Nil)
+          val action = component.logic.makeOperationRequest(request).toOption.collect {
+            case action: Action => action
+          }.getOrElse(fail("action missing"))
+          val ctx = component.logic.executionContext()
+          val response = component.logic.executeAction(action, ctx)
+          given ExecutionContext = ctx
 
-      Then("the managed Job carries the JobDefinition snapshot")
-      response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
-      val jobid = ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))
-      val model = component.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobid).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
-      model.debug.jobDefinitionSnapshot.map(_.key) shouldBe Some("op-bound-ok")
-      model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
+          Then("the managed Job carries the JobDefinition snapshot")
+          response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+          val jobid = ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))
+          val model = component.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobid).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
+          model.debug.jobDefinitionSnapshot.map(_.key) shouldBe Some("op-bound-ok")
+          model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
+          }
+        }
       }
-    }
 
-    "apply operation JobDefinition compensation during normal Command launch" in {
-      Given("an operation bound to a JobDefinition with explicit compensation")
-      _with_fixture(
-        operationExecution = Map("ok" -> "sync-job"),
-        operationJobDefinitionRefs = Map("ok" -> "op-bound-compensation")
-      ) { fixture =>
-      val body =
-        """job:
+      "apply operation JobDefinition compensation during normal Command launch" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E15, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("an operation bound to a JobDefinition with explicit compensation")
+          _with_fixture(
+            operationExecution = Map("ok" -> "sync-job"),
+            operationJobDefinitionRefs = Map("ok" -> "op-bound-compensation")
+          ) { fixture =>
+          val body =
+            """job:
           |  name: operation-bound-compensation
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
           |  compensation:
           |    action: org.goldenport.cncf.test.JclFixture.command.compensate
           |""".stripMargin
-      _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
-        arguments = List(
-          Argument("key", "op-bound-compensation"),
-          Argument("status", "active"),
-          Argument("body", body)
-        )
-      )
+          _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.create_job_definition",
+            arguments = List(
+              Argument("key", "op-bound-compensation"),
+              Argument("status", "active"),
+              Argument("body", body)
+            )
+          )
 
-      When("the operation completes and a later same-job continuation fails")
-      val component = _component_for(fixture.subsystem, "org.goldenport.cncf.test.JclFixture.command.ok")
-      val request = _build_request(fixture.subsystem.resolver, "org.goldenport.cncf.test.JclFixture.command.ok", Nil)
-      val action = component.logic.makeOperationRequest(request).toOption.collect {
-        case action: Action => action
-      }.getOrElse(fail("action missing"))
-      val ctx = component.logic.executionContext()
-      val response = component.logic.executeAction(action, ctx)
-      val jobid = org.goldenport.cncf.job.JobId.parse(ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))).toOption.get
-      val failed = new org.goldenport.cncf.job.JobTask {
-        val actionid = org.goldenport.cncf.job.ActionId.generate()
-        override def actionId: org.goldenport.cncf.job.ActionId = actionid
-        override def operationName: Option[String] = Some("same-job-failure")
-        def run(ctx: ExecutionContext): org.goldenport.cncf.job.TaskOutcome =
-          org.goldenport.cncf.job.TaskFailed(Conclusion.simple("same-job-failure: forced"))
-      }
-      val _ = component.jobEngine.runTaskInJobSync(jobid, failed, ctx)
-      val model = component.jobEngine.queryVisible(jobid)(using ctx).toOption.flatten.getOrElse(fail("job missing"))
+          When("the operation completes and a later same-job continuation fails")
+          val component = _component_for(fixture.subsystem, "org.goldenport.cncf.test.JclFixture.command.ok")
+          val request = _build_request(fixture.subsystem.resolver, "org.goldenport.cncf.test.JclFixture.command.ok", Nil)
+          val action = component.logic.makeOperationRequest(request).toOption.collect {
+            case action: Action => action
+          }.getOrElse(fail("action missing"))
+          val ctx = component.logic.executionContext()
+          val response = component.logic.executeAction(action, ctx)
+          val jobid = org.goldenport.cncf.job.JobId.parse(ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))).toOption.get
+          val failed = new org.goldenport.cncf.job.JobTask {
+            val actionid = org.goldenport.cncf.job.ActionId.generate()
+            override def actionId: org.goldenport.cncf.job.ActionId = actionid
+            override def operationName: Option[String] = Some("same-job-failure")
+            def run(ctx: ExecutionContext): org.goldenport.cncf.job.TaskOutcome =
+              org.goldenport.cncf.job.TaskFailed(Conclusion.simple("same-job-failure: forced"))
+          }
+          val _ = component.jobEngine.runTaskInJobSync(jobid, failed, ctx)
+          val model = component.jobEngine.queryVisible(jobid)(using ctx).toOption.flatten.getOrElse(fail("job missing"))
 
-      Then("the root task carries and runs the JobDefinition compensation action")
-      response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
-      val root = model.tasks.tasks.find(_.operation.exists(_.endsWith(".ok"))).getOrElse(fail("root task missing"))
-      root.compensationActionRef shouldBe Some("org.goldenport.cncf.test.JclFixture.command.compensate")
-      model.tasks.tasks.exists(_.operation.exists(_.endsWith(".compensate"))) shouldBe true
-      root.compensationStatus shouldBe Some("succeeded")
-      fixture.trace.exists(_.startsWith("compensate:")) shouldBe true
+          Then("the root task carries and runs the JobDefinition compensation action")
+          response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+          val root = model.tasks.tasks.find(_.operation.exists(_.endsWith(".ok"))).getOrElse(fail("root task missing"))
+          root.compensationActionRef shouldBe Some("org.goldenport.cncf.test.JclFixture.command.compensate")
+          model.tasks.tasks.exists(_.operation.exists(_.endsWith(".compensate"))) shouldBe true
+          root.compensationStatus shouldBe Some("succeeded")
+          fixture.trace.exists(_.startsWith("compensate:")) shouldBe true
+          }
+        }
       }
     }
 
-    "submit canonical JCL and compare declared and observed profile diagnostics" in {
-      Given("a canonical JCL profile whose required action succeeds")
-      _with_fixture() { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val body =
-        """job:
+    "job submission and local continuations" which {
+      "submit canonical JCL and compare declared and observed profile diagnostics" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E16, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a canonical JCL profile whose required action succeeds")
+          _with_fixture() { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val body =
+            """job:
           |  name: compare-ok
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -1260,34 +1302,36 @@ final class JclJobControlComponentSpec
           |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
 
-      When("the job is submitted and compared")
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", body))
-      )
-      val jobid = _strings(_record(response), "submitted-job-ids").head
-      val comparison = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.compare_job_profile",
-        arguments = List(Argument("id", jobid))
-      )
+          When("the job is submitted and compared")
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", body))
+          )
+          val jobid = _strings(_record(response), "submitted-job-ids").head
+          val comparison = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.compare_job_profile",
+            arguments = List(Argument("id", jobid))
+          )
 
-      Then("the declared profile is attached and no error difference is reported")
-      val record = _record(comparison)
-      record.getString("summarySeverity") shouldBe Some("ok")
-      record.getBoolean("accepted") shouldBe Some(true)
-      record.getRecord("declared").flatMap(_.getString("expectedStatus")) shouldBe Some("Succeeded")
-      _records(record.asMap("differences")) shouldBe empty
+          Then("the declared profile is attached and no error difference is reported")
+          val record = _record(comparison)
+          record.getString("summarySeverity") shouldBe Some("ok")
+          record.getBoolean("accepted") shouldBe Some(true)
+          record.getRecord("declared").flatMap(_.getString("expectedStatus")) shouldBe Some("Succeeded")
+          _records(record.asMap("differences")) shouldBe empty
+          }
+        }
       }
-    }
 
-    "report profile contradictions and reconstruct canonical job JCL" in {
-      Given("a canonical JCL profile whose declared status is wrong")
-      _with_fixture() { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val body =
-        """job:
+      "report profile contradictions and reconstruct canonical job JCL" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E17, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a canonical JCL profile whose declared status is wrong")
+          _with_fixture() { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val body =
+            """job:
           |  name: compare-status-mismatch
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -1297,51 +1341,53 @@ final class JclJobControlComponentSpec
           |      - action: org.goldenport.cncf.test.JclFixture.command.ok
           |""".stripMargin
 
-      When("the job is submitted, compared, and reconstructed")
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", body))
-      )
-      val jobid = _strings(_record(response), "submitted-job-ids").head
-      val comparison = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.compare_job_profile",
-        arguments = List(Argument("id", jobid))
-      )
-      val reconstructed = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.reconstruct_job_profile",
-        arguments = List(Argument("id", jobid))
-      )
+          When("the job is submitted, compared, and reconstructed")
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", body))
+          )
+          val jobid = _strings(_record(response), "submitted-job-ids").head
+          val comparison = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.compare_job_profile",
+            arguments = List(Argument("id", jobid))
+          )
+          val reconstructed = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.reconstruct_job_profile",
+            arguments = List(Argument("id", jobid))
+          )
 
-      Then("comparison reports an error-level status mismatch")
-      val differences = _records(_record(comparison).asMap("differences"))
-      differences.exists(_.getString("kind").contains("status-mismatch")) shouldBe true
-      _record(comparison).getString("summarySeverity") shouldBe Some("error")
+          Then("comparison reports an error-level status mismatch")
+          val differences = _records(_record(comparison).asMap("differences"))
+          differences.exists(_.getString("kind").contains("status-mismatch")) shouldBe true
+          _record(comparison).getString("summarySeverity") shouldBe Some("error")
 
-      And("reconstruction emits canonical single-job shape")
-      val job = _record(reconstructed).getRecord("job").getOrElse(fail("canonical job missing"))
-      job.getString("name") shouldBe Some("compare-status-mismatch")
-      job.getRecord("profile").flatMap(_.getString("expectedStatus")) shouldBe Some("Succeeded")
+          And("reconstruction emits canonical single-job shape")
+          val job = _record(reconstructed).getRecord("job").getOrElse(fail("canonical job missing"))
+          job.getString("name") shouldBe Some("compare-status-mismatch")
+          job.getRecord("profile").flatMap(_.getString("expectedStatus")) shouldBe Some("Succeeded")
+          }
+        }
       }
-    }
 
-    "submit a single action job and a fail-fast batch with failure hook" in {
-      Given("a fixture component with ok/fail/hook actions")
-      _with_fixture() { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      "submit a single action job and a fail-fast batch with failure hook" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E18, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a fixture component with ok/fail/hook actions")
+          _with_fixture() { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
 
-      val single =
-        """jobs:
+          val single =
+            """jobs:
           |  - name: single-ok
           |    target:
           |      action: org.goldenport.cncf.test.JclFixture.command.ok
           |    parameters:
           |      orderId: one
           |""".stripMargin
-      val batch =
-        """jobs:
+          val batch =
+            """jobs:
           |  - name: ok
           |    target:
           |      action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -1362,50 +1408,52 @@ final class JclJobControlComponentSpec
           |    parameters:
           |      orderId: c
           |""".stripMargin
-      JobBatchDefinition.parseYaml(batch).toOption.map(_.jobs.size) shouldBe Some(3)
+          JobBatchDefinition.parseYaml(batch).toOption.map(_.jobs.size) shouldBe Some(3)
 
-      When("submit_job_definition and submit_job_batch are invoked")
-      val singleresponse = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", single))
-      )
-      val batchresponse = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_batch",
-        arguments = List(Argument("body", batch))
-      )
+          When("submit_job_definition and submit_job_batch are invoked")
+          val singleresponse = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", single))
+          )
+          val batchresponse = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_batch",
+            arguments = List(Argument("body", batch))
+          )
 
-      Then("single submission returns one visible job id")
-      val singlerecord = _record(singleresponse)
-      val singleids = _strings(singlerecord, "submitted-job-ids")
-      singleids.size shouldBe 1
-      fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(singleids.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(singleids.head)
+          Then("single submission returns one visible job id")
+          val singlerecord = _record(singleresponse)
+          val singleids = _strings(singlerecord, "submitted-job-ids")
+          singleids.size shouldBe 1
+          fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(singleids.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(singleids.head)
 
-      And("batch submission is sequential fail-fast and runs the failure hook")
-      val batchrecord = _record(batchresponse)
-      batchrecord.getBoolean("success") shouldBe Some(false)
-      _strings(batchrecord, "submitted-job-ids").size shouldBe 2
-      batchrecord.getInt("stopped-at-index") shouldBe Some(1)
-      batchrecord.getString("stopped-at-name") shouldBe Some("fail")
-      batchrecord.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
+          And("batch submission is sequential fail-fast and runs the failure hook")
+          val batchrecord = _record(batchresponse)
+          batchrecord.getBoolean("success") shouldBe Some(false)
+          _strings(batchrecord, "submitted-job-ids").size shouldBe 2
+          batchrecord.getInt("stopped-at-index") shouldBe Some(1)
+          batchrecord.getString("stopped-at-name") shouldBe Some("fail")
+          batchrecord.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
 
-      And("the third job is not executed")
-      val trace = fixture.trace.toVector
-      trace.takeRight(3) shouldBe Vector(
-        "ok:orderId=a",
-        "fail:orderId=b",
-        "hook:reason=after-fail"
-      )
+          And("the third job is not executed")
+          val trace = fixture.trace.toVector
+          trace.takeRight(3) shouldBe Vector(
+            "ok:orderId=a",
+            "fail:orderId=b",
+            "hook:reason=after-fail"
+          )
+          }
+        }
       }
-    }
 
-    "submit canonical flow as one ordered Job with root parameter precedence" in {
-      Given("a canonical action JCL job with two finite flow steps")
-      _with_fixture() { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val body =
-        """job:
+      "submit canonical flow as one ordered Job with root parameter precedence" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E19, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a canonical action JCL job with two finite flow steps")
+          _with_fixture() { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val body =
+            """job:
           |  name: ordered-flow
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -1424,42 +1472,44 @@ final class JclJobControlComponentSpec
           |          orderId: final
           |""".stripMargin
 
-      When("the canonical JCL job is submitted")
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", body))
-      )
-      val submittedids = _strings(_record(response), "submitted-job-ids")
+          When("the canonical JCL job is submitted")
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", body))
+          )
+          val submittedids = _strings(_record(response), "submitted-job-ids")
 
-      Then("one Job completes with root then declared flow task order")
-      submittedids should have size 1
-      val jobid = org.goldenport.cncf.job.JobId.parse(submittedids.head).toOption.get
-      val model = fixture.subsystem.jobEngine.queryVisible(jobid).toOption.flatten.getOrElse(fail("job missing"))
-      model.status shouldBe JobStatus.Succeeded
-      model.tasks.totalCount shouldBe 3
-      model.tasks.tasks.map(_.operation.map(_.split("\\.").last)) shouldBe
-        Vector(Some("ok"), Some("hook"), Some("compensate"))
+          Then("one Job completes with root then declared flow task order")
+          submittedids should have size 1
+          val jobid = org.goldenport.cncf.job.JobId.parse(submittedids.head).toOption.get
+          val model = fixture.subsystem.jobEngine.queryVisible(jobid).toOption.flatten.getOrElse(fail("job missing"))
+          model.status shouldBe JobStatus.Succeeded
+          model.tasks.totalCount shouldBe 3
+          model.tasks.tasks.map(_.operation.map(_.split("\\.").last)) shouldBe
+            Vector(Some("ok"), Some("hook"), Some("compensate"))
 
-      And("flow metadata records ordered IDs and task parameters override the root")
-      model.debug.parameters.get("jcl.target.action") shouldBe
-        Some("org.goldenport.cncf.test.JclFixture.command.ok")
-      model.debug.parameters.get("jcl.flow.step.ids") shouldBe Some("first,final")
-      model.debug.executionNotes.exists(_.contains("first,final")) shouldBe true
-      fixture.trace.toVector shouldBe Vector(
-        "ok:orderId=root,region=root",
-        "hook:orderId=root,region=first",
-        "compensate:orderId=final,region=root"
-      )
+          And("flow metadata records ordered IDs and task parameters override the root")
+          model.debug.parameters.get("jcl.target.action") shouldBe
+            Some("org.goldenport.cncf.test.JclFixture.command.ok")
+          model.debug.parameters.get("jcl.flow.step.ids") shouldBe Some("first,final")
+          model.debug.executionNotes.exists(_.contains("first,final")) shouldBe true
+          fixture.trace.toVector shouldBe Vector(
+            "ok:orderId=root,region=root",
+            "hook:orderId=root,region=first",
+            "compensate:orderId=final,region=root"
+          )
+          }
+        }
       }
-    }
 
-    "publish executable events and run ordered local continuations in the same Job" in {
-      Given("a canonical root-plus-flow JCL with a persistent event and two handlers")
-      _with_fixture() { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val body =
-        """job:
+      "publish executable events and run ordered local continuations in the same Job" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E20, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a canonical root-plus-flow JCL with a persistent event and two handlers")
+          _with_fixture() { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val body =
+            """job:
           |  name: event-flow
           |  target:
           |    action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -1494,98 +1544,102 @@ final class JclJobControlComponentSpec
           |          handler: notify
           |          shared: notify
           |""".stripMargin
-      val before = fixture.subsystem.eventBus.subscriptions.size
-      fixture.subsystem.eventBus.register(EventSubscription(
-        name = "jcl-test-observer",
-        eventName = Some("order.accepted"),
-        kind = Some("order"),
-        handler = new EventDispatchHandler {
-          def dispatch(event: DomainEvent): Consequence[Unit] = {
-            event match {
-              case received: ReceptionDomainEvent => received.name shouldBe "order.accepted"
-              case other => fail(s"unexpected event: $other")
+          val before = fixture.subsystem.eventBus.subscriptions.size
+          fixture.subsystem.eventBus.register(EventSubscription(
+            name = "jcl-test-observer",
+            eventName = Some("order.accepted"),
+            kind = Some("order"),
+            handler = new EventDispatchHandler {
+              def dispatch(event: DomainEvent): Consequence[Unit] = {
+                event match {
+                  case received: ReceptionDomainEvent => received.name shouldBe "order.accepted"
+                  case other => fail(s"unexpected event: $other")
+                }
+                fixture.trace += "external EventBus observer"
+                Consequence.unit
+              }
             }
-            fixture.trace += "external EventBus observer"
-            Consequence.unit
+          ))
+          val registered = fixture.subsystem.eventBus.subscriptions.size
+
+          When("the JCL is submitted through job_control")
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", body))
+          )
+          val ids = _strings(_record(response), "submitted-job-ids")
+          ids should have size 1
+          val jobid = org.goldenport.cncf.job.JobId.parse(ids.head).toOption.get
+          val model = fixture.subsystem.jobEngine.queryVisible(jobid).toOption.flatten.getOrElse(fail("job missing"))
+
+          Then("the source action, external observer, and local handlers complete in order")
+          model.status shouldBe JobStatus.Succeeded
+          model.tasks.totalCount shouldBe 4
+          model.tasks.tasks.forall(_.status == org.goldenport.cncf.job.JobTaskStatus.Succeeded) shouldBe true
+          fixture.trace.toVector shouldBe Vector(
+            "ok:orderId=job-order,shared=job",
+            "hook:orderId=job-order,shared=flow",
+            "external EventBus observer",
+            "hook:handler=project,orderId=job-order,shared=project",
+            "hook:handler=notify,orderId=job-order,shared=notify"
+          )
+          model.debug.parameters.get("jcl.event.ids") shouldBe Some("accepted")
+          model.debug.parameters.get("jcl.continuation.ids") shouldBe Some("project,notify")
+          model.debug.executionNotes.exists(_.contains("jcl event ids: accepted")) shouldBe true
+          model.debug.executionNotes.exists(_.contains("jcl continuation ids: project,notify")) shouldBe true
+
+          And("each continuation is a SameJob child of the source and no JCL subscription is added")
+          val source = model.tasks.tasks(1)
+          val continuations = model.tasks.tasks.drop(2)
+          continuations.map(_.parentTaskId) shouldBe Vector(Some(source.taskId), Some(source.taskId))
+          continuations.map(_.component) shouldBe Vector(Some("org.goldenport.cncf.test.JclFixture"), Some("org.goldenport.cncf.test.JclFixture"))
+          fixture.subsystem.eventBus.subscriptions.size shouldBe registered
+          registered shouldBe before + 1
+
+          And("the declared event is persisted once with JCL and standard lineage attributes")
+          val records = fixture.subsystem.eventStore.query(EventStore.Query(name = Some("order.accepted"))).toOption.getOrElse(Vector.empty)
+          records should have size 1
+          val event = records.head
+          event.kind shouldBe "order"
+          event.attributes.get("jcl.event.id") shouldBe Some("accepted")
+          event.attributes.get("jcl.event.after") shouldBe Some("publish")
+          event.attributes.get("cncf.context.jobId") shouldBe Some(jobid.print)
+          event.attributes.get("cncf.context.taskId") shouldBe Some(source.taskId.print)
+          event.attributes.get("cncf.context.correlationId").exists(_.nonEmpty) shouldBe true
+          event.attributes.get("cncf.context.causationId").exists(_.nonEmpty) shouldBe true
           }
         }
-      ))
-      val registered = fixture.subsystem.eventBus.subscriptions.size
-
-      When("the JCL is submitted through job_control")
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", body))
-      )
-      val ids = _strings(_record(response), "submitted-job-ids")
-      ids should have size 1
-      val jobid = org.goldenport.cncf.job.JobId.parse(ids.head).toOption.get
-      val model = fixture.subsystem.jobEngine.queryVisible(jobid).toOption.flatten.getOrElse(fail("job missing"))
-
-      Then("the source action, external observer, and local handlers complete in order")
-      model.status shouldBe JobStatus.Succeeded
-      model.tasks.totalCount shouldBe 4
-      model.tasks.tasks.forall(_.status == org.goldenport.cncf.job.JobTaskStatus.Succeeded) shouldBe true
-      fixture.trace.toVector shouldBe Vector(
-        "ok:orderId=job-order,shared=job",
-        "hook:orderId=job-order,shared=flow",
-        "external EventBus observer",
-        "hook:handler=project,orderId=job-order,shared=project",
-        "hook:handler=notify,orderId=job-order,shared=notify"
-      )
-      model.debug.parameters.get("jcl.event.ids") shouldBe Some("accepted")
-      model.debug.parameters.get("jcl.continuation.ids") shouldBe Some("project,notify")
-      model.debug.executionNotes.exists(_.contains("jcl event ids: accepted")) shouldBe true
-      model.debug.executionNotes.exists(_.contains("jcl continuation ids: project,notify")) shouldBe true
-
-      And("each continuation is a SameJob child of the source and no JCL subscription is added")
-      val source = model.tasks.tasks(1)
-      val continuations = model.tasks.tasks.drop(2)
-      continuations.map(_.parentTaskId) shouldBe Vector(Some(source.taskId), Some(source.taskId))
-      continuations.map(_.component) shouldBe Vector(Some("org.goldenport.cncf.test.JclFixture"), Some("org.goldenport.cncf.test.JclFixture"))
-      fixture.subsystem.eventBus.subscriptions.size shouldBe registered
-      registered shouldBe before + 1
-
-      And("the declared event is persisted once with JCL and standard lineage attributes")
-      val records = fixture.subsystem.eventStore.query(EventStore.Query(name = Some("order.accepted"))).toOption.getOrElse(Vector.empty)
-      records should have size 1
-      val event = records.head
-      event.kind shouldBe "order"
-      event.attributes.get("jcl.event.id") shouldBe Some("accepted")
-      event.attributes.get("jcl.event.after") shouldBe Some("publish")
-      event.attributes.get("cncf.context.jobId") shouldBe Some(jobid.print)
-      event.attributes.get("cncf.context.taskId") shouldBe Some(source.taskId.print)
-      event.attributes.get("cncf.context.correlationId").exists(_.nonEmpty) shouldBe true
-      event.attributes.get("cncf.context.causationId").exists(_.nonEmpty) shouldBe true
       }
     }
 
-    "describe and submit workflow-target JCL while preserving workflow and job surfaces" in {
-      Given("a fixture component with workflow metadata and entity state")
-      val entityid = _entity_id("workflow_submit")
-      _with_fixture(
-        definitions = Vector(
-          WorkflowDefinition(
-            name = "sales-order-approval",
-            registrations = Vector(
-              WorkflowRegistration(
-                name = "approval",
-                eventName = "sales-order.approved",
-                entityCollection = "salesOrder",
-                entityIdKey = "orderId",
-                statusField = "status",
-                statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrder")),
-                priority = WorkflowPriority(10)
+    "workflow-target submission" which {
+      "describe and submit workflow-target JCL while preserving workflow and job surfaces" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E21, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a fixture component with workflow metadata and entity state")
+          val entityid = _entity_id("workflow_submit")
+          _with_fixture(
+            definitions = Vector(
+              WorkflowDefinition(
+                name = "sales-order-approval",
+                registrations = Vector(
+                  WorkflowRegistration(
+                    name = "approval",
+                    eventName = "sales-order.approved",
+                    entityCollection = "salesOrder",
+                    entityIdKey = "orderId",
+                    statusField = "status",
+                    statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrder")),
+                    priority = WorkflowPriority(10)
+                  )
+                )
               )
-            )
-          )
-        ),
-        entities = Vector(SalesOrder(entityid, "approved"))
-      ) { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val body =
-        s"""jobs:
+            ),
+            entities = Vector(SalesOrder(entityid, "approved"))
+          ) { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val body =
+            s"""jobs:
            |  - name: start-approval
            |    target:
            |      workflow:
@@ -1595,76 +1649,78 @@ final class JclJobControlComponentSpec
            |      orderId: ${entityid.value}
            |""".stripMargin
 
-      When("the workflow-target JCL is described and submitted")
-      val described = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
-        arguments = List(Argument("body", body))
-      )
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
-        arguments = List(Argument("body", body))
-      )
-
-      Then("the workflow target is preserved in normalized output")
-      val describedjob = _records(_record(described).asMap("jobs")).head
-      describedjob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("definition")) shouldBe Some("sales-order-approval")
-      describedjob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("registration")) shouldBe Some("approval")
-
-      And("submission returns the workflow-triggered managed job id")
-      val record = _record(response)
-      record.getBoolean("success") shouldBe Some(true)
-      val submittedids = _strings(record, "submitted-job-ids")
-      submittedids.size shouldBe 1
-      awaitCondition {
-        fixture.trace.contains("workflow.advanceOrder")
-      } shouldBe true
-      fixture.trace should contain ("workflow.advanceOrder")
-
-      val instance = fixture.subsystem.workflowEngine.instances.headOption.getOrElse(fail("workflow instance missing"))
-      instance.registrationName shouldBe "approval"
-      instance.relatedJobIds.head.value shouldBe submittedids.head
-
-      val workflowinstance = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.get_workflow_instance",
-        arguments = List(Argument("id", instance.id.value))
-      )
-      _record(workflowinstance).getAny("related-job-ids").collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty) should contain (submittedids.head)
-      fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(submittedids.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(submittedids.head)
-      }
-    }
-
-    "submit mixed action and workflow batches sequentially and fail-fast on workflow non-progression" in {
-      Given("a fixture component with one progressable and one non-progressable workflow target")
-      val approvedid = _entity_id("workflow_batch_ok")
-      val pendingid = _entity_id("workflow_batch_pending")
-      _with_fixture(
-        definitions = Vector(
-          WorkflowDefinition(
-            name = "sales-order-approval",
-            registrations = Vector(
-              WorkflowRegistration(
-                name = "approval",
-                eventName = "sales-order.approved",
-                entityCollection = "salesOrder",
-                entityIdKey = "orderId",
-                statusField = "status",
-                statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrder")),
-                priority = WorkflowPriority(10)
-              )
-            )
+          When("the workflow-target JCL is described and submitted")
+          val described = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.describe_job_definition",
+            arguments = List(Argument("body", body))
           )
-        ),
-        entities = Vector(
-          SalesOrder(approvedid, "approved"),
-          SalesOrder(pendingid, "pending")
-        )
-      ) { fixture =>
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val mixed =
-        s"""jobs:
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            arguments = List(Argument("body", body))
+          )
+
+          Then("the workflow target is preserved in normalized output")
+          val describedjob = _records(_record(described).asMap("jobs")).head
+          describedjob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("definition")) shouldBe Some("sales-order-approval")
+          describedjob.getRecord("target").flatMap(_.getRecord("workflow")).flatMap(_.getString("registration")) shouldBe Some("approval")
+
+          And("submission returns the workflow-triggered managed job id")
+          val record = _record(response)
+          record.getBoolean("success") shouldBe Some(true)
+          val submittedids = _strings(record, "submitted-job-ids")
+          submittedids.size shouldBe 1
+          awaitCondition {
+            fixture.trace.contains("workflow.advanceOrder")
+          } shouldBe true
+          fixture.trace should contain ("workflow.advanceOrder")
+
+          val instance = fixture.subsystem.workflowEngine.instances.headOption.getOrElse(fail("workflow instance missing"))
+          instance.registrationName shouldBe "approval"
+          instance.relatedJobIds.head.value shouldBe submittedids.head
+
+          val workflowinstance = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.WORKFLOW.name}.workflow.get_workflow_instance",
+            arguments = List(Argument("id", instance.id.value))
+          )
+          _record(workflowinstance).getAny("related-job-ids").collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty) should contain (submittedids.head)
+          fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(submittedids.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(submittedids.head)
+          }
+        }
+      }
+
+      "submit mixed action and workflow batches sequentially and fail-fast on workflow non-progression" must afterWord("in spec:executable-jcl-runtime-contract, example:JCL-E22, rules:JM69-05,JM69-06, phase:69.3,69.4") {
+        "preserve the specified JCL behavior" in {
+          Given("a fixture component with one progressable and one non-progressable workflow target")
+          val approvedid = _entity_id("workflow_batch_ok")
+          val pendingid = _entity_id("workflow_batch_pending")
+          _with_fixture(
+            definitions = Vector(
+              WorkflowDefinition(
+                name = "sales-order-approval",
+                registrations = Vector(
+                  WorkflowRegistration(
+                    name = "approval",
+                    eventName = "sales-order.approved",
+                    entityCollection = "salesOrder",
+                    entityIdKey = "orderId",
+                    statusField = "status",
+                    statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrder")),
+                    priority = WorkflowPriority(10)
+                  )
+                )
+              )
+            ),
+            entities = Vector(
+              SalesOrder(approvedid, "approved"),
+              SalesOrder(pendingid, "pending")
+            )
+          ) { fixture =>
+          given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+          val mixed =
+            s"""jobs:
            |  - name: direct
            |    target:
            |      action: org.goldenport.cncf.test.JclFixture.command.ok
@@ -1695,35 +1751,37 @@ final class JclJobControlComponentSpec
            |      orderId: never
            |""".stripMargin
 
-      When("the mixed batch is submitted")
-      val response = _execute(
-        fixture.subsystem,
-        s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_batch",
-        arguments = List(Argument("body", mixed))
-      )
+          When("the mixed batch is submitted")
+          val response = _execute(
+            fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_batch",
+            arguments = List(Argument("body", mixed))
+          )
 
-      Then("action target and workflow target both contribute visible submitted job ids")
-      val record = _record(response)
-      record.getBoolean("success") shouldBe Some(false)
-      _strings(record, "submitted-job-ids").size shouldBe 2
-      record.getInt("stopped-at-index") shouldBe Some(2)
-      record.getString("stopped-at-name") shouldBe Some("wf-no-progress")
-      record.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
+          Then("action target and workflow target both contribute visible submitted job ids")
+          val record = _record(response)
+          record.getBoolean("success") shouldBe Some(false)
+          _strings(record, "submitted-job-ids").size shouldBe 2
+          record.getInt("stopped-at-index") shouldBe Some(2)
+          record.getString("stopped-at-name") shouldBe Some("wf-no-progress")
+          record.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
 
-      And("the failure hook runs and later jobs are not executed")
-      awaitCondition {
-        fixture.trace.toVector == Vector(
-          "ok:orderId=direct-1",
-          "workflow.advanceOrder",
-          "hook:reason=workflow-no-progress"
-        )
-      } shouldBe true
-      fixture.trace.toVector shouldBe Vector(
-        "ok:orderId=direct-1",
-        "workflow.advanceOrder",
-        "hook:reason=workflow-no-progress"
-      )
-      fixture.subsystem.workflowEngine.instances.size shouldBe 2
+          And("the failure hook runs and later jobs are not executed")
+          awaitCondition {
+            fixture.trace.toVector == Vector(
+              "ok:orderId=direct-1",
+              "workflow.advanceOrder",
+              "hook:reason=workflow-no-progress"
+            )
+          } shouldBe true
+          fixture.trace.toVector shouldBe Vector(
+            "ok:orderId=direct-1",
+            "workflow.advanceOrder",
+            "hook:reason=workflow-no-progress"
+          )
+          fixture.subsystem.workflowEngine.instances.size shouldBe 2
+          }
+        }
       }
     }
   }

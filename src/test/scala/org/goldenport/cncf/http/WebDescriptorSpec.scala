@@ -21,12 +21,14 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 25, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Aug. 28, 2026
+ *  version Aug. 28, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "WebDescriptor" should {
     "load the minimum Phase 12 schema from an explicit descriptor path" in {
+      Given("an explicit YAML descriptor covering the Phase 12 Web schema")
       val path = Files.createTempFile("cncf-web-descriptor", ".yaml")
       Files.writeString(
         path,
@@ -182,8 +184,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded from its explicit path")
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      Then("all declared Web metadata and effective defaults are retained")
       descriptor.profile shouldBe Some(WebUxProfile.Bootstrap)
       descriptor.effectiveProfile shouldBe WebUxProfile.Bootstrap
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
@@ -299,6 +303,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "complete obvious Static Form Web app defaults from a minimal app entry" in {
+      Given("a YAML descriptor containing only a minimal Static Form app entry")
       val path = Files.createTempFile("cncf-web-descriptor-minimal-app", ".yaml")
       Files.writeString(
         path,
@@ -309,9 +314,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the minimal app descriptor is loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
       val app = descriptor.apps.headOption.getOrElse(fail("app is missing"))
 
+      Then("the app receives its route, root and kind defaults")
       app.name shouldBe "notice-board"
       app.kind shouldBe "static-form"
       app.effectivePath shouldBe "/web/notice-board"
@@ -321,6 +328,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "decode component Web entry app aliases" in {
+      Given("a YAML descriptor with supported component entry aliases")
       val path = Files.createTempFile("cncf-web-descriptor-entry-app", ".yaml")
       Files.writeString(
         path,
@@ -336,8 +344,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the entry declarations are loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      Then("the aliases select the same component entry apps")
       descriptor.apps.map(app => app.normalizedName -> app.entry) shouldBe Vector(
         "notice-board" -> true,
         "console" -> true,
@@ -352,6 +362,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "merge scoped assets in global app and form order without duplicates" in {
+      Given("global, app and form asset declarations with overlapping entries")
       val path = Files.createTempFile("cncf-web-descriptor-scoped-assets", ".yaml")
       Files.writeString(
         path,
@@ -384,10 +395,12 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the scoped asset descriptor is loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
       val assets = descriptor.resultAssets("notice-board", "notice", "search-notices")
       val indexassets = descriptor.formIndexAssets("notice-board")
 
+      Then("assets merge in scope order without duplicates")
       assets.autoComplete shouldBe false
       indexassets.css shouldBe Vector(
         "/web/assets/site.css",
@@ -410,6 +423,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "discover /web/web-descriptor.yaml from a directory descriptor root" in {
+      Given("a descriptor under the web directory of a temporary root")
       val root = Files.createTempDirectory("cncf-web-descriptor-root")
       val web = Files.createDirectories(root.resolve("web"))
       Files.writeString(
@@ -421,12 +435,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the directory root is loaded")
       val descriptor = WebDescriptor.load(root).toOption.get
 
+      Then("the canonical descriptor metadata is discovered")
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
     }
 
     "discover src/main/car/web/web.yaml from a development project root" in {
+      Given("a descriptor under the development project CAR web directory")
       val root = Files.createTempDirectory("cncf-web-descriptor-dev-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("car").resolve("web"))
       Files.writeString(
@@ -438,12 +455,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the development project root is loaded")
       val descriptor = WebDescriptor.load(root).toOption.get
 
+      Then("the CAR descriptor metadata is discovered")
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
     }
 
     "discover src/main/web-inf/form.yaml from a development project root" in {
+      Given("a form descriptor under src/main/web-inf")
       val root = Files.createTempDirectory("cncf-web-descriptor-source-web-inf-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
       Files.writeString(
@@ -458,13 +478,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the development project root is loaded")
       val descriptor = WebDescriptor.load(root).toOption.get
 
+      Then("the operation exposure and form enablement are discovered")
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
       descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
     }
 
     "discover direct src/main/web-inf/form.yaml metadata without a web wrapper" in {
+      Given("direct form metadata under src/main/web-inf without a web wrapper")
       val root = Files.createTempDirectory("cncf-web-descriptor-source-direct-web-inf-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
       Files.writeString(
@@ -483,9 +506,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the development project root is loaded")
       val descriptor = WebDescriptor.load(root).toOption.get
       val form = descriptor.form("notice-board.notice.search-notices")
 
+      Then("the form metadata retains exposure, redirects and controls")
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
       form.enabled shouldBe Some(true)
       form.successRedirect shouldBe Some("/web/notice-board/detail?id=${result.id}")
@@ -493,7 +518,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "derive operation exposure from form access and defaults" in {
-      val descriptor = WebDescriptor.fromRecord(Record.dataAuto(
+      Given("a form record with authenticated defaults, anonymous access and a disabled command")
+      val record = Record.dataAuto(
         "default" -> Record.dataAuto(
           "form" -> Record.dataAuto(
             "access" -> "authenticated"
@@ -511,8 +537,12 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
             "access" -> "authenticated"
           )
         )
-      ))
+      )
 
+      When("the form record is decoded")
+      val descriptor = WebDescriptor.fromRecord(record)
+
+      Then("each operation receives its declared or default exposure")
       descriptor.isFormEnabled("notice-board.notice.post-notice") shouldBe true
       descriptor.exposureOf("notice-board.notice.post-notice") shouldBe WebDescriptor.Exposure.Protected
       descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
@@ -522,7 +552,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "accept default dotted form access shorthand and legacy expose values" in {
-      val descriptor = WebDescriptor.fromRecord(Record.dataAuto(
+      Given("a record with dotted form-access shorthand and legacy expose declarations")
+      val record = Record.dataAuto(
         "default" -> Record.dataAuto(
           "form.access" -> "authenticated"
         ),
@@ -537,14 +568,19 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
             "expose" -> "anonymous"
           )
         )
-      ))
+      )
 
+      When("the compatibility record is decoded")
+      val descriptor = WebDescriptor.fromRecord(record)
+
+      Then("legacy exposure and explicit anonymous form access are retained")
       descriptor.exposureOf("notice-board.notice.legacy-public") shouldBe WebDescriptor.Exposure.Public
       descriptor.exposureOf("notice-board.notice.legacy-protected") shouldBe WebDescriptor.Exposure.Protected
       descriptor.exposureOf("notice-board.notice.form-expose") shouldBe WebDescriptor.Exposure.Public
     }
 
     "default form access to anonymous when no authentication mode is configured" in {
+      Given("a form YAML descriptor without an authentication mode")
       val path = Files.createTempFile("cncf-web-descriptor-form-default-access", ".yaml")
       Files.writeString(
         path,
@@ -558,13 +594,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      Then("form access defaults to anonymous and enabled")
       descriptor.exposureOf("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
       descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
     }
 
     "merge split form descriptor metadata without losing redirect or controls" in {
+      Given("base and supplement descriptors that declare different fields of one form")
       val selector = "notice-board.notice.search-notices"
       val base = WebDescriptor(form = Map(
         selector -> WebDescriptor.Form(
@@ -581,8 +620,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         )
       ))
 
+      When("the supplement overrides the base form")
       val form = base.mergeOverride(supplement).form(selector)
 
+      Then("enablement and assets merge without losing redirects or controls")
       form.enabled shouldBe Some(true)
       form.successRedirect shouldBe Some("/web/notice-board/detail?id=${result.id}")
       form.successMessageKey shouldBe Some("notice.saved")
@@ -592,6 +633,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "merge UX profile overrides by descriptor scope" in {
+      Given("base and supplement descriptors with global, app and form UX profiles")
       val selector = "notice-board.notice.search-notices"
       val base = WebDescriptor(
         profile = Some(WebUxProfile.Bootstrap),
@@ -624,8 +666,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         ))
       )
 
+      When("the supplement overrides the base descriptor")
       val descriptor = base.mergeOverride(supplement)
 
+      Then("each UX scope uses its override profile")
       descriptor.effectiveProfile shouldBe WebUxProfile.Compact
       descriptor.appProfile("notice-board") shouldBe Some(WebUxProfile.Compact)
       descriptor.formProfile("notice-board", "notice", "search-notices") shouldBe Some(WebUxProfile.Admin)
@@ -633,6 +677,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "merge component Web entry metadata without dropping it" in {
+      Given("an entry app and a profile-only override for the same app")
       val base = WebDescriptor(apps = Vector(WebDescriptor.App("notice-board", entry = true)))
       val supplement = WebDescriptor(apps = Vector(WebDescriptor.App(
         "notice-board",
@@ -640,14 +685,17 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         profileRaw = Some("material")
       )))
 
+      When("the app descriptors are merged")
       val descriptor = base.mergeOverride(supplement)
       val app = descriptor.apps.headOption.getOrElse(fail("app is missing"))
 
+      Then("the entry flag remains set while the profile is overridden")
       app.entry shouldBe true
       app.profile shouldBe Some(WebUxProfile.Material)
     }
 
     "merge explicit component Web entry disable from an override descriptor" in {
+      Given("an enabled entry app and an explicit entry-disable override")
       val base = WebDescriptor(apps = Vector(WebDescriptor.App(
         "notice-board",
         entry = true,
@@ -659,20 +707,27 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         entryRaw = Some(false)
       )))
 
+      When("the app descriptors are merged")
       val descriptor = base.mergeOverride(supplement)
       val app = descriptor.apps.headOption.getOrElse(fail("app is missing"))
 
+      Then("the explicit disable flag is retained")
       app.entry shouldBe false
       app.entryRaw shouldBe Some(false)
     }
 
     "keep UX profile metadata out of form exposure controls" in {
+      Given("a descriptor containing only UX profile metadata")
       val descriptor = WebDescriptor(
         profile = Some(WebUxProfile.Material),
         profileRaw = Some("material")
       )
 
-      descriptor.hasControls shouldBe false
+      When("its form-control metadata is inspected")
+      val hascontrols = descriptor.hasControls
+
+      Then("UX metadata does not enable explicit exposure controls")
+      hascontrols shouldBe false
       descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
       descriptor.operationProfile("notice-board", "notice", "search-notices") shouldBe WebUxProfile.Material
     }
@@ -730,6 +785,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "does not discover src/main/web/web.yaml as CAR metadata" in {
+      Given("a descriptor placed under the unsupported src/main/web directory")
       val root = Files.createTempDirectory("cncf-web-descriptor-web-app-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web"))
       Files.writeString(
@@ -741,12 +797,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the development project root is loaded")
       val result = WebDescriptor.load(root)
 
+      Then("the unsupported location does not become CAR descriptor metadata")
       result shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "does not discover src/main/web/WEB-INF/form.yaml as descriptor source" in {
+      Given("a descriptor placed under the unsupported src/main/web/WEB-INF directory")
       val root = Files.createTempDirectory("cncf-web-descriptor-private-web-inf-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web").resolve("WEB-INF"))
       Files.writeString(
@@ -758,12 +817,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the development project root is loaded")
       val result = WebDescriptor.load(root)
 
+      Then("the unsupported location does not become descriptor source metadata")
       result shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "does not discover src/main/form/form.yaml as descriptor source" in {
+      Given("a descriptor placed under the unsupported src/main/form directory")
       val root = Files.createTempDirectory("cncf-web-descriptor-source-form-root")
       val form = Files.createDirectories(root.resolve("src").resolve("main").resolve("form"))
       Files.writeString(
@@ -775,12 +837,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the development project root is loaded")
       val result = WebDescriptor.load(root)
 
+      Then("the unsupported location does not become descriptor source metadata")
       result shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "keep /web/web.yaml as the secondary directory descriptor name" in {
+      Given("a directory root containing the secondary web.yaml descriptor name")
       val root = Files.createTempDirectory("cncf-web-descriptor-root")
       val web = Files.createDirectories(root.resolve("web"))
       Files.writeString(
@@ -792,12 +857,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the directory root is loaded")
       val descriptor = WebDescriptor.load(root).toOption.get
 
+      Then("the secondary descriptor name is discovered")
       descriptor.expose("admin.system.ping") shouldBe WebDescriptor.Exposure.Protected
     }
 
     "discover /web/web-descriptor.yaml from an archive descriptor root" in {
+      Given("an archive containing web/web-descriptor.yaml")
       val path = Files.createTempFile("cncf-web-descriptor-archive", ".sar")
       val yaml =
         """web:
@@ -813,14 +881,21 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         zip.close()
       }
 
+      When("the archive root is loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      Then("the archived descriptor metadata is discovered")
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
     }
 
     "complete CAR Web app package routes from descriptor app entries" in {
-      val app = WebDescriptor.App("notice-board").completedFor(Some("notice-board"))
+      Given("an app entry owned by the notice-board component")
+      val entry = WebDescriptor.App("notice-board")
 
+      When("the app package routes are completed for that component")
+      val app = entry.completedFor(Some("notice-board"))
+
+      Then("the completed app retains its Static Form defaults and component route")
       app.effectiveRoot shouldBe "/web/notice-board"
       app.route shouldBe Some("/web/notice-board/notice-board")
       app.effectiveKind shouldBe "static-form"
@@ -828,6 +903,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "reject unknown UX profile names during descriptor load" in {
+      Given("a YAML descriptor declaring an unknown UX profile")
       val path = Files.createTempFile("cncf-web-descriptor-invalid-profile", ".yaml")
       Files.writeString(
         path,
@@ -837,8 +913,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the invalid descriptor is loaded")
       val result = WebDescriptor.load(path)
 
+      Then("loading fails with the unknown-profile diagnostic")
       result shouldBe a[org.goldenport.Consequence.Failure[_]]
       result match {
         case org.goldenport.Consequence.Failure(conclusion) =>
@@ -850,6 +928,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "reject conflicting Web route aliases during descriptor load" in {
+      Given("a YAML descriptor containing conflicting route aliases")
       val path = Files.createTempFile("cncf-web-descriptor-route-conflict", ".yaml")
       Files.writeString(
         path,
@@ -867,8 +946,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the conflicting descriptor is loaded")
       val result = WebDescriptor.load(path)
 
+      Then("loading fails with the route-conflict diagnostic")
       result shouldBe a[org.goldenport.Consequence.Failure[_]]
       result match {
         case org.goldenport.Consequence.Failure(conclusion) =>
@@ -880,6 +961,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "reject admin page component and href component mismatches during descriptor load" in {
+      Given("a YAML Admin page whose href and declared component differ")
       val path = Files.createTempFile("cncf-web-descriptor-admin-page-conflict", ".yaml")
       Files.writeString(
         path,
@@ -893,8 +975,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the conflicting descriptor is loaded")
       val result = WebDescriptor.load(path)
 
+      Then("loading fails with the Admin component diagnostic")
       result shouldBe a[org.goldenport.Consequence.Failure[_]]
       result match {
         case org.goldenport.Consequence.Failure(conclusion) =>
@@ -906,6 +990,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "reject descriptor-declared admin pages without names during descriptor load" in {
+      Given("a YAML Admin page without a name")
       val path = Files.createTempFile("cncf-web-descriptor-admin-page-missing-name", ".yaml")
       Files.writeString(
         path,
@@ -918,8 +1003,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the invalid descriptor is loaded")
       val result = WebDescriptor.load(path)
 
+      Then("loading fails with the required-name diagnostic")
       result shouldBe a[org.goldenport.Consequence.Failure[_]]
       result match {
         case org.goldenport.Consequence.Failure(conclusion) =>
@@ -1024,6 +1111,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "deduplicate identical Web route aliases during descriptor load" in {
+      Given("a YAML descriptor repeating an identical route alias")
       val path = Files.createTempFile("cncf-web-descriptor-route-duplicate", ".yaml")
       Files.writeString(
         path,
@@ -1041,13 +1129,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      Then("only one normalized route remains")
       descriptor.routes.size shouldBe 1
       descriptor.routes.head.normalizedPathText shouldBe "/web/board"
     }
 
     "parse descriptor-driven subsystem shell owner" in {
+      Given("a YAML descriptor declaring a subsystem shell owner and composition")
       val path = Files.createTempFile("cncf-web-descriptor-shell", ".yaml")
       Files.writeString(
         path,
@@ -1066,8 +1157,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the shell descriptor is loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      Then("shell ownership, composition and page mode are decoded")
       descriptor.shellComponentName shouldBe Some("blog-component")
       descriptor.shellAppName shouldBe Some("blog")
       descriptor.shellLayoutName shouldBe Some("default")
@@ -1076,6 +1169,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "prefer app root page customization before global index customization" in {
+      Given("a YAML descriptor with app-root and global index page modes")
       val path = Files.createTempFile("cncf-web-descriptor-page-mode", ".yaml")
       Files.writeString(
         path,
@@ -1089,22 +1183,30 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         StandardCharsets.UTF_8
       )
 
+      When("the page-mode descriptor is loaded")
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      Then("app-root customization takes precedence over the global index")
       descriptor.staticPageMode("signin", Vector.empty) shouldBe WebDescriptor.PageMode.Screen
       descriptor.staticPageMode("blog", Vector.empty) shouldBe WebDescriptor.PageMode.Article
     }
 
     "not derive implicit SAR routes from Web app names" in {
+      Given("a descriptor containing only a named Web app")
       val descriptor = WebDescriptor(
         apps = Vector(WebDescriptor.App("notice-board"))
       )
 
-      descriptor.routes shouldBe Vector.empty
+      When("its route declarations are inspected")
+      val routes = descriptor.routes
+
+      Then("app names do not create implicit SAR routes")
+      routes shouldBe Vector.empty
       descriptor.webRouteFor(Vector("web", "notice-board")) shouldBe None
     }
 
     "resolve the runtime descriptor path from RuntimeConfig" in {
+      Given("runtime configuration naming an explicit descriptor path")
       val path = Files.createTempFile("cncf-web-descriptor-runtime", ".yaml")
       Files.writeString(
         path,
@@ -1123,20 +1225,26 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         ConfigurationTrace.empty
       )
 
+      When("the runtime descriptor is resolved")
       val descriptor = WebDescriptorResolver.resolve(configuration).toOption.get
 
+      Then("the configured descriptor metadata is loaded")
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
     }
 
     "resolve an empty descriptor when no runtime descriptor path is configured" in {
+      Given("runtime configuration with no descriptor path")
       val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
 
+      When("the runtime descriptor is resolved")
       val descriptor = WebDescriptorResolver.resolve(configuration).toOption.get
 
+      Then("resolution returns the empty descriptor")
       descriptor shouldBe WebDescriptor.empty
     }
 
     "resolve component dev source form metadata from runtime configuration" in {
+      Given("runtime configuration naming a component development root with form metadata")
       val root = Files.createTempDirectory("cncf-web-descriptor-configured-component-dev-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
       Files.writeString(
@@ -1161,13 +1269,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         configuration = configuration
       )
 
+      When("the subsystem descriptor is resolved")
       val descriptor = WebDescriptorResolver.resolve(subsystem).toOption.get
 
+      Then("component development form metadata is loaded")
       descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe
         Some("/web/notice-board/detail?id=${result.id}")
     }
 
     "treat exposure as the contract gate for public Web form surfaces" in {
+      Given("explicit public, protected and internal operation exposures")
       val publicselector = "notice-board.notice.search-notices"
       val protectedselector = "notice-board.notice.post-notice"
       val internalselector = "notice-board.notice.rebuild-index"
@@ -1179,7 +1290,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         )
       )
 
-      descriptor.exposureOf(publicselector) shouldBe WebDescriptor.Exposure.Public
+      When("the public operation exposure is inspected")
+      val publicexposure = descriptor.exposureOf(publicselector)
+
+      Then("exposure remains the gate for declared and unlisted form surfaces")
+      publicexposure shouldBe WebDescriptor.Exposure.Public
       descriptor.exposureOf(protectedselector) shouldBe WebDescriptor.Exposure.Protected
       descriptor.exposureOf(internalselector) shouldBe WebDescriptor.Exposure.Internal
       descriptor.exposureOf("notice-board.notice.unlisted") shouldBe WebDescriptor.Exposure.Internal
@@ -1190,11 +1305,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "keep page customization separate from operation form exposure controls" in {
+      Given("page customization without operation form controls")
       val descriptor = WebDescriptor(
         pages = Map("signup" -> WebDescriptor.PageCustomization(heading = Some("Create account")))
       )
 
-      descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
+      When("the operation form enablement is inspected")
+      val formenabled = descriptor.isFormEnabled("notice-board.notice.search-notices")
+
+      Then("page customization does not disable default form availability")
+      formenabled shouldBe true
     }
 
     "merge component CAR Web descriptors before runtime override descriptors" in {
@@ -1278,6 +1398,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "apply application component CAR Web defaults after provider component Web defaults" in {
+      Given("application and provider CARs declaring different Web defaults")
       val appcar = Files.createTempFile("cncf-app-component-web", ".car")
       val providercar = Files.createTempFile("cncf-provider-web", ".car")
       try {
@@ -1317,8 +1438,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
           _component("textus-user-account", providercar)
         ))
 
+        When("the subsystem Web descriptor is resolved")
         val descriptor = WebDescriptorResolver.resolve(subsystem).toOption.get
 
+        Then("application component defaults override provider defaults")
         descriptor.pageCustomization(Some("textus-user-account"), Some("signup")).flatMap(_.heading) shouldBe Some("App signup")
       } finally {
         Files.deleteIfExists(appcar)
@@ -1327,6 +1450,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "allow Web Tier authorization when every configured category matches at least one subject value" in {
+      Given("an authorization rule and a subject with a match in every configured category")
       val descriptor = WebDescriptor(
         authorization = Map(
           "notice-board.notice.post-notice" -> WebDescriptor.Authorization(
@@ -1342,10 +1466,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         capabilities = Set("notice-post", "notice.post")
       )
 
-      WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.post-notice", subject) shouldBe true
+      When("authorization is evaluated for the selected operation")
+      val allowed = WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.post-notice", subject)
+
+      Then("matching roles, scopes and capabilities allow the operation")
+      allowed shouldBe true
     }
 
     "deny Web Tier authorization when a configured category has no matching subject value" in {
+      Given("an authorization rule and a subject whose scope category does not match")
       val descriptor = WebDescriptor(
         authorization = Map(
           "notice-board.notice.post-notice" -> WebDescriptor.Authorization(
@@ -1359,10 +1488,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         scopes = Set("notice:read")
       )
 
-      WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.post-notice", subject) shouldBe false
+      When("authorization is evaluated for the selected operation")
+      val allowed = WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.post-notice", subject)
+
+      Then("a missing category match denies the operation")
+      allowed shouldBe false
     }
 
     "apply operation-mode and anonymous policy from Web Tier authorization rules" in {
+      Given("an anonymous subject and a rule admitting anonymous access only in development")
       val descriptor = WebDescriptor(
         authorization = Map(
           "notice-board.notice.post-notice" -> WebDescriptor.Authorization(
@@ -1373,21 +1507,28 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
       )
       val subject = WebDescriptorAuthorization.Subject()
 
-      WebDescriptorAuthorization.isAllowed(
+      When("authorization is evaluated in the development operation mode")
+      val developallowed = WebDescriptorAuthorization.isAllowed(
         descriptor,
         "notice-board.notice.post-notice",
         subject,
         org.goldenport.cncf.config.OperationMode.Develop
-      ) shouldBe true
-      WebDescriptorAuthorization.isAllowed(
+      )
+      Then("the explicitly admitted anonymous development request succeeds")
+      developallowed shouldBe true
+      When("authorization is evaluated in production mode")
+      val productionallowed = WebDescriptorAuthorization.isAllowed(
         descriptor,
         "notice-board.notice.post-notice",
         subject,
         org.goldenport.cncf.config.OperationMode.Production
-      ) shouldBe false
+      )
+      Then("anonymous access is denied outside the admitted development mode")
+      productionallowed shouldBe false
     }
 
     "allow Web Tier authorization when no rule exists for the selector" in {
+      Given("an authorization descriptor without a rule for the requested selector")
       val descriptor = WebDescriptor(
         authorization = Map(
           "notice-board.notice.post-notice" -> WebDescriptor.Authorization(
@@ -1396,22 +1537,30 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         )
       )
 
-      WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.search-notices", WebDescriptorAuthorization.Subject()) shouldBe true
+      When("authorization is evaluated for that unconfigured selector")
+      val allowed = WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.search-notices", WebDescriptorAuthorization.Subject())
+
+      Then("the missing selector rule allows the request")
+      allowed shouldBe true
     }
 
     "derive a Web authorization subject from an anonymous security context" in {
+      Given("an anonymous execution security context")
       val security = org.goldenport.cncf.context.ExecutionContext
         .create(org.goldenport.cncf.context.SecurityContext.Privilege.Anonymous)
         .security
 
+      When("the Web authorization subject is derived")
       val subject = WebDescriptorAuthorization.Subject.from(security)
 
+      Then("the subject retains anonymous roles and capabilities")
       subject.isAnonymous shouldBe true
       subject.roles should contain ("anonymous")
       subject.capabilities should contain ("anonymous")
     }
 
     "derive a Web authorization subject from HTTP query and header values" in {
+      Given("an HTTP request with roles, capability, principal and scope metadata")
       val request = org.http4s.Request[cats.effect.IO](
         method = org.http4s.Method.GET,
         uri = org.http4s.Uri.unsafeFromString("/web/notice-board/admin?role=operator%20reviewer&capability=notice.admin&principalId=admin-test")
@@ -1422,8 +1571,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenTh
         )
       )
 
+      When("the Web authorization subject is derived from the request")
       val subject = WebDescriptorAuthorization.Subject.fromHttp(request)
 
+      Then("the subject contains the declared request security metadata")
       subject.isAnonymous shouldBe false
       subject.roles should contain ("operator")
       subject.roles should contain ("reviewer")

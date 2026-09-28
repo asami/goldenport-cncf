@@ -19,8 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- *  version Sep. 17, 2026
- * @version Sep. 19, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -30,13 +29,13 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     "call planner and execute plan before update" in {
       Given("an execution context, persistent person, and successful transition plan")
       given ExecutionContext = ExecutionContext.create()
-      given EntityPersistent[_Person] = _person_persistent
+      given EntityPersistent[Person] = _person_persistent
 
-      val provider = new _ProviderWithPlan
+      val provider = new ProviderWithPlan
       val hook = new PlannedTransitionValidationHook(provider)
-      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_1", _cid, entropy = "hook_1"), "taro")
+      val entity = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_1", _cid, entropy = "hook_1"), "taro")
       When("the planned validation hook processes the update")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
 
       Then("the update succeeds and lifecycle events are emitted")
       result shouldBe Consequence.unit
@@ -70,15 +69,15 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     "schedule an explicitly bound committed transition without staging it before commit" in {
       Given("an execution context, persistent person, and successful explicitly bound transition plan")
       given ExecutionContext = ExecutionContext.create()
-      given EntityPersistent[_Person] = _person_persistent
-      val entity = _Person(
+      given EntityPersistent[Person] = _person_persistent
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_bound", _cid, entropy = "hook_bound"),
         "sachiko"
       )
       val hook = new PlannedTransitionValidationHook(new ProviderWithBoundPlan(_binding))
 
       When("the planned validation hook processes the successful update before UnitOfWork commit")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
 
       Then("only the existing lifecycle events are staged and no committed-transition event is pre-commit")
       result shouldBe Consequence.unit
@@ -92,11 +91,11 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
 
     "attach the selected rule binding to a structural execution plan without rewriting the hook operation" in {
       Given("a structural rule with an explicit CML binding and an update whose state changes from Draft to Approved")
-      val entity = _Person(
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "planner_bound", _cid, entropy = "planner_bound"),
         "ichiro"
       )
-      val rule = TransitionRule[_Person](
+      val rule = TransitionRule[Person](
         eventName = "approve",
         priority = 0,
         declarationOrder = 0,
@@ -125,8 +124,8 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
 
     "commit an explicit binding with the actual selector and fail closed before executing a mismatched direct plan" in {
       Given("selected explicit binding plans and independently controlled matching and mismatched invocations")
-      given EntityPersistent[_Person] = _person_persistent
-      val entity = _Person(
+      given EntityPersistent[Person] = _person_persistent
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_operation", _cid, entropy = "hook_operation"),
         "ichiro"
       )
@@ -165,13 +164,13 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     "emit transition-failed on action failure" in {
       Given("an execution context, persistent person, and failing transition plan")
       given ExecutionContext = ExecutionContext.create()
-      given EntityPersistent[_Person] = _person_persistent
+      given EntityPersistent[Person] = _person_persistent
 
-      val provider = new _ProviderWithFailingPlan
+      val provider = new ProviderWithFailingPlan
       val hook = new PlannedTransitionValidationHook(provider)
-      val entity = _Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_2", _cid, entropy = "hook_2"), "hanako")
+      val entity = Person(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_2", _cid, entropy = "hook_2"), "hanako")
       When("the planned validation hook processes the update")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
 
       Then("the update fails without staging a raw failure diagnostic for transactional publication")
       result shouldBe a[Consequence.Failure[_]]
@@ -189,15 +188,15 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     "reject suspension at the update hook until durable continuation persistence is available" in {
       Given("a planned update whose Required SPI action returns a typed suspension")
       given ExecutionContext = ExecutionContext.create()
-      given EntityPersistent[_Person] = _person_persistent
+      given EntityPersistent[Person] = _person_persistent
       val hook = new PlannedTransitionValidationHook(new ProviderWithOutcomePlan(_suspended_program))
-      val entity = _Person(
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "hook_suspended", _cid, entropy = "hook_suspended"),
         "hanako"
       )
 
       When("the update hook interprets the plan without an atomic persistence boundary")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
 
       Then("the update fails before a successful transition can be staged")
       result shouldBe a[Consequence.Failure[_]]
@@ -235,9 +234,9 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         token = "planned-transition-selected-rollback-spec"
       )
       given ExecutionContext = context
-      given EntityPersistent[_Person] = _person_persistent
+      given EntityPersistent[Person] = _person_persistent
       val hook = new PlannedTransitionValidationHook(new ProviderWithBoundPlan(_binding))
-      val entity = _Person(
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "test",
           "hook_selected_rollback",
@@ -248,7 +247,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
 
       When("the selected transition completes its actions and the UnitOfWork explicitly rolls back")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
       val rollbackresult = unitofwork.rollback()
 
       Then("one taxonomy-only Rollback record preserves the selected binding while no committed envelope is emitted")
@@ -287,9 +286,9 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         token = "planned-transition-validation-hook-failure-spec"
       )
       given ExecutionContext = context
-      given EntityPersistent[_Person] = _person_persistent
-      val hook = new PlannedTransitionValidationHook(new _ProviderWithFailingPlan)
-      val entity = _Person(
+      given EntityPersistent[Person] = _person_persistent
+      val hook = new PlannedTransitionValidationHook(new ProviderWithFailingPlan)
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "test",
           "hook_failure_rollback",
@@ -300,7 +299,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
 
       When("the hook fails and its runtime UnitOfWork rolls back")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
       val rollbackresult = summon[ExecutionContext].runtime.unitOfWork.rollback()
 
       Then("exactly one non-transactional taxonomy-only failure is stored without a committed-success transition")
@@ -339,9 +338,9 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         token = "planned-transition-planning-failure-spec"
       )
       given ExecutionContext = context
-      given EntityPersistent[_Person] = _person_persistent
-      val hook = new PlannedTransitionValidationHook(new _ProviderWithPlanningFailure)
-      val entity = _Person(
+      given EntityPersistent[Person] = _person_persistent
+      val hook = new PlannedTransitionValidationHook(new ProviderWithPlanningFailure)
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "test",
           "hook_planning_failure_rollback",
@@ -352,7 +351,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
 
       When("the planner fails and its runtime UnitOfWork rolls back")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
       val rollbackresult = summon[ExecutionContext].runtime.unitOfWork.rollback()
 
       Then("exactly one non-transactional planning failure is stored without private planner text")
@@ -391,9 +390,9 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         token = "planned-transition-typed-rejection-spec"
       )
       given ExecutionContext = context
-      given EntityPersistent[_Person] = _person_persistent
+      given EntityPersistent[Person] = _person_persistent
       val hook = new PlannedTransitionValidationHook(new TypedPlanningRejectionProvider)
-      val entity = _Person(
+      val entity = Person(
         org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
           "test",
           "hook_typed_rejection",
@@ -404,7 +403,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
 
       When("the typed planner rejection is returned and the runtime UnitOfWork rolls back")
-      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[Person]])
       val rollbackresult = summon[ExecutionContext].runtime.unitOfWork.rollback()
 
       Then("the safe typed outcome is projected without private text or a committed success")
@@ -419,18 +418,18 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     }
   }
 
-  private final case class _Person(id: EntityId, name: String) {
+  private final case class Person(id: EntityId, name: String) {
     def toRecord(): Record = Record.dataAuto("id" -> id, "name" -> name)
   }
 
-  private val _person_persistent: EntityPersistent[_Person] = new EntityPersistent[_Person] {
-    def id(e: _Person): EntityId = e.id
-    def toRecord(e: _Person): Record = e.toRecord()
-    def fromRecord(r: Record): Consequence[_Person] = {
+  private val _person_persistent: EntityPersistent[Person] = new EntityPersistent[Person] {
+    def id(e: Person): EntityId = e.id
+    def toRecord(e: Person): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[Person] = {
       val m = r.asMap
       (m.get("id"), m.get("name")) match {
         case (Some(id: EntityId), Some(name: String)) =>
-          Consequence.success(_Person(id, name))
+          Consequence.success(Person(id, name))
         case _ =>
           Consequence.argumentInvalid("invalid person record")
       }
@@ -579,7 +578,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         fail("The planned-transition hook specification requires a CNCF execution context instance.")
     }
 
-  private final class _ProviderWithPlan extends StateMachinePlannerProvider {
+  private final class ProviderWithPlan extends StateMachinePlannerProvider {
     private var _called = false
     private var _execution_trace = Vector.empty[String]
 
@@ -636,7 +635,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       }
   }
 
-  private final class _ProviderWithFailingPlan extends StateMachinePlannerProvider {
+  private final class ProviderWithFailingPlan extends StateMachinePlannerProvider {
     def planForSave[T](
       entity: T,
       tc: EntityPersistent[T],
@@ -718,7 +717,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
     }
   }
 
-  private final class _ProviderWithPlanningFailure extends StateMachinePlannerProvider {
+  private final class ProviderWithPlanningFailure extends StateMachinePlannerProvider {
     def planForSave[T](
       entity: T,
       tc: EntityPersistent[T],

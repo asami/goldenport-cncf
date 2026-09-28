@@ -10,7 +10,7 @@ import org.goldenport.cncf.component._
  * it neither discovers sources nor grants runtime or deployment authority.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 21, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentResourceSourceKind(val precedence: Int) {
@@ -252,7 +252,9 @@ object ResolvedComponentResources {
       Option.when(available.nonEmpty)(kind -> available.sortBy(x => (!_terminal(x.availability), _candidate_key(x))))
     }.headOption
     source match {
-      case Some((kind, selected +: rest)) =>
+      case Some((kind, entries)) =>
+        val selected = entries.head
+        val rest = entries.tail
         val conflict = Option.when(rest.nonEmpty)(ComponentResourceDiagnostic(
           ComponentResourceDiagnosticKind.Conflict, Some(target.identity.componentId), Some(kind), "multiple equally-precedent resource evidence entries were deterministically selected"
         )).toVector
@@ -269,7 +271,9 @@ object ResolvedComponentResources {
           Option.when(entries.nonEmpty)(kind -> entries.sortBy(_candidate_key))
         }.headOption
         unavailable match {
-          case Some((kind, selected +: rest)) =>
+          case Some((kind, entries)) =>
+            val selected = entries.head
+            val rest = entries.tail
             val conflict = Option.when(rest.nonEmpty)(ComponentResourceDiagnostic(
               ComponentResourceDiagnosticKind.Conflict, Some(target.identity.componentId), Some(kind), "multiple equally-precedent unavailable resource evidence entries were deterministically selected"
             )).toVector

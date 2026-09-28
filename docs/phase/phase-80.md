@@ -4,19 +4,19 @@ Status: planned
 
 ## Goal
 
-Phase 77 -> 77.1 -> 77.2 の順に完成した StateMachine API/SPI Runtime と最初の Skill-driven Workflow vertical slice を安定した基盤として、実運用から必要性が確認された Workflow invocation / participant / context integration の拡張機能を追加する。
+Use the StateMachine API/SPI Runtime and first Skill-driven Workflow vertical slice completed in the Phase 77 -> 77.1 -> 77.2 sequence as a stable foundation. Add Workflow invocation, participant, and context integration extensions whose need has been demonstrated in operation.
 
-Phase 80 は `sm-workflow Phase 1` の前提ではない。sm-workflow は CNCF Phase 77.2 の consumer handoff を受けた時点で executable specification の実装を開始できる。
+Phase 80 is not a prerequisite for `sm-workflow Phase 1`. sm-workflow can begin implementing executable specifications when it receives the CNCF Phase 77.2 consumer handoff.
 
 ## Dependency
 
 - CNCF Phase 77.2 closed and consumer handoff frozen, after Phases 77 and 77.1.
 - Cozy Phase 62 generated Workflow ABI.
-- Phase 77 sequence の StateMachine API/SPI、`ActionExecution = Completed | Suspended | Failed`、durable Continuation/resume、deterministic progression semantics を再定義しない。
+- Do not redefine the Phase 77 sequence's StateMachine API/SPI, `ActionExecution = Completed | Suspended | Failed`, durable Continuation/resume, or deterministic progression semantics.
 
 ## Baseline inherited from the Phase 77 sequence
 
-Phase 80 では次を新規実装項目として数えない。
+Phase 80 does not count the following as new implementation work.
 
 - Workflow ABI admission / ComponentFactory discovery.
 - independent WorkflowInstance persistence contract.
@@ -32,11 +32,11 @@ Phase 80 では次を新規実装項目として数えない。
 - deterministic test provider.
 - `sm-workflow` consumer handoff.
 
-これらは Phase 77.2 を最終所有者とする Phase 77 sequence の completion condition である。
+These are completion conditions of the Phase 77 sequence, with Phase 77.2 as their final owner.
 
 ## Extension candidates
 
-Phase 80 は実運用 evidence を入力として、Phase 77 sequence の foundation 上に必要なものだけを追加する。
+Phase 80 uses operational evidence to add only the extensions needed on the Phase 77 sequence foundation.
 
 1. richer `WorkflowInvocationContract` projection.
 2. bounded `ContextBundle / ContextReference / ContextSnapshot` ergonomics.

@@ -38,12 +38,12 @@ import org.simplemodeling.model.datatype.{
 }
 
 /*
- * Package-internal canonical v1 durable-record storage.  This remains
+ * Package-internal canonical versioned durable-record storage (V1 and V2).  This remains
  * deliberately separate from JobEntity: it has no live JobEngine authority
  * and stores only the closed canonical durable value and stable identity.
  *
  * @since   Sep. 10, 2026
- * @version Sep. 17, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobStoreSnapshot(
@@ -231,7 +231,7 @@ private[job] final class DurableJobStore(
     if (stored == canonical)
       Consequence.unit
     else
-      Consequence.stateInvalid("Durable job storage text is not canonical v1 JSON")
+      Consequence.stateInvalid("Durable job storage text is not canonical versioned JSON")
 
   private def _same_identity(
     previous: DurableJobRecord,

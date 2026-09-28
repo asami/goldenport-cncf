@@ -10,7 +10,7 @@ import org.goldenport.Consequence
  * or any other live execution object.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 14, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobProjectionEvidence(
@@ -120,7 +120,7 @@ private[job] object DurableJobProjection {
     record: JobRecord,
     evidence: DurableJobProjectionEvidence
   ): Consequence[DurableJobRecord] =
-    _bodyV2(record, evidence) match {
+    _body_v2(record, evidence) match {
       case Left(message) => Consequence.argumentInvalid(s"durable v2 projection refused: $message")
       case Right(body) => DurableJobRecord.createV2(body)
     }
@@ -171,7 +171,7 @@ private[job] object DurableJobProjection {
       retention = evidence.retention
     )
 
-  private def _bodyV2(
+  private def _body_v2(
     record: JobRecord,
     evidence: DurableJobProjectionEvidence
   ): Either[String, DurableJobRecordBody] =
@@ -290,7 +290,7 @@ private[job] object DurableJobProjection {
           (),
           "failed or cancelled JobRecord must have a live failure result"
         )
-      case _ => Left(s"unknown JobStatus: ${record.status}")
+      case null => Left(s"unknown JobStatus: ${record.status}")
     }
 
   private def _status(status: JobStatus): Either[String, DurableJobLifecycleStatus] =
@@ -301,14 +301,14 @@ private[job] object DurableJobProjection {
       case JobStatus.Succeeded => Right(DurableJobLifecycleStatus.Succeeded)
       case JobStatus.Failed => Right(DurableJobLifecycleStatus.Failed)
       case JobStatus.Cancelled => Right(DurableJobLifecycleStatus.Cancelled)
-      case _ => Left(s"unknown JobStatus: $status")
+      case null => Left(s"unknown JobStatus: $status")
     }
 
   private def _run_mode(mode: JobRunMode): Either[String, DurableRunMode] =
     mode match {
       case JobRunMode.Async => Right(DurableRunMode.Async)
       case JobRunMode.Sync => Right(DurableRunMode.Sync)
-      case _ => Left(s"unknown JobRunMode: $mode")
+      case null => Left(s"unknown JobRunMode: $mode")
     }
 
   private def _tasks(
@@ -523,7 +523,7 @@ private[job] object DurableJobProjection {
           model.finishedAt.nonEmpty &&
             model.finishedAt.forall(!_.isBefore(model.startedAt)) &&
             !model.result.success
-        case _ => false
+        case null => false
       }
     }
     val closed = models.forall(_.status != JobTaskStatus.Running)
@@ -550,7 +550,7 @@ private[job] object DurableJobProjection {
           model.finishedAt.nonEmpty &&
             model.finishedAt.forall(!_.isBefore(model.startedAt)) &&
             !model.result.success
-        case _ => false
+        case null => false
       }
     }
     val transactionconsistent = models.forall { model =>
@@ -564,7 +564,7 @@ private[job] object DurableJobProjection {
           model.transactionOutcome.exists(value =>
             value == "failed" || value == "compensation-failed"
           )
-        case _ => false
+        case null => false
       }
     }
     Either.cond(
@@ -605,7 +605,7 @@ private[job] object DurableJobProjection {
           model.finishedAt.nonEmpty &&
             model.finishedAt.forall(!_.isBefore(model.startedAt)) &&
             !model.result.success
-        case _ => false
+        case null => false
       }
     }
     val closed = models.forall(_.status != JobTaskStatus.Running)
@@ -827,7 +827,7 @@ private[job] object DurableJobProjection {
         case DurableResultOutcome.Cancelled(_) => true
         case _ => false
       }
-      case _ => false
+      case null => false
     }
     Either.cond(expected, (), "v2 result evidence does not match JobStatus")
   }

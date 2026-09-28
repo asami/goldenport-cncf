@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
  *  version Apr. 14, 2026
- * @version Sep. 17, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineRuleBuilderSpec
@@ -31,20 +31,20 @@ final class StateMachineRuleBuilderSpec
     "build update rule with ref guard and execute plan" in {
       Given("a state-machine update rule with a reference guard and execution plan")
       given ExecutionContext = ExecutionContext.create()
-      given EntityPersistent[_Entity] = _entityPersistent
+      given EntityPersistent[TestEntity] = _entity_persistent
 
       val trace = ArrayBuffer.empty[String]
-      val guardresolver = new GuardBindingResolver[_Entity, TransitionEvent] {
-        def resolve(name: String): Consequence[Guard[_Entity, TransitionEvent]] =
-          Consequence.success(new Guard[_Entity, TransitionEvent] {
-            def eval(state: _Entity, event: TransitionEvent): Consequence[Boolean] = {
+      val guardresolver = new GuardBindingResolver[TestEntity, TransitionEvent] {
+        def resolve(name: String): Consequence[Guard[TestEntity, TransitionEvent]] =
+          Consequence.success(new Guard[TestEntity, TransitionEvent] {
+            def eval(state: TestEntity, event: TransitionEvent): Consequence[Boolean] = {
               val _ = state
               Consequence.success(name == "isUpdate" && event.name == "update")
             }
           })
       }
       val guard = StateMachineRuleBuilder.guardRef("isUpdate", guardresolver)
-      val plan = StateMachineRuleBuilder.plan[_Entity](
+      val plan = StateMachineRuleBuilder.plan[TestEntity](
         exit = Vector(StateMachineRuleBuilder.action { (_, _) =>
           trace += "exit"
           _completed_program
@@ -73,16 +73,16 @@ final class StateMachineRuleBuilderSpec
             eventName = rule.eventName,
             priority = rule.priority,
             declarationOrder = rule.declarationOrder,
-            guard = rule.guard.map(_.asInstanceOf[Guard[_Entity, TransitionEvent]]),
-            plan = rule.plan.asInstanceOf[ExecutionPlan[_Entity, TransitionEvent]]
+            guard = rule.guard.map(_.asInstanceOf[Guard[TestEntity, TransitionEvent]]),
+            plan = rule.plan.asInstanceOf[ExecutionPlan[TestEntity, TransitionEvent]]
           )
         ))
       )
 
-      val entity = _Entity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b1", _cid, entropy = "b1"), "taro")
+      val entity = TestEntity(org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "b1", _cid, entropy = "b1"), "taro")
       val event = TransitionEvent("update", Some(entity.id))
       When("the provider selects and executes the update plan")
-      val selected = provider.planForUpdate(entity, _entityPersistent, event)
+      val selected = provider.planForUpdate(entity, _entity_persistent, event)
       val selectedPlan = selected.TAKE.getOrElse(fail("plan should be selected"))
       Then("the plan executes its exit, transition, and entry actions in order")
       ExecutionPlanExecutor.execute(
@@ -95,7 +95,11 @@ final class StateMachineRuleBuilderSpec
     }
 
     "create expression guard helper instance" in {
-      val guard = StateMachineRuleBuilder.guardExpression[_Entity]("event.name == 'update'") {
+      Given("an update-event expression with an explicit state, event and context binding")
+      val expression = "event.name == 'update'"
+
+      When("the rule builder constructs the expression guard")
+      val guard = StateMachineRuleBuilder.guardExpression[TestEntity](expression) {
         (state, event) => Map(
           "state" -> state,
           "event" -> event,
@@ -103,22 +107,23 @@ final class StateMachineRuleBuilderSpec
         )
       }
 
+      Then("the helper returns an expression guard")
       guard shouldBe a[ExpressionGuard[?, ?]]
     }
   }
 
-  private final case class _Entity(id: EntityId, name: String) {
+  private final case class TestEntity(id: EntityId, name: String) {
     def toRecord: Record = Record.dataAuto("id" -> id, "name" -> name)
   }
 
-  private val _entityPersistent: EntityPersistent[_Entity] = new EntityPersistent[_Entity] {
-    def id(e: _Entity): EntityId = e.id
-    def toRecord(e: _Entity): Record = e.toRecord
-    def fromRecord(r: Record): Consequence[_Entity] = {
+  private val _entity_persistent: EntityPersistent[TestEntity] = new EntityPersistent[TestEntity] {
+    def id(e: TestEntity): EntityId = e.id
+    def toRecord(e: TestEntity): Record = e.toRecord
+    def fromRecord(r: Record): Consequence[TestEntity] = {
       val m = r.asMap
       (m.get("id"), m.get("name")) match {
         case (Some(id: EntityId), Some(name: String)) =>
-          Consequence.success(_Entity(id, name))
+          Consequence.success(TestEntity(id, name))
         case _ =>
           Consequence.argumentInvalid("invalid record")
       }

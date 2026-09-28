@@ -1,0 +1,5 @@
+-Xms4096m
+-Xmx4096m
+-Xss4M
+-XX:ReservedCodeCacheSize=512m
+-XX:+UseG1GC

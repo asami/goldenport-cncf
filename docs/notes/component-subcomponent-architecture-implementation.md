@@ -1,4 +1,4 @@
-# Component and SubComponent Architecture Implementation Proposal
+# Component and Subcomponent Architecture Implementation Proposal
 
 status = historical, non-normative; retained RSC-01 successor handoff
 date = 2026-08-20
