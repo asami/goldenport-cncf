@@ -27,7 +27,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 27, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -117,40 +118,63 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
       }
 
       "when an explicit development repository is projected at runtime" in {
-        Given("Spec: phase-55-runtime-repository-bootstrap-projection; Rules: GCF09F-C1,C2,C3; Example: E1; an explicit current-project development repository")
-        val root = _fixture_root("gcf09f-runtime-default-search-")
-        val development = _canonical_development_fixture(root.resolve("current-project")).toAbsolutePath.normalize
-        val policy = RepositoryBootstrapPolicy(
-          repositoryComponentDevDirs = Vector(development.toString),
-          baseDirectory = root
-        )
-        val (withoutdefaults, residual) = RepositoryBootstrapPolicy.admitArguments(
-          policy,
-          Array("--no-default-components")
-        )
-        val explicit = ComponentRepository.ComponentDevDirRepository.Specification(development)
-        val defaultlocal = ComponentRepository.ComponentDirRepository.Specification(
-          ComponentRepository.defaultLocalComponentRepositoryDir()
-        )
+        Vector(false, true).foreach { localCarPresent =>
+          withClue(s"local CAR present=$localCarPresent: ") {
+            Given("Spec: phase-55-runtime-repository-bootstrap-projection; Rules: GCF09F-C1,C2,C3; Example: E1; an explicit development repository and an owned home with an absent or present local CAR directory")
+            val originalhome = Option(System.getProperty("user.home"))
+            try {
+              val root = _fixture_root("gcf09f-runtime-default-search-")
+              val home = Files.createDirectories(root.resolve("home")).toAbsolutePath.normalize
+              System.setProperty("user.home", home.toString)
+              val development = _canonical_development_fixture(root.resolve("current-project")).toAbsolutePath.normalize
+              val policy = RepositoryBootstrapPolicy(
+                repositoryComponentDevDirs = Vector(development.toString),
+                baseDirectory = root
+              )
+              val (withoutdefaults, residual) = RepositoryBootstrapPolicy.admitArguments(
+                policy,
+                Array("--no-default-components")
+              )
+              val explicit = ComponentRepository.ComponentDevDirRepository.Specification(development)
+              val defaultlocaldir = ComponentRepository.defaultLocalComponentRepositoryDir()
+              if (localCarPresent) Files.createDirectories(defaultlocaldir)
+              val defaultlocal = ComponentRepository.ComponentDirRepository.Specification(defaultlocaldir)
+              val standardcar = ComponentRepository.standardComponentRepositorySpec()
+              val standardsar = ComponentRepository.standardSubsystemRepositorySpec()
 
-        When("the runtime factory projects repository sources from each admitted policy")
-        val projected = GenericSubsystemFactory._runtime_repository_specs_for_descriptor_c(policy)
-        val suppressing = GenericSubsystemFactory._runtime_repository_specs_for_descriptor_c(withoutdefaults)
+              When("the runtime factory projects repository sources from each admitted policy in the owned home")
+              val projected = GenericSubsystemFactory._runtime_repository_specs_for_descriptor_c(policy)
+              val suppressing = GenericSubsystemFactory._runtime_repository_specs_for_descriptor_c(withoutdefaults)
 
-        Then("the explicit repository precedes the default local CAR repository, while the admitted no-default control preserves only explicit sources")
-        val projectedrepositories = projected.toOption.getOrElse(
-          fail(s"runtime repository projection: ${projected.display}")
-        )
-        val suppressingrepositories = suppressing.toOption.getOrElse(
-          fail(s"no-default runtime repository projection: ${suppressing.display}")
-        )
-        projectedrepositories should contain (explicit)
-        projectedrepositories should contain (defaultlocal)
-        projectedrepositories.indexOf(explicit) should be < projectedrepositories.indexOf(defaultlocal)
-        withoutdefaults.defaultRepositoriesEnabled shouldBe false
-        residual should contain ("--no-default-components")
-        suppressingrepositories should contain (explicit)
-        suppressingrepositories should not contain defaultlocal
+              Then("the explicit repository precedes standard CAR/SAR sources and the local CAR when present, while no-default projection preserves only explicit sources")
+              val projectedrepositories = projected.toOption.getOrElse(
+                fail(s"runtime repository projection: ${projected.display}")
+              )
+              val suppressingrepositories = suppressing.toOption.getOrElse(
+                fail(s"no-default runtime repository projection: ${suppressing.display}")
+              )
+              projectedrepositories should contain (explicit)
+              projectedrepositories should contain (standardcar)
+              projectedrepositories should contain (standardsar)
+              projectedrepositories.indexOf(explicit) should be < projectedrepositories.indexOf(standardcar)
+              projectedrepositories.indexOf(explicit) should be < projectedrepositories.indexOf(standardsar)
+              if (localCarPresent) {
+                projectedrepositories should contain (defaultlocal)
+                projectedrepositories.indexOf(explicit) should be < projectedrepositories.indexOf(defaultlocal)
+              } else {
+                projectedrepositories should not contain defaultlocal
+              }
+              withoutdefaults.defaultRepositoriesEnabled shouldBe false
+              residual should contain ("--no-default-components")
+              suppressingrepositories shouldBe Vector(explicit)
+            } finally {
+              originalhome match {
+                case Some(value) => System.setProperty("user.home", value)
+                case None => System.clearProperty("user.home")
+              }
+            }
+          }
+        }
       }
 
       "when component development and assembly descriptor sources are both admitted" in {

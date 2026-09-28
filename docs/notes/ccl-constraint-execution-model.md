@@ -1,0 +1,113 @@
+# CCL Constraint Execution Model
+
+## Status
+Initial runtime note. CCL itself is owned by CML/Cozy. CNCF concerns begin where a resolved CML Constraint must be evaluated or used to control execution. This note intentionally records only the first execution-side implications.
+
+## Boundary
+```
+CCL: expression and semantic condition
+  -> CML: Constraint context and model meaning
+  -> CNCF: evaluation and execution behavior
+```
+
+CNCF must not redefine CCL syntax or the CML type system.
+
+## Evaluation Context
+Runtime evaluation needs a generalized context populated from the executing model element. Candidate bindings include `self`, operation parameters, runtime/model variables, `result`, pre-state/snapshot references, workflow variables/state, state-machine transition context, and action results where exposed by the CML contract.
+
+The evaluator should receive an already resolved semantic expression plus an evaluation context. Runtime should not reconstruct the CML type system ad hoc.
+
+## Execution Uses
+- Operation precondition: contract condition required before execution.
+- Operation postcondition: condition evaluated with inputs/result and, where needed, pre-state.
+- StateMachine guard: transition eligibility; semantically distinct from an operation precondition even when both evaluate Boolean.
+- Workflow condition: condition evaluated against workflow instance/state/variables as defined by CML.
+- Admission condition: CCL expresses the condition; Candidate-Admission execution interprets failure/success, including Admission Gap semantics.
+- Capability satisfaction: Capability remains first-class; CCL may express a satisfaction condition where appropriate.
+
+## Pre-State
+OCL `@pre` is a useful surface precedent. CNCF runtime semantics should define it explicitly in terms of operation execution and snapshot boundaries rather than importing OCL runtime semantics wholesale.
+
+## Evaluation Result
+The runtime should not import the complete OCL `null` / `invalid` value model. At minimum it must distinguish successful evaluation producing a CML value (normally Boolean for Constraint) from evaluation failure. The concrete CNCF error/result model remains open.
+
+## Evidence
+Constructive-logic ideas may be used above ordinary Boolean evaluation:
+
+```
+CCL Constraint -> Boolean evaluation -> Validation / Admission / Guard -> optional Evidence
+```
+
+Evidence is not required for every Constraint and is not part of CCL Core. Scala implementations may later use refined values, typed evidence, given values, or domain-specific result types where useful.
+
+## Multiplicity
+Resolved CCL expressions retain CML multiplicity (`1`, `?`, `+`, `*`, `[m..n]`). Runtime/projection should consume this semantic information rather than create an independent collection/optional interpretation.
+
+For Scala projection it may determine direct access versus map/flatMap and operations such as forall, exists, and filter.
+
+## Diagnostics and CAR Lint
+Static semantic validation should happen before runtime whenever possible. CAR lint initially handles basic CCL/CML semantic errors; advanced reasoning can be added later.
+
+Source/model references should survive into executable metadata where practical so runtime failures can be diagnosed against the originating constraint.
+
+## Open Issues
+- evaluator API/SPI
+- pre-state snapshot boundary and representation
+- evaluation failure model
+- integration with Guard and Workflow runtime APIs
+- Candidate-Admission integration
+- generic versus model-specific Evidence production
+- observability/event representation for constraint evaluation
+- coexistence of interpreted evaluation and compiled projection
+
+These are follow-up topics. This note establishes the runtime boundary, not a complete runtime specification.
+
+
+## Consequence Semantics
+CCL evaluation failure is represented by the existing Consequence mechanism. CNCF should not introduce a CCL-specific Failure/Result hierarchy for this purpose.
+
+Conceptually:
+
+```
+evaluate(expression, context)
+  -> Consequence[CML value]
+```
+
+For a Constraint, the runtime distinction is:
+
+```
+Consequence success + true
+  -> constraint satisfied
+
+Consequence success + false
+  -> constraint evaluated successfully but is not satisfied
+
+Consequence failure
+  -> constraint evaluation itself failed
+```
+
+These outcomes must not be collapsed. Their interpretation remains owned by the execution context. For example, a false StateMachine guard means a transition is not eligible, while a Consequence failure means guard evaluation failed. Likewise, an unsatisfied Admission condition and an Admission evaluation failure are different outcomes.
+
+CCL has no runtime `null` value. Absence is represented by CML multiplicity before and during evaluation.
+
+
+## ConstraintContext Runtime Binding
+CML/CCL derives a ConstraintContextSchema from the Constraint placement. CNCF binds runtime values to that schema rather than inventing an independent evaluation environment.
+
+Conceptually:
+
+```
+CML model placement
+  -> ConstraintContextSchema
+       -> CCL static resolution
+       -> CNCF ConstraintContextInstance
+            -> Consequence[CML value]
+```
+
+The schema may contain subject/self, parameters, variables, result, and temporal views such as pre-state. At runtime a ConstraintContextInstance supplies the corresponding values.
+
+Implicit `self` is a source-level/static-resolution convenience. Runtime evaluation should consume the resolved semantic expression, so it does not need to repeat unqualified-name lookup rules.
+
+Placement also determines execution meaning. Operation.preconditions, Operation.postconditions, Transition.guard, Workflow conditions, and Admission conditions may all reference the same Constraint representation while CNCF applies the appropriate execution policy.
+
+For postconditions, pre-state is best understood as a temporal view of context bindings. The exact snapshot mechanism remains an execution-model follow-up.
