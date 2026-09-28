@@ -15,7 +15,7 @@ import org.goldenport.cncf.job.{JobBatchDefinition, JobDefinition, JobDefinition
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
-import org.goldenport.cncf.testutil.SubsystemTestFixture
+import org.goldenport.cncf.testutil.{RuntimeOutputCapture, SubsystemTestFixture}
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
@@ -255,10 +255,12 @@ final class JclJobControlComponentSpec
           |""".stripMargin
 
           When("the inputs are parsed at the JCL source boundary")
-          val xmlrejected = JobBatchDefinition.parse(xmlexternalentity, RecordFormat.Xml) match {
-            case Consequence.Failure(_) => true
-            case Consequence.Success(_) => false
-          }
+          val xmlrejected = RuntimeOutputCapture.capture {
+            JobBatchDefinition.parse(xmlexternalentity, RecordFormat.Xml) match {
+              case Consequence.Failure(_) => true
+              case Consequence.Success(_) => false
+            }
+          }.value
           val xmlxincluderejected = JobBatchDefinition.parse(xmlxinclude, RecordFormat.Xml) match {
             case Consequence.Failure(_) => true
             case Consequence.Success(_) => false

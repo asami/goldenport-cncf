@@ -16,8 +16,9 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiSelection}
 import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRecordRequest, AiRecordResponse, AiRunner as AiRunnerSpi, AiRunnerSocket}
+import org.goldenport.cncf.log.LogBackendHolder
 import org.goldenport.cncf.subsystem.{Subsystem, SystemNode}
-import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.testutil.{RuntimeOutputCapture, TestComponentFactory}
 import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +27,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep.  7, 2026
- * @version Sep.  8, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentActivationLifecycleSpec
@@ -122,65 +123,70 @@ final class ComponentActivationLifecycleSpec
       "E2 keep non-opting components activation-free across managed Server and non-Server construction" must _e2 {
         "when ordinary components are assembled in Server and each non-Server runtime mode" in {
           Given("Spec: docs/spec/component-activation-lifecycle.md; Rules: R3,R4,R6; Example: E2")
-          val ordinary = TestComponentFactory.emptySubsystem("activation-no-opt-in")
-          val component = TestComponentFactory.create("ordinary", Protocol.empty, subsystem = ordinary)
-          val modes = Table("mode", RunMode.Command, RunMode.Client, RunMode.Script, RunMode.ServerEmulator)
-          val descriptor = _descriptor_path("controlled")
-          var assembled = Vector.empty[(RunMode, Subsystem, Component, AtomicInteger)]
-          var server: Option[Subsystem] = None
-          var servercomponent: Option[Component] = None
+          val originalbackend = LogBackendHolder.backend
+          RuntimeOutputCapture.capture {
+            val ordinary = TestComponentFactory.emptySubsystem("activation-no-opt-in")
+            val component = TestComponentFactory.create("ordinary", Protocol.empty, subsystem = ordinary)
+            val modes = Table("mode", RunMode.Command, RunMode.Client, RunMode.Script, RunMode.ServerEmulator)
+            val descriptor = _descriptor_path("controlled")
+            var assembled = Vector.empty[(RunMode, Subsystem, Component, AtomicInteger)]
+            var server: Option[Subsystem] = None
+            var servercomponent: Option[Component] = None
 
-          try {
-            When("the ordinary component is admitted and the non-Server assemblies complete without activation")
-            ordinary.add(component)
-            assembled = modes.map { mode =>
-              val callbackcount = new AtomicInteger(0)
-              var created: Option[Component] = None
-              val subsystem = CncfRuntime.buildSubsystem(
+            try {
+              When("the ordinary component is admitted and the non-Server assemblies complete without activation")
+              ordinary.add(component)
+              assembled = modes.map { mode =>
+                val callbackcount = new AtomicInteger(0)
+                var created: Option[Component] = None
+                val subsystem = CncfRuntime.buildSubsystem(
+                  extraComponents = current => {
+                    val value = _activating_component(current, s"mode-${mode.name}", context => {
+                      callbackcount.incrementAndGet()
+                      Consequence.unit
+                    })
+                    created = Some(value)
+                    Vector(value)
+                  },
+                  mode = Some(mode),
+                  args = Array(s"--textus.test.descriptor=$descriptor", "--no-default-components")
+                )
+                (mode, subsystem, created.get, callbackcount)
+              }.toVector
+              val serversubsystem = CncfRuntime.buildSubsystem(
                 extraComponents = current => {
-                  val value = _activating_component(current, s"mode-${mode.name}", context => {
-                    callbackcount.incrementAndGet()
-                    Consequence.unit
-                  })
-                  created = Some(value)
-                  Vector(value)
+                  val created = TestComponentFactory.create("server-ordinary", Protocol.empty, subsystem = current)
+                  servercomponent = Some(created)
+                  Vector(created)
                 },
-                mode = Some(mode),
+                mode = Some(RunMode.Server),
                 args = Array(s"--textus.test.descriptor=$descriptor", "--no-default-components")
               )
-              (mode, subsystem, created.get, callbackcount)
-            }.toVector
-            val serversubsystem = CncfRuntime.buildSubsystem(
-              extraComponents = current => {
-                val created = TestComponentFactory.create("server-ordinary", Protocol.empty, subsystem = current)
-                servercomponent = Some(created)
-                Vector(created)
-              },
-              mode = Some(RunMode.Server),
-              args = Array(s"--textus.test.descriptor=$descriptor", "--no-default-components")
-            )
-            server = Some(serversubsystem)
-            val serverresult = ComponentActivation.activateForServerRuntimeC(serversubsystem)
+              server = Some(serversubsystem)
+              val serverresult = ComponentActivation.activateForServerRuntimeC(serversubsystem)
 
-            Then("ordinary construction introduces no activation callback and every non-Server extra remains untouched")
-            ordinary.findComponent(component.componentId) shouldBe Some(component)
-            assembled.foreach { case (_, subsystem, created, callbackcount) =>
-              subsystem.findComponent(created.componentId) shouldBe Some(created)
-              callbackcount.get shouldBe 0
+              Then("ordinary construction introduces no activation callback and every non-Server extra remains untouched")
+              ordinary.findComponent(component.componentId) shouldBe Some(component)
+              assembled.foreach { case (_, subsystem, created, callbackcount) =>
+                subsystem.findComponent(created.componentId) shouldBe Some(created)
+                callbackcount.get shouldBe 0
+              }
+
+              Then("a Server-managed ordinary component remains activation-free through the public production route")
+              serverresult.toOption shouldBe Some(())
+              servercomponent shouldBe defined
+              servercomponent.foreach { value => serversubsystem.findComponent(value.componentId) shouldBe Some(value) }
+              ComponentActivation.diagnosticFor(serversubsystem) shouldBe empty
+              serversubsystem.systemNode.state shouldBe SystemNode.State.Running
+            } finally {
+              Subsystem.shutdownOwned(ordinary)
+              assembled.foreach { case (_, subsystem, _, _) => Subsystem.shutdownOwned(subsystem) }
+              server.foreach(Subsystem.shutdownOwned)
+              _delete_descriptor(descriptor)
             }
-
-            Then("a Server-managed ordinary component remains activation-free through the public production route")
-            serverresult.toOption shouldBe Some(())
-            servercomponent shouldBe defined
-            servercomponent.foreach { value => serversubsystem.findComponent(value.componentId) shouldBe Some(value) }
-            ComponentActivation.diagnosticFor(serversubsystem) shouldBe empty
-            serversubsystem.systemNode.state shouldBe SystemNode.State.Running
-          } finally {
-            Subsystem.shutdownOwned(ordinary)
-            assembled.foreach { case (_, subsystem, _, _) => Subsystem.shutdownOwned(subsystem) }
-            server.foreach(Subsystem.shutdownOwned)
-            _delete_descriptor(descriptor)
-          }
+          }.value
+          Then("the scoped assembly fixture restores the shared log backend for subsequent runtime owners")
+          LogBackendHolder.backend shouldBe originalbackend
         }
       }
     }
@@ -194,6 +200,7 @@ final class ComponentActivationLifecycleSpec
           val observedcontext = new AtomicReference[Option[ComponentActivationContext]](None)
           val descriptor = _descriptor_path("assembled", executionprofile = "standard")
           val originaltestruntimeproperty = sys.props.get("textus.test")
+          val originalbackend = LogBackendHolder.backend
           var activating: Option[Component] = None
           var socket: Option[Component & AiRunnerSocket] = None
           var assembled: Option[Subsystem] = None
@@ -260,6 +267,7 @@ final class ComponentActivationLifecycleSpec
 
           Then("the scoped production fixture restores the test-only runtime flag after assembly and activation")
           sys.props.get("textus.test") shouldBe originaltestruntimeproperty
+          LogBackendHolder.backend shouldBe originalbackend
         }
       }
 
@@ -850,7 +858,7 @@ final class ComponentActivationLifecycleSpec
   private def _without_test_runtime_flag[A](body: => A): A = {
     val previous = sys.props.get("textus.test")
     System.clearProperty("textus.test")
-    try body
+    try RuntimeOutputCapture.capture(body).value
     finally {
       previous match {
         case Some(value) => System.setProperty("textus.test", value)
