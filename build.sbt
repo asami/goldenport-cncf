@@ -9,7 +9,6 @@ val scala3Version = "3.3.8"
 val cozyGeneratorVersion = "0.3.3-SNAPSHOT"
 
 Compile / scalacOptions += "-release:17"
-Test / scalacOptions += "-release:17"
 Compile / javacOptions ++= Seq("--release", "17")
 Test / javacOptions := Seq("--release", "17")
 

@@ -1105,9 +1105,11 @@ sbt --batch cozyBuildCAR
 git diff --check
 ```
 
-The full CNCF suite completes with a 1 GiB sbt heap. Do not add `-J-Xmx4G` to
-routine validation commands. A larger sbt JVM is a temporary diagnostic
-override, not a test prerequisite.
+The repository `.jvmopts` configures ordinary Terminal and Codex SBT use with a
+4 GiB heap, 4 MiB thread stack, 512 MiB code cache, and G1GC. Run the existing
+commands without per-invocation JVM flags. The heap is required for the current
+clean source and test compilation; changing `Test / javaOptions` does not resize
+the compiler/SBT JVM.
 
 For development-directory integration, run the component through the `cncf`
 launcher with `--component-dev-dir` for each active sibling component.

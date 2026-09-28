@@ -12,7 +12,8 @@ import org.goldenport.configuration.{CanonicalParameterId, ConfigurationBindingR
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationEnvironmentBindingCodec private (
@@ -80,7 +81,7 @@ final class CncfConfigurationEnvironmentBindingCodec private (
           _encode_identity(component.component.name),
           _encode_identity(component.component.instance)
         ))
-      case _ => Consequence.configurationInvalid("CNCF configuration environment binding target is invalid")
+      case null => Consequence.configurationInvalid("CNCF configuration environment binding target is invalid")
     }
 
   private def _decode_target(

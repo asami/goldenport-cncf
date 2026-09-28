@@ -20,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 10, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallComponentDataStoreIdentitySpec
@@ -301,7 +302,7 @@ final class ActionCallComponentDataStoreIdentitySpec
 
   private def _configuration(values: Map[String, String]): ResolvedConfiguration =
     ResolvedConfiguration(
-      Configuration(values.view.mapValues(ConfigurationValue.StringValue).toMap),
+      Configuration(values.view.mapValues(ConfigurationValue.StringValue.apply).toMap),
       ConfigurationTrace.empty
     )
 

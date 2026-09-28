@@ -10,6 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 23, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStateMachineProviderBootstrapSpec
@@ -129,7 +130,7 @@ final class ComponentFactoryStateMachineProviderBootstrapSpec
     ))
   }
 
-  private def _expect_failure[A](result: Consequence[A]): Unit =
+  private def _expect_failure[A](result: Consequence[A]): org.scalatest.Assertion =
     result match {
       case Consequence.Failure(_) => succeed
       case Consequence.Success(_) => fail("a typed Consequence failure was required")

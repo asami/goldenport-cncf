@@ -58,7 +58,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 28, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1027,6 +1028,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
                   resolved.executionContext.runtime.context.formatting.locale == Locale.forLanguageTag("en-US") &&
                   resolved.executionContext.runtime.context.formatting.timezone != ZoneId.of("Europe/Paris")
               }
+            case _ => false
           }
         }
         val result = Test.check(
