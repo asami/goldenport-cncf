@@ -1,7 +1,9 @@
 # Phase 90: Candidate-Admission Runtime Support
 
-status=planned
+status=closed
 planned_at=2026-09-21
+started_at=2026-09-25
+closed_at=2026-09-25
 depends_on=[Phase 77](phase-77.md)
 consumer=sm-workflow Phase 1
 design=[Candidate-Admission Model](../notes/candidate-admission-model.md)
@@ -53,16 +55,76 @@ Application-specific review scope, Phase/Checklist, software-development closure
 
 ## Work stack
 
-| ID | Outcome | Status |
-| --- | --- | --- |
-| CAM-90-01 | Freeze Phase 77/90 layer boundary and generic CAM terminology. | planned |
-| CAM-90-02 | Define provider-neutral Candidate/Submission/Requirement/Evaluation/Gap/Result Value Objects. | planned |
-| CAM-90-03 | Define typed Evidence binding, target snapshot/revision correlation and freshness/coverage extension hooks. | planned |
-| CAM-90-04 | Integrate Admission Evaluation with StateMachine guards/actions without adding a parallel transition engine. | planned |
-| CAM-90-05 | Map semantic Admission Gaps to normal Required SPI Actions that may suspend through Phase 77 Continuation. | planned |
-| CAM-90-06 | Prove reuse of supplied fresh evidence and fail-closed stale/incompatible evidence behavior. | planned |
-| CAM-90-07 | Prove deterministic and authority gaps use normal Provider/Decision boundaries rather than semantic AI by default. | planned |
-| CAM-90-08 | Freeze the sm-workflow consumer handoff and record Cozy producer/ABI follow-up requirements. | planned |
+The stable acceptance IDs are defined only in the [Phase 90 Checklist](phase-90-checklist.md).
+
+| Outcome | Status |
+| --- | --- |
+| Freeze Phase 77/90 layer boundary and generic CAM terminology. | implemented |
+| Define provider-neutral Candidate/Submission/Requirement/Evaluation/Gap/Result Value Objects. | implemented |
+| Define typed Evidence binding, target snapshot/revision correlation and freshness/coverage extension hooks. | implemented |
+| Integrate Admission Evaluation with StateMachine guards/actions without adding a parallel transition engine. | focused proof passed |
+| Map semantic Admission Gaps to normal Required SPI Actions that may suspend through Phase 77 Continuation. | integrated reference fixture passed |
+| Prove reuse of supplied fresh evidence and fail-closed stale/incompatible evidence behavior. | focused proof passed |
+| Prove deterministic and authority gaps use normal Provider/Decision boundaries rather than semantic AI by default. | focused proof passed; application issuance remains consumer-owned |
+| Freeze the sm-workflow consumer handoff and record Cozy producer/ABI follow-up requirements. | documented below |
+
+## Current implementation slice
+
+The optional CAM Value Objects and evidence evaluator now validate candidate
+revision, typed evidence/scope, provenance, freshness and coverage. A separate
+immutable per-evidence local JSON store uses application-supplied codecs and
+preserves the submission association, target revision, typed payload/scope and
+provenance across adapter recreation. It does not share a transaction with
+Continuation or turn an evidence write into admission. An ordinary
+StateMachine guard evaluates admission and leaves transition selection to the
+existing canonical selector. A declared Gap binding maps semantic and
+deterministic requirements to normal Required SPI operations and authority
+requirements to an application-owned Decision boundary; it does not select
+which gap to execute. A focused fixture takes the semantic operation through
+the ordinary Action, persists its suspension through Phase 77, recreates the
+runtime, resumes once, stores the later typed evidence, reopens the store, and
+re-evaluates the original submission with recovered evidence. Neither
+evaluation nor guard executes application commitment.
+
+The execution-facing `resolveForInstanceC` now validates an Active,
+unsuspended WorkflowInstance and uses its version-bound admitted definition.
+The declaration check requires each semantic/deterministic operation's
+capability, Action identity, service/operation and input/result type to match
+its Required SPI. The shape-only and separately supplied definition resolvers
+are package-private and are not execution admission APIs. A real Cozy
+Candidate-Admission ABI fixture passes this check; undeclared Action,
+result-type drift, unstarted and suspended instances fail closed.
+Authority Decision remains application-owned and is not claimed to be admitted
+by Required SPI metadata.
+
+A synthetic Step-closure reference fixture derives an admitted Cozy
+Candidate-Admission ABI shape with Step names, binds it to an Active
+WorkflowInstance, and routes a broader-review Gap through its declared
+Required SPI. The ordinary UnitOfWork interpreter invokes an explicitly bound
+Program Provider, receives `Suspended`, and commits that same UnitOfWork before
+Phase 77 publishes the Continuation. After runtime recreation and one-shot
+resume, the later evidence is loaded from the separate CAM store and the
+original Submission is admitted without resubmission. This does not assert
+that Cozy already generated a real sm-workflow CML model.
+
+A separate focused fixture dispatches a deterministic Gap through the existing
+UnitOfWork interpreter and explicitly bound deterministic Provider; an unbound
+Required SPI fails. It projects an authority Gap through the normal Workflow
+Decision wire boundary, and that Decision cannot be admitted as a WorkOrder
+result. These fixtures do not add a CAM-owned Provider dispatcher or Decision
+issuer.
+
+Focused direct Scala compilation of the new files and 52 ScalaTest cases passed
+on 2026-09-25, including unchanged `TransitionSelectorSpec`,
+`StateMachineRequiredOperationActionSpec`, `WorkflowProtocolV1Spec`, and
+`ContinuationRuntimeSpec` from the existing compiled classpath. The final
+source/spec tree passed `sbt --batch test` under receipt
+`P90-FULL-TEST-01A0D871`: 515 suites completed, 3,840 tests succeeded, 0
+failed and 0 aborted; the SBT lock was released. The only later edits are
+this documentation-only closure record and checklist/index status projection.
+A separate read-only closure review found no Current Boundary Blocker.
+Application-owned Decision issuance/durability and an actual sm-workflow
+consumer remain outside this Phase.
 
 ## Reference acceptance
 
@@ -83,6 +145,28 @@ The reference fixture must show a candidate submitted with insufficient scoped e
 sm-workflow Phase 1 is the first application proving case. Its RequestStepClose specializes Candidate/Submission and its closure policy specializes AdmissionRequirement/Evaluation. Review scope/freshness semantics remain sm-workflow-owned typed payloads. Missing semantic evidence is converted by the Admission layer into the application-declared semantic Action, which may suspend through Phase 77.
 
 sm-workflow must consume Phase 90 rather than implement a parallel generic Candidate/Admission runtime.
+
+The consumer handoff is the existing admitted Cozy Candidate-Admission producer
+sidecar and Workflow ABI, received by `CandidateAdmissionProducerAbi` and
+`CandidateWorkflowAbi` and bound to an active instance through
+`WorkflowInstancePersistence.bindCandidateDefinitionC`. For each submitted Step
+candidate, sm-workflow owns the concrete candidate/evidence codecs, Step review
+scope and freshness policy, required evidence definitions, and the declared
+Requirement-to-Required-SPI bindings. It calls `evaluateC` or the ordinary
+`CandidateAdmissionGuard` and uses `resolveForInstanceC` only against the
+instance's admitted definition. It owns issuing and persisting authority
+Decisions, mapping successful semantic results into evidence, and invoking any
+physical Git/application commitment only after its StateMachine selects an
+admitted transition. CAM evaluation, routing, and evidence storage never commit.
+
+The current Step fixture is synthetic naming over a real admitted Cozy ABI
+shape; it is not a generated sm-workflow CML artifact. sm-workflow Phase 1 must
+replace it with its own generated model and executable consumer proof. If that
+model exposes a concrete missing Cozy producer expression or ABI field, record
+the exact gap for Cozy rather than adding a CNCF-local substitute. The separate
+evidence store and Phase 77 post-commit Continuation are intentionally loose;
+shared EventStore/WorkflowInstance/Continuation/UnitOfWork transaction work
+remains in [Phase 94](phase-94.md), not in this handoff.
 
 ## References
 

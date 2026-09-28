@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 23, 2026
- * @version Sep. 23, 2026
+ * @version Sep. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CandidateAdmissionProducerAbiSpec
@@ -146,12 +146,12 @@ final class CandidateAdmissionProducerAbiSpec
       _diagnostic(mismatchresult).code shouldBe DiagnosticCode.JudgmentAdmissionIdentityMismatch
     }
 
-    "require equal operation and input binding through Judgment Admission and Required SPI" in {
-      Given("otherwise valid descriptors with mismatched operation or input contracts")
+    "require compatible input contracts through Judgment Admission and equal Judgment and Required SPI operations" in {
+      Given("otherwise valid descriptors with mismatched input or Required SPI contracts")
       val artifact = _artifact
       val model = artifact.models.head
       val admissionoperation = artifact.copy(models = Vector(model.copy(
-        admissions = Vector(model.admissions.head.copy(operation = model.admissions.head.operation.copy(name = OperationIdentity("reversePayment"))))
+        admissions = Vector(model.admissions.head.copy(operation = model.admissions.head.operation.copy(inputType = Some(TypeIdentity("OtherRequest")))))
       )))
       val admissionbinding = artifact.copy(models = Vector(model.copy(
         admissions = Vector(model.admissions.head.copy(inputBinding = Some(InputBinding("other.subject"))))
@@ -163,10 +163,24 @@ final class CandidateAdmissionProducerAbiSpec
       val operationresult = CandidateAdmissionProducerAbi.admitC(admissionoperation)
       val bindingresult = CandidateAdmissionProducerAbi.admitC(admissionbinding)
       val requiredspiresult = CandidateAdmissionProducerAbi.admitC(requiredspioperation)
-      Then("all operation and input-binding disagreement is rejected deterministically")
+      Then("input-type, input-binding, and Required SPI disagreement is rejected deterministically")
       _diagnostic(operationresult).code shouldBe DiagnosticCode.OperationMismatch
       _diagnostic(bindingresult).code shouldBe DiagnosticCode.InputBindingMismatch
       _diagnostic(requiredspiresult).code shouldBe DiagnosticCode.OperationMismatch
+    }
+
+    "admit distinct Judgment and Admission operations sharing the same candidate input" in {
+      val artifact = _artifact
+      val model = artifact.models.head
+      val admission = model.admissions.head
+      val distinct = artifact.copy(models = Vector(model.copy(
+        admissions = Vector(admission.copy(operation = admission.operation.copy(
+          service = ServiceIdentity("GoalPhaseService"),
+          name = OperationIdentity("requestStepClose"),
+          resultType = Some(TypeIdentity("StepCloseResult"))
+        )))
+      )))
+      CandidateAdmissionProducerAbi.admitC(distinct) shouldBe Consequence.success(distinct)
     }
 
     "require LOCAL effect class and REQUIRED transaction for Admission" in {

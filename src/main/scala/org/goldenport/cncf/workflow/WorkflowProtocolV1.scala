@@ -163,11 +163,48 @@ object WorkflowProtocolV1 {
 
   type WorkflowStartResult[W, O] = WorkflowInteraction[W, O]
 
+  /** Project a Terminal only from the completed, durable instance named by the Handle. */
+  def projectTerminalC[O](
+    handle: WorkflowHandle,
+    record: InstanceRecord,
+    result: TypedValue[O],
+    presentation: MinimalPresentation
+  ): Consequence[WorkflowInteraction[Nothing, O]] =
+    if (handle == null || record == null || result == null || presentation == null)
+      Consequence.stateConflict("Workflow Terminal projection is incomplete")
+    else for {
+      admittedHandle <- handle.validateC
+      admittedRecord <- record.validateC
+      expected <- WorkflowHandle.fromRecordC(admittedHandle.componentIdentity, admittedRecord)
+      _ <- if (expected == admittedHandle &&
+          admittedRecord.lifecycle == WorkflowInstancePersistence.Lifecycle.Completed &&
+          admittedRecord.suspension.isEmpty)
+        Consequence.unit
+      else Consequence.stateConflict("Workflow Terminal requires the matching completed instance")
+      admittedResult <- result.validateC
+      admittedPresentation <- presentation.validateC
+    } yield WorkflowInteraction(
+      admittedHandle, WorkflowContinuation.Terminal(admittedResult, admittedPresentation)
+    )
+
   /** A separate-turn result is checked against the exact issued WorkOrder before resume. */
+  final case class SkillDispatchEvidence(
+    requestedRequirement: ExecutionRequirement,
+    selectedWorkerProfile: String,
+    mappingPolicyVersion: String
+  ) {
+    def validateC: Consequence[SkillDispatchEvidence] =
+      if (requestedRequirement == null || !_name(selectedWorkerProfile) ||
+          !_name(mappingPolicyVersion))
+        Consequence.stateConflict("Skill dispatch evidence is incomplete")
+      else requestedRequirement.validateC.map(_ => this)
+  }
+
   final case class ExecutionEvidence(
     references: Vector[ContextReference],
     workerIdentity: Option[String] = None,
-    modelIdentity: Option[String] = None
+    modelIdentity: Option[String] = None,
+    skillDispatch: Option[SkillDispatchEvidence] = None
   )
 
   final case class ContinuationResult[R](
@@ -190,7 +227,9 @@ object WorkflowProtocolV1 {
     if (issued == null || issued.handle == null || submitted == null ||
         submitted.handle == null || submitted.result == null ||
         submitted.resultReference == null || submitted.completionFacts == null ||
-        submitted.evidence == null || submitted.evidence.references == null)
+        submitted.evidence == null || submitted.evidence.references == null ||
+        submitted.evidence.workerIdentity == null || submitted.evidence.modelIdentity == null ||
+        submitted.evidence.skillDispatch == null)
       Consequence.stateConflict("Workflow result is incomplete")
     else issued.current match {
       case work: WorkflowContinuation.WorkOrder[?] =>
@@ -216,7 +255,10 @@ object WorkflowProtocolV1 {
             !request.completion.requiredFacts.forall(facts.contains) ||
             !request.evidence.requiredEvidence.forall(evidence.contains) ||
             submitted.evidence.workerIdentity.exists(x => !_name(x)) ||
-            submitted.evidence.modelIdentity.exists(x => !_name(x)))
+            submitted.evidence.modelIdentity.exists(x => !_name(x)) ||
+            submitted.evidence.skillDispatch.exists(x =>
+              x == null || x.requestedRequirement != work.requirement ||
+              x.validateC.toOption.isEmpty))
             Consequence.stateConflict("Workflow result does not satisfy the issued WorkOrder")
           else submitted.handle.validateC.flatMap(_ =>
             submitted.result.validateC.map(_ =>

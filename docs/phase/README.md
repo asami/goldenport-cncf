@@ -15,6 +15,10 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 95](phase-95.md) plans a UI-facing View Model and Aggregate command
+  contract over existing CNCF `ViewSpace`/`AggregateSpace`, with REST first and
+  gRPC deferred. It does not block the Editing Studio Flutter application's
+  fake, local, or provisional CRUD-adapter development.
 - The first `sm-workflow` vertical slice has priority over shared Workflow
   transaction redesign. [Phase 77.1](phase-77.1.md) and
   [Phase 77.2](phase-77.2.md) use an explicitly loose post-commit Continuation
@@ -28,9 +32,10 @@ Current baseline:
   [Phase 89](phase-89.md) admits it into CNCF. Both require a stable first
   `sm-workflow` vertical slice plus a concrete consumer requirement; neither
   blocks Phase 64, Phase 77, or `sm-workflow` Phase 1.
-- Latest closed phase: `phase-70.1.md` - documentation-only retirement of the
-  superseded duplicate activation plan. Phase 70 remains the authoritative
-  accepted implementation.
+- Latest closed phase: [Phase 90](phase-90.md) - generic Candidate-Admission
+  runtime support with loose evidence persistence and an explicit sm-workflow
+  consumer handoff. Its final source/spec tree passed the full suite on
+  2026-09-25; real sm-workflow CML generation remains consumer-owned.
 - Phase 70 is closed with the accepted protected component activation
   implementation. Phase 70.1 is closed under `retire-superseded`; Textus BoK
   Phase 8 remains a separate consumer boundary.

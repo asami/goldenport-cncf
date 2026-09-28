@@ -35,9 +35,9 @@ object WorkflowWorkOrderJsonV1 {
         kind <- _string(root, "kind")
         _ <- _expect(kind == "WORK_ORDER", "unsupported Continuation kind")
         handle <- _decodeHandle(root("handle"))
-        request <- _decode_request(root("request"), inputCodec)
+        request <- decodeRequest(root("request"), inputCodec)
         requirement <- _decode_requirement(root("requirement"))
-        presentation <- _decode_presentation(root("presentation"))
+        presentation <- decodePresentation(root("presentation"))
         _ <- _expect(request.context.snapshot.workflowRevision == handle.workflowRevision.value, "WorkOrder snapshot is stale")
       } yield WorkflowInteraction[W, Nothing](
         handle, WorkflowContinuation.WorkOrder(request, requirement, presentation)
@@ -55,9 +55,35 @@ object WorkflowWorkOrderJsonV1 {
     handle: WorkflowHandle,
     order: WorkflowContinuation.WorkOrder[W],
     codec: PayloadCodec[W]
-  ): Consequence[String] = {
-    val request = order.request
-    if (handle.workflowRevision == null || codec.typeIdentity == null || codec.typeIdentity.trim.isEmpty ||
+  ): Consequence[String] =
+    if (order.requirement == null || order.presentation == null)
+      Consequence.stateConflict("Workflow WorkOrder JSON has an incomplete projection")
+    else for {
+      requestJson <- encodeRequestC(handle, order.request, codec)
+      _ <- order.requirement.validateC
+      _ <- order.presentation.validateC
+    } yield Json.obj(
+      "schemaVersion" -> Json.fromString(WorkflowProtocolV1.schemaVersion),
+      "kind" -> Json.fromString("WORK_ORDER"),
+      "handle" -> _handle(handle),
+      "request" -> requestJson,
+      "requirement" -> Json.obj(
+        "capabilities" -> Json.arr(order.requirement.capabilities.map(x => Json.fromString(x.identity))*),
+        "risk" -> Json.fromString(order.requirement.risk.value),
+        "reasoning" -> Json.fromString(order.requirement.reasoning.value),
+        "reviewRequired" -> Json.fromBoolean(order.requirement.reviewRequired)
+      ),
+      "presentation" -> presentationJson(order.presentation)
+    ).noSpaces
+
+  /** Shared request wire body for WORK_ORDER and DECISION, without claim authority. */
+  private[workflow] def encodeRequestC[W](
+    handle: WorkflowHandle,
+    request: ContinuationRequest[W],
+    codec: PayloadCodec[W]
+  ): Consequence[Json] =
+    if (handle == null || codec == null || handle.workflowRevision == null ||
+        codec.typeIdentity == null || codec.typeIdentity.trim.isEmpty ||
         request == null || request.runId == null || !_name(request.runId.value) ||
         request.continuationId == null || !_name(request.continuationId.value) ||
         request.expectedRevision == null || !_name(request.expectedRevision.value) ||
@@ -76,22 +102,16 @@ object WorkflowWorkOrderJsonV1 {
         request.input == null || request.resultType == null ||
         request.input.exists(x => x == null || x.typeIdentity != codec.typeIdentity) ||
         request.resultType.exists(x => x == null || !_name(x.value)) ||
-        request.context.snapshot.workflowRevision != handle.workflowRevision.value ||
-        order.requirement == null || order.presentation == null)
-      Consequence.stateConflict("Workflow WorkOrder JSON has an incomplete or incompatible request")
+        !_valid_snapshot(request.context.snapshot) ||
+        request.context.snapshot.workflowRevision != handle.workflowRevision.value)
+      Consequence.stateConflict("Workflow Continuation JSON has an incomplete or incompatible request")
     else for {
       _ <- handle.validateC
-      _ <- order.requirement.validateC
-      _ <- order.presentation.validateC
       _ <- request.input match {
         case Some(value) => value.validateC.map(_ => ())
         case None => Consequence.unit
       }
     } yield Json.obj(
-      "schemaVersion" -> Json.fromString(WorkflowProtocolV1.schemaVersion),
-      "kind" -> Json.fromString("WORK_ORDER"),
-      "handle" -> _handle(handle),
-      "request" -> Json.obj(
         "runId" -> Json.fromString(request.runId.value),
         "continuationId" -> Json.fromString(request.continuationId.value),
         "expectedRevision" -> Json.fromString(request.expectedRevision.value),
@@ -111,25 +131,9 @@ object WorkflowWorkOrderJsonV1 {
           "requiredEvidence" -> Json.arr(request.evidence.requiredEvidence.map(_reference)*)
         ),
         "completionOperation" -> _operation(request.completionOperation)
-      ),
-      "requirement" -> Json.obj(
-        "capabilities" -> Json.arr(order.requirement.capabilities.map(x => Json.fromString(x.identity))*),
-        "risk" -> Json.fromString(order.requirement.risk.value),
-        "reasoning" -> Json.fromString(order.requirement.reasoning.value),
-        "reviewRequired" -> Json.fromBoolean(order.requirement.reviewRequired)
-      ),
-      "presentation" -> Json.obj(
-        "title" -> Json.fromString(order.presentation.title),
-        "currentSituation" -> Json.fromString(order.presentation.currentSituation),
-        "summary" -> _optional(order.presentation.summary),
-        "nextAction" -> _optional(order.presentation.nextAction),
-        "reason" -> _optional(order.presentation.reason),
-        "progress" -> _optional(order.presentation.progress)
-      )
-    ).noSpaces
-  }
+    )
 
-  private def _decode_request[W](json: Json, codec: PayloadCodec[W]): Either[String, ContinuationRequest[W]] = for {
+  private[workflow] def decodeRequest[W](json: Json, codec: PayloadCodec[W]): Either[String, ContinuationRequest[W]] = for {
     fields <- _fields(json, Set("runId", "continuationId", "expectedRevision", "requiredOperation", "operation", "input", "resultType", "context", "completion", "evidence", "completionOperation"))
     run <- _string(fields, "runId")
     continuation <- _string(fields, "continuationId")
@@ -204,7 +208,16 @@ object WorkflowWorkOrderJsonV1 {
     review <- fields("reviewRequired").asBoolean.toRight("reviewRequired must be boolean")
   } yield ExecutionRequirement(capabilities, RiskLevel(risk), level, review)
 
-  private def _decode_presentation(json: Json): Either[String, MinimalPresentation] = for {
+  private[workflow] def presentationJson(value: MinimalPresentation): Json = Json.obj(
+    "title" -> Json.fromString(value.title),
+    "currentSituation" -> Json.fromString(value.currentSituation),
+    "summary" -> _optional(value.summary),
+    "nextAction" -> _optional(value.nextAction),
+    "reason" -> _optional(value.reason),
+    "progress" -> _optional(value.progress)
+  )
+
+  private[workflow] def decodePresentation(json: Json): Either[String, MinimalPresentation] = for {
     fields <- _fields(json, Set("title", "currentSituation", "summary", "nextAction", "reason", "progress"))
     title <- _string(fields, "title")
     situation <- _string(fields, "currentSituation")
@@ -215,6 +228,15 @@ object WorkflowWorkOrderJsonV1 {
   } yield MinimalPresentation(title, situation, summary, action, reason, progress)
 
   private def _name(value: String): Boolean = value != null && value.trim.nonEmpty
+
+  private def _valid_snapshot(value: ContextSnapshot): Boolean =
+    _name(value.workflowRevision) &&
+      _valid_optional(value.modelRevision) &&
+      _valid_optional(value.workspaceRevision) &&
+      _valid_optional(value.evidenceRevision)
+
+  private def _valid_optional(value: Option[String]): Boolean =
+    value != null && value.forall(_name)
 
   private def _valid_reference(value: ContextReference): Boolean =
     value != null && _name(value.identity) && _name(value.revision)

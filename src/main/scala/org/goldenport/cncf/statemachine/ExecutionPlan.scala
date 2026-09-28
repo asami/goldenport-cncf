@@ -58,6 +58,23 @@ object TransitionLifecycleObserver {
 }
 
 object ExecutionPlanExecutor {
+  /** Compose an admitted plan for a caller that owns commit and suspension publication.
+    * The final completed Action supplies the result; a suspension stops later Actions.
+    */
+  def program[S, E](
+    plan: ExecutionPlan[S, E],
+    state: S,
+    event: E
+  ): ExecUowM[ActionExecution] =
+    _action_program(plan.exitActions ++ plan.transitionActions ++ plan.entryActions, state, event)
+      .flatMap {
+        case Some(outcome) => _pure(outcome)
+        case None =>
+          _failed(_failure_conclusion(StateMachineOperationFailure(
+            "empty-execution-plan", "StateMachine execution plan has no Action", Vector.empty
+          )))
+      }
+
   /**
    * Runs a workflow plan through the active UnitOfWork and publishes a typed
    * suspension only after its loose post-commit persistence step succeeds.
@@ -208,14 +225,24 @@ object ExecutionPlanExecutor {
     state: S,
     event: E
   ): ExecUowM[Option[ActionExecution.Suspended]] =
-    actions.foldLeft(_pure(Option.empty[ActionExecution.Suspended])) { (program, action) =>
+    _action_program(actions, state, event).flatMap {
+      case Some(suspended: ActionExecution.Suspended) => _pure(Some(suspended))
+      case _ => _pure(None)
+    }
+
+  private def _action_program[S, E](
+    actions: Vector[ResolvedAction[S, E]],
+    state: S,
+    event: E
+  ): ExecUowM[Option[ActionExecution]] =
+    actions.foldLeft(_pure(Option.empty[ActionExecution])) { (program, action) =>
       program.flatMap {
-        case suspended @ Some(_) =>
+        case suspended @ Some(_: ActionExecution.Suspended) =>
           _pure(suspended)
-        case None =>
+        case _ =>
           action.program(state, event).flatMap {
-            case _: ActionExecution.Completed =>
-              _pure(None)
+            case completed: ActionExecution.Completed =>
+              _pure(Some(completed))
             case suspended: ActionExecution.Suspended =>
               _pure(Some(suspended))
             case ActionExecution.Failed(failure) =>

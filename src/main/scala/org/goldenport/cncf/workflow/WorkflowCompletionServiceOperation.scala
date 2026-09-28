@@ -21,6 +21,11 @@ object WorkflowCompletionServiceOperation {
     def resultTypeIdentity: String
     def decodeC(request: Request): Consequence[ContinuationResult[R]]
     def encodeC(resume: ContinuationRuntime.Resume): Consequence[OperationResponse]
+    def encodeAfterCommitC(
+      resume: ContinuationRuntime.Resume,
+      submitted: ContinuationResult[R],
+      completed: Option[WorkflowInstancePersistence.InstanceRecord]
+    ): Consequence[OperationResponse] = encodeC(resume)
   }
 
   /** Selects a typed closing Action from admitted StateMachine/Workflow facts.
@@ -191,16 +196,16 @@ object WorkflowCompletionServiceOperation {
           owner, submitted, issuedPersistence, runtime, instancePersistence, configuration,
           freshUnitOfWork, selected.map(_._2.program)
         )
-        _ <- selected match {
+        completed <- selected match {
           case Some((current, SelectedClosing(_, Some(next)))) =>
             instancePersistence.append(configuration, current.identity, current.revision, next.history.last)
               .flatMap { persisted =>
-                if (persisted == next) Consequence.unit
+                if (persisted == next) Consequence.success(Some(persisted))
                 else Consequence.stateConflict("public completion WorkflowInstance append diverged")
               }
-          case _ => Consequence.unit
+          case _ => Consequence.success(None)
         }
-        encoded <- codec.encodeC(resumed)
+        encoded <- codec.encodeAfterCommitC(resumed, submitted, completed)
       } yield encoded
     }
 
