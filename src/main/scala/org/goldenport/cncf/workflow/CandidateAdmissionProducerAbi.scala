@@ -7,7 +7,7 @@ import org.goldenport.{Conclusion, Consequence}
 
 /*
  * @since   Sep. 23, 2026
- * @version Sep. 23, 2026
+ * @version Sep. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -413,7 +413,7 @@ object CandidateAdmissionProducerAbi {
         admission <- admissions.get(pair.admissionActionIdentity.value)
       } yield (judgment, admission)
     }.map { case (judgment, admission) =>
-      if (judgment.operation != admission.operation)
+      if (judgment.operation.inputType != admission.operation.inputType)
         Some(_diagnostic(DiagnosticCode.OperationMismatch, "admission" -> admission.identity.value, "judgment" -> judgment.identity.value))
       else if (judgment.inputBinding != admission.inputBinding)
         Some(_diagnostic(DiagnosticCode.InputBindingMismatch, "admission" -> admission.identity.value, "judgment" -> judgment.identity.value))

@@ -15,6 +15,10 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 95](phase-95.md) plans a UI-facing View Model and Aggregate command
+  contract over existing CNCF `ViewSpace`/`AggregateSpace`, with REST first and
+  gRPC deferred. It does not block the Editing Studio Flutter application's
+  fake, local, or provisional CRUD-adapter development.
 - The first `sm-workflow` vertical slice has priority over shared Workflow
   transaction redesign. [Phase 77.1](phase-77.1.md) and
   [Phase 77.2](phase-77.2.md) use an explicitly loose post-commit Continuation
