@@ -9,6 +9,9 @@ import org.goldenport.{Conclusion, Consequence}
 
 /** Receiver for the StateMachine workflow metadata emitted alongside Cozy's
   * Candidate-Admission sidecar. This does not change the closed Phase 62.3 ABI.
+  *
+  * @since   Sep. 25, 2026
+  * @version Sep. 28, 2026
   */
 object CandidateWorkflowAbi {
   final case class Operation(service: String, name: String, inputType: Option[String], resultType: Option[String])
@@ -136,11 +139,23 @@ object CandidateWorkflowAbi {
       val expectedSpi = model.requiredSpi.map(s =>
         RequiredSpi(s.identity.value, s.actionIdentity.value,
           _operation(s.operation), s.capabilitySource.line))
+      val camActions = workflow.actions.filter(_.kind != "OPERATION")
+      val ordinaryActions = workflow.actions.filter(_.kind == "OPERATION")
+      // The CAM sidecar contains only Judgment/Admission actions, but its
+      // Required SPI also covers ordinary operations. Admit those operations
+      // only with exact operation and source correlation to that same sidecar.
+      val ordinaryMatched = ordinaryActions.forall(action => {
+        val bindings = model.requiredSpi.filter(_.actionIdentity.value == action.identity)
+        bindings.size == 1 && bindings.head.actionSource.line == action.line &&
+          _operation(bindings.head.operation) == action.operation &&
+          action.inputBinding.nonEmpty && action.operation.inputType.nonEmpty &&
+          action.operation.resultType.nonEmpty
+      })
       if (workflow.rootLine != source.rootSource.line ||
           workflow.definitionLine != source.definitionSource.line)
         Left("workflow source does not match sidecar")
-      else if (workflow.actions.toSet != expectedActions.toSet ||
-          workflow.actions.size != expectedActions.size)
+      else if (camActions.toSet != expectedActions.toSet ||
+          camActions.size != expectedActions.size || !ordinaryMatched)
         Left("workflow actions do not match sidecar")
       else if (workflow.requiredSpi.toSet != expectedSpi.toSet ||
           workflow.requiredSpi.size != expectedSpi.size)
