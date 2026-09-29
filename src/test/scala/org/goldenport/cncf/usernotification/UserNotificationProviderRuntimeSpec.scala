@@ -18,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  7, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -320,11 +321,17 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
   ): UserNotificationProvider =
     new UserNotificationProvider {
       val name: String = providername
+      private val _accepted_by_dedupe = scala.collection.concurrent.TrieMap.empty[(String, String), UserNotificationResult]
+      private val _provider_lock = new AnyRef
 
-      def notify(request: UserNotificationRequest)(using ExecutionContext): Consequence[UserNotificationResult] = {
-        sink += request
-        deliverylatch.foreach(_.countDown())
-        Consequence.success(UserNotificationResult(notificationId = Some("notification-1")))
+      def notify(request: UserNotificationRequest)(using ExecutionContext): Consequence[UserNotificationResult] = _provider_lock.synchronized {
+        val dedupe = request.recipientUserId -> request.dedupeKey.getOrElse(java.util.UUID.randomUUID.toString)
+        val result = _accepted_by_dedupe.getOrElseUpdate(dedupe, {
+          sink += request
+          deliverylatch.foreach(_.countDown())
+          UserNotificationResult(notificationId = Some("notification-1"))
+        })
+        Consequence.success(result)
       }
     }
 

@@ -62,6 +62,7 @@ import org.goldenport.cncf.job.{
 }
 import org.goldenport.cncf.job.{
   JobDataOrigin,
+  JobExperienceService,
   JobEntityCollections,
   JobManagementDetail,
   JobManagementPage,
@@ -91,7 +92,7 @@ import org.goldenport.value.BaseContent
  *  version Apr. 22, 2026
  *  version May. 31, 2026
  *  version Aug.  8, 2026
- * @version Sep. 28, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component with EntityRuntimePlanProvider {
@@ -437,14 +438,19 @@ object JobControlComponent  extends JobControlRuntimeSupport with JobControlReco
           operations = NonEmptyVector.of(canceljob, suspendjob, resumejob, retryjob, loadjobevents)
         )
       )
+      val jobexperienceservice = JobExperienceProtocol.serviceDefinition
       val protocol = Protocol(
         services = spec.ServiceDefinitionGroup(
-          services = Vector(jobservice, jobadminservice)
+          services = Vector(jobservice, jobadminservice, jobexperienceservice)
         ),
         handler = ProtocolHandler.default
       )
       comp.withPort(
-        Component.Port.of(new DefaultJobService(comp), new DefaultJobAdminService(comp))
+        Component.Port.of(
+          new DefaultJobService(comp),
+          new DefaultJobAdminService(comp),
+          new JobExperienceService(params.subsystem.jobEngine)
+        )
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(

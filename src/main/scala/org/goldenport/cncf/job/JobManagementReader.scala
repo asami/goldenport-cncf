@@ -5,7 +5,7 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Sep. 11, 2026
- * @version Sep. 11, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object JobManagementReader {
@@ -24,7 +24,11 @@ private[job] object JobManagementReader {
       val authorized = _authorized_models(snapshot.models, policy)
         .filter(request.accepts)
         .sortWith(_page_model_precedes)
-      val filterfingerprint = request.filterFingerprint
+      // Existing callers retain byte-compatible tokens. Scoped UX callers bind
+      // the cursor to their normalized visibility contract as well as filters.
+      val filterfingerprint =
+        if (policy.visibilityKey.isEmpty) request.filterFingerprint
+        else JobManagementCursor.fingerprint(s"${request.filterFingerprint}|${policy.visibilityKey}")
       val callerfingerprint = JobManagementCursor.callerVisibilityFingerprint(ctx)
       val snapshotfingerprint = JobManagementCursor.snapshotFingerprint(authorized)
       request.cursor match {

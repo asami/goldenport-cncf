@@ -48,11 +48,12 @@ import org.goldenport.cncf.event.{
   ReceptionDomainEvent
 }
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.context.SubjectKind
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 enum JobDataOrigin {
@@ -309,10 +310,26 @@ object JobSubmitter {
 
 trait JobQueryPolicy {
   def authorizeRead(model: JobQueryReadModel)(using ExecutionContext): Consequence[Unit]
+
+  /** An empty key preserves the original management cursor wire format. */
+  def visibilityKey: String = ""
 }
 
 object JobQueryPolicy {
   val default: JobQueryPolicy = new DefaultJobQueryPolicy
+
+  /**
+   * Canonical session-first ownership rule shared by management and UX projections.
+   * A stored session is authoritative; older records fall back to principal and kind.
+   */
+  def isOwner(submitter: JobSubmitter, context: ExecutionContext): Boolean =
+    submitter.sessionId match {
+      case Some(sessionid) =>
+        context.security.session.flatMap(_.sessionId).contains(sessionid)
+      case None =>
+        submitter.principalId == context.security.principal.id.value &&
+          submitter.subjectKind == context.security.subjectKind.toString
+    }
 
   private final class DefaultJobQueryPolicy extends JobQueryPolicy {
     private val _read_caps = Set("job_view", "job_admin", "content_manager", "content_admin")
@@ -320,24 +337,12 @@ object JobQueryPolicy {
     def authorizeRead(model: JobQueryReadModel)(using ctx: ExecutionContext): Consequence[Unit] =
       if (ctx.security.hasAnyCapability(_read_caps))
         Consequence.unit
-      else if (_same_submitter(model.submitter, ctx))
+      else if (isOwner(model.submitter, ctx))
         Consequence.unit
       else
         Consequence.operationIllegal(
           "job.query",
           s"job is not owned by the current subject; required capability: ${_read_caps.toVector.sorted.mkString("|")}"
         )
-
-    private def _same_submitter(
-      submitter: JobSubmitter,
-      ctx: ExecutionContext
-    ): Boolean =
-      submitter.sessionId match {
-        case Some(sessionId) =>
-          ctx.security.session.flatMap(_.sessionId).contains(sessionId)
-        case None =>
-          submitter.principalId == ctx.security.principal.id.value &&
-            submitter.subjectKind == ctx.security.subjectKind.toString
-      }
   }
 }

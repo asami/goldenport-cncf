@@ -1,9 +1,12 @@
 package org.goldenport.cncf.usernotification
 
-import java.util.concurrent.ConcurrentHashMap
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{DomainEvent, EventDispatchHandler, EventId, EventLane, EventRecord, EventSubscription, ReceptionDomainEvent}
+import org.goldenport.cncf.job.JobExperienceScope
 import org.goldenport.cncf.subsystem.{GenericSubsystemUserNotificationEventForwardingBinding, Subsystem}
 
 /*
@@ -13,11 +16,11 @@ import org.goldenport.cncf.subsystem.{GenericSubsystemUserNotificationEventForwa
  * here when subsystem notification forwarding rules match those events.
  *
  * @since   May.  7, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object UserNotificationEventForwarder:
-  private val _sent = ConcurrentHashMap.newKeySet[String]()
   private val _job_terminal_events = Set(
     "job.succeeded",
     "job.failed",
@@ -69,12 +72,11 @@ object UserNotificationEventForwarder:
     _rules(subsystem).filter(_.matches(event)).foreach { rule =>
       _request(event, rule) match {
         case Some(request) =>
-          val key = request.dedupeKey.getOrElse(s"cncf.user-notification:${event.name}:${System.identityHashCode(event)}")
-          if (_sent.add(key)) {
-            _provider(ctx, rule.provider) match {
-              case Some(provider) =>
+          _provider(ctx, rule.provider) match {
+            case Some(provider) =>
+              try {
                 provider.notify(request)(using ctx) match {
-                  case Consequence.Success(result) =>
+                  case Consequence.Success(result) if result.accepted =>
                     _append_forwarding_diagnostic(
                       subsystem,
                       "user-notification.forwarding.sent",
@@ -82,16 +84,35 @@ object UserNotificationEventForwarder:
                       request,
                       result.notificationId.orElse(result.providerNotificationId).getOrElse("")
                     )(using ctx)
-                  case Consequence.Failure(conclusion) =>
+                  case Consequence.Success(_) =>
                     _append_forwarding_diagnostic(
                       subsystem,
                       "user-notification.forwarding.failed",
                       event,
                       request,
-                      conclusion.show
+                      "The notification provider refused delivery."
+                    )(using ctx)
+                  case Consequence.Failure(conclusion) =>
+                    val _ = conclusion
+                    _append_forwarding_diagnostic(
+                      subsystem,
+                      "user-notification.forwarding.failed",
+                      event,
+                      request,
+                      "The notification provider did not accept delivery."
                     )(using ctx)
                 }
-              case None =>
+              } catch {
+                case NonFatal(_) =>
+                  _append_forwarding_diagnostic(
+                    subsystem,
+                    "user-notification.forwarding.failed",
+                    event,
+                    request,
+                    "The notification provider failed while accepting delivery."
+                  )(using ctx)
+              }
+            case None =>
                 _append_forwarding_diagnostic(
                   subsystem,
                   "user-notification.forwarding.failed",
@@ -99,7 +120,6 @@ object UserNotificationEventForwarder:
                   request,
                   "No user-notification provider is configured for the current subsystem."
                 )(using ctx)
-            }
           }
         case None =>
           _append_forwarding_diagnostic(
@@ -112,7 +132,7 @@ object UserNotificationEventForwarder:
       }
     }
 
-  private final case class _Rule(
+  private final case class ForwardingRule(
     event: String,
     provider: Option[String],
     channel: Option[String],
@@ -133,9 +153,9 @@ object UserNotificationEventForwarder:
       _trigger(event.name)
   }
 
-  private object _Rule:
-    def from(binding: GenericSubsystemUserNotificationEventForwardingBinding): _Rule =
-      _Rule(
+  private object ForwardingRule:
+    def from(binding: GenericSubsystemUserNotificationEventForwardingBinding): ForwardingRule =
+      ForwardingRule(
         event = binding.event,
         provider = binding.provider,
         channel = binding.channel,
@@ -147,8 +167,8 @@ object UserNotificationEventForwarder:
         dedupeKey = binding.dedupeKey
       )
 
-    def default(event: String): _Rule =
-      _Rule(
+    def default(event: String): ForwardingRule =
+      ForwardingRule(
         event = event,
         provider = None,
         channel = None,
@@ -160,16 +180,16 @@ object UserNotificationEventForwarder:
         dedupeKey = None
       )
 
-  private def _rules(subsystem: Subsystem): Vector[_Rule] = {
+  private def _rules(subsystem: Subsystem): Vector[ForwardingRule] = {
     val configured = subsystem.descriptor.toVector
       .flatMap(_.runtime.toVector)
       .flatMap(_.userNotification.toVector)
       .flatMap(_.eventForwarding)
-      .map(_Rule.from)
+      .map(ForwardingRule.from)
     if (configured.nonEmpty)
       configured
     else if (subsystem.resolvedSecurityWiring.userNotification.enabledProviders.nonEmpty)
-      _job_terminal_events.toVector.sorted.map(_Rule.default)
+      _job_terminal_events.toVector.sorted.map(ForwardingRule.default)
     else
       Vector.empty
   }
@@ -190,7 +210,7 @@ object UserNotificationEventForwarder:
 
   private def _request(
     event: ReceptionDomainEvent,
-    rule: _Rule
+    rule: ForwardingRule
   ): Option[UserNotificationRequest] = {
     val recipient = _string(event, "submitter-principal-id").filter(_.trim.nonEmpty)
     val jobid = _string(event, "job-id").filter(_.trim.nonEmpty)
@@ -200,37 +220,38 @@ object UserNotificationEventForwarder:
         val app = _string(event, "web.app").filter(_.trim.nonEmpty)
         val service = _string(event, "web.service").filter(_.trim.nonEmpty)
         val operation = _string(event, "web.operation").filter(_.trim.nonEmpty)
-        val target = Vector(app, service, operation).flatten.mkString(".")
-        val status = if (trigger == "recovery-required") "recoveryRequired" else _string(event, "status").getOrElse(trigger)
-        val titleTarget = if (target.nonEmpty) s": $target" else ""
-        val message = _string(event, "message").orElse(_string(event, "result-summary")).getOrElse(status)
+        val target = Vector(app, service, operation).flatten.map(_display(_, 128)).filter(_.nonEmpty).mkString(".")
+        val status = _display(if (trigger == "recovery-required") "recoveryRequired" else trigger, 64)
+        val titletarget = if (target.nonEmpty) s": $target" else ""
+        val displayid = _display(id, 256)
+        val actionurl = _action_url(app, id)
         UserNotificationRequest(
           recipientUserId = user,
           notificationType = rule.notificationType,
           channel = rule.channel.getOrElse("in-app"),
-          title = s"Job $status$titleTarget",
-          body = s"Job $id is $status. $message".trim,
+          title = _display(s"Job $status$titletarget", 256),
+          body = _display(s"Job $displayid is $status. See the Job page for details.", 4096),
           priority = rule.priority.orElse(if (trigger == "failed" || trigger == "recovery-required") Some("high") else None),
           status = "Queued",
           dedupeKey = Some(_dedupe_key(rule, id, trigger)),
-          actionUrl = app.map(a => s"/web/$a/jobs/$id"),
-          metadata = Map(
-            "jobId" -> id,
-            "trigger" -> trigger,
-            "jobStatus" -> status,
-            "sourceEventName" -> event.name
-          ) ++ app.map("app" -> _) ++
-            service.map("service" -> _) ++
-            operation.map("operation" -> _) ++
-            _string(event, "recovery-required").map("recoveryRequired" -> _) ++
-            _string(event, "message").map("message" -> _),
+          actionUrl = actionurl,
+          metadata = _metadata(
+            "jobId" -> Some(id),
+            "trigger" -> Some(trigger),
+            "jobStatus" -> Some(status),
+            "sourceEventName" -> Some(event.name),
+            "app" -> app,
+            "service" -> service,
+            "operation" -> operation,
+            "recoveryRequired" -> _string(event, "recovery-required")
+          ),
           correlationId = _string(event, "correlation-id")
         )
       }
     }
   }
 
-  private def _dedupe_key(rule: _Rule, jobid: String, trigger: String): String =
+  private def _dedupe_key(rule: ForwardingRule, jobid: String, trigger: String): String =
     rule.dedupeKey
       .map(_.replace("${jobId}", jobid).replace("${trigger}", trigger))
       .getOrElse(s"cncf.job:$jobid:$trigger")
@@ -243,6 +264,33 @@ object UserNotificationEventForwarder:
 
   private def _normalize(s: String): String =
     Option(s).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT).replace("_", "-")
+
+  private def _path_segment(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+
+  private def _display(value: String, limit: Int): String =
+    Option(value).getOrElse("").map(character => if (Character.isISOControl(character)) ' ' else character).take(limit)
+
+  private def _metadata(entries: (String, Option[String])*): Map[String, String] =
+    entries.collect {
+      case (key, Some(value)) if _safe_reference(value) => key -> value
+    }.toMap
+
+  private def _safe_reference(value: String): Boolean =
+    Option(value).exists(entry => entry.trim.nonEmpty && entry.length <= 256 && !entry.exists(Character.isISOControl))
+
+  private def _safe_link_segment(value: String): Boolean =
+    _safe_reference(value) && value != "." && value != ".." && !value.contains('/') && !value.contains('\\')
+
+  private def _action_url(application: Option[String], id: String): Option[String] =
+    for {
+      original <- application
+      if _safe_link_segment(original) && _safe_link_segment(id)
+      normalized <- JobExperienceScope.normalizedApplication(original).toOption
+      if normalized == original
+      url = s"/web/${_path_segment(normalized)}/jobs/${_path_segment(id)}"
+      if UserNotificationLinkPolicy.isSafe(url)
+    } yield url
 
   private def _is_async_job_event(event: ReceptionDomainEvent): Boolean =
     _string(event, "job-run-mode").exists(v => _normalize(v) == "async")

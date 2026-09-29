@@ -33,3 +33,4 @@ Current runtime/I18N specs:
 Current HTTP/Form operation specs:
 
 - `http-form-typed-update-parameters.md`
+- `job-user-operator-experience.md`

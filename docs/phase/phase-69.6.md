@@ -1,6 +1,6 @@
 # Phase 69.6 - User and Operator Job Experience
 
-status=planned
+status=active
 planned_at=2026-09-09
 split_from=[Phase 69](phase-69.md)
 depends_on=[Phase 69.5](phase-69.5.md)
@@ -34,13 +34,20 @@ validated user/operator projections.
 
 | ID | Stage | Status |
 | --- | --- | --- |
-| JM69-08 | User and operator Job experience | planned |
+| JM69-08 | User and operator Job experience | IN_PROGRESS |
+
+Slice ledger: `JM69-08A` has completed implementation of the frozen [Job user
+and operator experience specification](../spec/job-user-operator-experience.md).
+Focused validation passed with HTTP 21/21 and 18 affected-consumer suites
+316/316 (337/337 total), with zero failures or pending tests and compilation
+passed. Independent review, Step acceptance, and release closure remain
+pending.
 
 Focused isolation, notification/read state, accessibility, control, recovery,
-pagination, and provider-failure specifications are required. The repository
-full suite is deliberately deferred to the declared aggregate final owner,
-Phase 69.7; this Phase still requires focused validation, independent review,
-and its own release commit.
+pagination, and provider-failure specifications are required and are covered by
+the focused validation evidence above. The repository full suite is deliberately
+deferred to the declared aggregate final owner, Phase 69.7; this Phase still
+requires independent review, Step acceptance, and its own release commit.
 
 ## Phase Plan Gate: PROCEED
 
