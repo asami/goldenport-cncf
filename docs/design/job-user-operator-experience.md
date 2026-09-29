@@ -1,6 +1,6 @@
 # Job User and Operator Experience Design
 
-status=validated-pending-review
+status=accepted
 phase=69.6
 slice=JM69-08A
 
