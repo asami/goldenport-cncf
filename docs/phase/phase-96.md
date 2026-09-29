@@ -26,14 +26,20 @@ Display Model instances conform to the target-neutral Abstract/Logical UI runtim
 
 ## Initial scope
 
-Implement the minimum infrastructure required for the Editing Studio List -> Detail -> one Action vertical slice:
+Implement the minimum infrastructure required for the Editing Studio List -> Detail -> standard Mutation vertical slice.
+
+Phase 96 also establishes the component-scoped `DisplayService` as the UI-facing public service. Aggregate and View runtime access remain internal for this phase; ordinary Business Operations remain independently published through the existing CNCF Operation/REST mechanism.
 
 - Display Model identity/version metadata;
 - Display Projection SPI/API from semantic View Models;
 - List and Detail Display Model shapes based on the Cozy runtime contract;
 - Section/Field/displayable Value representation;
 - presentation roles such as title/subtitle/status where admitted by the Abstract UI contract;
-- Action descriptor binding to CNCF Operation/Command semantics;
+- component-scoped `DisplayService` access Operations for Display Object read/query and standard mutation;
+- standard Display Mutation contracts for create/update/delete, including identity/revision and editable-field/constraint metadata;
+- deterministic mapping of standard Display Mutation to Entity/Aggregate resource mutation;
+- standard mutation result/projection suitable for List -> Detail -> Editor -> Save/Delete UI patterns;
+- Business Operation descriptors may be presented as actions, but Business Operations are invoked directly through their existing REST Operation interface rather than tunneled through DisplayService;
 - deterministic protocol codec/representation;
 - diagnostics for unsupported/incompatible projection or protocol versions; and
 - focused fixture/proof suitable for later textus-flutter-core consumption.
@@ -67,8 +73,10 @@ Use an Editing Studio/Knowledge Candidate fixture to prove:
 2. semantic Detail View -> Detail Display Model;
 3. semantic property -> presentation-role mapping;
 4. opaque/server-native value -> displayable value conversion;
-5. one Action descriptor -> CNCF Operation/Command binding; and
-6. deterministic encode/decode fixture for a future Flutter Core client.
+5. Detail Display Object -> standard update mutation -> Entity/Aggregate update -> refreshed Display Object;
+6. create/delete metadata sufficient for standard client interaction patterns;
+7. one Business Operation action descriptor whose execution target remains the ordinary REST Operation API; and
+8. deterministic encode/decode fixture for a future Flutter Core client.
 
 The later integration acceptance is replacement of the Android mock source with a CNCF Display Model source without rewriting standard List/Detail UI.
 
@@ -81,8 +89,22 @@ Phase 96 completes when:
 - the minimum List/Detail/Value/Action protocol is versioned and deterministic;
 - no Flutter-specific Widget semantics enter CNCF;
 - semantic View consumers remain unaffected;
-- the reference fixture proves List, Detail and one Action binding; and
+- the reference fixture proves List, Detail and standard Display Mutation;
+- DisplayService is component-scoped and exposes only the Display access/mutation boundary;
+- Aggregate/View runtime access remains internal in this phase;
+- Business Operations remain direct CNCF Operations and are not wrapped by DisplayService;
+- the initial post-Business-Operation consistency rule is client-initiated Display reload; and
 - the protocol is sufficiently frozen for textus-flutter-core client/runtime implementation.
+
+## Initial synchronization rule
+
+Standard Display Mutation may return/reproject the resulting Display Object because the mutation is part of the Display contract.
+
+Business Operations are different. A presentation client invokes the existing Business Operation REST endpoint directly. After success, the initial protocol requires the client to reload the affected Display Object/View through DisplayService. Push invalidation, subscriptions and Service Bus-driven refresh are future extensions, not Phase 96 requirements.
+
+## Standard UI implication
+
+Display Mutation metadata is intentionally sufficient for a generic presentation runtime to realize standard interaction patterns from configuration: List -> Create Editor -> Detail, Detail -> Edit -> Save -> Detail, and Detail -> Delete confirmation -> List. CNCF defines target-neutral semantics and validation; TFAF owns Flutter visual realization.
 
 ## Non-goals
 
