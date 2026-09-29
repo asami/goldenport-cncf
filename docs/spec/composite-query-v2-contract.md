@@ -1,6 +1,8 @@
 # CompositeQuery v2 Contract
 
-Status: implemented-pending-focused-validation
+Status: accepted-focused; repository-full validation deferred to PHASE-69.7
+
+Acceptance: [Phase 69.5 closure journal](../journal/2026/09/2026-09-29-phase-69.5-composite-query-v2.md).
 
 CompositeQuery v2 composes a declared set of Query requests into one ordered,
 bounded aggregate. It is an additive API; `CompositeQueryRequest`,

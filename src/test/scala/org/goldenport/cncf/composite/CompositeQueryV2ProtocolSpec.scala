@@ -210,10 +210,10 @@ final class CompositeQueryV2ProtocolSpec extends AnyWordSpec with Matchers with 
       "when secret-bearing requests exercise exception, raw failure, and successful payload paths" in _with_fixture { fixture =>
         Given("configured durable storage and secret-bearing arguments, properties, session, failures, exceptions, and payloads")
         val secret = "secret-token"
-        def secretBranch(branchId: String, operation: String): CompositeQueryV2Branch =
-          fixture.branch(branchId).copy(request = fixture.request(operation).copy(
+        def _secret_branch_(branchid: String, operation: String): CompositeQueryV2Branch =
+          fixture.branch(branchid).copy(request = fixture.request(operation).copy(
             arguments = List(Argument("credential", secret)),
-            properties = List(Property("fixture.branch", branchId, None), Property("password", secret, None))
+            properties = List(Property("fixture.branch", branchid, None), Property("password", secret, None))
           ))
         val caller = ExecutionContext.withSecurityContext(
           ExecutionContext.test(),
@@ -222,16 +222,16 @@ final class CompositeQueryV2ProtocolSpec extends AnyWordSpec with Matchers with 
         val durablecaller = createJobEntityContext()
         val context = ExecutionContext.withSecurityContext(durablecaller, caller.security)
         When("ephemeral and PersistentDiagnostics tasks execute through the configured provider")
-        val ephemeral = _success(_execute_using(context, fixture, CompositeQueryV2Targets.empty, Vector(secretBranch("ephemeralPayload", "payload"))))
+        val ephemeral = _success(_execute_using(context, fixture, CompositeQueryV2Targets.empty, Vector(_secret_branch_("ephemeralPayload", "payload"))))
         val beforepersistent = fixture.jobEngine.listJobs(persistentOnly = true)
         val response = _success(_execute_using(
           context,
           fixture,
           CompositeQueryV2Targets.empty,
           Vector(
-            secretBranch("exception", "throw"),
-            secretBranch("rawFailure", "rawfailure"),
-            secretBranch("payload", "payload")
+            _secret_branch_("exception", "throw"),
+            _secret_branch_("rawFailure", "rawfailure"),
+            _secret_branch_("payload", "payload")
           ),
           CompositeQueryV2Policy(persistence = CompositeQueryV2Persistence.PersistentDiagnostics)
         ))

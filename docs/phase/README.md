@@ -352,7 +352,9 @@ status is reported rather than inferred. The older `Current baseline` and
 closed-phase lists above are historical snapshots where they differ from
 these ledgers. For example, the Phase 69.4 active pointer above predates its
 closed ledger. Each phase and checklist remains the authority for its own
-acceptance, successor, and resume evidence. This inventory changes no status.
+acceptance, successor, and resume evidence. The two Phase 69.5 rows were
+synchronized with its closed ledgers on 2026-09-29; the other rows retain their
+dated inventory status. This inventory changes no acceptance authority.
 
 | Ledger | Declared status |
 | --- | --- |
@@ -600,8 +602,8 @@ acceptance, successor, and resume evidence. This inventory changes no status.
 | [phase-69.3](phase-69.3.md) | status=closed |
 | [phase-69.4-checklist](phase-69.4-checklist.md) | status=closed |
 | [phase-69.4](phase-69.4.md) | status=closed |
-| [phase-69.5-checklist](phase-69.5-checklist.md) | status=planned |
-| [phase-69.5](phase-69.5.md) | status=planned |
+| [phase-69.5-checklist](phase-69.5-checklist.md) | status=closed |
+| [phase-69.5](phase-69.5.md) | status=closed |
 | [phase-69.6-checklist](phase-69.6-checklist.md) | status=planned |
 | [phase-69.6](phase-69.6.md) | status=planned |
 | [phase-69.7-checklist](phase-69.7-checklist.md) | status=planned |

@@ -1,6 +1,8 @@
 # CompositeQuery v2 Design
 
-Status: implementation record pending focused validation
+Status: accepted-focused implementation record; repository-full validation deferred to PHASE-69.7
+
+Acceptance: [Phase 69.5 closure journal](../journal/2026/09/2026-09-29-phase-69.5-composite-query-v2.md).
 
 CompositeQuery v2 is a caller-side coordinator over the existing CNCF Job
 engine. The caller owns the supplied scheduler and its lifecycle. The
