@@ -10,7 +10,8 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 10, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CompositeQueryRequest(
@@ -125,6 +126,14 @@ final case class CompositeQueryDiagnostic(
 final class CompositeQueryEngine(
   subsystem: Subsystem
 ) {
+  def executeV2Blocking(
+    request: CompositeQueryV2Request,
+    targets: CompositeQueryV2Targets = CompositeQueryV2Targets.empty,
+    cancellation: CompositeQueryV2Cancellation = CompositeQueryV2Cancellation.fresh
+  )(using ExecutionContext): Consequence[CompositeQueryV2Response] =
+    CompositeQueryV2Engine(subsystem, subsystem.jobEngine, targets)
+      .executeBlocking(request, cancellation)
+
   def execute(
     request: CompositeQueryRequest
   )(using ExecutionContext): Consequence[CompositeQueryResponse] =
