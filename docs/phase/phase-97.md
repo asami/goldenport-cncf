@@ -4,7 +4,7 @@ status=planned
 planned_at=2026-10-01
 depends_on=[Phase 77](phase-77.md), [Phase 90](phase-90.md)
 related=[Phase 91](phase-91.md)
-consumer=textus-ai-runner, Workflow/Continuation, sm-workflow, textus-cbd-support
+consumer=textus-ai-core/textus-ai-runtime, Workflow/Continuation, sm-workflow, textus-cbd-support
 checklist=[Phase 97 Checklist](phase-97-checklist.md)
 
 ## Purpose
@@ -22,13 +22,25 @@ Logical context and the actual wire request are distinct records.
 AI consumer / execution
   -> CNCF AI Audit API
       -> AI Interaction / Evidence
-          -> CNCF Service Bus / Journal
-              -> Control Center / cbd-support / analysis
-                  -> Prompt/Context/Guard improvement
-                  -> Workflow/Rule/Program determinization
+          -> CNCF Service Bus / Journal (authoritative)
+          -> Observability Projection
+               -> compact/sanitized OTel trace, metric and log data
+               -> auditRef = AIInteractionId
+          -> Control Center / cbd-support / analysis
+               -> Prompt/Context/Guard improvement
+               -> Workflow/Rule/Program determinization
 ~~~
 
-CNCF owns provider-neutral contracts, correlation, policy hooks and persistence integration. textus-ai-runner and Workflow/Continuation are consumers. Applications own domain-specific evaluation semantics. cbd-support consumes evidence/KPIs rather than becoming the authoritative store.
+CNCF owns provider-neutral contracts, correlation, policy hooks and persistence integration. textus-ai-core/textus-ai-runtime and Workflow/Continuation are consumers. Applications own domain-specific evaluation semantics. cbd-support consumes evidence/KPIs rather than becoming the authoritative store.
+
+## Observability projection
+AI Audit is the source of truth for AI interaction evidence. Observability is a sanitized operational projection derived from AI Audit, not an independent detailed record.
+
+The projection carries only operationally useful compact information such as AIInteractionId/auditRef, execution correlation, provider/model identity where permitted, duration, usage/cost summaries, result status, retry/escalation and validation status. Prompt/context/request/response bodies do not flow to OpenTelemetry by default.
+
+OpenTelemetry traces, metrics and logs retain a back pointer to the authoritative AI Interaction through AIInteractionId/auditRef. Operational investigation therefore flows from dashboards/traces to AI Audit when detailed context is required. AI execution code should not independently duplicate detailed audit payloads into OTel.
+
+This pattern may later generalize to other CNCF authoritative audit records: authoritative record -> sanitized observability projection -> back reference.
 
 ## Policy
 Raw request/response can contain secrets, personal data or business-confidential content. Recording therefore requires classification/redaction/reference, authorization and retention policy. Metadata-only or referenced payload storage must be possible.
