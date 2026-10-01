@@ -120,3 +120,18 @@ Display Mutation metadata is intentionally sufficient for a generic presentation
 - docs/journal/2026/09/2026-09-29-display-model-protocol-direction.md
 - docs/journal/2026/09/2026-09-27-operation-client-ui-continuity.md
 - asami/cozy Phase 74
+
+## Online Experiment presentation handoff
+
+Phase 96 does not own Experiment assignment, but the Display Model Protocol must be able to carry a server-resolved presentation variant for CNCF Phase 98 online experiments.
+
+CNCF assigns the subject to an Experiment Arm. DisplayService/Display Projection exposes only the client-safe Experiment presentation context required to render the assigned UI variant, together with a Display Instance/correlation reference. The presentation client must not perform random assignment or choose another Arm.
+
+The client may use the assigned Arm/variant to select between target-specific UI realizations that cannot be expressed solely by target-neutral Display Model fields. Detailed Experiment/Run/assignment state remains server-side where possible.
+
+Standard Display Mutation must preserve the Display Instance/correlation reference. CNCF restores the authoritative Experiment/Run/Arm assignment from server-side context and records mutation lifecycle/outcome against that Arm. The client-supplied Arm value is not the authority for later mutation or Business Operation evaluation.
+
+This permits one Experiment assignment to correlate:
+Display variant -> user interaction -> Display Mutation -> Entity/Aggregate mutation -> Business Operation -> optional AI Interaction -> downstream business outcome.
+
+TFAF and other clients render the assigned variant; CNCF owns assignment, correlation, observation and subsequent routing.
