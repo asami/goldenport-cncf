@@ -5,7 +5,7 @@ status=planned
 - [ ] P97-01 Freeze Interaction/Context/Request/Response/Outcome/Evaluation/Evidence terminology.
 - [ ] P97-02 Define correlation to Job, Workflow, Continuation, Action/JudgmentAction and Component/Service/Operation.
 - [ ] P97-03 Separate logical AI context from actual provider wire request/response.
-- [ ] P97-04 Define provider-neutral execution metadata, retry/escalation and adopted/rejected outcomes.
+- [ ] P97-04 Define provider-neutral agent/provider/model execution metadata, retry/escalation and adopted/rejected outcomes.
 - [ ] P97-05 Define classification, redaction/reference, authorization and retention hooks.
 - [ ] P97-06 Integrate authoritative persistence with CNCF built-in Service Bus Journal.
 - [ ] P97-07 Define sanitized AI Audit -> Observability projection with AIInteractionId/auditRef back pointer and no raw payloads by default.
@@ -15,4 +15,7 @@ status=planned
 - [ ] P97-10 Expose query/projection contract for Control Center and cbd-support KPI analysis.
 - [ ] P97-11 Document progressive determinization from evidence to tuning/guard to Workflow/rule/program.
 - [ ] P97-12 Validate a representative Continuation/JudgmentAction interaction end to end, including OTel projection correlation.
-- [ ] P97-13 Complete review, tests and consumer handoff.
+- [ ] P97-13 Define Agent x Provider/Model x Work Type quality metrics including Admission pass/reject, human correction, retry/escalation, downstream outcome, latency, usage and cost.
+- [ ] P97-14 Define routing-feedback evidence contract while preserving application/workflow-owned approval authority.
+- [ ] P97-15 Validate agent-neutral correlation so Dot/OpenClaw/Codex-style project agents can drive the same Workflow and be compared without changing Workflow semantics.
+- [ ] P97-16 Complete review, tests and consumer handoff.
