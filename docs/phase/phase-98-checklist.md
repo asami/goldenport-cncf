@@ -16,4 +16,8 @@ status=planned
 - [ ] P98-12 Prove Operation X/Y online A/B routing.
 - [ ] P98-13 Prove AI-backed Arm inherits Experiment correlation into Phase 97 AI Audit without AI-runtime Experiment branching.
 - [ ] P98-14 Document offline Corpus-driven versus online request-driven Experiment boundaries.
-- [ ] P98-15 Complete focused/full tests, review and textus-experiment consumer handoff.
+- [ ] P98-15 Define Phase 96 Display Model handoff of server-assigned client-safe Arm/variant plus Display Instance/correlation reference.
+- [ ] P98-16 Prove UI runtime renders the assigned variant without performing Arm assignment.
+- [ ] P98-17 Prove Display Mutation restores authoritative Experiment/Run/Arm correlation server-side and records mutation lifecycle/outcome.
+- [ ] P98-18 Prove one Arm correlation spans Display variant -> Display Mutation -> Business Operation -> AI Audit when AI is invoked.
+- [ ] P98-19 Complete focused/full tests, review and textus-experiment consumer handoff.
