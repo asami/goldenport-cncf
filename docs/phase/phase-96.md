@@ -135,3 +135,7 @@ This permits one Experiment assignment to correlate:
 Display variant -> user interaction -> Display Mutation -> Entity/Aggregate mutation -> Business Operation -> optional AI Interaction -> downstream business outcome.
 
 TFAF and other clients render the assigned variant; CNCF owns assignment, correlation, observation and subsequent routing.
+
+### Multi-arm presentation semantics
+
+Display Model does not assume binary A/B experiments. The client-safe presentation variant identifies the server-assigned Arm from an N-arm Experiment. A/B UI testing is simply the two-arm case. Allocation policy, including future adaptive allocation, remains server-side; the presentation client only renders the assigned variant.
