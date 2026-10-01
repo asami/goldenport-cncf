@@ -1,52 +1,54 @@
-# Skill Procedural Semantics and Runtime Exclusion
+# Skill Logic and Runtime Execution Boundary
 
 Date: 2026-10-02
-Status: design direction
+Status: corrected design direction
 
-## Principle
+## Correction
 
-Generic Skill Workflow Support must present Skill execution as a conceptually single-threaded procedural unit.
+Generic Skill Workflow Support must not treat Skill Logic as the owner of a human-readable top-level procedure. That procedure belongs to Skill Specification/documentation. Executable control procedure belongs to Workflow/StateMachine.
 
-A Skill does not participate in concurrency semantics. It must not acquire/release locks, coordinate peers, implement lease ownership, resolve deadlocks, or contain concurrent retry/recovery protocols.
-
-Those responsibilities belong to Workflow/runtime infrastructure.
+Generic Skill Workflow Support projects a bounded WorkOrder/Continuation to Skill Logic and accepts its Result/Evidence.
 
 ```text
-Skill
-  human-readable sequential procedure
+Skill Specification
+  human-readable work description
         |
         v
 Workflow / StateMachine
-  execution ownership
-  coordination
-  continuation
-  admission
+  executable sequencing / branching / iteration
+  continuation / admission / coordination
+        |
+        | bounded WorkOrder
+        v
+Skill Logic
+  semantic AI work
+  bounded request -> Result / Evidence
         |
         v
 CNCF Runtime
-  exclusion / locking / lease
-  persistence
-  job / recovery
+  execution ownership / exclusion / lease
+  persistence / scheduling / recovery
 ```
 
-"Single-threaded" describes the Skill contract, not the provider implementation. Internal implementation may use parallel computation, but Generic Skill Workflow Support must not expose concurrent-worker coordination as Skill semantics.
+## Local execution assumption
+
+One Skill Logic invocation processes one assigned WorkOrder as a local sequential unit. It does not coordinate peer workers or own the overall procedure.
+
+Provider implementation may internally parallelize computation, but concurrent-worker coordination is not part of Skill semantics.
 
 ## Runtime implication
 
-Before semantic work is projected as a Skill WorkOrder, the surrounding execution mechanism is responsible for establishing any required execution ownership/exclusion for the affected resource scope.
+Before semantic work is projected as a Skill WorkOrder, the surrounding execution mechanism is responsible for required execution ownership/exclusion.
 
-The Skill therefore executes as if the work assigned to it is exclusively and safely available. It does not inspect competing Skill executions.
+Skill Logic therefore does not inspect competing Skill/agent/process executions and does not acquire/release locks, manage leases, resolve deadlocks, or invent retry/recovery protocols.
 
-Existing Aggregate/resource locking facilities may be used by concrete execution policies, but locking must remain a runtime concern rather than a Skill command vocabulary.
+Existing Aggregate/resource locking facilities may be used by execution policy, but they remain Workflow/runtime concerns.
 
-## Human-readable procedure
+## Stable separation
 
-Skill also has value as the human-readable top-level procedure of work. It may orchestrate calls to deterministic Operations, Workflow/StateMachine execution, AI-native semantic work, human approval, and sub-Skills while keeping the overall work understandable to a person.
+- Skill Specification: human-readable purpose and work description.
+- Skill Logic: thin semantic worker / Workflow adapter.
+- Workflow/StateMachine: executable control procedure and deterministic coordination.
+- Runtime: concurrency, exclusion, persistence, scheduling and recovery guarantees.
 
-This yields a stable separation:
-
-- Skill: procedural knowledge, AI-native work, ambiguous/non-routine work, human-readable top-level work description.
-- Workflow/StateMachine: deterministic execution semantics and coordination.
-- Runtime: concurrency, exclusion, persistence, recovery and infrastructure guarantees.
-
-When a Skill starts accumulating concurrency or recovery logic, move that behavior into Workflow/runtime rather than extending the Skill language.
+If Skill Logic accumulates sequencing, loops, closure rules, concurrency, or recovery logic, move that responsibility to Workflow/runtime rather than extending the Skill execution model.
