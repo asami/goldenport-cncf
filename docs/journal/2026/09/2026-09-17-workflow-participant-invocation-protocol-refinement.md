@@ -147,3 +147,58 @@ Codexは実行履歴・会話・既存Capabilityを材料に、Workflow / StateM
 6. 外部service integrationはAgent側を優先し、Workflow credentialはleast privilegeにする。
 7. CodexでWorkflow実装・test・debugを半自動化し、Citizen Developerが自然言語とmodelを中心に改善できるようにする。
 8. WorkflowとExecutable SpecificationをAI製品・モデルから独立した長期的software assetとする。
+
+
+## 2026-10-01 — Production Agent Architecture refinement
+
+### Agent runtime is software, not prompting
+
+Production Agent の実行主体を LLM / Skill としない。Agent System は stateful execution system を骨格とし、AI はその内部で非決定的な判断・生成を担う Action / Participant と位置付ける。
+
+> Agent = Stateful Execution System + Intelligent Actions
+
+Workflow / StateMachine が state、transition、Continuation、retry/failure、Admission、audit/evidence を所有する。AI、Human、External Service は typed contract に対する結果を返す。
+
+### LLM is not a state carrier
+
+LLM / Skill の会話履歴や前回出力に workflow state や長寿命の構造化データを持ち回らせない。field 欠落、rename、nesting drift、古い値による上書き等は自然言語実行では fail-fast せず、長い Agent execution ほど累積するためである。
+
+canonical state は typed/persisted runtime model に置き、各 AI invocation にはその Action に必要な bounded typed input だけを materialize する。AI result も typed result として回収し、runtime が validation / Admission 後に state transition へ反映する。
+
+### AI result is a candidate, not state
+
+非決定的な AI output を直接 authoritative state とみなさない。
+
+```text
+Workflow / StateMachine
+        |
+        v
+Judgment / Generation Action
+        |
+        v
+AI Candidate Result
+        |
+        v
+Validation / Admission
+        |
+        v
+Accepted State Transition
+```
+
+Candidate が不正・不十分なら reject / retry / escalate でき、authoritative workflow state を壊さない。この原則は Candidate-Admission Model と Continuation runtime を Agent execution に接続する。
+
+### AI as bootstrap for formalization
+
+Citizen Development の価値は、最初から完全な StateMachine を設計しなくても仕事を開始できる点にある。曖昧な業務は AI / Skill で exploratory execution し、AI Audit / runtime evidence を蓄積する。繰り返し現れる安定部分を Workflow / StateMachine / rule / deterministic Operation へ段階的に昇格させる。
+
+成熟に伴って AI 比率が下がることを失敗とみなさない。非決定性が不要な部分を software asset へ回収できたことが system maturity である。AI は未形式化業務と形式化された software の間を埋める bootstrap mechanism として使う。
+
+### Production Agent invariant
+
+1. Workflow / StateMachine Runtime owns execution semantics and canonical state.
+2. LLM / Skill is not a state carrier.
+3. AI receives bounded typed input and returns typed candidate result.
+4. Candidate is validated/admitted before authoritative state transition.
+5. Human / AI / deterministic Operation can coexist as Actions under the same runtime.
+6. Evidence from exploratory execution feeds progressive determinization.
+7. Stable control migrates out of AI into Workflow / StateMachine / rule / program; genuinely semantic judgment may remain AI-backed.
