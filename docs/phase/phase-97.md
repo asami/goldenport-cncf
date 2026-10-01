@@ -56,3 +56,9 @@ Correction, retry, escalation, admission rejection, validation failure, latency,
 - Event Sourcing application state from AI records.
 - Automatic policy/program changes without application-owned admission/approval.
 - Unrestricted raw prompt/response persistence by default.
+
+## Experiment correlation
+
+AI Audit does not make AI execution Experiment-aware. When an AI call occurs inside a Textus Experiment run/arm, Experiment identity is inherited from CNCF ExecutionContext/correlation context and captured automatically with the AI Interaction. The AI API does not require Experiment-specific parameters and textus-ai-runtime does not branch on Experiment semantics.
+
+Applicable correlation includes experimentId, experimentRunId and experimentArmId (or their canonical CNCF equivalents). Experiment Observation may retain an AIInteractionId/evidenceRef when the observed implementation used AI. The Experiment record and AI Audit record remain separate authoritative records for different concerns; the reference connects them without copying prompt/request/response payloads into Experiment.
