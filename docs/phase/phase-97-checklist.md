@@ -11,6 +11,7 @@ status=planned
 - [ ] P97-07 Define sanitized AI Audit -> Observability projection with AIInteractionId/auditRef back pointer and no raw payloads by default.
 - [ ] P97-08 Provide integration contract for textus-ai-core/textus-ai-runtime and Workflow/Continuation.
 - [ ] P97-09 Prove delayed outcome/evaluation attachment including human correction and downstream failure.
+- [ ] P97-09A Prove Experiment run/arm correlation is inherited from ExecutionContext without Experiment-specific AI API parameters, and that Experiment Observation can back-reference AIInteractionId.
 - [ ] P97-10 Expose query/projection contract for Control Center and cbd-support KPI analysis.
 - [ ] P97-11 Document progressive determinization from evidence to tuning/guard to Workflow/rule/program.
 - [ ] P97-12 Validate a representative Continuation/JudgmentAction interaction end to end, including OTel projection correlation.
