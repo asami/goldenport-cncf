@@ -202,3 +202,17 @@ Citizen Development の価値は、最初から完全な StateMachine を設計�
 5. Human / AI / deterministic Operation can coexist as Actions under the same runtime.
 6. Evidence from exploratory execution feeds progressive determinization.
 7. Stable control migrates out of AI into Workflow / StateMachine / rule / program; genuinely semantic judgment may remain AI-backed.
+
+
+### Two durable uses of AI
+
+AI usage should converge on two distinct roles.
+
+1. **Semantic / Intellectual Work** — work whose value is inherently semantic or nondeterministic: document/image/audio understanding, extraction, summarization, ambiguous classification and judgment, natural-language generation, software design, coding and review. These may remain AI-backed even in a mature production system, normally behind a bounded Judgment/Generation Action.
+2. **Exploratory / Bootstrap Execution** — use AI to begin operating before the process is sufficiently understood to justify implementing a program or complete StateMachine. This role is intentionally transitional: observe execution, discover stable structure, and progressively move control into Workflow / StateMachine / rules / deterministic Operations.
+
+The distinction is architectural. In the first role AI remains because the semantic capability itself is required. In the second role AI is scaffolding for discovering the software that should eventually exist.
+
+Deterministic process control is not a third AI role. Once ordering, state transition, validation, retry, routing, authorization or external effects can be expressed deterministically, the normal destination is Workflow / StateMachine / typed Operation rather than a permanently autonomous LLM agent.
+
+Coding is especially important because the first role can be used to transform the second role into software: AI can analyze exploratory evidence and propose/generate Workflow, StateMachine, rule, Operation and Executable Specification assets for human review.
