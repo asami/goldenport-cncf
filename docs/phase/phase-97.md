@@ -13,9 +13,9 @@ Make AI Audit a built-in CNCF cross-cutting capability for business applications
 AI Audit is not an AI execution engine.
 
 ## Core model
-An AI Interaction correlates execution context (Subsystem/Component/Operation/Job/Workflow/Continuation/Action/JudgmentAction/caller), AI context (provider/model/configuration/prompt version/tools/skills/resources), actual request/wire input, actual response/wire output and metadata, and later outcome/evaluation (accept/reject, correction, retry/escalation, Admission result, downstream success/failure, human review).
+An AI Interaction correlates execution context (Subsystem/Component/Operation/Job/Workflow/Continuation/Action/JudgmentAction/caller), AI context (agent/provider/model/configuration/prompt version/tools/skills/resources), actual request/wire input, actual response/wire output and metadata, and later outcome/evaluation (accept/reject, correction, retry/escalation, Admission result, downstream success/failure, human review).
 
-Logical context and the actual wire request are distinct records.
+Logical context and the actual wire request are distinct records. Agent identity and model/provider identity are also distinct so that Dot, OpenClaw, Codex or another agent can be compared independently from the model/provider it uses.
 
 ## Architecture boundary
 ~~~text
@@ -28,6 +28,7 @@ AI consumer / execution
                -> auditRef = AIInteractionId
           -> Control Center / cbd-support / analysis
                -> Prompt/Context/Guard improvement
+               -> Agent/Provider/Model routing feedback
                -> Workflow/Rule/Program determinization
 ~~~
 
@@ -36,7 +37,7 @@ CNCF owns provider-neutral contracts, correlation, policy hooks and persistence 
 ## Observability projection
 AI Audit is the source of truth for AI interaction evidence. Observability is a sanitized operational projection derived from AI Audit, not an independent detailed record.
 
-The projection carries only operationally useful compact information such as AIInteractionId/auditRef, execution correlation, provider/model identity where permitted, duration, usage/cost summaries, result status, retry/escalation and validation status. Prompt/context/request/response bodies do not flow to OpenTelemetry by default.
+The projection carries only operationally useful compact information such as AIInteractionId/auditRef, execution correlation, agent/provider/model identity where permitted, duration, usage/cost summaries, result status, retry/escalation and validation status. Prompt/context/request/response bodies do not flow to OpenTelemetry by default.
 
 OpenTelemetry traces, metrics and logs retain a back pointer to the authoritative AI Interaction through AIInteractionId/auditRef. Operational investigation therefore flows from dashboards/traces to AI Audit when detailed context is required. AI execution code should not independently duplicate detailed audit payloads into OTel.
 
@@ -46,9 +47,21 @@ This pattern may later generalize to other CNCF authoritative audit records: aut
 Raw request/response can contain secrets, personal data or business-confidential content. Recording therefore requires classification/redaction/reference, authorization and retention policy. Metadata-only or referenced payload storage must be possible.
 
 ## Engineering feedback loop
-AI execution -> Interaction evidence -> Evaluation -> anomaly/deviation detection -> prompt/context/guard tuning -> Workflow/rule/program candidate -> deterministic implementation where justified.
+AI execution -> Interaction evidence -> Evaluation -> anomaly/deviation detection -> prompt/context/guard tuning -> Agent/Provider/Model routing feedback -> Workflow/rule/program candidate -> deterministic implementation where justified.
 
-Correction, retry, escalation, admission rejection, validation failure, latency, cost and downstream outcome should be derivable per Component/Service/Operation/Workflow/AI Action.
+Correction, retry, escalation, Admission rejection, validation failure, human modification, latency, usage/cost and downstream outcome should be derivable per Component/Service/Operation/Workflow/AI Action and, where useful, per work type such as coding, review or judgment.
+
+The feedback loop must support comparative quality metrics for Agent x Provider/Model x Work Type, including:
+- success / validation pass rate
+- Candidate-Admission pass/reject rate
+- human correction or modification rate
+- retry/escalation and downstream failure rate
+- latency, usage and cost
+- effective-work measures such as cost per admitted result
+
+These metrics are evidence for routing-policy changes, not automatic authority to change routing. Application/workflow-owned Admission and approval remain the authority boundary.
+
+A key use case is long-running project agents. Dot, OpenClaw, Codex and future agents may all drive the same sm-workflow deterministic execution surface. Their outcomes should be comparable without coupling Workflow semantics to a particular agent. This permits routing and operating policy to evolve as model capability, allowance and price change.
 
 ## Non-goals
 - Provider-specific SDK abstraction/model routing.
