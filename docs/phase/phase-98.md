@@ -106,3 +106,15 @@ Existing Corpus-driven reproducible comparison remains the offline path. Online 
 - Embedding provider/model selection into generic CNCF Experiment routing.
 - Requiring AI for Experiment execution.
 - Automatically declaring a winning Arm or promoting it to production policy.
+
+## Display Model and UI experiments
+
+Online Experiment assignment also applies to presentation flows. CNCF resolves the Arm server-side and Phase 96 DisplayService/Display Projection carries a client-safe assigned UI variant/Arm plus a Display Instance/correlation reference in the Display Model protocol.
+
+The UI runtime may render different layouts/interactions based on that assigned variant, but it does not assign subjects to Arms. Stable assignment remains server-owned.
+
+Display interactions and standard Display Mutations preserve the Display Instance/correlation reference. CNCF resolves the authoritative Experiment/Run/Arm from server context and associates mutation start, validation, cancel/retry, success/failure and subsequent Business Operations with the same Arm.
+
+This enables end-to-end Experiment evidence across presentation and backend behavior, including an Arm where a displayed UI leads to an Operation whose implementation later invokes AI. Phase 97 AI Audit then records the AI Interaction with the same inherited Experiment correlation.
+
+An Arm may therefore represent a broader experience/execution plan, for example a UI variant plus Operation routing plus AI prompt/execution strategy, while individual UI/Operation/AI implementations remain free of assignment logic.
