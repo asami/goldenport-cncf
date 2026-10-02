@@ -273,3 +273,103 @@ If Checkpoint A reveals that Cozy Phase 74 requires substantial new cross-reposi
 Phase 96 should finish with a CNCF server capable of serving a target-neutral List/Detail Display Model, accepting standard create/update/delete Display Mutations through DisplayService, and advertising Business Operations without wrapping their execution.
 
 That is the stable server contract TFC/TFAF can replace its fake List/Detail source with. Richer UI semantics and experiment behavior can then evolve without reopening the semantic View/runtime boundary.
+
+
+## Concrete implementation proposal
+
+Implementation should use small typed Scala values rather than Record/Map-first data. Candidate responsibilities are: `DisplayModel` for List/Detail/Section/Field/Value/Action values; `DisplayProjectionDefinition` plus a pure `DisplayProjector`; an explicit `DisplayValueConverterRegistry`; a versioned protocol codec; and a component-scoped `DisplayService` implemented as registered CNCF Operations. Exact names must be reconciled with existing CNCF conventions before coding.
+
+### Core model candidate
+
+Use closed kinds for List/Detail, presentation roles such as Title/Subtitle/Status/Summary, typed display values for text/number/boolean/date/datetime/choice/reference, Sections and Fields, ListItem, and ActionDescriptor. Reuse existing CNCF identity/revision/value types where they already express the semantics. For server-native values, permit only an explicit typed structured-display form/converter; arbitrary JSON maps and silent `toString` conversion must not become the default model.
+
+### Projection definition and execution
+
+Separate definition from execution. A projection definition should identify its source View, target Display Model kind/version, field mappings, sections and actions. Initial source expressions should be deliberately small: direct semantic property references plus explicitly admitted converter/composition forms needed by the fixture. Do not introduce a new general expression language in Phase 96.
+
+`DisplayProjector` should be pure where possible: canonical CNCF View result in, `Consequence[DisplayModel]` out. Projection must be deterministic for the same admitted definition and semantic input.
+
+### Value conversion
+
+Use an explicit converter registry keyed by admitted semantic/source type. Built-ins cover common CNCF scalar/value types; application converters register explicitly. Missing conversion returns a structured failure. This prevents presentation behavior from depending on incidental JVM `toString` output.
+
+### Protocol codec
+
+Use an envelope carrying protocol identity/version, kind, Display Model identity, Display Object identity, source View/revision reference, sections/items/actions, and optional client-safe context such as Display Instance/correlation and presentation variant. Follow existing CNCF JSON codec/`Consequence` conventions. Commit golden fixtures for List, Detail, update request/result, delete result and Business Operation descriptor. Unknown protocol versions and unknown closed-enum values fail explicitly.
+
+### DisplayService Operations
+
+Implement DisplayService through registered CNCF Operations, conceptually `list`, `get`, `create`, `update`, and `delete`. Requests identify an admitted Display Model/projection and object identity/query. They must not let clients supply arbitrary View identities, converter names, Aggregate operation names, datastore paths or implementation classes.
+
+Read flow:
+
+```text
+DisplayService Operation
+  -> resolve admitted DisplayProjectionDefinition
+  -> canonical View/query facility
+  -> DisplayProjector
+  -> Display Model
+  -> Operation response / protocol codec
+```
+
+Update flow:
+
+```text
+DisplayService.update
+  -> resolve admitted projection
+  -> validate editable field identities
+  -> decode admitted Display Values
+  -> build canonical Entity/Aggregate mutation input
+  -> existing authorization/revision/validation/UnitOfWork
+  -> mutation result
+  -> query/reproject Detail Display Model
+  -> DisplayUpdateResult
+```
+
+The bridge must call the existing resource mutation API. No Display-specific datastore write, transaction manager or authorization model is introduced.
+
+### Mutation metadata
+
+Project only enough constraint metadata for a generic editor: required, bounded text, numeric range, choice/options and similar admitted constraints. Prefer existing domain/schema constraint authority. Display constraints may narrow client input but never weaken authoritative server-side domain validation.
+
+Implement update before create/delete. Update is the strongest common proof because it exercises identity, revision, editable fields, validation, mutation and reprojection. Create/delete should reuse the same boundary after update is stable.
+
+### Action descriptors
+
+Keep standard Display Mutation targets and ordinary Business Operation targets distinct. A Business Operation descriptor carries an existing CNCF Operation identity/presentation reference; the client invokes the ordinary Operation/REST endpoint. DisplayService does not proxy/tunnel it. Reuse existing Operation input schema/presentation metadata rather than cloning a second schema where possible.
+
+### Definition registration
+
+Avoid heuristic runtime discovery. Display projection definitions should be component-owned and registered during normal assembly/bootstrap, then resolved by component + Display Model identity/version. Before adding a new provider SPI, inspect current ComponentFactory/provider registration patterns and reuse the canonical mechanism where possible.
+
+### Editing Studio fixture
+
+Use a deliberately small KnowledgeCandidate-like semantic fixture with fields such as id, title, candidateType, status, summary, capturedAt and revision. List maps title/subtitle/status roles. Detail has a Summary section with editable title/status/summary and an Evidence section with read-only capturedAt. Include one standard update and one ordinary Business Operation descriptor. The fixture proves architecture without importing the full Editing Studio domain into CNCF tests.
+
+### Test structure
+
+Prefer cohesive specs such as `DisplayModelSpec`, `DisplayProjectionSpec`, `DisplayValueConverterSpec`, `DisplayModelJsonSpec`, `DisplayServiceReadSpec`, `DisplayMutationSpec`, `DisplayBusinessOperationDescriptorSpec`, and `DisplayModelEditingStudioFixtureSpec`, adjusted to repository naming conventions. Run these as focused Phase validation before the full CNCF suite.
+
+### Coding order inside checkpoints
+
+Checkpoint A: inventory existing View/identity/value/revision types; implement the minimum Display model; pure projection fixture; codec/golden fixture; only then registry/provider wiring.
+
+Checkpoint B: prove `DisplayService.get` for one Detail object first, then List. Detail is the stronger read proof because identity, revision, sections, fields and actions all appear there.
+
+Checkpoint C: implement update first, then create/delete, then Business Operation descriptor/reload behavior.
+
+Checkpoint D: freeze consumer artifacts only after mutation and Business Operation separation pass review.
+
+## Implementation inventory questions
+
+Before coding, inspect the repository and answer:
+
+1. What canonical CNCF View result/value type should `DisplayProjector` consume?
+2. Which existing identity/revision types can be reused?
+3. Which existing schema/constraint model should project editor constraints?
+4. Which existing Entity/Aggregate mutation service should DisplayService call?
+5. How are component-owned service/providers registered through ComponentFactory today?
+6. Which JSON codec utilities and protocol-version conventions should Phase 96 follow?
+7. Which Cozy Phase 74 List/Detail/Section/Field/Action types should CNCF consume/adapt rather than duplicate?
+
+These are inventory questions, not redesign prompts. Reuse a canonical facility whenever it already satisfies the requirement.
