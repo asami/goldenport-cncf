@@ -3,7 +3,7 @@
 status=planned
 planned_at=2026-09-29
 driver=KnowledgeHubProject/nict-editing-studio-app
-abstract_ui_dependency=asami/cozy Phase 74
+abstract_ui_dependency=asami/cozy Phase 74 semantic authority; Cozy Phase 76 producer ABI
 strategy=textus-knowledge-workbench/docs/strategy/knowledge-application-integration.md
 
 ## Goal
@@ -22,14 +22,19 @@ Semantic/Application Model
             -> Display Model Protocol
             -> presentation clients
 
-Display Model instances conform to the target-neutral Abstract/Logical UI runtime contract owned by Cozy Phase 74.
+Display Model instances conform to the target-neutral Abstract/Logical UI semantics established by Cozy Phase 74. CNCF owns the Scala 3 runtime ABI consumed by generated component code; Cozy Phase 76 generates that ABI usage through the ordinary CML producer path.
 
 ## Initial scope
 
 Implement the minimum infrastructure required for the Editing Studio List -> Detail -> standard Mutation vertical slice.
 
+Phase 96 also defines the consumer-side Logical UI generated ABI. Cozy itself remains Scala 2.12 and is not a runtime binary dependency of Scala 3 CNCF. As with other CML model elements, Cozy emits Scala 3 source/metadata against CNCF-owned public ABI types and ComponentFactory discovery/bootstrap seams.
+
 Phase 96 also establishes the component-scoped `DisplayService` as the UI-facing public service. Aggregate and View runtime access remain internal for this phase; ordinary Business Operations remain independently published through the existing CNCF Operation/REST mechanism.
 
+- CNCF-owned Scala 3 Logical UI generated ABI types/metadata corresponding to the admitted Cozy Phase 74 semantic subset;
+- generated metadata/provider discovery through the existing ComponentFactory pattern, with admission/validation before runtime use;
+- a hand-written CNCF consumer fixture that freezes the exact Scala 3 source shape Cozy Phase 76 must generate;
 - Display Model identity/version metadata;
 - Display Projection SPI/API from semantic View Models;
 - List and Detail Display Model shapes based on the Cozy runtime contract;
@@ -65,18 +70,39 @@ The protocol carries abstract presentation semantics, values, actions, identity 
 
 Semantic clients may continue to consume CNCF View Models independently.
 
+## Producer/consumer ABI boundary
+
+Use the same mechanism as existing CML-generated StateMachine/Workflow contracts:
+
+```text
+CML / Cozy semantic model
+  -> Cozy producer projection/code generation (Scala 2.12 implementation)
+  -> generated Scala 3 source + bounded metadata/provider surface
+  -> CNCF public Logical UI ABI
+  -> ComponentFactory discovery/admission
+  -> component Logical UI definitions
+  -> Display Projection + semantic View
+  -> Display Model instance
+```
+
+CNCF must not import `cozy_2.12`, reflect Cozy runtime classes, copy Cozy runtime objects as a second authority, or introduce a special cross-built Logical UI library solely for this integration. Cozy Phase 74 remains semantic authority/reference; CNCF Phase 96 owns runtime consumer types and admission; Cozy Phase 76 owns producer mapping and source generation.
+
+The consumer ABI should follow existing generated-ABI conventions: closed/versioned definition values, deterministic order, stable identity/provenance, provider-neutral metadata, ComponentFactory discovery, fail-closed admission, and a released producer fixture for cross-repository acceptance.
+
 ## Development proof
 
 Use an Editing Studio/Knowledge Candidate fixture to prove:
 
-1. semantic List View -> List Display Model;
-2. semantic Detail View -> Detail Display Model;
-3. semantic property -> presentation-role mapping;
-4. opaque/server-native value -> displayable value conversion;
-5. Detail Display Object -> standard update mutation -> Entity/Aggregate update -> refreshed Display Object;
-6. create/delete metadata sufficient for standard client interaction patterns;
-7. one Business Operation action descriptor whose execution target remains the ordinary REST Operation API; and
-8. deterministic encode/decode fixture for a future Flutter Core client.
+1. a hand-written/generated-shape Logical UI ABI fixture -> ComponentFactory admission/discovery;
+2. semantic List View + admitted Logical UI definition -> List Display Model;
+3. semantic Detail View + admitted Logical UI definition -> Detail Display Model;
+4. semantic property -> presentation-role mapping;
+5. opaque/server-native value -> displayable value conversion;
+6. Detail Display Object -> standard update mutation -> Entity/Aggregate update -> refreshed Display Object;
+7. create/delete metadata sufficient for standard client interaction patterns;
+8. one Business Operation action descriptor whose execution target remains the ordinary REST Operation API;
+9. deterministic encode/decode fixture for a future Flutter Core client; and
+10. a Cozy Phase 76 generated producer fixture accepted through the same CNCF ABI with no Cozy runtime binary dependency.
 
 The later integration acceptance is replacement of the Android mock source with a CNCF Display Model source without rewriting standard List/Detail UI.
 
@@ -84,7 +110,9 @@ The later integration acceptance is replacement of the Android mock source with 
 
 Phase 96 completes when:
 
-- semantic View Model and Display Model are distinct public concepts;
+- semantic View Model, Logical UI definition and Display Model are distinct public concepts;
+- CNCF exposes the versioned Scala 3 Logical UI generated ABI and ComponentFactory admission/discovery route;
+- Cozy Phase 76 can generate a conformant producer fixture without CNCF depending on `cozy_2.12`;
 - Display Projection produces Cozy Phase 74-conformant runtime models;
 - the minimum List/Detail/Value/Action protocol is versioned and deterministic;
 - no Flutter-specific Widget semantics enter CNCF;
@@ -119,7 +147,8 @@ Display Mutation metadata is intentionally sufficient for a generic presentation
 
 - docs/journal/2026/09/2026-09-29-display-model-protocol-direction.md
 - docs/journal/2026/09/2026-09-27-operation-client-ui-continuity.md
-- asami/cozy Phase 74
+- asami/cozy Phase 74 semantic authority
+- asami/cozy Phase 76 Logical UI producer ABI/code generation
 
 ## Online Experiment presentation handoff
 
