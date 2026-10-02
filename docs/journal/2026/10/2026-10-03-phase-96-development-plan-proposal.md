@@ -373,3 +373,50 @@ Before coding, inspect the repository and answer:
 7. Which Cozy Phase 74 List/Detail/Section/Field/Action types should CNCF consume/adapt rather than duplicate?
 
 These are inventory questions, not redesign prompts. Reuse a canonical facility whenever it already satisfies the requirement.
+
+
+## 2026-10-03 correction: ordinary CML Producer ABI for Logical UI
+
+The earlier implementation inventory raised a Scala-version distribution question because Cozy Phase 74's reference/runtime types live in the Scala 2.12 Cozy artifact while CNCF is Scala 3. That is not the intended runtime dependency direction.
+
+Logical UI must follow the same producer/consumer mechanism as other CML model elements. CNCF owns the Scala 3 runtime/public ABI and ComponentFactory admission/discovery seam. Cozy owns semantic modeling plus deterministic source/metadata generation. The Scala 2.12 Cozy compiler generates Scala 3 component source that calls the CNCF ABI; CNCF never links the Cozy runtime artifact to obtain Logical UI classes.
+
+Therefore replace any plan interpretation of 'reuse Cozy Logical UI Scala classes' with:
+
+```text
+Cozy Phase 74 semantics
+  -> CNCF Phase 96 hand-written expected generated shape / consumer ABI
+  -> Cozy Phase 76 producer mapping + Scala source generation
+  -> CNCF ComponentFactory admission
+  -> Display Projection / Display Model
+```
+
+### Revised P96-01
+
+P96-01 must inventory an existing generated ABI path (StateMachine/Workflow is the primary reference), then freeze the minimum CNCF Scala 3 Logical UI ABI corresponding to the Phase 74 semantic subset. The first executable fixture is hand-written in the exact shape expected from Cozy generation. Its acceptance proves runtime ownership before generator implementation.
+
+The ABI should include versioned definition identity, List/Detail/Section/Field/Value/Action/presentation-role definition data needed at runtime, source/provenance identity where existing generated ABI conventions require it, and a bounded provider/metadata surface discoverable through ComponentFactory. It must not contain Flutter/TFAF types, Cozy implementation classes, arbitrary JSON, transport endpoints, or application runtime callbacks.
+
+### Revised implementation order
+
+Checkpoint A becomes:
+
+1. inspect existing generated ABI + ComponentFactory patterns;
+2. map Cozy Phase 74 semantic vocabulary to CNCF-owned runtime definition values;
+3. implement CNCF ABI/admission/provider discovery;
+4. create hand-written expected-generated-shape fixture;
+5. implement Display Projection against admitted definitions;
+6. freeze consumer handoff for Cozy Phase 76;
+7. accept Cozy's generated fixture through the same path.
+
+Only after this seam is stable should protocol/read/mutation work proceed.
+
+### Explicitly rejected alternatives
+
+- CNCF depending on `org.simplemodeling:cozy_2.12`;
+- cross-building Cozy as the solution to this boundary;
+- a special `cozy-logical-ui-runtime` binary solely to bridge Scala versions;
+- CNCF copying Cozy runtime classes and treating the copy as a second semantic authority;
+- JSON/schema-only integration when the ordinary generated Scala ABI path can express the same contract.
+
+The problem is therefore not Scala 2.12/3 binary compatibility. It is a normal CML producer ABI addition with Cozy and CNCF work on opposite sides of the existing generation boundary.
