@@ -1,0 +1,15 @@
+package domain.statemachine.workflow
+
+object InvocationControlledWorkflowStateMachineWorkflow1 {
+  val workflow: StateMachineWorkflowAbi.WorkflowDescriptor = StateMachineWorkflowAbi.WorkflowDescriptor(
+  schemaVersion = "cozy.cml.statemachine-workflow-abi.v2",
+  identity = "InvocationControlledWorkflow",
+  version = "workflow-invocation-policy-v2",
+  source = StateMachineWorkflowAbi.WorkflowSourceCorrelation(StateMachineWorkflowAbi.SourceIdentity(Some(25)), StateMachineWorkflowAbi.SourceIdentity(Some(27))),
+  states = Vector(StateMachineWorkflowAbi.State("Pending", StateMachineWorkflowAbi.SourceIdentity(Some(43))), StateMachineWorkflowAbi.State("Complete", StateMachineWorkflowAbi.SourceIdentity(Some(45)))),
+  actions = Vector(StateMachineWorkflowAbi.Action("capture-payment", "OPERATION", StateMachineWorkflowAbi.Operation("OrderService", "capturePayment", Some("PaymentCommand"), Some("PaymentResult"), StateMachineWorkflowAbi.SourceIdentity(Some(61))), Some("payment.subject"), StateMachineWorkflowAbi.SourceIdentity(Some(61))), StateMachineWorkflowAbi.Action("check-payment", "OPERATION", StateMachineWorkflowAbi.Operation("OrderService", "capturePayment", Some("PaymentCommand"), Some("PaymentResult"), StateMachineWorkflowAbi.SourceIdentity(Some(67))), Some("payment.subject"), StateMachineWorkflowAbi.SourceIdentity(Some(67)))),
+  requiredOperations = Vector(StateMachineWorkflowAbi.WorkflowRequiredOperationDescriptor(StateMachineWorkflowAbi.StateMachineRequiredOperationIdentity("capture-payment-capability"), "capture-payment", StateMachineWorkflowAbi.StateMachineOperationIdentity("OrderService", "capturePayment"), Some(StateMachineWorkflowAbi.StateMachineInputTypeReference("PaymentCommand")), Some(StateMachineWorkflowAbi.StateMachineResultTypeReference("PaymentResult")), StateMachineWorkflowAbi.SourceIdentity(Some(75)), StateMachineWorkflowAbi.SourceIdentity(Some(61))), StateMachineWorkflowAbi.WorkflowRequiredOperationDescriptor(StateMachineWorkflowAbi.StateMachineRequiredOperationIdentity("check-payment-capability"), "check-payment", StateMachineWorkflowAbi.StateMachineOperationIdentity("OrderService", "capturePayment"), Some(StateMachineWorkflowAbi.StateMachineInputTypeReference("PaymentCommand")), Some(StateMachineWorkflowAbi.StateMachineResultTypeReference("PaymentResult")), StateMachineWorkflowAbi.SourceIdentity(Some(79)), StateMachineWorkflowAbi.SourceIdentity(Some(67)))),
+  invocationPolicies = Vector(StateMachineWorkflowAbi.InvocationPolicy("capture-control", StateMachineWorkflowAbi.InvocationTarget.Action("capture-payment"), "capture-payment", Some(StateMachineWorkflowAbi.RetryPolicy(3, 250L)), Some(30000L), StateMachineWorkflowAbi.SourceIdentity(Some(85))), StateMachineWorkflowAbi.InvocationPolicy("check-control", StateMachineWorkflowAbi.InvocationTarget.Participant("check-payment-capability"), "check-payment", None, Some(9223372036854775807L), StateMachineWorkflowAbi.SourceIdentity(Some(92))))
+)
+  val componentFactoryMetadata: StateMachineWorkflowAbi.ComponentFactoryMetadata = StateMachineWorkflowAbi.ComponentFactoryMetadata(workflow)
+}
