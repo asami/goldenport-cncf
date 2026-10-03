@@ -4,7 +4,7 @@ status=in-progress
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-02
+current_entry=P96-03
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
 ## Ledger boundary
@@ -19,11 +19,12 @@ binary-consumption assumptions. The [reconciliation record](../journal/2026/10/2
 retains the original 47 obligations and adds explicit generated-ABI handoff proof.
 The original execution baseline above is preserved; this import is not a rebaseline.
 
-P96-01 is CLOSED on documentary contract evidence; P96-02 through P96-11 remain
-OPEN. The accepted subset is fixed by the design/spec linked below. This ledger
-does not claim implementation, passing executable proof, LUI handoff issuance
-or Phase closure. Unpromoted wire examples and later physical bindings remain
-candidates for their owning Steps.
+P96-01 is CLOSED on documentary contract evidence; P96-02 is CLOSED on
+static ABI admission and pure Display construction evidence. P96-03 through
+P96-11 remain OPEN. The accepted subset is fixed by the design/spec linked
+below. The focused executable proof does not establish ComponentFactory
+integration, projection, LUI handoff issuance or Phase closure. Unpromoted wire
+examples and later physical bindings retain their owning Steps.
 The [Display proposal](../notes/display-model-phase-96-proposal.md) and
 [Presentation Context proposal](../notes/display-protocol-presentation-context-proposal.md)
 remain non-normative inputs.
@@ -81,11 +82,11 @@ behavior into [runtime design](../design/display-model-runtime.md),
 [promotion journal](../journal/2026/10/2026-10-03-phase-96-contract-promotion.md).
 Independent review and parent admission support all seven documentary outcomes;
 the [acceptance record](../journal/2026/10/2026-10-03-phase-96-contract-promotion.md#p96-01-documentary-acceptance)
-maps each checked item to its evidence. P96-02/03 implementation,
-generation and all LUI receipts remain pending; physical wire/codec,
-mutation request/result/adapter/strict-delete implementation and context
-decisions retain their later owners. Only P96-01's documentary obligations are
-closed; no later implementation or proof obligation is checked.
+maps each checked item to its evidence. At that documentary acceptance,
+P96-02/03 implementation, generation and all LUI receipts remained pending.
+P96-02 now has the separate acceptance record below; projection, generation,
+all LUI receipts, physical wire/codec, mutation request/result/adapter/strict-delete
+implementation and context decisions retain their later owners.
 
 - [x] An inventory identifies the canonical semantic View result/value type, reusable identity/revision types, schema/constraint authority, Entity/Aggregate mutation entry, ComponentFactory/provider registration, JSON/version conventions and the exact Cozy Phase 74 semantic subset mapped into CNCF-owned ABI types.
 - [x] A minimum CNCF-to-Cozy vocabulary map records List/Detail/Section/Field/Value/Action, roles, identity/version ownership, editor metadata placement and explicitly unsupported concepts without weakening semantic Views.
@@ -100,17 +101,23 @@ closed; no later implementation or proof obligation is checked.
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Display model owners
 - Update rule: Advance only from the admitted value contract and pure construction specifications; the checklist below is the closure basis.
 
-- [ ] Immutable application-neutral model types cover admitted List/items, Detail, sections, fields, typed values, roles, actions and structured diagnostics, conforming to the mapped Phase 74 semantics through CNCF-owned types, without importing Cozy implementation classes or creating a second semantic authority.
-- [ ] Display protocol version, generated ABI version, source reference/revision, Phase 74 semantic provenance and Logical UI definition version have distinct documented meanings; opaque IDs and container scopes are preserved.
-- [ ] Display capabilities, writable-field bindings and Business Operation metadata remain separate from presentation values and generated metadata and cannot create authorization or client-chosen mutation authority.
-- [ ] Given/When/Then construction/validation specifications and property-based checks cover valid/invalid admitted values and identity/scope preservation without server state, Flutter/TFAF types or target-specific layout objects.
+The [P96-02 acceptance record](../journal/2026/10/2026-10-03-phase-96-runtime-values-implementation.md#p96-02-acceptance--2026-10-03)
+maps all six outcomes to the combined four-suite, 41-test focused result and
+independent complete-accumulator review. Static ABI display-metadata maintenance
+is recorded separately as nonblocking HYG-P96-02-001. This closes pure
+construction/admission only, not projection, generated-producer or LUI receipts.
 
-- [ ] Versioned immutable Logical UI definition values and a bounded generated metadata-provider surface are implemented separately from runtime Display instances; the Scala 3 ABI has no Cozy or Flutter runtime type dependency.
-- [ ] Admission specifications cover incompatible ABI versions, invalid identities/provenance, unknown kinds, duplicate scoped definitions and broken references; a hand-written expected-generated fixture compiles against the ABI.
+- [x] Immutable application-neutral model types cover admitted List/items, Detail, sections, fields, typed values, roles, actions and structured diagnostics, conforming to the mapped Phase 74 semantics through CNCF-owned types, without importing Cozy implementation classes or creating a second semantic authority.
+- [x] Display protocol version, generated ABI version, source reference/revision, Phase 74 semantic provenance and Logical UI definition version have distinct documented meanings; opaque IDs and container scopes are preserved.
+- [x] Display capabilities, writable-field bindings and Business Operation metadata remain separate from presentation values and generated metadata and cannot create authorization or client-chosen mutation authority.
+- [x] Given/When/Then construction/validation specifications and property-based checks cover valid/invalid admitted values and identity/scope preservation without server state, Flutter/TFAF types or target-specific layout objects.
+
+- [x] Versioned immutable Logical UI definition values and a bounded generated metadata-provider surface are implemented separately from runtime Display instances; the Scala 3 ABI has no Cozy or Flutter runtime type dependency.
+- [x] Admission specifications cover incompatible ABI versions, invalid identities/provenance, unknown kinds, duplicate scoped definitions and broken references; a hand-written expected-generated fixture compiles against the ABI.
 
 ## P96-03: ComponentFactory admission and Display Projection
 
