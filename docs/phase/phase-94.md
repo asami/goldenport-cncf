@@ -63,6 +63,31 @@ atomicity.
   a post-commit callback, or by an in-memory-only fixture.
 - No Cozy source or producer-ABI change is in scope.
 
+## Textus EAI migration requirements — 2026-10-03
+
+The [Textus EAI requirement intake](../journal/2026/10/2026-10-03-textus-eai-workflow-requirements.md)
+adds a later consumer compatibility case. `sm-workflow` remains the development
+driver and the stable first-slice entry condition. EAI's minimum sequential
+WORK_ORDER-to-TERMINAL proof does not wait for Phase 94 or claim a shared commit.
+
+Before selecting EAI migration, inventory its actual configured WorkflowInstance,
+Continuation and issued WorkOrder providers and its consumer-owned EventReceipt
+store. Distinguish the transaction domain's promised participants from receipt
+metadata, external delivery and Edge work. Do not infer that those latter effects
+join the atomic commit or broaden the frozen three-method persistence SPI.
+
+The EAI migration case must retain source/event recovery lookup, pinned Binding,
+same-instance separate-call completion, revision/type/evidence admission and
+Succeeded/Failed/Cancelled business results. Test prepare rejection, abort,
+commit failure/indeterminacy, stale or duplicate submission and externally
+claimable work visibility against the selected durable backend. Explicitly
+record any extra recovery guarantee admitted by migration; the earlier fixture
+does not prove cross-process recovery or distributed exactly-once.
+
+The [WTX-94 checklist](phase-94-checklist.md) owns migration acceptance; this
+addition does not report implementation, select a backend, advance status or
+change the priority of Phase 94.
+
 ## References
 
 - [Phase 77.1](phase-77.1.md), [Phase 77.2](phase-77.2.md), and [Phase 94 Checklist](phase-94-checklist.md)

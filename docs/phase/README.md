@@ -15,6 +15,14 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 97](phase-97.md) / [checklist](phase-97-checklist.md) is the
+  GitHub-authoritative AI Audit and Interaction Evidence plan, status planned.
+- [Phase 100](phase-100.md) / [checklist](phase-100-checklist.md) allocates
+  DataStore logical-type declarations, storage mappings and existing-data
+  recovery, driven by workbench. It is planned, not started; the OR mapper
+  restores declared application types while DataStore handles physical values.
+  JSON-looking text is not a type declaration. The phase includes
+  consumer migration and recovery rehearsal without changing active Phase scope.
 - [Phase 95](phase-95.md) plans a UI-facing View Model and Aggregate command
   contract over existing CNCF `ViewSpace`/`AggregateSpace`, with REST first and
   gRPC deferred. It does not block the Editing Studio Flutter application's
@@ -663,3 +671,17 @@ dated inventory status. This inventory changes no acceptance authority.
 | [phase-93](phase-93.md) | No top-level status declared |
 | [phase-94-checklist](phase-94-checklist.md) | status=planned |
 | [phase-94](phase-94.md) | status=planned |
+
+## Textus EAI Requirement Intake — 2026-10-03
+
+The [consumer requirements and AC allocation](../journal/2026/10/2026-10-03-textus-eai-workflow-requirements.md)
+are retained in the [unnumbered post-88 follow-up](workflow-consumer-integration-follow-up.md)
+(application/provider assessment), [Phase 87](phase-87.md) (Workflow/Job observation),
+[Phase 93](phase-93.md) (Event correlation), and [Phase 94](phase-94.md)
+(later transaction migration). `sm-workflow` remains the development driver.
+The user reports Phase 88 is executing on Air; its initial local EAI addition
+has been withdrawn. Receive the actual result and stable sm-workflow handoff,
+then assess only residual gaps. This planning intake starts no Phase, assigns no
+new Phase number and adds no requirement that every later integration close
+before EAI's minimum slice can consume a usable upstream handoff. The historical inventory above is
+retained unchanged; each linked Phase owns its live status and evidence.
