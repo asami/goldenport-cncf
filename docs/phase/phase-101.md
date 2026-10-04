@@ -55,15 +55,25 @@ The consumer MUST NOT need to know whether the local provider maps these resourc
 
 ## Default local project mapping
 
-For project-local operation, the default provider SHOULD map component-owned project resources under the project Textus area:
+For project-local operation, the standard Component area is:
 
 ```text
 $PROJECT/.textus/<component>/
+  config.yaml                 # definition/configuration, version-controlled
+  <other-definition-files>    # definition files, version-controlled
+  resources/                  # durable project resources, version-controlled
+  work.d/                     # runtime/work area, NOT version-controlled
+    state/                    # local DataStore files where applicable
+    worktrees/                # repository/worktree materialization where applicable
+    tmp/                      # bounded temporary work
+    cache/                    # regenerable cache
 ```
 
-For sm-workflow this permits a local representation conceptually containing runtime state and dedicated worktrees below `$PROJECT/.textus/sm-workflow/`. This is a provider mapping, not an application contract.
+The root of the Component area is reserved for configuration/definition files. Durable non-definition project assets belong under `resources/`. All project-local resources that are runtime state, mutable workspace, temporary work, cache, or otherwise not intended for Git belong under `work.d/`.
 
-Home/system Component configuration remains under the existing CNCF configuration mechanism. Phase 101 does not redefine its physical search rules.
+This physical layout is a CNCF/Textus local-provider convention. Application/domain code requests logical resources and MUST NOT construct `.textus`, `resources`, or `work.d` paths.
+
+For sm-workflow, local SQLite state and dedicated CNCF/Cozy worktrees therefore map beneath `work.d/`, while project definitions/configuration remain at the Component-area root and any durable version-controlled resources belong beneath `resources/`.
 
 ## Resource metadata and lifecycle
 
@@ -92,14 +102,21 @@ Git worktree/checkouts are an sm-workflow use case, not a CNCF primitive require
 
 ## Version-control policy
 
-Phase 101 MUST make the distinction between versionable project resources and runtime/work resources explicit enough that project tooling can derive or validate ignore policy. It MUST NOT silently edit arbitrary repository files as a side effect merely to enforce ignore rules.
+The standard layout makes Git policy structural and stable:
 
-The initial sm-workflow expectation is:
+- Component-area root definition/configuration files are version-controlled;
+- `resources/` is version-controlled;
+- `work.d/` is not version-controlled.
 
-- project configuration: versionable;
-- runtime DataStore state: ignored;
-- workspaces/worktrees: ignored;
-- transient work/cache: ignored.
+A Textus/CNCF project generator MUST generate a standard ignore rule equivalent to:
+
+```gitignore
+.textus/*/work.d/
+```
+
+This rule is intended to remain valid as new Components and new work-resource kinds are added. Components and runtime providers MUST NOT edit `.gitignore` during normal execution, and MUST NOT add component-specific ignore entries for DataStore files, worktrees, caches, or temporary files. New non-versioned project-local resource kinds belong under `work.d/` so the project-generation-time rule remains sufficient.
+
+Project-specific exceptions, if ever required, are explicit project policy and are not inferred or silently rewritten by CNCF runtime.
 
 ## sm-workflow driver scenario
 
@@ -116,11 +133,12 @@ Demonstrate at least:
 1. a component obtains merged configuration through the existing CNCF configuration mechanism;
 2. a component obtains a project-local runtime DataStore without constructing a filesystem path;
 3. a component obtains two distinct named workspaces without constructing their directories;
-4. the local provider maps project resources under the project Textus component area by default;
+4. the local provider maps version-controlled resources beneath `resources/` and non-versioned runtime/work resources beneath `work.d/` by default;
 5. changing provider mapping does not require application/workflow changes;
 6. runtime/workspace resources are distinguishable from versionable project configuration/resources;
-7. a non-SQLite DataStore binding remains possible without changing the consumer API;
-8. the sm-workflow RepositorySync driver can use the API for dedicated CNCF/Cozy worktrees.
+7. a project-generation-time `.textus/*/work.d/` ignore rule covers newly created Component work areas without runtime `.gitignore` mutation;
+8. a non-SQLite DataStore binding remains possible without changing the consumer API;
+9. the sm-workflow RepositorySync driver can use the API for dedicated CNCF/Cozy worktrees.
 
 ## Closure criteria
 
