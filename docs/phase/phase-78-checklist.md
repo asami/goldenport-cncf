@@ -1,22 +1,38 @@
 # Phase 78 Checklist - Component Capability External Contract
 
-status=planned
+status=in-progress
 phase=[Phase 78](phase-78.md)
 development_item=DEV-011
 
 ## CAP-78-01: Semantic contract
 
 Stage Status:
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Component contract owner
 - Update rule: Close only after identity, meaning, versioning, and separation
   from executable and authorization concerns are accepted in design/spec.
+- Closure basis: All four checklist items below are checked against the
+  accepted design/spec and independent Step review.
 
-- [ ] Define stable qualified Capability identity and version semantics.
-- [ ] Define provided and required Capability declarations.
-- [ ] Separate Capability from Operation, Workflow, StateMachine,
+Contract documents:
+- [Component Capability design](../design/component-capability.md)
+- [Component Capability Specification](../spec/component-capability.md)
+
+- [x] Define stable qualified Capability identity and version semantics.
+- [x] Define provided and required Capability declarations.
+- [x] Separate Capability from Operation, Workflow, StateMachine,
       Availability, Authorization, Permission, and Guard.
-- [ ] Define compatibility across changed realizations.
+- [x] Define compatibility across changed realizations.
+
+Acceptance evidence (2026-10-05):
+- Specification rules R1-R10 and expected examples E1-E10 were accepted by
+  independent protected Step review at GPT-6.1 Sol high, with no blockers,
+  Hygiene, or Development Candidates.
+- Static document checks passed: four owned documents, 20 checks, 30 local
+  links/anchors, and `git diff --check`.
+- The semantic contract is closed. Projection/admission, realization binding,
+  package discovery, and real producer/consumer proof remain owned by
+  CAP-78-02 through CAP-78-05.
 
 ## CAP-78-02: External projection and admission
 

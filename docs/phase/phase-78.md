@@ -1,6 +1,6 @@
 # Phase 78 - Component Capability External Contract
 
-status=planned
+status=in-progress
 planned_at=2026-09-16
 reconciled_at=2026-09-18
 development_item=DEV-011
@@ -77,11 +77,21 @@ runtime admission requirement.
 
 | ID | Outcome | Status |
 | --- | --- | --- |
-| CAP-78-01 | Freeze Component Capability identity, vocabulary, semantic-reference shape, versioning, and compatibility boundaries. | planned |
+| CAP-78-01 | Freeze Component Capability identity, vocabulary, semantic-reference shape, versioning, and compatibility boundaries. | closed |
 | CAP-78-02 | Define and implement the external Component projection for provided and required Capabilities, preserving admitted semantic grounding/provenance. | planned |
 | CAP-78-03 | Bind explicit realization references to admitted Operation, Workflow, and StateMachine contracts without embedding orchestration procedure. | planned |
 | CAP-78-04 | Integrate admission/discovery with ComponentFactory and package/CAR metadata, including semantic references where present. | planned |
 | CAP-78-05 | Prove Cozy producer and Textus CBD Support consumer interoperability with exact identity, source, ABI, semantic-reference, and realization provenance. | planned |
+
+## CAP-78-01 acceptance
+
+The Component Capability design and specification were accepted on 2026-10-05
+by independent protected Step review at GPT-6.1 Sol high. Rules R1-R10 and
+expected examples E1-E10 establish the semantic contract. Static checks passed
+for the four-document scope, including 20 checks, 30 local links/anchors, and
+`git diff --check`. The [CAP-78-01 checklist](phase-78-checklist.md#cap-78-01-semantic-contract)
+records the closure basis. CAP-78-02 through CAP-78-05 retain the projection,
+binding, exposure, and executable interoperability obligations.
 
 ## Ownership boundary
 
@@ -140,6 +150,8 @@ runtime admission requirement.
 
 ## References
 
+- [Component Capability design](../design/component-capability.md)
+- [Component Capability Specification](../spec/component-capability.md)
 - [Development note](../notes/component-capability-external-contract-proposal.md)
 - [Development item journal](../journal/2026/09/2026-09-16-component-capability-external-contract-development-item.md)
 - [Phase 78 Checklist](phase-78-checklist.md)
