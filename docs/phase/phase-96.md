@@ -94,9 +94,29 @@ P96-01 is CLOSED after independent documentary contract review and parent
 admission, recorded in the [acceptance journal](../journal/2026/10/2026-10-03-phase-96-contract-promotion.md#p96-01-documentary-acceptance).
 Its selected contracts are [runtime design](../design/display-model-runtime.md),
 [generated ABI spec](../spec/logical-ui-generated-abi.md) and
-[runtime spec](../spec/display-model-runtime.md). P96-02 is the next planning
-entry; P96-02 through P96-11 remain OPEN. No implementation, passing executable
-proof, LUI handoff receipt or Phase closure is implied.
+[runtime spec](../spec/display-model-runtime.md). P96-02 is CLOSED on its
+separately accepted pure ABI/model proof. P96-03 is CLOSED with all seven
+unchanged obligations checked; the current checklist entry is P96-04, and
+P96-04 through P96-11 remain OPEN. A/B1/B2 focused
+history and the issued LUI-ABI-01 remain retained. Accepted Cozy P76-04
+LUI-GEN-01 delivery at `ccf2b8d7b89582c22f5f4a933b8354812a8ee2a3`
+is consumed unchanged by the authored P96-03C specification. The
+[consumer journal](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md)
+retains the first-pass unexecuted commands as history and records their
+parent-admitted current results: GC1..GC6/GCP1 passed 7/7 tests in one suite,
+the original accumulator passed 133/133 in 15 suites, source comparisons
+exited 0 and complete classpath inspection found no cozy_2.12 runtime jar.
+Both commands retain terminal SBT/wrapper exit 0 and released serial lock.
+Independent protected-focused whole-Step review `phase96-p96-03-step-review-001`
+revision 1 by `/root/phase96_p96_03_step_review_001` passed all 28 paths and
+19 programs, with zero blockers and nonblocking
+HYG-P96-03-SPEC-TRACEABILITY-001 retained. Parent admission in
+`phase96-review-ledger-001` revision 19 accepts all seven criteria, including
+criterion 7's LUI-ACCEPT-01 focused consumer proof, as recorded in the
+[acceptance entry](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md#2026-10-04--p96-03-independent-step-acceptance).
+Local P96-03 Step commit is PREPARED/PENDING, not executed; the separately owned
+Cozy P76-05 reciprocal receipt remains pending. Phase96 remains IN_PROGRESS
+with zero full Phase reviews; no full-suite run, release or Phase closure is claimed.
 
 ## Initial scope
 

@@ -43,7 +43,8 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -53,7 +54,7 @@ final class ComponentFactory(
   private[component] val _configuration: Option[ResolvedConfiguration] = None,
   workingsetclock: java.time.Clock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock,
   private[component] val _runtime_component_descriptors: Vector[ComponentDescriptor] = Vector.empty
-)  extends ComponentFactoryEntityPlanPart with ComponentFactoryDescriptorPart with ComponentFactoryWorkflowPart with ComponentFactoryStateMachinePart with ComponentFactoryEntityBootstrapPart with ComponentFactoryReflectionPart {
+)  extends ComponentFactoryEntityPlanPart with ComponentFactoryDescriptorPart with ComponentFactoryWorkflowPart with ComponentFactoryDisplayPart with ComponentFactoryStateMachinePart with ComponentFactoryEntityBootstrapPart with ComponentFactoryReflectionPart {
   private[component] val _working_set_clock = workingsetclock
 
   def discover(): Vector[Component] =

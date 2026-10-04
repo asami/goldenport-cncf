@@ -4,7 +4,7 @@ status=in-progress
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-03
+current_entry=P96-04
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
 ## Ledger boundary
@@ -20,11 +20,15 @@ retains the original 47 obligations and adds explicit generated-ABI handoff proo
 The original execution baseline above is preserved; this import is not a rebaseline.
 
 P96-01 is CLOSED on documentary contract evidence; P96-02 is CLOSED on
-static ABI admission and pure Display construction evidence. P96-03 through
-P96-11 remain OPEN. The accepted subset is fixed by the design/spec linked
-below. The focused executable proof does not establish ComponentFactory
-integration, projection, LUI handoff issuance or Phase closure. Unpromoted wire
-examples and later physical bindings retain their owning Steps.
+static ABI admission and pure Display construction evidence. P96-03 is CLOSED
+on all seven criteria after independent whole-Step review and parent admission;
+P96-04 through P96-11 remain OPEN. The accepted subset is fixed by the design/spec
+linked below. P96-02's focused proof remains limited to pure construction and
+static admission; P96-03's separate accepted evidence establishes ComponentFactory
+integration, projection and the focused LUI consumer proof. The local P96-03
+Step commit is PREPARED/PENDING, and the separate Cozy P76-05 reciprocal receipt
+is pending. Phase 96 remains in-progress with zero full Phase reviews and no
+closure. Unpromoted wire examples and later physical bindings retain their owning Steps.
 The [Display proposal](../notes/display-model-phase-96-proposal.md) and
 [Presentation Context proposal](../notes/display-protocol-presentation-context-proposal.md)
 remain non-normative inputs.
@@ -84,9 +88,11 @@ Independent review and parent admission support all seven documentary outcomes;
 the [acceptance record](../journal/2026/10/2026-10-03-phase-96-contract-promotion.md#p96-01-documentary-acceptance)
 maps each checked item to its evidence. At that documentary acceptance,
 P96-02/03 implementation, generation and all LUI receipts remained pending.
-P96-02 now has the separate acceptance record below; projection, generation,
-all LUI receipts, physical wire/codec, mutation request/result/adapter/strict-delete
-implementation and context decisions retain their later owners.
+P96-02 and P96-03 now have their separate acceptance records below. P96-03
+accepts projection, issued LUI-ABI-01, accepted producer LUI-GEN-01 and focused
+consumer LUI-ACCEPT-01 proof; the separate Cozy P76-05 receipt, physical wire/codec,
+mutation request/result/adapter/strict-delete implementation and context decisions
+retain their later owners.
 
 - [x] An inventory identifies the canonical semantic View result/value type, reusable identity/revision types, schema/constraint authority, Entity/Aggregate mutation entry, ComponentFactory/provider registration, JSON/version conventions and the exact Cozy Phase 74 semantic subset mapped into CNCF-owned ABI types.
 - [x] A minimum CNCF-to-Cozy vocabulary map records List/Detail/Section/Field/Value/Action, roles, identity/version ownership, editor metadata placement and explicitly unsupported concepts without weakening semantic Views.
@@ -123,18 +129,43 @@ construction/admission only, not projection, generated-producer or LUI receipts.
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Display projection owners
 - Update rule: Advance only from explicit admitted definitions and deterministic projection evidence; the checklist below is the closure basis.
 
-- [ ] Component-owned definitions use the canonical registration/assembly mechanism and declare source View, target kind/version, field/section/order/role/action mappings; arbitrary runtime discovery and field-name heuristics are excluded.
-- [ ] Pure projection consumes canonical semantic View results and admitted Logical UI definitions plus registered application converters/bindings; direct, combined and one-to-many mappings are supported only where admitted, without a general expression language.
-- [ ] Explicit typed conversion covers required scalar and opaque/server-native values; missing/unsupported converters return structured diagnostics rather than incidental `toString` or arbitrary JSON-map fallback.
-- [ ] List/Detail fixtures and property-based specifications prove deterministic output, ordering, value conversion and unchanged independent semantic View consumption.
+The existing A/B1/B2 accumulator and issued LUI-ABI-01 are retained. Cozy
+P76-04 LUI-GEN-01 producer delivery is accepted at
+`ccf2b8d7b89582c22f5f4a933b8354812a8ee2a3`, with coordinate
+`org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT`, Scala 2.12.18. P96-03C authors
+the two unchanged generated consumer sources, external typed fixture and
+GC1..GC6/GCP1 in the
+[consumer specification](../../src/test/scala/org/goldenport/cncf/component/ComponentFactoryGeneratedLogicalUiAcceptanceSpec.scala).
+The [consumer journal](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md)
+retains exact source mapping and first-pass unexecuted command history, then
+records parent-admitted current representative and accumulator results:
+7/7 tests in one suite plus 133/133 in the original 15 suites, both terminal
+SBT/wrapper exit 0 and serial lock released. GCP1 passed its executed >=100
+successful/zero-discard expectations; no separately printed exact case count
+is claimed. Source comparisons exited 0 and complete Test classpath inspection
+found no cozy_2.12 runtime jar. Independent protected-focused whole-Step review
+`phase96-p96-03-step-review-001` revision 1 by
+`/root/phase96_p96_03_step_review_001` passed all 28 paths and 19 programs;
+parent admission is recorded in `phase96-review-ledger-001` revision 19.
+The [acceptance entry](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md#2026-10-04--p96-03-independent-step-acceptance)
+supports all seven unchanged criteria below. Criterion 7 accepts LUI-ACCEPT-01
+as focused consumer proof; the separate Cozy P76-05 reciprocal receipt remains
+pending. Local Step commit is PREPARED/PENDING, not executed. Zero blockers and
+nonblocking HYG-P96-03-SPEC-TRACEABILITY-001 are retained. P96-03 is CLOSED;
+Phase 96 remains in-progress with zero full Phase reviews and no Phase closure.
 
-- [ ] ComponentFactory discovers and admits the hand-written generated-shape provider before component-scoped lookup; absent, duplicate and invalid provider cases follow the P96-01 contract without runtime CML parsing or heuristic reflection over Cozy.
-- [ ] LUI-ABI-01 hands the fixed ABI/provider/source fixture and focused projection proof to Cozy Phase 76 without requiring Phase 96 completion or a public release.
-- [ ] LUI-GEN-01 and LUI-ACCEPT-01 bind actual Cozy-generated source to the same fixture: Scala 3 compilation, ComponentFactory admission, failure diagnostics and equivalent List/Detail projection pass without a Cozy runtime dependency; evidence is shared with Cozy P76-05.
+- [x] Component-owned definitions use the canonical registration/assembly mechanism and declare source View, target kind/version, field/section/order/role/action mappings; arbitrary runtime discovery and field-name heuristics are excluded.
+- [x] Pure projection consumes canonical semantic View results and admitted Logical UI definitions plus registered application converters/bindings; direct, combined and one-to-many mappings are supported only where admitted, without a general expression language.
+- [x] Explicit typed conversion covers required scalar and opaque/server-native values; missing/unsupported converters return structured diagnostics rather than incidental `toString` or arbitrary JSON-map fallback.
+- [x] List/Detail fixtures and property-based specifications prove deterministic output, ordering, value conversion and unchanged independent semantic View consumption.
+
+- [x] ComponentFactory discovers and admits the hand-written generated-shape provider before component-scoped lookup; absent, duplicate and invalid provider cases follow the P96-01 contract without runtime CML parsing or heuristic reflection over Cozy.
+- [x] LUI-ABI-01 hands the fixed ABI/provider/source fixture and focused projection proof to Cozy Phase 76 without requiring Phase 96 completion or a public release.
+- [x] LUI-GEN-01 and LUI-ACCEPT-01 bind actual Cozy-generated source to the same fixture: Scala 3 compilation, ComponentFactory admission, failure diagnostics and equivalent List/Detail projection pass without a Cozy runtime dependency; evidence is shared with Cozy P76-05.
 
 ## P96-04: Protocol codec and compatibility boundary
 

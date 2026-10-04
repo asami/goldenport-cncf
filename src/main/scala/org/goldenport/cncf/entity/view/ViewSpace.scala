@@ -13,7 +13,8 @@ import org.goldenport.cncf.observability.CallTreeValueSummary
  * @since   Mar. 16, 2026
  *  version Mar. 17, 2026
  *  version Apr.  4, 2026
- * @version May. 10, 2026
+ *  version May. 10, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpace {
@@ -21,6 +22,12 @@ final class ViewSpace {
   private val _named_collections: mutable.Map[(String, String), ViewCollection[_]] = mutable.Map.empty
   private val _browsers: mutable.Map[String, Browser[_]] = mutable.Map.empty
   private val _named_browsers: mutable.Map[(String, String), Browser[_]] = mutable.Map.empty
+
+  /** Identity membership only; no typed source is extracted from the registry. */
+  def containsBrowser(browser: Browser[?]): Boolean = {
+    browser != null && (_browsers.valuesIterator.exists(registered => registered eq browser) ||
+      _named_browsers.valuesIterator.exists(registered => registered eq browser))
+  }
 
   def register[V](name: String, collection: ViewCollection[V]): Unit =
     if (_collections.contains(name))

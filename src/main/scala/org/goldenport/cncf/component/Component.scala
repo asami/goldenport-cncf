@@ -34,6 +34,7 @@ import org.goldenport.cncf.cli.renderer.{CliTreeJsonRenderer, CliTreeYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateEditContextSpace, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
+import org.goldenport.cncf.display.{DisplayRuntime, GeneratedLogicalUiAbi}
 import org.goldenport.cncf.information.InformationSpace
 import org.goldenport.cncf.knowledge.KnowledgeSpace
 import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAccess, CmlOperationDefinition}
@@ -64,7 +65,8 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jun. 18, 2026
  *  version Aug. 13, 2026
  *  version Aug. 31, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -104,6 +106,9 @@ abstract class Component() extends Component.Core.Holder {
   private var _initialization_parameters: ComponentInitializationParameters =
     ComponentInitializationParameters.empty
   private var _collections_bootstrapped: Boolean = false
+  private var _logical_ui_definitions:
+    Option[GeneratedLogicalUiAbi.AdmittedDefinitions] = None
+  @volatile private var _display_runtime: Option[DisplayRuntime.Registry] = None
   private var _mcp_ready_services: Set[String] = Set.empty
   private var _mcp_ready_operations: Set[String] = Set.empty
   val entitySpace: EntitySpace = new EntitySpace()
@@ -151,6 +156,26 @@ abstract class Component() extends Component.Core.Holder {
 
   def collectionsBootstrapped: Boolean =
     _collections_bootstrapped
+
+  def displayRuntime: Option[DisplayRuntime.Registry] =
+    _display_runtime
+
+  private[component] def _with_display_runtime(runtime: Option[DisplayRuntime.Registry]): Component = {
+    _display_runtime = runtime
+    this
+  }
+
+  // Structural admission only; runtime binding readiness is a separate gate.
+  private[component] def _admitted_logical_ui_definitions:
+    Option[GeneratedLogicalUiAbi.AdmittedDefinitions] =
+    _logical_ui_definitions
+
+  private[component] def _with_admitted_logical_ui_definitions(
+    definitions: Option[GeneratedLogicalUiAbi.AdmittedDefinitions]
+  ): Component = {
+    _logical_ui_definitions = definitions
+    this
+  }
 
   def entityRuntimeDescriptor(
     entityName: String

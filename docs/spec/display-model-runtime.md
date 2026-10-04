@@ -1,9 +1,12 @@
 # Display Model runtime contract
 
 Document role: normative implementation contract for Phase 96 Display behavior.
-Status: implementation contract; implementation and executable verification pending.
-Independent P96-01C review passed; this documentary contract is accepted for
-P96-01. Implementation, executable verification and Phase acceptance remain pending.
+Status: implementation contract; P96-01/02/03 accepted within their scoped boundaries.
+Independent P96-01C documentary review and P96-03 whole-Step review passed;
+all seven P96-03 criteria are CLOSED with focused LUI-ACCEPT-01 consumer proof
+accepted. Local P96-03 Step commit is PREPARED/PENDING; the separately owned
+Cozy P76-05 reciprocal receipt remains pending. Final Phase acceptance and later
+service, codec, wire, mutation and presentation-context work remain pending.
 
 The [runtime design](../design/display-model-runtime.md) fixes ownership and
 architecture; [Logical UI generated ABI](logical-ui-generated-abi.md) fixes
@@ -244,3 +247,226 @@ cannot reopen fixed invariants or erase pending Phase acceptance items. All
 54 checklist requirements and eleven stages remain required. Editing Studio
 Phase 2, app Phase 4 prototype, app Phase 5 real-server aggregate/E2E, Cozy
 producer acceptance and CNCF repository closure retain their separate owners.
+
+## P96-03B1: Explicit typed row projection
+
+The public [DisplayProjection](../../src/main/scala/org/goldenport/cncf/display/DisplayProjection.scala)
+boundary consumes already-authorized immutable `V` or `Vector[V]`. B1 selects
+no View and performs no query; canonical contextual View registration and the
+atomic component binding join remain P96-03B2. `SearchResult[V]` requires an
+explicit typed adapter at the source boundary. Actual Cozy producer acceptance
+and LUI-ABI-01/LUI-GEN-01/LUI-ACCEPT-01 remain PENDING.
+
+`ValueBinding[V](bindingIds, convert)` supplies a nonempty ordered output-key
+vector and `V => Consequence[Vector[DisplayValue]]`. `ActionBinding[V]` supplies
+one key and `V => Consequence[ActionAvailability]`. `RowBinding[V]` supplies the
+typed resource callback, value groups and row actions. `detailC` and `listC`
+admit these registrations against an `AdmittedDefinitions`, exact screen ID
+and exact declared View key. Their immutable `Detail[V]` and `List[V]` expose
+the selected definition and `projectC`; external construction and copying
+cannot bypass admission. List screen actions have separate `Vector[V]`-typed
+registrations and List projection accepts an explicit optional QuerySnapshot.
+
+Registration is per screen. Two screens may share a View key while supplying
+different exact value/action key sets. Every distinct declared value key has
+exactly one registered output; each distinct action key has exactly one
+registration in its own row or List-screen scope. Missing, duplicate, extra,
+malformed or null registrations fail before any callback. Empty declared
+scopes require empty bindings, but every row still requires a resource
+callback. Keys reused at several declared locations are evaluated once per
+scope and their output is independently validated at every location.
+
+Admission executes no callback. Diagnostic precedence is top-level shape and
+screen selection, row/resource shape, value groups in registration order,
+missing values in declaration order, row actions, then List actions. At
+projection, all source/vector/row and snapshot shape checks precede callbacks.
+Rows follow supplied order; resource runs first, then each value group at its
+first declared field occurrence, then actions at their first declared
+occurrence. Registration order cannot change callback or model order. Group
+outputs correspond positionally to their explicit output-key vector; count
+is checked before zipping. List screen actions follow all successful rows and
+receive the complete original vector, including an empty vector.
+
+Callbacks may explicitly combine native and opaque typed members and fan out
+to declared keys. They must be pure and capture only already-authorized
+immutable context. Arbitrary Scala closure purity is an application obligation;
+the framework adds no effects, retries, caches, source mutation, converter
+discovery, implicit string conversion, business execution or inverse mapping.
+Hidden/Disabled/Enabled are inert presentation data.
+
+The first callback Failure is propagated with its taxonomy and cause. NonFatal
+invocation exceptions are redacted into `DSP96_PROJECTION_CALLBACK_FAILED`;
+fatal/control exceptions are not swallowed. Null consequences/success values
+or entries fail with `DSP96_PROJECTION_ELEMENT_INVALID`, and output count
+defects with `DSP96_PROJECTION_OUTPUT_COUNT_INVALID`. Other registration codes
+use the same prefix and `ID_INVALID`, `SCREEN_NOT_FOUND`, `DEFINITION_MISMATCH`,
+`VIEW_BINDING_MISMATCH`, `BINDING_DUPLICATE`, `BINDING_UNDECLARED` or
+`BINDING_MISSING`. `ProjectionException` carries `Diagnostic(code, path, reason)`
+in an argument-invalid Consequence; fixed reasons and indexed paths reveal no
+source payload, supplied key or callback exception message.
+
+Only after successful callbacks and complete candidate assembly does projection
+call `Display.createC`. Its original runtime kind, role, title, payload,
+scoped correspondence and duplicate EntityId diagnostics pass through unchanged.
+These semantic failures may occur after callbacks, whereas callback failures
+short-circuit later callbacks and rows. No failure exposes a partial Display.
+Resource EntityId/EntityRevision and caller snapshot remain independent of
+definition, screen and producer provenance.
+
+Executable authoring is in [DisplayProjectionSpec](../../src/test/scala/org/goldenport/cncf/display/DisplayProjectionSpec.scala)
+(E1–E11) and [DisplayProjectionPropertySpec](../../src/test/scala/org/goldenport/cncf/display/DisplayProjectionPropertySpec.scala)
+(P1/P2, each requiring at least 100 successful generated cases). The external
+[typed fixture](../../src/test/scala/logicalui/TypedDisplayProjectionFixture.scala)
+consumes unchanged hand-written expected-generated definitions. Historical
+parent execution `phase96-p96-03b1-test-002` passed the selected seven suites
+and 67 tests, including E1..E11 and P1/P2 with at least 100 successes each.
+SBT and wrapper exited 0 and the shared lock was released. Two pre-review
+authoring repairs preceded that result: the finite permutation generator,
+then compile-time type qualification. This is historical focused validation,
+not independent B1 acceptance, actual generated producer proof, Step
+acceptance, service integration or checklist closure.
+
+## P96-03B2: Component-scoped contextual typed Browser binding
+
+[DisplayRuntime](../../src/main/scala/org/goldenport/cncf/display/DisplayRuntime.scala)
+joins a canonical `Browser[V]` to its matching immutable B1 `Detail[V]` or
+`List[V]`. Public `detail[V](screenId, viewBindingId, browser, row)` and
+`list[V](screenId, viewBindingId, browser, row, actions)` construct unevaluated
+closed `Binding` candidates. List screen actions retain `Vector[V]` typing.
+The candidates expose screen and View binding IDs but no execution API.
+Registry construction and copying are closed; its private heterogeneous
+entries retain each source's type with its projector. No erased source value,
+cast, reflection, generic type lookup, Record/JSON bridge or adapter is added.
+
+The auxiliary [DisplayBindingProvider](../../src/main/scala/org/goldenport/cncf/display/DisplayBindingProvider.scala)
+exposes `displayBindings(component): Vector[DisplayRuntime.Binding]`.
+Static metadata and runtime binding providers are separate capabilities.
+With absent metadata bootstrap skips runtime provider lookup and getters.
+With admitted metadata it selects the component capability first, considering
+the factory only when absent, then reads exactly one selected getter. An
+invalid, null or throwing selected result cannot fall back to the factory.
+The getter may finish explicit typed View registration in this Component.
+
+The package-private complete binding gate validates nonnull admitted
+definitions, ViewSpace and vector; candidate entries and exactly trimmed
+nonempty IDs; then duplicate and undeclared screens in candidate order and
+missing screens in definition order. Every declared screen needs exactly one
+candidate. Entries compile in definition order. Each source must be nonnull
+and already registered by reference identity in the Component's own default
+or named ViewSpace Browser maps before B1 registration admission. View binding
+IDs are application keys, not lookup names. Equivalent handles are insufficient;
+the same handle may deliberately be registered in two Components and owned by
+both. No source, converter or availability callback runs during admission.
+B1's branch, key, converter and action diagnostics pass through unchanged.
+
+`Component.displayRuntime` exposes an optional complete immutable Registry.
+Bootstrap retains all earlier Workflow, StateMachine, Continuation, revision
+and concurrency gates and their order. Existing entity/Aggregate/View,
+working-set, planner and event setup succeeds before runtime provider lookup.
+Only the final success tail publishes admitted definitions, the one complete
+registry reference and the collectionsBootstrapped flag, in that order.
+Earlier legacy setup effects are not rolled back on late failure. This is
+single-owner bootstrap with no added retry, locking or parallel-bootstrap
+guarantee. Successful repeat returns the same definitions and Registry objects
+without rereading either provider. No metadata means no runtime or new service.
+
+Registry `screenIds` preserves definition order. Its `readC(screenId,
+resourceId)(using ctx)` and `queryC(screenId, query)(using ctx)` validate exact
+screen selection, nonnull resource/query and context, then use only their own
+registry. Unknown screens and read-on-List/query-on-Detail fail before source
+execution. A valid request invokes exactly `find_with_context` or
+`query_with_context` once with the unchanged caller context and input, then
+projects its typed result. No context-free call, count, retry, cache, source
+mutation, eager Detail or business action is added. Browser query returns
+`Vector[V]`; List snapshot is `None`. Other canonical result shapes require an
+explicit application-owned typed adapter. Successful Detail identity must
+equal the requested EntityId; observed source revisions are retained.
+
+Browser Failure retains the original Conclusion, taxonomy and cause. A null
+Consequence is runtime element-invalid; a successful null source passes to
+B1 source validation. Only NonFatal exceptions from Browser invocation become
+fixed redacted source failure; projection remains outside that catch and fatal
+or control exceptions propagate. Registry is read-only infrastructure, not
+authorization: contextual sources and later ordinary Operation routing own
+access decisions, and action availability grants no permission.
+
+`DisplayRuntime.BindingException` carries `Diagnostic(code, path, reason)` in
+`Consequence.fail(Taxonomy.argumentInvalid, carrier)` and is never thrown.
+The closed `DSP96_RUNTIME_` suffixes are `ELEMENT_INVALID`, `ID_INVALID`,
+`PROVIDER_MISSING`, `PROVIDER_FAILED`, `SCREEN_UNDECLARED`, `SCREEN_DUPLICATE`,
+`SCREEN_MISSING`, `SOURCE_NOT_REGISTERED`, `SCREEN_NOT_FOUND`,
+`OPERATION_UNSUPPORTED`, `SOURCE_FAILED` and `SOURCE_ID_MISMATCH`. Indexed
+paths use `bindings[i]` and its `screenId`, `viewBindingId` or `browser`, or
+`definitions[i].screenId`; root/input paths are `definitions`, `viewSpace`,
+`bindings`, `screenId`, `resourceId`, `query`, `context`, `source` and
+`model.resource.entityId`. Missing or throwing provider uses `bindings`.
+Fixed reasons expose no supplied IDs, source payloads or exception messages.
+
+[DisplayRuntimeSpec](../../src/test/scala/org/goldenport/cncf/display/DisplayRuntimeSpec.scala)
+authors R1..R8 and RP1, with RP1 requiring at least 100 successful cases.
+[ComponentFactoryDisplayRuntimeSpec](../../src/test/scala/org/goldenport/cncf/component/ComponentFactoryDisplayRuntimeSpec.scala)
+authors B1..B5 including actual factory-created View ordering. The external
+[typed runtime fixture](../../src/test/scala/logicalui/TypedDisplayRuntimeFixture.scala)
+is development-only and does not claim actual Cozy generation or Entity
+admission. B2 parent validation and independent review remain PENDING. C actual
+producer acceptance and LUI-ABI-01/LUI-GEN-01/LUI-ACCEPT-01 remain PENDING; the
+next parent PLAN prepares LUI-ABI-01 from completed A/B evidence before C work.
+
+## P96-03C: Actual generated consumer proof
+
+The unchanged static ABI and contextual runtime contracts above are consumed
+by [ComponentFactoryGeneratedLogicalUiAcceptanceSpec](../../src/test/scala/org/goldenport/cncf/component/ComponentFactoryGeneratedLogicalUiAcceptanceSpec.scala).
+Its actual [definitions](../../src/test/scala/domain/logicalui/DomainLogicalUiDefinitions.scala)
+and [provider](../../src/test/scala/domain/logicalui/DomainLogicalUiMetadataProvider.scala)
+are the unmodified two-file LUI-GEN-01 delivery. The external
+[consumer fixture](../../src/test/scala/logicalui/GeneratedDisplayConsumerFixture.scala)
+supplies application-owned typed sources and bindings, not another production
+ABI, projector or generator implementation.
+
+GC1 covers normal bootstrap, complete publication and contextual List/select/
+Detail identity and exact model correspondence. GC2 compares actual and
+handwritten expected models while asserting their different provenance
+separately. GC3 preserves Unicode/whitespace, reversed order, empty List and
+independent typed semantic consumption. GC4 covers repeat identity and
+component isolation. GC5 derives invalid ABI/duplicate/revision/target vectors
+only in the fixture and compares normal bootstrap to authoritative admission.
+GC6 preserves the typed last-binding diagnostic and no Display publication,
+without requiring rollback of earlier semantic registration. GCP1 requires
+at least 100 successful undiscarded actual/expected normal-bootstrap cases
+with positive resource revisions, ESS states/availability and finite row
+permutations including empty. No definition provenance is normalized for
+comparison and no source is evaluated at bootstrap.
+
+The [consumer journal](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md)
+records the accepted Cozy P76-04 delivery at
+`ccf2b8d7b89582c22f5f4a933b8354812a8ee2a3` and corrected producer coordinate
+`org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT` (Scala 2.12.18). It retains
+source mapping, samples/provenance and historical planned commands, followed
+by actual parent-admitted current execution. Representative request/result
+`phase96-p96-03c-representative-request-001` r1 /
+`phase96-p96-03c-representative-result-001` r1 passed GC1..GC6/GCP1, 7/7 tests
+in one suite with Compile/Test success. GCP1's executed expectations require
+at least 100 successes and zero discards; no separately printed exact count
+is claimed. Both source comparisons exited 0, and the complete Test classpath
+inspection found no cozy_2.12 runtime jar. Accumulator request/result
+`phase96-p96-03c-accumulator-request-001` r1 /
+`phase96-p96-03c-accumulator-result-001` r1 passed the unchanged 15 suites and
+133/133 tests. Both terminal results retain SBT/wrapper exit 0 and released
+serial lock. This is 140 focused tests across 16 suites, not a full-suite run.
+Ordinary Compile/Test ran the pre-existing CNCF Information CML generator
+hook; no Phase76 ESS2-01 Logical UI producer was explicitly rerun.
+
+LUI-ABI-01 is issued and producer LUI-GEN-01 is accepted. Independent
+whole-Step review `phase96-p96-03-step-review-001` revision 1 by
+`/root/phase96_p96_03_step_review_001` passed all 28 paths and 19 programs;
+parent admission is recorded in `phase96-review-ledger-001` revision 19.
+All seven P96-03 criteria are CLOSED, including criterion 7's accepted
+LUI-ACCEPT-01 focused consumer proof, recorded in the
+[acceptance entry](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md#2026-10-04--p96-03-independent-step-acceptance).
+Local Step commit is PREPARED/PENDING, not executed; the separately owned
+Cozy P76-05 reciprocal receipt remains pending. Zero blockers and nonblocking
+HYG-P96-03-SPEC-TRACEABILITY-001 are retained. Earlier A/B1/B2 status statements
+describe historical slice state; this section records current acceptance without
+changing their normative contracts. Final Phase acceptance and later service,
+codec, wire, mutation and presentation-context work remain pending; no full
+Phase review or closure is claimed.
