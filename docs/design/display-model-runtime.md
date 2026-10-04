@@ -4,8 +4,8 @@ Document role: selected Phase 96 architecture decisions.
 Status: implementation contract; P96-01/02/03 accepted within their scoped boundaries.
 Independent P96-01C documentary review and P96-03 whole-Step review passed;
 all seven P96-03 criteria are CLOSED with focused LUI-ACCEPT-01 consumer proof
-accepted. Local P96-03 Step commit is PREPARED/PENDING; the separately owned
-Cozy P76-05 reciprocal receipt remains pending. Final Phase acceptance and later
+accepted at local P96-03 Step commit `bef59e7`; Cozy P76-05 reciprocal receipt
+is accepted at `3546755` and P76-06A documentary handoff at `ddeadab9`. Final Phase acceptance and later
 service, codec, wire, mutation and presentation-context work remain pending.
 Scope: PHASE-96 / P96-01 / P96-01C.
 
@@ -264,9 +264,16 @@ parent admission is recorded in `phase96-review-ledger-001` revision 19.
 All seven P96-03 criteria are CLOSED, including criterion 7's accepted
 LUI-ACCEPT-01 focused consumer proof, recorded in the
 [acceptance entry](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md#2026-10-04--p96-03-independent-step-acceptance).
-Local Step commit is PREPARED/PENDING, not executed; Cozy P76-05 remains a
-separately pending reciprocal receipt. Zero blockers and nonblocking
+Local Step commit is `bef59e7`. Cozy P76-05 reciprocal receipt is accepted at
+`3546755`; P76-06A documentary handoff is accepted at `ddeadab9`. Zero blockers and nonblocking
 HYG-P96-03-SPEC-TRACEABILITY-001 are retained. Historical A/B1/B2 pending statements
 above describe their earlier handoff position. Final Phase acceptance and later
 DisplayService, codec, wire, mutation and presentation-context work remain pending;
 no full Phase review or either Phase closure is claimed.
+
+The [physical protocol design](display-model-protocol.md) and authoritative
+[read protocol specification](../spec/display-model-protocol.md) select the
+P96-04A-WIRE pure snapshot boundary for implementation. Codec validation and
+independent acceptance are pending. P96-05 retains registered Operation and
+formatter/adaptor object proof; mutation, Business Operation and context artifacts
+remain separately owned by P96-06/08/10, with final handoff at P96-11.

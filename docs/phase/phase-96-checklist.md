@@ -4,7 +4,7 @@ status=in-progress
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-04
+current_entry=P96-05
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
 ## Ledger boundary
@@ -22,12 +22,16 @@ The original execution baseline above is preserved; this import is not a rebasel
 P96-01 is CLOSED on documentary contract evidence; P96-02 is CLOSED on
 static ABI admission and pure Display construction evidence. P96-03 is CLOSED
 on all seven criteria after independent whole-Step review and parent admission;
-P96-04 through P96-11 remain OPEN. The accepted subset is fixed by the design/spec
+P96-04 is CLOSED as an acceptance candidate after focused 151/151 tests in
+18 suites, independent whole-Step PASS and parent admission. The ledger has
+24 checked and 30 pending outcomes with all 54 criterion texts unchanged;
+current_entry=P96-05 and P96-05 through P96-11 remain OPEN. The local P96-04
+Step commit is PREPARED/PENDING. The accepted subset is fixed by the design/spec
 linked below. P96-02's focused proof remains limited to pure construction and
 static admission; P96-03's separate accepted evidence establishes ComponentFactory
 integration, projection and the focused LUI consumer proof. The local P96-03
-Step commit is PREPARED/PENDING, and the separate Cozy P76-05 reciprocal receipt
-is pending. Phase 96 remains in-progress with zero full Phase reviews and no
+Step commit is `bef59e7`; Cozy P76-05 reciprocal receipt is accepted at `3546755`
+and P76-06A documentary handoff at `ddeadab9`. Phase 96 remains in-progress with zero full Phase reviews and no
 closure. Unpromoted wire examples and later physical bindings retain their owning Steps.
 The [Display proposal](../notes/display-model-phase-96-proposal.md) and
 [Presentation Context proposal](../notes/display-protocol-presentation-context-proposal.md)
@@ -153,8 +157,9 @@ found no cozy_2.12 runtime jar. Independent protected-focused whole-Step review
 parent admission is recorded in `phase96-review-ledger-001` revision 19.
 The [acceptance entry](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md#2026-10-04--p96-03-independent-step-acceptance)
 supports all seven unchanged criteria below. Criterion 7 accepts LUI-ACCEPT-01
-as focused consumer proof; the separate Cozy P76-05 reciprocal receipt remains
-pending. Local Step commit is PREPARED/PENDING, not executed. Zero blockers and
+as focused consumer proof; Cozy P76-05 reciprocal receipt is accepted at
+`3546755`, P76-06A documentary handoff at `ddeadab9`, and local Step commit
+is `bef59e7`. Zero blockers and
 nonblocking HYG-P96-03-SPEC-TRACEABILITY-001 are retained. P96-03 is CLOSED;
 Phase 96 remains in-progress with zero full Phase reviews and no Phase closure.
 
@@ -171,14 +176,31 @@ Phase 96 remains in-progress with zero full Phase reviews and no Phase closure.
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Display protocol owners
 - Update rule: Advance only from the published physical binding and codec compatibility proof; the checklist below is the closure basis.
 
-- [ ] The exact schema/version, metadata member sets, REST envelope/route/media-type binding and canonical encoding are recorded separately from the generated ABI, Phase 74 semantic contract, definition/context versions and Entity revision.
-- [ ] Deterministic List/Detail golden fixtures and property-based round trips preserve admitted typed values, opaque identities, scoped fields, order and all required metadata without leaking domain objects or Flutter internals.
-- [ ] Structured rejection specifications cover incompatible protocol/ABI/semantic-contract versions, unknown closed kinds, malformed/missing members and duplicate/null inputs according to the admitted strictness policy.
-- [ ] After LUI-ACCEPT-01, the first presentation-client codec handoff records provenance, supported subset, compatibility rules and focused evidence; later mutation/context artifacts remain tracked by P96-06/P96-10/P96-11 rather than implied complete.
+The [protocol acceptance entry](../journal/2026/10/2026-10-04-phase-96-protocol-contract.md#2026-10-05--p96-04-independent-step-acceptance)
+is the closure basis for all four unchanged criteria: actual October 4 focused
+151/151 tests in 18 suites, terminal SBT/wrapper exit 0 and serial lock released,
+and independent whole-Step review `phase96-p96-04-step-review-001` revision 1
+PASS over all 15 paths and five complete Scala programs. Parent admission is
+recorded in `phase96-review-ledger-001` revision 25. The
+[strict read protocol](../spec/display-model-protocol.md) and
+[design](../design/display-model-protocol.md) retain the accepted contract;
+the journal preserves the earlier UNEXECUTED authoring history. DSP-WIRE-01
+accepts only the strict first List/Detail read snapshot codec handoff;
+registered DisplayService Operations and live HTTP proof remain with P96-05.
+P96-04 is CLOSED as an acceptance candidate; local Step commit is
+PREPARED/PENDING. All 54 criterion texts are retained with 24 checked and
+30 pending; P96-05..11 remain OPEN, Phase 96 remains in-progress and full Phase
+review count remains zero. Separate Cozy final release/closure and app Phase 5
+aggregate/E2E gates remain pending; the seven prior Hygiene records remain OPEN.
+
+- [x] The exact schema/version, metadata member sets, REST envelope/route/media-type binding and canonical encoding are recorded separately from the generated ABI, Phase 74 semantic contract, definition/context versions and Entity revision.
+- [x] Deterministic List/Detail golden fixtures and property-based round trips preserve admitted typed values, opaque identities, scoped fields, order and all required metadata without leaking domain objects or Flutter internals.
+- [x] Structured rejection specifications cover incompatible protocol/ABI/semantic-contract versions, unknown closed kinds, malformed/missing members and duplicate/null inputs according to the admitted strictness policy.
+- [x] After LUI-ACCEPT-01, the first presentation-client codec handoff records provenance, supported subset, compatibility rules and focused evidence; later mutation/context artifacts remain tracked by P96-06/P96-10/P96-11 rather than implied complete.
 
 ## P96-05: Component-scoped DisplayService read path
 

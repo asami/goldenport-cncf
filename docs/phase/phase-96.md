@@ -96,8 +96,8 @@ Its selected contracts are [runtime design](../design/display-model-runtime.md),
 [generated ABI spec](../spec/logical-ui-generated-abi.md) and
 [runtime spec](../spec/display-model-runtime.md). P96-02 is CLOSED on its
 separately accepted pure ABI/model proof. P96-03 is CLOSED with all seven
-unchanged obligations checked; the current checklist entry is P96-04, and
-P96-04 through P96-11 remain OPEN. A/B1/B2 focused
+unchanged obligations checked; P96-04 is CLOSED as an acceptance candidate,
+the current checklist entry is P96-05, and P96-05 through P96-11 remain OPEN. A/B1/B2 focused
 history and the issued LUI-ABI-01 remain retained. Accepted Cozy P76-04
 LUI-GEN-01 delivery at `ccf2b8d7b89582c22f5f4a933b8354812a8ee2a3`
 is consumed unchanged by the authored P96-03C specification. The
@@ -114,9 +114,32 @@ HYG-P96-03-SPEC-TRACEABILITY-001 retained. Parent admission in
 `phase96-review-ledger-001` revision 19 accepts all seven criteria, including
 criterion 7's LUI-ACCEPT-01 focused consumer proof, as recorded in the
 [acceptance entry](../journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md#2026-10-04--p96-03-independent-step-acceptance).
-Local P96-03 Step commit is PREPARED/PENDING, not executed; the separately owned
-Cozy P76-05 reciprocal receipt remains pending. Phase96 remains IN_PROGRESS
+Local P96-03 Step commit is `bef59e7`; the separate Cozy P76-05 reciprocal
+receipt is accepted at `3546755`, and P76-06A documentary handoff at `ddeadab9`.
+Phase96 remains IN_PROGRESS
 with zero full Phase reviews; no full-suite run, release or Phase closure is claimed.
+
+P96-04A-WIRE implements the [strict read protocol](../spec/display-model-protocol.md)
+and its [design](../design/display-model-protocol.md). The
+[protocol acceptance entry](../journal/2026/10/2026-10-04-phase-96-protocol-contract.md#2026-10-05--p96-04-independent-step-acceptance)
+records the actual October 4 representative 8/8 and accumulator 143/143 results:
+151/151 focused tests in 18 suites, both terminal SBT/wrapper exit 0 and serial
+lock released. All three properties passed their >=100 successful/zero-discard
+expectations, without a separately printed exact case count claim.
+Independent whole-Step review `phase96-p96-04-step-review-001` revision 1 by
+`/root/phase96_p96_04_step_review_001` passed all 15 paths, all five complete
+Scala programs and all four criteria; parent admission in
+`phase96-review-ledger-001` revision 25 accepts the four unchanged obligations.
+The journal retains planned UNEXECUTED authoring history and accepts DSP-WIRE-01
+only as the strict first List/Detail read snapshot codec handoff; registered
+DisplayService Operations and live HTTP proof retain P96-05 ownership.
+P96-04 is CLOSED as an acceptance candidate with local Step commit
+PREPARED/PENDING. The unchanged 54-criterion ledger has 24 checked and 30 pending
+outcomes, with current_entry=P96-05. P96-05 through P96-11 remain OPEN;
+Phase 96 remains IN_PROGRESS with zero full Phase reviews. Later service,
+mutation, Business Operation, context and aggregate acceptance, separate Cozy
+Phase 76 final release/closure and app Phase 5 aggregate/E2E acceptance remain
+pending. The seven prior Hygiene records remain OPEN.
 
 ## Initial scope
 
