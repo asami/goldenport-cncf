@@ -23,3 +23,8 @@ phase=[Phase 102](phase-102.md)
 - [ ] IAM-102-11: Define lifecycle events/observability projection and provider reconciliation behavior.
 - [ ] IAM-102-12: Add executable specifications proving provider interchange, stale action rejection, external-reference preservation and Phase 90 compatibility.
 - [ ] IAM-102-13: Complete focused/full review and consumer handoff.
+
+- [ ] IAM-102-14: Define Human-in-the-Loop as a standard Admission authority/routing case rather than a product/UI-specific Workflow primitive.
+- [ ] IAM-102-15: Prove an Admission Gap requiring human judgment can suspend/resume through Phase 77 Continuation without exposing internal Workflow state/transition semantics to the external participant host.
+- [ ] IAM-102-16: Prove the same abstract Workflow/Operation contract remains valid when an internal admission route changes between automatic, AI-assisted and human-required policies.
+- [ ] IAM-102-17: Prove Slack/Web/mobile/Watch bindings are replaceable participant/presentation adapters and do not become Admission or Workflow authority.
