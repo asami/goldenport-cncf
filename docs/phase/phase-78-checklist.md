@@ -37,16 +37,40 @@ Acceptance evidence (2026-10-05):
 ## CAP-78-02: External projection and admission
 
 Stage Status:
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Component ABI owner
 - Update rule: Close only after projection and fail-closed admission have
   executable specification coverage.
+- Closure basis: All four items below are checked against the R11/R12
+  implementation, passing CPJ/CPA specifications and independent Step review.
 
-- [ ] Define a versioned runtime-independent Component Capability projection.
-- [ ] Preserve component/package/source identity and ABI provenance.
-- [ ] Reject missing, duplicate, ambiguous, malformed, and incompatible
+Acceptance evidence (2026-10-05):
+- Independent protected Step review at GPT-6.1 Sol high passed the complete
+  16-file Step and 42-path contract boundary, with no blockers, Hygiene or
+  Development Candidates.
+- Codec CPJ-01..09 passed 9/9 and admission CPA-01..16 passed 16/16 through
+  the serial SBT runner. Main and Test compilation passed with the codec run.
+- Static source/document checks and `git diff --check` passed. Participant
+  Phase release validation and review remain separate obligations.
+
+Accepted contract and executable specifications:
+- [R11 concrete v1 contract](../spec/component-capability.md#r11-concrete-v1-format)
+- [R12 metadata admission](../spec/component-capability.md#r12-executable-metadata-admission)
+- [Codec specification CPJ-01..09](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityProjectionCodecSpec.scala)
+- [Admission specification CPA-01..16](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityAdmissionSpec.scala)
+
+This Step's runtime-independent discovery proof concerns external metadata
+decoding, selected-scope admission and readout with no runtime Component.
+The hand-authored fixture and explicit target facts are conformance input.
+Actual contract adapters/provenance are CAP-78-03; canonical ComponentFactory
+and package/CAR source/discovery are CAP-78-04; real Cozy-generated/CBD
+interoperability is CAP-78-05. These boxes do not close those later obligations.
+
+- [x] Define a versioned runtime-independent Component Capability projection.
+- [x] Preserve component/package/source identity and ABI provenance.
+- [x] Reject missing, duplicate, ambiguous, malformed, and incompatible
       declarations.
-- [ ] Prove discovery without loading Component runtime.
+- [x] Prove discovery without loading Component runtime.
 
 ## CAP-78-03: Realization mapping
 

@@ -78,7 +78,7 @@ runtime admission requirement.
 | ID | Outcome | Status |
 | --- | --- | --- |
 | CAP-78-01 | Freeze Component Capability identity, vocabulary, semantic-reference shape, versioning, and compatibility boundaries. | closed |
-| CAP-78-02 | Define and implement the external Component projection for provided and required Capabilities, preserving admitted semantic grounding/provenance. | planned |
+| CAP-78-02 | Define and implement the external Component projection for provided and required Capabilities, preserving admitted semantic grounding/provenance. | closed |
 | CAP-78-03 | Bind explicit realization references to admitted Operation, Workflow, and StateMachine contracts without embedding orchestration procedure. | planned |
 | CAP-78-04 | Integrate admission/discovery with ComponentFactory and package/CAR metadata, including semantic references where present. | planned |
 | CAP-78-05 | Prove Cozy producer and Textus CBD Support consumer interoperability with exact identity, source, ABI, semantic-reference, and realization provenance. | planned |
@@ -92,6 +92,25 @@ for the four-document scope, including 20 checks, 30 local links/anchors, and
 `git diff --check`. The [CAP-78-01 checklist](phase-78-checklist.md#cap-78-01-semantic-contract)
 records the closure basis. CAP-78-02 through CAP-78-05 retain the projection,
 binding, exposure, and executable interoperability obligations.
+
+## CAP-78-02 acceptance and implementation boundary
+
+The [R11/R12 contract](../spec/component-capability.md#r11-concrete-v1-format)
+and metadata package provide the external v1 projection, strict codec, selected
+reference scope and pure admission primitives. The
+[codec](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityProjectionCodecSpec.scala)
+and [admission](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityAdmissionSpec.scala)
+specifications cover CPJ-01..09 and CPA-01..16 with a hand-authored conformance
+input. On 2026-10-05, serial SBT validation passed codec 9/9 and admission
+16/16, including successful Main and Test compilation. Independent protected
+Step review at GPT-6.1 Sol high accepted the complete 16-file Step and its
+42-path contract boundary with no blockers, Hygiene or Development Candidates.
+Static source/document checks and `git diff --check` passed. The
+[CAP-78-02 checklist](phase-78-checklist.md#cap-78-02-external-projection-and-admission)
+records the closure basis. Participant Phase release validation and full review
+remain pending. Actual target adapters, canonical
+Factory/package/CAR exposure and real Cozy/CBD interoperability retain their
+CAP-78-03..05 owners and planned status.
 
 ## Ownership boundary
 

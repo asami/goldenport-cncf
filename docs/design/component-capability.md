@@ -2,6 +2,38 @@
 
 Status: structural design
 
+## Metadata admission stages
+
+The structure has four pure metadata stages: external JSON, raw typed
+`Projection`, explicit selected reference `Scope`, and private-constructed
+`Admitted`. The strict codec owns transport decoding/validation and compact
+encoding. Admission joins the acquired Component snapshot to caller-supplied
+model/vocabulary facts, supplemental definitions and admitted target contract
+facts. `Admitted` keeps the original projection, selected scope ID, combined
+definitions and separate resolved edge/target records.
+
+The Reference and Projection objects own their typed carriers. Internal
+decoding, encoding and validation parts support the codec facade; a binding
+part supports the admission facade. This package consumes canonical Component
+identity/release authorities while keeping model/vocabulary identities in their
+existing literal qualified domains. It receives no runtime Component or Factory
+and performs no activation or source acquisition.
+
+[R11](../spec/component-capability.md#r11-concrete-v1-format) owns the complete
+wire/scalar/snapshot contract;
+[R12](../spec/component-capability.md#r12-executable-metadata-admission) owns
+scope, exact binding, compatibility, public APIs and diagnostics. The
+[working specifications](../spec/component-capability.md#working-specifications-and-conformance-input)
+use hand-authored external input and independently supplied ready facts.
+Their validation and independent CAP-78-02 acceptance remain pending.
+
+The next handoffs remain separate. CAP-78-03 extracts actual admitted
+Operation/Workflow/StateMachine target contracts and proves their provenance.
+CAP-78-04 selects the canonical ComponentFactory/package/CAR metadata source
+and exposes discovery from it. CAP-78-05 uses a real Cozy-generated input and
+records producer/admission/CBD interoperability. Pure binding against explicit
+scope facts does not establish these integration surfaces.
+
 ## Authority and scope
 
 This document describes Component Capability responsibilities and structure.
