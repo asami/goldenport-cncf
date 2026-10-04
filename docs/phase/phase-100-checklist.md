@@ -25,6 +25,7 @@ Stage Status:
 - Update rule: Close only when canonical specs/design and executable contracts fix the mapping boundary. The checklist below is the closure basis.
 
 - [ ] Bind the approved `XSemiStructuredData` and `XJson` types and the selected declaration producer to the OR mapper used by DataStore consumers and EntityStore operations.
+- [ ] Freeze the producer-facing logical datatype/storage-mapping ABI and expected generated fixture for `asami/cozy` Phase 78; record the exact handoff revision before producer implementation.
 - [ ] Define `XSemiStructuredData` with Record values and `XJson` with JSON values in the existing canonical type system, with normalization and structured failures; reject name-only `Named` substitutes as the final route.
 - [ ] Specify explicit JSON/YAML/HOCON format selection and conversion to Record for `XSemiStructuredData`, including accepted shapes and unsupported format-specific values, independently of the DB storage format.
 - [ ] Distinguish application type, JSON intermediate value, serialized JSON text and physical column type; specify codec/version and field-name normalization without losing mapping identity.
@@ -43,7 +44,7 @@ Stage Status:
 
 - [ ] Implement admitted mapping resolution in the OR mapper while keeping DataStore text reads as physical Strings.
 - [ ] Route every identified EntityStore application-value boundary through the same declared-type mapping contract while retaining physical internal operations, transaction/provider identity, revision checks and atomic side effects.
-- [ ] Carry canonical datatype identities through model declarations, generated Scala/schema metadata and the existing EntityStore/EntityPersistent storage hooks into mapping resolution.
+- [ ] Consume the Cozy Phase 78 generated fixture and carry its canonical datatype identities through generated Scala/schema metadata and the existing EntityStore/EntityPersistent storage hooks into mapping resolution.
 - [ ] Integrate explicit JSON/YAML/HOCON codecs for `XSemiStructuredData` with the declared normalization and failure contracts; reuse existing format support where applicable.
 - [ ] Apply OR-mapper JSON encoding/decoding and distinct X/Record/JSON reconstruction to create/save/update and load/search/projection, including authoritative mutation readback.
 - [ ] Preserve mapped application semantics across in-memory and SQL providers and process restarts; test the physical and logical boundaries independently.
@@ -60,7 +61,7 @@ Stage Status:
 - [ ] Adopt declarations for durable Job/quota canonical text and opaque identity fields; retain exact String bytes.
 - [ ] Connect EntityStore projection and any required generated metadata without guessing field types.
 - [ ] Map each supported behavior of the current `DataType.Named("record")` path to formal declaration/normalization/generation/OR-mapping responsibilities and retain regression coverage.
-- [ ] Replace `DataType.Named("record")` producer/runtime dependencies with the `XSemiStructuredData` route and regenerate affected outputs; retire any temporary legacy declaration reader from the accepted route before closure.
+- [ ] Consume regenerated Cozy Phase 78 outputs to replace `DataType.Named("record")` producer/runtime dependencies with the `XSemiStructuredData` route; retire any temporary legacy declaration reader from the accepted route before closure.
 - [ ] Verify no active producer, generated schema, runtime branch or executable consumer in the selected scope depends on `DataType.Named("record")`; distinguish historical references and deliberate rejection fixtures from active support.
 - [ ] Replace payload-shape inference and collection/field-specific exceptions with declaration-based behavior and equivalent regression coverage.
 - [ ] Demonstrate the selected compatibility cutover and remove or explicitly locate any residual temporary legacy mode outside accepted typed behavior.
@@ -86,7 +87,7 @@ Stage Status:
 - Update rule: Close only after required tests, recovery rehearsal, independent review and release evidence. The checklist below is the closure basis.
 
 - [ ] Prove String preservation and X/Record/JSON/array roundtrip laws with Given/When/Then and property-based specifications, including empty/nested/Unicode/null/numeric edge cases.
-- [ ] Prove model declaration -> generated datatype/schema -> OR-mapper codec -> restart/readback preserves distinct semi-structured and JSON types without `Named("record")`, a `Named("json")` substitute or ad hoc string-name dispatch in the accepted route.
+- [ ] Accept a Cozy Phase 78 generated model declaration -> datatype/schema/storage metadata -> OR-mapper codec -> restart/readback route preserving distinct semi-structured and JSON types without `Named("record")`, a `Named("json")` substitute or ad hoc string-name dispatch.
 - [ ] Prove supported JSON/YAML/HOCON representations normalize to Record under `XSemiStructuredData`, with explicit format selection and failures for unsupported values; keep `XJson` readback as JSON.
 - [ ] Prove automatic codec selection follows declared types, with no fallback based on Record/Json runtime values, `RecordPresentable` or `toRecord`/`fromRecord` availability; preserve explicitly application-owned conversions.
 - [ ] Prove a text backend returns String and the OR mapper separately restores X, Record or JSON according to the declared application type, including distinct JSON-parse and application-decode failures.
