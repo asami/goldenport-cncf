@@ -2,7 +2,15 @@
 
 Status: planned
 Planned: 2026-10-05
-Driven by: sm-workflow Phases 5-7, especially Phase 7 RepositorySyncWorkflow
+Driven by: sm-workflow Phase 5 for the minimum resource API; sm-workflow Phase 7 for the RepositorySync/worktree expansion
+
+## Driven-development sequencing
+
+sm-workflow Phase 5 is allowed to start before this phase is complete. When Phase 5 reaches its project-resource integration boundary, it explicitly drives this Phase 101 and requires a minimum accepted slice before Phase 5 may close.
+
+The minimum Phase-5 slice MUST establish the logical Component resource contract and at least the runtime-state/DataStore binding needed to prove that sm-workflow does not construct physical project paths. Workspace semantics may be introduced in that slice when implementation cohesion warrants it, but the dedicated multi-repository worktree scenario is driven and hardened by sm-workflow Phase 7.
+
+Phase 101 remains a CNCF-owned phase: sm-workflow supplies the driver requirements and acceptance scenario but MUST NOT copy or locally emulate the missing CNCF abstraction.
 
 ## Goal
 
