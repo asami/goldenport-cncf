@@ -12,6 +12,15 @@ The minimum Phase-5 slice MUST establish the logical Component resource contract
 
 Phase 101 remains a CNCF-owned phase: sm-workflow supplies the driver requirements and acceptance scenario but MUST NOT copy or locally emulate the missing CNCF abstraction.
 
+### Closure sequencing
+
+Phase 101 has two explicit acceptance milestones:
+
+1. **Minimum slice accepted (sm-workflow Phase 5 gate).** The logical Component resource contract and required runtime-state/DataStore binding are implemented and accepted through sm-workflow Phase 5. Reaching this milestone allows sm-workflow Phase 5 to close, but CNCF Phase 101 remains OPEN.
+2. **Full acceptance (sm-workflow Phase 7 gate).** sm-workflow Phase 7 exercises the API with real dependency-aware RepositorySync and dedicated named CNCF/Cozy worktrees, including resource lifecycle and project-local version-control policy. Only after this driver acceptance succeeds may CNCF Phase 101 close.
+
+Closure order for the final milestone is strict: sm-workflow Phase 7 reaches its upstream acceptance gate -> CNCF Phase 101 records full acceptance and closes -> sm-workflow Phase 7 records the closed upstream dependency and may close. Phase 101 MUST NOT be closed merely because its API compiles or because the Phase 5 minimum slice passed.
+
 ## Goal
 
 Provide a CNCF-level logical API/DSL for component-owned project resources so application components can use configuration, DataStore-backed runtime state, workspaces/worktrees, working files, and other project-local resources without depending on physical directory layout.
@@ -112,6 +121,10 @@ Demonstrate at least:
 6. runtime/workspace resources are distinguishable from versionable project configuration/resources;
 7. a non-SQLite DataStore binding remains possible without changing the consumer API;
 8. the sm-workflow RepositorySync driver can use the API for dedicated CNCF/Cozy worktrees.
+
+## Closure criteria
+
+CNCF Phase 101 closes only when all Phase 101 executable specifications pass and the sm-workflow Phase 7 driver has demonstrated the real multi-repository workspace/worktree scenario without application-owned physical path construction. Phase 5 minimum-slice acceptance alone is explicitly insufficient for closure.
 
 ## Non-goals
 
