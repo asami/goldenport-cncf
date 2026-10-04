@@ -5,7 +5,8 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Sep. 11, 2026
- * @version Sep. 29, 2026
+ *  version Sep. 29, 2026
+ * @version Oct. 1, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object JobManagementReader {
@@ -16,12 +17,13 @@ private[job] object JobManagementReader {
   )
 
   def queryPage(
-    snapshot: Snapshot,
+    snapshot: => Snapshot,
     request: JobManagementQuery,
     policy: JobQueryPolicy
   )(using ctx: ExecutionContext): Consequence[JobManagementPage] =
-    request.validate.flatMap { _ =>
-      val authorized = _authorized_models(snapshot.models, policy)
+    _validate_request(request).flatMap { payload =>
+      val admitted = snapshot
+      val authorized = _authorized_models(admitted.models, policy)
         .filter(request.accepts)
         .sortWith(_page_model_precedes)
       // Existing callers retain byte-compatible tokens. Scoped UX callers bind
@@ -31,7 +33,7 @@ private[job] object JobManagementReader {
         else JobManagementCursor.fingerprint(s"${request.filterFingerprint}|${policy.visibilityKey}")
       val callerfingerprint = JobManagementCursor.callerVisibilityFingerprint(ctx)
       val snapshotfingerprint = JobManagementCursor.snapshotFingerprint(authorized)
-      request.cursor match {
+      payload match {
         case None =>
           _page(
             authorized,
@@ -41,8 +43,7 @@ private[job] object JobManagementReader {
             callerfingerprint,
             snapshotfingerprint
           )
-        case Some(cursor) =>
-          JobManagementCursor.decode(cursor).flatMap { payload =>
+        case Some(payload) =>
             if (payload.filterFingerprint != filterfingerprint)
               _invalid_query_cursor("request filter mismatch")
             else if (payload.callerVisibilityFingerprint != callerfingerprint)
@@ -60,7 +61,6 @@ private[job] object JobManagementReader {
                 callerfingerprint,
                 snapshotfingerprint
               )
-          }
       }
     }
 
@@ -94,7 +94,7 @@ private[job] object JobManagementReader {
     })
 
   def queryTasks(
-    snapshot: Snapshot,
+    snapshot: => Snapshot,
     jobid: JobId,
     offset: Int,
     limit: Int,
@@ -107,7 +107,7 @@ private[job] object JobManagementReader {
     }
 
   def queryTimeline(
-    snapshot: Snapshot,
+    snapshot: => Snapshot,
     jobid: JobId,
     offset: Int,
     limit: Int,
@@ -185,7 +185,7 @@ private[job] object JobManagementReader {
     callerfingerprint: String,
     snapshotfingerprint: String
   ): Consequence[JobManagementPage] = {
-    val entries = authorized.slice(offset, offset + limit).map(JobManagementSummary.from)
+    val entries = authorized.drop(offset).take(limit).map(JobManagementSummary.from)
     val nextoffset = offset + entries.size
     val next =
       if (nextoffset < authorized.size)
@@ -202,6 +202,16 @@ private[job] object JobManagementReader {
 
   private def _invalid_query_cursor[A](detail: String): Consequence[A] =
     Consequence.operationInvalid("job.management-query.cursor", s"invalid cursor: $detail")
+
+  private def _validate_request(request: JobManagementQuery): Consequence[Option[JobManagementCursorPayload]] =
+    if (request == null)
+      Consequence.argumentInvalid("JobManagement query shape refused")
+    else request.validate.flatMap { _ =>
+      request.cursor match {
+        case None => Consequence.success(None)
+        case Some(cursor) => JobManagementCursor.decode(cursor).map(Some(_))
+      }
+    }
 
   private def _expired_query_snapshot[A](): Consequence[A] =
     Consequence.operationInvalid("job.management-query.cursor", "expired snapshot: authorized source changed")
@@ -252,7 +262,7 @@ private[job] object JobManagementReader {
   private def _page_items[A](items: Vector[A], offset: Int, limit: Int): PageItems[A] = {
     val safeoffset = math.max(0, offset)
     val safelimit = math.max(0, limit)
-    PageItems(safeoffset, safelimit, items.size, items.slice(safeoffset, safeoffset + safelimit))
+    PageItems(safeoffset, safelimit, items.size, items.drop(safeoffset).take(safelimit))
   }
 
   private final case class PageItems[A](

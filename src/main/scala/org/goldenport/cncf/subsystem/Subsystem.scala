@@ -37,7 +37,8 @@ import org.goldenport.cncf.entity.{
   EntityRevisionTransport
 }
 import org.goldenport.cncf.http.{HttpDriver, HttpExecutionEnvelope, HttpExecutionResult, WebExecutionResolutionPolicy}
-import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
+import org.goldenport.cncf.job.{DurableJobRuntimeOwner, DurableJobRuntimeProvider, InMemoryJobEngine, JobEngine}
+import org.goldenport.cncf.config.JobDurableRuntimeConfiguration
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
 import org.goldenport.cncf.usernotification.UserNotificationEventForwarder
@@ -72,7 +73,8 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
- * @version Sep.  8, 2026
+ *  version Sep.  8, 2026
+ * @version Oct.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -156,6 +158,12 @@ final class Subsystem(
   private var _runtime_configuration_bindings: Option[ConfigurationBindingCollection[CncfConfigurationTarget]] = None
   private var _runtime_operation_security_policy: Option[RuntimeOperationSecurityPolicy] = None
   private var _runtime_execution_profile_configuration: Option[RuntimeExecutionProfileConfiguration] = None
+  private var _durable_job_configuration = JobDurableRuntimeConfiguration.default
+  private val _durable_job_providers = mutable.HashMap.empty[String, DurableJobRuntimeProvider]
+  private var _durable_job_owner = Option.empty[DurableJobRuntimeOwner]
+  private var _durable_job_initializing = false
+  private var _durable_job_initialized = false
+  private var _durable_job_failed = false
   private var _resolved_standalone_user_profile: Option[ResolvedStandaloneUserProfile] = None
   private var _subsystem_user_mode_c: Option[Consequence[SubsystemUserModeResolution]] = None
   private var _user_notification_forwarding_registered: Boolean = false
@@ -220,11 +228,54 @@ final class Subsystem(
       for {
         policy <- RuntimeOperationSecurityPolicy.from(bindings)
         executionprofile <- RuntimeExecutionProfileConfiguration.from(bindings)
+        durable <- JobDurableRuntimeConfiguration.from(bindings)
       } yield {
         _runtime_configuration_bindings = Some(bindings)
         _runtime_operation_security_policy = Some(policy)
         _runtime_execution_profile_configuration = Some(executionprofile)
+        _durable_job_configuration = durable
       }
+  }
+
+  private[cncf] def _register_durable_job_provider_c(provider: DurableJobRuntimeProvider): Consequence[Unit] = synchronized {
+    if (provider == null || !JobDurableRuntimeConfiguration.validProvider(provider.id) ||
+        _durable_job_providers.contains(provider.id) || _durable_job_initializing || _durable_job_initialized ||
+        _durable_job_failed || _shutdown_in_progress || _shutdown_result.nonEmpty) DurableJobRuntimeOwner.refused
+    else { _durable_job_providers.put(provider.id, provider); Consequence.unit }
+  }
+
+  private[cncf] def _initialize_durable_job_runtime_c(): Consequence[Unit] = {
+    val selected: Consequence[Option[(DurableJobRuntimeProvider, JobDurableRuntimeConfiguration)]] = synchronized {
+      if (_shutdown_in_progress || _shutdown_result.nonEmpty || _durable_job_initializing || _durable_job_failed)
+        DurableJobRuntimeOwner.refused
+      else if (_durable_job_initialized) Consequence.success(None)
+      else _durable_job_configuration.providerid match {
+        case None => _durable_job_initialized = true; Consequence.success(None)
+        case Some(id) => _durable_job_providers.get(id) match {
+          case Some(provider) =>
+            _durable_job_initializing = true
+            Consequence.success(Some(provider -> _durable_job_configuration))
+          case None => _durable_job_failed = true; DurableJobRuntimeOwner.refused
+        }
+      }
+    }
+    selected.flatMap {
+      case None => Consequence.unit
+      case Some((provider, configuration)) =>
+        // Factory, native probes and recovery run outside the Subsystem monitor.
+        val result = provider._start_c(this, configuration, owner => synchronized {
+          if (_shutdown_in_progress || _shutdown_result.nonEmpty) DurableJobRuntimeOwner.refused
+          else { _durable_job_owner = Some(owner); Consequence.unit }
+        })
+        synchronized {
+          _durable_job_initializing = false
+          result match {
+            case Consequence.Success(_) => _durable_job_initialized = true
+            case _ => _durable_job_failed = true
+          }
+        }
+        result.map(_ => ())
+    }
   }
 
   private[cncf] def admitRuntimeConfigurationBindingsC(
@@ -477,6 +528,8 @@ final class Subsystem(
 
   private var _shutdown_in_progress: Boolean = false
   private var _shutdown_result: Option[Consequence[Vector[ServiceContainerCleanupOutcome]]] = None
+  private[cncf] def _shutdown_result_option: Option[Consequence[Vector[ServiceContainerCleanupOutcome]]] =
+    synchronized { _shutdown_result }
   private var _component_class_loaders: Vector[java.net.URLClassLoader] = Vector.empty
 
   private[cncf] def registerComponentClassLoader(loader: java.net.URLClassLoader): Unit = synchronized {
@@ -538,6 +591,7 @@ final class Subsystem(
       } catch {
         case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
       }
+    val durableresult = synchronized { _durable_job_owner }.map(_._stop_c()).getOrElse(Consequence.unit)
     val serviceresult = _service_container_runtime
       .map(ServiceContainerRuntimeObservation.shutdownC)
       .getOrElse(Consequence.success(Vector.empty))
@@ -577,7 +631,7 @@ final class Subsystem(
         case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
       }
     val componentloaderresult = _drain_component_class_loaders_c()
-    val failures = Vector(jobresult, mcpresult, evaluationresult, serviceresult, bindingdrainresult, jobterminalresult, bindingresult, componentloaderresult).collect {
+    val failures = Vector(jobresult, durableresult, mcpresult, evaluationresult, serviceresult, bindingdrainresult, jobterminalresult, bindingresult, componentloaderresult).collect {
       case Consequence.Failure(conclusion) => conclusion
     }
     failures.reduceOption(_ ++ _) match {

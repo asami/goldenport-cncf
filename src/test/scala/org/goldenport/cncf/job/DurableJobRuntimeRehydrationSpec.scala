@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * startup recovery has canonically admitted and classified one durable record.
  *
  * @since   Sep.  9, 2026
- * @version Sep.  9, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobRuntimeRehydrationSpec
@@ -46,9 +46,9 @@ final class DurableJobRuntimeRehydrationSpec
         val fixture = _fixture()
         given ExecutionContext = fixture.context
         val jobid = _job_id("scheduled")
-        val snapshot = _create(
+        val snapshot = _publish(
           fixture.store,
-          _record(jobid, scheduledAt = Some(_instant.plusSeconds(10L)))
+          _record(jobid, scheduledat = Some(_instant.plusSeconds(10L)))
         )
         val runs = new AtomicInteger(0)
         val source = _source(Vector(_candidate(0L, jobid)))
@@ -56,6 +56,8 @@ final class DurableJobRuntimeRehydrationSpec
           jobid -> Consequence.success(_runtime(jobid, new CountingTask(runs), fixture.context))
         ))
         val enginefixture = createManualJobEngine(initialTime = _instant)
+        val evidence = JobDurableLifetimeRecoveryFixtures.bind(enginefixture.engine, fixture.store,
+          snapshot.record, fixture.context)
 
         When("the distinct runtime registers the admitted provider result")
         val report = _success(
@@ -87,6 +89,15 @@ final class DurableJobRuntimeRehydrationSpec
         Then("the live task runs only through normal JobEngine execution")
         enginefixture.engine.getStatus(_job(jobid)) shouldBe Some(JobStatus.Succeeded)
         runs.get() shouldBe 1
+        val retained = _success(fixture.store.load(jobid, _access)).get
+        if (snapshot.record.body.lifecycle.retry.nextRetryAt.isEmpty) {
+          retained.record.body.identity.revision shouldBe snapshot.record.body.identity.revision + 5L
+          evidence.revisions shouldBe (2L to 6L).toVector
+        } else {
+          retained shouldBe snapshot
+          evidence.requests shouldBe empty
+        }
+        _success(fixture.store.lifetimeQuota(DurableJobLifetimeQuotaPolicy.default).snapshot(jobid, _access)).seed.paid shouldBe JobLifetimeSnapshot(2, 96, 1, 1)
       }
     }
 
@@ -96,13 +107,15 @@ final class DurableJobRuntimeRehydrationSpec
         val fixture = _fixture()
         given ExecutionContext = fixture.context
         val jobid = _job_id("retry")
-        _create(fixture.store, _record(jobid, nextRetryAt = Some(_instant.plusSeconds(15L))))
+        val snapshot = _publish(fixture.store, _record(jobid, nextretryat = Some(_instant.plusSeconds(15L))))
         val runs = new AtomicInteger(0)
         val source = _source(Vector(_candidate(0L, jobid)))
         val port = _port(Map(
           jobid -> Consequence.success(_runtime(jobid, new CountingTask(runs), fixture.context))
         ))
         val enginefixture = createManualJobEngine(initialTime = _instant)
+        val evidence = JobDurableLifetimeRecoveryFixtures.bind(enginefixture.engine, fixture.store,
+          snapshot.record, fixture.context)
 
         When("the distinct runtime registers the admitted provider result")
         val report = _success(
@@ -122,6 +135,15 @@ final class DurableJobRuntimeRehydrationSpec
         Then("the live retry task runs only through normal JobEngine execution")
         enginefixture.engine.getStatus(_job(jobid)) shouldBe Some(JobStatus.Succeeded)
         runs.get() shouldBe 1
+        val retained = _success(fixture.store.load(jobid, _access)).get
+        if (snapshot.record.body.lifecycle.retry.nextRetryAt.isEmpty) {
+          retained.record.body.identity.revision shouldBe snapshot.record.body.identity.revision + 5L
+          evidence.revisions shouldBe (2L to 6L).toVector
+        } else {
+          retained shouldBe snapshot
+          evidence.requests shouldBe empty
+        }
+        _success(fixture.store.lifetimeQuota(DurableJobLifetimeQuotaPolicy.default).snapshot(jobid, _access)).seed.paid shouldBe JobLifetimeSnapshot(2, 96, 1, 1)
       }
     }
 
@@ -151,7 +173,7 @@ final class DurableJobRuntimeRehydrationSpec
         _create(fixture.store, _record(
           running,
           status = DurableJobLifecycleStatus.Running,
-          startedAt = Some(_instant.plusSeconds(1L))
+          startedat = Some(_instant.plusSeconds(1L))
         ))
         _create(fixture.store, _record(incomplete))
         _create(fixture.store, _record(terminal, status = DurableJobLifecycleStatus.Succeeded))
@@ -257,6 +279,15 @@ final class DurableJobRuntimeRehydrationSpec
   private final class CountingTask(runs: AtomicInteger) extends JobTask {
     val actionId: ActionId = ActionId("cncf", "runtime", Some(_instant), Some("RUNTIME-REHYDRATION"))
 
+    override def taskKind = "operation"
+    override def targetKind = Some("operation")
+    override def relation = Some("root")
+    override def transactionRole = Some("own")
+    override def transactionScope = Some("per-task")
+    override def componentName = Some("component-a")
+    override def serviceName = Some("service-a")
+    override def operationName = Some("run")
+
     def run(ctx: ExecutionContext): TaskOutcome = {
       val _ = ctx
       val _ = runs.incrementAndGet()
@@ -295,6 +326,10 @@ final class DurableJobRuntimeRehydrationSpec
   ): DurableJobRuntimeRehydration =
     DurableJobRuntimeRehydration(_job(jobid), List(task), context, None, None)
 
+  private def _publish(store: DurableJobStore, record: DurableJobRecord)
+      (using ExecutionContext): DurableJobStoreSnapshot =
+    JobDurableLifetimeRecoveryFixtures.publish(store, record)
+
   private def _create(
     store: DurableJobStore,
     record: DurableJobRecord
@@ -304,11 +339,11 @@ final class DurableJobRuntimeRehydrationSpec
   private def _record(
     jobid: String,
     status: DurableJobLifecycleStatus = DurableJobLifecycleStatus.Submitted,
-    scheduledAt: Option[Instant] = Some(_instant),
-    startedAt: Option[Instant] = None,
-    nextRetryAt: Option[Instant] = None
+    scheduledat: Option[Instant] = Some(_instant),
+    startedat: Option[Instant] = None,
+    nextretryat: Option[Instant] = None
   ): DurableJobRecord =
-    DurableJobRecord.createV2(_body(jobid, status, scheduledAt, startedAt, nextRetryAt))
+    DurableJobRecord.createV2(_body(jobid, status, scheduledat, startedat, nextretryat))
       .toOption
       .getOrElse(fail("unable to create durable runtime rehydration fixture"))
 

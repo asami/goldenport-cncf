@@ -1,58 +1,13 @@
 package org.goldenport.cncf.job
 
-import java.security.MessageDigest
-import java.time.{Duration, Instant}
-import java.util.Base64
-import java.util.concurrent.{
-  ConcurrentHashMap,
-  Executors,
-  PriorityBlockingQueue,
-  ScheduledExecutorService,
-  TimeUnit,
-  ExecutorService
-}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import scala.concurrent.ExecutionContext as ScalaExecutionContext
-import scala.util.control.NonFatal
-import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.consequence.Failures
-import org.goldenport.id.UniversalId
-import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.conclusion.Disposition
-import org.goldenport.observation.Taxonomy
-import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.record.Record
-import org.goldenport.record.io.RecordEncoder
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{
-  ExecutionContext,
-  ExecutionInvocationIdentity,
-  ExecutionProfileRuntime,
-  ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration,
-  IdGenerationContext
-}
-import org.goldenport.cncf.entity.{
-  EntityMutationExecutionPolicy,
-  EntityPersistentCreate,
-  EntityStore
-}
-import org.simplemodeling.model.datatype.EntityRevision
-import org.goldenport.cncf.event.{
-  EventBus,
-  EventLane,
-  EventPublishOption,
-  EventRecordFactory,
-  EventStore,
-  ReceptionDomainEvent
-}
-import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
+import java.time.Instant
+import org.goldenport.Consequence
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionProfileRuntime}
+import org.goldenport.cncf.event.{EventBus, EventStore}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMemoryJobEngine =>
@@ -78,14 +33,18 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
       _durable_lifecycle_write_bridge = Option(bridge)
     }
 
-  private[job] def durableLifecycleWriteFailureFacts: Vector[DurableJobLifecycleWriteFailureFact] = {
+  private[job] def durableLifecycleWriteFailureFacts: Vector[DurableJobLifecycleWriteFailureFact] = _state_monitor.synchronized {
     val entries = _durable_lifecycle_write_failures.entrySet().iterator()
     val builder = Vector.newBuilder[DurableJobLifecycleWriteFailureFact]
     while (entries.hasNext) {
       val entry = entries.next()
       builder += DurableJobLifecycleWriteFailureFact(entry.getKey, entry.getValue)
     }
-    builder.result().sortBy(_.jobid.value)
+    val shared = runtimeState._native_lifetime_bindings.iterator.flatMap { case (jobid, binding) =>
+      binding.checkpointfailure.map(DurableJobLifecycleWriteFailureFact(jobid, _))
+    }.toVector
+    (shared ++ builder.result()).distinctBy(_.jobid).sortBy(_.jobid.value)
+      .take(_resource_budget.policy.maxretainedjobs)
   }
 
   private[job] def recoverDurableStartup(
@@ -107,7 +66,9 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
     maxCandidates: Int
   )(using ctx: ExecutionContext): Consequence[DurableJobTerminalProjectionReport] =
     (new DurableJobStartupRecoveryCoordinator(source, store))
-      .recoverTerminal(maxCandidates)(_register_durable_terminal_fact)
+      .recoverTerminal(maxCandidates)((candidate, snapshot, decision, projection) =>
+        _register_durable_terminal_fact(candidate, snapshot, decision, projection, store,
+          _recovery_lifetime_policy, ctx))
       .map { report =>
         _durable_terminal_projection_report = Some(report)
         report
@@ -134,7 +95,9 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
     maxCandidates: Int
   )(using ctx: ExecutionContext): Consequence[DurableJobRuntimeRehydrationReport] =
     (new DurableJobStartupRecoveryCoordinator(source, store))
-      .recoverRuntime(maxCandidates, port)(_register_durable_runtime_rehydration)
+      .recoverRuntime(maxCandidates, port)((candidate, snapshot, decision, rehydration) =>
+        _register_durable_runtime_rehydration(candidate, snapshot, decision, rehydration, store,
+          _recovery_lifetime_policy, ctx))
       .map { report =>
         _durable_runtime_rehydration_report = Some(report)
         report
@@ -143,19 +106,25 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
   private[job] def durableRuntimeRehydrationReport: Option[DurableJobRuntimeRehydrationReport] =
     _durable_runtime_rehydration_report
 
+  private def _recovery_lifetime_policy: DurableJobLifetimeQuotaPolicy =
+    _durable_lifecycle_write_bridge.map(_.recoveryPolicy(runtimeState._lifetime_budget.policy))
+      .getOrElse(DurableJobLifetimeQuotaPolicy.default.copy(lifetime = runtimeState._lifetime_budget.policy))
+
   override def shutdown(): Unit = {
     quiesce()
     forceCancel()
   }
 
-  override def quiesce(): Unit = {
+  override def quiesce(): Unit = _state_monitor.synchronized {
     _admission_closed = true
     _signal_state_change()
   }
 
-  override def forceCancel(): Unit = {
+  override def forceCancel(): Unit = _state_monitor.synchronized {
+    _admission_closed = true
     _force_cancel_requested = true
-    _timer.shutdown()
+    _remove_pending_resources(None, close = true)
+    _scheduler.foreach(_.shutdownNow())
     _execution_scheduling_registration.foreach(_.close())
     _execution_scheduling_registration = None
     _worker_pool.shutdownNow()
@@ -168,9 +137,9 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
     )
 
   def drainOne(): Boolean =
-    Option(_work_queue.poll()) match {
+    _claim_work(blocking = false) match {
       case Some(work) =>
-        _run_scheduler_work(work)
+        _execute_reserved_work(work)
         true
       case None =>
         false
@@ -184,20 +153,40 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
   }
 
   def submit(tasks: List[JobTask], ctx: ExecutionContext): Consequence[JobId] =
-    submit(tasks, ctx, _default_submit_option(tasks))
+    runtimeState._operation_metrics.observeSubmission(
+      if (_durable_runtime_blocked) DurableJobRuntimeOwner.refused
+      else if (_admission_closed) Consequence.serviceUnavailable("JobEngine is quiescing")
+      else _state_monitor.synchronized { _prepare_lifetime_root(tasks, Vector.empty) }
+        .flatMap(_ => _submit_with_option(tasks, ctx, _default_submit_option(tasks)))
+    )
 
   def submit(
     tasks: List[JobTask],
     ctx: ExecutionContext,
     option: JobSubmitOption
   ): Consequence[JobId] =
-    if (_admission_closed)
+    runtimeState._operation_metrics.observeSubmission(_submit_with_option(tasks, ctx, option))
+
+  private def _submit_with_option(
+    tasks: List[JobTask],
+    ctx: ExecutionContext,
+    option: JobSubmitOption
+  ): Consequence[JobId] =
+    if (_durable_runtime_blocked) DurableJobRuntimeOwner.refused
+    else if (_admission_closed)
       Consequence.serviceUnavailable("JobEngine is quiescing")
+    else if (option == null)
+      JobInputResourcePolicy.invalid
     else {
+      JobInputResourcePolicy.validate(option.input).flatMap { _ =>
+      _state_monitor.synchronized { _prepare_lifetime_root(tasks, option.executionNotes) }.flatMap { ticket =>
       _validate_submit_option(option).recoverWith { conclusion =>
         tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
         Consequence.Failure(conclusion)
       }.flatMap { _ =>
+        val admission = _state_monitor.synchronized {
+          _reserve_submission(tasks, option.runMode).flatMap { lease =>
+            try {
         val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
         val now = _now()
         val initialdebug = JobDebugInfo(
@@ -236,12 +225,14 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
           debug = initialdebug,
           input = option.input
         )
-        _admit_durable_lifecycle(record).recoverWith { conclusion =>
+        val admitted = _admit_durable_lifecycle(record).recoverWith { conclusion =>
           _record_durable_lifecycle_write_failure(jobid, DurableJobLifecycleWriteFailure.AdmissionRefused)
           tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
           Consequence.Failure(conclusion)
         }.map { _ =>
-          _cancellation_scopes.put(jobid, new JobCancellationScope)
+          runtimeState._lifetime_budget.publishRoot(jobid, ticket)
+          _resource_budget.commit(lease, jobid)
+          _cancellation_scopes.put(jobid, _cancellation_scope(jobid))
           _put_record(record)
           _append_event(
             jobid = jobid,
@@ -272,16 +263,41 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
                       "scheduled-start-at" -> scheduledat.toString
                     )
                   )
-                  _schedule_delayed_start(jobid, scheduledat)
+                  if (!_schedule_delayed_start(jobid, scheduledat, lease))
+                    _resource_scheduling_failure(jobid)
                 case None =>
                   _append_timeline(jobid, "job.async.queued", None, None, None)
-                  _enqueue_work(SchedulerWorkItem.JobRun(_next_sequence(), option.priority, jobid))
+                  _enqueue_work(SchedulerWorkItem.JobRun(_next_sequence(), option.priority, jobid), lease)
               }
-            case JobRunMode.Sync =>
-              _run_job_sync(jobid, tasks, ctx)
+            case JobRunMode.Sync => ()
           }
-          jobid
+          jobid -> lease
         }
+        admitted match {
+          case Consequence.Failure(_) => _resource_budget.release(lease)
+          case _ => ()
+        }
+        admitted
+            } catch {
+              case e: Throwable =>
+                _resource_budget.release(lease)
+                throw e
+            }
+          }
+        }
+        admission.flatMap { case (jobid, lease) =>
+          if (option.runMode != JobRunMode.Sync) Consequence.success(jobid)
+          else {
+            var entered = false
+            try _execute_with_durable_runtime_c {
+              entered = true
+              _with_execution_lease(jobid, lease) { _run_job_sync(jobid, tasks, ctx) }
+            }.map(_ => jobid)
+            finally if (!entered) _resource_budget.release(lease)
+          }
+        }
+      }
+      }
       }
     }
 

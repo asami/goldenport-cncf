@@ -8,7 +8,7 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Sep. 11, 2026
- * @version Sep. 11, 2026
+ * @version Oct. 1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobManagementQuery(
@@ -19,7 +19,10 @@ final case class JobManagementQuery(
   cursor: Option[JobManagementCursor] = None
 ) {
   def validate: Consequence[Unit] =
-    if (limit <= 0 || limit > JobManagementQuery.MaximumLimit)
+    if (status == null || origin == null || cursor == null ||
+        status.exists(_ == null) || origin.exists(_ == null) || cursor.exists(_ == null))
+      Consequence.argumentInvalid("JobManagement query shape refused")
+    else if (limit <= 0 || limit > JobManagementQuery.MaximumLimit)
       Consequence.operationInvalid(
         "job.management-query",
         s"limit must be in 1..${JobManagementQuery.MaximumLimit}"
@@ -77,6 +80,9 @@ object JobManagementCursor {
   }
 
   def decode(cursor: JobManagementCursor): Consequence[JobManagementCursorPayload] =
+    if (cursor == null || cursor.value == null || cursor.value.isBlank || cursor.value.length > 280)
+      _invalid("malformed cursor")
+    else
     try {
       val parts = new String(
         Base64.getUrlDecoder.decode(cursor.value),

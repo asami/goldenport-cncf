@@ -13,7 +13,8 @@ import org.goldenport.configuration.{CanonicalParameterId, ConfigurationParamete
 
 /*
  * @since   Aug.  3, 2026
- * @version Aug.  4, 2026
+ *  version Aug.  4, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalog private[config] (
@@ -558,7 +559,7 @@ object CncfConfigurationParameterCatalog {
         isConfidential = false,
         Set(CncfConfigurationTargetKind.SubsystemInstance)
       ))
-    )
+    ) ++ JobDurableRuntimeConfiguration.definitions
 
   val subsystemUserMode: ConfigurationParameter[SubsystemUserMode] =
     _subsystem_user_mode_parameter
@@ -617,6 +618,9 @@ object CncfConfigurationParameterCatalog {
   val executionI18nDateTimeFormatPolicy: ConfigurationParameter[String] = _execution_i18n_date_time_format_policy_parameter
   val executionEnvironmentAllow: ConfigurationParameter[Vector[String]] = _execution_environment_allow_parameter
   val executionEnvironmentValues: ConfigurationParameter[Map[String, String]] = _execution_environment_values_parameter
+  private[cncf] val durableJobProvider: ConfigurationParameter[String] = JobDurableRuntimeConfiguration.provider
+  private[cncf] val durableJobMaintenancePeriodMillis: ConfigurationParameter[Long] = JobDurableRuntimeConfiguration.period
+  private[cncf] val durableJobMaxCandidates: ConfigurationParameter[Int] = JobDurableRuntimeConfiguration.candidates
 
   val closed: CncfConfigurationParameterCatalog =
     _take(create(_definitions))

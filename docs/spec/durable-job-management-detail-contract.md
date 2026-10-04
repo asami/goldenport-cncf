@@ -45,6 +45,16 @@ Management Task and timeline pages accept offsets no lower than zero and limits
 in `1..100`. Invalid pagination fails before a job candidate is located. Tree
 and Task-detail reads are exact reads of the already-authorized job.
 
+The default management limit is 100. Complete pagination admission precedes
+the by-name snapshot and candidate policy; an admitted snapshot is evaluated
+once. Pages preserve the supplied offset/limit, authorized total count,
+fetched count and original order through `drop(offset).take(limit)`, including
+empty pages at offsets near or equal to `Int.MaxValue`. No offset-plus-limit
+slice bound may overflow. Invalid offsets or limits perform no snapshot,
+candidate authorization, Job, timer or provider effect. Raw compatibility reads
+retain arbitrary nonnegative limits, negative normalization and all available
+facts; the management bound introduces no blanket 100-item truncation.
+
 Live state is the sole source for an available result. When live state is absent
 and an authorized terminal durable projection is the candidate after a fresh
 restart, its retained terminal facts supply only the
@@ -58,3 +68,8 @@ storage operation, remote verification, download, signing, retention policy,
 durable migration, recovery behavior, lifecycle write, management control,
 protocol, Help, HTTP, CLI, JCL, task-local calltree body, raw event history, or
 user-experience surface.
+
+[JobManagementPageResourceBoundsSpec](../../src/test/scala/org/goldenport/cncf/job/JobManagementPageResourceBoundsSpec.scala)
+authors QP2/QP7/QP8/QP9 for actual task/timeline pages, authorization, full raw
+facts and generated offsets with adjacent Given/When/Then and direct should
+assertions. B3B3B focused validation, independent review and commit are pending.

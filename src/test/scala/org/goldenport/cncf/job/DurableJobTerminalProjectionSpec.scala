@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * this path, and the assertions retain the executable maps as the boundary.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 11, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobTerminalProjectionSpec
@@ -83,7 +83,7 @@ final class DurableJobTerminalProjectionSpec
         engine.durableTerminalProjectionReport shouldBe Some(report)
         engine.durableRuntimeRehydrationReport shouldBe None
         engine.durableTerminalProjection(succeededid).map(_.snapshot) shouldBe Some(succeededsnapshot)
-        engine.durableTerminalProjection(succeededid).map(_.snapshot.record) shouldBe Some(succeeded)
+        engine.durableTerminalProjection(succeededid).map(_.snapshot.record) shouldBe Some(succeededsnapshot.record)
         engine.durableTerminalProjection(failedid).map(_.decision.outcome) shouldBe
           Some(DurableJobRecoveryOutcome.TerminalFailed)
         engine.durableTerminalProjection(cancelledid).map(_.decision.outcome) shouldBe
@@ -173,6 +173,12 @@ final class DurableJobTerminalProjectionSpec
           current = current.flatMap(_.children.headOption)
         }
         depth shouldBe _deep_task_count
+        val native = _success(fixture.store.lifetimeQuota(DurableJobLifetimeQuotaPolicy.default)
+          .snapshot(deep.body.identity.jobId, _access))
+        native.seed.paid shouldBe JobLifetimeSnapshot(4096, 131136, 2, 2)
+        native.seed.normalids shouldBe deep.body.tasks.map(_.taskId).toSet
+        native.seed.remaining shouldBe 0L
+        engine._native_binding(_job(deep.body.identity.jobId)).get.bridge shouldBe None
       }
     }
 
@@ -291,7 +297,8 @@ final class DurableJobTerminalProjectionSpec
         ))
         _success(fixture.store.checkpoint(
           terminalfirstsnapshot,
-          _record(terminalfirstid, DurableJobLifecycleStatus.Submitted, revision = 2L),
+          _record(terminalfirstid, DurableJobLifecycleStatus.Submitted,
+            revision = terminalfirstsnapshot.record.body.identity.revision + 1L),
           _access
         ))
         val terminalfirstport = _port(Map(
@@ -305,6 +312,7 @@ final class DurableJobTerminalProjectionSpec
           terminalfirstport,
           1
         ))
+        JobDurableLifetimeRecoveryFixtures.bind(engine, fixture.store, runtimefirstsnapshot.record, fixture.context)
         val runtimefirstport = _port(Map(
           runtimefirstid -> Consequence.success(_runtime(runtimefirstid, fixture.context))
         ))
@@ -316,7 +324,8 @@ final class DurableJobTerminalProjectionSpec
         ))
         _success(fixture.store.checkpoint(
           runtimefirstsnapshot,
-          _record(runtimefirstid, DurableJobLifecycleStatus.Succeeded, revision = 2L),
+          _record(runtimefirstid, DurableJobLifecycleStatus.Succeeded,
+            revision = runtimefirstsnapshot.record.body.identity.revision + 1L),
           _access
         ))
         val runtimefirstterminal = _success(engine.recoverDurableTerminalFacts(
@@ -422,6 +431,15 @@ final class DurableJobTerminalProjectionSpec
   private final class TestTask extends JobTask {
     val actionId: ActionId = ActionId("cncf", "terminal", Some(_instant), Some("RUNTIME"))
 
+    override def taskKind = "operation"
+    override def targetKind = Some("operation")
+    override def relation = Some("root")
+    override def transactionRole = Some("own")
+    override def transactionScope = Some("per-task")
+    override def componentName = Some("component-a")
+    override def serviceName = Some("service-a")
+    override def operationName = Some("run")
+
     def run(ctx: ExecutionContext): TaskOutcome = {
       val _ = ctx
       TaskSucceeded(OperationResponse.Scalar("rehydrated"))
@@ -462,7 +480,10 @@ final class DurableJobTerminalProjectionSpec
     store: DurableJobStore,
     record: DurableJobRecord
   )(using context: ExecutionContext): DurableJobStoreSnapshot =
-    _success(store.create(record, _access))
+    if (record.body.lifecycle.status == DurableJobLifecycleStatus.Submitted) {
+      val declaration = _success(DurableJobRecord.createV2(record.body.copy(timeline = Vector.empty)))
+      JobDurableLifetimeRecoveryFixtures.publish(store, declaration)
+    } else JobDurableLifetimeRecoveryFixtures.publishTerminal(store, record)
 
   private def _record(
     jobid: String,

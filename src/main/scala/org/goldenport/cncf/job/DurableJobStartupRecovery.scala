@@ -11,7 +11,7 @@ import scala.util.control.NonFatal
  * necessary to admit and classify each identity.
  *
  * @since   Sep.  9, 2026
- * @version Sep.  9, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobStartupRecoveryCandidate(
@@ -53,15 +53,15 @@ private[job] final class DurableJobStartupRecoveryCoordinator(
   source: DurableJobStartupRecoverySource,
   store: DurableJobStore
 ) {
+  private[job] def _admitted_candidates_c(
+    maxcandidates: Int
+  ): Consequence[Vector[DurableJobStartupRecoveryCandidate]] =
+    _source_candidates(maxcandidates)
+
   def recover(
     maxCandidates: Int
   )(using ctx: ExecutionContext): Consequence[DurableJobStartupRecoveryReport] =
-    if (maxCandidates <= 0)
-      Consequence.argumentInvalid(
-        "durable startup recovery candidate bound must be positive"
-      )
-    else
-      source.candidates(maxCandidates).flatMap(_validate(_, maxCandidates)).map {
+    _source_candidates(maxCandidates).map {
         candidates =>
           DurableJobStartupRecoveryReport(candidates.map(_recover_candidate))
       }
@@ -77,12 +77,10 @@ private[job] final class DurableJobStartupRecoveryCoordinator(
       DurableJobRuntimeRehydration
     ) => DurableJobRuntimeRehydrationFact
   )(using ctx: ExecutionContext): Consequence[DurableJobRuntimeRehydrationReport] =
-    if (maxCandidates <= 0)
-      Consequence.argumentInvalid(
-        "durable startup recovery candidate bound must be positive"
-      )
+    if (port == null || register == null)
+      _batch_refused
     else
-      source.candidates(maxCandidates).flatMap(_validate(_, maxCandidates)).map {
+      _source_candidates(maxCandidates).map {
         candidates =>
           DurableJobRuntimeRehydrationReport(
             candidates.map(_recover_runtime_candidate(_, port, register))
@@ -99,48 +97,63 @@ private[job] final class DurableJobStartupRecoveryCoordinator(
       DurableJobTerminalProjection
     ) => DurableJobTerminalProjectionFact
   )(using ctx: ExecutionContext): Consequence[DurableJobTerminalProjectionReport] =
-    if (maxCandidates <= 0)
-      Consequence.argumentInvalid(
-        "durable startup recovery candidate bound must be positive"
-      )
+    if (register == null)
+      _batch_refused
     else
-      source.candidates(maxCandidates).flatMap(_validate(_, maxCandidates)).map {
+      _source_candidates(maxCandidates).map {
         candidates =>
           DurableJobTerminalProjectionReport(
             candidates.map(_recover_terminal_candidate(_, register))
           )
       }
 
+  private def _source_candidates(
+    maxcandidates: Int
+  ): Consequence[Vector[DurableJobStartupRecoveryCandidate]] =
+    if (maxcandidates < 1 || maxcandidates > 1024 || source == null || store == null)
+      _batch_refused
+    else {
+      val discovered = try {
+        source.candidates(maxcandidates)
+      } catch {
+        case NonFatal(_) => _batch_refused[Vector[DurableJobStartupRecoveryCandidate]]
+      }
+      discovered match {
+        case Consequence.Success(candidates) => _validate(candidates, maxcandidates)
+        case _ => _batch_refused
+      }
+    }
+
+  private def _batch_refused[A]: Consequence[A] =
+    Consequence.argumentInvalid("Durable Job startup recovery batch refused")
+
   private def _validate(
     candidates: Vector[DurableJobStartupRecoveryCandidate],
-    maxCandidates: Int
+    maxcandidates: Int
   ): Consequence[Vector[DurableJobStartupRecoveryCandidate]] =
-    if (candidates.size > maxCandidates)
-      Consequence.argumentInvalid(
-        s"durable startup recovery source exceeded requested bound: ${candidates.size} > $maxCandidates"
-      )
+    if (candidates == null || candidates.size > maxcandidates ||
+        candidates.exists(candidate => !_candidate_shape(candidate)))
+      _batch_refused
+    else if (_duplicate_id(candidates).nonEmpty || _unstable_candidate(candidates).nonEmpty)
+      _batch_refused
     else
-      candidates.find(candidate => Option(candidate.jobId).forall(_.trim.isEmpty)) match {
-        case Some(_) =>
-          Consequence.argumentInvalid(
-            "durable startup recovery source supplied a blank durable job id"
-          )
-        case None =>
-          _duplicate_id(candidates) match {
-            case Some(id) =>
-              Consequence.argumentInvalid(
-                s"durable startup recovery source supplied a duplicate durable job id: $id"
-              )
-            case None =>
-              _unstable_candidate(candidates) match {
-                case Some(candidate) =>
-                  Consequence.argumentInvalid(
-                    s"durable startup recovery source supplied non-stable candidate order at ordinal ${candidate.ordinal}"
-                  )
-                case None => Consequence.success(candidates)
-              }
-          }
-      }
+      Consequence.success(candidates)
+
+  private def _candidate_shape(candidate: DurableJobStartupRecoveryCandidate): Boolean =
+    candidate != null && _nonblank(candidate.jobId) &&
+      _access_shape(candidate.access) && _evidence_shape(candidate.replayEvidence)
+
+  private def _nonblank(value: String): Boolean =
+    value != null && value.trim.nonEmpty
+
+  private def _access_shape(access: DurableJobRecordAccess): Boolean =
+    access != null && _nonblank(access.tenantId) && _nonblank(access.subjectId) &&
+      access.scopes != null && access.scopes.forall(_nonblank)
+
+  private def _evidence_shape(evidence: DurableReplayEvidence): Boolean =
+    evidence != null && evidence.idempotency != null && evidence.input != null &&
+      evidence.definition != null && evidence.authorization != null &&
+      evidence.provider != null && evidence.compatibility != null
 
   private def _duplicate_id(
     candidates: Vector[DurableJobStartupRecoveryCandidate]

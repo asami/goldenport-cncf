@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 14, 2026
- * @version Jul. 15, 2026
+ *  version Jul. 15, 2026
+ * @version Oct.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventBusSpec
@@ -26,7 +27,7 @@ final class EventBusSpec
   "EventBus" should {
     "register and dispatch in deterministic priority/order" in {
       Given("event bus with multiple subscriptions for same event")
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -68,7 +69,7 @@ final class EventBusSpec
 
     "dispatch ephemeral event without persistence dependency" in {
       Given("event bus with ephemeral publish")
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -93,7 +94,7 @@ final class EventBusSpec
 
     "persist and dispatch when publish is persistent" in {
       Given("event bus with persistent publish")
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -120,7 +121,7 @@ final class EventBusSpec
 
     "map dispatch failure to structured consequence failure" in {
       Given("event bus with failing handler")
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -157,7 +158,7 @@ final class EventBusSpec
     "deny publish for user privilege in authorized entry point" in {
       Given("event bus and user execution context")
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.User)
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -188,7 +189,7 @@ final class EventBusSpec
       Given("event bus and content-manager execution context")
       given ExecutionContext =
         ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -214,7 +215,7 @@ final class EventBusSpec
       Given("an authorized event handler that records its execution context")
       given context: ExecutionContext =
         ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -254,7 +255,7 @@ final class EventBusSpec
     "deny subscription introspection for user privilege" in {
       Given("event bus and user execution context")
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.User)
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -276,7 +277,7 @@ final class EventBusSpec
       Given("event bus and content-manager execution context")
       given ExecutionContext =
         ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val recorder = new _InMemoryCommitRecorder
+      val recorder = new InMemoryCommitRecorder
       val eventstore = EventStore.inMemory
       val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
       val bus = EventBus.default(eventengine)
@@ -296,6 +297,76 @@ final class EventBusSpec
     }
   }
 
+  "EB1 Authorized persistent refusal" should _persistence_scenario("EB1", "E2,E6") {
+    "retain default authorization Failure without persistence dispatch observation or provider work" in {
+      Given("E2,E6: real default bus/native store/handler and a user context without event capabilities")
+      import EventPersistenceOperationalAuditTestSupport.{NativeGraph, RecordingBackend, instant, withBackend}
+      val graph = new NativeGraph
+      val user = ExecutionContext.withSecurityContext(graph.executionContext,
+        ExecutionContext.test(SecurityContext.Privilege.User).security)
+      val event = ReceptionDomainEvent("authorization-refusal", "original", Map.empty, Map.empty, instant)
+      graph.bus.register(EventSubscription("native", handler = graph.handler("native")))
+      val backend = new RecordingBackend
+      val before = graph.observations
+      When("the persistent request enters the unchanged default authorized publish path")
+      val result = withBackend(backend)(graph.bus.publishAuthorized(event, EventPublishOption(persistent = true))(using user))
+      Then("the deterministic operation-illegal Failure precedes all append dispatch audit clock and ID work")
+      result match {
+        case Consequence.Failure(conclusion) =>
+          conclusion.observation.taxonomy.category shouldBe Taxonomy.Category.Operation
+          conclusion.observation.taxonomy.symptom shouldBe Taxonomy.Symptom.Illegal
+        case _ => fail("default publish authorization should refuse")
+      }
+      graph.observations shouldBe before
+      graph.store.results shouldBe empty
+      graph.store.stored shouldBe empty
+      graph.received shouldBe empty
+      backend.events shouldBe empty
+    }
+  }
+
+  "EB2 Excluded context and persistence paths" should _persistence_scenario("EB2", "E2,E6") {
+    "preserve context-free persistence and authorized nonpersistent dispatch with no implicit audit fallback" in {
+      Given("E2,E6: native bus with explicit original factory and native handler preserving original authorized context")
+      import EventPersistenceOperationalAuditTestSupport.{NativeGraph, RecordingBackend, instant, withBackend}
+      val graph = new NativeGraph
+      val event = ReceptionDomainEvent("excluded-path", "original", Map("original" -> "payload"), Map("original" -> "attribute"), instant)
+      graph.bus.register(EventSubscription("native", handler = graph.handler("native")))
+      val backend = new RecordingBackend
+      val before = graph.observations
+      When("context-free persistent publish uses its supplied factory and authorized nonpersistent publish uses the original context")
+      val results = withBackend(backend) {
+        val persistent = graph.bus.publish(event, EventPublishOption(persistent = true))
+        val ephemeral = graph.bus.publishAuthorized(event, EventPublishOption(persistent = false))(using graph.executionContext)
+        (persistent, ephemeral)
+      }
+      Then("public results and canonical persistence remain original and handlers receive their exact applicable context without any audit")
+      results shouldBe ((Consequence.success(EventPublishResult(1, persisted = true)),
+        Consequence.success(EventPublishResult(1, persisted = false))))
+      graph.store.stored.size shouldBe 1
+      val stored = graph.store.stored.head
+      stored.name shouldBe event.name
+      stored.kind shouldBe event.kind
+      stored.payload shouldBe event.payload
+      stored.attributes shouldBe event.attributes
+      stored.createdAt shouldBe event.occurredAt
+      stored.lane shouldBe EventLane.NonTransactional
+      (graph.store.results.head.toOption.get.head eq stored) shouldBe true
+      graph.store.appendCalls.get() shouldBe 1
+      graph.store.readCalls.get() shouldBe 0
+      graph.clock.calls.get() shouldBe before._1
+      graph.ids.calls.get() should be > before._2
+      graph.received.size shouldBe 2
+      graph.received.foreach { case (_, source, _) => (source.asInstanceOf[AnyRef] eq event) shouldBe true }
+      graph.received.head._3 shouldBe None
+      (graph.received.last._3.get eq graph.executionContext) shouldBe true
+      backend.events shouldBe empty
+    }
+  }
+
+  private def _persistence_scenario(example: String, rules: String) =
+    afterWord(s"in spec:event-persistence-operational-audit, example:$example, rules:$rules, phase:69.7, slice:C7")
+
   private def _action_event(name: String): ActionEvent =
     ActionEvent(
       executionContextId = ExecutionContextId.generate(),
@@ -314,7 +385,7 @@ final class EventBusSpec
       }
     }
 
-  private final class _InMemoryCommitRecorder extends CommitRecorder {
+  private final class InMemoryCommitRecorder extends CommitRecorder {
     def record(message: String): Unit = {
       val _ = message
     }

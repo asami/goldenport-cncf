@@ -10,14 +10,15 @@ import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.component.{Component, ComponentLocator, ComponentLogic}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.ReceptionDomainEvent
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobPersistencePolicy, JobRunMode, JobSubmitOption}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobPersistencePolicy, JobProducerOperationalAudit, JobRunMode, JobSubmitOption}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Apr. 22, 2026
- * @version Jul. 23, 2026
+ *  version Jul. 23, 2026
+ * @version Oct.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WorkflowDefinitionId(
@@ -289,7 +290,7 @@ object WorkflowEngine {
                       val updated = _record(instance, WorkflowStatus.NoProgress, "status-unmatched", entitystatus = Some(status))
                       Consequence.success(_decision(updated, entityid = Some(resolvedid.value), entitystatus = Some(status), reason = Some("status-unmatched")))
                     case Some(rule) =>
-                      _submit_action(entry, event, rule.nextAction).map { case (jobid, resolvedaction) =>
+                      _submit_action(entry, event, rule.nextAction).map { case (jobid, resolvedaction, actionid) =>
                         val updated = _record(
                           instance,
                           WorkflowStatus.Submitted,
@@ -299,6 +300,7 @@ object WorkflowEngine {
                           relatedjobid = Some(jobid),
                           entityid = Some(resolvedid.value)
                         )
+                        JobProducerOperationalAudit.workflow(entry.definition.id, updated, jobid, actionid)
                         _decision(
                           updated,
                           entityid = Some(resolvedid.value),
@@ -385,7 +387,7 @@ object WorkflowEngine {
       entry: _Entry,
       event: ReceptionDomainEvent,
       actionname: String
-    )(using ctx: ExecutionContext): Consequence[(JobId, String)] =
+    )(using ctx: ExecutionContext): Consequence[(JobId, String, ActionId)] =
       _resolve_target_action(entry, event, actionname).flatMap { case (component, action, resolvedselector) =>
         val task = ActionTask(
           ActionId.create("workflow.submit", ctx.clock.instant(), ctx.idGeneration),
@@ -410,7 +412,7 @@ object WorkflowEngine {
         )
         subsystem()._prepare_operation_task(action, task, ctx).flatMap { case (preparedtask, preparedcontext) =>
           subsystem().jobEngine.submit(List(preparedtask), preparedcontext, option)
-            .map(jobid => (jobid, resolvedselector))
+            .map(jobid => (jobid, resolvedselector, task.actionId))
         }
       }
 

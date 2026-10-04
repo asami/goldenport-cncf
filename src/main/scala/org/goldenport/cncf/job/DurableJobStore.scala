@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.metrics.RuntimeMetricPoint
 import org.goldenport.cncf.entity.{
   EntityConcurrencyPolicy,
   EntityMutationExecutionPolicy,
@@ -43,7 +44,8 @@ import org.simplemodeling.model.datatype.{
  * and stores only the closed canonical durable value and stable identity.
  *
  * @since   Sep. 10, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobStoreSnapshot(
@@ -60,81 +62,120 @@ private[job] enum DurableJobStoreStartupRecoveryLoad {
 }
 
 private[job] final class DurableJobStore(
-  entitystore: EntityStore
+  entitystore: EntityStore,
+  policy: DurableJobStorageResourcePolicy
 ) {
+  def this(entitystore: EntityStore) = this(entitystore, DurableJobStorageResourcePolicy.default)
+
+  private val _operational_metrics = new DurableJobOperationalMetrics
+
+  private[job] def operationalMetricsRecorder: DurableJobOperationalMetrics =
+    _operational_metrics
+
+  def operationalMetrics: Vector[RuntimeMetricPoint] =
+    _operational_metrics.snapshot()
+
+  private val _quota = new DurableJobStorageQuota(entitystore, policy)
+
+  private[job] def lifetimeQuota(policy: DurableJobLifetimeQuotaPolicy): DurableJobLifetimeQuota =
+    new DurableJobLifetimeQuota(entitystore, policy)
+
+  def resourceSnapshot()(using ctx: ExecutionContext): Consequence[DurableJobStorageQuotaSnapshot] = {
+    val result = _quota.resourceSnapshot()
+    _operational_metrics.observeStorageSnapshot(result)
+  }
   def create(
     record: DurableJobRecord,
     access: DurableJobRecordAccess
-  )(using ctx: ExecutionContext): Consequence[DurableJobStoreSnapshot] =
-    _ensure_collection().flatMap(_ => _admit(record, access)).flatMap { case (canonical, admitted) =>
-      for {
-        entityid <- DurableJobStoreEntity.entityId(admitted.body.identity.jobId)
-        entity = DurableJobStoreEntity(
-          entityid,
-          admitted.body.identity.jobId,
-          canonical
-        )
-        _ <- entitystore.create(entity)
-        snapshot <- _load(entity.id, entity.jobId, access)
-        result <- _required_snapshot(entity.id, snapshot)
-      } yield result
-    }
-
+  )(using ctx: ExecutionContext): Consequence[DurableJobStoreSnapshot] = {
+    val result = _ensure_collection().flatMap(_ => _admit(record, access)).flatMap { case (canonical, admitted) =>
+        for {
+          _ <- policy.validate
+          _ <- DurableJobStorageResourcePolicy.validateId(admitted.body.identity.jobId)
+          entityid <- DurableJobStoreEntity.entityId(admitted.body.identity.jobId)
+          entity = DurableJobStoreEntity(
+            entityid,
+            admitted.body.identity.jobId,
+            canonical
+          )
+          lease <- _quota.reserve(entity.jobId, canonical, None)
+          _ <- DurableJobStorageResourcePolicy.protect(entitystore.create(entity))
+          snapshot <- DurableJobStorageResourcePolicy.protect(_load(entity.id, entity.jobId, access))
+          result <- _required_snapshot(entity.id, snapshot)
+          acknowledged <- _storage_metadata(result)
+          _ <- _quota.confirm(lease, acknowledged)
+        } yield result
+      }
+    _operational_metrics.observeCreate(result)
+  }
   def load(
     jobId: String,
     access: DurableJobRecordAccess
-  )(using ctx: ExecutionContext): Consequence[Option[DurableJobStoreSnapshot]] =
-    _ensure_collection().flatMap(_ => DurableJobStoreEntity.entityId(jobId)).flatMap(_load(_, jobId, access))
-
+  )(using ctx: ExecutionContext): Consequence[Option[DurableJobStoreSnapshot]] = {
+    val result = _ensure_collection().flatMap(_ => DurableJobStoreEntity.entityId(jobId)).flatMap(_load(_, jobId, access))
+    _operational_metrics.observeLoad(result)
+  }
   def loadStartupRecovery(
     jobId: String,
     access: DurableJobRecordAccess
-  )(using ctx: ExecutionContext): DurableJobStoreStartupRecoveryLoad =
-    _ensure_collection() match {
-      case Consequence.Success(_) =>
-        DurableJobStoreEntity.entityId(jobId) match {
-          case Consequence.Success(id) =>
-            entitystore.loadDetached[DurableJobStoreEntity](id) match {
-              case Consequence.Success(Some(carrier)) =>
-                _startup_recovery_snapshot(carrier, id, jobId, access)
-              case Consequence.Success(None) =>
-                DurableJobStoreStartupRecoveryLoad.Missing
-              case Consequence.Failure(_) =>
-                DurableJobStoreStartupRecoveryLoad.Corrupt
-            }
-          case Consequence.Failure(_) =>
-            DurableJobStoreStartupRecoveryLoad.Corrupt
-        }
-      case Consequence.Failure(_) =>
-        DurableJobStoreStartupRecoveryLoad.Corrupt
-    }
-
+  )(using ctx: ExecutionContext): DurableJobStoreStartupRecoveryLoad = {
+    val result = _ensure_collection() match {
+        case Consequence.Success(_) =>
+          DurableJobStoreEntity.entityId(jobId) match {
+            case Consequence.Success(id) =>
+              entitystore.loadDetached[DurableJobStoreEntity](id) match {
+                case Consequence.Success(Some(carrier)) =>
+                  _startup_recovery_snapshot(carrier, id, jobId, access)
+                case Consequence.Success(None) =>
+                  DurableJobStoreStartupRecoveryLoad.Missing
+                case Consequence.Failure(_) =>
+                  DurableJobStoreStartupRecoveryLoad.Corrupt
+              }
+            case Consequence.Failure(_) =>
+              DurableJobStoreStartupRecoveryLoad.Corrupt
+          }
+        case Consequence.Failure(_) =>
+          DurableJobStoreStartupRecoveryLoad.Corrupt
+      }
+    _operational_metrics.observeStartup(result)
+  }
   def checkpoint(
     snapshot: DurableJobStoreSnapshot,
     record: DurableJobRecord,
     access: DurableJobRecordAccess
-  )(using ctx: ExecutionContext): Consequence[DurableJobStoreSnapshot] =
-    _ensure_collection().flatMap(_ => _admit(record, access)).flatMap { case (canonical, admitted) =>
-      val jobid = admitted.body.identity.jobId
-      for {
-        entityid <- DurableJobStoreEntity.entityId(jobid)
-        _ <- _same_identity(snapshot.record, admitted)
-        currentoption <- load(jobid, access)
-        current <- _required_snapshot(entityid, currentoption)
-        _ <- _current_snapshot(snapshot, current)
-        _ <- _contiguous_semantic_revision(snapshot.record, admitted)
-        entity = DurableJobStoreEntity(
-          entityid,
-          jobid,
-          canonical
-        )
-        carrier <- entitystore.updateDetached(
-          entity,
-          Some(snapshot.providerrevision),
-          _checkpoint_policy(snapshot.providerrevision)
-        )
-        result <- _snapshot(carrier, entity.id, jobid, access)
-      } yield result
+  )(using ctx: ExecutionContext): Consequence[DurableJobStoreSnapshot] = {
+    val result = _ensure_collection().flatMap(_ => _admit(record, access)).flatMap { case (canonical, admitted) =>
+        val jobid = admitted.body.identity.jobId
+        for {
+          _ <- policy.validate
+          _ <- DurableJobStorageResourcePolicy.validateId(jobid)
+          entityid <- DurableJobStoreEntity.entityId(jobid)
+          _ <- _same_identity(snapshot.record, admitted)
+          currentoption <- load(jobid, access)
+          current <- _required_snapshot(entityid, currentoption)
+          _ <- _current_snapshot(snapshot, current)
+          _ <- _contiguous_semantic_revision(snapshot.record, admitted)
+          entity = DurableJobStoreEntity(
+            entityid,
+            jobid,
+            canonical
+          )
+          lease <- _quota.reserve(jobid, canonical, Some(snapshot.providerrevision))
+          carrier <- DurableJobStorageResourcePolicy.protect(entitystore.updateDetached(
+            entity,
+            Some(snapshot.providerrevision),
+            _checkpoint_policy(snapshot.providerrevision)
+          ))
+          result <- _snapshot(carrier, entity.id, jobid, access)
+          acknowledged <- DurableJobStorageQuotaInventory.metadata(jobid, carrier.entity.canonicalJson, carrier.revision.value)
+          _ <- _quota.confirm(lease, acknowledged)
+        } yield result
+      }
+    _operational_metrics.observeCheckpoint(result)
+  }
+  private def _storage_metadata(snapshot: DurableJobStoreSnapshot): Consequence[DurableJobStorageQuotaMetadata] =
+    DurableJobRecordCodec.canonicalJson(snapshot.record).flatMap { canonical =>
+      DurableJobStorageQuotaInventory.metadata(snapshot.record.body.identity.jobId, canonical, snapshot.providerrevision.value)
     }
 
   private def _admit(

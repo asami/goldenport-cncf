@@ -4,15 +4,8 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import javax.sql.DataSource
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
-import io.circe.Json
-import io.circe.parser.parse
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.convert.StringEncodable
-import org.goldenport.text.Presentable
 import org.goldenport.record.Record
-import org.goldenport.record.RecordKeyNaming
-import org.goldenport.record.RecordPresentable
-import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{
   DataStore,
@@ -54,8 +47,7 @@ import org.goldenport.cncf.datastore.{
 import org.goldenport.cncf.entity.{
   EntityConcurrencyPolicy,
   EntityWritePolicy,
-  RevisionPreconditionPolicy,
-  SimpleEntityStorageShapePolicy
+  RevisionPreconditionPolicy
 }
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
@@ -68,7 +60,8 @@ import org.simplemodeling.model.datatype.EntityRevision
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Oct.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -81,7 +74,7 @@ class SqlDataStore(
     with EntityVersionedMutationDataStore
     with EntityConditionalTransitionDataStore {
   import DataStore.*
-  private val _record_decoder = new RecordDecoder()
+  private val _record_codec = new SqlDataStoreRecordCodec(config)
   @volatile private var _managed_resource: Option[ManagedSqlDataStoreResource] = None
   @volatile private var _managed_borrow_resource: Option[ManagedSqlDataStoreResource] = None
   @volatile private var _managed_borrow_admission: Option[() => Consequence[Unit]] = None
@@ -1238,106 +1231,11 @@ class SqlDataStore(
   private def _table_name(collection: CollectionId): String =
     collection.collectionName
 
-  private def _record_columns(
-    record: Record
-  ): Vector[(String, Any)] =
-    record.fields.collect {
-      case field if field.key != "id" =>
-        val k = field.key
-        val v = field.value.single
-        val key = if (config.normalizeColumnNames) _to_column_name(k) else k
-        key -> _column_value(v)
-    }
-      .foldLeft(Vector.empty[(String, Any)]) { case (z, (k, v)) =>
-        z.indexWhere(_._1 == k) match {
-          case -1 => z :+ (k -> v)
-          case i => z.updated(i, k -> v)
-        }
-      }
+  private def _record_columns(record: Record): Vector[(String, Any)] =
+    _record_codec.recordColumns(record)
 
-  private def _column_value(
-    value: Any
-  ): Any =
-    value match {
-      case org.simplemodeling.model.directive.Update.SetNull =>
-        null
-      case m: StringEncodable =>
-        given org.goldenport.context.ExecutionContext = org.goldenport.convert.StringEncoder.storageExecutionContext
-        m.encode
-      case m: Record =>
-        m.toJsonString
-      case m: RecordPresentable =>
-        m.toRecord().toJsonString
-      case xs: Iterable[?] =>
-        Json.fromValues(xs.iterator.map(_json_from_value).toVector).noSpaces
-      case m: Byte => m.toInt
-      case m: Short => m.toInt
-      case m: Int => m
-      case m: Long => m
-      case m: Boolean => if (m) 1 else 0
-      case m: Float => m.toDouble
-      case m: Double => m
-      case m: BigInt => m.toDouble
-      case m: BigDecimal => m.toDouble
-      case other =>
-        Presentable.print(other)
-    }
-
-  private def _json_from_value(
-    value: Any
-  ): Json =
-    value match {
-      case null => Json.Null
-      case m: StringEncodable =>
-        given org.goldenport.context.ExecutionContext = org.goldenport.convert.StringEncoder.storageExecutionContext
-        Json.fromString(m.encode)
-      case m: Record =>
-        parse(m.toJsonString).getOrElse(Json.fromString(m.toJsonString))
-      case m: RecordPresentable =>
-        val jsontext = m.toRecord().toJsonString
-        parse(jsontext).getOrElse(Json.fromString(jsontext))
-      case xs: Iterable[?] =>
-        Json.fromValues(xs.iterator.map(_json_from_value).toVector)
-      case m: Byte => Json.fromInt(m.toInt)
-      case m: Short => Json.fromInt(m.toInt)
-      case m: Int => Json.fromInt(m)
-      case m: Long => Json.fromLong(m)
-      case m: Boolean => Json.fromBoolean(m)
-      case m: Float => Json.fromFloatOrNull(m)
-      case m: Double => Json.fromDoubleOrNull(m)
-      case m: BigInt => Json.fromBigInt(m)
-      case m: BigDecimal => Json.fromBigDecimal(m)
-      case other => Json.fromString(Presentable.print(other))
-    }
-
-  private def _decode_column_value(
-    value: Any
-  ): Any = {
-    value match {
-      case s: String =>
-        val trimmed = s.trim
-        if (trimmed.startsWith("{") && trimmed.endsWith("}"))
-          _record_decoder.json(trimmed).toOption.getOrElse(s)
-        else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
-          parse(trimmed).toOption.map(_json_to_value).getOrElse(s)
-        else
-          s
-      case other =>
-        other
-    }
-  }
-
-  private def _json_to_value(
-    json: Json
-  ): Any =
-    json.fold(
-      jsonNull = null,
-      jsonBoolean = identity,
-      jsonNumber = n => n.toLong.getOrElse(n.toDouble),
-      jsonString = identity,
-      jsonArray = _.map(_json_to_value).toVector,
-      jsonObject = obj => Record.dataAuto(obj.toVector.map { case (k, v) => k -> _json_to_value(v) }*)
-    )
+  private def _column_value(value: Any): Any =
+    _record_codec.columnValue(value)
 
   private def _table_exists(
     conn: Connection,
@@ -1671,7 +1569,7 @@ class SqlDataStore(
         val rs = stmt.executeQuery()
         try {
           if (rs.next())
-            Some(_record_from_result_set(rs))
+            Some(_record_from_result_set(collection, rs))
           else
             None
         } finally {
@@ -1698,7 +1596,7 @@ class SqlDataStore(
         try {
           val buf = Vector.newBuilder[Record]
           while (rs.next()) {
-            buf += _record_from_result_set(rs)
+            buf += _record_from_result_set(collection, rs)
           }
           val records = buf.result()
           val range = directive.limit match {
@@ -1922,36 +1820,13 @@ class SqlDataStore(
     }
 
   private def _record_from_result_set(
+    collection: CollectionId,
     rs: java.sql.ResultSet
-  ): Record = {
-    val md = rs.getMetaData
-    val count = md.getColumnCount
-    val values = (1 to count).toVector.map { i =>
-      val rawname = md.getColumnLabel(i)
-      val name =
-        if (
-          SimpleEntityStorageShapePolicy
-            .isConcurrencyRevisionStorageField(rawname)
-        )
-          rawname
-        else if (config.normalizeColumnNames)
-          _to_property_name(rawname)
-        else
-          rawname
-      val value = _decode_column_value(rs.getObject(i))
-      name -> value
-    }
-    Record.create(values)
-  }
+  ): Record =
+    _record_codec.recordFromResultSet(collection, rs)
 
   private def _column_name(name: String): String =
-    if (config.normalizeColumnNames) _to_column_name(name) else name
-
-  private def _to_column_name(name: String): String =
-    RecordKeyNaming.toSnakeColumnName(name)
-
-  private def _to_property_name(name: String): String =
-    RecordKeyNaming.toCanonicalCamelName(name)
+    _record_codec.columnName(name)
 }
 
 object SqlDataStore {

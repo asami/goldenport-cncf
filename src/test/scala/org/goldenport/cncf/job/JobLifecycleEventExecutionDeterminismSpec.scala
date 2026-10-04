@@ -23,8 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 16, 2026
- *  version Jul. 16, 2026
- * @version Sep. 11, 2026
+ *  version Sep. 11, 2026
+ * @version Oct.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobLifecycleEventExecutionDeterminismSpec
@@ -219,48 +219,99 @@ final class JobLifecycleEventExecutionDeterminismSpec
       val context = _execution_context(instant, "durable-cancelled-retry-seed")
       given ExecutionContext = context
       val accepted = new DurableCancellationFixture(context, _durable_cancelled_terminal_result)
-      val refused = new DurableCancellationFixture(context, _durable_succeeded_terminal_result)
+      try {
+        val refused = new DurableCancellationFixture(context, _durable_succeeded_terminal_result)
+        try {
 
-      When("each first attempt queues its terminal retry, is cancelled before the queued body runs, and then drains the inert work item")
-      val acceptedid = _success(accepted.engine.submit(List(accepted.task), context))
-      accepted.engine.drainOne() shouldBe true
-      _success(accepted.engine.control(
-        acceptedid,
-        JobControlRequest(JobControlCommand.Cancel),
-        _permissive_control_policy
-      ))
-      accepted.engine.drainAll() shouldBe 1
-      val refusedid = _success(refused.engine.submit(List(refused.task), context))
-      refused.engine.drainOne() shouldBe true
-      _success(refused.engine.control(
-        refusedid,
-        JobControlRequest(JobControlCommand.Cancel),
-        _permissive_control_policy
-      ))
-      refused.engine.drainAll() shouldBe 1
+          When("each first attempt queues its terminal retry, is cancelled before the queued body runs, and cancellation removes pending work before any further drain")
+          val acceptedid = _success(accepted.engine.submit(List(accepted.task), context))
+          accepted.engine.drainOne() shouldBe true
+          Then("the accepted first attempt leaves exactly one queued pending work item before cancellation")
+          accepted.engine._work_queue.size() shouldBe 1
+          accepted.engine.resourceSnapshot.pending shouldBe 1
+          When("Cancel removes the accepted pending work and synchronously reaches the durable terminal gate")
+          _success(accepted.engine.control(
+            acceptedid,
+            JobControlRequest(JobControlCommand.Cancel),
+            _permissive_control_policy
+          ))
+          Then("the accepted terminal gate has already run once and cancellation leaves no queued, pending or executing work")
+          accepted.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+          accepted.source.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint) shouldBe 1
+          accepted.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          accepted.eventNames.count(_ == "job.cancelled") shouldBe 1
+          accepted.cancelledDispatches shouldBe 1
+          accepted.engine._work_queue.size() shouldBe 0
+          accepted.engine.resourceSnapshot.pending shouldBe 0
+          accepted.engine.resourceSnapshot.executing shouldBe 0
+          accepted.task.runCount shouldBe 1
+          Given("the accepted terminal boundaries and Event observations are captured before an empty drain")
+          val acceptedboundaries = accepted.source.boundaries
+          val acceptedevents = accepted.eventNames
+          val accepteddispatches = accepted.cancelledDispatches
+          When("the accepted engine drains after synchronous pending removal")
+          val accepteddrained = accepted.engine.drainAll()
+          Then("the accepted drain performs no work and adds no terminal boundary, Event or dispatch")
+          accepteddrained shouldBe 0
+          accepted.source.boundaries shouldBe acceptedboundaries
+          accepted.eventNames shouldBe acceptedevents
+          accepted.cancelledDispatches shouldBe accepteddispatches
+          When("the refused-evidence owner submits and runs only its first attempt to queue pending work")
+          val refusedid = _success(refused.engine.submit(List(refused.task), context))
+          refused.engine.drainOne() shouldBe true
+          Then("the refused first attempt leaves exactly one queued pending work item before cancellation")
+          refused.engine._work_queue.size() shouldBe 1
+          refused.engine.resourceSnapshot.pending shouldBe 1
+          When("Cancel removes the refused pending work and synchronously reaches the durable terminal gate")
+          _success(refused.engine.control(
+            refusedid,
+            JobControlRequest(JobControlCommand.Cancel),
+            _permissive_control_policy
+          ))
+          Then("the refused terminal gate has already run once and cancellation leaves no queued, pending or executing work")
+          refused.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+          refused.source.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint) shouldBe 1
+          refused.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          refused.eventNames.count(_ == "job.cancelled") shouldBe 0
+          refused.cancelledDispatches shouldBe 0
+          refused.engine._work_queue.size() shouldBe 0
+          refused.engine.resourceSnapshot.pending shouldBe 0
+          refused.engine.resourceSnapshot.executing shouldBe 0
+          refused.task.runCount shouldBe 1
+          Given("the refused terminal boundaries and Event observations are captured before an empty drain")
+          val refusedboundaries = refused.source.boundaries
+          val refusedevents = refused.eventNames
+          val refuseddispatches = refused.cancelledDispatches
+          When("the refused engine drains after synchronous pending removal")
+          val refuseddrained = refused.engine.drainAll()
+          Then("the refused drain performs no work and adds no terminal boundary, Event or dispatch")
+          refuseddrained shouldBe 0
+          refused.source.boundaries shouldBe refusedboundaries
+          refused.eventNames shouldBe refusedevents
+          refused.cancelledDispatches shouldBe refuseddispatches
 
-      Then("EventStore and EventBus receive one cancellation only after accepted terminal evidence, while refusal suppresses it and neither queued body runs")
-      accepted.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
-      accepted.cancelledEventsAtTerminalCheckpoint shouldBe 0
-      accepted.eventNames.count(_ == "job.cancelled") shouldBe 1
-      accepted.eventNames.lastOption shouldBe Some("job.cancelled")
-      accepted.cancelledDispatches shouldBe 1
-      accepted.task.runCount shouldBe 1
-      accepted.engine.getStatus(acceptedid) shouldBe Some(JobStatus.Cancelled)
-      refused.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
-      refused.cancelledEventsAtTerminalCheckpoint shouldBe 0
-      refused.eventNames.count(_ == "job.cancelled") shouldBe 0
-      refused.cancelledDispatches shouldBe 0
-      refused.task.runCount shouldBe 1
-      refused.engine.getStatus(refusedid) shouldBe Some(JobStatus.Cancelled)
-      refused.engine.durableLifecycleWriteFailureFacts shouldBe Vector(
-        DurableJobLifecycleWriteFailureFact(
-          refusedid,
-          DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused
-        )
-      )
-      accepted.engine.shutdown()
-      refused.engine.shutdown()
+          Then("EventStore and EventBus receive one cancellation only after accepted terminal evidence, while refusal suppresses it and neither queued body runs")
+          accepted.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+          accepted.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          accepted.eventNames.count(_ == "job.cancelled") shouldBe 1
+          accepted.eventNames.lastOption shouldBe Some("job.cancelled")
+          accepted.cancelledDispatches shouldBe 1
+          accepted.task.runCount shouldBe 1
+          accepted.engine.getStatus(acceptedid) shouldBe Some(JobStatus.Cancelled)
+          refused.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+          refused.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          refused.eventNames.count(_ == "job.cancelled") shouldBe 0
+          refused.cancelledDispatches shouldBe 0
+          refused.task.runCount shouldBe 1
+          refused.engine.getStatus(refusedid) shouldBe Some(JobStatus.Cancelled)
+          refused.engine.durableLifecycleWriteFailureFacts shouldBe Vector(
+            DurableJobLifecycleWriteFailureFact(
+              refusedid,
+              DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused
+            )
+          )
+        } finally refused.engine.shutdown()
+      } finally accepted.engine.shutdown()
     }
 
     "settle cancelled queued same-job work through the durable terminal checkpoint gate" in {
@@ -269,60 +320,114 @@ final class JobLifecycleEventExecutionDeterminismSpec
       val context = _execution_context(instant, "durable-cancelled-same-job-seed")
       given ExecutionContext = context
       val accepted = new DurableQueuedSameJobCancellationFixture(context, _durable_cancelled_terminal_result)
-      val refused = new DurableQueuedSameJobCancellationFixture(context, _durable_succeeded_terminal_result)
-      accepted.child.runCount shouldBe 0
-      refused.child.runCount shouldBe 0
+      try {
+        val refused = new DurableQueuedSameJobCancellationFixture(context, _durable_succeeded_terminal_result)
+        try {
+          Then("both queued-child fixtures begin with uncalled child bodies")
+          accepted.child.runCount shouldBe 0
+          refused.child.runCount shouldBe 0
 
-      When("the first task queues a child, cancellation arrives before that child dispatches, and the queued work drains")
-      val acceptedid = _success(accepted.engine.submit(List(accepted.parent), context))
-      accepted.engine.drainOne() shouldBe true
-      val acceptedcancelled = _success(accepted.engine.control(
-        acceptedid,
-        JobControlRequest(JobControlCommand.Cancel),
-        _permissive_control_policy
-      ))
-      acceptedcancelled.status shouldBe JobStatus.Cancelled
-      accepted.engine.drainAll() shouldBe 1
-      val refusedid = _success(refused.engine.submit(List(refused.parent), context))
-      refused.engine.drainOne() shouldBe true
-      val refusedcancelled = _success(refused.engine.control(
-        refusedid,
-        JobControlRequest(JobControlCommand.Cancel),
-        _permissive_control_policy
-      ))
-      refusedcancelled.status shouldBe JobStatus.Cancelled
-      refused.engine.drainAll() shouldBe 1
+          When("the first task queues a child, cancellation arrives before that child dispatches, and cancellation removes pending work before any further drain")
+          val acceptedid = _success(accepted.engine.submit(List(accepted.parent), context))
+          accepted.engine.drainOne() shouldBe true
+          Then("the accepted first attempt leaves exactly one queued pending work item before cancellation")
+          accepted.engine._work_queue.size() shouldBe 1
+          accepted.engine.resourceSnapshot.pending shouldBe 1
+          When("Cancel removes the accepted pending work and synchronously reaches the durable terminal gate")
+          val acceptedcancelled = _success(accepted.engine.control(
+            acceptedid,
+            JobControlRequest(JobControlCommand.Cancel),
+            _permissive_control_policy
+          ))
+          acceptedcancelled.status shouldBe JobStatus.Cancelled
+          Then("the accepted terminal gate has already run once and cancellation leaves no queued, pending or executing work")
+          accepted.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+          accepted.source.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint) shouldBe 1
+          accepted.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          accepted.eventNames.count(_ == "job.cancelled") shouldBe 1
+          accepted.cancelledDispatches shouldBe 1
+          accepted.engine._work_queue.size() shouldBe 0
+          accepted.engine.resourceSnapshot.pending shouldBe 0
+          accepted.engine.resourceSnapshot.executing shouldBe 0
+          accepted.parent.runCount shouldBe 1
+          accepted.child.runCount shouldBe 0
+          Given("the accepted terminal boundaries and Event observations are captured before an empty drain")
+          val acceptedboundaries = accepted.source.boundaries
+          val acceptedevents = accepted.eventNames
+          val accepteddispatches = accepted.cancelledDispatches
+          When("the accepted engine drains after synchronous pending removal")
+          val accepteddrained = accepted.engine.drainAll()
+          Then("the accepted drain performs no work and adds no terminal boundary, Event or dispatch")
+          accepteddrained shouldBe 0
+          accepted.source.boundaries shouldBe acceptedboundaries
+          accepted.eventNames shouldBe acceptedevents
+          accepted.cancelledDispatches shouldBe accepteddispatches
+          When("the refused-evidence owner submits and runs only its first attempt to queue pending work")
+          val refusedid = _success(refused.engine.submit(List(refused.parent), context))
+          refused.engine.drainOne() shouldBe true
+          Then("the refused first attempt leaves exactly one queued pending work item before cancellation")
+          refused.engine._work_queue.size() shouldBe 1
+          refused.engine.resourceSnapshot.pending shouldBe 1
+          When("Cancel removes the refused pending work and synchronously reaches the durable terminal gate")
+          val refusedcancelled = _success(refused.engine.control(
+            refusedid,
+            JobControlRequest(JobControlCommand.Cancel),
+            _permissive_control_policy
+          ))
+          refusedcancelled.status shouldBe JobStatus.Cancelled
+          Then("the refused terminal gate has already run once and cancellation leaves no queued, pending or executing work")
+          refused.source.boundaries.last shouldBe DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+          refused.source.boundaries.count(_ == DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint) shouldBe 1
+          refused.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          refused.eventNames.count(_ == "job.cancelled") shouldBe 0
+          refused.cancelledDispatches shouldBe 0
+          refused.engine._work_queue.size() shouldBe 0
+          refused.engine.resourceSnapshot.pending shouldBe 0
+          refused.engine.resourceSnapshot.executing shouldBe 0
+          refused.parent.runCount shouldBe 1
+          refused.child.runCount shouldBe 0
+          Given("the refused terminal boundaries and Event observations are captured before an empty drain")
+          val refusedboundaries = refused.source.boundaries
+          val refusedevents = refused.eventNames
+          val refuseddispatches = refused.cancelledDispatches
+          When("the refused engine drains after synchronous pending removal")
+          val refuseddrained = refused.engine.drainAll()
+          Then("the refused drain performs no work and adds no terminal boundary, Event or dispatch")
+          refuseddrained shouldBe 0
+          refused.source.boundaries shouldBe refusedboundaries
+          refused.eventNames shouldBe refusedevents
+          refused.cancelledDispatches shouldBe refuseddispatches
 
-      Then("accepted terminal evidence precedes one cancellation observation, refusal emits none, and neither queued child body runs")
-      accepted.source.boundaries shouldBe Vector(
-        DurableJobLifecycleWriteBoundary.Admission,
-        DurableJobLifecycleWriteBoundary.StartIntent,
-        DurableJobLifecycleWriteBoundary.RunningIntent,
-        DurableJobLifecycleWriteBoundary.TaskStartIntent,
-        DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
-        DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
-      )
-      accepted.cancelledEventsAtTerminalCheckpoint shouldBe 0
-      accepted.eventNames.count(_ == "job.cancelled") shouldBe 1
-      accepted.cancelledDispatches shouldBe 1
-      accepted.parent.runCount shouldBe 1
-      accepted.child.runCount shouldBe 0
-      accepted.engine.getStatus(acceptedid) shouldBe Some(JobStatus.Cancelled)
-      refused.source.boundaries shouldBe accepted.source.boundaries
-      refused.cancelledEventsAtTerminalCheckpoint shouldBe 0
-      refused.eventNames.count(_ == "job.cancelled") shouldBe 0
-      refused.cancelledDispatches shouldBe 0
-      refused.parent.runCount shouldBe 1
-      refused.child.runCount shouldBe 0
-      refused.engine.getStatus(refusedid) shouldBe Some(JobStatus.Cancelled)
-      refused.engine.durableLifecycleWriteFailureFacts shouldBe Vector(
-        DurableJobLifecycleWriteFailureFact(
-          refusedid,
-          DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused
-        )
-      )
-      accepted.engine.shutdown()
-      refused.engine.shutdown()
+          Then("accepted terminal evidence precedes one cancellation observation, refusal emits none, and neither queued child body runs")
+          accepted.source.boundaries shouldBe Vector(
+            DurableJobLifecycleWriteBoundary.Admission,
+            DurableJobLifecycleWriteBoundary.StartIntent,
+            DurableJobLifecycleWriteBoundary.RunningIntent,
+            DurableJobLifecycleWriteBoundary.TaskStartIntent,
+            DurableJobLifecycleWriteBoundary.TaskOutcomeCheckpoint,
+            DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint
+          )
+          accepted.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          accepted.eventNames.count(_ == "job.cancelled") shouldBe 1
+          accepted.cancelledDispatches shouldBe 1
+          accepted.parent.runCount shouldBe 1
+          accepted.child.runCount shouldBe 0
+          accepted.engine.getStatus(acceptedid) shouldBe Some(JobStatus.Cancelled)
+          refused.source.boundaries shouldBe accepted.source.boundaries
+          refused.cancelledEventsAtTerminalCheckpoint shouldBe 0
+          refused.eventNames.count(_ == "job.cancelled") shouldBe 0
+          refused.cancelledDispatches shouldBe 0
+          refused.parent.runCount shouldBe 1
+          refused.child.runCount shouldBe 0
+          refused.engine.getStatus(refusedid) shouldBe Some(JobStatus.Cancelled)
+          refused.engine.durableLifecycleWriteFailureFacts shouldBe Vector(
+            DurableJobLifecycleWriteFailureFact(
+              refusedid,
+              DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused
+            )
+          )
+        } finally refused.engine.shutdown()
+      } finally accepted.engine.shutdown()
     }
   }
 

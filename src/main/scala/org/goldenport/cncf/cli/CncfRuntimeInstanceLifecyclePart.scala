@@ -85,7 +85,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
- * @version Sep.  8, 2026
+ *  version Sep.  8, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -477,6 +478,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
         case Consequence.Failure(conclusion) =>
           throw new IllegalStateException(conclusion.show)
       }
+      subsystem._initialize_durable_job_runtime_c().TAKE
       subsystem
     }
   }

@@ -2,11 +2,11 @@ package org.goldenport.cncf.component.builtin.metrics
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
+import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry, RuntimeMetricPoint}
 import org.goldenport.cncf.observability.OpenTelemetryExporter
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -19,7 +19,7 @@ import org.goldenport.schema.DataType
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version Aug.  8, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
@@ -68,7 +68,8 @@ object MetricsComponent {
         params.subsystem.entityAccessMetrics,
         params.subsystem.componentMetrics,
         runtimeconfig,
-        () => params.subsystem.runtimeOperationSecurityPolicyC
+        () => params.subsystem.runtimeOperationSecurityPolicyC,
+        () => params.subsystem.jobEngine.operationalMetrics.getOrElse(Vector.empty)
       )))
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(componentId.name, componentId, instanceid, protocol)
@@ -79,13 +80,15 @@ object MetricsComponent {
     registry: EntityAccessMetricsRegistry,
     componentmetrics: ComponentMetricsRegistry,
     runtimeconfig: RuntimeConfig,
-    operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
+    operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy],
+    jobsupplier: () => Vector[RuntimeMetricPoint] = () => Vector.empty
   ) extends MetricsService {
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
 
     def loadRuntimeMetrics(): Consequence[Record] = {
-      val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry, componentmetrics)
+      val original = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry, componentmetrics)
+      val snapshot = original.copy(points = original.points ++ jobsupplier())
       val operationmode = MetricsComponent.operationMode(operationmodesupplier())
       val exportresult = OpenTelemetryExporter(
         runtimeconfig.openTelemetryExportConfig.forOperationMode(operationmode),

@@ -1,58 +1,17 @@
 package org.goldenport.cncf.job
 
-import java.security.MessageDigest
-import java.time.{Duration, Instant}
-import java.util.Base64
-import java.util.concurrent.{
-  ConcurrentHashMap,
-  Executors,
-  PriorityBlockingQueue,
-  ScheduledExecutorService,
-  TimeUnit,
-  ExecutorService
-}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import scala.concurrent.ExecutionContext as ScalaExecutionContext
 import scala.util.control.NonFatal
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.consequence.Failures
-import org.goldenport.id.UniversalId
-import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.conclusion.Disposition
-import org.goldenport.observation.Taxonomy
+import org.goldenport.observation.Descriptor
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{
-  ExecutionContext,
-  ExecutionInvocationIdentity,
-  ExecutionProfileRuntime,
-  ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration,
-  IdGenerationContext
-}
-import org.goldenport.cncf.entity.{
-  EntityMutationExecutionPolicy,
-  EntityPersistentCreate,
-  EntityStore
-}
-import org.simplemodeling.model.datatype.EntityRevision
-import org.goldenport.cncf.event.{
-  EventBus,
-  EventLane,
-  EventPublishOption,
-  EventRecordFactory,
-  EventStore,
-  ReceptionDomainEvent
-}
-import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMemoryJobEngine =>
@@ -63,11 +22,11 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
     tasks: List[JobTask],
     ctx: ExecutionContext
   ): Unit =
-    if (_establish_durable_start_intent(jobid) && _establish_durable_running_intent(jobid))
+    if (_can_run_next_task(jobid) && _establish_durable_start_intent(jobid) && _establish_durable_running_intent(jobid))
       _run_job_body(jobid, tasks, ctx, taskbridgewrites = true)
 
   private def _start_scheduler_workers(): Unit =
-    (0 until math.max(1, schedulerConfig.workerCount)).foreach { _ =>
+    (0 until schedulerConfig.workerCount).foreach { _ =>
       _worker_pool.submit(
         new Runnable {
           override def run(): Unit =
@@ -76,15 +35,16 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
       )
     }
 
-  private def _ensure_scheduler_workers(): Unit =
-    if (!_force_cancel_requested && _workers_started.compareAndSet(false, true))
+  private[job] def _ensure_scheduler_workers(): Unit =
+    if (_state_monitor.synchronized {
+      !_durable_runtime_blocked && !_force_cancel_requested && _workers_started.compareAndSet(false, true)
+    })
       _start_scheduler_workers()
 
   private def _scheduler_worker_loop(): Unit =
     while (!_force_cancel_requested && !Thread.currentThread().isInterrupted)
       try {
-        val work = _work_queue.take()
-        _run_scheduler_work(work)
+        _claim_work(blocking = true).foreach(_execute_reserved_work)
       } catch {
         case _: InterruptedException =>
           Thread.currentThread().interrupt()
@@ -103,8 +63,8 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
           taskbridgewrites = origin == SchedulerWorkItem.RetryRunOrigin.Automatic,
           retryorigin = origin
         )
-      case SchedulerWorkItem.SameJobTask(_, _, jobid, task, ctx, forcedTaskId) =>
-        _run_queued_same_job_task(jobid, task, ctx, forcedTaskId, Some("same-job-task"))
+      case SchedulerWorkItem.SameJobTask(_, _, jobid, task, ctx, forcedtaskid) =>
+        _run_queued_same_job_task(jobid, task, ctx, forcedtaskid, Some("same-job-task"))
     }
 
   private def _run_job_record(jobid: JobId): Unit =
@@ -147,14 +107,7 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
   ): Unit =
     if (_can_run_next_task(jobid)) {
       try {
-        _append_timeline(
-          jobid,
-          "job.scheduler.started",
-          Some(forcedtaskid),
-          ctx.jobContext.currentTask,
-          note
-        )
-        val _ = _run_same_job_task(jobid, task, ctx, Some(forcedtaskid))
+        val _ = _run_same_job_task(jobid, task, ctx, Some(forcedtaskid), note)
       } catch {
         case e: Throwable =>
           _handle_worker_failure(jobid, e)
@@ -194,12 +147,6 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
       )
     )
   }
-
-  private[job] def _enqueue_work(work: SchedulerWorkItem): Unit = {
-      if (schedulerConfig.autoStartWorkers)
-        _ensure_scheduler_workers()
-      _work_queue.put(work)
-    }
 
   private[job] def _next_sequence(): Long =
     _work_sequence.incrementAndGet()
@@ -241,108 +188,117 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
         var committedtasks = Vector.empty[(TaskId, JobTask)]
         var successresponse: Option[OperationResponse] = None
         var completedtasks = Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
+        var associationrefused = false
         var taskstartrefused = false
         var taskoutcomerefused = false
+        var dispatchrefused = false
         tasks.foreach { task =>
-          if (failure.isEmpty && !taskstartrefused && !taskoutcomerefused && _can_run_next_task(jobid)) {
-            if (_await_if_suspended(jobid)) {
+          if (failure.isEmpty && !associationrefused && !taskstartrefused && !taskoutcomerefused && !dispatchrefused) {
+            if (!_can_run_next_task(jobid)) dispatchrefused = true
+            else if (_await_if_suspended(jobid)) {
               val taskid = TaskId.create("execute", ctx.clock.instant(), ctx.idGeneration)
-              val startedat = _now()
-              val startednanos = System.nanoTime()
-              val jobcontext = JobContext(
-                jobId = Some(jobid),
-                taskId = Some(taskid),
-                actionId = Some(task.actionId),
-                parentJobId = ctx.jobContext.jobId,
-                currentTask = Some(taskid),
-                taskStack = previous.toVector :+ taskid,
-                causationId = ctx.observability.correlationId.map(_.print),
-                traceMetadata = Map(
-                  "traceId" -> ctx.observability.traceId.print
-                ) ++ ctx.observability.correlationId.map(x => "correlationId" -> x.print),
-                cancellationScope = Some(_cancellation_scope(jobid))
-              )
-              val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
-              _append_task_running(jobid, taskid, previous, startedat, task)
-              (if (taskbridgewrites)
-                 _establish_durable_task_start_intent(jobid, taskid, previous)
-               else
-                 Consequence.unit) match {
+              _associate_lifetime_task(jobid, taskid) match {
+                case Consequence.Failure(_) => associationrefused = true
                 case Consequence.Success(_) =>
-                  val taskoutcome = task.run(executioncontext)
-                  val taskcancelled =
-                    executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
-                  taskoutcome match {
-                    case TaskSucceeded(res) =>
-                      _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
-                      _append_task_finished(
-                        jobid,
-                        taskid,
-                        previous,
-                        JobTaskStatus.Succeeded,
-                        JobTaskResultSummary(success = true, message = Some("ok")),
-                        _now()
-                      )
-                      _append_timeline(
-                        jobid,
-                        "task.transaction.committed",
-                        Some(taskid),
-                        previous,
-                        None
-                      )
-                      (if (taskbridgewrites)
-                         _establish_durable_task_outcome_checkpoint(jobid, taskid, previous)
-                       else
-                         Consequence.unit) match {
-                        case Consequence.Success(_) =>
-                          completedtasks =
-                            completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
-                          successresponse = Some(res)
-                          committedtasks = committedtasks :+ (taskid -> task)
-                          previous = Some(taskid)
-                        case Consequence.Failure(_) =>
-                          taskoutcomerefused = true
+                  val startedat = _now()
+                  val startednanos = System.nanoTime()
+                  val jobcontext = JobContext(
+                    jobId = Some(jobid),
+                    taskId = Some(taskid),
+                    actionId = Some(task.actionId),
+                    parentJobId = ctx.jobContext.jobId,
+                    currentTask = Some(taskid),
+                    taskStack = previous.toVector :+ taskid,
+                    causationId = ctx.observability.correlationId.map(_.print),
+                    traceMetadata = Map(
+                      "traceId" -> ctx.observability.traceId.print
+                    ) ++ ctx.observability.correlationId.map(x => "correlationId" -> x.print),
+                    cancellationScope = Some(_cancellation_scope(jobid))
+                  )
+                  val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
+                  _append_task_running(jobid, taskid, previous, startedat, task)
+                  (if (taskbridgewrites)
+                     _establish_durable_task_start_intent(jobid, taskid, previous)
+                   else
+                     Consequence.unit) match {
+                    case Consequence.Success(_) =>
+                      val taskoutcome = task.run(executioncontext)
+                      val taskcancelled =
+                        executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
+                      taskoutcome match {
+                        case TaskSucceeded(res) =>
+                          _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
+                          _append_task_finished(
+                            jobid,
+                            taskid,
+                            previous,
+                            JobTaskStatus.Succeeded,
+                            JobTaskResultSummary(success = true, message = Some("ok")),
+                            _now()
+                          )
+                          _append_timeline(
+                            jobid,
+                            "task.transaction.committed",
+                            Some(taskid),
+                            previous,
+                            None
+                          )
+                          (if (taskbridgewrites)
+                             _establish_durable_task_outcome_checkpoint(jobid, taskid, previous)
+                           else
+                             Consequence.unit) match {
+                            case Consequence.Success(_) =>
+                              completedtasks =
+                                completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
+                              successresponse = Some(res)
+                              committedtasks = committedtasks :+ (taskid -> task)
+                              previous = Some(taskid)
+                            case Consequence.Failure(_) =>
+                              taskoutcomerefused = true
+                          }
+                        case TaskFailed(c) =>
+                          _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
+                          _append_task_finished(
+                            jobid,
+                            taskid,
+                            previous,
+                            JobTaskStatus.Failed,
+                            JobTaskResultSummary(
+                              success = false,
+                              message = c.observation.getEffectiveMessage
+                            ),
+                            _now()
+                          )
+                          _append_timeline(
+                            jobid,
+                            "task.transaction.failed",
+                            Some(taskid),
+                            previous,
+                            c.observation.getEffectiveMessage
+                          )
+                          (if (taskbridgewrites)
+                             _establish_durable_task_outcome_checkpoint(jobid, taskid, previous)
+                           else
+                             Consequence.unit) match {
+                            case Consequence.Success(_) =>
+                              completedtasks =
+                                completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
+                              failure = Some(c)
+                              failedtaskid = Some(taskid)
+                            case Consequence.Failure(_) =>
+                              taskoutcomerefused = true
+                          }
                       }
-                    case TaskFailed(c) =>
-                      _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
-                      _append_task_finished(
-                        jobid,
-                        taskid,
-                        previous,
-                        JobTaskStatus.Failed,
-                        JobTaskResultSummary(
-                          success = false,
-                          message = c.observation.getEffectiveMessage
-                        ),
-                        _now()
-                      )
-                      _append_timeline(
-                        jobid,
-                        "task.transaction.failed",
-                        Some(taskid),
-                        previous,
-                        c.observation.getEffectiveMessage
-                      )
-                      (if (taskbridgewrites)
-                         _establish_durable_task_outcome_checkpoint(jobid, taskid, previous)
-                       else
-                         Consequence.unit) match {
-                        case Consequence.Success(_) =>
-                          completedtasks =
-                            completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
-                          failure = Some(c)
-                          failedtaskid = Some(taskid)
-                        case Consequence.Failure(_) =>
-                          taskoutcomerefused = true
-                      }
+                    case Consequence.Failure(_) =>
+                      taskstartrefused = true
                   }
-                case Consequence.Failure(_) =>
-                  taskstartrefused = true
               }
             }
           }
         }
-        if (!taskstartrefused && !taskoutcomerefused) {
+        if (!associationrefused && !taskstartrefused && !taskoutcomerefused && !_native_runtime_refused(jobid) &&
+            (!dispatchrefused || (_get_record(jobid).exists(_.status == JobStatus.Cancelled) &&
+              !_has_durable_task_checkpoint_refusal(jobid)))) {
           val compensationobservations =
             if (failure.nonEmpty)
               _run_compensations(jobid, failedtaskid, committedtasks.reverse, ctx)
@@ -375,11 +331,15 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
     jobid: JobId,
     task: JobTask,
     ctx: ExecutionContext,
-      forcedtaskid: Option[TaskId] = None
+      forcedtaskid: Option[TaskId] = None,
+    schedulernote: Option[String] = None
   ): Consequence[TaskOutcome] = {
     val taskid = forcedtaskid.getOrElse(
       TaskId.create("same-job.execute", ctx.clock.instant(), ctx.idGeneration)
     )
+    _associate_lifetime_task(jobid, taskid).flatMap { _ =>
+    if (forcedtaskid.nonEmpty)
+      _append_timeline(jobid, "job.scheduler.started", Some(taskid), ctx.jobContext.currentTask, schedulernote)
     val parent = ctx.jobContext.currentTask
     val startedat = _now()
     val startednanos = System.nanoTime()
@@ -438,23 +398,27 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
           )
           ()
       }
-      _establish_durable_task_outcome_checkpoint(jobid, taskid, parent).map { _ =>
+      _establish_durable_task_outcome_checkpoint(jobid, taskid, parent).flatMap { _ =>
         val compensationobservations = outcome match {
           case TaskSucceeded(_) =>
             Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
           case TaskFailed(c) =>
             val observations = _run_same_job_compensations(jobid, Some(taskid), ctx)
-            _update_deferred_result(jobid, Some(JobResult.Failure(c)))
+            if (!_native_runtime_refused(jobid)) _update_deferred_result(jobid, Some(JobResult.Failure(c)))
             observations
         }
+        if (_native_runtime_refused(jobid)) DurableJobLifetimeQuotaPolicy.unavailable
+        else {
         if (_settle_if_ready(jobid)) {
           _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
           compensationobservations.foreach { case (task, outcome, executioncontext, taskcancelled) =>
             _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
           }
         }
-        outcome
+        Consequence.success(outcome)
+        }
       }
+    }
     }
   }
 
@@ -529,12 +493,12 @@ private[job] trait InMemoryJobEngineExecutionPart extends JobEngine { self: InMe
 
   private def _save_calltree(
     jobid: JobId,
-    operationMode: org.goldenport.cncf.config.OperationMode,
+    operationmode: org.goldenport.cncf.config.OperationMode,
     record: Record
   ): Unit = {
     val json = RecordEncoder.json(record)
     val bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-    val externalizer = DiagnosticPayloadExternalizer.fromGlobal(operationMode)
+    val externalizer = DiagnosticPayloadExternalizer.fromGlobal(operationmode)
     val externalsummary =
       externalizer.externalizeText(
         operation = _job_operation_fqn(jobid),

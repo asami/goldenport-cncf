@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object DurableJobRecordCodec  extends DurableJobRecordDecodingPart with DurableJobRecordEncodingPart {
@@ -58,7 +58,11 @@ object DurableJobRecordCodec  extends DurableJobRecordDecodingPart with DurableJ
     }
 
   def canonicalV0Json(body: DurableJobRecordBody): Consequence[String] =
-    _from_either(_validate_body(V1, body).map(_ => _unsigned_json(DurableRecordFormat.V0, body).noSpaces))
+    _from_either(for {
+      _ <- _validate_body(V1, body)
+      text = _unsigned_json(DurableRecordFormat.V0, body).noSpaces
+      _ <- DurableJobRecordResourcePolicy.validateText(text)
+    } yield text)
 
   def decode(text: String, access: DurableJobRecordAccess): Consequence[DurableJobRecord] =
     _from_either(_safe_decode_record(text).flatMap { record =>
@@ -85,6 +89,11 @@ object DurableJobRecordCodec  extends DurableJobRecordDecodingPart with DurableJ
     _from_either(for {
       _ <- _validate_record(record)
       _ <- _authorize(record.body.authorization, access)
+      _ <- Either.cond(
+        record.body.retention.deletionState == DurableDeletionState.Active,
+        (),
+        "Durable job public projection requires active retention"
+      )
     } yield _public_projection(record.body))
 
   private def _safe_decode_record(text: String): Either[String, DurableJobRecord] =
@@ -126,17 +135,17 @@ object DurableJobRecordCodec  extends DurableJobRecordDecodingPart with DurableJ
     for {
       _ <- _validate_body(format, body)
       unsigned = _unsigned_json(format, body).noSpaces
+      _ <- DurableJobRecordResourcePolicy.validateBytes(unsigned)
       digest <- _sha256(unsigned)
-    } yield DurableJobRecord(
-      format,
-      body,
-      DurableRecordIntegrity(SHA256_ALGORITHM, digest)
-    )
+      record = DurableJobRecord(format, body, DurableRecordIntegrity(SHA256_ALGORITHM, digest))
+      _ <- DurableJobRecordResourcePolicy.validateText(_signed_json(record).noSpaces)
+    } yield record
 
   private def _validate_record(record: DurableJobRecord): Either[String, Unit] =
     for {
       _ <- Either.cond(record.format == V1 || record.format == V2, (), "Durable record must use the v1 or v2 format")
       _ <- _validate_body(record.format, record.body)
+      _ <- DurableJobRecordResourcePolicy.validateText(_signed_json(record).noSpaces)
       _ <- Either.cond(record.integrity.algorithm == SHA256_ALGORITHM, (), s"Unsupported durable integrity algorithm: ${record.integrity.algorithm}")
       _ <- _validate_digest(record.integrity.unsignedBodySha256, "integrity.unsignedBodySha256")
       expected <- _sha256(_unsigned_json(record.format, record.body).noSpaces)

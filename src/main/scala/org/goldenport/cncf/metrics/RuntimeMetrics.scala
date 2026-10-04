@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version Jul. 24, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -205,6 +205,24 @@ object RuntimeMetricsCatalog {
       "Component",
       "Component-owned bounded metrics with contract-defined, low-cardinality labels.",
       Vector("component")
+    ),
+    MetricScopeDefinition(
+      "job.lifecycle",
+      "Job lifecycle",
+      "Cumulative non-authoritative State-lifetime emitted Job facts; no durable availability or readiness guarantee.",
+      Vector("family", "operation", "outcome", "persistence", "run_mode")
+    ),
+    MetricScopeDefinition(
+      "job.operation",
+      "Job operation",
+      "Cumulative non-authoritative State-lifetime completed public-call results; no durable acknowledgement or readiness guarantee.",
+      Vector("operation", "outcome")
+    ),
+    MetricScopeDefinition(
+      "job.durable.operation",
+      "Durable Job operation",
+      "Cumulative non-authoritative Store-lifetime completed durable-operation results; no disposal, availability or readiness guarantee.",
+      Vector("operation", "outcome")
     )
   )
 

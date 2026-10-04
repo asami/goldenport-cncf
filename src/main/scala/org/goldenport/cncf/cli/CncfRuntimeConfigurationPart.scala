@@ -31,7 +31,8 @@ import org.goldenport.cncf.config.RuntimeTestDescriptor
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeConfigurationPart {
@@ -60,19 +61,21 @@ private[cli] trait CncfRuntimeConfigurationPart {
     val explicitconfigs = _explicit_config_sources(cwd, configargs)
     val argsource = ConfigurationSource.args(configargs).toSeq
     val initialsources = ConfigurationSources(_deduplicate_runtime_sources(
-      initialbasesources.sources ++ explicitconfigs ++ argsource
+      initialbasesources.sources.filterNot(_.isInstanceOf[ConfigurationSource.Args]) ++ explicitconfigs ++ argsource
     ))
     val testconfigs = _test_descriptor_config_sources(initialsources, cwd)
     val effectiveargs = testconfigs.configmap ++ configargs ++ testconfigs.normalizedpathconfig
+    val runtimeargs = effectiveargs ++ _test_home_default_config_args(cwd, effectiveargs)
     val basesources = _runtime_standard_config_sources(
       cwd,
       applicationname = _configuration_application_name,
-      args = effectiveargs,
+      args = runtimeargs,
       environment = environment
     )
-    val testhomedefaults = _test_home_default_config_source(cwd, effectiveargs)
+    val (argumentsources, othersources) =
+      basesources.sources.partition(_.isInstanceOf[ConfigurationSource.Args])
     val sources = ConfigurationSources(_deduplicate_runtime_sources(
-      basesources.sources ++ explicitconfigs ++ testhomedefaults.toVector
+      othersources ++ explicitconfigs ++ argumentsources
     ))
     ConfigurationResolver.default.resolveSnapshot(sources.sources) match {
       case Consequence.Success(snapshot) =>
@@ -249,19 +252,19 @@ private[cli] trait CncfRuntimeConfigurationPart {
       .map(Paths.get(_))
       .map(path => if (path.isAbsolute) path.normalize else cwd.resolve(path).normalize)
 
-  private[cli] def _test_home_default_config_source(
+  private[cli] def _test_home_default_config_args(
     cwd: Path,
     args: Map[String, String]
-  ): Option[ConfigurationSource] =
+  ): Map[String, String] =
     _test_home_runtime_config(cwd, args).flatMap { homeconfig =>
       if (homeconfig.inheritlocaldata) {
         None
       } else {
-        homeconfig.path.flatMap { path =>
-          ConfigurationSource.args(Map("textus.local-data.root" -> path.resolve(".cncf").toString))
+        homeconfig.path.map { path =>
+          Map("textus.local-data.root" -> path.resolve(".cncf").toString)
         }
       }
-    }
+    }.getOrElse(Map.empty)
 
   private[cli] def _test_home_boolean(
     args: Map[String, String],

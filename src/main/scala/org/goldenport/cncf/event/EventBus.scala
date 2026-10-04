@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.observation.{Cause, Taxonomy}
+import org.goldenport.observation.Cause
 
 /*
  * EventBus baseline for EV-03.
@@ -18,7 +18,8 @@ import org.goldenport.observation.{Cause, Taxonomy}
  *
  * @since   Mar. 20, 2026
  *  version Apr. 22, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Oct.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventDispatchHandler {
@@ -202,7 +203,10 @@ final class DefaultEventBus(
 
     val persisted = if (option.persistent) {
       context match {
-        case Some(ctx) => eventengine.emit(Vector(event), EventRecordFactory.from(ctx)).map(_ => ())
+        case Some(ctx) =>
+          val result = eventengine.emit(Vector(event), EventRecordFactory.from(ctx))
+          EventPersistenceOperationalAudit.observe(name, kind, result)(using ctx)
+          result.map(_ => ())
         case None => eventengine.emit(Vector(event)).map(_ => ())
       }
     } else {

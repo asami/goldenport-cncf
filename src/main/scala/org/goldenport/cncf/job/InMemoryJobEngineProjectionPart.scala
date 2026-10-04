@@ -1,63 +1,16 @@
 package org.goldenport.cncf.job
 
-import java.security.MessageDigest
-import java.time.{Duration, Instant}
-import java.util.Base64
-import java.util.concurrent.{
-  ConcurrentHashMap,
-  Executors,
-  PriorityBlockingQueue,
-  ScheduledExecutorService,
-  TimeUnit,
-  ExecutorService
-}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import scala.concurrent.ExecutionContext as ScalaExecutionContext
-import scala.util.control.NonFatal
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.consequence.Failures
-import org.goldenport.id.UniversalId
-import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.conclusion.Disposition
-import org.goldenport.observation.Taxonomy
-import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.record.Record
-import org.goldenport.record.io.RecordEncoder
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{
-  ExecutionContext,
-  ExecutionInvocationIdentity,
-  ExecutionProfileRuntime,
-  ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration,
-  IdGenerationContext
-}
-import org.goldenport.cncf.entity.{
-  EntityMutationExecutionPolicy,
-  EntityPersistentCreate,
-  EntityStore
-}
-import org.simplemodeling.model.datatype.EntityRevision
-import org.goldenport.cncf.event.{
-  EventBus,
-  EventLane,
-  EventPublishOption,
-  EventRecordFactory,
-  EventStore,
-  ReceptionDomainEvent
-}
-import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.{EntityMutationExecutionPolicy, EntityPersistentCreate, EntityStore}
+import org.goldenport.cncf.event.{EventLane, EventPublishOption, EventRecordFactory, ReceptionDomainEvent}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineProjectionPart extends JobEngine { self: InMemoryJobEngine =>
-  import InMemoryJobEngine.*
-
   private[job] def _task_page(
     record: JobRecord,
     offset: Int,
@@ -446,6 +399,7 @@ private[job] trait InMemoryJobEngineProjectionPart extends JobEngine { self: InM
     attributes: Map[String, String] = Map.empty
   ): Unit =
     _get_record(jobid).foreach { record =>
+      runtimeState._operational_metrics.observe(name, record.persistence, record.runMode)
       val (eventpayload, eventattributes) = _job_event_metadata(record, name, payload, attributes)
       val occurredat = _now()
       val event = ReceptionDomainEvent(
@@ -458,11 +412,16 @@ private[job] trait InMemoryJobEngineProjectionPart extends JobEngine { self: InM
       given ExecutionContext = record.submittedContext
       _event_bus match {
         case Some(bus) =>
-          val _ = bus.publishRuntime(event, EventPublishOption(persistent = true))
+          val result = bus.publishRuntime(event, EventPublishOption(persistent = true))
+          val _ = JobLifecycleOperationalAudit.observeBus(record, name, occurredat, result)
         case None =>
-          _event_store.foreach { store =>
-            val factory = EventRecordFactory.from(record.submittedContext)
-            val _ = store.append(Vector(factory.create(event, EventLane.NonTransactional)))
+          _event_store match {
+            case Some(store) =>
+              val factory = EventRecordFactory.from(record.submittedContext)
+              val result = store.append(Vector(factory.create(event, EventLane.NonTransactional)))
+              val _ = JobLifecycleOperationalAudit.observeStore(record, name, occurredat, result)
+            case None =>
+              JobLifecycleOperationalAudit.observeUnavailable(record, name, occurredat)
           }
       }
     }

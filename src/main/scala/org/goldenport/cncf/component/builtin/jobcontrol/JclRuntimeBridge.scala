@@ -14,6 +14,7 @@ import org.goldenport.cncf.job.{
   JobFlowStep,
   JobId,
   JobPersistencePolicy,
+  JobProducerOperationalAudit,
   JobSemanticPlan,
   JobSubmitOption,
   JobTask,
@@ -28,7 +29,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 
 /*
  * @since   Sep. 13, 2026
- * @version Sep. 13, 2026
+ * @version Oct.  4, 2026
  */
 /** Package-private runtime owner for accepted JCL action and workflow targets. */
 private[jobcontrol] final class JclRuntimeBridge(component: Component) {
@@ -110,7 +111,10 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
                 preparedcontext,
                 option
               ).map { jobid =>
-                (jobid, component.logic.awaitJobResult(jobid))
+                val response = component.logic.awaitJobResult(jobid)
+                val result = (jobid, response)
+                JobProducerOperationalAudit.jcl(jobid, roottask.actionId, definitionSnapshot, response)
+                result
               }
             }
           }

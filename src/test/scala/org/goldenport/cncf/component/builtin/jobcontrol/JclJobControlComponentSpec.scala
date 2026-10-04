@@ -7,11 +7,14 @@ import cats.effect.Ref
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, ProcedureActionCall}
 import org.goldenport.cncf.component.{Component, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext, SecurityContext}
+import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext, Principal, PrincipalId, SecurityContext}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityStore}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntityStorage, PartitionStrategy}
 import org.goldenport.cncf.event.{DomainEvent, EventDispatchHandler, EventStore, EventSubscription, ReceptionDomainEvent}
 import org.goldenport.cncf.job.{JobBatchDefinition, JobDefinition, JobDefinitionEntity, JobDefinitionId, JobEngineTestFixture, JobEntityCollections, JobStatus, JobTarget, JobWorkflowTarget}
+import org.goldenport.cncf.job.{JobDefinitionSnapshot, JobId, JobPersistencePolicy, JobProducerOperationalAuditTestSupport, JobResult}
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
@@ -31,7 +34,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Apr. 22, 2026
  *  version May.  7, 2026
  *  version Aug. 13, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -1785,6 +1789,227 @@ final class JclJobControlComponentSpec
       }
     }
   }
+
+  "PJ1 Native stored JCL definition acknowledgement" should _producer_scenario("PJ1", "R3,R4,R7") {
+    "bind the actual created and loaded definition to the submitted native Job and Action after its successful wait" in {
+      Given("docs/spec/job-producer-operational-correlation-contract.md R3,R4,R7; PJ1: the existing admitted JCL fixture and a stored active definition with private key source and body parameters")
+      _with_fixture() { fixture =>
+        val selector = s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job"
+        val key = "producer-stored-private-key"
+        val body = _producer_body("ok", "producer-private-body")
+        val backend = new JobProducerOperationalAuditTestSupport.RecordingBackend
+        When("normal JobControl protocol creates loads and submits the original stored definition")
+        val created = _record(_execute(fixture.subsystem, s"$selector.create_job_definition",
+          List(Argument("key", key), Argument("status", "active"), Argument("body", body))))
+        val loaded = _record(_execute(fixture.subsystem, s"$selector.get_job_definition", List(Argument("key", key))))
+        val submitted = JobProducerOperationalAuditTestSupport.withBackend(backend) {
+          _execute(fixture.subsystem, s"$selector.submit_job_definition", List(Argument("body", s"jobDefinitionRef: $key")))
+        }
+        val jobid = JobId.parse(_strings(_record(submitted), "submitted-job-ids").head).toOption.get
+        val native = JobProducerOperationalAuditTestSupport.nativeRecord(fixture.subsystem.jobEngine, jobid)
+        val snapshot = native.debug.jobDefinitionSnapshot.get
+        Then("one actual producer frame binds the original stored definition ID and acknowledged Job and Action with success")
+        loaded.getString("id") shouldBe created.getString("id")
+        snapshot.id shouldBe created.getString("id").get
+        snapshot.key shouldBe key
+        snapshot.jclSource shouldBe created.getString("jclSource")
+        snapshot.jclSource.get should include("producer-private-body")
+        native.status shouldBe JobStatus.Succeeded
+        fixture.trace.toVector shouldBe Vector("ok:orderId=producer-private-body")
+        backend.events.size shouldBe 1
+        val atoms = backend.events.head.attributes
+        atoms.getString("producer") shouldBe Some("jcl-action")
+        atoms.getString("job-id") shouldBe Some(native.id.value)
+        atoms.getString("operation-action-id") shouldBe Some(native.tasks.head.actionId.value)
+        atoms.getBoolean("job-definition-present") shouldBe Some(true)
+        atoms.getString("job-definition-id") shouldBe Some(snapshot.id)
+        atoms.getString("result-outcome") shouldBe Some("succeeded")
+        Vector(key, body, "producer-private-body", "command.ok").foreach { marker =>
+          backend.events.head.message should not include marker
+          backend.events.head.attributes.asMap.values.mkString should not include marker
+        }
+        JobProducerOperationalAuditTestSupport.framed(backend.events.head.message).hcursor.get[String]("job-definition-id").toOption shouldBe Some(snapshot.id)
+      }
+    }
+  }
+
+  "PJ2 Native inline JCL association" should _producer_scenario("PJ2", "R3,R4,R5") {
+    "keep absent original definition truthful despite forged definition-like request parameters" in {
+      Given("docs/spec/job-producer-operational-correlation-contract.md R3,R4,R5; PJ2: an actual inline action JCL source with forged jcl.jobDefinition.id/key/source parameters")
+      _with_fixture() { fixture =>
+        val backend = new JobProducerOperationalAuditTestSupport.RecordingBackend
+        val marker = JobProducerOperationalAuditTestSupport.secret
+        val body = s"""job:
+          |  name: private-inline
+          |  target:
+          |    action: org.goldenport.cncf.test.JclFixture.command.ok
+          |  parameters:
+          |    orderId: inline-native
+          |    jcl.jobDefinition.id: "$marker"
+          |    jcl.jobDefinition.key: "$marker"
+          |    jcl.jobDefinition.source: "$marker"
+          |  submit:
+          |    persistence: ephemeral
+          |""".stripMargin
+        When("normal JobControl protocol submits the real inline action with no stored definition")
+        val submitted = JobProducerOperationalAuditTestSupport.withBackend(backend) {
+          _execute(fixture.subsystem,
+            s"${org.goldenport.cncf.component.builtin.BuiltinComponentIdentity.JOB_CONTROL.name}.job.submit_job_definition",
+            List(Argument("body", body)))
+        }
+        val jobid = JobId.parse(_strings(_record(submitted), "submitted-job-ids").head).toOption.get
+        val native = JobProducerOperationalAuditTestSupport.nativeRecord(fixture.subsystem.jobEngine, jobid)
+        Then("the actual Job and Action correlate without inferring a definition from private parameters")
+        native.debug.jobDefinitionSnapshot shouldBe None
+        native.debug.parameters.get("jcl.jobDefinition.id") shouldBe Some(marker)
+        native.status shouldBe JobStatus.Succeeded
+        backend.events.size shouldBe 1
+        val atoms = backend.events.head.attributes
+        atoms.getString("job-id") shouldBe Some(native.id.value)
+        atoms.getString("operation-action-id") shouldBe Some(native.tasks.head.actionId.value)
+        atoms.getBoolean("job-definition-present") shouldBe Some(false)
+        atoms.getString("job-definition-id") shouldBe None
+        atoms.getBoolean("job-definition-id-omitted") shouldBe None
+        atoms.getString("result-outcome") shouldBe Some("succeeded")
+        backend.events.head.message should not include marker
+        atoms.asMap.values.mkString should not include marker
+        fixture.trace.size shouldBe 1
+      }
+    }
+  }
+
+  "PJ3 Native failed action and refused submission" should _producer_scenario("PJ3", "R3,R7,R8") {
+    "acknowledge the normally returned failed Job with its exact original failure and omit unknown or refused submissions" in {
+      Given("docs/spec/job-producer-operational-correlation-contract.md R3,R7,R8; PJ3: the real JclRuntimeBridge over the existing admitted fixture's fail action and actual component-owned native JobEngine")
+      _with_fixture() { fixture =>
+        given ExecutionContext = fixture.component.logic.executionContext()
+        val bridge = new JclRuntimeBridge(fixture.component)
+        val backend = new JobProducerOperationalAuditTestSupport.RecordingBackend
+        When("the real fail action is submitted and its normal wait returns the original failed response")
+        val pair = JobProducerOperationalAuditTestSupport.withBackend(backend) {
+          bridge.submitAction("org.goldenport.cncf.test.JclFixture.command.fail", Map("orderId" -> "failed-native"),
+            None, JobPersistencePolicy.Ephemeral, None)
+        }.toOption.get
+        val native = JobProducerOperationalAuditTestSupport.nativeRecord(fixture.component.jobEngine, pair._1)
+        Then("the submitted producer association retains the actual Job and Action IDs and failed outcome without swallowing the original failure")
+        native.status shouldBe JobStatus.Failed
+        pair._2.isSuccess shouldBe false
+        (native.result, pair._2) match {
+          case (Some(JobResult.Failure(original)), Consequence.Failure(returned)) =>
+            (original eq returned) shouldBe true
+            returned.show should include("jcl fixture failure: fail")
+          case _ => fail("PJ3 original native failed response missing")
+        }
+        fixture.trace.toVector shouldBe Vector("fail:orderId=failed-native")
+        backend.events.size shouldBe 1
+        val atoms = backend.events.head.attributes
+        atoms.getString("job-id") shouldBe Some(native.id.value)
+        atoms.getString("operation-action-id") shouldBe Some(native.tasks.head.actionId.value)
+        atoms.getString("result-outcome") shouldBe Some("failed")
+        backend.events.head.message should not include "jcl fixture failure"
+        backend.clear()
+        val before = fixture.trace.toVector
+        When("the actual resolver misses a target and the native engine later refuses admission")
+        val unknown = JobProducerOperationalAuditTestSupport.withBackend(backend) {
+          bridge.submitAction("org.goldenport.cncf.test.JclFixture.command.unknown", Map.empty, None, JobPersistencePolicy.Ephemeral, None)
+        }
+        fixture.component.jobEngine.quiesce()
+        val refused = JobProducerOperationalAuditTestSupport.withBackend(backend) {
+          bridge.submitAction("org.goldenport.cncf.test.JclFixture.command.ok", Map.empty, None, JobPersistencePolicy.Ephemeral, None)
+        }
+        Then("original failures propagate with no guessed association retry or action body effect")
+        unknown.isSuccess shouldBe false
+        refused.isSuccess shouldBe false
+        fixture.trace.toVector shouldBe before
+        backend.events shouldBe empty
+      }
+    }
+  }
+
+  "PJ4 Native hostile JCL observation has no effects" should _producer_scenario("PJ4", "R1,R3,R4,R8") {
+    "preserve independent native execution results trace providers and security reads with private source values and throwing logs" in {
+      Given("docs/spec/job-producer-operational-correlation-contract.md R1,R3,R4,R8; PJ4: independent admitted JCL fixtures with hostile input key source summary parameters security and path values")
+      val original = LogBackendHolder.backend.get
+      val policy = ObservabilityEngine.visibilityPolicy
+      val backend = new JobProducerOperationalAuditTestSupport.RecordingBackend
+      val throwing = new JobProducerOperationalAuditTestSupport.ThrowingBackend
+      When("the actual JCL action and normal await run under Nop recording and throwing native backends")
+      val nop = _producer_bridge_run(LogBackend.NopLogBackend)
+      val observed = _producer_bridge_run(backend)
+      val failedlog = _producer_bridge_run(throwing)
+      Then("native results original response objects body trace clock-ID-security counts and canonical private parameters stay identical")
+      observed shouldBe nop
+      failedlog shouldBe nop
+      backend.events.size shouldBe 1
+      throwing.calls.get() shouldBe 1
+      val event = backend.events.head
+      val marker = JobProducerOperationalAuditTestSupport.secret
+      event.message should not include marker
+      event.attributes.asMap.values.mkString should not include marker
+      event.attributes.asMap.keySet shouldBe Set("audit.kind", "operation", "outcome", "record-kind", "trace-id",
+        "correlation-id", "producer", "job-id", "operation-action-id", "job-definition-present", "job-definition-id", "result-outcome")
+      val json = JobProducerOperationalAuditTestSupport.framed(event.message)
+      json.asObject.get.keys.toSet shouldBe event.attributes.asMap.keySet
+      json.asObject.get.toVector.foreach { case (key, value) =>
+        value.fold(fail("null atom"), boolean => event.attributes.getBoolean(key) shouldBe Some(boolean),
+          number => event.attributes.getLong(key) shouldBe number.toLong,
+          string => event.attributes.getString(key) shouldBe Some(string), _ => fail("array atom"), _ => fail("object atom"))
+      }
+      (LogBackendHolder.backend.get eq original) shouldBe true
+      ObservabilityEngine.visibilityPolicy shouldBe policy
+    }
+  }
+
+  private def _producer_scenario(example: String, rules: String) =
+    afterWord(s"in spec:job-producer-operational-correlation, example:$example, rules:$rules, phase:69.7")
+
+  private def _producer_body(action: String, value: String): String = s"""job:
+    |  name: private-producer-source
+    |  target:
+    |    action: org.goldenport.cncf.test.JclFixture.command.$action
+    |  parameters:
+    |    orderId: $value
+    |  submit:
+    |    persistence: ephemeral
+    |""".stripMargin
+
+  private final case class ProducerRun(jobid: String, actions: Vector[String], status: JobStatus,
+    response: Consequence[OperationResponse], trace: Vector[String], parameters: Map[String, String],
+    snapshot: Option[JobDefinitionSnapshot], clockcalls: Int, idcalls: Int, securityreads: Int)
+
+  private def _producer_bridge_run(backend: LogBackend): ProducerRun =
+    _with_fixture() { fixture =>
+      val clock = new JobProducerOperationalAuditTestSupport.CountingClock
+      val ids = new JobProducerOperationalAuditTestSupport.CountingIds
+      val base = JobProducerOperationalAuditTestSupport.context(clock, ids)
+      val securityreads = new AtomicInteger(0)
+      val marker = JobProducerOperationalAuditTestSupport.secret
+      val originalprincipal = base.security.principal
+      val principal = new Principal {
+        def id: PrincipalId = { securityreads.incrementAndGet(); originalprincipal.id }
+        def attributes: Map[String, String] = {
+          securityreads.incrementAndGet()
+          originalprincipal.attributes ++ Map("private-subject-tenant-credential-provider-path" -> marker)
+        }
+      }
+      given ExecutionContext = ExecutionContext.withSecurityContext(base, base.security.copy(principal = principal))
+      val snapshot = JobDefinitionSnapshot("original-native-definition", marker, None, Some(marker), Some(marker))
+      val pair = JobProducerOperationalAuditTestSupport.withBackend(backend) {
+        new JclRuntimeBridge(fixture.component).submitAction("org.goldenport.cncf.test.JclFixture.command.ok",
+          Map("orderId" -> marker, "jcl.jobDefinition.id" -> marker), Some(marker), JobPersistencePolicy.Ephemeral,
+          None, Some(snapshot))
+      }.toOption.get
+      val native = JobProducerOperationalAuditTestSupport.nativeRecord(fixture.component.jobEngine, pair._1)
+      native.result match {
+        case Some(JobResult.Success(original)) => (pair._2.toOption.get eq original) shouldBe true
+        case _ => fail("PJ4 original successful response missing")
+      }
+      native.debug.requestSummary shouldBe Some(marker)
+      native.debug.jobDefinitionSnapshot shouldBe Some(snapshot)
+      ProducerRun(native.id.value, native.tasks.map(_.actionId.value).toVector, native.status, pair._2,
+        fixture.trace.toVector, native.debug.parameters, native.debug.jobDefinitionSnapshot,
+        clock.calls.get(), ids.calls.get(), securityreads.get())
+    }
 
   private final case class Fixture(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,

@@ -1,58 +1,16 @@
 package org.goldenport.cncf.job
 
-import java.security.MessageDigest
-import java.time.{Duration, Instant}
-import java.util.Base64
-import java.util.concurrent.{
-  ConcurrentHashMap,
-  Executors,
-  PriorityBlockingQueue,
-  ScheduledExecutorService,
-  TimeUnit,
-  ExecutorService
-}
+import java.time.Instant
+import java.util.concurrent.{ConcurrentHashMap, Executors, PriorityBlockingQueue, ScheduledExecutorService, TimeUnit, ExecutorService}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import scala.concurrent.ExecutionContext as ScalaExecutionContext
-import scala.util.control.NonFatal
-import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.consequence.Failures
-import org.goldenport.id.UniversalId
-import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.conclusion.Disposition
-import org.goldenport.observation.Taxonomy
-import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.record.Record
-import org.goldenport.record.io.RecordEncoder
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{
-  ExecutionContext,
-  ExecutionInvocationIdentity,
-  ExecutionProfileRuntime,
-  ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration,
-  IdGenerationContext
-}
-import org.goldenport.cncf.entity.{
-  EntityMutationExecutionPolicy,
-  EntityPersistentCreate,
-  EntityStore
-}
-import org.simplemodeling.model.datatype.EntityRevision
-import org.goldenport.cncf.event.{
-  EventBus,
-  EventLane,
-  EventPublishOption,
-  EventRecordFactory,
-  EventStore,
-  ReceptionDomainEvent
-}
-import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
+import org.goldenport.Consequence
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionProfileRuntime, ExecutionSchedulerMode, ExecutionSchedulingRegistration}
+import org.goldenport.cncf.event.{EventBus, EventStore}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InMemoryJobEngine(
@@ -64,10 +22,16 @@ final class InMemoryJobEngine(
   timer: Option[JobTimer] = None
 )(
   implicit val executionContext: ScalaExecutionContext
-) extends JobEngine with InMemoryJobEngineAdmissionPart with InMemoryJobEngineQueryPart with InMemoryJobEngineDurableLifecyclePart with InMemoryJobEngineExecutionPart with InMemoryJobEngineControlPart with InMemoryJobEngineSettlementPart with InMemoryJobEngineProjectionPart with InMemoryJobEngineRetryRecoveryPart {
+) extends JobEngine with InMemoryJobEngineAdmissionPart with InMemoryJobEngineQueryPart with InMemoryJobEngineDurableLifecyclePart with InMemoryJobEngineExecutionPart with InMemoryJobEngineControlPart with InMemoryJobEngineSettlementPart with InMemoryJobEngineProjectionPart with InMemoryJobEngineRetryRecoveryPart with InMemoryJobEngineResourcePart with InMemoryJobEngineLifetimePart with InMemoryJobEngineDurableRuntimePart {
   import InMemoryJobEngine._
+  override def operationalMetrics: Option[Vector[org.goldenport.cncf.metrics.RuntimeMetricPoint]] =
+    Some(runtimeState._operational_metrics.snapshot() ++ runtimeState._operation_metrics.snapshot())
   private[job] val _durable_jobs = runtimeState.durableJobs
   private[job] val _runtime_jobs = runtimeState.runtimeJobs
+  private[job] val _state_monitor = runtimeState._state_monitor
+  private[job] val _resource_budget = runtimeState._attach_resource_budget(schedulerConfig, retrySchedule)
+  private[job] val _resource_owner = _resource_budget.newOwner()
+  private[job] val _bootstrap_pending = _prepare_resource_bootstrap()
   private[job] val _durable_terminal_facts =
     new ConcurrentHashMap[JobId, DurableJobTerminalProjection]()
   private[job] var _durable_lifecycle_write_bridge =
@@ -82,28 +46,27 @@ final class InMemoryJobEngine(
     Option.empty[DurableJobRuntimeRehydrationReport]
   private[job] var _durable_terminal_projection_report =
     Option.empty[DurableJobTerminalProjectionReport]
-  private val _scheduler: Option[ScheduledExecutorService] =
+  private[job] val _scheduler: Option[ScheduledExecutorService] =
     if (timer.isDefined) None else Some(Executors.newSingleThreadScheduledExecutor())
   private[job] val _timer: JobTimer =
     timer.getOrElse(new ScheduledJobTimer(_scheduler.get, timeSource))
   private[job] val _work_sequence = new AtomicLong(0L)
-  private[job] val _work_queue = new PriorityBlockingQueue[SchedulerWorkItem](
+  private[job] val _work_queue = new PriorityBlockingQueue[JobReservedWork](
     11,
     java.util.Comparator
-      .comparingInt[SchedulerWorkItem](_.priority)
-      .thenComparingLong(_.sequence)
+      .comparingInt[JobReservedWork](_.work.priority)
+      .thenComparingLong(_.work.sequence)
   )
   private[job] val _worker_pool: ExecutorService =
-    Executors.newFixedThreadPool(math.max(1, schedulerConfig.workerCount))
+    Executors.newFixedThreadPool(schedulerConfig.workerCount)
   private[job] val _workers_started = new AtomicBoolean(false)
-  private[job] val _state_monitor = new Object
   private[job] val _cancellation_scopes = new ConcurrentHashMap[JobId, JobCancellationScope]()
   private[job] var _execution_scheduling_registration = Option.empty[ExecutionSchedulingRegistration]
   @volatile private[job] var _admission_closed = false
   @volatile private[job] var _force_cancel_requested = false
 
-  _rehydrate_delayed_starts()
-  _rehydrate_delayed_retries()
+  _finish_native_bootstrap_cancellation()
+  _rehydrate_resource_work()
 
 }
 
@@ -148,14 +111,85 @@ object InMemoryJobEngine {
   final case class State(
     durableJobs: ConcurrentHashMap[JobId, JobRecord] = new ConcurrentHashMap[JobId, JobRecord](),
     runtimeJobs: ConcurrentHashMap[JobId, JobRecord] = new ConcurrentHashMap[JobId, JobRecord]()
-  )
+  ) {
+    private[job] val _state_monitor = new Object
+    private[job] val _operational_metrics = new JobOperationalMetrics
+    private[job] val _operation_metrics = new JobOperationMetrics
+    private[job] var _resource_budget = new JobResourceBudget(JobResourcePolicy.default)
+    private[job] var _lifetime_budget = new JobLifetimeBudget(JobLifetimePolicy.default)
+    private[job] val _native_lifetime_bindings =
+      scala.collection.mutable.HashMap.empty[JobId, JobDurableLifetimeRuntimeBinding]
+    private[job] var _bootstrap_cancelled = Set.empty[JobId]
+    private var _resource_attached = false
+
+    private[job] def bindLifetimePolicy(policy: JobLifetimePolicy): Consequence[Unit] =
+      _state_monitor.synchronized {
+        if (_resource_attached || policy == null) JobResourcePolicy.refused
+        else policy.validate.map { _ =>
+          _lifetime_budget = new JobLifetimeBudget(policy)
+          ()
+        }
+      }
+
+    private[job] def bindResourcePolicy(policy: JobResourcePolicy): Consequence[Unit] =
+      _state_monitor.synchronized {
+        if (_resource_attached || policy == null) JobResourcePolicy.refused
+        else policy.validate.map { _ =>
+          _resource_budget = new JobResourceBudget(policy)
+          ()
+        }
+      }
+
+    private[job] def _attach_resource_budget(
+      scheduler: SchedulerConfig,
+      retry: RetrySchedule
+    ): JobResourceBudget = _state_monitor.synchronized {
+      import scala.jdk.CollectionConverters.*
+      val admitted = _resource_budget.policy.validateEngine(scheduler, retry).flatMap { _ =>
+        _validate_inputs(durableJobs).flatMap(_ => _validate_inputs(runtimeJobs))
+      }.flatMap { _ =>
+        JobLifetimeBootstrap.stage(durableJobs, runtimeJobs, _resource_budget.policy,
+          _lifetime_budget, _native_lifetime_bindings.toMap)
+      }.flatMap { seeds =>
+        _resource_budget.seed(durableJobs.keySet().iterator().asScala ++ runtimeJobs.keySet().iterator().asScala)
+          .map { _ =>
+            _lifetime_budget.commitSeeds(seeds.local)
+            seeds.native.foreach { case (jobid, seed) => _lifetime_budget.replaceNativeSeed(jobid, seed) }
+            _bootstrap_cancelled = seeds.cancelled
+          }
+      }
+      admitted match {
+        case Consequence.Success(_) =>
+          _resource_attached = true
+          _resource_budget
+        case _ => throw new IllegalArgumentException("JobEngine resource bootstrap refused")
+      }
+    }
+
+    private def _validate_inputs(records: ConcurrentHashMap[JobId, JobRecord]): Consequence[Unit] =
+      if (records == null) JobInputResourcePolicy.invalid
+      else {
+        val entries = records.values().iterator()
+        var count = 0
+        var result: Consequence[Unit] = Consequence.unit
+        while (entries.hasNext && result.isSuccess) {
+          val record = entries.next()
+          count += 1
+          result =
+            if (count > _resource_budget.policy.maxretainedjobs) JobResourcePolicy.refused
+            else if (record == null) JobInputResourcePolicy.invalid
+            else JobInputResourcePolicy.validate(record.input)
+        }
+        result
+      }
+  }
 
   private[job] sealed trait RetryPolicy
   private[job] object RetryPolicy {
     case object None extends RetryPolicy
-    final case class Immediate(nextattempt: Int, maxAttempts: Int) extends RetryPolicy
-    final case class Delayed(nextattempt: Int, dueat: Instant, maxAttempts: Int) extends RetryPolicy
-    final case class Exhausted(kind: JobRetryKind, attempts: Int, maxAttempts: Int)
+    final case class Immediate(nextattempt: Int, maxattempts: Int) extends RetryPolicy
+    final case class Delayed(nextattempt: Int, delay: java.time.Duration, maxattempts: Int) extends RetryPolicy
+    final case class Exhausted(kind: JobRetryKind, attempts: Int, maxattempts: Int)
         extends RetryPolicy
   }
 

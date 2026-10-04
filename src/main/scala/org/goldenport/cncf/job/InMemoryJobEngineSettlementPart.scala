@@ -1,62 +1,16 @@
 package org.goldenport.cncf.job
 
-import java.security.MessageDigest
-import java.time.{Duration, Instant}
-import java.util.Base64
-import java.util.concurrent.{
-  ConcurrentHashMap,
-  Executors,
-  PriorityBlockingQueue,
-  ScheduledExecutorService,
-  TimeUnit,
-  ExecutorService
-}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import scala.concurrent.ExecutionContext as ScalaExecutionContext
-import scala.util.control.NonFatal
-import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.consequence.Failures
-import org.goldenport.id.UniversalId
-import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.conclusion.Disposition
-import org.goldenport.observation.Taxonomy
-import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.record.Record
-import org.goldenport.record.io.RecordEncoder
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{
-  ExecutionContext,
-  ExecutionInvocationIdentity,
-  ExecutionProfileRuntime,
-  ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration,
-  IdGenerationContext
-}
-import org.goldenport.cncf.entity.{
-  EntityMutationExecutionPolicy,
-  EntityPersistentCreate,
-  EntityStore
-}
-import org.simplemodeling.model.datatype.EntityRevision
-import org.goldenport.cncf.event.{
-  EventBus,
-  EventLane,
-  EventPublishOption,
-  EventRecordFactory,
-  EventStore,
-  ReceptionDomainEvent
-}
-import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
+import java.time.Instant
+import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 2, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InMemoryJobEngine =>
-  import InMemoryJobEngine.*
+  import InMemoryJobEngine.SchedulerWorkItem
 
   private[job] def _append_task_running(
     jobid: JobId,
@@ -173,7 +127,11 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
     result: Option[JobResult],
     taskbridgewrites: Boolean = true,
     retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
-  ): Boolean = {
+  ): Boolean = _state_monitor.synchronized {
+    if (_native_runtime_refused(jobid) ||
+        (_native_binding(jobid).nonEmpty && _has_durable_task_checkpoint_refusal(jobid))) return false
+    if (_get_record(jobid).exists(_.status == JobStatus.Cancelled) &&
+        _native_binding(jobid).exists(_.cancellationSettled)) return true
     _mutate_record(jobid) { record =>
       record.copy(
         baseTasksCompleted = true,
@@ -202,6 +160,10 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
     retryorigin: SchedulerWorkItem.RetryRunOrigin = SchedulerWorkItem.RetryRunOrigin.Automatic
   ): Boolean =
     _state_monitor.synchronized {
+      if (_native_runtime_refused(jobid) ||
+          (_native_binding(jobid).nonEmpty && _has_durable_task_checkpoint_refusal(jobid))) return false
+      if (_get_record(jobid).exists(_.status == JobStatus.Cancelled) &&
+          _native_binding(jobid).exists(_.cancellationSettled)) return true
       var terminalcheckpointed = true
       _get_record(jobid).foreach { record =>
         if (
@@ -218,6 +180,8 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
               )
             case Some(JobResult.Failure(_)) =>
               terminalcheckpointed = _terminal_checkpoint_succeeded(jobid, taskbridgewrites)
+              if (terminalcheckpointed)
+                _native_binding(jobid).foreach(_.cancellationSettled = true)
               if (terminalcheckpointed && _has_eligible_durable_terminal_checkpoint(jobid))
                 _append_eventfor_control(jobid, JobControlCommand.Cancel, JobStatus.Cancelled)
             case Some(success @ JobResult.Success(_)) =>
@@ -249,7 +213,22 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
     }
 
   private[job] def _cancellation_scope(jobid: JobId): JobCancellationScope =
-    _cancellation_scopes.computeIfAbsent(jobid, _ => new JobCancellationScope)
+    _state_monitor.synchronized {
+      _native_binding(jobid) match {
+        case Some(binding) =>
+          _cancellation_scopes.putIfAbsent(jobid, binding.scope)
+          binding.scope
+        case None => _cancellation_scopes.computeIfAbsent(jobid, _ => new JobCancellationScope)
+      }
+    }
+
+  private[job] def _replace_cancellation_scope(jobid: JobId): Unit =
+    _state_monitor.synchronized {
+      val scope = new JobCancellationScope
+      _native_binding(jobid).foreach(_.scope = scope)
+      _cancellation_scopes.put(jobid, scope)
+      ()
+    }
 
   private[job] def _run_compensations(
     jobid: JobId,
@@ -257,17 +236,29 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
       committedtasks: Vector[(TaskId, JobTask)],
     ctx: ExecutionContext
   ): Vector[(JobTask, TaskOutcome, ExecutionContext, Boolean)] =
-    if (committedtasks.nonEmpty) {
+    {
+    val selected = _state_monitor.synchronized {
+      committedtasks.foldLeft(Consequence.success(Vector.empty[(TaskId, JobTask)])) {
+        case (selection, entry @ (taskid, _)) =>
+          selection.flatMap { claimed =>
+            _claim_lifetime_compensation(jobid, taskid).map { acknowledged =>
+              if (acknowledged) claimed :+ entry else claimed
+            }
+          }
+      }
+    }
+    val claimed = selected.toOption.getOrElse(Vector.empty)
+    if (selected.isSuccess && claimed.nonEmpty) {
       var observations = Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
       _append_timeline(
         jobid,
         "job.compensation.started",
         failuretaskid,
         None,
-        Some(committedtasks.size.toString)
+        Some(claimed.size.toString)
       )
-      committedtasks.foreach { case (originalTaskId, originalTask) =>
-        originalTask.compensationTask match {
+      claimed.foreach { case (originaltaskid, originaltask) =>
+        originaltask.compensationTask match {
           case Some(compensation) =>
             val compensationtaskid = TaskId.create(
               "compensation",
@@ -276,10 +267,10 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
             )
             val startedat = _now()
             val startednanos = System.nanoTime()
-            val parent       = failuretaskid.orElse(Some(originalTaskId))
+            val parent       = failuretaskid.orElse(Some(originaltaskid))
             _mark_task_compensation(
               jobid,
-              originalTaskId,
+              originaltaskid,
               Some("running"),
               None,
               recoveryrequired = false
@@ -287,9 +278,9 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
             _append_timeline(
               jobid,
               "task.compensation.started",
-              Some(originalTaskId),
+              Some(originaltaskid),
               parent,
-              originalTask.compensationActionRef
+              originaltask.compensationActionRef
             )
             _append_task_running(
               jobid,
@@ -298,7 +289,7 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
               startedat,
               compensation,
               relation = Some("compensation"),
-              compensatestaskid = Some(originalTaskId)
+              compensatestaskid = Some(originaltaskid)
             )
             val jobcontext = JobContext(
               jobId = Some(jobid),
@@ -331,7 +322,7 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
                 )
                 _mark_task_compensation(
                   jobid,
-                  originalTaskId,
+                  originaltaskid,
                   Some("succeeded"),
                   None,
                   recoveryrequired = false
@@ -339,7 +330,7 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
                 _append_timeline(
                   jobid,
                   "task.compensation.succeeded",
-                  Some(originalTaskId),
+                  Some(originaltaskid),
                   parent,
                   None
                 )
@@ -360,19 +351,19 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
                 )
                 _mark_task_compensation(
                   jobid,
-                  originalTaskId,
+                  originaltaskid,
                   Some("failed"),
                   message,
                   recoveryrequired = true
                 )
                 _mark_recovery_required(
                   jobid,
-                  s"compensation failed for task ${originalTaskId.value}: ${message.getOrElse(c.show)}"
+                  s"compensation failed for task ${originaltaskid.value}: ${message.getOrElse(c.show)}"
                 )
                 _append_timeline(
                   jobid,
                   "task.compensation.failed",
-                  Some(originalTaskId),
+                  Some(originaltaskid),
                   parent,
                   message
                 )
@@ -384,10 +375,10 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
               compensationcancelled
             )
           case None =>
-            val message = s"no compensation action for task ${originalTaskId.value}"
+            val message = s"no compensation action for task ${originaltaskid.value}"
             _mark_task_compensation(
               jobid,
-              originalTaskId,
+              originaltaskid,
               Some("missing"),
               Some(message),
               recoveryrequired = true
@@ -396,7 +387,7 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
             _append_timeline(
               jobid,
               "task.compensation.missing",
-              Some(originalTaskId),
+              Some(originaltaskid),
               failuretaskid,
               Some(message)
             )
@@ -406,6 +397,7 @@ private[job] trait InMemoryJobEngineSettlementPart extends JobEngine { self: InM
       observations
     } else
       Vector.empty
+    }
 
   private[job] def _run_same_job_compensations(
     jobid: JobId,

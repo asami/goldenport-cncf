@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait DurableJobRecordDecodingPart { self: DurableJobRecordCodec.type =>
@@ -294,7 +294,12 @@ private[job] trait DurableJobRecordDecodingPart { self: DurableJobRecordCodec.ty
     } yield DurableRecordIntegrity(algorithm, digest)
 
   private[job] def _parse_json(text: String): Either[String, Json] =
-    try _strict_json_parser.parse(text).left.map(error => s"Malformed durable job record JSON: ${error.message}")
+    try {
+      for {
+        _ <- DurableJobRecordResourcePolicy.validateText(text)
+        json <- _strict_json_parser.parse(text).left.map(error => s"Malformed durable job record JSON: ${error.message}")
+      } yield json
+    }
     catch {
       case NonFatal(error) => Left(s"Malformed durable job record JSON: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}")
     }

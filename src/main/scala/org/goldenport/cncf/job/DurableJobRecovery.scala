@@ -12,7 +12,7 @@ import org.goldenport.Consequence
  * treat it as permission to reconstruct or execute live work.
  *
  * @since   Sep.  9, 2026
- * @version Sep.  9, 2026
+ * @version Oct.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] enum DurableJobRecoveryOutcome(val wire: String) {
@@ -56,14 +56,16 @@ private[job] object DurableJobRecovery {
     record: DurableJobRecord,
     replayEvidence: DurableReplayEvidence
   ): Consequence[DurableJobRecoveryDecision] =
-    _validate_lifecycle_result(record) match {
+    if (record.body.retention.deletionState != DurableDeletionState.Active)
+      Consequence.stateInvalid("Durable job recovery requires active retention")
+    else _validate_lifecycle_result(record) match {
       case Left(message) => Consequence.argumentInvalid(s"durable recovery refused: $message")
       case Right(_) => Consequence.success(_classify(record, replayEvidence))
     }
 
   private def _classify(
     record: DurableJobRecord,
-    replayEvidence: DurableReplayEvidence
+    replayevidence: DurableReplayEvidence
   ): DurableJobRecoveryDecision = {
     val lifecycle = record.body.lifecycle
     lifecycle.status match {
@@ -92,16 +94,16 @@ private[job] object DurableJobRecovery {
               nonempty,
               Vector.empty
             )
-          case _ => _eligible_submitted_decision(lifecycle, replayEvidence)
+          case _ => _eligible_submitted_decision(lifecycle, replayevidence)
         }
     }
   }
 
   private def _eligible_submitted_decision(
     lifecycle: DurableJobLifecycle,
-    replayEvidence: DurableReplayEvidence
+    replayevidence: DurableReplayEvidence
   ): DurableJobRecoveryDecision =
-    DurableReplayAssessment.assess(replayEvidence) match {
+    DurableReplayAssessment.assess(replayevidence) match {
       case DurableReplayDecision.Allowed =>
         lifecycle.retry.nextRetryAt match {
           case Some(_) =>

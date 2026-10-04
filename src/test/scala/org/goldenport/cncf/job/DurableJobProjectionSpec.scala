@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * its fail-closed replay assessment boundary.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 14, 2026
+ *  version Sep. 14, 2026
+ * @version Oct. 2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobProjectionSpec
@@ -22,6 +23,149 @@ final class DurableJobProjectionSpec
     with Matchers
     with GivenWhenThen {
   "DurableJobProjection" should {
+    "NRT-P1 normal compensation aggregates" must afterWord(
+      "in spec:durable-job-record-contract, example:NRT-P1, rules:R3,R6, phase:69.7"
+    ) {
+      "preserve V2 declaration and closed original recovery facts without inventing a companion descriptor" in {
+        Given("NRT-P1: a normal succeeded task with a nonblank compensation declaration in docs/spec/durable-job-record-contract")
+        val declaration = _record().copy(taskReadModels = _record().taskReadModels.map(
+          _.copy(compensationActionRef = Some("undo"))))
+        When("V2 and the strict V1 projector receive the same declaration-only original")
+        val declared = DurableJobProjection.projectV2(declaration, _evidence())
+        Then("V2 signs the exact ordinary descriptor while V1 still refuses incomplete compensation metadata")
+        declared shouldBe a[Consequence.Success[_]]
+        declared.toOption.get.body.tasks.head.compensation shouldBe None
+        DurableJobProjection.project(declaration, _evidence()) shouldBe a[Consequence.Failure[_]]
+        Vector(("succeeded", true), ("failed", true), ("missing", true), ("missing", false)).foreach {
+          case (mode, action) =>
+            Given(s"NRT-P1: a committed succeeded original with $mode aggregate, declared action=$action, and exact actual companion facts")
+            val (record, evidence) = _aggregate_case(mode, action)
+            When("the unchanged aggregate and exact closed task descriptors are projected")
+            val projected = DurableJobProjection.projectV2(record, evidence)
+            Then("the normal original retains descriptor None, real companions stay exact, and checked missing/failure recovery remains signed")
+            projected shouldBe a[Consequence.Success[_]]
+            projected.toOption.get.body.tasks.head.compensation shouldBe None
+            projected.toOption.get.body.tasks shouldBe evidence.tasks
+            projected.toOption.get.body.lifecycle.retry.recoveryRequired shouldBe
+              (mode == "failed" || mode == "missing")
+            record.taskReadModels.head.compensationStatus shouldBe Some(mode)
+            DurableJobProjection.project(record, evidence) shouldBe a[Consequence.Failure[_]]
+        }
+      }
+    }
+
+    "NRT-P2 malformed normal aggregates" must afterWord(
+      "in spec:durable-job-record-contract, example:NRT-P2, rules:R3,R6, phase:69.7"
+    ) {
+      "refuse malformed aggregate metadata and mismatched or absent companion evidence without deleting it" in {
+        val (missing, missingevidence) = _aggregate_case("missing", false)
+        val original = missing.taskReadModels.head
+        val variants = Vector(
+          "unknown" -> original.copy(compensationStatus = Some("unknown")),
+          "stray" -> original.copy(compensationStatus = None),
+          "blankfailure" -> original.copy(compensationFailureSummary = Some(" ")),
+          "blankaction" -> original.copy(compensationActionRef = Some(" ")),
+          "modelrecovery" -> original.copy(recoveryRequired = false),
+          "uncommitted" -> original.copy(transactionOutcome = Some("failed")),
+          "unfinished" -> original.copy(finishedAt = None)
+        )
+        variants.foreach { case (name, model) =>
+          Given(s"NRT-P2: the absent-action missing original has malformed $name metadata under R3,R6")
+          val candidate = missing.copy(taskReadModels = model +: missing.taskReadModels.tail)
+          When("the full typed candidate is projected without preprocessing normalization")
+          val result = DurableJobProjection.projectV2(candidate, missingevidence)
+          Then("the invalid aggregate is refused before a durable record is returned")
+          result shouldBe a[Consequence.Failure[_]]
+          candidate.taskReadModels.head shouldBe model
+        }
+        Given("NRT-P2: a no-action missing original has its model recovery flag but no job recovery flag")
+        When("the record and its matching retry evidence both omit recoveryRequired")
+        val norecovery = DurableJobProjection.projectV2(missing.copy(
+          retry = missing.retry.copy(recoveryRequired = false)), missingevidence.copy(
+          retry = missingevidence.retry.copy(recoveryRequired = false)))
+        Then("missing still refuses even when supplied retry evidence agrees with the malformed live record")
+        norecovery shouldBe a[Consequence.Failure[_]]
+        Vector("succeeded", "failed").foreach { mode =>
+          val (record, evidence) = _aggregate_case(mode, true)
+          val companion = record.taskReadModels.last
+          Vector("absent", "multiple", "status", "target", "aggregate").foreach { variant =>
+            Given(s"NRT-P2: a $mode original has $variant actual companion correspondence")
+            val models = variant match {
+              case "absent" => record.taskReadModels.init
+              case "multiple" => record.taskReadModels :+ companion.copy(
+                taskId = TaskId("cncf", "task", Some(_instant), Some("duplicate-companion")))
+              case "status" => record.taskReadModels.init :+ companion.copy(
+                compensationStatus = Some(if (mode == "succeeded") "failed" else "succeeded"))
+              case "target" => record.taskReadModels.init :+ companion.copy(
+                compensatesTaskId = Some(record.taskReadModels(1).taskId))
+              case _ => record.taskReadModels.updated(0,
+                record.taskReadModels.head.copy(compensationStatus = Some("running")))
+            }
+            val supplied = evidence.copy(tasks = models.map(_descriptor))
+            When("the original aggregate is compared with complete matching source descriptors for those actual models")
+            val result = DurableJobProjection.projectV2(record.copy(taskReadModels = models), supplied)
+            Then("none of the malformed correspondences becomes a terminal signed aggregate")
+            result shouldBe a[Consequence.Failure[_]]
+          }
+          if (mode == "failed") {
+            Vector(true, false).foreach { modelmissing =>
+              Given("NRT-P2: failed compensation lacks exactly one of the original/model and job recovery flags")
+              val candidate = if (modelmissing) record.copy(taskReadModels = record.taskReadModels.updated(0,
+                record.taskReadModels.head.copy(recoveryRequired = false)))
+              else record.copy(retry = record.retry.copy(recoveryRequired = false))
+              val supplied = evidence.copy(retry = evidence.retry.copy(recoveryRequired = candidate.retry.recoveryRequired))
+              When("the flag-deficient failed aggregate is projected with exact companion evidence")
+              val result = DurableJobProjection.projectV2(candidate, supplied)
+              Then("both independently missing flags refuse")
+              result shouldBe a[Consequence.Failure[_]]
+            }
+          }
+        }
+      }
+    }
+
+    "NRT-P3 strict actual descriptors and historical compatibility" must afterWord(
+      "in spec:durable-job-record-contract, example:NRT-P3, rules:R3,R6, phase:69.7"
+    ) {
+      "retain V1/V2 complete normal descriptor equality and refuse incomplete actual companions or source divergence" in {
+        Given("NRT-P3: a historical complete normal descriptor has explicit action, original target and succeeded status")
+        val original = _record().taskReadModels.head.copy(compensationActionRef = Some("undo"),
+          compensatesTaskId = Some(_record().taskReadModels.head.taskId), compensationStatus = Some("succeeded"))
+        val record = _record().copy(taskReadModels = Vector(original))
+        val supplied = _evidence().copy(tasks = Vector(_descriptor(original)))
+        When("the complete historical normal correspondence is projected by both versions")
+        val v1 = DurableJobProjection.project(record, supplied)
+        val v2 = DurableJobProjection.projectV2(record, supplied)
+        Then("both preserve the exact existing descriptor and neither invents a different target")
+        v1 shouldBe a[Consequence.Success[_]]
+        v2 shouldBe a[Consequence.Success[_]]
+        v1.toOption.get.body.tasks shouldBe supplied.tasks
+        v2.toOption.get.body.tasks shouldBe supplied.tasks
+        val (aggregate, evidence) = _aggregate_case("succeeded", true)
+        val companion = aggregate.taskReadModels.last
+        Vector("action", "target", "status").foreach { field =>
+          Given(s"NRT-P3: an actual compensation-relation companion lacks its $field field")
+          val broken = field match {
+            case "action" => companion.copy(compensationActionRef = None)
+            case "target" => companion.copy(compensatesTaskId = None)
+            case _ => companion.copy(compensationStatus = None)
+          }
+          When("the incomplete actual companion is projected against the original complete source descriptor")
+          val result = DurableJobProjection.projectV2(
+            aggregate.copy(taskReadModels = aggregate.taskReadModels.init :+ broken), evidence)
+          Then("the actual companion never enters the normal aggregate exception")
+          result shouldBe a[Consequence.Failure[_]]
+        }
+        Given("NRT-P3: a complete actual companion has a source descriptor naming another compensation action")
+        val mismatched = evidence.copy(tasks = evidence.tasks.init :+ evidence.tasks.last.copy(
+          compensation = evidence.tasks.last.compensation.map(value =>
+            value.copy(operation = value.operation.copy(operationId = "different-action")))))
+        When("the exact live companion and divergent source action are projected")
+        val mismatch = DurableJobProjection.projectV2(aggregate, mismatched)
+        Then("unchanged strict source equality refuses the companion")
+        mismatch shouldBe a[Consequence.Failure[_]]
+      }
+    }
     "project a persistent terminal job from closed evidence without capturing live objects" in {
       Given("a persistent terminal JobRecord with a live task and closed projection evidence")
       val record = _record()
@@ -57,12 +201,12 @@ final class DurableJobProjectionSpec
     )
 
       When("each invalid variant is projected")
-      val ephemeralResult = DurableJobProjection.project(ephemeral, evidence)
-      val crosswiredResult = DurableJobProjection.project(record, crosswired)
+      val ephemeralresult = DurableJobProjection.project(ephemeral, evidence)
+      val crosswiredresult = DurableJobProjection.project(record, crosswired)
 
       Then("both variants fail closed without a partial durable record")
-      ephemeralResult shouldBe a[Consequence.Failure[_]]
-      crosswiredResult shouldBe a[Consequence.Failure[_]]
+      ephemeralresult shouldBe a[Consequence.Failure[_]]
+      crosswiredresult shouldBe a[Consequence.Failure[_]]
     }
 
     "refuse replay deterministically when all six evidence categories are absent" in {
@@ -209,7 +353,7 @@ final class DurableJobProjectionSpec
 
       When("the exact and a structurally mismatched descriptor are projected")
       val projected = DurableJobProjection.projectV2(record, evidence)
-      val mismatchedDescriptor = DurableJobProjection.projectV2(
+      val mismatcheddescriptor = DurableJobProjection.projectV2(
         record,
         evidence.copy(tasks = evidence.tasks.map(task =>
           task.copy(target = task.target.copy(
@@ -220,20 +364,20 @@ final class DurableJobProjectionSpec
 
       Then("only the exact descriptor produces the pending record with its started time")
       projected shouldBe a[Consequence.Success[_]]
-      mismatchedDescriptor shouldBe a[Consequence.Failure[_]]
+      mismatcheddescriptor shouldBe a[Consequence.Failure[_]]
       projected.toOption.get.body.lifecycle.status shouldBe DurableJobLifecycleStatus.Running
       projected.toOption.get.body.lifecycle.schedule shouldBe DurableScheduleState(
         Some(_instant),
         Some(_instant.plusSeconds(5L)),
         None
       )
-      val contradictoryTask = task.copy(transactionOutcome = Some("committed"))
-      val contradictoryEvidence = evidence.copy(tasks = evidence.tasks.map(task =>
+      val contradictorytask = task.copy(transactionOutcome = Some("committed"))
+      val contradictoryevidence = evidence.copy(tasks = evidence.tasks.map(task =>
         task.copy(transaction = task.transaction.copy(outcome = DurableTransactionOutcome.Committed))
       ))
       DurableJobProjection.projectV2(
-        record.copy(taskReadModels = Vector(contradictoryTask)),
-        contradictoryEvidence
+        record.copy(taskReadModels = Vector(contradictorytask)),
+        contradictoryevidence
       ) shouldBe a[Consequence.Failure[_]]
     }
 
@@ -286,15 +430,15 @@ final class DurableJobProjectionSpec
       )
 
       When("a lifecycle/result mismatch and an empty descriptor vector are projected")
-      val mismatchedResult = DurableJobProjection.projectV2(
+      val mismatchedresult = DurableJobProjection.projectV2(
         record,
         evidence.copy(result = DurableResultOutcome.Succeeded(DurableValue.Absent))
       )
-      val mismatchedTaskEvidence = DurableJobProjection.projectV2(record, evidence.copy(tasks = Vector.empty))
+      val mismatchedtaskevidence = DurableJobProjection.projectV2(record, evidence.copy(tasks = Vector.empty))
 
       Then("neither mismatch produces a partial v2 record")
-      mismatchedResult shouldBe a[Consequence.Failure[_]]
-      mismatchedTaskEvidence shouldBe a[Consequence.Failure[_]]
+      mismatchedresult shouldBe a[Consequence.Failure[_]]
+      mismatchedtaskevidence shouldBe a[Consequence.Failure[_]]
     }
 
     "project a v2 succeeded retry history with a closed compensation model but refuse a missing non-compensation durable pair" in {
@@ -396,6 +540,64 @@ final class DurableJobProjectionSpec
     }
   }
 
+  private def _aggregate_case(mode: String, action: Boolean): (JobRecord, DurableJobProjectionEvidence) = {
+    val base = _record()
+    val original = base.taskReadModels.head.copy(
+      compensationActionRef = Option.when(action)("undo"), compensationStatus = Some(mode),
+      compensationFailureSummary = Option.when(mode == "failed" || mode == "missing")("compensation unavailable"),
+      recoveryRequired = mode == "failed" || mode == "missing")
+    val failedid = TaskId("cncf", "task", Some(_instant), Some("aggregate-failure"))
+    val failed = base.taskReadModels.head.copy(taskId = failedid, parentTaskId = Some(original.taskId),
+      status = JobTaskStatus.Failed, startedAt = _instant.plusSeconds(21),
+      finishedAt = Some(_instant.plusSeconds(25)), result = JobTaskResultSummary(false, Some("failed")),
+      relation = Some("child"), transactionOutcome = Some("failed"))
+    val companion = base.taskReadModels.head.copy(
+      taskId = TaskId("cncf", "task", Some(_instant), Some("aggregate-companion")),
+      parentTaskId = Some(failedid), relation = Some("compensation"),
+      status = if (mode == "failed") JobTaskStatus.Failed else JobTaskStatus.Succeeded,
+      startedAt = _instant.plusSeconds(26), finishedAt = Some(_instant.plusSeconds(27)),
+      result = JobTaskResultSummary(mode != "failed", Some("compensated")),
+      transactionOutcome = Some(if (mode == "failed") "compensation-failed" else "compensation-committed"),
+      compensationActionRef = Some("undo"), compensatesTaskId = Some(original.taskId),
+      compensationStatus = Some(mode),
+      compensationFailureSummary = Option.when(mode == "failed")("compensation unavailable"),
+      recoveryRequired = mode == "failed")
+    val models = Vector(original, failed) ++ Option.when(mode != "missing")(companion)
+    val record = base.copy(status = JobStatus.Failed,
+      result = Some(JobResult.Failure(Consequence.stateInvalid[Nothing]("failed").conclusion)),
+      updatedAt = _instant.plusSeconds(30), taskReadModels = models,
+      timeline = Vector(JobTimelineEvent(1, _instant, "job.submitted", None, None, None),
+        JobTimelineEvent(2, _instant.plusSeconds(30), "job.failed", None, None, None)),
+      retry = JobRetryState(maxAttempts = 3, recoveryRequired = mode == "failed" || mode == "missing"))
+    val evidence = _evidence().copy(tasks = models.map(_descriptor),
+      result = DurableResultOutcome.Failed(DurableFailureSummary("execution", "failed", "failed", false)),
+      retry = DurableRetryEvidence(Vector(DurableAttemptEvidence(1, _instant.plusSeconds(5),
+        Some(_instant.plusSeconds(30)), DurableAttemptOutcome.Failed,
+        Some(DurableFailureSummary("execution", "failed", "failed", false)))),
+        3, None, false, record.retry.recoveryRequired))
+    record -> evidence
+  }
+
+  private def _descriptor(model: JobTaskReadModel): DurableTaskDescriptor = {
+    val relation = DurableTaskRelationKind.parse(model.relation.get).toOption.get
+    val outcome = model.transactionOutcome.get match {
+      case "running" => DurableTransactionOutcome.Pending
+      case "committed" => DurableTransactionOutcome.Committed
+      case "failed" => DurableTransactionOutcome.Failed
+      case _ => DurableTransactionOutcome.Compensated
+    }
+    val compensation = if (model.compensatesTaskId.nonEmpty) Some(DurableCompensationDescriptor(
+      DurableOperationReference(model.component.get, model.service, model.compensationActionRef.get, None),
+      model.compensatesTaskId.get.value, DurableCompensationStatus.parse(model.compensationStatus.get).toOption.get,
+      model.compensationFailureSummary.map(value => DurableFailureSummary("compensation", "failed", value, false))))
+    else None
+    _evidence().tasks.head.copy(taskId = model.taskId.value, parentTaskId = model.parentTaskId.map(_.value),
+      target = DurableTaskTarget(model.targetKind.get,
+        DurableOperationReference(model.component.get, model.service, model.operation.get, None)),
+      relation = DurableTaskRelation(relation, model.parentTaskId.map(_.value)),
+      transaction = DurableTransactionDescriptor(DurableTransactionRole.Own,
+        DurableTransactionScope.PerTask, outcome), compensation = compensation)
+  }
   private val _instant = Instant.parse("2026-09-09T01:02:03Z")
   private val _digest = "a" * 64
 

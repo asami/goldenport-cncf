@@ -146,3 +146,71 @@ denied, form, notification, and anonymous private accessible cache outcomes.
 Retention/deletion/maintenance, durable integrity, expiry clocks, result-store
 migration, provider delivery implementation, and repository-wide aggregate
 validation remain owned by Phase 69.7.
+
+
+## Phase 69.7 completed-operation audit and safe diagnostics companion
+
+The [Job Experience Operational Audit Contract](job-operational-audit-contract.md)
+extends the existing operator ids/kinds/status/time promise with exact closed
+facet tables. Unknown kinds render as `redacted`; optional free-form targets,
+selector metadata, transaction/compensation strings outside the closed tables,
+result/failure text and timeline notes are suppressed at the existing diagnostic
+projection. Exact canonical IDs, times, statuses, counts and page behavior survive;
+raw management queries preserve their original canonical model.
+
+The five original facade operations are observed only after their normal result,
+using authorized returned references and bounded scalar facts. Failed calls never
+copy requested Job IDs, scope, cursor, session or principal data. Existing Phase
+69.6 scope admission, protocol, controls, normal result/control payloads and
+notification semantics remain authoritative. C4 is authored with selected current validation passed as recorded below;
+independent complete JM69-09 review and Step acceptance remain pending.
+The original Phase 69.6 accepted chronology and scenarios above remain in force.
+
+
+## C4 selected validation evidence — 2026-10-03
+
+`PH697-C4-REP-004` passed **34/34 tests in 4 suites**, zero failed and
+zero pending. `PH697-C4-ACC-002` passed **593/593 tests in 72 suites**,
+zero failed and one original pending example. The accumulator retains the
+original66 ordered suites plus three new audit/privacy suites and three actual
+Protocol/Web/HTTP consumers. All fourteen OA1–OA4, DR1–DR4 and AI1–AI6 examples
+were discovered and passed. Both current-subject readers returned0, permissions
+were consumed and actual SBT/wrapper exits were0 with final `lock=released`.
+Compiler warnings were0; the known Scala/JVM Unsafe runtime warning is separate.
+
+The initial `PH697-C4-REP-001` ended with Test/compile E164 at
+`JobExperienceOperationalAuditFixtures.scala:60`: `CountingClock.withZone`
+required `override`. No tests ran in that failed attempt. The exact one-modifier
+repair `MCR-PH697-C4-CLOCK-OVERRIDE-01` changed neither its body nor assertions,
+and the failed attempt remains recorded with SBT/wrapper1 and released lock.
+`PH697-C4-REP-002` passed the earlier four-suite subject, but
+`PH697-C4-ACC-001` then completed72 suites with592 successful, one failed and
+one original pending example. AI5 received earlier-suite bootstrap audit
+replay when installing the standard replay-capable file backend.
+`MCR-PH697-C4-BOOTSTRAP-ISOLATION-01` isolates the private test backend without
+consuming the saved original bootstrap buffer. AI5 now explicitly seeds a real
+audit into a bootstrap backend, verifies its exact restoration and retained
+buffer, and keeps the strict file/recorded JSON equality and all original
+privacy/bounds checks. This two-file repair is M2 and remains unwaived for the
+complete independent JM69-09 Step review. No production log behavior changed.
+
+These receipts select the actual preprojection source. This factual documentation
+projection changes no tested program or prerequisite and does not rebind old
+receipts. Full original JM69-09 C/D/native correlation/configured health and
+lifecycle obligations, all prior unwaived M2/CPBs, JM69-10 actual two-process and
+CBD fresh-runtime acceptance, Phase69.4–69.6 ancestry/deferred audits, complete
+independent Step reviews/local acceptance commits, aggregate final full
+validation, sole epoch1 comprehensive Phase review and final local release remain
+required. Phase/JM69-09 remain IN_PROGRESS; JM69-10 remains OPEN. No Step/Phase
+acceptance, push, publication, deployment or successor work is claimed.
+
+`PH697-C4-REP-003` stopped before tests because concurrently changed Cozy
+source made the existing development classpath stale. Its failed receipt and
+exact source drift remain recorded. `PH697-C4-COZY-CP-001` successfully ran
+only the existing `cozyExportRuntimeClasspath` prerequisite with reader0 and
+released lock. The unchanged Cozy0.3.3-SNAPSHOT coordinate was retained;
+318 current producer source paths, including two newly added developer-owned
+FailureModel files, were preserved without edits or feature acceptance.
+Current selected prerequisite context therefore contains413 source paths.
+The producer reported three existing missing-credentials notices; these are
+separate from the selected CNCF compiler-warning count.

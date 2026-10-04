@@ -35,14 +35,63 @@ Each candidate follows this order exactly:
 3. Classify the admitted record using unchanged `DurableJobRecovery`.
 4. Invoke the provider port only for an allowed classification.
 5. Validate the transient result and match its runtime Job id to both the
-   candidate id and admitted durable identity.
-6. Insert the fresh runtime record.
-7. Register its existing due state.
+   candidate id and admitted durable identity. After all existing structural
+   and identity checks, admit the complete runtime input under the
+   [Job Input Resource Contract](job-input-resource-contract.md). Input refusal
+   precedes record construction, clock read, sanitizer, resource reservation,
+   runtime insertion, queue and timer effects. Admit the complete live task batch
+   and signed task/timeline/diagnostic/retry footprint under the
+   [Job Lifetime Resource Contract](job-lifetime-resource-contract.md). This is
+   bounded pure observation of declarations, executed normal obligations,
+   timeline rows, diagnostics and retries, not a source of paid credits.
+6. Refuse locally known runtime, terminal, native-binding and budget collisions,
+   quiesce, or an absent/conflicting lifecycle bridge. The explicitly configured
+   bridge must own the identical supplied `DurableJobStore` object.
+7. Authenticate already `Published` V2 lifetime authority read-only, using that
+   store, the candidate access, the caller recovery `ExecutionContext`, and the
+   complete selected native policy. Require equality of the entire admitted
+   signed snapshot and its provider revision. Check the observed footprint and
+   normal/compensation obligations against the exact native Seed, plus unused
+   normal capacity for the complete uncancelled live batch.
+8. Construct the safe record, reserve original retained/pending capacity, and
+   atomically adopt the acknowledged bridge entry. Only then publish the shared
+   State binding and exact Seed, commit the physical lease, insert the record,
+   and register its existing due state.
+
+Registration performs no root reservation/publication/recovery, Work or Retry
+payment, historical floor, maximum, or regenerated Cancel credit. Physical
+reservation or bridge-adoption refusal releases only the provisional physical
+lease, preserving signed bytes and native paid authority.
 
 No port invocation occurs for invalid discovery, missing, corrupt, refused,
 terminal, running, suspended, started, recovery-required, or proof-incomplete
 candidates. A failed, empty, malformed, or id-mismatched port result is
 refused before runtime insertion, queue insertion, or timer registration.
+Input capacity/shape refusal also reports the existing closed `refused` fact.
+The eligible source, native load and provider port have already executed and
+remain observable; refusal leaves the native revision/timestamp unchanged.
+Valid input retains existing sanitization of inline and Blob raw references,
+every other metadata/timestamp, and normal due-state execution. C1 executable
+IR1..IR6 scenarios are authored in
+[JobInputRecoveryResourceBoundsSpec](../../src/test/scala/org/goldenport/cncf/job/JobInputRecoveryResourceBoundsSpec.scala);
+actual C1 `PHASE-69.7-JM69-09B3B3C1-VAL-003` discovered 47 suites and passed
+410 tests, zero failures, zero compiler warnings, with one existing
+SqliteDataStore pending example. Independent Step review, acceptance and commit
+remain pending. [C2A lifetime admission](job-lifetime-resource-contract.md)
+adds pure signed/live footprint admission before runtime construction. Authored
+C2B2B2 replaces native recovery floors with the exact authenticated Seed and
+explicit store-bound ownership. Missing, Pending, corrupt, foreign-owner,
+policy-mismatched, stale or V1 authority refuses without importing local floors.
+Its fresh focused validation, independent review, Step acceptance and commit
+remain pending; all original Phase obligations remain mandatory.
+
+Positive LR5/IR5/IR6 fixtures declare each transient reconstructed input by its
+original ordered name and `DurableValue.Absent` before genuine native
+reserve/create/publish and evidence-source capture. Absent means no durable
+value was admitted for that declaration. It retains count/name matching and
+signed input equality through every acknowledgement; it does not persist raw
+payloads or change runtime legacy-SHA, TTL, timestamp or sanitizer checks.
+Malformed negative inputs retain their earlier pure refusal boundary.
 
 ## R3 Eligible lifecycle
 
@@ -79,6 +128,41 @@ existing delayed-start timer and a future retry uses the existing delayed-retry
 timer. A schedule or retry already due enters the existing queue through its
 existing due-state mechanism. Recovery code never directly calls `JobTask.run`,
 `ActionEngine`, `UnitOfWork`, or an external effect.
+
+## R6 Recovered ownership, signed checkpoints and prepaid safety
+
+Same-State owners share the installed native quota/access/recovery-context,
+bridge and cancellation scope. Pure declarations with Pending transaction and
+no task event, association or compensation obligation are not executed normal
+IDs. Actual executed and referenced normal IDs, companion originals and claims
+must be covered by the native Seed. Historic task strings remain closed values.
+
+A recovered normal `JobRun` starts from acknowledged semantic revision N:
+`StartIntent` acknowledges N+1, `RunningIntent` N+2, then actual TaskStart,
+TaskOutcome and Terminal requests continue contiguously under original access,
+evidence and OCC. The initial signed task/history prefix and protected metadata
+remain exact; only the validated current invocation suffix is appended.
+Declaration-only placeholders may be replaced by actual live descriptors.
+Transient rehydration/queue events never enter signed history. Overflow, stale
+or ambiguous acknowledgement withholds subsequent body/canonical success and
+retains genuine paid/refusal authority. New-root revisions 1/2/3 remain intact.
+
+Persisted `cancelClaimed` is observed before metadata getters or timer/pending
+work registration. Recovery retains a task-free safety record and installs the
+cancelled shared scope, then applies original once-only safety settlement with
+no second cancel claim or payment. The narrow zero-model terminal checkpoint
+requires an adopted recovered binding, fresh authenticated native Cancel intent,
+and an actual local Cancelled result. It preserves original signed tasks/history
+and appends only the admitted Cancelled terminal event. Real stale/lost terminal
+acknowledgement retains refusal and suppresses canonical success. Explicit Retry
+alone pays through its existing native gate and resets scope/intent; recovery
+`RetryRun` and `Control` retain `taskbridgewrites=false`.
+
+[JobDurableLifetimeRecoverySpec](../../src/test/scala/org/goldenport/cncf/job/JobDurableLifetimeRecoverySpec.scala)
+authors NR1..NR24 with actual SQLite close/reopen, independent literal paid
+oracles, bounded ownership races, and Seed6970933641 with at least24 finite
+shrinking runs. These are authored scenarios, not fresh validation or JM69-10
+real two-process/CBD acceptance.
 
 ## Examples
 

@@ -11,7 +11,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * the bridge does not derive durable facts from live execution objects.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 28, 2026
+ * @version Oct.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] enum DurableJobLifecycleWriteBoundary {
@@ -93,68 +93,105 @@ private[job] final case class DurableJobLifecycleWriteFailureFact(
 
 /*
  * Engine-owned canonical admission, first-start, and task lifecycle checkpoint bridge.
- * Its only per-job retained state is the current store snapshot returned by a
- * successful create or checkpoint.
+ * Retains acknowledged signed snapshots and quota/access ownership handles.
+ * Neither handle nor local counters substitute for persisted lifetime authority.
  */
 private[job] final class DurableJobLifecycleWriteBridge(
   store: DurableJobStore,
-  evidence: DurableJobLifecycleWriteEvidenceSource
+  evidence: DurableJobLifecycleWriteEvidenceSource,
+  lifetimepolicy: DurableJobLifetimeQuotaPolicy = DurableJobLifetimeQuotaPolicy.default
 ) {
-  private val _snapshots = new ConcurrentHashMap[JobId, DurableJobStoreSnapshot]()
+  private final case class Entry(snapshot: DurableJobStoreSnapshot,
+    binding: DurableJobLifetimeBinding, recovered: Option[DurableJobLifetimeRecovery.Prepared])
+  private val _entries = new ConcurrentHashMap[JobId, Entry]()
 
   def hasAdmittedSnapshot(jobid: JobId): Boolean =
-    _snapshots.containsKey(jobid)
+    _entries.containsKey(jobid)
 
-  def admit(record: JobRecord)(using ctx: ExecutionContext): Consequence[Unit] =
+  def lifetimeBinding(jobId: JobId): Option[DurableJobLifetimeBinding] =
+    Option(_entries.get(jobId)).map(_.binding)
+
+  def recoveryPolicy(policy: JobLifetimePolicy): DurableJobLifetimeQuotaPolicy =
+    lifetimepolicy.copy(lifetime = policy)
+
+  def ownsStore(selected: DurableJobStore): Boolean = store eq selected
+
+  def adoptRecovery(jobId: JobId, prepared: DurableJobLifetimeRecovery.Prepared): Consequence[Unit] =
+    if (prepared == null || jobId.value != prepared.snapshot.record.body.identity.jobId)
+      DurableJobLifetimeQuotaPolicy.invalid
+    else if (_entries.putIfAbsent(jobId, Entry(prepared.snapshot, prepared.native, Some(prepared))) == null)
+      Consequence.unit
+    else DurableJobLifetimeQuotaPolicy.unavailable
+
+  def recoveredCancelled(record: JobRecord): Boolean =
+    record.status == JobStatus.Cancelled && record.result.nonEmpty && record.taskReadModels.isEmpty &&
+      Option(_entries.get(record.id)).exists(entry => entry.recovered.exists(_.quota.cancelclaimed) &&
+        entry.snapshot.record.body.result == DurableResultOutcome.Pending &&
+        (entry.snapshot.record.body.lifecycle.status == DurableJobLifecycleStatus.Submitted ||
+          entry.snapshot.record.body.lifecycle.status == DurableJobLifecycleStatus.Running))
+
+  def admit(record: JobRecord, policy: JobLifetimePolicy = lifetimepolicy.lifetime)
+      (using ctx: ExecutionContext): Consequence[Unit] =
     _submitted(record).flatMap { _ =>
-      _evidence(DurableJobLifecycleWriteRequest.Admission, 1L).flatMap { supplied =>
-        DurableJobProjection
-          .projectV2(record, supplied.projection)
-          .flatMap(store.create(_, supplied.access))
-          .map { snapshot =>
-            _snapshots.put(record.id, snapshot)
-            ()
-          }
+      _root_candidate(record, policy).flatMap { case (nativepolicy, taskcount, notecount) =>
+        _evidence(record.id, DurableJobLifecycleWriteRequest.Admission, 1L).flatMap { supplied =>
+          DurableJobProjection
+            .projectV2(record, supplied.projection)
+            .flatMap(DurableJobLifetimeAdmission.admit(
+              store, _, supplied.access, taskcount, notecount, nativepolicy))
+            .flatMap { admitted =>
+              if (_entries.putIfAbsent(record.id, Entry(admitted.snapshot, admitted.binding, None)) == null)
+                Consequence.unit
+              else DurableJobLifetimeQuotaPolicy.unavailable
+            }
+        }
+      }
+    }
+
+  private def _root_candidate(record: JobRecord, policy: JobLifetimePolicy)
+      : Consequence[(DurableJobLifetimeQuotaPolicy, Int, Long)] =
+    DurableJobLifetimeQuotaPolicy.pure {
+      if (lifetimepolicy == null) DurableJobLifetimeQuotaPolicy.invalid
+      else {
+        val nativepolicy = lifetimepolicy.copy(lifetime = policy)
+        for {
+          _ <- nativepolicy.validate
+          taskcount <- JobLifetimeBootstrap.taskCount(record.tasks, JobResourcePolicy.default)
+          _ <- if (record.debug != null) Consequence.unit else JobResourcePolicy.refused
+          notecount <- JobLifetimeBootstrap.noteCount(record.debug.executionNotes, policy)
+          _ <- new JobLifetimeBudget(policy).prepareRoot(taskcount, notecount)
+        } yield (nativepolicy, taskcount, notecount)
       }
     }
 
   def establishStartIntent(record: JobRecord)(using ctx: ExecutionContext): Consequence[Unit] =
-    _submitted(record).flatMap { _ =>
+    DurableJobLifetimeQuotaPolicy.protect { _submitted(record).flatMap { _ =>
       _current_snapshot(record.id).flatMap { snapshot =>
-        val candidate = _start_intent_candidate(record)
-        _evidence(DurableJobLifecycleWriteRequest.StartIntent, 2L).flatMap { supplied =>
-          DurableJobProjection
-            .projectV2(candidate, supplied.projection)
-            .flatMap(store.checkpoint(snapshot, _, supplied.access))
-            .map { checkpointed =>
-              _snapshots.put(record.id, checkpointed)
-              ()
-            }
+        _start_basis(record, snapshot).flatMap { basis =>
+          val candidate = _start_intent_candidate(basis)
+          _evidence(record.id, DurableJobLifecycleWriteRequest.StartIntent, _next_semantic_revision(snapshot))
+            .flatMap(_checkpoint(snapshot, candidate, _))
         }
       }
-    }
+    }}
 
   def establishRunningIntent(record: JobRecord)(using ctx: ExecutionContext): Consequence[Unit] =
-    _submitted(record).flatMap { _ =>
+    DurableJobLifetimeQuotaPolicy.protect { _submitted(record).flatMap { _ =>
       _revision_two_snapshot(record.id).flatMap { snapshot =>
-        val candidate = _running_intent_candidate(_running_intent_basis(record, snapshot))
-        _evidence(DurableJobLifecycleWriteRequest.RunningIntent, 3L).flatMap { supplied =>
-          DurableJobProjection
-            .projectV2(candidate, supplied.projection)
-            .flatMap(store.checkpoint(snapshot, _, supplied.access))
-            .map { checkpointed =>
-              _snapshots.put(record.id, checkpointed)
-              ()
-            }
+        _recovery_basis(record, snapshot).map(_.getOrElse(_running_intent_basis(record, snapshot)))
+          .flatMap { basis =>
+            val candidate = _running_intent_candidate(basis)
+            _evidence(record.id, DurableJobLifecycleWriteRequest.RunningIntent, _next_semantic_revision(snapshot))
+              .flatMap(_checkpoint(snapshot, candidate, _))
         }
       }
-    }
+    }}
 
   def establishTaskStart(
     record: JobRecord,
     request: DurableJobLifecycleWriteRequest
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _running(record).flatMap { _ =>
+    DurableJobLifetimeQuotaPolicy.protect { _running(record).flatMap { _ =>
       _nonterminal_running_pending_snapshot(record.id).flatMap { snapshot =>
         _task_start_request(record, request).flatMap { taskstart =>
           _task_intent_basis(record, snapshot, taskstart.taskreadmodels).flatMap { basis =>
@@ -163,25 +200,19 @@ private[job] final class DurableJobLifecycleWriteBridge(
               taskstart.taskid,
               taskstart.parenttaskid
             )
-            _evidence(taskstart, _next_semantic_revision(snapshot)).flatMap { supplied =>
-              DurableJobProjection
-                .projectV2(candidate, supplied.projection)
-                .flatMap(store.checkpoint(snapshot, _, supplied.access))
-                .map { checkpointed =>
-                  _snapshots.put(record.id, checkpointed)
-                  ()
-                }
+            _evidence(record.id, taskstart, _next_semantic_revision(snapshot)).flatMap { supplied =>
+              _checkpoint(snapshot, candidate, supplied)
             }
           }
         }
       }
-    }
+    }}
 
   def establishTaskOutcome(
     record: JobRecord,
     request: DurableJobLifecycleWriteRequest
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _task_outcome_record(record).flatMap { _ =>
+    DurableJobLifetimeQuotaPolicy.protect { _task_outcome_record(record).flatMap { _ =>
       _nonterminal_running_pending_snapshot(record.id).flatMap { snapshot =>
         _task_outcome_request(record, request).flatMap { taskoutcome =>
           _task_outcome_basis(record, snapshot, taskoutcome.taskreadmodels).flatMap { basis =>
@@ -190,48 +221,40 @@ private[job] final class DurableJobLifecycleWriteBridge(
               taskoutcome.completedtaskid,
               taskoutcome.parenttaskid
             )
-            _evidence(taskoutcome, _next_semantic_revision(snapshot)).flatMap { supplied =>
-              DurableJobProjection
-                .projectV2(candidate, supplied.projection)
-                .flatMap(store.checkpoint(snapshot, _, supplied.access))
-                .map { checkpointed =>
-                  _snapshots.put(record.id, checkpointed)
-                  ()
-                }
+            _evidence(record.id, taskoutcome, _next_semantic_revision(snapshot)).flatMap { supplied =>
+              _checkpoint(snapshot, candidate, supplied)
             }
           }
         }
       }
-    }
+    }}
 
   def establishTerminalOutcome(
     record: JobRecord,
     request: DurableJobLifecycleWriteRequest
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _terminal(record).flatMap { _ =>
-      _nonterminal_running_pending_snapshot(record.id).flatMap { snapshot =>
+    DurableJobLifetimeQuotaPolicy.protect { _terminal(record).flatMap { _ =>
+      _terminal_snapshot(record).flatMap { snapshot =>
         _terminal_outcome_request(record, request).flatMap { terminal =>
           _terminal_intent_basis(record, snapshot, terminal.taskreadmodels).flatMap { basis =>
             val candidate = _terminal_outcome_checkpoint_candidate(basis)
-            _evidence(terminal, _next_semantic_revision(snapshot)).flatMap { supplied =>
-              DurableJobProjection
-                .projectV2(candidate, supplied.projection)
-                .flatMap(store.checkpoint(snapshot, _, supplied.access))
-                .map { checkpointed =>
-                  _snapshots.put(record.id, checkpointed)
-                  ()
-                }
+            _evidence(record.id, terminal, _next_semantic_revision(snapshot)).flatMap { supplied =>
+              _checkpoint(snapshot, candidate, supplied)
             }
           }
         }
       }
-    }
+    }}
 
   private def _evidence(
+    jobid: JobId,
     request: DurableJobLifecycleWriteRequest,
     expectedrevision: Long
   ): Consequence[DurableJobLifecycleWriteEvidence] =
-    evidence(request).flatMap { supplied =>
+    (evidence match {
+      case source: DurableJobKeyedEvidenceSource => DurableJobKeyedEvidence.fetch(jobid, expectedrevision, request, source)
+      case _ => evidence(request)
+    }).flatMap { supplied =>
       if (supplied == null || supplied.projection == null || supplied.access == null)
         Consequence.argumentInvalid("durable lifecycle write evidence is missing")
       else if (supplied.projection.semanticRevision != expectedrevision)
@@ -299,14 +322,16 @@ private[job] final class DurableJobLifecycleWriteBridge(
       Consequence.unit
 
   private def _current_snapshot(jobid: JobId): Consequence[DurableJobStoreSnapshot] =
-    Option(_snapshots.get(jobid)).map(Consequence.success).getOrElse(
+    Option(_entries.get(jobid)).map(entry => Consequence.success(entry.snapshot)).getOrElse(
       Consequence.stateInvalid("durable lifecycle write has no admitted snapshot")
     )
 
   private def _revision_two_snapshot(jobid: JobId): Consequence[DurableJobStoreSnapshot] =
     _current_snapshot(jobid).flatMap { snapshot =>
       if (
-        snapshot.record.body.identity.revision == 2L &&
+        snapshot.record.body.identity.revision == Option(_entries.get(jobid))
+          .flatMap(_.recovered).map(value => Math.addExact(value.snapshot.record.body.identity.revision, 1L))
+          .getOrElse(2L) &&
           snapshot.record.body.lifecycle.status == DurableJobLifecycleStatus.Submitted
       )
         Consequence.success(snapshot)
@@ -333,7 +358,55 @@ private[job] final class DurableJobLifecycleWriteBridge(
     }
 
   private def _next_semantic_revision(snapshot: DurableJobStoreSnapshot): Long =
-    snapshot.record.body.identity.revision + 1L
+    Math.addExact(snapshot.record.body.identity.revision, 1L)
+
+  private def _start_basis(record: JobRecord, snapshot: DurableJobStoreSnapshot): Consequence[JobRecord] = {
+    val recovered = Option(_entries.get(record.id)).flatMap(_.recovered)
+    val revision = recovered.map(_.snapshot.record.body.identity.revision).getOrElse(1L)
+    if (snapshot.record.body.identity.revision != revision) DurableJobLifetimeQuotaPolicy.invalid
+    else _recovery_basis(record, snapshot).map(_.getOrElse(record))
+  }
+
+  private def _recovery_basis(record: JobRecord, snapshot: DurableJobStoreSnapshot)
+      : Consequence[Option[JobRecord]] =
+    Option(_entries.get(record.id)).flatMap(_.recovered) match {
+      case Some(prepared) => DurableJobRecoveryCheckpointProjection.basis(record, prepared.snapshot, snapshot).map(Some(_))
+      case None => Consequence.success(None)
+    }
+
+  private def _checkpoint_timeline(record: JobRecord, snapshot: DurableJobStoreSnapshot,
+    models: Vector[JobTaskReadModel]): Consequence[Vector[JobTimelineEvent]] =
+    _recovery_basis(record, snapshot).flatMap {
+      case Some(basis) => Consequence.success(basis.timeline)
+      case None => _rehydrated_retained_timeline(snapshot, models)
+    }
+
+  private def _terminal_snapshot(record: JobRecord): Consequence[DurableJobStoreSnapshot] =
+    if (recoveredCancelled(record)) _current_snapshot(record.id)
+    else _nonterminal_running_pending_snapshot(record.id)
+
+  private def _checkpoint(snapshot: DurableJobStoreSnapshot, candidate: JobRecord,
+    supplied: DurableJobLifecycleWriteEvidence)(using ctx: ExecutionContext): Consequence[Unit] = {
+    val entry = _entries.get(candidate.id)
+    if (entry == null || entry.snapshot != snapshot) DurableJobLifetimeQuotaPolicy.unavailable
+    else {
+      val cancelled = recoveredCancelled(candidate)
+      val projected = entry.recovered match {
+        case Some(prepared) =>
+          val confirmed = if (cancelled) prepared.native.quota.snapshot(candidate.id.value,
+            prepared.native.access)(using prepared.context).flatMap(value =>
+              if (value.cancelclaimed) Consequence.unit else DurableJobLifetimeQuotaPolicy.unavailable)
+            else Consequence.unit
+          confirmed.flatMap(_ => DurableJobRecoveryCheckpointProjection.project(candidate, supplied,
+            prepared, snapshot, cancelled))
+        case None => DurableJobProjection.projectV2(candidate, supplied.projection)
+      }
+      projected.flatMap(store.checkpoint(snapshot, _, supplied.access)).flatMap { acknowledged =>
+        if (_entries.replace(candidate.id, entry, entry.copy(snapshot = acknowledged))) Consequence.unit
+        else DurableJobLifetimeQuotaPolicy.unavailable
+      }
+    }
+  }
 
   private def _task_start_request(
     record: JobRecord,
@@ -483,7 +556,7 @@ private[job] final class DurableJobLifecycleWriteBridge(
     snapshot: DurableJobStoreSnapshot,
     taskreadmodels: Vector[JobTaskReadModel]
   ): Consequence[JobRecord] =
-    _rehydrated_retained_timeline(snapshot, taskreadmodels).map { timeline =>
+    _checkpoint_timeline(record, snapshot, taskreadmodels).map { timeline =>
       record.copy(
         updatedAt = _maximum_updated_at(record.updatedAt, snapshot.record.body.identity.updatedAt),
         timeline = timeline
@@ -495,7 +568,7 @@ private[job] final class DurableJobLifecycleWriteBridge(
     snapshot: DurableJobStoreSnapshot,
     taskreadmodels: Vector[JobTaskReadModel]
   ): Consequence[JobRecord] =
-    _rehydrated_retained_timeline(snapshot, taskreadmodels).map { timeline =>
+    _checkpoint_timeline(record, snapshot, taskreadmodels).map { timeline =>
       record.copy(
         status = JobStatus.Running,
         result = None,
@@ -509,7 +582,7 @@ private[job] final class DurableJobLifecycleWriteBridge(
     snapshot: DurableJobStoreSnapshot,
     taskreadmodels: Vector[JobTaskReadModel]
   ): Consequence[JobRecord] =
-    _rehydrated_retained_timeline(snapshot, taskreadmodels).map { timeline =>
+    _checkpoint_timeline(record, snapshot, taskreadmodels).map { timeline =>
       record.copy(
         updatedAt = _maximum_updated_at(record.updatedAt, snapshot.record.body.identity.updatedAt),
         timeline = timeline
@@ -557,7 +630,7 @@ private[job] final class DurableJobLifecycleWriteBridge(
 
   private def _start_intent_candidate(record: JobRecord): JobRecord = {
     val updatedat = record.updatedAt.plusMillis(1L)
-    val sequence = record.timeline.map(_.sequence).foldLeft(0L)(math.max) + 1L
+    val sequence = Math.addExact(record.timeline.map(_.sequence).foldLeft(0L)(math.max), 1L)
     record.copy(
       updatedAt = updatedat,
       timeline = record.timeline :+ JobTimelineEvent(
@@ -573,7 +646,7 @@ private[job] final class DurableJobLifecycleWriteBridge(
 
   private def _running_intent_candidate(record: JobRecord): JobRecord = {
     val updatedat = record.updatedAt.plusMillis(1L)
-    val sequence = record.timeline.map(_.sequence).foldLeft(0L)(math.max) + 1L
+    val sequence = Math.addExact(record.timeline.map(_.sequence).foldLeft(0L)(math.max), 1L)
     record.copy(
       status = JobStatus.Running,
       updatedAt = updatedat,
@@ -594,7 +667,7 @@ private[job] final class DurableJobLifecycleWriteBridge(
     parent: Option[TaskId]
   ): JobRecord = {
     val updatedat = record.updatedAt.plusMillis(1L)
-    val sequence = record.timeline.map(_.sequence).foldLeft(0L)(math.max) + 1L
+    val sequence = Math.addExact(record.timeline.map(_.sequence).foldLeft(0L)(math.max), 1L)
     record.copy(
       updatedAt = updatedat,
       timeline = record.timeline :+ JobTimelineEvent(
@@ -614,7 +687,7 @@ private[job] final class DurableJobLifecycleWriteBridge(
     parent: Option[TaskId]
   ): JobRecord = {
     val updatedat = record.updatedAt.plusMillis(1L)
-    val sequence = record.timeline.map(_.sequence).foldLeft(0L)(math.max) + 1L
+    val sequence = Math.addExact(record.timeline.map(_.sequence).foldLeft(0L)(math.max), 1L)
     record.copy(
       updatedAt = updatedat,
       timeline = record.timeline :+ JobTimelineEvent(
@@ -630,22 +703,9 @@ private[job] final class DurableJobLifecycleWriteBridge(
 
   private def _terminal_outcome_checkpoint_candidate(record: JobRecord): JobRecord = {
     val updatedat = record.updatedAt.plusMillis(1L)
-    val sequence = record.timeline.map(_.sequence).foldLeft(0L)(math.max) + 1L
-    val tasks = record.taskReadModels.map { task =>
-      if (
-        task.relation.forall(_ != "compensation") &&
-          task.compensationActionRef.isEmpty && task.compensatesTaskId.isEmpty
-      )
-        task.copy(
-          compensationStatus = None,
-          compensationFailureSummary = None
-        )
-      else
-        task
-    }
+    val sequence = Math.addExact(record.timeline.map(_.sequence).foldLeft(0L)(math.max), 1L)
     record.copy(
       updatedAt = updatedat,
-      taskReadModels = tasks,
       timeline = record.timeline :+ JobTimelineEvent(
         sequence = sequence,
         occurredAt = updatedat,

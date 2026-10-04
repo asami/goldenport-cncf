@@ -1,114 +1,108 @@
 package org.goldenport.cncf.job
 
-import java.security.MessageDigest
 import java.time.{Duration, Instant}
-import java.util.Base64
-import java.util.concurrent.{
-  ConcurrentHashMap,
-  Executors,
-  PriorityBlockingQueue,
-  ScheduledExecutorService,
-  TimeUnit,
-  ExecutorService
-}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import scala.concurrent.ExecutionContext as ScalaExecutionContext
 import scala.util.control.NonFatal
-import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.Consequence
 import org.goldenport.consequence.Failures
-import org.goldenport.id.UniversalId
-import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.conclusion.Disposition
-import org.goldenport.observation.Taxonomy
+import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.record.Record
-import org.goldenport.record.io.RecordEncoder
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{
-  ExecutionContext,
-  ExecutionInvocationIdentity,
-  ExecutionProfileRuntime,
-  ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration,
-  IdGenerationContext
-}
-import org.goldenport.cncf.entity.{
-  EntityMutationExecutionPolicy,
-  EntityPersistentCreate,
-  EntityStore
-}
-import org.simplemodeling.model.datatype.EntityRevision
-import org.goldenport.cncf.event.{
-  EventBus,
-  EventLane,
-  EventPublishOption,
-  EventRecordFactory,
-  EventStore,
-  ReceptionDomainEvent
-}
-import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemoryJobEngine =>
   import InMemoryJobEngine.*
+  import JobResourceBudget.WaitLease
 
   private[job] def _control(
     jobid: JobId,
     request: JobControlRequest
+  ): Consequence[JobControlResponse] =
+    if (request == null || request.command == null || request.option == null ||
+        request.option.mode == null || request.option.timeoutMillis < 0L ||
+        request.option.timeoutMillis > 86400000L)
+      Consequence.argumentInvalid("JobEngine wait request refused")
+    else request.option.mode match {
+      case JobCommandMode.Async => _control_admitted(jobid, request, None)
+      case JobCommandMode.Sync =>
+        _wait_deadline(request.option.timeoutMillis).flatMap { deadline =>
+          _with_wait_capacity(lease => _control_admitted(jobid, request, Some(deadline -> lease)))
+        }
+    }
+
+  private def _control_admitted(
+    jobid: JobId,
+    request: JobControlRequest,
+    wait: Option[(Instant, WaitLease)]
   ): Consequence[JobControlResponse] = {
     val transition = _state_monitor.synchronized {
-      _get_record(jobid) match {
+      if (request.command == JobControlCommand.Retry && _admission_closed)
+        JobResourcePolicy.refused[ControlTransition]
+      else _get_record(jobid) match {
         case None =>
           _control_failure(s"job not found: ${jobid.value}")
         case Some(_) if _has_durable_task_checkpoint_refusal(jobid) =>
           _control_failure(s"job control blocked by durable task checkpoint refusal: ${jobid.value}")
         case Some(record) =>
-          _control_transition_for(request.command, record.status).map {
+          _control_transition_for(request.command, record.status).flatMap {
             case applied @ ControlTransition.Apply(target) =>
               request.command match {
                 case JobControlCommand.Retry =>
-                  _retry_job(jobid, record)
+                  _retry_job(jobid, record).map(_ => applied)
                 case _ =>
-                  _append_timelinefor_control(jobid, request.command, target)
-                  _update_record(jobid, target, _control_result_for(target))
+                  _pay_lifetime_control(jobid, request.command).map { _ =>
                   if (request.command == JobControlCommand.Cancel)
-                    _cancellation_scope(jobid).cancel()
-                  if (
-                    request.command == JobControlCommand.Cancel &&
-                      _has_eligible_durable_terminal_checkpoint(jobid) &&
-                      _has_no_active_or_pending_local_work(jobid)
-                  )
-                    _mark_base_completion(jobid, _control_result_for(target))
-                  if (
-                    request.command != JobControlCommand.Cancel ||
-                      !_has_eligible_durable_terminal_checkpoint(jobid)
-                  )
+                    _apply_safety_cancel(jobid)
+                  else {
+                    _append_timelinefor_control(jobid, request.command, target)
+                    _update_record(jobid, target, _control_result_for(target))
                     _append_eventfor_control(jobid, request.command, target)
+                  }
+                  applied
+                  }
               }
-              applied
-            case replay => replay
+            case replay => Consequence.success(replay)
           }
       }
     }
     transition.flatMap {
       case ControlTransition.Apply(target) =>
-        _control_response(jobid, request, target, changed = true)
+        _control_response(jobid, request, target, changed = true, wait = wait)
       case ControlTransition.Replay(status) =>
         _control_replay_response(jobid, request, status)
     }
   }
 
+  private[job] def _apply_safety_cancel(jobid: JobId): Unit =
+    _state_monitor.synchronized {
+      _get_record(jobid).foreach { record =>
+        record.status match {
+          case JobStatus.Submitted | JobStatus.Running | JobStatus.Suspended =>
+            _remove_pending_resources(Some(jobid))
+            _append_timelinefor_control(jobid, JobControlCommand.Cancel, JobStatus.Cancelled)
+            _update_record(jobid, JobStatus.Cancelled, _control_result_for(JobStatus.Cancelled))
+            _cancellation_scope(jobid).cancel()
+            if (_has_eligible_durable_terminal_checkpoint(jobid) &&
+                _has_no_active_or_pending_local_work(jobid))
+              _mark_base_completion(jobid, _control_result_for(JobStatus.Cancelled))
+            if (!_has_eligible_durable_terminal_checkpoint(jobid))
+              _append_eventfor_control(jobid, JobControlCommand.Cancel, JobStatus.Cancelled)
+          case JobStatus.Cancelled =>
+            _remove_pending_resources(Some(jobid))
+            _cancellation_scope(jobid).cancel()
+          case _ => ()
+        }
+      }
+    }
+
   private def _control_response(
     jobid: JobId,
     request: JobControlRequest,
     target: JobStatus,
-    changed: Boolean
+    changed: Boolean,
+    wait: Option[(Instant, WaitLease)]
   ): Consequence[JobControlResponse] =
     request.option.mode match {
       case JobCommandMode.Async =>
@@ -122,7 +116,8 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
           )
         )
       case JobCommandMode.Sync =>
-        _await_control_sync(jobid, request, target, changed)
+        val (deadline, lease) = wait.get
+        _await_control_sync(jobid, request, target, changed, deadline, lease)
     }
 
   private def _control_replay_response(
@@ -157,8 +152,9 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
         )
     }
 
-  private def _retry_job(jobid: JobId, record: JobRecord): Unit = {
-    _cancellation_scopes.put(jobid, new JobCancellationScope)
+  private def _retry_job(jobid: JobId, record: JobRecord): Consequence[Unit] =
+    _reserve_lifetime_retry(jobid, record.tasks) { _reserve_pending(jobid, root = true) }.map { lease =>
+    try {
     val now = _now()
     _put_record(
       record.copy(
@@ -184,7 +180,13 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
       record.priority,
       jobid,
       SchedulerWorkItem.RetryRunOrigin.Control
-    ))
+    ), lease)
+    ()
+    } catch {
+      case e: Throwable =>
+        _resource_budget.release(lease)
+        throw e
+    }
   }
 
   private def _append_timelinefor_control(
@@ -256,22 +258,24 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
     jobid: JobId,
     request: JobControlRequest,
     target: JobStatus,
-    changed: Boolean
+    changed: Boolean,
+    deadline: Instant,
+    lease: WaitLease
   ): Consequence[JobControlResponse] = {
-    val deadline = _now().plusMillis(math.max(0L, request.option.timeoutMillis))
     var status = getStatus(jobid).getOrElse(target)
     val waitoutcome =
       if (request.command == JobControlCommand.Retry && !_is_retry_settled(status))
-        _wait_until(deadline) {
+        _wait_until(deadline, lease) {
           status = getStatus(jobid).getOrElse(status)
           _is_retry_settled(status)
         }
       else
-        WaitOutcome.Completed
+        Consequence.success(WaitOutcome.Completed)
+    waitoutcome.flatMap { outcome =>
     status = getStatus(jobid).getOrElse(status)
-    if (waitoutcome == WaitOutcome.TimedOut && !_is_retry_settled(status)) {
+    if (outcome == WaitOutcome.TimedOut && !_is_retry_settled(status)) {
       _control_timeout(s"sync timeout for job control: ${jobid.value}")
-    } else if (waitoutcome == WaitOutcome.Interrupted) {
+    } else if (outcome == WaitOutcome.Interrupted) {
       Consequence.stateConflict(s"job control await interrupted: ${jobid.value}")
     } else {
       val response = request.command match {
@@ -289,6 +293,7 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
           changed = changed
         )
       )
+    }
     }
   }
 
@@ -332,15 +337,18 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
     }
 
   private[job] def _can_run_next_task(jobid: JobId): Boolean =
-    _get_record(jobid).exists(r =>
-      r.status != JobStatus.Cancelled && !_has_durable_task_checkpoint_refusal(jobid)
-    )
+    _state_monitor.synchronized {
+      _get_record(jobid).exists(record =>
+        record.status != JobStatus.Cancelled && !_has_durable_task_checkpoint_refusal(jobid) &&
+          _native_dispatch_allowed(jobid)
+      )
+    }
 
   private[job] def _has_eligible_durable_terminal_checkpoint(jobid: JobId): Boolean =
     _get_record(jobid).exists { record =>
       record.persistence == JobPersistencePolicy.Persistent &&
-        record.taskReadModels.nonEmpty &&
-        _durable_lifecycle_write_bridge.exists(_.hasAdmittedSnapshot(record.id))
+        _lifecycle_bridge(record.id).exists(bridge => bridge.hasAdmittedSnapshot(record.id) &&
+          (record.taskReadModels.nonEmpty || bridge.recoveredCancelled(record)))
     }
 
   private def _has_no_active_or_pending_local_work(jobid: JobId): Boolean =
@@ -348,8 +356,8 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
       record.activeTaskCount == 0 && record.pendingTaskCount == 0
     }
 
-  private def _has_durable_task_checkpoint_refusal(jobid: JobId): Boolean =
-    Option(_durable_lifecycle_write_failures.get(jobid)).exists {
+  private[job] def _has_durable_task_checkpoint_refusal(jobid: JobId): Boolean =
+    _lifecycle_failure(jobid).exists {
       case DurableJobLifecycleWriteFailure.TaskStartIntentRefused => true
       case DurableJobLifecycleWriteFailure.TaskOutcomeCheckpointRefused => true
       case DurableJobLifecycleWriteFailure.TerminalOutcomeCheckpointRefused => true
@@ -374,40 +382,93 @@ private[job] trait InMemoryJobEngineControlPart extends JobEngine { self: InMemo
     status.forall(_ != JobStatus.Cancelled)
   }
 
+  private[job] def _wait_deadline(timeoutmillis: Long): Consequence[Instant] =
+    if (timeoutmillis < 0L || timeoutmillis > 86400000L)
+      Consequence.argumentInvalid("JobEngine wait request refused")
+    else try Consequence.success(_now().plusMillis(timeoutmillis))
+    catch {
+      case NonFatal(_) => Consequence.argumentInvalid("JobEngine wait request refused")
+    }
+
+  private[job] def _with_wait_capacity[A](body: WaitLease => Consequence[A]): Consequence[A] = {
+    val admission = _state_monitor.synchronized {
+      if (_admission_closed) JobResourcePolicy.refused[WaitLease]
+      else _resource_budget.reserveWait(_resource_owner)
+    }
+    admission.flatMap { lease =>
+      try body(lease)
+      finally _resource_budget.releaseWait(lease)
+    }
+  }
+
+  private def _wait_remaining(deadline: Instant): Consequence[Long] =
+    try {
+      val remaining = Duration.between(_now(), deadline)
+      if (remaining.compareTo(Duration.ofMillis(86400000L)) > 0)
+        JobResourcePolicy.refused
+      else if (remaining.isNegative || remaining.isZero)
+        Consequence.success(0L)
+      else Consequence.success(remaining.toNanos)
+    } catch {
+      case NonFatal(_) => JobResourcePolicy.refused
+    }
+
   private[job] def _wait_until(
-    deadline: Instant
-  )(done: => Boolean): WaitOutcome =
-    if (done)
-      WaitOutcome.Completed
-    else if (!_now().isBefore(deadline))
-      WaitOutcome.TimedOut
-    else {
-      val registration = _timer.schedule(deadline) {
-        _signal_state_change()
-      }
-      try
-        _state_monitor.synchronized {
-          var completed = done
-          try {
-            while (!completed && !_force_cancel_requested && _now().isBefore(deadline)) {
-              val remainingnanos = Duration.between(_now(), deadline).toNanos
-              if (remainingnanos > 0L) {
-                val waitmillis = remainingnanos / 1000000L
-                val waitnanos = (remainingnanos % 1000000L).toInt
-                _state_monitor.wait(waitmillis, waitnanos)
-              }
-              completed = done
-            }
-            if (completed) WaitOutcome.Completed else WaitOutcome.TimedOut
-          } catch {
-            case _: InterruptedException =>
-              Thread.currentThread().interrupt()
-              WaitOutcome.Interrupted
+    deadline: Instant,
+    lease: WaitLease
+  )(done: => Boolean): Consequence[WaitOutcome] =
+    if (done) Consequence.success(WaitOutcome.Completed)
+    else _wait_remaining(deadline).flatMap { remaining =>
+      if (remaining == 0L) Consequence.success(WaitOutcome.TimedOut)
+      else {
+        // External schedule/close may have taken effect without an acknowledgement.
+        _resource_budget.markWaitAmbiguous(lease)
+        val scheduled = try {
+          val registration = _timer.schedule(deadline) { _signal_state_change() }
+          if (registration == null) JobResourcePolicy.refused[JobTimerRegistration]
+          else {
+            _resource_budget.acknowledgeWait(lease)
+            Consequence.success(registration)
           }
+        } catch {
+          case NonFatal(_) => JobResourcePolicy.refused[JobTimerRegistration]
         }
-      finally
-        registration.close()
+        scheduled.flatMap { registration =>
+          var closefailed = false
+          val outcome = try {
+            _state_monitor.synchronized {
+              var outcome = Option.empty[Consequence[WaitOutcome]]
+              try {
+                while (outcome.isEmpty) {
+                  if (done) outcome = Some(Consequence.success(WaitOutcome.Completed))
+                  else if (_force_cancel_requested) outcome = Some(Consequence.success(WaitOutcome.TimedOut))
+                  else _wait_remaining(deadline) match {
+                    case Consequence.Failure(conclusion) => outcome = Some(Consequence.Failure(conclusion))
+                    case Consequence.Success(nanos) =>
+                      if (nanos == 0L) outcome = Some(Consequence.success(WaitOutcome.TimedOut))
+                      else _state_monitor.wait(nanos / 1000000L, (nanos % 1000000L).toInt)
+                  }
+                }
+              } catch {
+                case _: InterruptedException =>
+                  Thread.currentThread().interrupt()
+                  outcome = Some(Consequence.success(WaitOutcome.Interrupted))
+              }
+              outcome.get
+            }
+          } finally {
+            _resource_budget.markWaitAmbiguous(lease)
+            try {
+              registration.close()
+              _resource_budget.acknowledgeWait(lease)
+            } catch {
+              case NonFatal(_) => closefailed = true
+            }
+          }
+          if (closefailed) JobResourcePolicy.refused else outcome
+        }
       }
+    }
 
   private[job] def _signal_state_change(): Unit =
     _state_monitor.synchronized {

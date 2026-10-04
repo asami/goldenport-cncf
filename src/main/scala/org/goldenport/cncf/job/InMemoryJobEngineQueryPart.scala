@@ -1,62 +1,16 @@
 package org.goldenport.cncf.job
 
-import java.security.MessageDigest
-import java.time.{Duration, Instant}
-import java.util.Base64
-import java.util.concurrent.{
-  ConcurrentHashMap,
-  Executors,
-  PriorityBlockingQueue,
-  ScheduledExecutorService,
-  TimeUnit,
-  ExecutorService
-}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import scala.concurrent.ExecutionContext as ScalaExecutionContext
-import scala.util.control.NonFatal
-import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.consequence.Failures
-import org.goldenport.id.UniversalId
-import org.goldenport.observation.{Cause, Descriptor}
-import org.goldenport.conclusion.Disposition
-import org.goldenport.observation.Taxonomy
-import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.record.Record
-import org.goldenport.record.io.RecordEncoder
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{
-  ExecutionContext,
-  ExecutionInvocationIdentity,
-  ExecutionProfileRuntime,
-  ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration,
-  IdGenerationContext
-}
-import org.goldenport.cncf.entity.{
-  EntityMutationExecutionPolicy,
-  EntityPersistentCreate,
-  EntityStore
-}
-import org.simplemodeling.model.datatype.EntityRevision
-import org.goldenport.cncf.event.{
-  EventBus,
-  EventLane,
-  EventPublishOption,
-  EventRecordFactory,
-  EventStore,
-  ReceptionDomainEvent
-}
-import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
+import java.time.Instant
+import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemoryJobEngine =>
-  import InMemoryJobEngine.*
+  import InMemoryJobEngine.{WaitOutcome, SchedulerWorkItem}
 
   def getStatus(jobId: JobId): Option[JobStatus] =
     _get_record(jobId)
@@ -73,11 +27,12 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     jobId: JobId,
     timeoutMillis: Long
   ): Consequence[JobResult] =
+    _wait_deadline(timeoutMillis).flatMap { deadline =>
+    _with_wait_capacity { lease =>
     _get_record(jobId) match {
       case None => Consequence.operationNotFound(s"job:${jobId.value}")
       case Some(_) =>
-        val deadline = _now().plusMillis(math.max(0L, timeoutMillis))
-        _wait_until(deadline)(getResult(jobId).nonEmpty) match {
+        _wait_until(deadline, lease)(getResult(jobId).nonEmpty).flatMap {
           case WaitOutcome.Completed =>
             getResult(jobId) match {
               case Some(result) => Consequence.success(result)
@@ -89,15 +44,19 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
             Consequence.stateConflict(s"job await interrupted: ${jobId.value}")
         }
     }
+    }
+    }
 
   def control(
     jobId: JobId,
     request: JobControlRequest,
     policy: JobControlPolicy = JobControlPolicy.default
   )(using ctx: ExecutionContext): Consequence[JobControlResponse] =
-    policy.authorize(jobId, request).flatMap { _ =>
-      _control(jobId, request)
-    }
+    runtimeState._operation_metrics.observeControl(
+      policy.authorize(jobId, request).flatMap { _ =>
+        _control(jobId, request)
+      }
+    )
 
   def query(jobId: JobId): Option[JobQueryReadModel] =
     _get_record(jobId)
@@ -108,7 +67,8 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     request: JobManagementQuery,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[JobManagementPage] =
-    JobManagementReader.queryPage(_management_snapshot, request, policy)
+    runtimeState._operation_metrics.observePage(JobOperationMetrics.PageOperation.Page,
+      JobManagementReader.queryPage(_management_snapshot, request, policy))
 
   override def listJobs(
     limit: Int = 100,
@@ -191,7 +151,8 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     limit: Int = JobManagementQuery.DefaultLimit,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobTaskPage]] =
-    JobManagementReader.queryTasks(_management_snapshot, jobId, offset, limit, policy)
+    runtimeState._operation_metrics.observePage(JobOperationMetrics.PageOperation.Tasks,
+      JobManagementReader.queryTasks(_management_snapshot, jobId, offset, limit, policy))
 
   override def queryManagementTimeline(
     jobId: JobId,
@@ -199,7 +160,8 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     limit: Int = JobManagementQuery.DefaultLimit,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ctx: ExecutionContext): Consequence[Option[JobTimelinePage]] =
-    JobManagementReader.queryTimeline(_management_snapshot, jobId, offset, limit, policy)
+    runtimeState._operation_metrics.observePage(JobOperationMetrics.PageOperation.Timeline,
+      JobManagementReader.queryTimeline(_management_snapshot, jobId, offset, limit, policy))
 
   override def queryManagementTaskExecutionTree(
     jobId: JobId,
@@ -229,7 +191,15 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     parameters: Map[String, String],
     executionNotes: Vector[String] = Vector.empty
   ): Unit =
-    _mutate_record(jobId) { record =>
+    _state_monitor.synchronized {
+    _get_record(jobId).foreach { _ =>
+      val admitted = JobLifetimeBootstrap.noteCount(executionNotes, runtimeState._lifetime_budget.policy)
+        .flatMap(count => _pay_lifetime_annotation(jobId, count))
+      admitted match {
+        case Consequence.Success(_) => ()
+        case _ => throw new IllegalArgumentException("JobEngine lifetime annotation refused")
+      }
+      _mutate_record(jobId) { record =>
       record.copy(
         debug = record.debug.copy(
           parameters = record.debug.parameters ++ parameters,
@@ -237,6 +207,8 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
         ),
         updatedAt = _now()
       )
+    }
+    }
     }
 
   override def cleanupExpiredInputs(now: Instant): Int = {
@@ -256,18 +228,18 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     jobId: JobId,
     profile: JobDeclaredProfile
   ): Unit =
-    _mutate_record(jobId) { record =>
+    _state_monitor.synchronized {
+    _get_record(jobId).filterNot(_.debug.executionNotes.contains("jcl declared profile attached"))
+      .foreach { _ => _mutate_record(jobId) { record =>
       record.copy(
         debug = record.debug.copy(
           declaredProfile = Some(profile),
-          executionNotes =
-            if (record.debug.executionNotes.contains("jcl declared profile attached"))
-              record.debug.executionNotes
-            else
-              record.debug.executionNotes :+ "jcl declared profile attached"
+          executionNotes = record.debug.executionNotes :+ "jcl declared profile attached"
         ),
         updatedAt = _now()
       )
+    }
+    }
     }
 
   override def runTaskInJobSync(
@@ -275,11 +247,17 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     task: JobTask,
     ctx: ExecutionContext
   ): Consequence[TaskOutcome] =
-    _get_record(jobId) match {
+    if (task == null) JobResourcePolicy.refused
+    else _get_record(jobId) match {
       case Some(_) if _can_run_next_task(jobId) =>
-        _run_same_job_task(jobId, task, ctx).flatMap { outcome =>
-          outcome.result.map(_ => outcome)
+        _with_same_job_execution(jobId) {
+          _run_same_job_task(jobId, task, ctx).flatMap { outcome =>
+            outcome.result.map(_ => outcome)
+          }
         }
+      case Some(record) if record.status != JobStatus.Cancelled &&
+          !_has_durable_task_checkpoint_refusal(jobId) && _native_runtime_refused(jobId) =>
+        DurableJobLifetimeQuotaPolicy.unavailable
       case Some(_) =>
         Consequence.stateInvalid(s"job task admission blocked: ${jobId.value}")
       case None =>
@@ -291,9 +269,14 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     task: JobTask,
     ctx: ExecutionContext
   ): Consequence[TaskId] =
-    _get_record(jobId) match {
+    _state_monitor.synchronized {
+    if (task == null || _admission_closed) JobResourcePolicy.refused
+    else _get_record(jobId) match {
       case Some(_) if _can_run_next_task(jobId) =>
+        _reserve_lifetime_work(jobId, List(task)) { _reserve_pending(jobId, root = false) }.flatMap { lease =>
+        try {
         val taskid = TaskId.create("same-job.enqueue", ctx.clock.instant(), ctx.idGeneration)
+        _associate_lifetime_task(jobId, taskid).map { _ =>
         _append_same_job_task_queued(jobId, taskid, task, ctx.jobContext.currentTask)
         val priority = _get_record(jobId).map(_.priority).getOrElse(0)
         _enqueue_work(SchedulerWorkItem.SameJobTask(
@@ -303,12 +286,26 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
           task,
           ctx,
           taskid
-        ))
-        Consequence.success(taskid)
+        ), lease)
+        taskid
+        }.recoverWith { conclusion =>
+          _resource_budget.release(lease)
+          Consequence.Failure(conclusion)
+        }
+        } catch {
+          case e: Throwable =>
+            _resource_budget.release(lease)
+            throw e
+        }
+        }
+      case Some(record) if record.status != JobStatus.Cancelled &&
+          !_has_durable_task_checkpoint_refusal(jobId) && _native_runtime_refused(jobId) =>
+        DurableJobLifetimeQuotaPolicy.unavailable
       case Some(_) =>
         Consequence.stateInvalid(s"job task admission blocked: ${jobId.value}")
       case None =>
         Consequence.operationNotFound(s"job:${jobId.value}")
+    }
     }
 
 }
