@@ -5,6 +5,7 @@ planned_at=2026-10-03
 renumbered_at=2026-10-05
 driver=textus-knowledge-workbench
 checklist=[Phase 100 Checklist](phase-100-checklist.md)
+producer_handoff=asami/cozy Phase 78
 
 Renumbered on 2026-10-05 from the local, uncommitted DataStore Phase 97 plan.
 GitHub Phase 97 (AI Audit) is authoritative; GitHub Phases 98 and 99 retain
@@ -151,7 +152,7 @@ payload-shape inference.
    selection, storage mapping and compatibility activation in canonical specs;
    define `XJson` and `XSemiStructuredData` contracts in the existing Core type
    system (DSM-100-02).
-3. Implement the Core types and selected producer changes, then connect
+3. Freeze the producer-facing fixture/contract, hand the required CML/Cozy generation work to Cozy Phase 78, accept its generated fixture, then implement the Core/runtime integration and connect
    generated metadata and existing EntityPersistent hooks to the OR mapper
    and physical provider operations (DSM-100-03/04). Do not hand-patch generated
    artifacts or add a competing type system.
@@ -169,10 +170,10 @@ payload-shape inference.
 | --- | --- | --- |
 | DSM-100-01 | Inventory actual logical-type producers, DataStore consumers, existing encodings and affected data; retain reproduction and original recovery inputs. | None |
 | DSM-100-02 | Freeze the application-type / OR-mapper codec / physical-storage contract, declaration ownership, missing-mapping behavior and compatibility matrix. | DSM-100-01 |
-| DSM-100-03 | Bind admitted mappings in the OR mapper over physical DataStore operations, consistently across writes, reads, queries and mutation readback. | DSM-100-02 |
-| DSM-100-04 | Migrate affected callers and replace heuristic decoding and collection/field-specific exceptions with declarations. | DSM-100-03 |
+| DSM-100-03 | Bind admitted mappings in the OR mapper over physical DataStore operations, consistently across writes, reads, queries and mutation readback; consume the Cozy Phase 78 generated producer fixture for generated-declaration coverage. | DSM-100-02 and Cozy Phase 78 producer handoff |
+| DSM-100-04 | Migrate affected callers and replace heuristic decoding and collection/field-specific exceptions with declarations, including regenerated Cozy Phase 78 outputs in the selected scope. | DSM-100-03 and Cozy Phase 78 |
 | DSM-100-05 | Implement and rehearse diagnosis, explicit migration and recovery for existing records on isolated copies. | DSM-100-02, DSM-100-04 |
-| DSM-100-06 | Prove provider parity and restart roundtrips with workbench and existing durable consumers; complete review and release evidence. | DSM-100-03 through DSM-100-05 |
+| DSM-100-06 | Prove provider parity and restart roundtrips with workbench and existing durable consumers; explicitly accept the Cozy Phase 78 generated fixture; complete review and release evidence. | DSM-100-03 through DSM-100-05 and Cozy Phase 78 handoff |
 
 ## Ownership and integration
 
@@ -192,9 +193,7 @@ payload-shape inference.
   application reconstruction use an explicitly bound OR-mapping path; do not
   insert that reconstruction back into the low-level provider. An
   EntityStore-only repair cannot close this Phase.
-- Select the producer and downstream repository/path scope at PLAN. A required
-  Cozy/model producer change is an explicit prerequisite/handoff, not inferred
-  permission to edit every ecosystem repository.
+- Select the producer and downstream repository/path scope at PLAN. The required Cozy/model producer work is allocated to `asami/cozy` Phase 78. DSM-100-02 freezes the producer-facing logical datatype/storage-mapping contract and expected fixture; Cozy Phase 78 implements CML -> semantic datatype -> generated Scala/schema/storage metadata; DSM-100-03/04 consume that output; DSM-100-06 is the downstream acceptance authority. This handoff is not permission for either repository to edit the other's owned implementation.
 - workbench supplies the concrete failing consumer scenario. Durable Job and
   quota/canonical-text consumers supply compatibility regressions, including
   opaque IDs and exact String content.
