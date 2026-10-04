@@ -118,3 +118,32 @@ A component's abstract Workflow/Operation contract must remain stable when human
 An internally automatic step may later gain Human Admission, or a Human Admission may later become policy-automatic after sufficient operational evidence, without forcing callers or collaborating abstract model elements to model the participant/UI loop.
 
 Human/AI participation is refinable inside the Workflow implementation and must not leak into unrelated abstract model contracts.
+
+
+## Driven-development sequencing
+
+driver=textus-control-center Phase 6
+
+Phase 102 is a CNCF-owned, consumer-driven development unit. Textus Control Center Phase 6 supplies the initial driver requirements and acceptance scenario, but MUST NOT copy or locally emulate the missing CNCF Admission Management abstraction.
+
+Phase 102 does not become the global CNCF active phase merely because Control Center starts its consumer work. It may be developed in parallel with other independently driven CNCF phases such as Phase 100 (textus-knowledge-workbench) and Phase 101 (sm-workflow), subject to normal repository/worktree isolation and integration validation.
+
+The intended development arrangement is a dedicated CNCF branch/worktree associated with the Control Center Phase 6 effort. The driver must not reuse or mutate another consumer project's dedicated CNCF worktree.
+
+When upstream CNCF main changes are incorporated into the Phase 102 development branch/worktree, validate the affected CNCF scope and the CNCF full suite required by the development policy before treating the dependency baseline as accepted; then validate the Control Center consumer against that accepted CNCF state. A consumer test alone is not evidence that an incorporated CNCF change is safe.
+
+### Control Center gate
+
+Control Center Phase 6 may prepare its consumer-side model/UI integration in parallel, but it must not close against a private duplicate of the Phase 102 contract.
+
+The closure handoff is:
+
+```text
+Control Center Phase 6 reaches CNCF integration boundary
+  -> drives CNCF Phase 102 in its dedicated CNCF worktree
+  -> CNCF Phase 102 contract/provider slice accepted
+  -> Control Center consumes the accepted CNCF API
+  -> Control Center Phase 6 admission vertical slice validated
+```
+
+Exact final closure ordering may be refined when Phase 102 implementation is split into slices, but CNCF remains producer authority and Control Center remains consumer/driver.
