@@ -73,3 +73,48 @@ Dot, OpenClaw, Codex or other agents may create candidates. Agent identity/produ
 - Giving AI agents admission authority.
 - Building the Control Center UI itself.
 - Making every external approval system conform internally to CNCF StateMachine semantics.
+
+
+## Human-in-the-Loop as standard Admission
+
+Phase 102 treats Human-in-the-Loop as a standard Admission routing/authority case rather than an application-specific workflow primitive.
+
+A Candidate may require admission by policy, AI judgment, human authority, or a composed policy. The common management model must expose enough typed information to route a pending human decision and submit the resulting authorized action without embedding Slack, mobile, Watch, Dot, OpenClaw or other presentation/provider concepts.
+
+Conceptually:
+
+```text
+Evidence / Context
+      -> Candidate
+      -> Admission Requirement
+      -> Admission Authority / Policy
+           -> automatic / deterministic
+           -> AI judgment
+           -> human decision
+           -> composed policy
+      -> Decision
+      -> Apply
+      -> Feedback
+```
+
+Human participation does not become authoritative merely because it occurs in a UI or conversation. The resulting typed Admission decision/action is authoritative under the owning provider/workflow policy.
+
+## Continuation / IoC relationship
+
+Admission semantics and Continuation mechanics remain separate.
+
+- Admission answers the semantic question: may this Candidate be accepted/applied?
+- Continuation provides the runtime mechanism for suspending execution when an external participant/result is required and resuming with a typed result.
+- Human-in-the-Loop is one possible external participation binding selected by Admission/policy; it is not a special outer orchestration loop.
+
+When an Admission Gap requires human judgment, the owning Workflow may route the required semantic Action through the existing Phase 77 Continuation mechanism. The external host/provider needs only the generic continuation/result contract. It does not need to know the Workflow's internal states or post-decision transition logic.
+
+This preserves inversion of control: Workflow semantics declare required external participation, while deployment/runtime binds that participation to Slack, Web, mobile, Watch, AI, or another provider.
+
+## Abstraction-preserving refinement
+
+A component's abstract Workflow/Operation contract must remain stable when human or AI participation is added, removed, or changed inside the implementation, provided the external semantic contract is unchanged.
+
+An internally automatic step may later gain Human Admission, or a Human Admission may later become policy-automatic after sufficient operational evidence, without forcing callers or collaborating abstract model elements to model the participant/UI loop.
+
+Human/AI participation is refinable inside the Workflow implementation and must not leak into unrelated abstract model contracts.
