@@ -1,8 +1,8 @@
 package org.goldenport.cncf.component
 
-import logicalui.{ExpectedGeneratedLogicalUiFixture, TypedDisplayRuntimeFixture}
+import logicalui.{DisplayServiceReadFixture, ExpectedGeneratedLogicalUiFixture, TypedDisplayRuntimeFixture}
 import org.goldenport.Consequence
-import org.goldenport.cncf.display.{DisplayBindingProvider, DisplayRuntime, GeneratedLogicalUiAbi, GeneratedLogicalUiMetadataProvider}
+import org.goldenport.cncf.display.{DisplayBindingProvider, DisplayRuntime, DisplayService, DisplayServiceBindingProvider, GeneratedLogicalUiAbi, GeneratedLogicalUiMetadataProvider}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.workflow.{GeneratedWorkflowAbi, GeneratedWorkflowAbiAdmissionException, GeneratedWorkflowMetadataProvider}
@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct.  3, 2026
+ * @version Oct.  5, 2026
  */
 final class ComponentFactoryLogicalUiBootstrapSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GeneratedLogicalUiAbi.*
@@ -450,8 +450,11 @@ final class ComponentFactoryLogicalUiBootstrapSpec extends AnyWordSpec with Matc
     }
   }
 
-  private final class LogicalUiFactory(read: () => Vector[Definition]) extends Component.Factory with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider {
+  private final class LogicalUiFactory(read: () => Vector[Definition]) extends Component.Factory with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider {
     override def generatedLogicalUiDefinitions: Vector[Definition] = read()
+
+    def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+      DisplayServiceReadFixture.resourceBindings
 
     override def displayBindings(component: Component): Vector[DisplayRuntime.Binding] =
       TypedDisplayRuntimeFixture.installBindings(component)
@@ -488,8 +491,10 @@ final class ComponentFactoryLogicalUiBootstrapSpec extends AnyWordSpec with Matc
   }
 
   private def _provider_component(read: () => Vector[Definition]): Component =
-    new Component() with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider {
+    new Component() with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider {
       override def generatedLogicalUiDefinitions: Vector[Definition] = read()
+      def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+        DisplayServiceReadFixture.resourceBindings
       override def displayBindings(component: Component): Vector[DisplayRuntime.Binding] =
         TypedDisplayRuntimeFixture.installBindings(component)
     }

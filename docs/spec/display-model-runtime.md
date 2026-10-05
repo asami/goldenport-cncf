@@ -1,12 +1,16 @@
 # Display Model runtime contract
 
 Document role: normative implementation contract for Phase 96 Display behavior.
-Status: implementation contract; P96-01/02/03 accepted within their scoped boundaries.
+Status: implementation contract; P96-01/02/03/04/05 accepted within their scoped boundaries.
 Independent P96-01C documentary review and P96-03 whole-Step review passed;
 all seven P96-03 criteria are CLOSED with focused LUI-ACCEPT-01 consumer proof
 accepted at local P96-03 Step commit `bef59e7`; Cozy P76-05 reciprocal receipt
-is accepted at `3546755` and P76-06A documentary handoff at `ddeadab9`. Final Phase acceptance and later
-service, codec, wire, mutation and presentation-context work remain pending.
+is accepted at `3546755` and P76-06A documentary handoff at `ddeadab9`.
+P96-04's pure codec is accepted at local Step commit `625d533`.
+P96-05 read-service validation and independent acceptance are complete, recorded
+in the [Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance).
+Its local Step commit is PREPARED/PENDING; later mutation/context work and final
+Phase acceptance remain pending.
 
 The [runtime design](../design/display-model-runtime.md) fixes ownership and
 architecture; [Logical UI generated ABI](logical-ui-generated-abi.md) fixes
@@ -91,11 +95,10 @@ structurally without cross-component fallback. Read uses canonical contextual
 View facilities; it exposes no public generic Aggregate/View gateway or second
 View store.
 
-Required public proof starts with Detail, then List/select/Detail. This contract
-does not fix exact Display route/media/HTTP verb or JSON envelope. P96-04 must
-bind the existing canonical path-resolution specification, including its
-component/service/operation authority, rather than inventing aliases or a new
-top-level REST namespace.
+Required public proof starts with Detail, then List/select/Detail. The separate
+[accepted P96-04 physical contract](display-model-protocol.md#r7-existing-rest-binding-and-later-execution-proof)
+fixes the existing GET/.json/envelope binding, without aliases or a new REST
+namespace. P96-05A SR1..SR4 below fix its normal registered Operation realization.
 
 ## DSP96-R05: Capabilities and writable mapping
 
@@ -189,7 +192,10 @@ no authority. The core P96-01..P96-09 path works without Phase 98 implementation
 
 ## Requirement-to-proof ownership
 
-All rows are REQUIRED / PENDING, with no implementation or passing-test claim.
+This initial ownership matrix retains the original P96-01 authoring status for
+the P96-03 rows; the later P96-03C section records their accepted evidence.
+The P96-04 and P96-05 rows project their current accepted codec and read-service
+boundaries. Later rows remain required/pending and make no new passing-test claim.
 The [P96-01B matrix](../journal/2026/10/2026-10-03-phase-96-generated-abi-contract.md#unexecuted-acceptance-matrix--p96-01b-abi-v1)
 retains full PROJ/ROUNDTRIP scenario descriptions. Owning Steps must bind real
 Executable Specifications and actual commands/results, using Given/When/Then,
@@ -203,8 +209,8 @@ Markdown wording tests are not evidence.
 | R01/R02/R05 | PROJ-02 combined/fan-out/opaque-source conversion, admitted kinds and no inverse/fallback | P96-03 | PENDING |
 | R01/R02/R08 | PROJ-03 structured failures, contextual inert action availability and independent semantic consumption | P96-03 | PENDING |
 | R01/R02/R03; ABI S08 | ROUNDTRIP-01 actual Cozy-generated source through same compile/admission/projection path, exact receipt/artifacts | Cozy Phase 76 / P96-03 | PENDING |
-| R02/R03/R04 | Exact versioned codec, strict malformed/unknown rejection, golden fixtures and property round trips | P96-04 | PENDING |
-| R03/R04 | Public Detail first, then List/select/Detail; registered authorized canonical service | P96-05 | PENDING |
+| R02/R03/R04 | Exact versioned codec, strict malformed/unknown rejection, golden fixtures and property round trips | P96-04 | ACCEPTED at `625d533`; pure codec only |
+| R03/R04 | Public Detail first, then List/select/Detail; registered authorized canonical service | P96-05 | ACCEPTED; [independent Step evidence](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance), local Step commit PREPARED/PENDING |
 | R05/R06/R07 | Mutation mapping, strict observed revision/delete, stale-before-equality/no-op, committed-pending and revision-corresponding refresh | P96-06/07 | PENDING |
 | R08 | Direct ordinary Business Operation followed by explicit corresponding Display reload | P96-08 | PENDING |
 | R01..R08 | ESS2-01 development reference and separate positive create/Detail/List and delete/List fixture | P96-09 (positive paths also P96-07) | PENDING |
@@ -468,11 +474,166 @@ Local Step commit is `bef59e7`. Cozy P76-05 reciprocal receipt is accepted at
 HYG-P96-03-SPEC-TRACEABILITY-001 are retained. Earlier A/B1/B2 status statements
 describe historical slice state; this section records current acceptance without
 changing their normative contracts. Final Phase acceptance and later service,
-codec, wire, mutation and presentation-context work remain pending; no full
+mutation and presentation-context work remain pending; no full
 Phase review or closure is claimed.
 
-The [physical read protocol](display-model-protocol.md) is now accepted for
-implementation in P96-04A-WIRE with separate [protocol design](../design/display-model-protocol.md).
-It promotes the first strict List/Detail snapshot subset only. Codec validation
-and independent acceptance remain pending; P96-05 owns live Operation/envelope
-object proof and later mutation/context artifacts retain their original owners.
+The [physical read protocol](display-model-protocol.md) with separate
+[protocol design](../design/display-model-protocol.md) is accepted at P96-04
+local Step commit `625d533`. Its 151/151 focused tests and independent review
+accept only the strict first List/Detail snapshot codec subset. Earlier dated
+pending statements remain historical. P96-05 owns normal Operation/envelope
+object proof; later mutation/context artifacts retain their original owners.
+
+## P96-05A: Ordinary component-scoped read service
+
+This is the frozen P96-05A implementation contract; scoped executed acceptance
+is recorded separately in the journal, without changing the contract below.
+The [design](../design/display-model-runtime.md#p96-05a-prepared-effective-registration)
+fixes assembly responsibility; [protocol R7/R9](display-model-protocol.md#r9-pure-typed-json-and-framework-envelope-adapter)
+fixes the machine transport. No read criterion or Phase gate is closed by authoring.
+
+### SR1: Complete explicit service capability
+
+[DisplayServiceBindingProvider](../../src/main/scala/org/goldenport/cncf/display/DisplayServiceBindingProvider.scala)
+supplies `displayServiceBindings(component): Vector[DisplayService.ResourceBinding]`.
+The passive `ResourceBinding(resourceType, screenId)` carries no source callback,
+View name, converter, dynamic DI key or execution authority. It is separate from
+unchanged static metadata and typed runtime capabilities. After successful typed
+runtime join, select the component capability first; use its factory only if the
+component capability is absent. Read exactly one selected getter. Selected null,
+throwing or invalid results never fall back.
+
+Every nonempty admitted definition vector requires exactly one mapping per
+screen. Reject null vectors/entries, untrimmed/empty/null IDs, duplicate and extra
+screens in binding order, then missing screens in definition order. Each List and
+its declared DetailTarget must have the same resourceType; multiple screens may
+share one resourceType. Trusted `Source.createC(componentId, resourceType)` uses
+the actual owner ComponentId. Runtime and definition screen vectors must match.
+Constructor/copy bypass of admitted executable service bindings is closed.
+
+Prepare one ordinary ServiceDefinition `display`, exactly `query` and `read`,
+no default or list/get aliases. Any existing normalized display definition or
+installed Service is a collision; never merge, replace or last-wins. Absent
+metadata preserves legacy bootstrap success without a Display service or service
+capability read. A present selected provider with an empty definition vector is
+rejected by existing Logical UI ABI S05/S06 with LUI96_DEFINITIONS_MISSING at
+`definitions`, before runtime or service getters and without fallback. It does
+not produce an admitted empty runtime or service.
+
+### SR2: Closed raw request admission
+
+The ordinary bound Operations declare required Property parameters
+`resourceType`, `screenId`, plus `resourceId` for read, each XString/One, with
+the canonical specified nonvoid
+`ResponseDefinition(result = List(DataType.Named("OperationResponse")))`.
+This names the ordinary framework response; business JSON remains the closed
+`cncf.display-model.v1`, version `1`, through the typed codec. Empty or void
+output declarations are inadmissible. Validate the raw Request before any
+datatype coercion: nonnull Request; exact canonical bound component, service and
+operation; no positional arguments or switches; exactly one nonnull String for
+each required business property; exactly trimmed nonempty identifiers. Unknown,
+duplicate, wrong-kind, missing, numeric, Boolean, collection or null business
+inputs fail without incidental `toString` conversion or source effects.
+
+Direct operation-request construction may carry only existing framework/security
+transport properties; normal Subsystem strips them. They never select a source
+or grant authority. No arbitrary View/converter/path/class/Aggregate Operation,
+filter/where/limit/offset/total/control grammar is admitted. Extra client filters
+are rejected, not ignored. Resolve the exact admitted screen/resourceType pair;
+read requires Detail and query requires List. Resource IDs use existing
+`EntityId.parse` plus exact `.value` equality, never a screen-derived identity.
+Foreign/missing/undeclared selections cannot search another component or source.
+
+Service admission/input defects use `ServiceException(Diagnostic(code,path,reason))`
+with `Consequence.fail(Taxonomy.argumentInvalid, carrier)`. Fixed redacted reasons
+contain no caller values or exception text. `DSP96_SERVICE_` suffixes are
+`ELEMENT_INVALID`, `ID_INVALID`, `PROVIDER_MISSING`, `PROVIDER_FAILED`,
+`SCREEN_MISSING`, `SCREEN_UNDECLARED`, `SCREEN_DUPLICATE`, `RESOURCE_MISMATCH`,
+`SERVICE_COLLISION`, `INPUT_INVALID`, `OPERATION_UNSUPPORTED`. Paths use indexed
+`bindings[i]`/`definitions[i]`, `bindings`, `service` or `request.<name>`.
+Ordinary authorization failures and source/runtime/projection/wire Conclusions
+pass through with their original taxonomy and cause.
+
+### SR3: Normal authorized contextual execution
+
+Ordinary Subsystem resolution authorizes before request conversion. The admitted
+QueryAction creates a ProcedureActionCall under the existing UnitOfWork and
+ExecutionContext; no public bypass invokes Registry directly. Read calls only its
+registered `Registry.readC(screenId, parsedEntityId)` once; query calls only
+`Registry.queryC(screenId, Query.fromRecord(Record.empty))` once, with the exact
+call execution context. Preserve typed source identity/revision and failure
+semantics. No count, context-free call, retry, cache, eager Detail, invented query
+snapshot, source mutation or action execution occurs. Enabled presentation
+Actions and spoofed request security fields cannot grant access.
+
+The resulting admitted Display goes through pure `encodeJsonC` and returns
+`OperationResponse.Json`. Existing in-process Http4s route execution proves the
+canonical GET/.json/envelope contract with business `data` as an object, UTF8
+application/json body, empty arrays, precise numbers/nanos and exact UTF16 units
+including lone surrogates. This is not a live socket/server claim. Independent
+semantic clients still consume original typed Capture values without Display.
+
+### SR4: Prepared effective registration and final publication
+
+Component owns one private optional immutable registration containing effective
+Protocol, ProtocolLogic and ServiceGroup. Prepare it before publishing definitions,
+runtime or flag. Append exactly one admitted service to original component.protocol,
+preserving its handler and every existing definition and installed Service instance.
+Construct only the new Service through ordinary serviceFactory setup/create, then
+ProtocolLogic for the complete protocol. NonFatal construction defects become a
+fixed structured `componentInvalid("Display service construction failed")` failure
+before any partial exposure. Retain the componentInvalid taxonomy with no raw
+exception cause, facet or private exception text.
+
+Never copy/replace Core or add a public generic Core/protocol mutation API. Fixed
+Core overrides and Component.Instance retain Core/name/componentId/instanceId/
+factory/actionEngine/jobEngine/subsystem identity. Effective getters choose the
+prepared registration or original values. Ordinary dispatcher discovery consumes
+component.protocol, not core.protocol. The original entity-bootstrap core.protocol
+fallback remains unchanged and cannot infer a display Entity collection.
+
+The existing single-owner final tail publishes complete definitions/runtime/
+registration/collectionsBootstrapped only after every gate. Failure retains original
+protocol/services and publishes no Display; earlier legacy View/provider/factory
+setup effects are not rolled back. Successful repeat preserves all published
+references and reads no provider again. No lazy exposure, concurrent-bootstrap,
+lock, rollback or new retry guarantee is introduced.
+
+### P96-05A executable correspondence
+
+Examples are scoped to their suite; short R1..R9 references name the separate
+physical protocol. Every scenario has visible E metadata and adjacent Given /
+When / Then with should expectations; property bodies do too.
+
+| Suite and examples | Rules | Observable behavior |
+| --- | --- | --- |
+| [DisplayServiceReadSpec](../../src/test/scala/org/goldenport/cncf/display/DisplayServiceReadSpec.scala) E1 | SR1..SR3, DSP96-R04 | Detail first, actual delivered metadata and one contextual find |
+| Read E2/E3 | SR3, DSP96-R01..R04, protocol R3/R4/R7 | HTTP Detail/List/select/Detail, typed semantic consumer, empty/reversed/all-kind losslessness |
+| Read E4/E5 | SR2/SR3, DSP96-R03/R04 | Component/screen/resource confinement and raw input/control rejection |
+| Read E6/E7 | SR2/SR3, DSP96-R01/R02/R04/R08 | Descriptor authorization, caller context and original/redacted failure semantics |
+| Read E8 | SR1/SR3, protocol R1/R4/R6/R7 | Typed/text codec correspondence and only canonical query/read operations |
+| [ComponentFactoryDisplayServiceSpec](../../src/test/scala/org/goldenport/cncf/component/ComponentFactoryDisplayServiceSpec.scala) E1/E2 | SR1/SR4, ABI S05/S06 | Late provider precedence, absent-provider legacy success and typed present-empty rejection before runtime/service getters |
+| Registration E3/E4 | SR1/SR4 | Complete invalid mapping matrix, construction failure and normalized collision atomicity |
+| Registration E5/E6 | SR1/SR3/SR4, DSP96-R03 | Fixed Core/effective consumers, repeat identity and foreign source ownership |
+| [DisplayServiceReadPropertySpec](../../src/test/scala/org/goldenport/cncf/display/DisplayServiceReadPropertySpec.scala) E1/E2 | SR1..SR3, DSP96-R01..R04, protocol R3/R4/R7 | >=100 successful zero-discard public preservation and closed-selection laws |
+| [OperationResponseJsonEnvelopeSpec](../../src/test/scala/org/goldenport/cncf/protocol/OperationResponseJsonEnvelopeSpec.scala) E1..E3 | protocol R3/R4/R7/R9 | Framework-owned envelope, compatibility/job/debug and exact UTF8 payload |
+| [PathPreNormalizerHttpSuffixSpec](../../src/test/scala/org/goldenport/cncf/path/PathPreNormalizerHttpSuffixSpec.scala) E1..E3 | SR3, path-resolution R1/R4/R5, protocol R7 | Suffix-independent canonical HTTP identity, alias/CLI compatibility and >=100 successful zero-discard preservation law |
+
+The [application fixture](../../src/test/scala/logicalui/DisplayServiceReadFixture.scala)
+supplies explicit ESS mappings, typed Browsers and normal initialization/routes.
+Delivered Cozy definitions/provider remain unchanged. Existing generated consumer
+and successful bootstrap helper providers gain only this passive capability.
+The [read-service acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance)
+records representative012 subject12 (Registration6 + Read8) 14/14 and
+accumulator002 subject12 266/266 in 32 suites, plus current subject13's fresh
+14/14 in two suites after internal naming correction and normal generation/
+production/Test compilation. All three commands completed with SBT/wrapper
+exit 0 and serial lock released. The 266-test result is retained baseline
+coverage, not a fresh rerun on renamed source. Whole-Step review and independent
+focused PASS close the sole naming blocker and support all four unchanged
+P96-05 criteria, admitted in ledger revision 28. P96-05 is CLOSED as the
+PREPARED/PENDING local Step commit candidate. Actual in-process Http4s routing
+is not socket/live-server E2E acceptance; later mutation/context and Phase gates
+remain pending. Representative011 8/8 and accumulator001 263/266 with only
+Registration E2/E3/E5 failing remain historical receipts, alongside intended
+UNEXECUTED commands and failed001..010 checkpoints.

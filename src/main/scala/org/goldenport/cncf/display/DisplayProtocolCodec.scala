@@ -10,7 +10,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct.  5, 2026
  */
 /** Pure strict read codec; trusted definitions remain the sole semantic admission source. */
 object DisplayProtocolCodec {
@@ -21,10 +21,13 @@ object DisplayProtocolCodec {
   private val _parser = JawnParser(allowDuplicateKeys = false)
   private val _decimal_pattern = "(-?)([0-9]+)(?:\\.([0-9]+))?(?:E([+-]?[0-9]+))?".r
 
-  def encodeC(source: Source, display: Display): Consequence[String] = {
+  def encodeC(source: Source, display: Display): Consequence[String] =
+    encodeJsonC(source, display).map(_render)
+
+  def encodeJsonC(source: Source, display: Display): Consequence[Json] = {
     if (source == null) _failure("INPUT_INVALID", "source")
     else if (display == null) _failure("INPUT_INVALID", "display")
-    else Consequence.success(_render(_payload(source, display)))
+    else Consequence.success(_payload(source, display))
   }
 
   def decodeC(expectedSource: Source, definitions: AdmittedDefinitions, json: String): Consequence[Display] = {

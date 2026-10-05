@@ -2,12 +2,12 @@ package org.goldenport.cncf.component
 
 import cats.data.State
 import cats.effect.Ref
-import logicalui.{TypedDisplayProjectionFixture, TypedDisplayRuntimeFixture}
+import logicalui.{DisplayServiceReadFixture, TypedDisplayProjectionFixture, TypedDisplayRuntimeFixture}
 import logicalui.TypedDisplayRuntimeFixture.Installed
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.display.{Display, DisplayBindingProvider, DisplayModel, DisplayRuntime, GeneratedLogicalUiAbi, GeneratedLogicalUiMetadataProvider}
+import org.goldenport.cncf.display.{Display, DisplayBindingProvider, DisplayModel, DisplayRuntime, DisplayService, DisplayServiceBindingProvider, GeneratedLogicalUiAbi, GeneratedLogicalUiMetadataProvider}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.ViewDefinition
@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct.  3, 2026
+ * @version Oct.  5, 2026
  */
 final class ComponentFactoryDisplayRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GeneratedLogicalUiAbi.*
@@ -41,15 +41,19 @@ final class ComponentFactoryDisplayRuntimeSpec extends AnyWordSpec with Matchers
     }
   }
   private final class RuntimeFactory(readBindings: Component => Vector[DisplayRuntime.Binding])
-    extends FixtureFactory with DisplayBindingProvider {
+    extends FixtureFactory with DisplayBindingProvider with DisplayServiceBindingProvider {
     private val _read_bindings = readBindings
     def displayBindings(component: Component): Vector[DisplayRuntime.Binding] = _read_bindings(component)
+    def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+      DisplayServiceReadFixture.resourceBindings
   }
   private final class CombinedFactory(readBindings: Component => Vector[DisplayRuntime.Binding])
-    extends FixtureFactory with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider {
+    extends FixtureFactory with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider {
     private val _read_bindings = readBindings
     def generatedLogicalUiDefinitions: Vector[Definition] = _definitions
     def displayBindings(component: Component): Vector[DisplayRuntime.Binding] = _read_bindings(component)
+    def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+      DisplayServiceReadFixture.resourceBindings
   }
 
   private def _with_subsystem(body: Subsystem => Unit): Unit = {
@@ -73,9 +77,11 @@ final class ComponentFactoryDisplayRuntimeSpec extends AnyWordSpec with Matchers
     }
   }
   private def _provider_component(read: Component => Vector[DisplayRuntime.Binding]): Component = {
-    new Component() with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider {
+    new Component() with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider {
       def generatedLogicalUiDefinitions: Vector[Definition] = _definitions
       def displayBindings(component: Component): Vector[DisplayRuntime.Binding] = read(component)
+      def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+        DisplayServiceReadFixture.resourceBindings
     }
   }
   private def _success[A](result: Consequence[A]): A = {
@@ -144,8 +150,10 @@ final class ComponentFactoryDisplayRuntimeSpec extends AnyWordSpec with Matchers
           var duplicateblocked = false
           var beforepublication = false
           var installed: Option[Installed] = None
-          val component = _initialize(subsystem, new Component() with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider {
+          val component = _initialize(subsystem, new Component() with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider {
             def generatedLogicalUiDefinitions: Vector[Definition] = _definitions
+            def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+              DisplayServiceReadFixture.resourceBindings
             override def viewDefinitions: Vector[ViewDefinition] =
               Vector(ViewDefinition("person-view", _entity_name))
             def displayBindings(component: Component): Vector[DisplayRuntime.Binding] = {

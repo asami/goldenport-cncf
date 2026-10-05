@@ -73,3 +73,42 @@ HYG-P96-02-001 — Static ABI executable-specification display traceability. Own
 - Nonblocking reason: QUOTE-01A adds one parity guard and a version-history line without adding a responsibility, changing API shapes or making the existing structure unsafe or unreviewable. No correctness defect was found in the admitted boundary.
 - Proposed boundary: A separately planned goldenport-scala-library parser-maintenance task that first establishes a compatibility-preserving extraction design and its affected callers/specifications; retain current nested API and sealed-hierarchy contracts until that task is admitted.
 <!-- cncf-phase-finding:HYG-P96-PARSER-SIZE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-05-BASELINE-MAINTENANCE-001:begin -->
+### HYG-P96-05-BASELINE-MAINTENANCE-001
+
+- Kind: hygiene
+- Status: OPEN
+- Discovery: independent P96-05 protected-focused whole-Step review, 2026-10-05
+- Source reviewer: /root/phase96_p96_05_step_review_001
+- Evidence: Component.scala has 1,365 current lines versus 1,320 at accepted P96-04 HEAD625d533, already exceeding the ordinary 1,000-line source-size threshold before this Step. Its historical composition/lifecycle code includes legacy Any/cast surfaces and local/private-parameter naming debt. ComponentFactoryEntityPlanPart.scala retains historical erased store-snapshot handling. Alias.scala retains lower-case Purpose cases and the hidden AliasNormalization._normalize_input declaration. OperationRequestActionDispatcher.scala retains existing serviceDefinition/operationDefinition local binders. These defects precede the admitted delta; no new source erasure or unrelated responsibility expansion was found in the Display registration/read implementation.
+- Priority: P3
+- Nonblocking reason: current behavior is reviewable and the focused service, lifecycle, resolver, HTTP and alias evidence passes. This is baseline maintenance, not authorization for incidental cleanup.
+- Maintenance boundary: a separately admitted CNCF naming/responsibility-maintenance task may inventory and repair this baseline while preserving compatibility and semantic bootstrap behavior. Do not extract Component, redesign storage or expand P96-05 merely to address this record. Existing HYG-P96-02-001 and HYG-P96-03-SPEC-TRACEABILITY-001 remain distinct and are not duplicated here.
+<!-- cncf-phase-finding:HYG-P96-05-BASELINE-MAINTENANCE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-05-GIVEN-TRACEABILITY-001:begin -->
+### HYG-P96-05-GIVEN-TRACEABILITY-001
+
+- Kind: hygiene
+- Status: OPEN
+- Discovery: independent P96-05 protected-focused whole-Step review, 2026-10-05
+- Source reviewer: /root/phase96_p96_05_step_review_001
+- Evidence: the new ComponentFactoryDisplayServiceSpec.scala:79, DisplayServiceReadSpec.scala:32, DisplayServiceReadPropertySpec.scala:52, OperationResponseJsonEnvelopeSpec.scala:29 and PathPreNormalizerHttpSuffixSpec.scala:29 have useful semantic Given clauses but omit the specification file path, governing rule identifiers and Example identifier within the Given description required by docs/rules/executable-spec-display-and-tagging-rules.md 4.2. Their outer afterWord metadata already supplies visible spec/example/rules/phase identities. Envelope E4's initial Given at line171 does supply the governing path and identifiers.
+- Priority: P3
+- Nonblocking reason: all 23 new behavior groups have actual adjacent setup/action/expectation Given/When/Then boundaries, should expectations, visible E identities and meaningful regression behavior. No missing GWT authoring boundary, metadata-only test or unexecuted registered branch was found.
+- Maintenance boundary: add the missing descriptive Given references in a separately admitted presentation-maintenance task, preserving scenarios, assertions, generators and execution thresholds. This new record covers the P96-05 suites and does not duplicate HYG-P96-03-SPEC-TRACEABILITY-001's five earlier suites.
+<!-- cncf-phase-finding:HYG-P96-05-GIVEN-TRACEABILITY-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-05-VALIDATION-PROJECTION-001:begin -->
+### HYG-P96-05-VALIDATION-PROJECTION-001
+
+- Kind: hygiene
+- Status: OPEN
+- Discovery: independent P96-05 protected-focused whole-Step review, 2026-10-05
+- Source reviewer: /root/phase96_p96_05_step_review_001
+- Evidence: the current introductions and P96-05A sections of docs/spec/display-model-runtime.md, docs/spec/display-model-protocol.md, docs/design/display-model-runtime.md and docs/design/display-model-protocol.md still describe focused execution/validation as pending. The runtime specification's concluding correspondence paragraph specifically calls representative012 and accumulator002 pending. Actual subject12 receipts and the current Phase/checklist/journal status establish representative012 14/14 and accumulator002 266/266 success with released locks.
+- Priority: P3
+- Nonblocking reason: the operational current-status documents correctly distinguish successful validation from still-pending independent acceptance; the selected normative behavior agrees with the implementation and executed specifications. No false closure or invalid behavioral evidence is created.
+- Maintenance boundary: reconcile only undated current execution-status projections with the actual successful receipts, while preserving dated authoring/failure/planned history and leaving independent acceptance, commit and Phase closure to their owners. Do not change contract text, criteria or historical results.
+<!-- cncf-phase-finding:HYG-P96-05-VALIDATION-PROJECTION-001:end -->

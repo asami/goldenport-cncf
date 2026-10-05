@@ -1,9 +1,12 @@
 # Display Model protocol v1
 
 Document role: normative physical read protocol contract.
-Status: accepted for implementation in PHASE-96 / P96-04A-WIRE; executable
-validation and independent acceptance are pending. This contract promotes only
-the first List/Detail read subset of the earlier proposal.
+Status: P96-04A-WIRE pure codec accepted at local Step commit `625d533`, after
+151/151 focused tests and independent whole-Step review. P96-05 service/typed
+adapter execution and independent acceptance are complete in the
+[Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance);
+its local Step commit remains PREPARED/PENDING and later Phase gates remain pending.
+This contract promotes only the first List/Detail read subset of the earlier proposal.
 
 The [design](../design/display-model-protocol.md) records ownership and rationale.
 [Generated ABI](logical-ui-generated-abi.md) and
@@ -20,8 +23,10 @@ exactly trimmed resource type. Source has a private constructor, immutable
 public members and no copy bypass. The application owns this registered logical
 resource type; Source is not authorization proof. Serialize `componentId.name`.
 
-`DisplayProtocolCodec.encodeC(source, display): Consequence[String]` encodes
-one admitted Display. `decodeC(expectedSource, definitions, json):
+`DisplayProtocolCodec.encodeJsonC(source, display): Consequence[io.circe.Json]`
+purely encodes one admitted Display as the business object. `encodeC(source,
+display): Consequence[String]` delegates to the same guarded typed payload and
+the unchanged canonical text renderer. `decodeC(expectedSource, definitions, json):
 Consequence[Display]` restores it against already-admitted trusted definitions.
 Received metadata, source IDs, provenance and actions cannot register anything,
 select a View/converter, reissue admission, authorize or execute an operation.
@@ -170,6 +175,14 @@ property and `textus.output.shape=envelope`. P96-05 owns normal registered
 Operations and formatter/adaptor proof that data stays an object. P96-04 proves
 pure payload behavior only and makes no live HTTP claim.
 
+The existing formatter derives a recognized `json`, `yaml`, `xml` or `text`
+suffix from the final path segment of retained `Request.Source.Http`. Explicit
+request format properties take precedence; a recognized HTTP suffix precedes
+configured format and mode fallback. An absent or unsupported suffix preserves
+that fallback, and non-HTTP selection remains unchanged. This corresponds to
+output-format General Rules 6/7 and path-resolution R4 without changing canonical
+Operation identity.
+
 ## R8: DSP-WIRE-01 and later owners
 
 DSP-WIRE-01 carries the strict v1 read-only List/Detail subset, exact source and
@@ -181,6 +194,65 @@ Business Operation descriptors and context artifacts, requiring explicit future
 schema/version decisions. No silent additive v1 tolerance, editable fields,
 constraints, capabilities, mutation results, executable actions, Experiment or
 Flutter objects are admitted. P96-11 retains final handoff and Phase closure.
+
+## R9: Pure typed JSON and framework envelope adapter
+
+`encodeJsonC` shares the exact existing source/display null guards and private
+payload builder with `encodeC`; the latter maps only the canonical renderer.
+No second encoder, schema, decode/re-admission, callback, source query or generic
+Record/Any projection is introduced. Existing v1 canonical bytes and diagnostics
+remain unchanged. [Runtime SR1..SR4](display-model-runtime.md#p96-05a-ordinary-component-scoped-read-service)
+own ordinary registered read/query execution returning `OperationResponse.Json`.
+
+Only resolved format `json` plus shape `envelope`, or existing inline debug,
+selects the typed Json adapter. The ordinary formatter builds existing
+execution/job/continuation/debug metadata with interface-shape `json`, using
+existing framework helpers and placeholder `data=null`. Encode and parse this
+trusted framework-only Record once, replace only `data` with the actual business
+Json (or Json.Null for explicit AcceptedJob), and render with
+`Printer.noSpaces.copy(escapeNonAscii=true)`. Business data is never a Scalar
+containing JSON text, locale-transformed Record, or custom Http response.
+
+Failure to parse generated framework metadata is an unrecoverable internal
+formatting defect with fixed redacted IllegalStateException, not user-input
+rejection or a successful fallback. Preserve ordinary optional-root semantics:
+direct/job-result data remains exact; accepted-job data is null; only explicit
+runtime job/continuation/debug metadata creates those roots. Data payload members
+cannot impersonate framework roots. Existing HTTP failure mapping is unchanged.
+
+Typed Json data-only and every non-json selection retain existing behavior.
+Explicit request format precedes the retained HTTP final-path suffix, which
+precedes configured/mode fallback. No YAML/XML Display envelope converter
+is admitted. The machine contract remains `.json` or explicit JSON format plus
+`textus.output.shape=envelope`. JSON adapter escaping preserves each UTF16 code
+unit, including surrogate pairs/lone units, through UTF8 body bytes, without
+normalization, rounding, field renaming or locale conversion. Required arrays and
+optional omission retain R2/R3 semantics. This extends no v1 business member set.
+
+## P96-05A executable correspondence
+
+| Suite/examples | Rules | Required observable proof |
+| --- | --- | --- |
+| [DisplayServiceReadSpec](../../src/test/scala/org/goldenport/cncf/display/DisplayServiceReadSpec.scala) E2/E3 | R3/R4/R7/R9, runtime SR3 | Actual normal Http4s route body, object data, precise values, empty/reversed order and exact UTF8/UTF16 |
+| Read E8 | R1/R4/R6/R7/R9 | Typed/text payload equivalence, original API guards and canonical operations |
+| [DisplayServiceReadPropertySpec](../../src/test/scala/org/goldenport/cncf/display/DisplayServiceReadPropertySpec.scala) E1 | R1..R4/R7/R9 | >=100 successful zero-discard public HTTP/trusted-decode cases |
+| [OperationResponseJsonEnvelopeSpec](../../src/test/scala/org/goldenport/cncf/protocol/OperationResponseJsonEnvelopeSpec.scala) E1 | R7/R9 | Arbitrary Json kinds, raw data/non-json and existing Record/Scalar/Http compatibility |
+| Envelope E2 | R7/R9 | Accepted-job null, job-result object, continuation and inline-debug ownership/presence |
+| Envelope E3 | R3/R4/R7/R9 | Nested controls/Unicode/lone surrogates, exact opaque values, UTF8 bytes and no locale conversion |
+| Envelope E4 | R7/R9, output-format 6/7, path-resolution R4 | Real formatter HTTP suffix precedence across all modes, explicit aliases/last-wins/invalid selection, Record formats and configured/mode/non-HTTP fallback compatibility |
+
+All are authored Given/When/Then specifications with visible suite-scoped E
+metadata, not execution receipts. The
+[read-service acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance)
+owns actual receipts, samples/traces and independent P96-05 public-service/adapter
+acceptance. It records current subject13 14/14 in two suites with normal
+generation and production/Test compilation, separately from retained subject12
+266/266 in 32 suites; the accumulator was not rerun on renamed source. Whole-Step
+review and fresh independent focused PASS resolved the sole naming blocker and
+were admitted in ledger revision 28. P96-05 is CLOSED as the PREPARED/PENDING
+local Step commit candidate. Pure P96-04 acceptance retains its independent
+history; later mutation/context, Phase and separate Cozy/app gates remain pending.
+Actual in-process Http4s routing is not socket/live-server E2E acceptance.
 
 ## Executable correspondence
 

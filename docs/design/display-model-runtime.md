@@ -1,13 +1,17 @@
 # Display Model runtime design
 
 Document role: selected Phase 96 architecture decisions.
-Status: implementation contract; P96-01/02/03 accepted within their scoped boundaries.
+Status: implementation contract; P96-01/02/03/04/05 accepted within their scoped boundaries.
 Independent P96-01C documentary review and P96-03 whole-Step review passed;
 all seven P96-03 criteria are CLOSED with focused LUI-ACCEPT-01 consumer proof
 accepted at local P96-03 Step commit `bef59e7`; Cozy P76-05 reciprocal receipt
-is accepted at `3546755` and P76-06A documentary handoff at `ddeadab9`. Final Phase acceptance and later
-service, codec, wire, mutation and presentation-context work remain pending.
-Scope: PHASE-96 / P96-01 / P96-01C.
+is accepted at `3546755` and P76-06A documentary handoff at `ddeadab9`.
+The pure P96-04 codec is accepted at local Step commit `625d533`. P96-05
+read-service validation and independent acceptance are complete in the
+[Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance).
+Its local Step commit is PREPARED/PENDING; later mutation/context work and final
+Phase acceptance remain pending.
+Scope: PHASE-96 / P96-01C / P96-03 / P96-04 / P96-05A.
 
 The behavior contracts are [Logical UI generated ABI](../spec/logical-ui-generated-abi.md)
 and [Display Model runtime](../spec/display-model-runtime.md). These decisions
@@ -268,12 +272,110 @@ Local Step commit is `bef59e7`. Cozy P76-05 reciprocal receipt is accepted at
 `3546755`; P76-06A documentary handoff is accepted at `ddeadab9`. Zero blockers and nonblocking
 HYG-P96-03-SPEC-TRACEABILITY-001 are retained. Historical A/B1/B2 pending statements
 above describe their earlier handoff position. Final Phase acceptance and later
-DisplayService, codec, wire, mutation and presentation-context work remain pending;
+At P96-03 acceptance, DisplayService, mutation and presentation-context work remained pending;
 no full Phase review or either Phase closure is claimed.
 
 The [physical protocol design](display-model-protocol.md) and authoritative
 [read protocol specification](../spec/display-model-protocol.md) select the
-P96-04A-WIRE pure snapshot boundary for implementation. Codec validation and
-independent acceptance are pending. P96-05 retains registered Operation and
+P96-04A-WIRE pure snapshot boundary accepted at local Step commit `625d533`,
+after 151/151 focused tests and independent whole-Step review. Earlier dated
+pending statements retain their historical meaning. P96-05 retains registered Operation and
 formatter/adaptor object proof; mutation, Business Operation and context artifacts
 remain separately owned by P96-06/08/10, with final handoff at P96-11.
+
+## P96-05A: Prepared effective registration
+
+[Runtime SR1..SR4](../spec/display-model-runtime.md#p96-05a-ordinary-component-scoped-read-service)
+are authoritative behavior. This selected architecture is implemented under the
+same frozen initial Slice; no new lifecycle or transport design is inferred.
+Validation and independent acceptance are complete for this scoped read-service
+boundary, as recorded in the
+[acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance);
+local Step commit remains PREPARED/PENDING. No later mutation/context or Phase
+gate is closed by this evidence.
+
+Passive application ResourceBindings close the missing resourceType ownership
+edge without putting a View/converter/callback into client input or generated
+metadata. Service capability selection is separate from static/runtime selection,
+component-first with factory-only-if-absent, after typed Views/runtime are ready.
+Existing ABI S05/S06 distinguish absent metadata from a present-empty selected
+provider: absence preserves legacy success without a Display service/getter;
+present-empty static admission fails with LUI96_DEFINITIONS_MISSING at
+`definitions` before runtime/service getters and without fallback. No admitted
+empty runtime or service is constructed. This reconciles SR1 with the existing ABI.
+A full screen mapping and matching List DetailTarget resource types prevent a
+resource family from being silently inferred from a screen or producer identity.
+Private admitted service entries retain trusted Source plus original Definition;
+the already-complete typed Registry retains each semantic source and projector.
+No source value crosses an erased/generic bridge.
+
+One narrow private immutable DisplayRegistration holds effective Protocol,
+ProtocolLogic and ServiceGroup. Component Core is not replaced: Component.Instance
+and application fixed Core overrides remain valid, and engines/identity/factory/
+subsystem remain exactly original. Prepare all three effective objects before the
+existing final Display publication tail. Append a single definition, preserving
+handler, definitions and installed Service references; call ordinary serviceFactory
+setup/create only for the new service. Normalized existing display services fail
+closed rather than becoming extension or replacement points. NonFatal preparation
+failure uses the existing semantic `componentInvalid("Display service construction failed")`
+before any presentation publication. Its componentInvalid taxonomy is retained
+without a Throwable cause/facet, private exception text or raw logging. This
+implements the existing SR4 construction-failure contract, with no new lifecycle
+or architecture guarantee.
+
+Component protocol/protocolLogic/services getters select the complete registration
+or baseline. OperationRequestActionDispatcher joins ordinary consumers by reading
+component.protocol; its accompanying private selector/parameter types use compliant
+UpperCamelCase. Existing resolver, CLI/meta/OpenAPI/MCP consumers already use the
+effective getters. Entity bootstrap's core.protocol fallback deliberately remains
+original semantic metadata, so presentation operations cannot synthesize an Entity
+collection. There is no global resolver or public generic mutation API.
+
+Final single-owner success publishes admitted definitions, typed runtime, complete
+registration and bootstrap flag after every gate. Successful repeat preserves
+references and getter counts. A failed late join retains baseline protocol/services
+and no Display publication; preexisting semantic/provider/factory setup effects are
+not rolled back. This is not a concurrency, locking, transaction rollback or
+retry redesign, and there is no lazy service exposure.
+
+## P96-05A: Ordinary authorized execution and JSON ownership
+
+Bound query/read are ordinary OperationDefinitions with closed Property input,
+QueryAction and ProcedureActionCall. Their existing canonical framework result
+declaration, `ResponseDefinition(result = List(DataType.Named("OperationResponse")))`,
+satisfies the specified nonvoid construction contract before prepared effective
+registration. It introduces no new Display datatype or schema: actual execution
+still returns OperationResponse.Json through the pure typed codec and closed
+`cncf.display-model.v1`, version `1`, business protocol.
+Authorization occurs on the canonical normal
+Subsystem path before raw input conversion. The ProcedureActionCall forwards its
+exact scoped execution context to the already-admitted Browser route once. Query
+uses canonical match-all `Query.fromRecord(Record.empty)`; arbitrary filter/control
+grammar is rejected. An inert enabled Action remains presentation data, never an
+authorization credential. Original structured source/projection/codec Conclusions
+are not wrapped into service-input errors.
+
+Raw shape validation precedes datatype coercion to prevent incidental String
+conversion from widening the public contract. Canonical EntityId parsing remains
+datatype-owned; exact screen/resourceType admission is service-owned. Fixed
+redacted service diagnostics distinguish admission/input defects from ordinary
+security failures and existing runtime/wire failures.
+
+The [protocol adapter design](display-model-protocol.md#p96-05a-typed-business-json-and-framework-metadata)
+keeps business Json separate from framework Record metadata. This is not a
+domain-to-Record projection or custom Http response. Pure typed encoding feeds
+OperationResponse.Json through the ordinary selected JSON envelope, preserving
+UTF16 units at the real in-process Http4s UTF8 body boundary. No live socket,
+alternate YAML/XML converter, locale transformation or new envelope schema is
+claimed.
+
+Read E1..E8, registration E1..E6, public property E1/E2 and envelope E1..E3 are
+linked bidirectionally in the [normative correspondence table](../spec/display-model-runtime.md#p96-05a-executable-correspondence).
+The [dated acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance)
+separates historical authoring/planned execution from actual focused receipts and
+independent acceptance: current subject13 14/14 in two suites and retained
+subject12 266/266 in 32 suites, with whole-Step review and focused naming PASS
+admitted in ledger revision 28. The retained accumulator was not rerun on renamed
+source. P96-05 is CLOSED as the PREPARED/PENDING local Step commit candidate;
+all 54 criteria stay unchanged, later P96-06..11 remain OPEN and final Phase,
+separate Cozy and app aggregate/E2E acceptance gates remain pending.

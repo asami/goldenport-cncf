@@ -2,11 +2,11 @@ package logicalui
 
 import domain.logicalui.{DomainLogicalUiDefinitions, DomainLogicalUiMetadataProvider}
 import org.goldenport.cncf.component.{Component, ComponentCreate}
-import org.goldenport.cncf.display.{DisplayBindingProvider, DisplayRuntime, GeneratedLogicalUiAbi, GeneratedLogicalUiMetadataProvider}
+import org.goldenport.cncf.display.{DisplayBindingProvider, DisplayRuntime, DisplayService, DisplayServiceBindingProvider, GeneratedLogicalUiAbi, GeneratedLogicalUiMetadataProvider}
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct.  5, 2026
  */
 /** Development-only actual-delivery consumers and explicit typed application bindings. */
 object GeneratedDisplayConsumerFixture {
@@ -15,7 +15,7 @@ object GeneratedDisplayConsumerFixture {
   import TypedDisplayRuntimeFixture.Installed
 
   abstract class ConsumerComponent(rows: Vector[Capture], invalidLastBinding: Boolean)
-    extends Component() with DisplayBindingProvider {
+    extends Component() with DisplayBindingProvider with DisplayServiceBindingProvider {
     private val _rows = rows
     private val _invalid_last_binding = invalidLastBinding
     private var _metadata_reads = 0
@@ -26,6 +26,9 @@ object GeneratedDisplayConsumerFixture {
     def bindingReads: Int = _binding_reads
     def installed: Option[Installed] = _installed
     def recordMetadataRead(): Unit = { _metadata_reads += 1 }
+
+    def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+      DisplayServiceReadFixture.resourceBindings
 
     def displayBindings(component: Component): Vector[DisplayRuntime.Binding] = {
       _binding_reads += 1
@@ -59,11 +62,13 @@ object GeneratedDisplayConsumerFixture {
   }
 
   final class FallbackFactory extends Component.Factory
-    with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider {
+    with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider {
     private var _metadata_reads = 0
     private var _binding_reads = 0
     def metadataReads: Int = _metadata_reads
     def bindingReads: Int = _binding_reads
+    def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] =
+      DisplayServiceReadFixture.resourceBindings
     def generatedLogicalUiDefinitions: Vector[Definition] = {
       _metadata_reads += 1
       DomainLogicalUiDefinitions.definitions

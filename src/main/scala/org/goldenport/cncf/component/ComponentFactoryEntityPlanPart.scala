@@ -37,7 +37,7 @@ import scala.util.Try
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct.  3, 2026
+ * @version Oct.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] trait ComponentFactoryEntityPlanPart { self: ComponentFactory =>
@@ -119,9 +119,11 @@ private[component] trait ComponentFactoryEntityPlanPart { self: ComponentFactory
       _bootstrap_event_reception(component)
       }
       displayruntime <- _bind_display_runtime_c(component, logicaluidefinitions)
+      displayregistration <- _prepare_display_service_c(component, logicaluidefinitions, displayruntime)
     } yield {
       component._with_admitted_logical_ui_definitions(logicaluidefinitions)
       component._with_display_runtime(displayruntime)
+      component._with_display_registration(displayregistration)
       component.withCollectionsBootstrapped()
     }
   }
