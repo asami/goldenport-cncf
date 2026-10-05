@@ -4,7 +4,7 @@ status=in-progress
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-06
+current_entry=P96-07
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
 ## Ledger boundary
@@ -24,9 +24,16 @@ static ABI admission and pure Display construction evidence. P96-03 is CLOSED
 on all seven criteria after independent whole-Step review and parent admission;
 P96-04 is CLOSED at accepted local Step commit `625d533` after focused 151/151 tests in
 18 suites, independent whole-Step PASS and parent admission. The ledger has
-28 checked and 26 pending outcomes with all 54 criterion texts unchanged;
-current_entry=P96-06. P96-05 is independently accepted and CLOSED as the
-PREPARED/PENDING local Step commit candidate; P96-06 through P96-11 remain OPEN.
+33 checked and 21 pending outcomes with all 54 criterion texts unchanged;
+current_entry=P96-07. P96-05 is independently accepted and CLOSED at local
+Step commit `4898201d5679408d6e44510024a6feaea442a66c`; P96-06 is independently
+accepted and a CLOSED candidate, with its local Step commit PREPARED/PENDING,
+and P96-07 through P96-11 remain OPEN.
+The [P96-06 acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-step-acceptance)
+records complete A+B acceptance of all five criteria through the original whole-Step
+review and independent descriptor-focused PASS in ledger revision 31. Current
+subject4 passed 5/5 representative tests and 98/98 accumulator tests; completed
+repairs 6/nonconverging 0/accepted are retained.
 The [P96-05 acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance)
 records current subject13 14/14 focused tests, retained subject12 266/266 baseline,
 whole-Step review and independent focused PASS admitted in ledger revision 28.
@@ -224,9 +231,9 @@ blocker is resolved; current subject13 passed 14/14 tests in two suites after
 normal generation and production/Test compilation. Subject12's 266/266 tests
 in 32 suites remain the retained baseline, not a fresh accumulator on renamed
 source. All three successful result receipts have SBT/wrapper exit 0 and serial
-lock released. Local Step commit is PREPARED/PENDING, not executed. The current
-ledger has 28 checked/26 pending criteria, current_entry=P96-06; six later
-stages remain OPEN and Phase 96 remains in-progress with zero full Phase reviews.
+lock released. Local Step commit is `4898201d5679408d6e44510024a6feaea442a66c`. At P96-05 acceptance the
+ledger had 28 checked/26 pending criteria, current_entry=P96-06; P96-06 was
+IN_PROGRESS and five later stages remained OPEN. Phase 96 remains in-progress with zero full Phase reviews.
 All ten Hygiene records remain OPEN; no Development Candidate is admitted.
 
 The following authoring, failed execution and pending acceptance statements
@@ -384,15 +391,30 @@ Phase review/release/closure remain pending.
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Display mutation contract owners
 - Update rule: Advance only from the admitted mutation schema, binding and error contract; the checklist below is the closure basis.
 
-- [ ] Typed create/update/delete inputs/results identify admitted resource/projection definitions, explicit capability/availability, scoped editable fields, accepted values and constraints; Business Operations are excluded.
-- [ ] Every editable field has an explicit registered converter and Entity/Aggregate update target; derived/combined/unbound fields have no inferred inverse mapping and metadata cannot weaken domain validation.
-- [ ] Observed revision is bound through the existing transport-metadata contract and an admitted Display adapter, not a new business input; missing/malformed/stale revision and changed-definition behavior are specified.
-- [ ] Structured failure and result fixtures cover duplicate/unknown/read-only fields, wrong values, constraints, forbidden/unsupported mutation, conflict, create identity/revision and deletion receipt.
-- [ ] The accepted contract distinguishes pre-commit failure from committed-write/Display-pending outcomes, defines read-after-write correspondence and prevents command replay after committed projection failure.
+P96-06 complete A+B follows the [mutation contract](../spec/display-mutation.md)
+and [design](../design/display-mutation.md). The
+[Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-step-acceptance)
+maps all five unchanged criteria to original whole-Step review
+`phase96-p96-06-step-review-001@1` and independent focused PASS
+`phase96-p96-06-descriptor-focused-review-001@1`, admitted in ledger revision 31.
+Current `phase96-p96-06b-validation-subject-001@4` passed 5/5 tests in one suite
+and 98/98 in fourteen suites with SBT/wrapper exit 0 and serial lock released.
+Historical A readiness 8/8 plus 57/57 and B subject3 8/8 plus 97/97 retain their
+distinct subjects; A alone was not Step acceptance. Completed repairs
+6/nonconverging 0/accepted are retained. P96-06 is an independently accepted
+CLOSED candidate; its local Step commit is PREPARED/PENDING. P96-07 canonical
+write, strict deletion, ordinary route/descriptor exposure and actual contextual
+reload/positive lifecycle proof remain pending. Existing read-v1 is unchanged.
+
+- [x] Typed create/update/delete inputs/results identify admitted resource/projection definitions, explicit capability/availability, scoped editable fields, accepted values and constraints; Business Operations are excluded.
+- [x] Every editable field has an explicit registered converter and Entity/Aggregate update target; derived/combined/unbound fields have no inferred inverse mapping and metadata cannot weaken domain validation.
+- [x] Observed revision is bound through the existing transport-metadata contract and an admitted Display adapter, not a new business input; missing/malformed/stale revision and changed-definition behavior are specified.
+- [x] Structured failure and result fixtures cover duplicate/unknown/read-only fields, wrong values, constraints, forbidden/unsupported mutation, conflict, create identity/revision and deletion receipt.
+- [x] The accepted contract distinguishes pre-commit failure from committed-write/Display-pending outcomes, defines read-after-write correspondence and prevents command replay after committed projection failure.
 
 ## P96-07: Mutation bridge to Entity/Aggregate runtime
 

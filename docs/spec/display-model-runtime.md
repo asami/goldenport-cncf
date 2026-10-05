@@ -9,8 +9,12 @@ is accepted at `3546755` and P76-06A documentary handoff at `ddeadab9`.
 P96-04's pure codec is accepted at local Step commit `625d533`.
 P96-05 read-service validation and independent acceptance are complete, recorded
 in the [Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance).
-Its local Step commit is PREPARED/PENDING; later mutation/context work and final
-Phase acceptance remain pending.
+Its local Step commit is `4898201d5679408d6e44510024a6feaea442a66c`.
+P96-06 complete A+B contract and standalone codecs are focused validated and
+independently accepted on all five criteria, recorded in the
+[mutation Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-step-acceptance);
+its local Step commit remains PENDING. P96-07 canonical write/contextual reload
+and later context work and final Phase acceptance remain pending.
 
 The [runtime design](../design/display-model-runtime.md) fixes ownership and
 architecture; [Logical UI generated ABI](logical-ui-generated-abi.md) fixes
@@ -18,7 +22,10 @@ static admission. Existing [Aggregate/View semantics](../design/aggregate-view-s
 [path resolution](path-resolution.md) and
 [Entity conflict/conditional transition](entity-conflict-and-conditional-transition.md)
 remain governing contracts. This document fixes behavior without inventing a
-physical Display wire schema, HTTP result status or mutation request/result sum.
+physical Display wire schema or HTTP result status. The separate
+[Display Mutation contract](display-mutation.md) now freezes typed mutation
+preparation/results and P96-06B standalone schemas; accepted pure contracts/codecs
+do not establish a canonical write or live mutation route.
 
 ## DSP96-R01: Typed projection and independent semantic consumption
 
@@ -210,7 +217,7 @@ Markdown wording tests are not evidence.
 | R01/R02/R08 | PROJ-03 structured failures, contextual inert action availability and independent semantic consumption | P96-03 | PENDING |
 | R01/R02/R03; ABI S08 | ROUNDTRIP-01 actual Cozy-generated source through same compile/admission/projection path, exact receipt/artifacts | Cozy Phase 76 / P96-03 | PENDING |
 | R02/R03/R04 | Exact versioned codec, strict malformed/unknown rejection, golden fixtures and property round trips | P96-04 | ACCEPTED at `625d533`; pure codec only |
-| R03/R04 | Public Detail first, then List/select/Detail; registered authorized canonical service | P96-05 | ACCEPTED; [independent Step evidence](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance), local Step commit PREPARED/PENDING |
+| R03/R04 | Public Detail first, then List/select/Detail; registered authorized canonical service | P96-05 | ACCEPTED; [independent Step evidence](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance), local Step commit `4898201` |
 | R05/R06/R07 | Mutation mapping, strict observed revision/delete, stale-before-equality/no-op, committed-pending and revision-corresponding refresh | P96-06/07 | PENDING |
 | R08 | Direct ordinary Business Operation followed by explicit corresponding Display reload | P96-08 | PENDING |
 | R01..R08 | ESS2-01 development reference and separate positive create/Detail/List and delete/List fixture | P96-09 (positive paths also P96-07) | PENDING |
@@ -631,9 +638,36 @@ production/Test compilation. All three commands completed with SBT/wrapper
 exit 0 and serial lock released. The 266-test result is retained baseline
 coverage, not a fresh rerun on renamed source. Whole-Step review and independent
 focused PASS close the sole naming blocker and support all four unchanged
-P96-05 criteria, admitted in ledger revision 28. P96-05 is CLOSED as the
-PREPARED/PENDING local Step commit candidate. Actual in-process Http4s routing
+P96-05 criteria, admitted in ledger revision 28. P96-05 is CLOSED at local
+Step commit `4898201d5679408d6e44510024a6feaea442a66c`. Actual in-process Http4s routing
 is not socket/live-server E2E acceptance; later mutation/context and Phase gates
 remain pending. Representative011 8/8 and accumulator001 263/266 with only
 Registration E2/E3/E5 failing remain historical receipts, alongside intended
 UNEXECUTED commands and failed001..010 checkpoints.
+
+## P96-06A: Typed mutation preparation and source-bearing result contract
+
+The [mutation specification](display-mutation.md) and
+[design](../design/display-mutation.md) freeze the pure typed Binding[P],
+transport observations, supplied canonical receipts and postcommit projection
+representation. Complete A+B focused validation and independent acceptance of
+all five unchanged criteria are recorded in the
+[Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-step-acceptance).
+Current subject4 passed 5/5 representative and 98/98 accumulator tests; original
+whole-Step review and descriptor-focused PASS are admitted in ledger revision 31.
+The local Step commit remains PENDING. P96-07 owns canonical atomic writes,
+strict delete, ordinary route and positive lifecycle proof.
+
+ReloadedDisplay(source, display) is a server candidate, not an admitted Result,
+query receipt or commit proof. Source correspondence compares componentId.name
+and resourceType; Selection additionally compares every definition/provenance/
+mutation revision. Direct Ready candidates reject foreign sources structurally;
+completeC after a supplied canonical Receipt retains the committed outcome with
+ProjectionUnavailable for foreign/failed reload, or ViewNotCurrent for correct
+source/definition/identity with a different revision. retryCommand stays false.
+P96-07 must carry the actual selected canonical contextual source with the
+returned Display and may not relabel foreign data. Display and published read-v1
+remain unchanged. B validates nested read-v1 before candidate construction under
+the unchanged admission contract. All five P96-06 criteria are independently
+accepted for complete A+B; A alone provides no Step acceptance or actual
+contextual reload proof.

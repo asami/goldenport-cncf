@@ -97,10 +97,11 @@ Its selected contracts are [runtime design](../design/display-model-runtime.md),
 [runtime spec](../spec/display-model-runtime.md). P96-02 is CLOSED on its
 separately accepted pure ABI/model proof. P96-03 is CLOSED with all seven
 unchanged obligations checked; P96-04 is CLOSED at local Step commit `625d533`,
-P96-05 is independently accepted on all four unchanged criteria and CLOSED as
-the PREPARED/PENDING local Step commit candidate. The current checklist entry
-is P96-06, with 28 checked/26 pending outcomes across 54 unchanged criteria;
-P96-06 through P96-11 remain OPEN. The
+P96-05 is independently accepted on all four unchanged criteria and CLOSED at
+local Step commit `4898201d5679408d6e44510024a6feaea442a66c`. The current checklist entry
+is P96-07, with 33 checked/21 pending outcomes across 54 unchanged criteria;
+P96-06 is independently accepted and a CLOSED candidate, with its local Step
+commit PREPARED/PENDING; P96-07 through P96-11 remain OPEN. The
 [P96-05 acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance)
 records current 14/14 focused evidence, the retained 266/266 baseline and
 independent whole-Step/focused review closure in ledger revision 28. A/B1/B2 focused
@@ -124,6 +125,27 @@ Local P96-03 Step commit is `bef59e7`; the separate Cozy P76-05 reciprocal
 receipt is accepted at `3546755`, and P76-06A documentary handoff at `ddeadab9`.
 Phase96 remains IN_PROGRESS
 with zero full Phase reviews; no full-suite run, release or Phase closure is claimed.
+
+P96-06 complete A+B typed mutation contract, bindings, transport metadata,
+source-bearing result candidates and standalone codecs are focused validated
+and independently accepted in the [mutation spec](../spec/display-mutation.md),
+[design](../design/display-mutation.md) and
+[Step acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-step-acceptance).
+Current `phase96-p96-06b-validation-subject-001@4` passed 5/5 representative tests
+and 98/98 accumulator tests with SBT/wrapper exit 0 and serial lock released.
+Original whole-Step review `phase96-p96-06-step-review-001@1` plus independent
+`phase96-p96-06-descriptor-focused-review-001@1` PASS, admitted in ledger revision
+31, support all five unchanged criteria. P96-06 is a CLOSED candidate and the
+local Step commit remains PREPARED/PENDING. Historical A subject4 8/8 plus 57/57,
+B subject3 8/8 plus 97/97 and failed/unexecuted records remain distinct; A alone
+was not Step acceptance. Completed repairs 6/nonconverging 0/accepted are retained.
+P96-07 owns canonical
+atomic writes, strict deletion, positive create/delete lifecycle, ordinary
+route/descriptor exposure and the actual selected contextual source/reload pair;
+pure preparation and ReloadedDisplay candidates do not prove those effects.
+Existing read-v1 remains unchanged. The Phase retains 33 checked/21 pending
+criteria, current_entry=P96-07, zero full Phase reviews and pending final
+validation/release/closure. P96-07..11 and separate Cozy/app gates remain pending.
 
 P96-04A-WIRE implements the [strict read protocol](../spec/display-model-protocol.md)
 and its [design](../design/display-model-protocol.md). The
@@ -150,8 +172,7 @@ pending. The seven prior Hygiene records remain OPEN.
 ### P96-05A read-service authoring and output contract repair
 
 Current status: P96-05 is independently accepted on all four criteria and CLOSED
-as the local Step commit candidate. The commit is PREPARED/PENDING, with no
-executed receipt or hash claimed. The
+at local Step commit `4898201d5679408d6e44510024a6feaea442a66c`. The
 [dated acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance)
 records whole-Step review `phase96-p96-05-step-review-001` revision 1, the sole
 `CPB-P96-05-NAMING-001` repair and fresh independent focused PASS
@@ -162,9 +183,9 @@ retained baseline, not a rerun on renamed source. All three successful commands
 have SBT/wrapper exit 0 and serial lock released. This accepts actual in-process
 Http4s route proof, not socket/live-server E2E. All ten Hygiene records stay OPEN;
 no Development Candidate is admitted. Completed repairs 2/nonconverging 0,
-narrowing and Phase repairs 0 are retained. The ledger has 28 checked/26 pending
-outcomes across 54 unchanged criteria, current_entry=P96-06. P96-06..11 remain
-OPEN, Phase 96 remains in-progress with zero full Phase reviews, and later
+narrowing and Phase repairs 0 are retained. At P96-05 acceptance the ledger had 28 checked/26 pending
+outcomes across 54 unchanged criteria, current_entry=P96-06. P96-06 was IN_PROGRESS;
+P96-07..11 remained OPEN. Phase 96 remains in-progress with zero full Phase reviews, and later
 Phase/server, separate Cozy final and app Phase 5 aggregate/E2E gates remain pending.
 
 The following authoring/failure and pending-status prose is retained historical
