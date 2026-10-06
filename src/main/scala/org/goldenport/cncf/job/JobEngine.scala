@@ -4,12 +4,13 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Oct.  3, 2026
+ * @version Oct.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 trait JobEngine {
@@ -19,6 +20,12 @@ trait JobEngine {
       ctx: ExecutionContext,
       option: JobSubmitOption
   ): Consequence[JobId]
+  def stageSubmit(
+    tasks: List[JobTask],
+    unitOfWork: UnitOfWork,
+    option: JobSubmitOption
+  ): Consequence[JobId] =
+    Consequence.operationInvalid("job.stage-submit", "UOW submission is not supported by this engine")
   def quiesce(): Unit = shutdown()
   def forceCancel(): Unit = shutdown()
   def shutdown(): Unit = ()

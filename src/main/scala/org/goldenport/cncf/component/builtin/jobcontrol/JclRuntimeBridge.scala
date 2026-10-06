@@ -29,7 +29,8 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 
 /*
  * @since   Sep. 13, 2026
- * @version Oct.  4, 2026
+ * @version Oct.  6, 2026
+ * @author  ASAMI, Tomoharu
  */
 /** Package-private runtime owner for accepted JCL action and workflow targets. */
 private[jobcontrol] final class JclRuntimeBridge(component: Component) {
@@ -48,7 +49,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
       continuations = Vector.empty
     )
   )(using ctx: org.goldenport.cncf.context.ExecutionContext):
-      Consequence[(JobId, Consequence[OperationResponse])] =
+      Consequence[(JobId, Consequence[OperationResponse])] = {
     _resolve_target_action(selector, parameters).flatMap { case (target, action) =>
       _resolve_compensation_task(compensation, parameters).flatMap { comp =>
         val roottask = ActionTask(
@@ -62,29 +63,30 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
         val flowsteps = plan.steps
         val flowids = flowsteps.map(_.id).mkString(",")
         val flowparameters: Map[String, String] =
-          if (flowsteps.nonEmpty) Map("jcl.flow.step.ids" -> flowids)
-          else Map.empty
+          if (flowsteps.nonEmpty) { Map("jcl.flow.step.ids" -> flowids) }
+          else { Map.empty }
         val flowexecutionnotes =
-          if (flowsteps.nonEmpty)
+          if (flowsteps.nonEmpty) {
             Vector(s"jcl flow step ids: $flowids")
-          else
+          } else {
             Vector.empty
+          }
         val eventids = plan.emittedEvents.map(_.id).mkString(",")
         val continuationids = plan.continuations.map(_.id).mkString(",")
         val eventparameters: Map[String, String] =
-          (if (plan.emittedEvents.nonEmpty)
+          (if (plan.emittedEvents.nonEmpty) {
              Map("jcl.event.ids" -> eventids)
-           else Map.empty) ++
-            (if (plan.continuations.nonEmpty)
+           } else { Map.empty }) ++
+            (if (plan.continuations.nonEmpty) {
                Map("jcl.continuation.ids" -> continuationids)
-             else Map.empty)
+             } else { Map.empty })
         val eventexecutionnotes =
-          (if (plan.emittedEvents.nonEmpty)
+          (if (plan.emittedEvents.nonEmpty) {
              Vector(s"jcl event ids: $eventids")
-           else Vector.empty) ++
-            (if (plan.continuations.nonEmpty)
+           } else { Vector.empty }) ++
+            (if (plan.continuations.nonEmpty) {
                Vector(s"jcl continuation ids: $continuationids")
-             else Vector.empty)
+             } else { Vector.empty })
         val option = JobSubmitOption(
           persistence = persistence,
           requestSummary = requestSummary,
@@ -95,7 +97,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
           declaredProfile = declaredProfile,
           jobDefinitionSnapshot = definitionSnapshot
         )
-        _prepare_operation_task(action, roottask, ctx).flatMap {
+        _prepare_operation_task(action, roottask, ctx, "root").flatMap {
           case (preparedroottask, preparedcontext) =>
           _prepare_flow_tasks(flowsteps, parameters, ctx).flatMap { preparedflowtasks =>
             _prepare_continuation_tasks(plan.continuations, parameters, ctx).flatMap { preparedcontinuations =>
@@ -121,6 +123,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
         }
       }
     }
+  }
 
   def submitWorkflow(
     entry: org.goldenport.cncf.job.JobWorkflowTarget,
@@ -129,13 +132,13 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
     declaredProfile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
     definitionSnapshot: Option[JobDefinitionSnapshot] = None
   )(using org.goldenport.cncf.context.ExecutionContext):
-      Consequence[(Vector[JobId], Consequence[OperationResponse])] =
+      Consequence[(Vector[JobId], Consequence[OperationResponse])] = {
     _resolve_workflow_entrypoint(entry).flatMap { endpoint =>
       val event = _workflow_start_event(endpoint, parameters)
       component.subsystem match {
         case Some(subsystem) =>
           subsystem.workflowEngine.handle(endpoint.component.name, event).flatMap { decision =>
-            if (decision.progressed)
+            if (decision.progressed) {
               decision.relatedJobId match {
                 case Some(jobid) =>
                   declaredProfile.foreach { profile =>
@@ -169,7 +172,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
                     s"workflow progressed without managed job: ${entry.definition}/${entry.registration}"
                   )
               }
-            else
+            } else {
               Consequence.success(
                 (
                       Vector.empty[JobId],
@@ -178,17 +181,19 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
                   )
                 )
               )
+            }
           }
         case None =>
           Consequence.serviceUnavailable("subsystem is not available")
       }
     }
+  }
 
   private def _prepare_continuation_tasks(
     continuations: Vector[JobContinuation],
     rootparameters: Map[String, String],
     context: org.goldenport.cncf.context.ExecutionContext
-  ): Consequence[Vector[(JobContinuation, JobTask)]] =
+  ): Consequence[Vector[(JobContinuation, JobTask)]] = {
     continuations.foldLeft(
       Consequence.success(Vector.empty[(JobContinuation, JobTask)])
     ) { (result, continuation) =>
@@ -206,12 +211,13 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
               target.actionEngine,
               Some(target)
             )
-            _prepare_operation_task(action, task, context).map {
+            _prepare_operation_task(action, task, context, "continuation").map {
               case (preparedtask, _) => preparedtasks :+ (continuation -> preparedtask)
             }
         }
       }
     }
+  }
 
   private def _wrap_event_tasks(
     preparedroot: JobTask,
@@ -222,15 +228,16 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
   ): (JobTask, Vector[JobTask]) = {
     def _wrap_(task: JobTask, after: String): JobTask = {
       val matching = emissions.filter(_.after == after)
-      if (matching.isEmpty)
+      if (matching.isEmpty) {
         task
-      else
+      } else {
         JclEventAwareTask(
           delegate = task,
           emissions = matching,
           continuations = preparedcontinuations,
           component = component
         )
+      }
     }
     val root = _wrap_(preparedroot, "root")
     val flow = flowsteps.zip(preparedflowtasks).map { case (step, task) =>
@@ -243,7 +250,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
     flowsteps: Vector[JobFlowStep],
     rootparameters: Map[String, String],
     context: org.goldenport.cncf.context.ExecutionContext
-  ): Consequence[Vector[JobTask]] =
+  ): Consequence[Vector[JobTask]] = {
     flowsteps.foldLeft(Consequence.success(Vector.empty[JobTask])) { (result, step) =>
       result.flatMap { preparedtasks =>
         val parameters = rootparameters ++ step.parameters
@@ -254,27 +261,34 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
             target.actionEngine,
             Some(target)
           )
-          _prepare_operation_task(action, task, context).map { case (preparedtask, _) =>
+          _prepare_operation_task(action, task, context, "child").map { case (preparedtask, _) =>
             preparedtasks :+ preparedtask
           }
         }
       }
     }
+  }
 
   private def _prepare_operation_task(
     action: Action,
     task: ActionTask,
-    context: org.goldenport.cncf.context.ExecutionContext
-  ): Consequence[(JobTask, org.goldenport.cncf.context.ExecutionContext)] =
+    context: org.goldenport.cncf.context.ExecutionContext,
+    defaultrelation: String
+  ): Consequence[(JobTask, org.goldenport.cncf.context.ExecutionContext)] = {
     component.subsystem match {
-      case Some(subsystem) => subsystem._prepare_operation_task(action, task, context)
+      case Some(subsystem) =>
+        subsystem._prepare_operation_task(action, task, context).map {
+          case (preparedtask, preparedcontext) =>
+            (JclPreparedTask(preparedtask, defaultrelation), preparedcontext)
+        }
       case None => Consequence.serviceUnavailable("component subsystem is not available")
     }
+  }
 
   private def _resolve_compensation_task(
     compensation: Option[JobFailureHook],
     parameters: Map[String, String]
-  )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Option[JobTask]] =
+  )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Option[JobTask]] = {
     compensation match {
       case None => Consequence.success(None)
       case Some(hook) =>
@@ -286,13 +300,14 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
               target.actionEngine,
               Some(target)
             )
-            _prepare_operation_task(action, task, ctx).map(x => Some(x._1))
+            _prepare_operation_task(action, task, ctx, "root").map(x => Some(x._1))
         }
     }
+  }
 
   private def _resolve_workflow_entrypoint(
     entry: org.goldenport.cncf.job.JobWorkflowTarget
-  ): Consequence[WorkflowEntrypoint] =
+  ): Consequence[WorkflowEntrypoint] = {
     component.subsystem match {
       case Some(subsystem) =>
         subsystem.workflowEngine.findEntrypoint(entry.definition, entry.registration) match {
@@ -312,6 +327,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
       case None =>
         Consequence.serviceUnavailable("subsystem is not available")
     }
+  }
 
   private def _workflow_start_event(
     endpoint: WorkflowEntrypoint,
@@ -336,22 +352,22 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
   private def _resolve_target_action(
     selector: String,
     parameters: Map[String, String]
-  ): Consequence[(Component, Action)] =
+  ): Consequence[(Component, Action)] = {
     component.subsystem.map(_.operationResolver.resolve(selector)).getOrElse(
       OperationResolver.ResolutionResult.Invalid("subsystem is not available")
     ) match {
       case OperationResolver.ResolutionResult.Resolved(
             _,
-            componentName,
-            serviceName,
-            operationName
+            componentname,
+            servicename,
+            operationname
           ) =>
-        component.subsystem.flatMap(_.findComponent(componentName)) match {
+        component.subsystem.flatMap(_.findComponent(componentname)) match {
           case Some(target) =>
             val request = Request.of(
-              component = componentName,
-              service = serviceName,
-              operation = operationName,
+              component = componentname,
+              service = servicename,
+              operation = operationname,
               arguments = parameters.toVector.sortBy(_._1).map { case (k, v) =>
                 org.goldenport.protocol.Argument(k, v)
               }.toList
@@ -362,7 +378,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
                 Consequence.argumentInvalid(s"JCL target is not action: $selector")
             }
           case None =>
-            Consequence.operationNotFound(s"JCL target component: $componentName")
+            Consequence.operationNotFound(s"JCL target component: $componentname")
         }
       case OperationResolver.ResolutionResult.NotFound(_, s) =>
         Consequence.operationNotFound(s"JCL target action: $s")
@@ -373,6 +389,35 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
       case OperationResolver.ResolutionResult.Invalid(message) =>
         Consequence.argumentInvalid(message)
     }
+  }
+
+  /** Site-selected relation defaults; preparation, parent IDs and callbacks stay native. */
+  private final case class JclPreparedTask(delegate: JobTask, defaultrelation: String) extends JobTask {
+    def actionId: ActionId = delegate.actionId
+    override def taskKind: String = delegate.taskKind
+    override def targetKind: Option[String] = delegate.targetKind
+    override def relation: Option[String] = delegate.relation.orElse(Some(defaultrelation))
+    override def transactionRole: Option[String] = delegate.transactionRole.orElse(Some("own"))
+    override def transactionScope: Option[String] = delegate.transactionScope.orElse(Some("per-task"))
+    override def compensationActionRef: Option[String] = delegate.compensationActionRef
+    override def compensationTask: Option[JobTask] = delegate.compensationTask
+    override def componentName: Option[String] = delegate.componentName
+    override def serviceName: Option[String] = delegate.serviceName
+    override def operationName: Option[String] = delegate.operationName
+    override def requestSummary: Option[String] = delegate.requestSummary
+    override def requestParameters: Map[String, String] = delegate.requestParameters
+    override def defaultPersistence: JobPersistencePolicy = delegate.defaultPersistence
+    def run(ctx: org.goldenport.cncf.context.ExecutionContext): TaskOutcome = delegate.run(ctx)
+    override def observeCanonicalOutcome(
+      outcome: TaskOutcome,
+      ctx: org.goldenport.cncf.context.ExecutionContext,
+      cancelled: Boolean
+    ): Unit = delegate.observeCanonicalOutcome(outcome, ctx, cancelled)
+    override def observeAdmissionFailure(
+      conclusion: org.goldenport.Conclusion,
+      ctx: org.goldenport.cncf.context.ExecutionContext
+    ): Unit = delegate.observeAdmissionFailure(conclusion, ctx)
+  }
 
   /** Adapter that emits declared events and runs matching continuations after success. */
   private final case class JclEventAwareTask(
@@ -396,7 +441,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
     override def requestParameters: Map[String, String] = delegate.requestParameters
     override def defaultPersistence: JobPersistencePolicy = delegate.defaultPersistence
 
-    def run(ctx: org.goldenport.cncf.context.ExecutionContext): TaskOutcome =
+    def run(ctx: org.goldenport.cncf.context.ExecutionContext): TaskOutcome = {
       delegate.run(ctx) match {
         case success @ TaskSucceeded(_) =>
           _process_success(ctx) match {
@@ -405,6 +450,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
           }
         case failure: TaskFailed => failure
       }
+    }
 
     override def observeCanonicalOutcome(
       outcome: TaskOutcome,
@@ -421,7 +467,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
 
     private def _process_success(
       ctx: org.goldenport.cncf.context.ExecutionContext
-    ): Consequence[Unit] =
+    ): Consequence[Unit] = {
       emissions.foldLeft(Consequence.success(())) { (result, emission) =>
         result.flatMap { _ =>
           _publish(emission, ctx).flatMap { _ =>
@@ -435,11 +481,12 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
           }
         }
       }
+    }
 
     private def _publish(
       emission: JobEventEmission,
       ctx: org.goldenport.cncf.context.ExecutionContext
-    ): Consequence[Unit] =
+    ): Consequence[Unit] = {
       component.subsystem match {
         case Some(subsystem) =>
           given org.goldenport.cncf.context.ExecutionContext = ctx
@@ -450,11 +497,12 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
         case None =>
           Consequence.serviceUnavailable("component subsystem is not available")
       }
+    }
 
     private def _run_continuation(
       task: JobTask,
       ctx: org.goldenport.cncf.context.ExecutionContext
-    ): Consequence[Unit] =
+    ): Consequence[Unit] = {
       ctx.jobContext.jobId match {
         case Some(jobid) =>
           component.jobEngine.runTaskInJobSync(jobid, task, ctx).flatMap {
@@ -464,6 +512,7 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
         case None =>
           Consequence.stateInvalid("JCL continuation requires managed job context")
       }
+    }
 
     private def _event(
       emission: JobEventEmission,
@@ -504,10 +553,12 @@ private[jobcontrol] final class JclRuntimeBridge(component: Component) {
     private def _scope_name(
       scope: org.goldenport.cncf.context.ScopeContext,
       kind: org.goldenport.cncf.context.ScopeKind
-    ): Option[String] =
-      if (scope.core.kind == kind)
+    ): Option[String] = {
+      if (scope.core.kind == kind) {
         Some(scope.core.name)
-      else
+      } else {
         scope.core.parent.flatMap(_scope_name(_, kind))
+      }
+    }
   }
 }

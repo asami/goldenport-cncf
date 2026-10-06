@@ -34,7 +34,7 @@ The [Step acceptance journal](../journal/2026/10/2026-10-04-phase-69.7-jm69-09-s
 records the review, selected validation and retained findings. Dated authored
 sections below retain their historical pending states; this current summary
 supersedes those JM69-09 status projections without rewriting their evidence.
-JM69-10 remains OPEN and Phase 69.7 remains IN_PROGRESS. Real two-process/CBD
+JM69-10 remains OPEN and Phase 69.7 remains IN_PROGRESS. Real CNCF two-process
 acceptance, predecessor audits, aggregate full validation, the sole epoch-1
 Phase full review and final local release remain required.
 
@@ -485,28 +485,74 @@ Hygiene follow-ups are retained. C3 selected validation passed; no remote action
 successor work is recorded. See the
 [C3 Oct3 journal](../journal/2026/10/2026-10-03-phase-69.7-durable-job-operational-metrics.md).
 
-## JM69-10: Cross-Process and Downstream Acceptance
+## JM69-10: CNCF Cross-Process and Native Consumer Acceptance
 
 Stage Status:
-- Current status: OPEN
-- Owner: CNCF, representative Textus consumers, documentation, validation, review, and release maintainers
+- Current status: DONE
+- Owner: Original CNCF Phase69.7 parent and native consumer, documentation, validation and review maintainers
 - Update rule: Update the status with its checklist; it reaches `DONE` only when every listed criterion is checked, and then records the frozen successor handoff.
 - Entry rule: JM69-09 is DONE.
-- Completion rule: The complete Job Management contract passes restart, downstream, review, and release gates before sequence closure.
+- Completion rule: The retained CNCF Job Management contract passes current native integration/conformance validation and protected independent Step review before local Step acceptance; Phase full-validation/version/release gates remain required at their separate Phase boundary.
+- Closure basis: The active native Step criteria below; dated prior Slice obligations are historical and interpreted through the current D4 scope/conformance disposition.
 
-- [ ] Run real two-process, scheduled/retry, crash-interrupted, cursor, payload, corruption, incompatible-version, migration, JCL, governance, CompositeQuery, user/admin, notification, and security acceptance fixtures.
-- [ ] Prove a fresh CBD Support runtime recovers the exact completed Review Job/result without ComponentFactory-local or component-owned shadow state.
-- [ ] Run focused compatibility regressions; promote accepted design/spec/guidance; run full CNCF/downstream validation, review, conditional review-fix/re-review, version checks, and release preparation.
-- [ ] Record exact commands, counts, process/storage identities, fixtures, artifact/diff identity, limitations, and release commit evidence.
+- [x] Run real two-process, scheduled/retry, crash-interrupted, cursor, payload, corruption, incompatible-version, migration, JCL, governance, CompositeQuery, user/admin, notification, and security acceptance fixtures.
+- [x] Verify current native UOW submission/commit activation with the same owner/identity, unpublished staging, abort/failure cleanup and ordinary-submit compatibility; retain exact caller isolation and native authority/no-effect guarantees.
+- [x] Run focused compatibility and complete current affected-consumer verification; complete protected independent whole-Step review and any admitted review-fix/re-review, then promote accepted design/spec/operator guidance at that boundary.
+- [x] Record exact Step commands, counts, process/storage identities, fixtures, artifact/diff identity, limitations, independent review and local Step acceptance commit evidence.
+
+Excluded / HANDED_OFF_UNVALIDATED: The original criterion “Prove a fresh CBD
+Support runtime recovers the exact completed Review Job/result without
+ComponentFactory-local or component-owned shadow state” is relocated by the
+actual human amendment to `textus-cbd-support` continuation. It is excluded,
+unvalidated and not checked as passed. Production Provider/Entity/StartReview,
+Report/attestation and full fresh-runtime integration retain their unfinished
+status in the [CBD execution handoff](../journal/2026/10/2026-10-06-phase-69.7-cbd-provider-job-execution.md).
+All dated unchecked CBD items below remain historical records, not active
+CNCF closure prerequisites. Native UOW work remains CNCF-owned.
 
 Evidence:
-- Pending.
+- Independent protected-focused Step review01 PASS, complete115 paths/67 programs.
+- Current serial REP9/79 and ACC132/1086 succeeded; existing SqliteDataStore pending1.
+- Exact selected commands, native process/storage identity and accepted guidance in the [closure journal](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md).
+- The containing local Step acceptance commit identifies the actual native revision; Phase gates remain pending.
+
+## Current JM69-10 acceptance — 2026-10-06
+
+The original CNCF JM69-10 accumulator has passed independent protected-focused
+Step conformance review `PHASE-69.7-JM69-10-independent-step-review01@1`:
+115 selected files and 67 whole programs, with no current blocker or new
+Hygiene/Development Candidate. Current representative validation passed
+9 suites / 79 tests; the current affected-consumer accumulator passed
+132 suites / 1,086 tests, retaining only the existing SqliteDataStore pending
+example. Both actual serial executions completed with exit0 and lock=released.
+
+The containing local JM69-10 Step acceptance commit records the four native
+criteria and accepts the reviewed spec/design/operator guidance. Its native
+Git revision identifies that commit; this text does not invent a future OID.
+The [current closure journal](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md)
+records exact commands, fixtures, process/storage identities, review, promotion
+and limits. Dated earlier authored or pending sections remain historical and
+are superseded by this current disposition without rewriting old evidence.
+
+JM69-09 and CNCF JM69-10 are DONE in the containing Step commit. Phase69.7
+remains IN_PROGRESS. The sole original-epoch full Phase review, actual aggregate
+repository-full test, version/closure records, final local phase-release commit
+and committed closure audit remain required. CBD remains excluded and
+HANDED_OFF_UNVALIDATED; no completed CBD runtime acceptance is claimed.
+
+
 
 ## Phase Completion Gate
 
 - [ ] JM69-09 and JM69-10 are DONE.
-- [ ] Every original Phase 69 acceptance statement has executable or exact operational evidence.
-- [ ] CBD Support fresh-runtime acceptance, full validation, review convergence, documentation promotion, version evidence, release commit, and clean intended tree are recorded.
+- [ ] Every retained non-CBD Phase 69 acceptance statement has executable or exact operational evidence; the human-excluded CBD requirement is explicitly recorded as HANDED_OFF_UNVALIDATED.
+- [ ] Phase69.4–69.6 ancestry/reciprocal deferrals and actual aggregate repository-full CNCF validation are recorded under PHASE-69.7 ownership; full validation is deferred-not-run until the Phase release gate.
+- [ ] Sole original-epoch comprehensive Phase review and any admitted convergence, documentation promotion, version evidence, final local release commit, clean intended tree and committed closure audit are recorded.
+
+Current gate ownership is detailed in the
+[D4 closure boundary](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md).
+The original full-validation/version/release obligations move to this Phase
+gate; they are not prerequisites for the earlier JM69-10 Step commit.
 
 Current runtime evidence `PHASE-69.7-JM69-09B3B3C2B2B1-VAL-003` records
 54 completed / 0 aborted suites, 477 run / 477 succeeded / 0 failed tests,
@@ -1212,3 +1258,1791 @@ Compile-fix CV-PH697-C7-SCALATEST-IMPORT-01/CV-PH697-C7-NULL-PATTERN-WARN-01 (na
 
 - [x] Validate C7 fourteen authored leaves and newly affected native Event/Job/transport consumers.
 - [ ] Retain and complete original JM69-09/JM69-10 and Phase acceptance obligations.
+
+## JM69-10A authored child criteria — 2026-10-04
+
+status=focused_validated_independent_review_pending
+initial_authoring_status=authored_test_pending
+
+These child criteria link the [cross-process contract](../spec/job-cross-process-acceptance-contract.md)
+and [authoring journal](../journal/2026/10/2026-10-04-phase-69.7-job-cross-process-acceptance.md).
+They do not check any original JM69-10 or Phase-completion criterion.
+
+| Child criterion | Authored executable leaf | Current evidence |
+| --- | --- | --- |
+| CP1: actual completed Persistent writer and independent native terminal reader, exact paid facts, facade and successful closes | [CP1](../../src/test/scala/org/goldenport/cncf/job/JobCrossProcessAcceptanceSpec.scala) | focused_validated_independent_review_pending; REP002 five/25, ACC001 111/900+pending1 |
+| CP2: separate empty configured owners, no fabricated native quota roots or effects | [CP2](../../src/test/scala/org/goldenport/cncf/job/JobCrossProcessAcceptanceSpec.scala) | focused_validated_independent_review_pending; same A receipts |
+| CP3: foreign native startup refusal, unchanged rows, zero reader effects and successful cleanup | [CP3](../../src/test/scala/org/goldenport/cncf/job/JobCrossProcessAcceptanceSpec.scala) | focused_validated_independent_review_pending; same A receipts |
+| CP4: ordinary shrinking, seed 69710001L/min24, 1..3 jobs per genuine JVM pair with exact native facts | [CP4](../../src/test/scala/org/goldenport/cncf/job/JobCrossProcessAcceptanceSpec.scala) | actual property passed; independent review pending; same A receipts |
+
+- [ ] Validate CP1 against current source and independently inspect its native process evidence.
+- [ ] Validate CP2 against current source and independently inspect its empty native evidence.
+- [ ] Validate CP3 against current source and independently inspect its expected-refusal evidence.
+- [ ] Validate CP4 against current source and independently inspect actual property pass/minimum-success evidence.
+
+JM69-09 remains DONE; JM69-10 OPEN; Phase 69.7 IN_PROGRESS. Original scheduled/
+retry/crash, cursor/payload/corruption/version/migration, JCL/governance/
+CompositeQuery/user/admin/notification/security, exact independently fresh CBD
+Support Review/result, compatibility/promotion, predecessor ancestry/deferred
+handoffs, whole-Step independent review/local commit, aggregate full validation,
+sole epoch-1 Phase review and final local release remain required. Historical
+authored/pending sections and accepted JM69-09 evidence remain intact.
+
+## JM69-10A selected validation and B1 authored criteria — 2026-10-04
+
+A current status=focused_validated_independent_review_pending. REP002 passed
+five suites/25 tests and ACC001 passed 111 suites/900 tests plus one existing
+pending; both have zero failures/aborted/compiler warnings, reader/SBT/wrapper0
+and lock=released. The [A journal](../journal/2026/10/2026-10-04-phase-69.7-job-cross-process-acceptance.md)
+retains actual execution history. Combined validation/independent-inspection
+checkboxes above remain open because independent whole-Step review is pending.
+
+- [x] Execute selected current CP1..CP4 validation, including actual CP4 seed69710001L/min24 property.
+- [ ] Complete independent whole-Step review and original JM69-10 acceptance after every original Slice obligation.
+
+B1 implementation=authored_test_pending under the [codec contract](../spec/durable-job-operation-response-codec-contract.md)
+and [journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-codec.md).
+Revision1's eight authored criteria and numeric SCOPE_MISMATCH remain history.
+Revision2 completes the frozen six-form adapter and adds four numeric criteria;
+all twelve are authored, with all B1 execution/review evidence pending.
+
+| Criterion | Authored specification | Current evidence |
+| --- | --- | --- |
+| ORC1 exact ordered full Review domain Record and independent literal | [codec spec](../../src/test/scala/org/goldenport/cncf/job/DurableJobOperationResponseCodecSpec.scala) | authored_test_pending; no actual CBD pipeline claim |
+| ORC2 Void/five scalars/ordered JSON lexemes/verbatim YAML | same spec ORC2 | authored_test_pending |
+| ORC3 nested types/duplicates/null/collection kind/bits/decimal context and numeric refusal | same spec ORC3 | authored_test_pending |
+| ORC4 hostile constant refusal with zero observation/getter/conversion callbacks | same spec ORC4 | authored_test_pending |
+| ORC5 malformed/version/field/tag/numeric/noncanonical/Unicode refusal | same spec ORC5 | authored_test_pending |
+| ORC6 inclusive 8388608 UTF-8 bytes and 32768 full-wire nodes | same spec ORC6 | authored_test_pending |
+| ORC7 inclusive depth64/65, quote-aware preflight and strict grammar | same spec ORC7 | authored_test_pending |
+| ORC8 ordinary shrinking supported trees seed69710021L/min100, inner GWT and exact observations | same spec ORC8 | authored_test_pending |
+| ORC9 all six public numeric forms in direct JSON/Record placements and independent wires | same spec ORC9 | authored_test_pending |
+| ORC10 independent native plain/scientific, signed/zero and full Int-scale layouts | same spec ORC10 | authored_test_pending |
+| ORC11 exact native/stored full-wire numeric capacities, one over and giant coefficient refusal | same spec ORC11 | authored_test_pending |
+| ORC12 malformed unsafe lexemes and hostile raw JDK numeric refusal with unchanged post-setup counters | same spec ORC12 | authored_test_pending |
+
+- [ ] Validate B1 three-suite representative selection, then the original 111-suite accumulator plus codec (112 suites).
+- [ ] Complete B1 independent conformance and original full-Step/Phase gates.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Every original process,
+framework publication/ownership/authorized reading/lifecycle, actual fresh CBD
+result, compatibility/promotion, security/consumer matrix, ancestry/deferred
+handoff, complete-Step review/local commit, aggregate full validation, sole
+epoch1 Phase review and final local release obligation remains required.
+Neither A nor B1 alone accepts any original whole-Step or Phase criterion.
+
+## JM69-10B1 current execution and B2 authored gate — 2026-10-04
+
+The preceding B1 authored table and pending execution plan remain historical.
+B1 subject5 is now focused_validated_independent_review_pending:
+`PH697-JM10B1-REP-005` completed three suites/32 succeeded, no failed/pending/
+aborted; `PH697-JM10B1-ACC-001` completed 112 suites/912 succeeded, no failed/
+aborted, plus one existing SqliteDataStoreSpec pending. Both have
+compilerwarnings0, typed reader/SBT/wrapper0 and `lock=released`. All twelve
+ORC leaves passed, including ORC8 ordinary shrinking seed69710021L/min100 with
+actual checked.passed/checked.succeeded>=100 assertions. This supplies B1
+selected evidence only. The
+[codec journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-codec.md)
+retains initial/failed histories, five shrink-map type corrections, semantic
+refusal assertions, static expected-Consequence fixture typing, stale Cozy
+prerequisite/successful refresh and one-use pre-submit retention recovery;
+complete original Step independent assurance remains unwaived.
+
+- [x] Execute B1 subject5 selected three-suite representative and 112-suite accumulator over ORC1..ORC12.
+- [ ] Complete original JM69-10 independent whole-Step assurance and acceptance after all original obligations.
+
+B2 private publication/read behavior is defined by the
+[payload contract](../spec/durable-job-operation-response-payload-contract.md)
+and [design](../design/durable-job-operation-response-payload.md), with the
+[initial authoring journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-payload.md).
+All following child criteria are authored_test_pending. B1/A receipts establish
+no B2 execution or original Step/Phase acceptance.
+
+| Child criterion | Authored executable scenario | Evidence |
+| --- | --- | --- |
+| Independent six-field Review native publication/terminal attachment and exact owned response | [payload spec RP1](../../src/test/scala/org/goldenport/cncf/job/DurableJobOperationResponsePayloadsSpec.scala) | authored_test_pending |
+| Closed writer and fresh actual managed same-process reader owners, Published recovery and zero effects | same spec RP2 | authored_test_pending |
+| Foreign/null/missing-scope/corrupt/stale/inactive authority with zero Blob lookup | same spec RP3 | authored_test_pending |
+| Complete owned membership/binding/protected plans and inclusive1024/excess1025 | same spec RP4 | authored_test_pending |
+| Original exact Published quota; no bootstrap/reserve/confirm/release/census | same spec RP5 | authored_test_pending |
+| Exact physical returned shape before opening, null stream and uppercase digest | same spec RP6 | authored_test_pending |
+| Exact EOF/size/digest, zero fallback and hostile counts within one sentinel | same spec RP7 | authored_test_pending |
+| Strict UTF-8 plus unchanged closed B1 wire decode without repair/fallback | same spec RP8 | authored_test_pending |
+| Deterministic revision/deletion/quota races, errors/interruption and finally-close | same spec RP9 | authored_test_pending |
+| Closed publisher refusal without allocation and unchanged original put rollback | same spec RP10 | authored_test_pending |
+| Exact8388608-byte wire, one-over producer and bounded hostile physical excess | same spec RP11 | authored_test_pending |
+| Ordinary shrinking native Record/V1–V2 property, seed69710022L/min24 with checked assertions | same spec RP12 | authored_test_pending |
+
+- [x] Execute the frozen B2 six-suite representative, then unchanged retained113-suite accumulator.
+- [ ] Complete parent mechanical admission and independent complete-original-Step review; no B2-only acceptance.
+- [ ] Connect real runtime terminal publication and the authenticated consumer while preserving raw/management compatibility.
+- [ ] Complete independently fresh actual CBD full completed Review/result and all remaining original process/Phase obligations.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. The original scheduled/
+retry/crash, cursor/payload/corruption/version/migration, JCL/governance/
+CompositeQuery/user/admin/notification/security, compatibility and accepted
+spec/design/guidance promotion, Phase69.4..69.6 ancestry/reciprocal deferred
+validation, complete JM69-10 independent Step review/local acceptance commit,
+aggregate full CNCF/downstream validation, sole epoch1 full Phase review and
+final version/closure/local release gates remain required. The same-process
+fresh owner and Review domain fixture close no actual CBD/JVM gate. The
+component shadow-store spike remains rejected. Original authority/base/binding/
+recovery/epoch/history/budgets remain intact; no push/publication/deployment/
+successor or original completion checkbox is supplied by B2 authoring.
+
+## JM69-10B2 current selected execution — 2026-10-04
+
+status=focused_validated_independent_review_pending
+subject_revision=3
+review_status=complete-original-Step-independent-assurance-pending
+acceptance_status=not-accepted
+
+Earlier authored/pending sections remain the original authoring history. Current
+`PH697-JM10B2-REP-005` passed six completed suites/60 succeeded,
+zero failed/pending/aborted; `PH697-JM10B2-ACC-005` passed the unchanged original
+ordered113-suite accumulator/924 succeeded, zero failed/aborted, plus the
+one existing SqliteDataStoreSpec pending example. Both had zero compiler
+warnings, typed reader/SBT/wrapper exit0, consumed permissions and lock=released.
+RP1..RP12 passed; RP12 ordinary shrinking seed69710022L/min24 retained its actual
+checked.passed and checked.succeeded>=24 assertions, valid V2 Running/Pending
+producer, and both selected V1/V2 completed consumers. Parent complete sixteen-path
+mechanical/GWT/compliance admission passed; current Step union22 and twelve
+unrelated dirty paths were preserved.
+
+Failure history remains: REP001 stopped before compile/tests on stale Cozy
+classpath; the existing authorized `cozyExportRuntimeClasspath` CP001 succeeded
+with lock released (three noncompiler missing-credential notices). Its initial
+request-retention stop had no submission and used one same-child V4 recovery.
+REP002 had thirteen test compile errors from inherited ScalaTest withFixture
+resolution; qualifying twelve existing native-helper calls corrected it. REP003
+was a parent typed repair-identity preparation rejection, with no child or SBT
+submission. REP004 compiled with no warnings and ran six suites:59 succeeded,
+one RP12 failure from invalid V1/Pending fixture setup. Two local RP12 lines now
+use the valid V2 producer and explicitly retain V1/V2 completed-consumer coverage.
+No assertion was weakened, case removed, shrink disabled or snapshot printed.
+These are selected test results, not independent acceptance.
+
+JM69-09 remains DONE; JM69-10 remains OPEN and Phase69.7 IN_PROGRESS. Real terminal
+runtime publication/authorized consumer integration, the complete process
+matrix and independently fresh actual Textus CBD Support completed full result,
+predecessor ancestry/deferred audits, complete original Step independent review
+and local acceptance commit, aggregate full CNCF/downstream validation, sole
+epoch1 comprehensive Phase review and final local release remain mandatory.
+The representative native fixture is same-process and does not establish actual
+CBD or separate-JVM acceptance. No B2-only review, acceptance, commit, push,
+publication, deployment or successor work is recorded.
+
+## Stage JM69-10B3 native terminal publication — 2026-10-04
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: Phase 69.7 JM69-10 framework durable result publication
+- Update rule: Update only from parent-admitted source, actual selected execution
+  and complete original Step assurance; the following unchecked ledger owns closure.
+
+implementation=authored_test_pending
+review_status=complete-original-Step-independent-assurance-pending
+acceptance_status=not-accepted
+
+The [publication contract](../spec/durable-job-operation-response-publication-contract.md)
+and [design](../design/durable-job-operation-response-publication.md) author
+closed explicit terminal intent, genuine successful response eligibility,
+independent signed preflight, actual original B2 producer, result-only original
+checkpoint and retained failure/ambiguous acknowledgement ownership.
+The [B3 journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-publication.md)
+records exact15 scope and pending selected six/114 execution. Supplied absence
+and raw/queryVisible/management compatibility are preserved. No B3 validation,
+review, acceptance or commit has executed. Actual B2 six/60 and113/924 plus one
+original pending and zero compiler warnings remain prior foundation only;
+all earlier failed/pending receipts and existing checkboxes remain retained.
+
+| B3 child criterion | Executable case | Current evidence |
+| --- | --- | --- |
+| Actual full Review/domain/types/wire and one signed owned result | TP1 | authored_test_pending |
+| Scalar once; repeated actual terminal guard before fetch/put | TP2 | authored_test_pending |
+| Original Supplied absence and live response identity | TP3 | authored_test_pending |
+| Old native bridge missing capability refusal | TP4 | authored_test_pending |
+| Null intent at six and owned intent at five nonterminal boundaries | TP5 | authored_test_pending |
+| Independent result/access/authorization/retry preflight refusal | TP6 | authored_test_pending |
+| Actual unsupported/null success without allocation/event | TP7 | authored_test_pending |
+| Original producer corrupt-acknowledgement rollback only | TP8 | authored_test_pending |
+| Actual lost terminal acknowledgement retains Published/committed evidence | TP9 | authored_test_pending |
+| Configured payload capacity and real closed lease refusal | TP10 | authored_test_pending |
+| Fully closed writer/fresh configured same-process owner and raw/management compatibility | TP11 | authored_test_pending |
+| Normal shrinking native Scalar/Record ASCII1..12 seed69710033L/min24 and checked assertions | TP12 | authored_test_pending |
+| Genuine nonretryable Failed and native-control Cancelled candidates | TP13 | authored_test_pending |
+
+All cases bind [the native publication specification](../../src/test/scala/org/goldenport/cncf/job/DurableJobOperationResponsePublicationSpec.scala)
+with adjacent Given/When/Then and afterWord metadata. Positive fixtures use the
+actual configured owner/SystemNode lease, original immutable recipe and unique
+target/configured-durable-runtime/work child with finally cleanup. TP4 alone is
+the original direct native missing-capability fixture. Same-process reopen and
+the independent Review do not establish separate-JVM or actual CBD acceptance.
+
+- [x] Admit exact15 B3 paths, whole-file compliance and TP1..TP13 executable authoring gates.
+- [x] Execute B3 representative six suites with reader/SBT/wrapper success and actual lock release.
+- [x] Execute retained ordered114 accumulator after representative pass; preserve the existing pending example.
+- [ ] Include B1/B2 validation repairs and B3 in complete original JM69-10 independent protected Step assurance.
+- [ ] Complete trusted caller-authority result access resolver and queryVisible integration in the same original JM69-10.
+- [ ] Complete independently fresh actual CBD full completed Review/result and the original complete process/downstream matrix.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Original scheduled/retry/crash,
+cursor/payload/corruption/version/migration, JCL/governance/CompositeQuery/user/
+admin/notification/security, compatibility/guidance promotion, Phase69.4..69.6
+ancestry/reciprocal deferred validation, complete Step independent review/local
+acceptance commit, aggregate full CNCF/downstream validation, sole epoch1 full
+Phase review and final version/closure/local Phase release remain required.
+No original item is closed by B3 authoring; no Slice-only acceptance or
+push/publication/deployment/successor is recorded.
+
+## JM69-10B3 current selected execution — 2026-10-04
+
+status=focused_validated_independent_review_pending
+subject_revision=4
+review_status=complete-original-Step-independent-assurance-pending
+acceptance_status=not-accepted
+
+Earlier B3 authoring/pending text remains historical. Current
+`PH697-JM10B3-REP-004` completed six suites/59 succeeded,
+zero failed/pending/aborted. `PH697-JM10B3-ACC-004` completed the retained
+ordered114 suites/937 succeeded, zero failed/aborted,
+plus the one original SqliteDataStoreSpec pending example. Both had zero
+compiler warnings, typed validation reader/SBT/wrapper exit0, consumed
+permissions and actual lock=released. The journal owns execution history;
+the publication contract and design retain normative responsibility only.
+
+TP1..TP13 passed with actual configured managed SQLite/LocalBlob/SystemNode
+owners and real Task lifecycle. TP12 preserves normal shrinking, seed69710033L,
+minimum24 and checked.passed/checked.succeeded assertions. Parent whole-file
+compliance/GWT and exact15-path mechanical admission passed; the original
+31-path JM69-10 union and twelve unrelated dirty paths were preserved.
+
+Retained failure history: REP001 stopped at Test/compile on two static test
+errors. FIX01 supplied the actual ExecutionContext without occupying the Blob
+typeclass parameter and compared failure Conclusions by their actual cases.
+REP002 compiled with no compiler warnings and completed six suites:47 succeeded,
+12 failed in the new publication spec. FIX02 replaced its expired construction
+provider observation with the installed native managed DataStoreSpace view
+under the original owner lease, and corrected two query expectations to the
+original Option[OperationResponse]; getResult still asserts JobResult.Success.
+All scenarios, original domain/payment/refusal/counter assertions, useful
+Given/When/Then output, property shrinking and seed/minimum were retained.
+
+REP003 narrowed the new failures to two, with57 succeeded and no compiler
+warnings. FIX03 corrected TP13's independent expected cancelcredit to0 only
+after genuine Cancel, and gave TP11 an explicit test-only legacy management
+policy for its submitted JobId while retaining default fresh caller refusal
+None and separately asserting authorized UnavailableAfterRestart. No production
+default security, trusted result resolver, payment or public facade changed.
+
+REP002 initially lost the accepted request before submission; independent
+native/no-start/no-denial/live-permission checks admitted one same-child
+retention recovery. REP003 initially stopped before its native-history check
+because the selected instruction was absent from child context; the current
+verified ordinary local SBT standing branch admitted the honest absence
+preflight and one same-child recovery. Those infrastructure stops executed no
+SBT and consumed no permission. Actual subsequent command results above are
+separate from renderer acceptance. No new Cozy classpath refresh was needed.
+REP003 also attempted a nonexistent renderer path before opening a script;
+the authoritative protocol helper subsequently performed the sole actual
+recovery render. This pre-render path correction created no execution or
+permission-consumption evidence.
+
+JM69-09 remains DONE, JM69-10 OPEN and Phase69.7 IN_PROGRESS. Trusted caller
+tenant/subject/scopes resolution and queryVisible result integration, genuinely
+completed full Review from an independently fresh actual CBD runtime, the
+entire original scheduled/retry/crash, cursor/payload/corruption/version/
+migration and JCL/governance/CompositeQuery/user/admin/notification/security
+process matrix remain mandatory. A same-process fresh configured owner and
+independent six-field Review fixture do not establish actual CBD or separate-
+JVM result acceptance. Compatibility and accepted specification/design/guidance
+promotion, Phase69.4..69.6 ancestry and reciprocal deferred validation audits,
+complete original JM69-10 independent protected Step review/local acceptance
+commit, aggregate full CNCF/downstream validation, sole epoch1 Phase full
+review and final version/closure/local Phase release remain open.
+
+Original source/base/authority/Goal binding/epoch/history/counters remain
+retained. No B3-only independent acceptance, commit, push, publication,
+deployment or successor work is claimed.
+
+## Stage JM69-10B4 current-caller result query — 2026-10-04
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: Phase 69.7 parent and bounded implementation editor
+- Update rule: Update only from actual parent authoring verification, selected validation and original independent Step acceptance; closure derives from every stable unchecked B4 and original JM69-10/Phase gate below.
+
+status=focused_validated_independent_review_pending
+manifest=PHASE-69.7-JM69-10B4-implementation01@1
+acceptance_status=not-accepted
+
+The [query contract](../spec/durable-job-operation-response-query-contract.md),
+[design](../design/durable-job-operation-response-query.md) and
+[journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-query.md) integrate
+the original closed projection, B3 actual producer and B2 native reader with
+ordinary overview followed by strict independently composed raw current-caller
+authority. Same ready-owner real lease reading returns only a detached exact
+response; raw/projection/getResult/management retain None/UnavailableAfterRestart.
+No cached result or startup/signed/normalized/admin grant is introduced. Admitted
+reads may finish through logical close; subsystem drain waits and SystemNode
+owns physical finalization. Existing CP1..CP4 semantics and history remain intact.
+
+| B4 authored group | Required evidence | Current status |
+| --- | --- | --- |
+| E1_Q1 | Live exact identity and missing None without resolver/Blob/missing-policy | focused_validated_independent_review_pending |
+| E2_Q2 | Genuine native six-field Review, default owner overview/current raw access, one closed read, unchanged facts/raw/management/no cache | focused_validated_independent_review_pending |
+| E3_Q3 | Original foreign overview refusal and returned policy failure preserved | focused_validated_independent_review_pending |
+| E4_Q4 | Overview-granted hostile raw tenant/subject/scope denied before Blob, later valid independent success | focused_validated_independent_review_pending |
+| E5_Q5 | Startup resolver null/None; malformed/failed/thrown access; interrupt and fatal boundaries | focused_validated_independent_review_pending |
+| E6_Q6 | Actual current signed row/retention/Published quota faults before physical get | focused_validated_independent_review_pending |
+| E7_Q7 | Actual metadata/reply/byte faults, bounded size+1 and opened stream closure | focused_validated_independent_review_pending |
+| E8_Q8 | Native row/deletion/quota race after opening with distinct setup-write accounting | focused_validated_independent_review_pending |
+| E9_Q9 | Real admitted resolver lease blocks drain, new queries refuse, original read completes, node closes physical resource | focused_validated_independent_review_pending |
+| E10_Q10 | Original Supplied Absent/live states and negative legacy selections without owned dispatch | focused_validated_independent_review_pending |
+| E11_Q11 | Real sequential Review writer/reader JVMs, local domain/native/effect/closure checks, observation-only receipt | focused_validated_independent_review_pending |
+| E12_Q12 | Valid Ready startup and foreign current durable refusal after overview grant, no Blob | focused_validated_independent_review_pending |
+| E13_Q13 | Ordinary shrinking alpha1..8 seed69710034/min24/workers1, genuine sequential pair per input | focused_validated_independent_review_pending |
+
+Checklist:
+- [x] Parent verifies exact23 authored paths and whole-file nine-program compliance with preserved unrelated twelve paths.
+- [x] Parent verifies all Q1..Q13 Given/When/Then/afterWord/should groups and actual independent native/JVM domain assertions.
+- [x] Execute selected eight-suite B4 representative with reader/SBT/wrapper success and lock=released.
+- [x] Execute retained115-suite accumulator preserving original pending case and lock=released.
+- [ ] Include original B1/B2/B3 validation repairs and B4 in complete original independent protected JM69-10 Step assurance.
+- [ ] Complete actual CBD provider pipeline and independently fresh exact completed Review/result acceptance.
+- [ ] Complete every original process/compatibility/ancestry/Step/Phase/release obligation before original closure.
+
+The following no-execution/pending prose is the initial historical authoring
+record; current selected execution is recorded below.
+
+No B4 validation has executed during initial authoring. Selected representative
+Query/Publication/Payloads/OwnerIntegration/TerminalProjection/QueryReadModel/
+ManagementQuery/CrossProcessAcceptance and the original114+newQuery=115 accumulator
+remain pending. B3 actual6/59 and114/937+pending1, zero warnings, consumed permissions,
+reader/SBT/wrapper0/released and three narrow repairs remain referenced history;
+they do not establish this result consumer.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Current actual CBD task is
+provider-pipeline-pending and lacks reportId/reportDigest. Independent Review/native
+query probes do not complete actual CBD acceptance. Every original scheduled/retry/
+crash-interrupted/cursor/payload/corruption/version/migration/JCL/governance/
+CompositeQuery/user/admin/notification/security fixture, focused compatibility
+and accepted guidance promotion, Phase69.4..69.6 ancestry and reciprocal deferred
+full-validation handoffs, complete independent JM69-10 Step review/local acceptance
+commit, aggregate full CNCF/downstream validation, sole epoch1 comprehensive full
+Phase review and final version/closure/local phase-release commit remains mandatory.
+Original authority/base/Goal binding/epochs/repair histories are preserved; no
+partial-Step acceptance, Goal replacement, counter reset, push, publication,
+deployment or successor work is recorded.
+
+### B4 current selected execution — 2026-10-04
+
+subject_revision=4
+review_status=complete-original-Step-independent-assurance-pending
+acceptance_status=not-accepted
+
+The [B4 journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-query.md#jm69-10b4-current-selected-execution--2026-10-04)
+owns the complete logical argv, actual log/summary/result locators and retained
+failure/infrastructure/runtime-deviation history. Parent mechanical admission
+JM69-10B4-mechanical-admission-revision4@1 verifies exact23 B4 paths
+(9Scala+14docs), nine-program compliance and Q1..Q13 native/true-JVM domain
+assertions; original JM10 union43, twelve unrelated dirty paths, empty native
+index and accepted JM69-09 HEAD7aee remain preserved.
+
+PH697-JM10B4-REP-004 completed8 suites, aborted0, total74/succeeded74,
+failed0/canceled0/ignored0/pending0. PH697-JM10B4-ACC-004 completed115 suites,
+aborted0, total950/succeeded950, failed0/canceled0/ignored0 and the one existing
+SqliteDataStoreSpec pending example. Both have compiler warnings0, typed
+validation reader/SBT/wrapper exit0, consumed permissions and actual lock=released.
+
+REP001's8 compile diagnostics, REP002's73/74 legacy None/None mismatch and
+REP003's73/74 reserved-hyphen test identity refusal remain historical.
+The three narrow compile/Own-PerTask/test-identity repairs preserve production
+UniversalId grammar, closed outcomes, all six E10 modes, Q1..Q13
+Given/When/Then/should assertions, property seed69710034/min24/workers1 and
+original CP1..CP4. REP003 origin/retention stops and system-python deviation,
+and REP004 origin/uv-flags deviation and corrected continuation remain recorded
+in the journal.
+
+Only selected focused validation has passed; full validation is pending at the
+release gate. Complete original whole-JM10 M2 independent assurance, actual CBD
+pipeline/fresh exact completed Review/result and every remaining original
+process/compatibility/ancestry/Step/Phase/release gate remain unwaived.
+This M0 projection neither increments nor resets cumulative3 pre-review batches,
+nonconvergence0, originalJM10review0 or Phase0. Original Goal/base/authority/
+epoch/history/counters and prior repairs remain retained; JM69-09 DONE,
+JM69-10 OPEN and Phase69.7 IN_PROGRESS. No partial-Step acceptance or closure
+is established.
+
+## Stage JM69-10C1 native scheduled and interrupted processes — 2026-10-04
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: Phase 69.7 parent and bounded implementation editor
+- Update rule: Update only from actual parent authoring verification, selected validation and original independent Step/Phase acceptance; closure derives from every stable unchecked C1 and original gate below.
+
+status=focused_validation_passed
+initial_authoring_status=authored_test_pending
+current_execution_projection_date=2026-10-05 JST
+manifest=PHASE-69.7-JM69-10C1-implementation01@2
+decision=PH697-JM10C1-NATIVE-SCHEDULE-CRASH-01@1
+acceptance_status=not-accepted
+
+The [journal](../journal/2026/10/2026-10-04-phase-69.7-job-scheduled-cross-process.md),
+[contract](../spec/job-cross-process-acceptance-contract.md#native-scheduled-and-interrupted-process-companion)
+and [design](../design/job-cross-process-acceptance.md#native-scheduled-and-interrupted-process-composition)
+record eight owned paths, three new programs, unchanged genuine native
+composition, exact independent evidence/payment/deadline/refusal assertions
+and bounded actual process/resource ownership.
+
+| C1 authored group | Required evidence | Current status |
+| --- | --- | --- |
+| E1_SCH1 | Genuine scheduled Admission delay10; graceful writer exit; fresh runtime Registered, pre-due0/inclusive-due1 and five tail revisions2..6; third fresh terminal zero-effects reader with original paid facts and actual closure | selected_validation_passed |
+| E2_CR1 | Genuine committed unstarted writer pre-halt native assertions; actual owned exit71/closurefalse; fresh due execution and terminal readers with exact retained payment across actual JVMs | selected_validation_passed |
+| E3_CR2 | Genuine TaskStart Running4/Pending/one association; body runs1/canonical0 then actual halt71; fresh RecoveryRequired fixed refusal, neverReady/no dispatch/mutation/refund and unchanged native rows with normal reader closure | selected_validation_passed |
+| E4_SCH4 | Ordinary shrinking Gen.choose(1,20), seed69710051L/min24/workers1, unique real trio per case, exact inclusive schedule/payment/native/zero-effects/closure oracle and actual checked.passed/succeeded>=24 | selected_validation_passed |
+
+Checklist:
+- [x] Parent verifies exact eight authored paths, preserved original47-path Step union and twelve unrelated dirty paths.
+- [x] Parent verifies whole-file naming/import/header and native observation compliance of all three new programs.
+- [x] Parent verifies E1_SCH1 Given/When/Then/afterWord/should and genuine native trio authoring.
+- [x] Parent verifies E2_CR1 Given/When/Then/afterWord/should and actual unstarted halt71 trio authoring.
+- [x] Parent verifies E3_CR2 Given/When/Then/afterWord/should and actual Running halt71/refusal pair authoring.
+- [x] Parent verifies E4_SCH4 ordinary shrinking seed/minimum/workers and actual generated JVM trio authoring.
+- [x] Execute selected eight-suite representative with typed reader/SBT/wrapper0, consumed permission and lock=released.
+- [x] Execute retained116-suite accumulator with original pending example and lock=released.
+- [ ] Include C1 plus all retained B1..B4 repair chains in complete original independent protected JM69-10 Step assurance.
+- [ ] Complete actual CBD provider pipeline and independently fresh exact completed full Review/result without component shadow state.
+- [ ] Complete actual retry/cursor/payload/corruption/incompatible-version/migration/JCL/governance/CompositeQuery/user/admin/notification/security process acceptance.
+- [ ] Complete focused compatibility and accepted spec/design/guidance promotion.
+- [ ] Verify Phase69.4..69.6 ancestry and reciprocal deferred full-validation handoffs.
+- [ ] Complete original JM69-10 independent Step acceptance and local commit after all Slices.
+- [ ] Complete aggregate full CNCF/downstream validation, sole epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+Selected C1 representative passed8 suites/71 succeeded and the original115+
+newScheduled=116 accumulator passed116 suites/954 succeeded plus1 retained
+pending. The representative was recorded on2026-10-04 JST and the accumulator
+on2026-10-05 JST; complete actual logical argv appears in the journal.
+Selected C1 execution is passed; independent acceptance remains pending. B4 actual8/74 and115/950+pending1,
+compilerwarnings0, typed reader/SBT/wrapper0, consumed permissions/released locks
+and three narrow repairs remain retained history; whole-JM10 M2 independent
+assurance remains unwaived.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. The original whole scheduled/
+retry row stays open, along with every original Step/Phase criterion. Actual
+CBD ReviewPipelineTask remains provider-pipeline-pending without reportId/
+reportDigest; these native Absent scenarios are no full CBD completion proof.
+The rejected CBD spike, original Goal/base/authority/binding/epoch/history and
+cumulative repair counters are preserved. No Goal replacement, counter reset,
+partial-Step acceptance, commit, push/publication/deployment or successor work
+is recorded.
+
+### C1 current execution projection — 2026-10-05 JST
+
+Both actual root Test/testOnly selections completed with typed validation reader/native SBT/wrapper exit0, compiler warnings0, no compile failure, consumed invocation permissions and lock=released. REP-001 completed8 suites/71 succeeded, failed/canceled/ignored/pending/aborted0. ACC-001 completed116 suites/954 succeeded, failed/canceled/ignored/aborted0 plus the one retained SqliteDataStoreSpec pending. Four C1 leaves are selected_validation_passed; their GWT clauses, genuine process oracles and ordinary shrinking seed69710051L/min24/workers1 remain unchanged. No C1 compilation or behavioral repair occurred.
+
+This is C1-EXECUTION-PROJECTION-01 mechanical execution bookkeeping. B4 cumulative3/nonconvergence0, original JM10 review0/Phase0 and all authority/base/binding/epoch/history are retained; this projection increments or resets none. Stage remains IN_PROGRESS and acceptance_status=not-accepted. Actual CBD provider pipeline/independently fresh full Review, retry/remaining process matrix, compatibility/promotion, Phase69.4..69.6 ancestry/deferred audit, whole original JM10 protected independent assurance/local commit, aggregate full CNCF/downstream validation, sole epoch1 Phase review and final local release remain open. Full validation remains pending at the aggregate release gate. No partial-Step/Phase acceptance, push, publication, deployment or successor work is claimed. The original complete47-path Step union and twelve unrelated dirty paths are preserved.
+
+The C1 ledger has8 completed items and7 pending items; only completed parent authoring and selected execution items are checked. [Current C1 execution journal](../journal/2026/10/2026-10-04-phase-69.7-job-scheduled-cross-process.md#jm69-10c1-current-selected-execution--2026-10-05-jst) retains both complete actual argv, exact log/summary/typed-result locators, completion markers and native-origin bookkeeping, alongside initial planned commands and B4 history. [REP-001 terminal record](../../.codex-workflow/phases/PHASE-69.7/JM69-10C1-representative01-result.json) and [ACC-001 terminal record](../../.codex-workflow/phases/PHASE-69.7/JM69-10C1-accumulator01-result.json) supply the actual evidence. Initial implementation-editor no-execution statements remain historical; this FIX editor ran no validation, SBT, runtime/project script, network operation, self-review or Git mutation. Parent owns verification and transitions.
+
+## Stage JM69-10C2 real automatic retry processes — 2026-10-05
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: Phase 69.7 parent and bounded implementation editor
+- Update rule: Update only from actual parent authoring/mechanical verification, selected validation and original whole-Step/Phase evidence; closure derives from every stable unchecked C2 and original gate below.
+
+status=focused_validation_passed
+manifest=PHASE-69.7-JM69-10C2-implementation01@1
+decision=PH697-JM10C2-REAL-RETRY-PROCESS-01@1
+acceptance_status=not-accepted
+
+The [retry journal](../journal/2026/10/2026-10-05-phase-69.7-job-retry-cross-process.md)
+records all eight owned paths, three new programs, frozen findings and exact
+planned8/117 argv. [RC1..RC6](../spec/job-cross-process-acceptance-contract.md#real-automatic-retry-process-companion)
+and the [design](../design/job-cross-process-acceptance.md#real-automatic-retry-process-composition)
+retain original actual automatic retry/payment/checkpoint and recovery safety.
+The [Phase Stage](phase-69.7.md#stage-jm69-10c2-real-automatic-retry-processes--2026-10-05)
+includes the same planned commands. Original47 Step paths and20 unrelated
+planning paths remain preserved; the four new files extend Step union to51.
+
+| C2 authored group | Given / When / Then evidence required | Current status |
+| --- | --- | --- |
+| E1_RT1 | Genuine RetryNow first failure/second success / actual completed writer exit then distinct fresh terminal JVM / signed Succeeded8/Absent, two Failed/Committed descriptors, four pair events, closed Failed/Succeeded attempts, paid(4,192,2,2)/remaining0/two associations and no reader effects | selected_validation_passed |
+| E2_RT2 | Genuine RetryLater/default60s/independent split30 / first drain1 then split30/drain0,29/drain0,1/drain1 and fresh terminal JVM / exact requests1..5 beforedue,6..8 afterdue, Task/canonical2/2 and native/process/closure oracle | selected_validation_passed |
+| E3_RT3 | Genuine first failed/canonical1 settlement plus native retry payment and live delayed scheduling / graceful writer exit then fresh independent configured candidate/Port/Task / unchanged Running5/Pending/Failed, original fixed RecoveryRequired refusal, neverReady/no replay/refund/mutation and actual reader closure | selected_validation_passed |
+| E4_RT4 | Same real paid pending retry / pre-halt assertions and own actual exit71 then fresh refused startup / crash closurefalse, unchanged Running5/native paid authority, zero reader effects and normal reader closure | selected_validation_passed |
+| E5_RT5 | Ordinary shrinking Gen.oneOf immediate/delayed and Gen.choose(1,59), seed69710061L/min24/workers1 / actual complete writer then distinct fresh terminal JVM per unique case / exact native/domain/payment/process/cleanup oracle and checked.passed/succeeded>=24 | selected_validation_passed |
+
+Checklist:
+- [x] Parent admits exact eight authored paths, preserved51-path Step union and20 unrelated planning paths.
+- [x] Parent verifies whole-file RULE naming/header/import and native keyed-source/resource compliance of all three new programs.
+- [x] Parent verifies E1_RT1 adjacent GWT/afterWord/should and genuine immediate completed pair.
+- [x] Parent verifies E2_RT2 adjacent GWT/afterWord/should and genuine default strict-before/inclusive delayed pair.
+- [x] Parent verifies E3_RT3 adjacent GWT/afterWord/should and genuine gracefully interrupted pending retry/refusal pair.
+- [x] Parent verifies E4_RT4 adjacent GWT/afterWord/should and actual pending halt71/refusal pair.
+- [x] Parent verifies E5_RT5 ordinary shrinking seed69710061L/min24/workers1 and actual generated process pairs.
+- [x] Execute selected8-suite representative with current typed reader/native SBT/wrapper0, consumed permission and lock=released.
+- [x] Execute retained117-suite accumulator preserving original pending example and lock=released.
+- [ ] Include C2 and all retained prior repair chains in complete original protected independent JM69-10 Step assurance.
+- [ ] Complete actual CBD provider pipeline and independently fresh exact completed full Review/result without component shadow state.
+- [ ] Complete remaining original scheduled/retry/crash/cursor/payload/corruption/incompatible-version/migration/JCL/governance/CompositeQuery/user/admin/notification/security process acceptance.
+- [ ] Complete focused compatibility and accepted spec/design/guidance promotion.
+- [x] Verify Phase69.4..69.6 ancestry and reciprocal deferred full-validation handoffs. Parent JM69-10D1 audit: [source ancestry and reciprocal deferral verified](../journal/2026/10/2026-10-05-phase-69.7-predecessor-handoff-audit.md); full validation remains pending.
+- [ ] Complete original JM69-10 independent Step acceptance/local commit after all Slices.
+- [ ] Complete aggregate full CNCF/downstream validation, sole epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+Historical original authoring handoff: C2 authoring supplied no execution,
+review or acceptance evidence. Current C2 selected execution has passed as
+recorded below; independent review and acceptance remain pending. Retained C1
+REP-0018 suites/71 succeeded and ACC-001116 suites/954 succeeded plus1 original
+pending, compilerwarnings0, typed reader/native SBT/wrapper0, consumed
+permissions and released locks are C1 evidence only. Earlier checked and
+pending Stage history remains intact; B4 cumulative3/nonconvergence0,
+original JM10 review0/Phase0 and original authority/base/binding/epoch/history/
+counters are retained.
+
+Pending real RetryLater failure retains signed Running5/Pending/Failed and
+startedAt despite live Submitted/due60. Genuine reserveRetry pays
+(4,192,2,2)/remaining1 with one actual association. Original recovery refuses
+started work with ActiveLifecycle/ExecutionAlreadyStarted; no eligible
+Submitted seed, durable retry-due checkpoint, positive started-work replay,
+refund or safety-policy change is introduced. NR15's synthetic Submitted/due
+fixture is no failed-writer substitute. Refused readers observe native rows
+through the original managed Subsystem lease; absent installed owner closure
+is vacuous, not independent provisional-owner closure evidence.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Original whole scheduled/retry
+row remains open. Actual CBD ReviewPipelineTask remains provider-pipeline-pending
+without reportId/reportDigest; full actual provider completion and independent
+fresh exact completed Review/result remain mandatory. Native Absent and
+UnavailableAfterRestart supply no substitute. Rejected CBD spike, remaining
+original matrix/compatibility/predecessor/Step/aggregate/sole epoch1 Phase/
+release gates remain required. No Goal/history/budget reset, partial-Step
+acceptance, commit, push, publication, deployment or successor work is recorded.
+
+### Current C2 selected execution projection — 2026-10-05 JST
+
+Current selected C2 evidence is `focused_validation_passed` at subject
+`PHASE-69.7-JM10C2-real-retry-process@3`; Stage remains IN_PROGRESS and
+acceptance_status=not-accepted. Parent admitted the eight authored paths,
+51-path original Step union and20 unrelated paths, whole-file authoring/native
+compliance and all five adjacent GWT/afterWord/should leaves. REP004 completed
+8 suites/77 succeeded, failed/canceled/ignored/pending/aborted0; ACC004 completed
+117 suites/959 succeeded, failed/canceled/ignored/aborted0 plus1 original
+SqliteDataStoreSpec pending. Both have compilerwarnings0, typed reader0,
+native SBT0/wrapper0, consumed permission and actual lock=released. Runtime
+JDK/SQLite baseline warnings are distinct from CNCF compilerwarnings0.
+
+The two C2 M1 pre-review batches narrowed four failures to one and then cleared
+the observed failures. Prior B4 cumulative3/nonconvergence0 and original JM10
+review0/Phase0 remain retained. This M0 factual projection increments and resets
+no repair counter. Five real GWT leaves, seed69710061L/min24/workers1, ordinary
+shrinking, clock/IDs, chronological native task/event/attempt evidence and
+payment/refusal/process assertions remain unchanged. Selected success supplies
+no independent Step review, CBD completion or acceptance. Original whole-JM10
+protected M2 assurance, actual CBD pipeline/fresh completed full Review,
+positive started-work retry/remaining process matrix, compatibility/promotion,
+69.4..69.6 ancestry/deferred audits, independent Step/local commit, aggregate
+full validation, sole original epoch1 Phase review and final local release
+remain required and unchecked. No partial acceptance or successor work.
+
+Complete actual logical argv, all prior failures, Cozy prerequisite, retention/Python and authoring-governance history, both narrowing M1 repairs and exact completion markers are retained in the [current retry execution journal](../journal/2026/10/2026-10-05-phase-69.7-job-retry-cross-process.md#jm69-10c2-current-selected-execution--2026-10-05-jst). Original planned commands above remain historical.
+
+[PHASE-69.7-JM10C2-REP-VAL-004-terminal@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C2-representative04-result.json): native SBT completed 2026-10-05 02:16:36 JST; terminal observed 2026-10-05T02:17:07.702400+09:00. Actual result `/private/tmp/skill.cncf.d/a-a19c3091-dacd-4ec7-8166-e08af2c5267f/command-result.json`; log `/private/tmp/skill.cncf.d/a-c173703c-ab51-4dfe-97c4-d4e12a0ee870/29056-20261004T171306Z.log`; summary `/private/tmp/skill.cncf.d/a-c173703c-ab51-4dfe-97c4-d4e12a0ee870/29056-20261004T171306Z.summary.json`.
+
+[PHASE-69.7-JM10C2-ACC-VAL-004-terminal@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C2-accumulator04-result.json): native SBT completed 2026-10-05 02:34:02 JST; terminal observed 2026-10-05T02:34:47.006685+09:00. Actual result `/private/tmp/skill.cncf.d/a-3634a219-4877-4a8c-9ba0-8546659404c8/command-result.json`; log `/private/tmp/skill.cncf.d/a-a2d81320-14f2-4753-9dfa-baa20c315c29/30278-20261004T171912Z.log`; summary `/private/tmp/skill.cncf.d/a-a2d81320-14f2-4753-9dfa-baa20c315c29/30278-20261004T171912Z.summary.json`.
+
+Full validation remains pending at the original aggregate release gate. M0 projection only; parent owns final factual/static verification and transitions.
+
+## JM69-10D1 predecessor handoff audit — 2026-10-05
+
+status=source_ancestry_and_reciprocal_deferral_verified
+manifest=PHASE-69.7-JM69-10D1-implementation01@1
+audit=PHASE-69.7-JM69-10D1-predecessor-audit01@1
+acceptance_status=not-accepted
+
+The [dated predecessor audit journal](../journal/2026/10/2026-10-05-phase-69.7-predecessor-handoff-audit.md)
+records the parent's actual three release/accepted-Step pairs, direct-parent
+and ordered ancestry through original base/current JM69-09 HEAD, matching
+committed/current owner/sequence/dependency/closed declarations and immutable
+lightweight/CQ2/UX handoffs. The named ancestry/reciprocal deferred-handoff
+item in the current C2 ledger is checked from that completed parent audit.
+Earlier authored ledgers and pending assertions remain historical and are
+superseded only for this audit item by the dated journal.
+
+All three predecessor full suites remain `deferred-not-run`; the audit ran no
+full suite and promotes no historical focused assurance to Phase69.7 success.
+Legacy entry/trailers remain unconsumed historical controls; no copied contents,
+new hashes/certificates, adapted control or fresh aggregate authority is created.
+Actual remaining process acceptance, CBD provider pipeline/fresh completed
+Review, compatibility/promotion, whole original protected independent Step
+review/acceptance/local commit, aggregate full CNCF/downstream validation,
+sole epoch1 Phase review and final version/closure/local release remain open.
+
+JM69-09 remains DONE, JM69-10 OPEN and Phase69.7 IN_PROGRESS. C2 selected
+REP00477 / ACC004959 plus1 pending and original Goal/base/authority/binding/
+epoch/history/counters remain unchanged. This documentation-only projection
+establishes no new Step/Phase acceptance. Parent owns static verification,
+independent assurance and transitions.
+
+## Stage JM69-10C3 native cursor processes — 2026-10-05
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: Parent updates from attributable authoring, selected execution and original whole-Step assurance; DONE/CLOSED requires all eight checklist items below checked.
+
+status=focused_validation_passed
+manifest=PHASE-69.7-JM69-10C3-implementation01@1
+acceptance_status=not-accepted
+
+The [cursor journal](../journal/2026/10/2026-10-05-phase-69.7-job-cursor-cross-process.md)
+owns exact authored scope and selected planned/not-run argv. See the
+[UC1..UC6 contract](../spec/job-cross-process-acceptance-contract.md#native-management-cursor-process-companion),
+[design](../design/job-cross-process-acceptance.md#native-management-cursor-process-composition)
+and [seven-leaf executable specification](../../src/test/scala/org/goldenport/cncf/job/JobCursorCrossProcessAcceptanceSpec.scala).
+
+- [x] C3-01 Exact closed eight-path Plan and seven E1_CU1..E7_CU7 GWT scenarios decided under original authority/base/epoch.
+- [x] C3-02 All eight owned paths authored, including three complete programs, seven adjacent GWT leaves and seed69710071L/min24/workers1 ordinary shrinking process property.
+- [x] C3-03 Parent admits authored diff and executes selected eight-suite representative with typed completion, zero compiler warnings and lock=released.
+- [x] C3-04 Execute retained 118-suite accumulator with original pending example, typed completion, zero compiler warnings and lock=released.
+- [ ] C3-05 Complete original whole-JM10 protected M2 independent assurance including C3 and all retained repairs, then original Step acceptance/local commit.
+- [ ] C3-06 Complete actual CBD provider pipeline and independently fresh exact completed full Review/result without component shadow state under separately admitted repository scope.
+- [ ] C3-07 Complete remaining original process matrix, positive started-work retry protected decision if required, focused compatibility and accepted spec/design/guidance promotion.
+- [ ] C3-08 Complete aggregate full CNCF/downstream validation, sole original epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+C2 REP00477 and ACC004959 plus1 pending, both narrowing repairs and D1 verified
+ancestry/reciprocal deferred handoffs are retained prior evidence. All
+predecessor/aggregate full validation remains deferred-not-run. Actual CBD
+provider-pipeline-pending and its unadmitted source scope request remain an
+unresolved current dependency, with no Development Candidate or waiver.
+Original whole cursor/payload/corruption/version/migration row stays unchecked;
+seven authored leaves establish no whole-JM10 or Phase acceptance. JM69-09
+DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Original Goal/authority/base/binding/
+epoch/history/budgets/counters and every prior checkbox remain preserved.
+Parent owns diff admission, execution, independent assurance and transitions.
+
+### C3 current selected execution projection — 2026-10-05 JST
+
+MCR-C3-SELECTED-PROJECTION-01 updates current selected execution only. REP002
+completed8 suites/62 succeeded/pending0; ACC002 completed118 suites/966 succeeded
+plus1 original SqliteDataStoreSpec pending. Both had failed/canceled/ignored/
+aborted0, compilerwarnings0, no compile failure, typed reader/native SBT/wrapper
+exit0, consumed permission and actual lock=released. C3-01..04 are checked;
+C3-05..08 remain open. Stage remains IN_PROGRESS and acceptance_status=not-accepted.
+
+[Current C3 execution journal](../journal/2026/10/2026-10-05-phase-69.7-job-cursor-cross-process.md#jm69-10c3-current-selected-execution--2026-10-05-jst)
+retains complete actual argv, typed-result/log/summary links and completion
+markers for failed REP001, successful Cozy generated prerequisite and passing
+REP002/ACC002, plus initial child history/Python, renderer-path and parent
+static-helper corrections. Earlier planned/not-run and initial-authoring
+statements remain historical. [REP002 terminal record](../../.codex-workflow/phases/PHASE-69.7/JM69-10C3-representative02-result.json)
+and [ACC002 terminal record](../../.codex-workflow/phases/PHASE-69.7/JM69-10C3-accumulator02-result.json)
+supply current results; no whole matrix or aggregate full validation is inferred.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Actual CBD provider pipeline/
+independently fresh exact completed full Review without component shadow state
+remains unresolved and unadmitted, with no waiver or Development Candidate.
+Original remaining process matrix/compatibility/promotion, whole-JM10 protected
+M2 independent assurance/local commit, aggregate full CNCF/downstream validation,
+sole epoch1 comprehensive Phase review and final version/closure/local release
+remain required. Original Goal/base/binding/authority/epoch/history/budgets and
+all cumulative narrowing/nonconvergence counts remain unchanged. This M0 factual
+projection increments or resets no behavior-repair allowance. Parent owns
+verification, independent assurance and transitions; this FIX editor performed
+no validation, SBT, runtime/network, self-review or Git mutation and claims no
+partial-Step/Phase acceptance, commit, push, publication, deployment or successor.
+
+## Stage JM69-10C4 native refusal processes — 2026-10-05
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: Parent updates from attributable authoring, selected execution and original whole-Step assurance; DONE/CLOSED requires all eight checklist items below checked.
+
+status=focused_validated_independent_review_pending
+manifest=PHASE-69.7-JM69-10C4-validation-fix01@1
+validation_status=REP002-ACC002-passed
+acceptance_status=not-accepted
+
+The [native refusal journal](../journal/2026/10/2026-10-05-phase-69.7-job-native-refusal-cross-process.md)
+preserves exact eight-path initial authoring and seven actual JVM GWT leaves.
+Actual REP001 completed eight suites/54 tests:47 succeeded,7 failed, no aborts
+or pending tests, compilerwarnings0; reader2/SBT1/wrapper1, permission consumed
+and lock=released. The [frozen corrective Fix Manifest](../../.codex-workflow/phases/PHASE-69.7/JM69-10C4-validation-fix01.json)
+and [Plan2](../../.codex-workflow/phases/PHASE-69.7/JM69-10C4-cycle-plan02.json)
+retain the exact eight-path boundary and historical planned argv. Actual current
+revision2 REP002 completed8 suites/54 succeeded/pending0; ACC002 completed119
+suites/973 succeeded plus original pending1. Both had failed0/aborted0,
+compilerwarnings0, reader/SBT/wrapper0, consumed permissions and lock=released.
+[REP002 terminal record](../../.codex-workflow/phases/PHASE-69.7/JM69-10C4-representative02-result.json)
+and [ACC002 terminal record](../../.codex-workflow/phases/PHASE-69.7/JM69-10C4-accumulator02-result.json)
+retain the actual results; the journal records exact argv, counts and locators.
+MCR-C4-SELECTED-PROJECTION-01 projects only these selected executions. The
+[NF1..NF8 contract](../spec/job-cross-process-acceptance-contract.md#native-refusal-process-companion),
+[design composition](../design/job-cross-process-acceptance.md#native-refusal-process-composition)
+and [executable specification](../../src/test/scala/org/goldenport/cncf/job/JobNativeRefusalCrossProcessAcceptanceSpec.scala)
+retain original native authority and real good-terminal/failed-runtime semantics.
+
+- [x] C4-01 Initial revision1 closed eight-path Plan and seven E1_NF1..E7_NF7 GWT scenarios frozen under original authority/base/epoch; historical initial planning attribution retained.
+- [x] C4-02 Initial revision1 authoring of all eight paths, three complete programs, seven adjacent GWT leaves and seed69710081L/min24/workers1 ordinary dependent shrinking property; historical authoring only, not repaired validation acceptance.
+- [x] C4-03 Parent admitted the corrective diff; actual current revision2 REP002 passed54 tests in8 suites, pending0, typed reader/SBT/wrapper0, zero compiler warnings, permission consumed and lock=released; REP001 retained as historical failure.
+- [x] C4-04 Actual current revision2 ACC002 passed973 tests in119 suites with the original pending1, typed reader/SBT/wrapper0, zero compiler warnings, permission consumed and lock=released.
+- [ ] C4-05 Complete original whole-JM10 protected M2 independent assurance including C4 and all retained repairs, then original Step acceptance/local commit.
+- [ ] C4-06 Admit actual CBD repository source scope and complete its provider pipeline and independently fresh exact completed full Review/result without component shadow state.
+- [ ] C4-07 Complete remaining original process matrix, positive started-work retry protected decision if required, compatibility and accepted spec/design/guidance promotion.
+- [ ] C4-08 Complete aggregate full CNCF/downstream validation, sole original epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+C3 REP002 eight/62 and ACC002 118/966 plus1 pending are retained prior C3
+evidence only; no C4 validation is inferred. C2 narrowing repairs, D1 verified
+ancestry/reciprocal deferrals and all predecessor/aggregate deferred-not-run
+obligations remain retained. Actual CBD provider pipeline and fresh full Review
+remain unresolved and unadmitted, without waiver or Development Candidate.
+The original whole cursor/payload/corruption/version/migration row remains open;
+authored native refusal leaves supply no whole-Step acceptance.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Original Goal/authority/base/
+binding/epoch/history/budgets/counters, all prior stages/checkboxes and unrelated
+user/agent edits remain preserved. Parent owns diff admission, selected
+execution, independent assurance and transitions. No partial acceptance,
+commit, push, publication, deployment, successor or Goal change is recorded.
+
+
+## Stage JM69-10C5 migration across actual JVMs — 2026-10-05
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: Parent updates only from attributable authoring, selected execution and original whole-Step assurance; DONE/CLOSED requires all eight items below checked.
+
+status=selected_validation_passed_review_pending
+manifest=PHASE-69.7-JM69-10C5-implementation03@1
+validation_status=REP003-ACC001-passed
+acceptance_status=not-accepted
+
+The [C5 journal](../journal/2026/10/2026-10-05-phase-69.7-job-migration-cross-process.md) records exact eight-path initial authoring, seven visible actual GWT leaves, ordinary seed69710091L/min24/workers1 trios and unchanged initial planned8REP/120ACC argv. The [MG1..MG8 companion](../spec/job-cross-process-acceptance-contract.md#migration-process-consumer-companion) and [composition design](../design/job-cross-process-acceptance.md#migration-process-consumer-composition) consume original migration and owner R7. Both earlier editors terminated pre-edit/no-test: C5-TERMINAL-RUNTIME-FACT-01 and C5-NATIVE-CLOCK-EFFECT-02 are retained failed planning history. Manifest03 corrects terminal Registered/runtime Refused/Ready, measured three native Entity audit updates/clocks per V1 and original successful maintenance timer/local terminal paid/resource seeds without product changes. No C5 selected result existed at initial authoring.
+
+Actual REP001 stopped on the stale Cozy prerequisite before tests. Actual Cozy refresh exited0/reader0/lock=released with480 valid entries; its three missing-credentials diagnostics are distinct from CNCF compiler warnings. Actual REP002 completed8 suites/55 tests:52 succeeded,3 failed, aborted0/ignored0/canceled0/pending0/compilerwarnings0, reader2/SBT1/wrapper1, permission consumed and lock=released. C5-PUBLISHED-BLOB-TOKEN-ORACLE-01 is the one settled causal test-oracle failure: the new None predicate contradicted unchanged original reserve/confirm. The [frozen Fix Manifest](../../.codex-workflow/phases/PHASE-69.7/JM69-10C5-validation-fix01.json) supplied exact32 lowercase hexadecimal token format for these genuine putObserved case entries, with complete native Blob row equality retained; no universal Published token requirement or product change is introduced. Historical pre-validation status was repair_planned_test_pending/REP002-failed-repair-planned, with REP003 representative8 and ACC001 accumulator120 planned-not-run pending parent verification and fresh revision2 execution.
+
+Parent source/GWT/compliance admission and fresh revision2 execution are now actual. PH697-JM10C5-REP-003 completed8 suites/55 tests,55 succeeded/pending0; PH697-JM10C5-ACC-001 completed120 suites/980 tests,980 succeeded plus only original SqliteDataStoreSpec pending1. Both have failed0/aborted0/canceled0/ignored0, compilerwarnings0, typed reader0/SBT0/wrapper0, permission consumed and lock=released. See the [canonical C5 journal selected evidence](../journal/2026/10/2026-10-05-phase-69.7-job-migration-cross-process.md#actual-revision2-selected-validation), [JM69-10C5-representative03-result.json@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C5-representative03-result.json) and [JM69-10C5-accumulator01-result.json@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C5-accumulator01-result.json). C5-SELECTED-RESULT-PROJECTION-01 records actual one-cause narrowing1->0 as selected validation evidence only. The original consumed pre-review C5 batch1 and activeJM10review0/historicalJM09repair1/Phase0 counters remain unchanged here; parent owns convergence bookkeeping. Stage remains IN_PROGRESS and acceptance_status=not-accepted; no C5-only review/commit or Goal closure is claimed.
+
+- [x] C5-01 Parent-frozen Manifest03 closed eight-path Plan and all seven E1_MG1..E7_MG7 scenarios under original authority/base/binding/epoch; both earlier failed planning intakes/history retained.
+- [x] C5-02 Initial authoring of companion/design, three new consumer programs, seven actual GWT leaves, ordinary24-case property, journal and thin Phase/checklist C5 entries; actual REP002 failure and the applied one-cause token-oracle repair retained.
+- [x] C5-03 Parent admitted current revision2 source/GWT/compliance; actual REP003 passed55 tests in8 suites, pending0, failed0/aborted0/canceled0/ignored0/compilerwarnings0, reader/SBT/wrapper0, permission consumed and lock=released.
+- [x] C5-04 Actual current revision2 ACC001 passed980 tests in120 suites, only original SqliteDataStoreSpec pending1, failed0/aborted0/canceled0/ignored0/compilerwarnings0, reader/SBT/wrapper0, permission consumed and lock=released.
+- [ ] C5-05 Complete original whole-JM10 protected M2 independent assurance including C5/retained repairs, then original Step acceptance/local commit.
+- [ ] C5-06 Admit actual CBD source scope and complete its real provider/Entity/completed Job and independently fresh exact full Review/result acceptance without shadow state.
+- [ ] C5-07 Complete remaining original process matrix/protected positive started-work decision where required, compatibility and accepted spec/design/guidance promotion.
+- [ ] C5-08 Complete aggregate full CNCF/downstream validation, sole original epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+C4 actual8/54 and119/973+pending1 are C4-only evidence; all C2 narrowing/C3 history, D1 ancestry/reciprocal deferrals, infrastructure/disclosure history and original aggregate deferred-not-run obligations remain. JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS. Whole-JM10 protected M2 independent acceptance/local Step commit, actual CBD read-only/unanswered and unadmitted source scope/full Review acceptance, remaining original process matrix/compatibility/promotion, aggregate full CNCF/downstream validation, sole original epoch1 full Phase review and final local release remain open. Original Goal/authority/base/binding/epoch/history/ledgers/budgets/counters and existing Stage/user/agent edits remain. Parent owns projection verification, assurance, convergence bookkeeping and transitions. No partial-Step/Phase acceptance, Goal change, commit, push, publication, deployment or successor is recorded.
+
+
+## Stage JM69-10C6 actual fresh Job experience — 2026-10-05
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: Parent updates from attributable authoring, current selected execution and original whole-Step assurance; DONE/CLOSED requires all eight items below checked.
+
+status=selected_validation_passed_review_pending
+manifest=PHASE-69.7-JM69-10C6-implementation01@1
+validation_status=REP002-ACC001-passed
+review_status=complete-original-Step-independent-assurance-pending
+acceptance_status=not-accepted
+
+The [C6 journal](../journal/2026/10/2026-10-05-phase-69.7-job-experience-cross-process.md)
+records original eight authoring paths plus the newly admitted ninth metrics-source
+repair path, eight E1_UX1..E8_UX8 examples and original
+history/counters. The [UX1..UX9 companion](../spec/job-cross-process-acceptance-contract.md#fresh-job-experience-process-companion),
+[native composition](../design/job-cross-process-acceptance.md#fresh-job-experience-process-composition)
+and [executable specification](../../src/test/scala/org/goldenport/cncf/job/JobExperienceCrossProcessAcceptanceSpec.scala)
+author actual original direct-facade consumer evidence. Every subcase has a
+genuine scalar Task writer and separate independently composed fresh reader.
+Normal shrinking uses seed69710081L/min24/workers1 over alpha1..8/six callers.
+Complete native rows/body/provider revision/payment/quota/physical equality and
+service effects precede closed observation receipts; final verification I/O is
+separate. Original Mine/Operator/Application/diagnostics/control meanings remain.
+
+- [x] C6-01 Authored programs/oracles: frozen Manifest01 original eight authoring paths, three new native consumer programs and all eight adjacent-GWT semantic examples authored under original authority/base/binding/epoch; Fix Manifest01 adds the ninth metrics-source null-pattern/header repair, now parent mechanically/source admitted at revision2.
+- [x] C6-02 Authored compliance: Oct5 ASAMI headers, shared naming/explicit returns/narrow imports/braces, afterWord metadata and generated inner/outer GWT applied; parent actual three-program mechanical/spec/source/compliance admission revision1 precedes REP001; actual revision2 source/header/naming/GWT admission now includes the metrics-source repair.
+- [x] C6-03 Representative run: parent admitted current subject2 repair source/GWT/compliance; actual REP002 compiled repaired source and passed89 tests in10 suites, pending0, failed0/canceled0/ignored0/aborted0/compilerwarnings0, typed reader0/SBT0/wrapper0, permission consumed and lock=released; REP00179 passing tests with warning2 remain historical selected-gate failure.
+- [x] C6-04 Accumulator run: actual subject2 unchanged121ACC passed988 tests in121 suites, only original SqliteDataStoreSpec pending1, failed0/canceled0/ignored0/aborted0/compilerwarnings0, typed reader0/SBT0/wrapper0, permission consumed and lock=released.
+- [ ] C6-05 Original wholeStep assurance: complete protected whole-JM10 M2 independent assurance including C6 and all retained repairs without partial-Slice acceptance.
+- [ ] C6-06 Remaining original matrix/CBD: actual notification/JCL/governance/CompositeQuery/security/positive started-work decision where required, admitted CBD provider/Entity/completed full Review/fresh runtime, compatibility and accepted promotion.
+- [ ] C6-07 CompleteStepcommit: finish original whole JM69-10 acceptance and local Step commit after all mandatory scope and assurance.
+- [ ] C6-08 Aggregate/fullPhase/release: complete aggregate full CNCF/downstream validation, sole original epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+Actual PH697-JM10C6-REP-001 completed8 suites/79 tests,79 succeeded with
+failed0/canceled0/ignored0/pending0/aborted0, SBT0/wrapper0/typed reader0,
+permission consumed and lock=released. Two E121 compiler warnings at
+JobOperationalMetrics.scala:19,24 leave selected_validation_pass=false and
+acceptance pending. Fix Manifest01 prescribes two explicit null fallbacks and
+Oct5 header. At historical repair authoring, current source admission/validation
+were pending and revised10REP then unchanged121ACC were planned-not-run.
+Actual [parent mechanical/source/header/GWT admission revision2](../../.codex-workflow/phases/PHASE-69.7/JM69-10C6-mechanical-admission-revision2.json)
+now precedes subject2 [REP002](../../.codex-workflow/phases/PHASE-69.7/JM69-10C6-representative02-result.json),
+10 completed suites/89 tests,89 succeeded/pending0, and [ACC001](../../.codex-workflow/phases/PHASE-69.7/JM69-10C6-accumulator01-result.json),
+121 completed suites/988 tests,988 succeeded plus only original SqliteDataStoreSpec
+pending1. Both have failed0/canceled0/ignored0/aborted0/compilerwarnings0,
+no compile failure, typed reader0/SBT0/wrapper0, consumed permission and
+lock=released. Actual result/log/summary links are retained in the
+[current C6 journal](../journal/2026/10/2026-10-05-phase-69.7-job-experience-cross-process.md#actual-revision2-selected-validation).
+C6-SELECTED-RESULT-PROJECTION-01 records actual one-code-unit narrowing warning2->0;
+pre-review unit1 remains consumed, with no additional behavior/review counter.
+
+The [capacity incident](../../.codex-workflow/phases/PHASE-69.7/JM69-10C6-accumulator01-capacity-incident01.json)
+retains initial and one retry no-child capacity rejections, with no submitted
+command, consumed permission, tests or repair unit. The original three-turn
+blocked audit remains historical. Earlier elapsed-time expiry/fresh-request
+inference is corrected infrastructure bookkeeping: current permission has no
+wall-time expiration and was not renewed. The [actual recovery](../../.codex-workflow/phases/PHASE-69.7/JM69-10C6-accumulator01-runtime-recovery03.json)
+observed the same original Goal active and changed agent tree containing only
+/root; original control102/subject2/live unconsumed ACC001 intake/request/attempt/
+permission were retained. Accepted registered dispatch after external tree
+movement led to the original ACC001 first execution above, without a product
+edit, new PLAN epoch, capacity-cause inference or counter reset.
+
+Historical Step68 before/69 planned is now actual69 plus20 preserved user/agent paths,
+and remains
+within original authority. Prior C5 actual8/55 and120/980+pending1 are C5-only;
+all earlier A/B/C1..C4, D1 ancestry/reciprocal deferrals and infrastructure/
+disclosure/repair histories remain. Initial C6 authoring resets/consumes no
+reviewed-Step/Phase repair allowance. Original events17/budgets10/reviews2/
+fullPhaseReviews0/epoch1, activeJM10repair0/historicalJM09repair1/Phase0 and
+nonconverging0/limit3 remain. Actual CBD source scope remains unanswered/unadmitted;
+original whole-Step/Phase gates are unwaived. JM69-09 DONE; JM69-10 OPEN;
+Phase69.7 IN_PROGRESS. Original Goal/authority/base/binding/epoch/history/ledgers/
+budgets/counters and all prior Stage/user/agent changes remain. Parent owns diff
+verification, selected execution, review and transitions. Stage stays IN_PROGRESS
+with four checked and four open items; acceptance_status=not-accepted. Original
+wholeJM10 protected independent M2 assurance and local Step commit, actual
+notification/JCL/governance/CompositeQuery/security/matrix/positive started-work
+decision, CBD provider/Entity/completed full Review/fresh runtime, compatibility/
+promotion, aggregate full CNCF/downstream validation, sole original epoch1 Phase
+review and final local release remain mandatory. No partial acceptance,
+Goal change, commit, push, publication, deployment or successor is recorded.
+
+## Stage JM69-10C7 Actual Job notification
+
+Stage status: IN_PROGRESS
+status=focused_validation_passed
+manifest=PHASE-69.7-JM69-10C7-implementation01@1
+validation_status=representative-and-accumulator-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+
+The [C7 journal](../journal/2026/10/2026-10-05-phase-69.7-job-notification-cross-process.md)
+records exact eight-path original authoring and provenance. The
+[NT1..NT9 companion](../spec/job-cross-process-acceptance-contract.md#fresh-job-notification-process-companion),
+[native composition](../design/job-cross-process-acceptance.md#fresh-job-notification-process-composition)
+and [executable specification](../../src/test/scala/org/goldenport/cncf/job/JobNotificationCrossProcessAcceptanceSpec.scala)
+author genuine paid Job lifecycle -> actual EventBus/default configured provider,
+literal mode-specific request/diagnostic and independent fresh enabled-provider
+native/no-replay/read-effect oracles. Seven closed modes and alpha1..8 inputs use
+ordinary shrinking seed69710091L/min24/workers1 with inner/outer GWT. Native
+revision6/physical owned bytes/paid2,96,1,1/quota and actual closure are observed
+locally before bounded receipts. Initial authored_validation_pending/planned-not-run
+is historical and superseded by actual subject revision2 selected validation.
+REP002 completed7 suites/51 tests,51 succeeded/pending0; ACC001 completed123
+suites/1006 tests,1006 succeeded plus only original SqliteDataStoreSpec pending1.
+Both have failed0/aborted0/canceled0/ignored0/compilerwarnings0, typed reader/SBT/
+wrapper0, permission consumed and lock=released. The [actual C7 selected evidence](../journal/2026/10/2026-10-05-phase-69.7-job-notification-cross-process.md#actual-revision2-selected-validation)
+links results/logs/summaries and mechanical admission revision2. Initial REP001
+completed7 suites/51 tests with43 successes/8 failures/compilerwarnings0,
+SBT/wrapper1 and lock=released; the shared fresh-scope reference defect and
+registered two-file M1 capture-original-scope correction remain historical.
+C7-SELECTED-RESULT-PROJECTION-01 projects the admitted results only: consumed
+pre-review unit1 narrows8->0, with original counters unchanged.
+
+- [x] C7-01 Authored programs/oracles: exact eight C7 paths, three new native notification programs and eight adjacent-GWT semantic leaves under original Manifest01 authority/base/binding/epoch; parent source/GWT admission accepted for subject revision2.
+- [x] C7-02 Authored compliance: Oct5 ASAMI headers, required naming/explicit returns/narrow imports/braces, afterWord rule metadata and generated inner/outer GWT; parent mechanical/compliance admission revision2 accepted.
+- [x] C7-03 Representative run: actual subject revision2 REP0027 suites/51 succeeded, zero failures/warnings/pending; typed reader/SBT/wrapper0, permission consumed and lock=released, parent-admitted.
+- [x] C7-04 Accumulator run: actual subject revision2 original ordered121+2=123ACC001123 suites/1006 succeeded, zero failures/warnings and only original SqliteDataStoreSpec pending1; typed reader/SBT/wrapper0, permission consumed and lock=released, parent-admitted.
+- [ ] C7-05 Original wholeStep assurance: complete protected whole-JM10 M2 independent assurance including C7 and all retained repairs without partial-Slice acceptance.
+- [ ] C7-06 Remaining original matrix/CBD: actual JCL/governance/CompositeQuery/security/matrix/positive started-work decision, admitted CBD provider/Entity/completed full Review/fresh runtime, compatibility and accepted promotion.
+- [ ] C7-07 CompleteStepcommit: finish original whole JM69-10 acceptance and local Step commit after all mandatory scope and assurance.
+- [ ] C7-08 Aggregate/fullPhase/release: complete aggregate full CNCF/downstream validation, sole original epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+Prior C6 selected results and repaired-warning/capacity/permission/recovery history,
+all prior Stage/A/B/C1..C6/D1 evidence, original authority/base/binding/epoch/history/
+budgets/counters and user/agent edits remain. Initial C7 authoring consumed no new
+reviewed-Step/Phase repair; actual pre-review unit1 is consumed, narrowing8->0.
+This M0 result projection consumes no additional repair unit and resets no
+reviewed-Step/Phase/nonconverging counters. CBD source scope remains unanswered/unadmitted; native
+scalar notification evidence cannot replace actual completed CBD Review proof.
+Original wholeStep promoted guidance and remaining gates are mandatory. Parent
+owns diff verification, validation, re-review and transitions. JM69-09 DONE;
+JM69-10 OPEN; Phase69.7 IN_PROGRESS. No C7-only acceptance, goal change, commit,
+push, publication, deployment or successor is recorded.
+
+## Stage JM69-10C8 Actual CompositeQuery native diagnostics
+
+Stage status: IN_PROGRESS
+status=focused_validation_passed
+manifest=PHASE-69.7-JM69-10C8-implementation01@2
+validation_status=subject8-REP010-ACC002-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+
+The [C8 journal](../journal/2026/10/2026-10-05-phase-69.7-composite-query-native-diagnostics.md)
+records exact twelve-path initial authoring, preserved no-edit binding mismatch
+and corrected revision2 public native subsystem/engine binding. The
+[CQNT1..CQNT9 companion](../spec/job-cross-process-acceptance-contract.md#compositequery-native-process-companion),
+[native composition](../design/job-cross-process-acceptance.md#compositequery-native-process-composition)
+and [five-leaf executable specification](../../src/test/scala/org/goldenport/cncf/job/CompositeQueryNativeCrossProcessAcceptanceSpec.scala)
+author original native REALTIME public-facade Query execution against a separate
+immutable target-c8, actual canonical Void await/monitor barrier, signed6/Absent/
+paid2,96,1,1 diagnostics, default Ephemeral native0, fresh MANUAL no-replay/
+zero-effect/current-caller oracles and full owned actor/engine/timer/worker/node/
+SQL cleanup. Ordinary seed69710081L/min24/workers1 generated cases retain
+inner/outer GWT. At initial authoring actual C8 representative/accumulator
+results were unavailable and selected8REP/128ACC were planned-not-run.
+Current subject8 results below supersede that initial validation status.
+
+- [x] C8-01 Authored programs/oracles: exact twelve C8 paths, two bounded production metadata/argument edits, three new native CompositeQuery programs and five adjacent-GWT semantic leaves under revision2/original authority/base/binding/epoch.
+- [x] C8-02 Authored compliance: Oct5 ASAMI headers, required naming/explicit returns/narrow imports/structural braces, same-file target-program debt and generated inner/outer GWT; parent admitted current subject8 source/GWT/compliance before selected validation.
+- [x] C8-03 Representative run: parent-admitted current subject8 REP010 completed8 suites/66 tests,66 succeeded; failed0/aborted0/canceled0/ignored0/pending0/compilerwarnings0, typed reader/SBT/wrapper0, consumed permission and lock=released.
+- [x] C8-04 Accumulator run: parent-admitted current subject8 ACC002 completed128 suites/1050 tests,1050 succeeded; failed0/aborted0/canceled0/ignored0/compilerwarnings0 and only original SqliteDataStoreSpec pending1, typed reader/SBT/wrapper0, consumed permission and lock=released.
+- [ ] C8-05 Original wholeStep assurance: complete protected whole-JM10 M2 independent assurance including C8 and all retained repairs without partial-Slice acceptance.
+- [ ] C8-06 Remaining original matrix/CBD: actual JCL/governance/security/matrix/positive started-work decision, admitted CBD provider/Entity/completed full Review/fresh runtime, compatibility and accepted guidance promotion.
+- [ ] C8-07 CompleteStepcommit: finish original whole JM69-10 acceptance and local Step commit after all mandatory scope and assurance.
+- [ ] C8-08 Aggregate/fullPhase/release: complete aggregate full CNCF/downstream validation, predecessor deferred-full handoffs, sole original epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+Prior C7 actual receipts and pre-review narrowing8->0, all prior A/B/C1..C7/D1
+evidence, original authority/base/binding/epoch/history/budgets/counters and
+user/agent work remain. The initial C8 mismatch performed no edit/test/review
+and consumed no repair allowance; this initial revision2 authoring resets no
+counter and records no invented execution. Stable separate HYG-PH697-SQL-SIZE-01,
+HYG-PH697-ROOTA-VALIDATION-PROJECTION-01 and HYG-PH697-SUBSYSTEM-SIZE-01 remain.
+CBD source scope remains unanswered/unadmitted. Parent owns diff verification,
+validation, independent assurance and transitions. JM69-09 DONE; JM69-10 OPEN;
+Phase69.7 IN_PROGRESS. No C8-only acceptance, goal change, commit, push,
+publication, deployment or successor is recorded.
+
+
+## Current C8 selected validation — 2026-10-06
+
+Initial authored_validation_pending/planned-not-run is historical. Parent-admitted
+current subject8 selected Slice validation is complete:
+[JM69-10C8-representative10-result.json@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C8-representative10-result.json)
+records PH697-JM10C8-REP-010,8 completed suites/66 tests,66 succeeded, pending0;
+[JM69-10C8-accumulator02-result.json@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C8-accumulator02-result.json)
+records PH697-JM10C8-ACC-002,128 completed suites/1050 tests,1050 succeeded,
+with only original SqliteDataStoreSpec pending1. Both invocation summaries use
+cncf.sbt.invocation-summary.v1 and report failed0/aborted0/canceled0/ignored0,
+compile_failed=false, compilerwarnings0, typed reader exit0/SBT exit0/wrapper
+exit0, consumed permission and serial lock=released. Result records retain the
+actual log/summary paths and completion markers.
+
+The [C8 journal chronology](../journal/2026/10/2026-10-05-phase-69.7-composite-query-native-diagnostics.md#current-c8-validation-chronology--2026-10-06)
+retains the original no-edit binding mismatch, five bounded pre-review corrections,
+historical REP008 subject6 success, failed ACC001/CP003 and REP009 subject7,
+external human dependency recovery and actual generated-only CP004 PASS. Latest
+selected Cozy0.3.3-SNAPSHOT remains; compatible external dependency recovery
+resolved this run without establishing publisher identity or importing/accepting
+future Phase100 APIs. CQNT1..CQNT9, genuine process/property/native/canonical/
+privacy/payment/cleanup oracles and all historical receipts remain unchanged.
+This documentation projection consumes no repair unit or counter reset.
+
+JM69-09 remains DONE; JM69-10 remains OPEN; Phase69.7 remains IN_PROGRESS.
+Original whole-JM10 protected M2 independent Step review and local acceptance
+commit remain pending. Actual admitted CBD provider -> Entity -> completed full
+Review, independent fresh real recovery, remaining original matrix/positive
+started-work choice, compatibility/accepted guidance promotion, predecessor
+deferred-full validation, aggregate full CNCF/downstream validation, sole original
+epoch1 comprehensive Phase review and final local Phase release remain owed.
+Original Goal/authority/base/binding/epochs/history/ledgers/budgets/counters and
+other authors' work remain. Parent owns diff/link/status verification, validation,
+review and transitions; this editor runs no validation or self-review.
+
+## Stage JM69-10C9 Actual public JCL and lightweight definition native processes
+
+Stage status: IN_PROGRESS
+
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: Parent updates only from attributable authoring, selected execution and original whole-Step assurance; DONE/CLOSED requires all eight C9 checklist items checked.
+
+status=selected_validation_complete
+manifest=PHASE-69.7-JM69-10C9-implementation01@3
+validation_status=REP006-and-ACC001-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+
+The [Oct6 C9 journal](../journal/2026/10/2026-10-06-phase-69.7-job-jcl-cross-process.md)
+records completion of revised initial authoring in exactly eleven paths, with
+the preserved actual revision1 pre-edit C9-SIGNED-DEFINITION-SOURCE-01 and
+revision2 partial-authoring C9-FINITE-FLOW-ROOT-PARENT-02. Parent Manifest3
+freezes dual native JobEntity submitted A/current JobDefinition B/Retired plus
+separate signed metadata authority, and JCL-private site-selected root/child/
+continuation relations with actual previous/source parent IDs and genuine
+accumulated boundary prefixes. No source digest/schema/Blob/seed, model
+detachment/padding, engine/projector relaxation or reduced generated count is
+introduced. The two owned current JCL documents now consume the canonical
+lightweight opaque saved-ID/key/source/format/profile/lifecycle contract and
+EntityStore-owned internal revision, without domain version/revision/hash.
+
+The [JX1..JX9 companion](../spec/job-cross-process-acceptance-contract.md#jcl-native-process-companion),
+[native composition](../design/job-cross-process-acceptance.md#jcl-native-process-composition)
+and [seven-scenario executable specification](../../src/test/scala/org/goldenport/cncf/job/JobJclCrossProcessAcceptanceSpec.scala)
+retain actual public Action/native EntityStore/configured SQLite/provider,
+scalar/parameter/context/canonical/payment/privacy/foreign-refusal/no-replay
+and owned resource/process assertions. Real REALTIME writer exit precedes an
+independently fresh Manual reader; only opaque Job IDs and bounded independent
+selectors cross JVMs. Persistent N1..3 keeps semantic4+2N/charged2N/
+history32+64N+notes/admissions1/cancelCredits1, explicit Ephemeral stays empty,
+and normal seed69710101L/min24/workers1 shrinking preserves all selected
+Root/Child chains/prefixes with adjacent inner/outer GWT. At initial authoring
+C9 validation had not run and selected6REP/129ACC were planned-not-run.
+Actual selected validation is recorded below; original acceptance remains open.
+
+- [x] C9-01 Authored programs/oracles: exact eleven owned paths, preserved four partial Scala programs, site-selected delegating metadata, native dual-Entity/source/signed distinction, full seven E1_JX1..E7_JX7 adjacent-GWT scenarios and ordinary real-process property under Manifest3.
+- [x] C9-02 Authored compliance/docs: Oct6 ASAMI headers with preserved original production since, required naming/explicit returns/narrow imports/structural braces, same-file target debt and all seven doc projections; current stale lightweight identity/version/hash claims corrected within owned paths.
+- [x] C9-03 Representative validation: parent diff/GWT/compliance admission and actual REP006 selected six-suite run; 60 tests succeeded, compiler warnings0, reader/SBT/wrapper0, permission consumed and lock=released.
+- [x] C9-04 Accumulator validation: actual ACC001 exact parent-selected ordered129-suite run including original128 plus C9; 1057 tests succeeded plus the sole original SqliteDataStoreSpec pending1, compiler warnings0, reader/SBT/wrapper0, permission consumed and lock=released.
+- [ ] C9-05 Remaining process/security decision: C10 actual event/continuation processes, remaining original security/matrix and protected positive started-work decision, compatibility and accepted guidance promotion.
+- [ ] C9-06 Actual CBD: admitted real provider -> Entity -> completed full Review -> independently fresh exact real recovery without component shadow state; source scope remains unadmitted.
+- [ ] C9-07 Original wholeStep: protected independent whole-JM69-10 M2 review including all retained repairs, acceptance and local Step commit after every mandatory Slice.
+- [ ] C9-08 Aggregate/fullPhase/release: predecessor reciprocal deferred-full obligations, aggregate full CNCF/downstream validation, sole original epoch1 comprehensive Phase review and final version/closure/local Phase release.
+
+C8 subject8 actual8/66 and128/1050 plus original pending1/zero warnings/
+typed reader-SBT-wrapper0/lock=released remain C8-only evidence. All prior
+A/B/C1..C8/D1 evidence, both C9 mismatches, dependency/infrastructure/disclosure
+history and narrowing/repair accounting remain. Stable separate
+HYG-PH697-SQL-SIZE-01, HYG-PH697-ROOTA-VALIDATION-PROJECTION-01 and
+HYG-PH697-SUBSYSTEM-SIZE-01 remain. Initial revised authoring consumes no
+reviewed-Step/Phase repair and resets no counter/epoch/history. Governance
+means current lightweight lifecycle only; retired proposal/approval/hash/history
+systems are not restored. JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS.
+Original Goal/authority/base/binding/epoch/history/ledgers/budgets/counters and
+other authors' work remain. Parent owns diff verification, tests, independently
+selected repairs/review and transitions. No C9-only acceptance, Goal change,
+commit, push, publication, deployment or successor is recorded.
+
+## Current C9 selected validation — 2026-10-06
+
+Initial `authored_validation_pending` / `planned-not-run` remains authoring
+history and is superseded by `status=selected_validation_complete` and
+`validation_status=REP006-and-ACC001-passed`. Current
+`review_status=original-wholeStep-protected-M2-pending` and
+`acceptance_status=not-accepted` remain unchanged.
+
+Actual [REP006 representative result](../../.codex-workflow/phases/PHASE-69.7/JM69-10C9-representative06-result.json) completed6 suites/60 tests,
+60 succeeded, aborted0/failed0/canceled0/ignored0/pending0/compilerwarnings0.
+Actual [ACC001 accumulator result](../../.codex-workflow/phases/PHASE-69.7/JM69-10C9-accumulator01-result.json) completed129 suites/1057 tests,
+1057 succeeded, aborted0/failed0/canceled0/ignored0/compilerwarnings0, plus
+only the original `SqliteDataStoreSpec` pending1. Both typed readers, SBT and
+wrappers exited0; both execution permissions were consumed and actual
+`lock=released` was verified by the parent. These are selected-validation
+results, with no full-repository, whole-Step or full-Phase acceptance inferred.
+
+JX6 retains four typed pre-execution refusals and complete unchanged native
+baselines/effects. The original malformed-YAML refusal retains `ParserException`,
+the `expected the node content` diagnostic and exact `Taxonomy(System,Corrupted)`
+(System-Corrupted). Draft/Retired exact messages and the unsupported exact-key
+message retain `argumentInvalid`. This records existing branch-specific public
+consequences; it introduces no parser/taxonomy policy and weakens no negative
+assertion. Source A/current B, separate signed metadata, JX1..JX9, privacy,
+no-reader-replay, cleanup and the ordinary seeded min24 property remain unchanged.
+
+Stage remains IN_PROGRESS; JM69-09 DONE, JM69-10 OPEN and Phase69.7 IN_PROGRESS.
+All original wider acceptance obligations above remain open, including actual
+C10 processes, security/positive started-work decision, actual CBD full Review
+and independent fresh recovery, compatibility/guidance promotion, protected
+whole-JM10 M2/local acceptance commit, predecessor reciprocal deferred-full,
+aggregate full CNCF/downstream validation, sole epoch1 full Phase review and
+final local release. Original history, allowances, counters and HYG records
+remain; selected validation neither resets them nor records review acceptance.
+
+## Stage JM69-10C10 Actual public JCL event and continuation native processes
+
+Stage status: IN_PROGRESS
+
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: Parent records attributable authoring, selected execution and original whole-Step assurance; authoring alone cannot check validation, review or acceptance gates.
+
+status=selected_validation_passed_wholeStep_review_pending
+manifest=PHASE-69.7-JM69-10C10-implementation01@1
+repair_manifest=PHASE-69.7-JM69-10C10-pre-review-fix03@1
+validation_status=subject4-focused-representative-accumulator-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+stage_status=IN_PROGRESS
+phase_status=in_progress
+step_status=OPEN
+
+Current selected projection is repaired C10 subject4 with focused, representative
+and accumulator validation passed; original whole-Step assurance remains pending. Initial authored_validation_pending/planned-not-run remains history.
+Earlier dated C9 IN_PROGRESS
+projections and REP006/ACC001 green/failure histories remain historical evidence;
+no earlier acceptance or allowance is rewritten. JM69-09 remains DONE,
+JM69-10 remains OPEN and Phase69.7 remains IN_PROGRESS.
+
+The [C10 journal](../journal/2026/10/2026-10-06-phase-69.7-job-jcl-event-cross-process.md),
+[EC1..EC9 contract](../spec/job-cross-process-acceptance-contract.md#jcl-event-and-continuation-native-process-companion)
+and [composition](../design/job-cross-process-acceptance.md#jcl-event-and-continuation-native-process-composition)
+map nine adjacent GWT leaves to the three new owned programs. Public inline
+JobControl YAML, real same-engine CommandActions and one existing authorized
+EventBus observer cover PersistentRoot, PersistentFlow, NonPersistentEvent,
+EphemeralJob, SourceFailure, DispatchFailure, HandlerFailure, ForeignReader
+and ordinary GeneratedPersistentFlow alpha1..8/N1..3, seed69710102L/min24/workers1.
+
+Independent metadata selectors validate genuine growing checkpoints while
+the emitting source remains Running/Pending during handlers. Root/no parent,
+finite Child/reference-root and every Continuation/reference-source retain
+actual order and Own/PerTask metadata. T=base+N requires signed revision4+2*T,
+all terminal descriptors Committed, Succeeded(Absent), native paid2*T/
+(32+64*T+32*N+notes)/(1+N)/(1+N), notes3/4, remaining0, exact T normal IDs,
+no claims and cancelclaimed=false. Dynamic continuations each reserve their
+own native work ticket.
+
+Actual attempts, canonical post-commit callbacks, UoW aborts and source wrapper
+outcomes remain distinct. Original source/observer/handler failure conclusions
+and short-circuit behavior are retained; an already successful source delegate
+commit is not erased by later wrapper failure. The original ReceptionDomainEvent
+and real writer EventRecords prove lineage, clock occurrence and observer order.
+Persistent events append only to the existing in-memory Subsystem EventStore;
+all independent fresh readers have selected eventcount0. Ephemeral/failure
+readers receive no Job ID and preserve an empty native durable Job namespace.
+
+Persistent fresh readers restore exact signed terminal/payment facts, load
+positive native inline JobEntity debug and preserve original scalar
+UnavailableAfterRestart or foreign refusal/concealment. Rows/payment stay
+unchanged and reader action/commit/source/pair/port/Blob/publication/SQL/
+Entity-write/event/redispatch effects are zero. Actual sequential writer exit,
+PID/start/UUID separation, child60s/receipt16384-byte/stderr2048-byte bounds,
+failed-log retention and successful-only owned cleanup accompany original
+node/lease/provider/owner/maintenance/worker/timer/scheduler closure.
+
+- [x] Author the three owned native fixture/probe/spec programs and nine EC1..EC9 leaves, including complete generated-invocation GWT.
+- [x] Project the selected C10 contract, design, journal and equal Phase/checklist IN_PROGRESS status in the seven owned documents.
+- [x] Author the bounded private Continuation routing repair, CP1/CP2/CP3 exhaustive lifecycle/metadata/source specifications and strict compensation contract under fix03.
+- [x] Run parent-selected focused2, representative9 and accumulated130 suites on repaired subject4 through the registered serialized runner; record actual discovered outcomes, warnings, permission and lock-release evidence.
+- [ ] Complete original whole-JM69-10 protected independent M2 and local Step acceptance commit after all remaining Slices.
+- [ ] Complete remaining security/positive started-work decision, actual CBD provider/Entity/completed full Review and independently fresh recovery, compatibility and accepted guidance promotion.
+- [ ] Complete predecessor reciprocal deferred-full, aggregate full CNCF/downstream validation, sole original epoch1 Phase review and final local release.
+
+Actual [REP001](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-representative01-result.json)
+refused on a stale Cozy classpath prerequisite before compile; authorized
+[CP001](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-cozy-classpath-prerequisite01-result.json)
+classpath export succeeded.
+[REP002](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-representative02-result.json)
+completed8 suites/76 tests/68 succeeded/8 failed;
+[focused01](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-focused01-result.json)
+recorded9 tests/2 succeeded/7 failed and
+[focused02](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-focused02-result.json)
+recorded9 tests/4 succeeded/5 failed. Runtime compilations had compilerwarnings0;
+all actual typed results were consumed and locks released. Earlier two
+test-only abort/provenance/diagnostic corrections and narrowing8→7→5 remain.
+
+The remaining EC1/EC2/EC3/EC8/EC9 failures exposed private V2 Continuation
+compensation routing into the Root/Child-only aggregate predicate. Frozen
+`C10-NATIVE-CONTINUATION-PROJECTION-01` now has exactly the prescribed strict
+Continuation routing and CP1/CP2/CP3 regression authoring. Empty fields retain
+None, targetless incomplete metadata refuses, complete explicit correspondence
+stays exact, and all source/lifecycle/V1/Root/Child/companion semantics remain.
+The six-path amendment adds three paths to the initial ten C10 paths:
+DurableJobTaskProjection.scala, DurableJobProjectionSpec.scala and
+durable-job-record-contract.md; C10 union13 and whole-JM69-10 union95 retain
+the original88 and20 unrelated partition.
+
+Neither implementation nor repair editor executed tests or review. Parent recorded
+actual repaired subject4 focused2/representative9/accumulator130 passing results;
+original Step/Phase acceptance, commit and closure remain pending. EventReception
+is not repaired; its separate potential issue remains an unverified candidate. All
+original allowances, counters, failures, infrastructure/disclosure histories,
+goal binding and epoch remain. Parent owns diff verification, selected
+validation, independent review and transitions.
+
+The carried [HYG-PH697-SQL-SIZE-01](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md#hyg-ph697-sql-size-01--bounded-fix-and-inherited-debt),
+[HYG-PH697-ROOTA-VALIDATION-PROJECTION-01](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md)
+and [HYG-PH697-SUBSYSTEM-SIZE-01](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md)
+retain their existing separate follow-up scope. No out-of-owned cleanup,
+publication, push, deployment or successor work is part of C10.
+
+## Selected repaired-subject4 validation
+
+| Selected actual evidence | Result |
+| --- | --- |
+| [Focused](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-focused02-result.json) | 2 suites; 25/25 passed; failed0; pending0; compilerwarnings0; reader0/SBT0/wrapper0; lock=released |
+| [Representative](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-representative01-result.json) | 9 suites; 92/92 passed; failed0; pending0; compilerwarnings0; reader0/SBT0/wrapper0; lock=released |
+| [Accumulator](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-accumulator01-result.json) | 130 suites; 1069/1069 passed; failed0; pending1; compilerwarnings0; reader0/SBT0/wrapper0; lock=released |
+
+The first repaired [focused01 attempt](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-focused01-result.json) stopped before compilation/test
+on a stale Cozy development classpath. Authorized [CP002 export](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-cozy-classpath-prerequisite02-result.json)
+succeeded at the selected0.3.3-SNAPSHOT; its actual prerequisite notices remain
+in that separate record. Only then was the same selected focused command run
+under a fresh invocation. Every listed actual result consumed its own permission
+and released the shared serial lock; no failed request was replayed.
+
+The actual C10 failing surface narrowed8→7→5→0 through three consumed
+pre-review repairs, nonconverging0. CP1..CP3 and all EC1..EC9 passed, including
+the original min24 real-process shrinking property. The accumulator retains
+only the previously admitted SqliteDataStoreSpec pending case.
+
+This is selected incremental validation only. StageC10 remains IN_PROGRESS,
+JM69-10 OPEN, Phase69.7 in_progress and acceptance not-accepted. Original
+whole-JM69-10 independent protected M2/local Step commit, actual CBD provider→
+Entity→completed full Review and independent fresh recovery, positive started-work
+closure, predecessor deferred-full validations, aggregate final full validation,
+sole epoch1 full Phase review and final local release remain OPEN.
+Original authority/base/binding/history/counters and failure records are retained.
+No push, publication, deployment or successor work occurred.
+
+
+# Stage JM69-10C11 Native startup security cross-process acceptance
+
+- Owner: original Phase69.7 parent
+- Update rule: Record actual authoring and parent-selected execution separately; validation/review/acceptance gates require their own attributable evidence.
+
+status=validated_review_pending
+manifest=PHASE-69.7-JM69-10C11-validation-fix01@1
+cycle_plan=PHASE-69.7-JM69-10C11-cycle-plan02@1
+validation_status=REP002-passed-ACC001-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+stage_status=IN_PROGRESS
+phase_status=in_progress
+step_status=OPEN
+
+The [C11 journal](../journal/2026/10/2026-10-06-phase-69.7-job-security-cross-process.md),
+[SEC1..SEC8 contract](../spec/job-cross-process-acceptance-contract.md#native-startup-security-cross-process-acceptance)
+and [native composition](../design/job-cross-process-acceptance.md#native-startup-security-cross-process-composition)
+record the initial ten-path authoring history and seven actual behavior leaves.
+Current [Fix Manifest](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-validation-fix01.json)
+and [CyclePlan revision2](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-cycle-plan02.json)
+freeze exactly seven repair paths at rePLAN controls125/126. The new
+JobSecurityCrossProcess Case delegates unchanged genuine writer(count1..3),
+then starts its own independently configured native reader after writer
+closure/exit. Six closed Mode selectors supply original access independently;
+only one selected ordinal differs. Signed-body-derived access, synthetic
+terminal publication, writer-domain-state transport and new reader Tasks are
+excluded by the frozen boundary.
+
+S1 covers ExactAccess/ExtraScopes x count1/count3. S2..S5 cover ForeignTenant,
+ForeignSubject, MissingScopes and UnrelatedScopes at count1/index0. S6 runs
+all four denied modes at every count3 ordinal: twelve real sequential pairs.
+S7 generates dependent six-mode/count1..3/index0..count-1 with ordinary
+integer shrinking preserving mode and valid count/index bounds: ordinary count
+shrinks filtered to1..3 with index<count, then ordinary index shrinks filtered
+to0<=index<count. Recursive shrinking, seed69710103L/min24/workers1 and the full actual process oracle;
+passed, succeeded>=24 and discarded0 are required. All leaves and each matrix/
+generated invocation have adjacent actual Given/When/Then and SEC traceability.
+
+Both ordered reports retain candidate IDs/ordinals. Genuine completed runtime
+facts are all Refused; positive terminal facts are Registered/Ready with an
+installed owner. Selected denials are exactly terminal Refused, fixed durable
+runtime startup refused, Degraded/execution unavailable/runtime not ready/no
+owner. Healthy mixed prefixes/suffixes retain body-free durable projections;
+denied query/status/projection is absent. Tenant/subject equality and required
+scope subset remain original, with no job_admin context/capability bypass.
+
+Local native job/storage/lifetime/blob-quota rows remain identical after
+startup/query/auth/payment observations. Separate trusted original-access
+observer loads every intact signed revision6/Succeeded(Absent)/static definition
+and paid Seed(2,96,1,1), remaining0, exact single normal ID, no claims or cancel
+claim. It never overrides denied candidate access. Positive queries retain
+raw None and original management UnavailableAfterRestart; mixed healthy queries
+assert only existing body-free projection/status, without absent-owner
+management success. Empty Tasks/keyed requests/executable maps/queue, Port0,
+leased drainAll0, Entity mutation0, body/getter0, ID/Clock deltas0 and manual
+pending timers1positive/0denied accompany zero Job pending/executing replay work.
+Positive maintenance status is started/not closed/not in flight/nextDueAt present/
+lastResult absent. The actual raw timer count and exact scheduler status stay
+unchanged through reads/native authentication/leased drainAll. Actual
+nodeStopped/lease0/SQL/installed-owner closure yields global timers0 and installed
+scheduler closed/not started/not in flight/no nextDueAt. Receipt timers retain
+the preclosure raw1positive/0denied; no reset/subtraction/disable/time advance.
+Receipts transfer only bounded scalar observations after assertions/closure,
+with actual PID/start/UUID separation, owned child60s and5s+5s termination,
+stderr2048-byte/receipt16384-byte bounds, failed logs retained and successful-only
+owned cleanup. Healthy retained memory is allowed; no blanket rollback or
+invented zero-resource oracle is used.
+
+The two frozen same-file M0 edits remove only the Oct.2 history line in
+DurableJobTaskProjection.scala and DurableJobProjectionSpec.scala, retaining
+original @since, Oct.6 @version, author and spec Sep.14 history. Strict C10
+Continuation/Root/Child/V1 behavior and all original semantic specifications
+remain unchanged. Parent-recorded C10 subject4 focused2/25, REP9/92 and
+ACC130/1069+originalpending1 success, prerequisites/failures and narrowing8→7→5→0
+history remain preserved. Actual C11 REP001 completed4 suites/26 tests:
+24 success/2 failures (S1/S7), compiler warnings/aborts/pending/ignored/canceled0,
+reader2/SBT1/wrapper1, consumed permission and lock=released.
+C11-READY-MAINTENANCE-TIMER-ORACLE-01 repairs the disproved preclosure timer0
+premise; C11-DEPENDENT-SHRINK-DOMAIN-01 repairs invalid count0 tuple shrink.
+The seven-path repair was authored with REP002same4/ACC001same131 planned, not run.
+
+Actual parent-admitted subject2 selected validation is now complete:
+[REP002](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-representative02-result.json), invocation
+PH697-JM10C11-REP-002, completed4 suites/26 tests,26 succeeded/pending0;
+[ACC001](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-accumulator01-result.json), invocation
+PH697-JM10C11-ACC-001, completed131 suites/1076 tests,1076 succeeded plus
+only original SqliteDataStoreSpec: should store record fields as columns pending1.
+Both have failed0/aborted0/canceled0/ignored0/compilerwarnings0, typed
+reader0/SBT0/wrapper0, permission consumed and lock=released. Initial
+repair_authored_test_pending/REP001-failed-REP002-ACC001-planned remains
+historical; original failed REP001 and both repair causes are retained.
+These are parent-selected focused/accumulated tests; repository/downstream
+full validation and original whole-Step independent assurance/acceptance remain
+pending. This factual projection changes no acceptance or repair counters.
+
+- [x] Author the three exact owned security fixture/probe/spec programs and S1..S7, including every matrix/generated-invocation GWT and full original native oracle.
+- [x] Append initial SEC1..SEC8 contract/design, C11 journal and matching Phase/checklist authoring history; current status is validated_review_pending.
+- [x] Remove only the two exact Oct.2 header history lines under C11-LATE-HEADER-MONTH-COMPRESSION-01, preserving original current headers and C10 semantics.
+- [x] Record actual failed REP0014/26/24success/2fail and freeze both stable repair causes at rePLAN controls125/126.
+- [x] Author exact seven-path maintenance-timer oracle/domain-shrink repair and current document projection without executing validation.
+- [x] Run parent-selected REP002same4 suites: actual PH697-JM10C11-REP-002 passed26 tests in4 suites, pending0, failed0/aborted0/canceled0/ignored0/compilerwarnings0, reader/SBT/wrapper0, permission consumed and lock=released.
+- [x] Run parent-selected accumulated131 suites: actual PH697-JM10C11-ACC-001 passed1076 tests in131 suites, only original SqliteDataStoreSpec pending1, failed0/aborted0/canceled0/ignored0/compilerwarnings0, reader/SBT/wrapper0, permission consumed and lock=released.
+- [ ] Complete original whole-JM69-10 protected independent M2 after all original remaining obligations.
+- [ ] Complete original JM69-10 local Step acceptance commit after complete independent assurance; no C11-only acceptance or commit.
+- [ ] Complete actual CBD provider/Entity/completed full Review/independently fresh recovery, positive started-work closure/decision, compatibility and accepted guidance promotion.
+- [ ] Complete predecessor ancestry/reciprocal deferred-full, aggregate complete CNCF/downstream validation, sole original epoch1 Phase review and final version/closure/local release.
+
+JM69-09 DONE; original JM69-10 OPEN; Phase69.7 IN_PROGRESS. C11 REP001 remains
+a historical failure; actual REP002same4/26 and ACC001same131/1076+originalpending1
+passed selected validation, and protected whole-Step assurance/acceptance remains pending.
+The actual CBD provider-pipeline-pending gateway, existing Absent/facade limit
+and unanswered downstream authority remain; no fake full Review/shadow store
+is introduced. Started-work SC5/RC5 refusal evidence is not positive closure.
+Original authority/base/binding/epoch/history/counters remain preserved.
+Initial95 Step paths plus20 unrelated paths was the preauthoring partition;
+current99 Step paths plus20 unrelated paths (119 dirty) is preserved. The three stable
+[HYG-PH697 follow-ups](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md)
+retain their separate scope. No Step/Phase acceptance, full-validation early,
+commit, publication, push, deployment or successor is recorded by authoring.
+
+
+# Stage JM69-10D2 Framework acceptance matrix and restart guidance
+
+- Owner: original Phase69.7 parent
+- Update rule: Authoring, retained selected execution, static verification,
+  original independent review and acceptance require separate evidence.
+
+status=authored_review_pending
+stage_status=IN_PROGRESS
+phase=69.7
+step=JM69-10
+slice=JM69-10D2
+validation_status=retained-selected-ACC001-passed-static-checks-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+phase_status=in_progress
+step_status=OPEN
+manifest=PHASE-69.7-JM69-10D2-implementation01@1
+
+The [D2 journal](../journal/2026/10/2026-10-06-phase-69.7-restart-acceptance-matrix.md),
+[consolidated contract](../spec/job-cross-process-acceptance-contract.md#jm69-10d2-consolidated-restart-acceptance-matrix--2026-10-06),
+[design](../design/job-cross-process-acceptance.md#jm69-10d2-consolidated-restart-acceptance-matrix--2026-10-06),
+[operator specification](../spec/job-user-operator-experience.md#phase-697-restart-and-retained-result-operational-companion--jm69-10d2)
+and [operator design](../design/job-user-operator-experience.md#phase-697-restart-and-retained-result-operational-companion--jm69-10d2)
+record thirteen actual ACC001 suite-head/behavior mappings and the frozen
+existing operational guidance. New appendices are authored_review_pending;
+Phase69.6 accepted operator headers/history and every earlier Phase69.7
+section, original scenario result, C10/C11 failure and counter are retained.
+
+The retained same unchanged program/configuration/inputs evidence is
+[PH697-JM10C11-ACC-001](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-accumulator01-result.json):
+131 completed suites, 1076 succeeded, pending1 (only the original
+SqliteDataStoreSpec “should store record fields as columns”), failed0/aborted0/
+canceled0/ignored0/compilerwarnings0, typed reader0/SBT0/wrapper0,
+permission consumed and lock=released.
+[PH697-JM10C11-REP-002](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-representative02-result.json)
+passed four suites/26 succeeded, pending0 and the same zero failure/exit/warning
+counts with consumed permission and released lock. REP002 covered its selected
+four suites; it supplies no whole-matrix coverage claim. No D2 execution occurred.
+
+Positive unstarted/scheduled recovery and completed writer retry with fresh
+terminal observation remain distinct from SC5 Running4 and RC5 Running5
+started-work no-replay refusals. RecoveryRequired/ActiveLifecycle/
+ExecutionAlreadyStarted and rehydration R2/R3 remain unchanged. The original
+checklist’s real scheduled/retry/crash matrix versus the retained plan’s OPEN
+positive-started-work closure/design choice is recorded parent planning evidence;
+D2 makes no policy decision or acceptance waiver. Actual CBD remains
+provider-pipeline-pending, requires reportId/reportDigest on read, and owes
+provider/Entity/completed full Review/independent fresh recovery. Its checkout
+is read-only and unanswered authority is retained.
+
+- [x] D2-01: Author all thirteen explicit frozen executable-specification/behavior/actual ACC001 suite-head rows in contract, design and D2 journal.
+- [x] D2-02: Author existing restart/retained-result guidance in both operator appendices with authored_review_pending status.
+- [x] D2-03: Record the positive unstarted/completed retry boundary, exact started-work refusal contract and OPEN positive-started-work parent choice.
+- [x] D2-04: Author matching D2 journal/Phase/checklist status and retained actual selected execution evidence.
+- [x] Parent static verification passed: seven documents; thirteen exact frozen source/behavior mappings and ACC001 log lines; 103 local links; Phase/checklist consistency; all four original JM69-10 criteria unchecked; ordinary Git diff --check passed including new journal; no new SBT.
+- [ ] Complete all original whole-Step fixture criteria, including positive-started-work closure/design choice.
+- [ ] Complete actual CBD full Review and independently fresh runtime recovery under admitted authority.
+- [ ] Complete compatibility and accepted spec/design/operator guidance promotion.
+- [ ] Complete original whole-JM69-10 protected independent M2 and local Step acceptance commit.
+- [ ] Complete predecessor ancestry and reciprocal deferred-full validation.
+- [ ] Complete aggregate full CNCF/downstream validation and sole original epoch1 Phase review.
+- [ ] Complete final version/closure evidence and local phase-release commit.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS; acceptance not-accepted.
+Original authority/base/binding/epoch/history are preserved. C11 pre-review
+consumed1, C10 pre-review consumed3, step/phase repair-cycle0, nonconverging0,
+and historical JM69-09 step repair-cycle1 remain unchanged. The original119
+dirty paths (99 Step +20 unrelated) are preserved; the frozen D2 authoring adds
+two existing operator documents and one journal to the intended Step union102,
+with the20 unrelated paths preserved. No new executable behavior/specification
+is introduced; same-file program debt is not applicable.
+[HYG-PH697-SQL-SIZE-01, HYG-PH697-ROOTA-VALIDATION-PROJECTION-01 and HYG-PH697-SUBSYSTEM-SIZE-01](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md)
+retain separate scope. All original acceptance criteria above and in earlier
+sections stay unchecked; authoring closes no Step/Phase or acceptance gate.
+
+
+# Stage JM69-10D3 Existing focused compatibility evidence
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: This checklist is the closure basis; authoring, retained selected
+  execution, independent review and original acceptance require separate evidence.
+
+status=authored_review_pending
+stage_status=IN_PROGRESS
+phase=69.7
+step=JM69-10
+slice=JM69-10D3
+validation_status=retained-selected-ACC001-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+phase_status=in_progress
+step_status=OPEN
+manifest=PHASE-69.7-JM69-10D3-implementation01@1
+
+The [D3 journal](../journal/2026/10/2026-10-06-phase-69.7-compatibility-evidence.md), [contract](../spec/job-cross-process-acceptance-contract.md#jm69-10d3-existing-focused-compatibility-evidence--2026-10-06) and [design](../design/job-cross-process-acceptance.md#jm69-10d3-existing-focused-compatibility-evidence--2026-10-06)
+append nine frozen compatibility families/twenty existing suites with exact
+case/source links, actual ACC001 suite-head lines and every frozen evidence limit.
+The [parent frozen evidence](../../.codex-workflow/phases/PHASE-69.7/JM69-10D3-parent-plan-evidence01.json)
+retains the source and selected-run provenance. Every row records
+selected-tests-passed/original-wholeStep-M2-pending. Existing histories remain
+chronological; this authoring does not accept/promote guidance or close any of
+the four original Step acceptance criteria.
+
+The retained unchanged program/configuration/execution-input evidence is
+[PH697-JM10C11-ACC-001](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-accumulator01-result.json):
+131 completed suites, 1076 succeeded, pending1 (sole original
+SqliteDataStoreSpec “should store record fields as columns”), failed0/aborted0/
+canceled0/ignored0/compilerwarnings0, typed reader0/SBT0/wrapper0,
+permission consumed and lock=released. These are selected execution results;
+original whole-Step protected M2 and aggregate full validation remain pending.
+No D3 SBT or new execution occurred.
+
+Raw/live/legacy result-facade compatibility remains separate from eligible
+owned detached queryVisible. The retry restart-named fixture reuses the same
+State/Task in one process and proves no positive fresh native started-work
+recovery. Normative RecoveryRequired and rehydration R2/R3 are preserved;
+SC5/RC5 started-work no-replay refusals retain the original OPEN closure/design
+choice. UI/provider/Review fixtures are not actual CBD full Review or generic
+fresh inbox proof. CBD remains a read-only provider-pipeline-pending dependency
+with reportId/reportDigest read requirements and unanswered source authority.
+
+- [x] D3-01: Author nine families/twenty suites with exact case/source/actual ACC001 suite-head evidence in contract, design and D3 journal.
+- [x] D3-02: Retain all frozen evidence limits and original normative started-work/downstream boundaries and OPEN obligations.
+- [x] D3-03: Author matching D3 journal/Phase/checklist status and retained actual selected execution evidence.
+- [ ] Complete all original whole-Step fixture criteria and positive-started-work closure/design choice.
+- [ ] Complete actual CBD provider/Entity/full Review and independently fresh runtime recovery under admitted authority.
+- [ ] Complete original compatibility criterion and accepted spec/design/operator guidance promotion.
+- [ ] Complete original whole-JM69-10 protected independent M2 and local Step acceptance commit.
+- [ ] Complete predecessor ancestry and reciprocal deferred-full validation.
+- [ ] Complete aggregate full CNCF/downstream validation and sole original epoch1 full Phase review.
+- [ ] Complete final version/closure evidence and local phase-release commit.
+
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS; acceptance not-accepted.
+Original Goal/authority/base/binding/epoch/history and every historical result
+remain intact. C11 pre-review consumed1, C10 pre-review consumed3,
+step/phase repair-cycle0, nonconverging0 and historical JM69-09 step repair-cycle1
+remain unchanged. D2 intended Step union102 and unrelated20 are preserved;
+this single new D3 journal extends the intended Step union102→103.
+No executable scenario, fixture, test selection or program changes;
+executable-specification authoring gate and same-file program debt are not
+applicable. Separate follow-up debt remains
+[HYG-PH697-SQL-SIZE-01, HYG-PH697-ROOTA-VALIDATION-PROJECTION-01 and HYG-PH697-SUBSYSTEM-SIZE-01](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md).
+Authoring closes no original acceptance gate. Parent owns static diff/link/fact
+verification, validation, independent review, transitions and local commits.
+
+
+# Stage JM69-10CBD1 Registered Provider Canonical Input
+
+Stage Status:
+- Current status: IN_PROGRESS
+- Owner: original Phase69.7 parent
+- Update rule: Authored input handoff, selected validation, independent review,
+  and original whole-Step acceptance require separate evidence.
+
+status=authored_review_pending
+stage_status=IN_PROGRESS
+phase=69.7
+step=JM69-10
+slice=JM69-10CBD1
+manifest=PHASE-69.7-JM69-10CBD1-implementation-manifest01@1
+validation_status=focused_passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+phase_status=in_progress
+step_status=OPEN
+
+The approved participant repository `textus-cbd-support` now authors the
+bounded canonical-input prerequisite under CBD addition01. Its source-relative
+records are `docs/spec/car-review-provider-contract.md`,
+`docs/design/car-review-architecture.md`, and
+`docs/journal/2026/10/2026-10-06-phase-69.7-provider-canonical-input.md`.
+The executable specification is
+`src/test/scala/org/simplemodeling/textus/cbdsupport/CarReviewCanonicalProviderInputSpec.scala`.
+Repository identity and source-relative references apply independently of local
+checkout layout; the main CBD checkout and its unrelated planning remain intact.
+
+The process-local admitted cache uses explicit Review ID plus provider identity
+and retains the successful bounded bundle with metadata. Strict request
+schema/shape and outer Review/target binding precede cache lookup/provider
+execution; quality preflight and registered descriptor selection keep their
+priority. Cached bodies are re-admitted under the current request/policy, with
+attributed refusal and no rerun. Immutable same-Review/provider changed request
+binding refuses. Existing wire digest admission is unchanged and does not
+identify the cache; no new digest mechanism or exception approval is introduced.
+
+The additive canonical API invokes the existing registered ProviderCall path
+once and hands retained `AdmittedProviderBundleInput` directly to the existing
+canonical response application. Legacy public execution signatures, outcome
+constructors/patterns, and named arguments remain compatible. Its eight visible
+GWT scenarios cover registered canonical handoff, legacy-then-canonical cache,
+canonical-then-legacy cache, foreign Review envelope, foreign target envelope,
+registry selection refusal without fallback, attributed malformed/failed/
+timeout/cancellation cases, and immutable same-Review provider request.
+
+- [x] CBD1-01: Author explicit Review/provider cache with actual bounded admitted input.
+- [x] CBD1-02: Author strict request preflight and current-request/policy cached re-admission.
+- [x] CBD1-03: Author additive canonical handoff preserving registered execution and legacy API.
+- [x] CBD1-04: Author all eight frozen executable GWT scenarios and source mapping.
+- [x] CBD1-05: Author scoped CBD contract/design/journal and matching Phase/checklist status.
+- [x] Parent verify actual diff, naming/header/cache identity, GWT source map, links, and both roots' diff whitespace.
+- [x] Run the frozen six-suite CBD focused validation through the registered serial SBT runner.
+- [ ] Connect actual server-owned CBD provider selection, owner-bound Entity/UnitOfWork persistence, and native Job completion.
+- [ ] Prove independently fresh actual CBD full Review reads, caller isolation, no redispatch, and native authority/mutation behavior.
+- [ ] Resolve the original OPEN SC5/RC5 started-work closure/design choice under parent authority.
+- [ ] Complete original whole-JM69-10 protected independent M2 and local Step acceptance commit.
+- [ ] Complete predecessor ancestry and reciprocal deferred-full validation.
+- [ ] Complete aggregate CNCF/downstream full validation and sole original epoch1 comprehensive Phase review.
+- [ ] Complete final version/closure evidence and local phase-release commit.
+
+These controlled registered-provider fixtures are a canonical-input prerequisite.
+They do not prove external Cozy execution, full CBD integration, authoritative
+report persistence, native completed Job, or fresh-reader acceptance. All four
+original JM69-10 acceptance criteria remain unchecked; accepted guidance
+promotion remains pending. Started-work RecoveryRequired remains unchanged.
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS; acceptance not-accepted.
+
+Same-file debt completed: request-digest cache identity and its coordinator
+helper/parameter plumbing removed. Separate
+[HYG-PH697-SQL-SIZE-01, HYG-PH697-ROOTA-VALIDATION-PROJECTION-01 and HYG-PH697-SUBSYSTEM-SIZE-01](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md)
+retain scope. Original active Goal/authority1/binding1/epoch1/history4, approved
+CBD addition01, base and historical evidence/counts remain intact. Selected
+six-suite focused validation passed 32/32; whole-Step acceptance remains pending.
+Retained CNCF C11 ACC001 evidence does not validate CBD.
+Parent owns diff verification, validation, independent review and transitions.
+No Step/Phase acceptance, publication, deployment or successor work is claimed.
+
+## JM69-10CBD2A — Explicit Review Identity Prerequisite (2026-10-06)
+
+stage=IN_PROGRESS
+status=authored_review_pending
+validation_status=focused_passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=notaccepted
+
+Stage Status:
+
+- Current status: IN_PROGRESS
+- Owner: Original Phase69.7 parent and bounded CBD implementation/fix editors.
+- Update rule: The parent updates this block only from attributable source/static evidence, selected execution evidence and original protected Step/Phase acceptance evidence.
+- Closure basis: All unchecked CBD2A checklist items below and all original JM69-10 checklist items remain required; DONE/CLOSED requires their completion under the original acceptance criteria.
+
+The frozen CBD2A prerequisite replaces calculated diagnosis management identity
+with an explicit native server-owned plan reference, positive immutable revision
+and mandatory typed execution selection. Dependency publishers own declared target,
+baseline, availability/evidence and policy revisions. The closed production codec
+restores typed data and compares semantic selections after duplicate refusal;
+Review IDs, time, payloads and vector order cannot invent identity or revision.
+
+ReviewDiagnosis Entity/Aggregate/View retain required plan_revision and
+execution_selection. Persisted root validation refuses revision/selection conflicts
+before join, reuse, conditional successor, completion or terminal ownership.
+Only claim and successful conditional successor issue exact-reference Owner
+leases. Native Entity/UOW creates issue composition and retention IDs; expiry
+deletes actual queried attestation IDs. Conditional persisted revision/state/
+active-Review expectations, sole successor/one start, immutable predecessor,
+stale-owner refusal, current terminal reads and rollback semantics remain.
+Pre-v2 roots missing required fields need a separately owned migration decision;
+setup requires compatible current generated schema, with no silent adapter/rewrite.
+
+- [x] Author the explicit reference/typed-selection/Owner contract and remove management hashes from the selected programs.
+- [x] Author required generated CML schema and native composition-ID create behavior.
+- [x] Author all CBD2A-GWT01 through CBD2A-GWT10 and preserve the eight Entity/UOW persistence behaviors.
+- [x] Replace obsolete documentation-shape evidence with actual production scenario anchors and record current supersession/refusal semantics.
+- [x] Parent intake: verify exact native ownership/diff, case/source mapping, header/naming, links and both roots' whitespace.
+- [x] Run the frozen seven-suite focused CBD validation through the registered serial SBT runner.
+- [ ] Complete actual CBD server provider selection, durable Entity/UOW Review-to-Job binding and Report/attestation commit before native Job success.
+- [ ] Prove writer exit and independently fresh full CBD reads, caller isolation, no redispatch and native mutation authority.
+- [ ] Resolve the original OPEN SC5/RC5 started-work choice; retain RecoveryRequired until separately decided.
+- [ ] Complete original JM69-10 independent protected M2 and local Step acceptance commit.
+- [ ] Complete Phase69.4–69.6 deferred handoffs/full validation, aggregate full validation, sole original epoch1 Phase review and local release closure.
+
+The eight preserved behaviors are claim/join, immutable completion/reuse, bounded
+authorized fresh-UOW Report read, due authorized expiry/tombstone/successor, all
+non-success terminal histories, sole concurrent successor/one start, issued-owner
+refusal and current persisted terminal repeat refusal. This authored prerequisite
+is not full Provider-to-Job or independently fresh-process acceptance. CBD1's
+six-suite 32/32 green evidence remains prior provider-handoff evidence; CBD2A's
+selected seven-suite focused validation passed46/46; whole-Step acceptance pending. All original JM69-10 acceptance criteria
+remain unchecked. JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS.
+
+CBD specification/design/journal references remain in the admitted participant
+checkout: docs/spec/car-review-reuse-key-contract.md,
+docs/spec/car-review-persistence-contract.md, docs/design/car-review-architecture.md
+and docs/journal/2026/10/2026-10-06-phase-69.7-explicit-review-identity.md.
+Same-file debt completed: management digest calculation/canonical identity,
+name-derived root/snapshot/history/retention helpers and obsolete doc-shape suite
+removed; typed ownership/schema and affected GWT authoring applied.
+HYG-PH697-CBD-FACTORY-SIZE-01 remains OPEN separate maintenance of the large
+ComponentFactory. Existing SQL/root-validation-projection/subsystem Hygiene stays
+with its original ledger. No independent finding or Development Candidate is added.
+Original active Goal/authority1/binding1/approved addition01/base/epoch1/history4
+and counters/history remain unchanged. Parent owns validation, independent review
+and transitions; no acceptance, commit, publication, deployment or successor is claimed.
+
+## JM69-10CBD2B — Native UOW Job Submission Prerequisite (2026-10-06)
+
+stage=IN_PROGRESS
+status=authored_review_pending
+validation_status=focused_passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=notaccepted
+
+Stage Status:
+
+- Current status: IN_PROGRESS
+- Owner: Original Phase69.7 parent and bounded native implementation/fix editors.
+- Update rule: The parent updates this block only from attributable source/static evidence, selected execution evidence and original protected Step/Phase acceptance evidence.
+- Closure basis: All unchecked CBD2B items below and every original JM69-10/full closure obligation remain required; DONE/CLOSED requires original acceptance criteria.
+
+The frozen native prerequisite exposes explicit Persistent+Async
+JobEngine.stageSubmit on an existing Ready Subsystem owner/bridge. Original
+State/resource/lifetime budgets reserve retained/pending/root capacity before
+native ID issuance. The unpublished ID has no JobRecord/Entity Job, paid root,
+evidence/event, queue, timer or body. A private UOW resource checks synchronous
+late-registration release and owns only Pending/Activated/Released termination.
+After outer commit, activation enters the original durable owner lease then
+State and publishes the exact issued ID through the shared ordinary native
+builder/lifecycle/lifetime/resource/record/event/Async paths using commit-time
+now. Activated ownership stays with the engine; Failure or control cleanup
+releases only unactivated capacity and preserves acknowledged evidence.
+
+- [x] Author the native API/reservation/UOW/activation/failure/compatibility contract and exact owned implementation paths.
+- [x] Author UJS1–UJS10 with native managed fixture, adjacent GWT and ordinary shrinking seed69710201/min24.
+- [x] Author normative R1–R5, design, journal and matching truthful Phase projections.
+- [x] Parent intake: verify exact ownership/diff, whole-file/header/naming, source/GWT mapping, links and whitespace.
+- [x] Run the frozen eight-suite focused native/UOW validation through the registered serial SBT runner.
+- [ ] Complete actual CBD provider execution, durable Entity/UOW Review-to-Job binding and Report/attestation commit before native Job success.
+- [ ] Prove writer exit and independently fresh full CBD reads, caller isolation, no redispatch and native mutation authority; missing exact Job requires explicit RecoveryRequired.
+- [ ] Resolve original OPEN SC5/RC5 started-work choice; retain RecoveryRequired until separately decided.
+- [ ] Complete original JM69-10 independent protected M2 and local Step acceptance commit.
+- [ ] Complete Phase69.4–69.6 deferred handoffs/full validation, aggregate full validation, sole original epoch1 Phase review and final local release closure.
+
+See [contract](../spec/job-unit-of-work-submission-contract.md),
+[design](../design/job-unit-of-work-submission.md) and
+[journal](../journal/2026/10/2026-10-06-phase-69.7-job-unit-of-work-submission.md).
+Selected eight-suite focused validation passed90/90; current-source full CBD acceptance remains pending.
+Prior CBD2A seven-suite46/46 retains only unaffected identity/schema/owner
+evidence. Ordinary Sync/Async/delayed submit and original recovery remain
+unchanged in scope. Same-file debt: shared submit builder/publication,
+reservation lifecycle helper, changed declaration naming and Oct.6 headers.
+SQL/root-validation-projection/subsystem/CBD-factory Hygiene stays separate;
+no new review finding or Development Candidate is claimed. Original
+Goal/authority1/binding1/addition01/base/epoch1/history4 and counters remain.
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS; notaccepted. Parent owns
+verification/validation/review/transitions. No acceptance, commit, publication,
+deployment or successor work is claimed.
+
+## JM69-10CBD2C — Registered Provider Native Job Execution (2026-10-06)
+
+Stage Status:
+
+- Current status: IN_PROGRESS
+- Owner: Original Phase69.7 parent and bounded CBD implementation/fix editors.
+- Update rule: The parent updates this block only from attributable source/static evidence, selected execution evidence and original protected whole-Step/Phase acceptance evidence; the checklist remains the closure basis.
+
+- Stage status: IN_PROGRESS
+- Plan status: frozen manifest02@1
+- Implementation status: authored_review_pending
+- Validation status: pending
+- Acceptance status: notaccepted
+- Step review: original-wholeStep-protected-M2-pending
+- Closure basis: Every unchecked CBD2C item and original JM69-10/full closure obligation remains required.
+
+The [CBD execution journal](../journal/2026/10/2026-10-06-phase-69.7-cbd-provider-job-execution.md)
+records CJE-R1–R10/CJE1–CJE10/CANC1–CANC4, selected source-mode preparation,
+semantic provenance and actual native bridge. Parent manifest02 settles the prior
+PRE-EDIT cancellation result gap as actual CancellationCall[Unit]/cancelC with
+compatible Unit SPI and native best-effort callback. Original approval/base/history/
+epoch/repair counters remain; no new scope approval, review or acceptance is claimed.
+
+- [x] Author explicit plan/issued-owner/template/provider/gate validation before native identity issuance.
+- [x] Author original native outer-UOW stageSubmit and remove legacy fake pending success.
+- [x] Author fresh Job UOW/FunctionalActionCall/ActionEngine ProviderCall, canonical Entity completion and commit-gated Task outcome.
+- [x] Author structured actual Unit cancellation/registered admission and original scope callback closure.
+- [x] Author explicit current-source build, target-private copy preparation and actual native Test bridge.
+- [x] Author CJE1–CJE10/CANC1–CANC4 with adjacent GWT and ordinary shrinking seed69710301/min24 property.
+- [ ] Parent intake: verify exact owned diff, source/GWT/header/naming, links, whitespace and selected copied-source build inputs.
+- [ ] Parent static script review, exact admitted preparation and frozen serial SBT representative/accumulator validation.
+- [ ] Wire generated production StartReview server selection and durable Review-to-Job Entity binding in the same outer UOW.
+- [ ] Prove actual writer exit and independently fresh full caller-isolated CBD read/cancel/report pipeline, no redispatch and native mutation authority.
+- [ ] Resolve original OPEN SC5/RC5; retain started-work RecoveryRequired until separately decided.
+- [ ] Complete original whole-JM69-10 protected M2 review and local Step acceptance commit.
+- [ ] Complete predecessor full handoffs, aggregate full validation, sole original-epoch Phase review and final local release closure.
+
+Validation is pending; prior CBD2B90/90 and CBD2A46/46 remain prerequisite evidence
+only. Generated StartReview still reaches the missing-plan precondition. Original
+JM69-10 completion criteria remain unchecked. Existing SQL/root-validation-projection/
+subsystem/CBD-factory Hygiene and Development Candidate ledgers remain separate.
+JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS; notaccepted.
+
+## Stage JM69-10D4 — Current CNCF-only closure projection — 2026-10-06
+
+Stage Status:
+
+- Current status: IN_PROGRESS
+- Owner: Original CNCF Phase69.7 parent `/root`.
+- Update rule: Update only from actual authoring/static checks, execution, independent review and local commit evidence; authoring supplies no acceptance.
+- Closure basis: The active native JM69-10 criteria and separate Phase completion gates in the [checklist](phase-69.7-checklist.md), mirrored by the [closure-boundary journal](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md).
+
+status=authored_review_pending
+manifest=PHASE-69.7-JM69-10D4-implementation01@1
+validation_status=representative9-accumulator132-planned-not-run
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+restart_decision=decided-conformance-review-pending
+cbd_disposition=HANDED_OFF_UNVALIDATED
+
+Ten Markdown paths project the exact delivered human CBD exclusion/regular-source
+handoff and the settled parent restart-conformance decision. Dated prior Slice
+statuses/checklists, SC/RC clauses/fixtures/oracles, failures/counts, accepted
+JM69-09, original Goal/authority/base/binding/epoch/history/counters and aggregate
+declarations remain intact. Earlier dated CBD unchecked obligations are historical,
+excluded from current CNCF completion and not checked as passed. Native UOW remains
+CNCF-owned. SC5/RC5 started-work RecoveryRequired is decided conformance awaiting
+current verification/independent Step review, never positive recovery achieved.
+
+- [x] Author D4-01/07 current human-amended CNCF scope and separate Step/Phase gates.
+- [x] Author D4-02/03 dated restart-conformance and native operator companions.
+- [x] Author D4-04/05 retained matrix/predecessor disposition and HANDED_OFF_UNVALIDATED CBD journal.
+- [x] Author D4-06 current closure-boundary journal and Phase/checklist links.
+- [ ] Parent static diff/link/Stage Status/requirement-map/status and ordinary whitespace checks.
+- [ ] Actual current representative9 and accumulator132 verification, including native UOW added after retained C11 accumulator131/1076 succeeded/pending1.
+- [ ] Complete original whole-JM69-10 protected independent M2 review, admitted convergence, accepted guidance promotion and local Step acceptance commit.
+- [ ] Sole original-epoch Phase full review, actual Phase-owned repository-full test, version/closure evidence, final local phase-release commit and committed closure audit.
+
+Predecessor ancestry/reciprocal deferral remains verified; actual repository-full
+validation remains deferred-not-run and required at PHASE_RELEASE_COMMIT. No D4
+execution/check pass is claimed by authoring. JM69-09 DONE; JM69-10 OPEN;
+Phase69.7 IN_PROGRESS. Parent owns static checks, validation, review and transitions.

@@ -1,12 +1,13 @@
 package org.goldenport.cncf.job
 
 import java.time.Instant
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 4, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemoryJobEngine =>
@@ -62,6 +63,49 @@ private[job] trait InMemoryJobEngineQueryPart extends JobEngine { self: InMemory
     _get_record(jobId)
       .map(_read_model)
       .orElse(durableTerminalProjection(jobId).map(_.queryReadModel))
+
+  override def queryVisible(
+    jobId: JobId,
+    policy: JobQueryPolicy = JobQueryPolicy.default
+  )(using caller: ExecutionContext): Consequence[Option[JobQueryReadModel]] =
+    query(jobId) match {
+      case None => Consequence.success(None)
+      case Some(model) =>
+        try policy.authorizeRead(model).flatMap { _ => _visible_result_c(jobId, model, caller) }
+        catch {
+          case _: InterruptedException => Thread.currentThread().interrupt(); DurableJobCallerAccessResolver.refused
+          case NonFatal(_) => DurableJobCallerAccessResolver.refused
+        }
+    }
+
+  private def _visible_result_c(jobid: JobId, model: JobQueryReadModel,
+    caller: ExecutionContext): Consequence[Option[JobQueryReadModel]] =
+    if (model.result.nonEmpty || _get_record(jobid).nonEmpty) Consequence.success(Some(model))
+    else _owned_terminal_snapshot(jobid, model) match {
+      case None => Consequence.success(Some(model))
+      case Some(snapshot) =>
+        _durable_runtime_owner_option match {
+          case Some(owner) => owner._read_result_c(snapshot, caller).map(response =>
+            Some(model.copy(result = Some(response))))
+          case None => DurableJobCallerAccessResolver.refused
+        }
+    }
+
+  private def _owned_terminal_snapshot(jobid: JobId,
+    model: JobQueryReadModel): Option[DurableJobStoreSnapshot] =
+    durableTerminalProjection(jobid).filter(projection =>
+      (projection.queryReadModel eq model) && model.jobId == jobid &&
+        projection.snapshot.record.body.identity.jobId == jobid.value &&
+        projection.snapshot.record.body.lifecycle.status == DurableJobLifecycleStatus.Succeeded)
+      .flatMap { projection =>
+        projection.snapshot.record.body.result match {
+          case DurableResultOutcome.Succeeded(DurableValue.External(reference))
+              if reference != null && reference.storageKind == DurableJobOwnedBlobPayloads.storageKind &&
+                reference.contentType.contains(DurableJobOperationResponsePayloads.contentType.header) =>
+            Some(projection.snapshot)
+          case _ => None
+        }
+      }
 
   override def queryPage(
     request: JobManagementQuery,

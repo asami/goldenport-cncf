@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Sep.  9, 2026
  *  version Sep. 14, 2026
- * @version Oct. 2, 2026
+ * @version Oct. 6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobProjectionSpec
@@ -23,6 +23,129 @@ final class DurableJobProjectionSpec
     with Matchers
     with GivenWhenThen {
   "DurableJobProjection" should {
+    "CP1 strict empty Continuation correspondence" must afterWord(
+      "in spec:durable-job-record-contract, example:CP1, rules:R3,R6, phase:69.7"
+    ) {
+      "preserve Running and Succeeded Action continuations through canonical V2 admission and terminal V1 compatibility" in {
+        Vector(false, true).foreach { running =>
+          Given(s"CP1: a Running=$running Root and distinct Action Continuation have empty compensation fields")
+          val (record, evidence) = _continuation_case(running)
+          val rootid = _record().taskReadModels.head.taskId.value
+          val childid = TaskId("cncf", "task", Some(_instant), Some("strict-continuation")).value
+          val access = DurableJobRecordAccess("tenant-a", "subject-a", Set("job.read"))
+          When("the exact source is projected through V2, canonical JSON, authorized decode and the V1 projector")
+          val projected = DurableJobProjection.projectV2(record, evidence)
+          val canonical = projected.flatMap(DurableJobRecordCodec.canonicalJson)
+          val decoded = canonical.flatMap(text => DurableJobRecordCodec.decode(text, access))
+          val legacy = DurableJobProjection.project(record, evidence)
+          Then("canonical integrity admission preserves the exact ordered descriptors and independent Continuation identity without live bodies")
+          projected shouldBe a[Consequence.Success[_]]
+          canonical shouldBe a[Consequence.Success[_]]
+          decoded shouldBe a[Consequence.Success[_]]
+          decoded.toOption.get shouldBe projected.toOption.get
+          val body = projected.toOption.get.body
+          body.tasks shouldBe evidence.tasks
+          body.tasks.map(_.taskId) shouldBe Vector(rootid, childid)
+          body.tasks.head.parentTaskId shouldBe None
+          body.tasks.head.relation shouldBe DurableTaskRelation(DurableTaskRelationKind.Root, None)
+          body.tasks.last.parentTaskId shouldBe Some(rootid)
+          body.tasks.last.relation shouldBe DurableTaskRelation(DurableTaskRelationKind.Continuation, Some(rootid))
+          body.tasks.last.kind shouldBe DurableTaskKind.Action
+          body.tasks.last.target shouldBe DurableTaskTarget("action",
+            DurableOperationReference("component-a", Some("service-a"), "continue", None))
+          body.tasks.map(_.transaction) shouldBe Vector.fill(2)(DurableTransactionDescriptor(
+            DurableTransactionRole.Own, DurableTransactionScope.PerTask,
+            if (running) DurableTransactionOutcome.Pending else DurableTransactionOutcome.Committed))
+          body.tasks.map(_.compensation) shouldBe Vector(None, None)
+          body.lifecycle.status shouldBe
+            (if (running) DurableJobLifecycleStatus.Running else DurableJobLifecycleStatus.Succeeded)
+          body.result shouldBe (if (running) DurableResultOutcome.Pending else _evidence().result)
+          canonical.toOption.get should not include "LIVE-ACTION-BODY"
+          canonical.toOption.get should not include "LIVE-RESULT-BODY"
+          canonical.toOption.get should not include "RAW-INPUT-BODY"
+          if (running) {
+            legacy shouldBe a[Consequence.Failure[_]]
+          } else {
+            legacy shouldBe a[Consequence.Success[_]]
+            legacy.toOption.get.body.tasks shouldBe evidence.tasks
+          }
+        }
+      }
+    }
+
+    "CP2 strict Continuation compensation metadata" must afterWord(
+      "in spec:durable-job-record-contract, example:CP2, rules:R3,R6, phase:69.7"
+    ) {
+      "refuse every targetless nonempty subset while preserving complete historical explicit correspondence" in {
+        Vector(false, true).foreach { running =>
+          (1 to 7).foreach { subset =>
+            Given(s"CP2: Running=$running Continuation has targetless compensation subset=$subset and an exact None source descriptor")
+            val (record, evidence) = _continuation_case(running)
+            val child = record.taskReadModels.last.copy(
+              compensationActionRef = Option.when((subset & 1) != 0)("undo"),
+              compensationStatus = Option.when((subset & 2) != 0)("succeeded"),
+              compensationFailureSummary = Option.when((subset & 4) != 0)("failed"))
+            val candidate = record.copy(taskReadModels = record.taskReadModels.updated(1, child))
+            When("the incomplete live Continuation is projected through V2 without source or model normalization")
+            val projected = DurableJobProjection.projectV2(candidate, evidence)
+            Then("every nonempty targetless subset refuses before a durable record even though the source says None")
+            projected shouldBe a[Consequence.Failure[_]]
+          }
+        }
+        Given("CP2: a terminal Continuation has complete undo, explicit Root target and succeeded metadata with its exact supplied compensation")
+        val (record, evidence) = _continuation_case(false)
+        val rootid = record.taskReadModels.head.taskId
+        val child = record.taskReadModels.last.copy(compensationActionRef = Some("undo"),
+          compensatesTaskId = Some(rootid), compensationStatus = Some("succeeded"))
+        val compensation = DurableCompensationDescriptor(
+          DurableOperationReference("component-a", Some("service-a"), "undo", None),
+          rootid.value, DurableCompensationStatus.Succeeded, None)
+        val candidate = record.copy(taskReadModels = record.taskReadModels.updated(1, child))
+        val supplied = evidence.copy(tasks = evidence.tasks.updated(1,
+          evidence.tasks.last.copy(compensation = Some(compensation))))
+        When("the complete historical Continuation correspondence is projected through V1 and V2")
+        val legacy = DurableJobProjection.project(candidate, supplied)
+        val projected = DurableJobProjection.projectV2(candidate, supplied)
+        Then("both versions retain the exact explicit compensation and full supplied descriptors without inventing a companion")
+        legacy shouldBe a[Consequence.Success[_]]
+        projected shouldBe a[Consequence.Success[_]]
+        legacy.toOption.get.body.tasks shouldBe supplied.tasks
+        projected.toOption.get.body.tasks shouldBe supplied.tasks
+        projected.toOption.get.body.tasks.last.compensation shouldBe Some(compensation)
+      }
+    }
+
+    "CP3 exact Continuation source correspondence" must afterWord(
+      "in spec:durable-job-record-contract, example:CP3, rules:R3,R6, phase:69.7"
+    ) {
+      "refuse each independent supplied descriptor divergence in both valid lifecycles" in {
+        Vector(false, true).foreach { running =>
+          Vector("parent", "relation", "operation", "kind", "transaction", "compensation").foreach { variant =>
+            Given(s"CP3: Running=$running live Continuation stays valid while only supplied $variant correspondence diverges")
+            val (record, evidence) = _continuation_case(running)
+            val child = evidence.tasks.last
+            val divergent = variant match {
+              case "parent" => child.copy(parentTaskId = None)
+              case "relation" => child.copy(relation = child.relation.copy(kind = DurableTaskRelationKind.Child))
+              case "operation" => child.copy(target = child.target.copy(
+                operation = child.target.operation.copy(operationId = "other-operation")))
+              case "kind" => child.copy(kind = DurableTaskKind.Operation)
+              case "transaction" => child.copy(transaction = child.transaction.copy(outcome =
+                if (running) DurableTransactionOutcome.Committed else DurableTransactionOutcome.Pending))
+              case _ => child.copy(compensation = Some(DurableCompensationDescriptor(
+                DurableOperationReference("component-a", Some("service-a"), "undo", None),
+                record.taskReadModels.head.taskId.value, DurableCompensationStatus.Succeeded, None)))
+            }
+            val supplied = evidence.copy(tasks = evidence.tasks.updated(1, divergent))
+            When("V2 compares the unchanged live record with that divergent supplied descriptor")
+            val projected = DurableJobProjection.projectV2(record, supplied)
+            Then("the independent source mismatch refuses before a durable record")
+            projected shouldBe a[Consequence.Failure[_]]
+          }
+        }
+      }
+    }
+
     "NRT-P1 normal compensation aggregates" must afterWord(
       "in spec:durable-job-record-contract, example:NRT-P1, rules:R3,R6, phase:69.7"
     ) {
@@ -538,6 +661,41 @@ final class DurableJobProjectionSpec
       projected.toOption.get.body.tasks.last.relation.kind shouldBe DurableTaskRelationKind.Compensation
       missingnoncompensationpair shouldBe a[Consequence.Failure[_]]
     }
+  }
+
+  private def _continuation_case(running: Boolean): (JobRecord, DurableJobProjectionEvidence) = {
+    val base = _record()
+    val root = base.taskReadModels.head.copy(
+      status = if (running) JobTaskStatus.Running else JobTaskStatus.Succeeded,
+      finishedAt = if (running) None else Some(_instant.plusSeconds(20L)),
+      result = if (running) JobTaskResultSummary(success = true, message = None) else base.taskReadModels.head.result,
+      transactionOutcome = Some(if (running) "running" else "committed"))
+    val child = root.copy(
+      taskId = TaskId("cncf", "task", Some(_instant), Some("strict-continuation")),
+      parentTaskId = Some(root.taskId),
+      startedAt = _instant.plusSeconds(6L),
+      finishedAt = if (running) None else Some(_instant.plusSeconds(15L)),
+      operation = Some("continue"), taskKind = "action", targetKind = Some("action"),
+      relation = Some("continuation"))
+    val started = Vector(
+      JobTimelineEvent(1L, _instant, "job.submitted", None, None, None),
+      JobTimelineEvent(2L, _instant.plusSeconds(5L), "task.durable-start-intent", Some(root.taskId), None, None),
+      JobTimelineEvent(3L, _instant.plusSeconds(6L), "task.durable-start-intent", Some(child.taskId), Some(root.taskId), None))
+    val timeline = if (running) started else started ++ Vector(
+      JobTimelineEvent(4L, _instant.plusSeconds(15L), "task.durable-outcome-checkpoint", Some(child.taskId), Some(root.taskId), None),
+      JobTimelineEvent(5L, _instant.plusSeconds(20L), "task.durable-outcome-checkpoint", Some(root.taskId), None, None),
+      JobTimelineEvent(6L, _instant.plusSeconds(20L), "job.succeeded", None, None, None))
+    val record = base.copy(
+      status = if (running) JobStatus.Running else JobStatus.Succeeded,
+      result = if (running) None else base.result,
+      taskReadModels = Vector(root, child), timeline = timeline,
+      retry = if (running) JobRetryState(maxAttempts = 3) else base.retry)
+    val original = _evidence()
+    val evidence = original.copy(
+      tasks = Vector(_descriptor(root), _descriptor(child).copy(kind = DurableTaskKind.Action)),
+      result = if (running) DurableResultOutcome.Pending else original.result,
+      retry = if (running) DurableRetryEvidence(Vector.empty, 3, None, false, false) else original.retry)
+    record -> evidence
   }
 
   private def _aggregate_case(mode: String, action: Boolean): (JobRecord, DurableJobProjectionEvidence) = {

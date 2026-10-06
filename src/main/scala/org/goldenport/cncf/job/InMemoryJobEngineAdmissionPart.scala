@@ -4,10 +4,11 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionProfileRuntime}
 import org.goldenport.cncf.event.{EventBus, EventStore}
+import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 3, 2026
+ * @version Oct.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMemoryJobEngine =>
@@ -167,6 +168,72 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
   ): Consequence[JobId] =
     runtimeState._operation_metrics.observeSubmission(_submit_with_option(tasks, ctx, option))
 
+  override def stageSubmit(
+    tasks: List[JobTask],
+    unitOfWork: UnitOfWork,
+    option: JobSubmitOption
+  ): Consequence[JobId] =
+    if (unitOfWork == null || unitOfWork.executionContext == null || option == null)
+      JobInputResourcePolicy.invalid
+    else {
+      val ctx = unitOfWork.executionContext
+      val reservation = _state_monitor.synchronized {
+        _staging_owner_c().flatMap { owner =>
+          _validate_staged_option(option).flatMap { _ =>
+            JobInputResourcePolicy.validate(option.input).flatMap { _ =>
+              _prepare_lifetime_root(tasks, option.executionNotes).flatMap { ticket =>
+                _validate_submit_option(option).flatMap { _ =>
+                  _reserve_submission(tasks, JobRunMode.Async).map { lease =>
+                    var transferred = false
+                    try {
+                      val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
+                      val submission = new JobUnitOfWorkSubmission(jobid,
+                        () => _resource_budget.release(lease),
+                        published => runtimeState._operation_metrics.observeSubmission {
+                          owner._execute_c {
+                            _state_monitor.synchronized {
+                              _staging_owner_c().flatMap { current =>
+                                if (!(current eq owner) || !_resource_budget.isPending(lease))
+                                  JobResourcePolicy.refused
+                                else _publish_submission(
+                                  _build_submission_record(jobid, tasks, ctx, option, _now()),
+                                  option, ticket, lease, published)
+                              }
+                            }
+                          }
+                        })
+                      transferred = true
+                      submission
+                    } finally if (!transferred) _resource_budget.release(lease)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      reservation.flatMap(_._stage_c(unitOfWork))
+    }
+
+  private def _staging_owner_c(): Consequence[DurableJobRuntimeOwner] =
+    if (!_durable_runtime_ready) DurableJobRuntimeOwner.refused
+    else _durable_runtime_owner_option match {
+      case Some(owner) if owner.health.state == JobDurableOperationalState.Ready &&
+          _durable_lifecycle_write_bridge.exists(_ eq owner._bridge) => Consequence.success(owner)
+      case _ => DurableJobRuntimeOwner.refused
+    }
+
+  private def _validate_staged_option(option: JobSubmitOption): Consequence[Unit] =
+    if (option.persistence != JobPersistencePolicy.Persistent || option.runMode != JobRunMode.Async)
+      Consequence.argumentInvalid("stageSubmit requires Persistent Async options")
+    else if (option.scheduledStartAt == null || option.scheduledStartAt.exists(_ == null) ||
+        option.requestSummary == null || option.requestSummary.exists(_ == null) ||
+        option.parameters == null || option.parameters.exists { case (key, value) => key == null || value == null } ||
+        option.declaredProfile == null || option.declaredProfile.exists(_ == null) ||
+        option.jobDefinitionSnapshot == null || option.jobDefinitionSnapshot.exists(_ == null))
+      JobInputResourcePolicy.invalid
+    else Consequence.unit
+
   private def _submit_with_option(
     tasks: List[JobTask],
     ctx: ExecutionContext,
@@ -188,7 +255,43 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
           _reserve_submission(tasks, option.runMode).flatMap { lease =>
             try {
         val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
-        val now = _now()
+        val record = _build_submission_record(jobid, tasks, ctx, option, _now())
+        val admitted = _publish_submission(record, option, ticket, lease, () => ()).map(_ -> lease)
+        admitted match {
+          case Consequence.Failure(_) => _resource_budget.release(lease)
+          case _ => ()
+        }
+        admitted
+            } catch {
+              case e: Throwable =>
+                _resource_budget.release(lease)
+                throw e
+            }
+          }
+        }
+        admission.flatMap { case (jobid, lease) =>
+          if (option.runMode != JobRunMode.Sync) Consequence.success(jobid)
+          else {
+            var entered = false
+            try _execute_with_durable_runtime_c {
+              entered = true
+              _with_execution_lease(jobid, lease) { _run_job_sync(jobid, tasks, ctx) }
+            }.map(_ => jobid)
+            finally if (!entered) _resource_budget.release(lease)
+          }
+        }
+      }
+      }
+      }
+    }
+
+  private def _build_submission_record(
+    jobid: JobId,
+    tasks: List[JobTask],
+    ctx: ExecutionContext,
+    option: JobSubmitOption,
+    now: Instant
+  ): JobRecord = {
         val initialdebug = JobDebugInfo(
           requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
           parameters =
@@ -199,7 +302,7 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
             option.declaredProfile.orElse(option.jobDefinitionSnapshot.flatMap(_.profile)),
           jobDefinitionSnapshot = option.jobDefinitionSnapshot
         )
-        val record = JobRecord(
+        JobRecord(
           id = jobid,
           tasks = tasks,
           submittedContext = ctx,
@@ -225,13 +328,25 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
           debug = initialdebug,
           input = option.input
         )
-        val admitted = _admit_durable_lifecycle(record).recoverWith { conclusion =>
+  }
+
+  private def _publish_submission(
+    record: JobRecord,
+    option: JobSubmitOption,
+    ticket: JobLifetimeBudget.Ticket,
+    lease: JobResourceBudget.Lease,
+    published: () => Unit
+  ): Consequence[JobId] = {
+    val jobid = record.id
+    val now = record.createdAt
+    _admit_durable_lifecycle(record).recoverWith { conclusion =>
           _record_durable_lifecycle_write_failure(jobid, DurableJobLifecycleWriteFailure.AdmissionRefused)
-          tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
+          record.tasks.foreach(_observe_task_admission_failure(_, conclusion, record.submittedContext))
           Consequence.Failure(conclusion)
         }.map { _ =>
           runtimeState._lifetime_budget.publishRoot(jobid, ticket)
           _resource_budget.commit(lease, jobid)
+          published()
           _cancellation_scopes.put(jobid, _cancellation_scope(jobid))
           _put_record(record)
           _append_event(
@@ -240,7 +355,7 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
             payload = Map(
               "job-id" -> jobid.value,
               "status" -> JobStatus.Submitted.toString,
-              "request-summary" -> initialdebug.requestSummary.getOrElse("")
+              "request-summary" -> record.debug.requestSummary.getOrElse("")
             )
           )
           option.runMode match {
@@ -271,34 +386,8 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
               }
             case JobRunMode.Sync => ()
           }
-          jobid -> lease
+          jobid
         }
-        admitted match {
-          case Consequence.Failure(_) => _resource_budget.release(lease)
-          case _ => ()
-        }
-        admitted
-            } catch {
-              case e: Throwable =>
-                _resource_budget.release(lease)
-                throw e
-            }
-          }
-        }
-        admission.flatMap { case (jobid, lease) =>
-          if (option.runMode != JobRunMode.Sync) Consequence.success(jobid)
-          else {
-            var entered = false
-            try _execute_with_durable_runtime_c {
-              entered = true
-              _with_execution_lease(jobid, lease) { _run_job_sync(jobid, tasks, ctx) }
-            }.map(_ => jobid)
-            finally if (!entered) _resource_budget.release(lease)
-          }
-        }
-      }
-      }
-      }
-    }
+  }
 
 }

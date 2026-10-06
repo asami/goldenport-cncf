@@ -7,7 +7,10 @@ import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.ContentType
-import org.goldenport.cncf.blob.*
+import org.goldenport.cncf.blob.{
+  Blob, BlobCreate, BlobKind, BlobPutRequest, BlobPutResult, BlobRepository,
+  BlobSourceMode, BlobStorageRef, BlobStore, BlobUrl
+}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityStore
 import org.simplemodeling.model.datatype.EntityId
@@ -16,7 +19,7 @@ import org.simplemodeling.model.datatype.EntityId
  * Exclusive provider-backed payload ownership; metadata survives disposal.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  3, 2026
+ * @version Oct.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] sealed abstract class DurableJobOwnedBlobTarget {
@@ -90,7 +93,10 @@ private[job] final class DurableJobOwnedBlobPayloads(
     this(store, entityStore, blobStore, DurableJobOwnedBlobResourcePolicy.default)
 
   import BlobRepository.given
-  import DurableJobOwnedBlobPayloads.*
+  import DurableJobOwnedBlobPayloads.{
+    bindingAttribute, bindingFingerprint, maxReferences, ownerAttribute,
+    ownerFingerprint, ownershipAttribute, referenceCount, references, storageKind
+  }
 
   private val _quota = new DurableJobOwnedBlobQuota(entitystore, policy)
 
@@ -139,9 +145,90 @@ private[job] final class DurableJobOwnedBlobPayloads(
     if (store == null) result else store.operationalMetricsRecorder.observePayloadPrepare(result)
   }
 
+  def readObserved(
+    snapshot: DurableJobStoreSnapshot,
+    access: DurableJobRecordAccess,
+    reference: DurableExternalReference
+  )(using ctx: ExecutionContext): Consequence[DurableJobOwnedBlobDetachedPayload] = _read_protected {
+    for {
+      admitted <- _active(snapshot, access)
+      _ <- policy.validate
+      _ <- if (reference != null && reference.storageKind == storageKind &&
+          references(admitted.record).contains(reference)) Consequence.unit else _refused
+      targets <- _metadata_targets(admitted.record)
+      selected <- targets.find(_.id.value == reference.reference)
+        .fold[Consequence[VerifiedTarget]](_refused)(Consequence.success)
+      _ <- _quota.inspectTargets(targets.map(_.fact))
+      _ <- if (selected.fact.bytesize >= 0L && selected.fact.bytesize <= policy.maxpayloadbytes.toLong)
+        Consequence.unit else _refused
+      detached <- _read_physical(selected)
+      _ <- _active(snapshot, access)
+      _ <- _quota.inspectTargets(targets.map(_.fact))
+    } yield detached
+  }
+
+  private def _read_physical(target: VerifiedTarget): Consequence[DurableJobOwnedBlobDetachedPayload] =
+    blobstore.get(target.storageRef).flatMap { returned =>
+      val fact = target.fact
+      if (returned == null || returned.payload == null || returned.id != target.id ||
+          returned.storageRef != target.storageRef || returned.contentType == null ||
+          returned.contentType.header != fact.contenttype || returned.byteSize != fact.bytesize ||
+          returned.digest == null || !returned.digest.equalsIgnoreCase(fact.payloadsha256)) _refused
+      else {
+        val stream = returned.payload.openInputStream()
+        if (stream == null) _refused
+        else try {
+          val output = new ByteArrayOutputStream(math.min(8192L, fact.bytesize).toInt)
+          val digest = MessageDigest.getInstance("SHA-256")
+          val buffer = new Array[Byte](8192)
+          val limit = Math.addExact(fact.bytesize, 1L)
+          var total = 0L
+          var ended = false
+          while (!ended && total < limit) {
+            if (Thread.currentThread().isInterrupted) throw new InterruptedException()
+            val length = math.min(buffer.length.toLong, limit - total).toInt
+            val count = stream.read(buffer, 0, length)
+            if (count == -1) ended = true
+            else if (count == 0) {
+              if (Thread.currentThread().isInterrupted) throw new InterruptedException()
+              val byte = stream.read()
+              if (byte == -1) ended = true
+              else if (byte >= 0 && byte <= 255) {
+                total = Math.addExact(total, 1L)
+                digest.update(byte.toByte)
+                if (total <= fact.bytesize) output.write(byte)
+              } else throw new IllegalStateException("durable payload read refused")
+            } else if (count > 0 && count <= length) {
+              total = Math.addExact(total, count.toLong)
+              digest.update(buffer, 0, count)
+              if (total <= fact.bytesize) output.write(buffer, 0, count)
+            } else throw new IllegalStateException("durable payload read refused")
+          }
+          val actual = digest.digest().map(value => f"${value & 0xff}%02x").mkString
+          if (ended && total == fact.bytesize && actual.equalsIgnoreCase(fact.payloadsha256))
+            Consequence.success(DurableJobOwnedBlobDetachedPayload(output.toByteArray, actual))
+          else _refused
+        } catch {
+          case exception: InterruptedException => Thread.currentThread().interrupt(); throw exception
+        } finally stream.close()
+      }
+    }
+
+  private def _read_protected[A](body: => Consequence[A]): Consequence[A] =
+    try {
+      if (Thread.currentThread().isInterrupted) throw new InterruptedException()
+      body match {
+        case success @ Consequence.Success(_) => success
+        case _ => _refused
+      }
+    } catch {
+      case _: InterruptedException => Thread.currentThread().interrupt(); _refused
+      case NonFatal(_) => _refused
+    }
+
   def inspect(record: DurableJobRecord, budget: DurableJobIntegrityByteBudget)
       (using ctx: ExecutionContext): Consequence[DurableJobPayloadIntegrityOutcome] = {
-    import DurableJobPayloadIntegrityOutcome.*
+    import DurableJobPayloadIntegrityOutcome.{Refused, ResourceBoundRefused, Verified}
     try {
       _metadata_targets(record).flatMap { targets =>
         if (targets.isEmpty) Consequence.success(Verified)

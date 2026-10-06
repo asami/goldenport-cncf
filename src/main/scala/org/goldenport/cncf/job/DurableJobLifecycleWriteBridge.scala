@@ -8,10 +8,11 @@ import org.goldenport.cncf.context.ExecutionContext
 /*
  * Closed lifecycle boundary for the durable writes admitted by JM69-03N and JM69-03O.
  * The source supplies closed evidence and access independently of the bridge;
- * the bridge does not derive durable facts from live execution objects.
+ * the bridge does not derive durable facts from live execution objects. An
+ * explicit terminal intent alone requests publication of the owned live response.
  *
  * @since   Sep.  9, 2026
- * @version Oct.  3, 2026
+ * @version Oct.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] enum DurableJobLifecycleWriteBoundary {
@@ -62,10 +63,15 @@ private[job] enum DurableJobLifecycleWriteRequest {
   }
 }
 
-/* The evidence/access pair is closed and has no provider or live execution value. */
+private[job] enum DurableJobResultPublication {
+  case Supplied, OwnedOperationResponse
+}
+
+/* The evidence/access/intent pair is closed and contains no live response. */
 private[job] final case class DurableJobLifecycleWriteEvidence(
   projection: DurableJobProjectionEvidence,
-  access: DurableJobRecordAccess
+  access: DurableJobRecordAccess,
+  resultPublication: DurableJobResultPublication = DurableJobResultPublication.Supplied
 )
 
 /*
@@ -99,7 +105,8 @@ private[job] final case class DurableJobLifecycleWriteFailureFact(
 private[job] final class DurableJobLifecycleWriteBridge(
   store: DurableJobStore,
   evidence: DurableJobLifecycleWriteEvidenceSource,
-  lifetimepolicy: DurableJobLifetimeQuotaPolicy = DurableJobLifetimeQuotaPolicy.default
+  lifetimepolicy: DurableJobLifetimeQuotaPolicy = DurableJobLifetimeQuotaPolicy.default,
+  resultPayloads: Option[DurableJobOperationResponsePayloads] = None
 ) {
   private final case class Entry(snapshot: DurableJobStoreSnapshot,
     binding: DurableJobLifetimeBinding, recovered: Option[DurableJobLifetimeRecovery.Prepared])
@@ -239,7 +246,11 @@ private[job] final class DurableJobLifecycleWriteBridge(
           _terminal_intent_basis(record, snapshot, terminal.taskreadmodels).flatMap { basis =>
             val candidate = _terminal_outcome_checkpoint_candidate(basis)
             _evidence(record.id, terminal, _next_semantic_revision(snapshot)).flatMap { supplied =>
-              _checkpoint(snapshot, candidate, supplied)
+              supplied.resultPublication match {
+                case DurableJobResultPublication.Supplied => _checkpoint(snapshot, candidate, supplied)
+                case DurableJobResultPublication.OwnedOperationResponse =>
+                  _publish_terminal(snapshot, candidate, supplied)
+              }
             }
           }
         }
@@ -257,6 +268,10 @@ private[job] final class DurableJobLifecycleWriteBridge(
     }).flatMap { supplied =>
       if (supplied == null || supplied.projection == null || supplied.access == null)
         Consequence.argumentInvalid("durable lifecycle write evidence is missing")
+      else if (supplied.resultPublication == null ||
+          (supplied.resultPublication == DurableJobResultPublication.OwnedOperationResponse &&
+            request.boundary != DurableJobLifecycleWriteBoundary.TerminalOutcomeCheckpoint))
+        DurableJobOperationResponsePayloads.refused
       else if (supplied.projection.semanticRevision != expectedrevision)
         Consequence.argumentInvalid(
           s"durable ${request.boundary.toString} evidence must use semantic revision $expectedrevision"
@@ -389,24 +404,67 @@ private[job] final class DurableJobLifecycleWriteBridge(
     supplied: DurableJobLifecycleWriteEvidence)(using ctx: ExecutionContext): Consequence[Unit] = {
     val entry = _entries.get(candidate.id)
     if (entry == null || entry.snapshot != snapshot) DurableJobLifetimeQuotaPolicy.unavailable
-    else {
-      val cancelled = recoveredCancelled(candidate)
-      val projected = entry.recovered match {
-        case Some(prepared) =>
-          val confirmed = if (cancelled) prepared.native.quota.snapshot(candidate.id.value,
-            prepared.native.access)(using prepared.context).flatMap(value =>
-              if (value.cancelclaimed) Consequence.unit else DurableJobLifetimeQuotaPolicy.unavailable)
-            else Consequence.unit
-          confirmed.flatMap(_ => DurableJobRecoveryCheckpointProjection.project(candidate, supplied,
-            prepared, snapshot, cancelled))
-        case None => DurableJobProjection.projectV2(candidate, supplied.projection)
-      }
-      projected.flatMap(store.checkpoint(snapshot, _, supplied.access)).flatMap { acknowledged =>
-        if (_entries.replace(candidate.id, entry, entry.copy(snapshot = acknowledged))) Consequence.unit
-        else DurableJobLifetimeQuotaPolicy.unavailable
-      }
+    else _project_checkpoint(entry, snapshot, candidate, supplied)
+      .flatMap(_acknowledge_checkpoint(entry, snapshot, candidate, supplied, _))
+  }
+
+  private def _project_checkpoint(entry: Entry, snapshot: DurableJobStoreSnapshot,
+    candidate: JobRecord, supplied: DurableJobLifecycleWriteEvidence)
+      (using ctx: ExecutionContext): Consequence[DurableJobRecord] = {
+    val cancelled = recoveredCancelled(candidate)
+    entry.recovered match {
+      case Some(prepared) =>
+        val confirmed = if (cancelled) prepared.native.quota.snapshot(candidate.id.value,
+          prepared.native.access)(using prepared.context).flatMap(value =>
+            if (value.cancelclaimed) Consequence.unit else DurableJobLifetimeQuotaPolicy.unavailable)
+          else Consequence.unit
+        confirmed.flatMap(_ => DurableJobRecoveryCheckpointProjection.project(candidate, supplied,
+          prepared, snapshot, cancelled))
+      case None => DurableJobProjection.projectV2(candidate, supplied.projection)
     }
   }
+
+  private def _signed_roundtrip(record: DurableJobRecord,
+    access: DurableJobRecordAccess): Consequence[DurableJobRecord] =
+    for {
+      canonical <- DurableJobRecordCodec.canonicalJson(record)
+      admitted <- DurableJobRecordCodec.decode(canonical, access)
+      _ <- if (admitted == record) Consequence.unit else DurableJobOperationResponsePayloads.refused
+    } yield admitted
+
+  private def _publish_terminal(snapshot: DurableJobStoreSnapshot, candidate: JobRecord,
+    supplied: DurableJobLifecycleWriteEvidence)(using ctx: ExecutionContext): Consequence[Unit] = {
+    val entry = _entries.get(candidate.id)
+    if (entry == null || entry.snapshot != snapshot) DurableJobLifetimeQuotaPolicy.unavailable
+    else if (candidate.status != JobStatus.Succeeded ||
+        snapshot.record.body.lifecycle.status != DurableJobLifecycleStatus.Running ||
+        snapshot.record.body.result != DurableResultOutcome.Pending ||
+        supplied.projection.result != DurableResultOutcome.Succeeded(DurableValue.Absent) ||
+        supplied.access != entry.binding.access ||
+        supplied.projection.authorization != snapshot.record.body.authorization)
+      DurableJobOperationResponsePayloads.refused
+    else (candidate.result, resultPayloads) match {
+      case (Some(JobResult.Success(response)), Some(payloads)) if response != null && payloads != null =>
+        for {
+          projected <- _project_checkpoint(entry, snapshot, candidate, supplied)
+          seed <- _signed_roundtrip(projected, supplied.access)
+          reference <- payloads.publishObserved(snapshot, supplied.access, response)
+          result <- DurableJobRecord.createV2(seed.body.copy(
+            result = DurableResultOutcome.Succeeded(DurableValue.External(reference))))
+          admitted <- _signed_roundtrip(result, supplied.access)
+          _ <- _acknowledge_checkpoint(entry, snapshot, candidate, supplied, admitted)
+        } yield ()
+      case _ => DurableJobOperationResponsePayloads.refused
+    }
+  }
+
+  private def _acknowledge_checkpoint(entry: Entry, snapshot: DurableJobStoreSnapshot,
+    candidate: JobRecord, supplied: DurableJobLifecycleWriteEvidence, projected: DurableJobRecord)
+      (using ctx: ExecutionContext): Consequence[Unit] =
+    store.checkpoint(snapshot, projected, supplied.access).flatMap { acknowledged =>
+      if (_entries.replace(candidate.id, entry, entry.copy(snapshot = acknowledged))) Consequence.unit
+      else DurableJobLifetimeQuotaPolicy.unavailable
+    }
 
   private def _task_start_request(
     record: JobRecord,

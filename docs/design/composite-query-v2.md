@@ -71,3 +71,86 @@ Affected v1 consumers are the existing CompositeQuery engine and the StaticWeb
 page context provider. They retain their original shape because V2 is exposed
 only by the additive facade. The independent Job, context, authorization, and
 page consumer specifications are the focused compatibility boundary.
+
+## Current native diagnostics realization — JM69-10C8
+
+status=focused_validation_passed
+manifest=PHASE-69.7-JM69-10C8-implementation01@2
+validation_status=subject8-REP010-ACC002-passed
+acceptance_status=not-accepted
+
+The sole coordinator reservation construction supplies
+`persistentDiagnostics = policy.persistence == PersistentDiagnostics` to the
+existing branch adapter. Only that selection changes its metadata to the
+native closed Operation/operation/composite-query-v2/no-service/
+composite-query-v2/root/own/per-task descriptor. Running/Committed/Failed are
+the original engine's canonical wrapper-task outcomes. The Query's own
+authorization and target UnitOfWork retain their existing responsibilities.
+Task body, staged scalar callback, physical-body exit, ID capture, width,
+cancellation, deadlines and fallback behavior retain the accepted design.
+Ephemeral metadata and persistence default remain unchanged.
+
+The [C8 native process composition](job-cross-process-acceptance.md#compositequery-native-process-composition)
+binds `new CompositeQueryEngine(native.subsystem)` to the actual original
+configured native engine. The separate existing CompositeQueryV2Fixture has
+no supplied native engine; its immutable `target-c8` entry selects the real
+Query subsystem. Its own unused fixture engine and subsystem engine receive
+no submissions. Subsystem is final: inheritance, setters, reflection, private
+engine replacement and transparent submission delegates are unnecessary.
+
+One owned caller Thread performs the public facade invocation; the original
+writer REALTIME scheduler performs ordinary Async work. The returned
+diagnostic IDs identify each actual job. `awaitResult(id,5000L)` followed by
+the original native state-monitor read barrier observes terminal signed
+checkpoint completion after the aggregate callback. Successful live Task
+results are `Void`, signed results are `Succeeded(Absent)`, and six genuine
+keyed-source boundaries retain original authorization/definition and paid
+2/96/1/1 with remaining0. Original realtime maintenance may perform empty
+retention polls; its counts are observed without a fixed-count assertion.
+
+An independent MANUAL reader registers those original terminal records,
+observes no executable tasks or Query calls and drains the original reader
+engine once with zero work. The local complete Job/quota rows, payments and
+read/runtime counters establish body-free unchanged reads. All caller,
+fixture/target/native engines, timers, worker pools, optional schedulers,
+logical bindings, owned nodes and physical native SQL close before receipts.
+Failures retain their primary exception with cleanup errors suppressed.
+Authoring does not establish selected validation or independent acceptance;
+the Phase69.5 accepted-focused history and Phase69.7 deferred-full obligation
+remain unchanged.
+
+
+## Current C8 selected validation — 2026-10-06
+
+Initial authored_validation_pending/planned-not-run is historical. Parent-admitted
+current subject8 selected Slice validation is complete:
+[JM69-10C8-representative10-result.json@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C8-representative10-result.json)
+records PH697-JM10C8-REP-010,8 completed suites/66 tests,66 succeeded, pending0;
+[JM69-10C8-accumulator02-result.json@1](../../.codex-workflow/phases/PHASE-69.7/JM69-10C8-accumulator02-result.json)
+records PH697-JM10C8-ACC-002,128 completed suites/1050 tests,1050 succeeded,
+with only original SqliteDataStoreSpec pending1. Both invocation summaries use
+cncf.sbt.invocation-summary.v1 and report failed0/aborted0/canceled0/ignored0,
+compile_failed=false, compilerwarnings0, typed reader exit0/SBT exit0/wrapper
+exit0, consumed permission and serial lock=released. Result records retain the
+actual log/summary paths and completion markers.
+
+The [C8 journal chronology](../journal/2026/10/2026-10-05-phase-69.7-composite-query-native-diagnostics.md#current-c8-validation-chronology--2026-10-06)
+retains the original no-edit binding mismatch, five bounded pre-review corrections,
+historical REP008 subject6 success, failed ACC001/CP003 and REP009 subject7,
+external human dependency recovery and actual generated-only CP004 PASS. Latest
+selected Cozy0.3.3-SNAPSHOT remains; compatible external dependency recovery
+resolved this run without establishing publisher identity or importing/accepting
+future Phase100 APIs. CQNT1..CQNT9, genuine process/property/native/canonical/
+privacy/payment/cleanup oracles and all historical receipts remain unchanged.
+This documentation projection consumes no repair unit or counter reset.
+
+JM69-09 remains DONE; JM69-10 remains OPEN; Phase69.7 remains IN_PROGRESS.
+Original whole-JM10 protected M2 independent Step review and local acceptance
+commit remain pending. Actual admitted CBD provider -> Entity -> completed full
+Review, independent fresh real recovery, remaining original matrix/positive
+started-work choice, compatibility/accepted guidance promotion, predecessor
+deferred-full validation, aggregate full CNCF/downstream validation, sole original
+epoch1 comprehensive Phase review and final local Phase release remain owed.
+Original Goal/authority/base/binding/epochs/history/ledgers/budgets/counters and
+other authors' work remain. Parent owns diff/link/status verification, validation,
+review and transitions; this editor runs no validation or self-review.
