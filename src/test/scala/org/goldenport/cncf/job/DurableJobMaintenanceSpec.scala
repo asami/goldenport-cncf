@@ -3,7 +3,8 @@ package org.goldenport.cncf.job
 import java.nio.file.{Files, Path}
 import java.time.{Duration, Instant}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.ContentType
@@ -19,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Bounded native sweeps and the explicitly configured production timer owner.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  1, 2026
+ * @version Oct.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobMaintenanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -259,6 +260,187 @@ final class DurableJobMaintenanceSpec extends AnyWordSpec with Matchers with Giv
         _message(status.lastResult.get) should not include "private-source"
         status.nextDueAt shouldBe Some(_instant.plus(period.multipliedBy(11)))
         pending shouldBe 1
+      }
+    }
+
+    "M3 finalize an interrupted admitted run with preserved interruption and one completion-clock rearm" in {
+      Given("a production scheduler, native coordinator, manual clock and retained timer with an interruptible first source run")
+      val fixture = _fixture()
+      given ExecutionContext = fixture.context
+      val clock = new ManualJobTimeSource(_deadline)
+      val timer = new RetainedTimer
+      val admitted = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val sourcefailure = new AtomicReference[InterruptedException]()
+      val threadfailure = new AtomicReference[Throwable]()
+      val interrupted = new AtomicBoolean(false)
+      val runs = new AtomicInteger(0)
+      val source = new Source(Vector.empty, action = () => {
+        if (runs.incrementAndGet() == 1) {
+          admitted.countDown()
+          try {
+            if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("private-source-latch-timeout")
+          } catch {
+            case exception: InterruptedException => sourcefailure.set(exception); throw exception
+          }
+        }
+      })
+      val owner = new DurableJobMaintenanceScheduler(fixture.maintenance, source, 1, Duration.ofSeconds(1), clock, timer)
+      val thread = new Thread(() => {
+        try timer.fire(0) catch {
+          case exception: InterruptedException => threadfailure.set(exception)
+          case NonFatal(exception) => threadfailure.set(exception)
+        } finally interrupted.set(Thread.currentThread().isInterrupted)
+      })
+
+      try {
+        When("start admits the due callback on the owned thread and the source enters its interruptible wait")
+        _success(owner.start())
+        clock.advanceBy(Duration.ofSeconds(1))
+        thread.start()
+        val entered = admitted.await(5, TimeUnit.SECONDS)
+        val during = owner.status
+        Then("one admitted run is visible without a pending registration or any interruption on the caller thread")
+        entered shouldBe true
+        during.inFlight shouldBe true
+        during.nextDueAt shouldBe None
+        timer.registrations shouldBe 1
+        Thread.currentThread().isInterrupted shouldBe false
+
+        When("completion time advances and the blocked callback is actually interrupted and boundedly joined")
+        clock.advanceBy(Duration.ofSeconds(5))
+        thread.interrupt()
+        thread.join(5000)
+        val completed = owner.status
+        Then("the same interruption escapes with its flag preserved while bounded failure bookkeeping rearms exactly once")
+        thread.isAlive shouldBe false
+        sourcefailure.get() shouldBe a[InterruptedException]
+        threadfailure.get() should be theSameInstanceAs sourcefailure.get()
+        interrupted.get() shouldBe true
+        Thread.currentThread().isInterrupted shouldBe false
+        completed.started shouldBe true
+        completed.closed shouldBe false
+        completed.inFlight shouldBe false
+        completed.lastResult.get shouldBe a[Consequence.Failure[_]]
+        _message(completed.lastResult.get).length should be < 1024
+        _message(completed.lastResult.get) should not include "private-source"
+        completed.nextDueAt shouldBe Some(_deadline.plusSeconds(7))
+        timer.registrations shouldBe 2
+        source.calls shouldBe 1
+
+        When("the consumed generation is retained and triggered again")
+        timer.fire(0)
+        Then("the stale callback has no source or lifecycle effect")
+        owner.status shouldBe completed
+        source.calls shouldBe 1
+        timer.registrations shouldBe 2
+
+        When("the fresh generation becomes due and executes on the clear caller thread")
+        clock.advanceBy(Duration.ofSeconds(1))
+        timer.fire(1)
+        val fresh = owner.status
+        owner.close()
+        Then("the next real run succeeds and schedules once while close owns only its registration and preserves the shared timer")
+        source.calls shouldBe 2
+        fresh.inFlight shouldBe false
+        _success(fresh.lastResult.get).entries shouldBe Vector.empty
+        fresh.nextDueAt shouldBe Some(_deadline.plusSeconds(8))
+        timer.registrations shouldBe 3
+        timer.cancelled shouldBe Vector(2)
+        timer.shutdownCount shouldBe 0
+        Thread.currentThread().isInterrupted shouldBe false
+      } finally {
+        release.countDown()
+        owner.close()
+        if (thread.isAlive) thread.interrupt()
+        thread.join(5000)
+      }
+    }
+
+    "M4 finalize interruption after close overlaps admitted work without rearm or native Job and payload effects" in {
+      Given("a real signed due Job with owned bytes and a production scheduler blocked in an interruptible source")
+      val fixture = _fixture()
+      given ExecutionContext = fixture.context
+      val active = _create(fixture, _record("close-interrupted", v2 = true))
+      val (attached, metadata) = _attach(fixture, active)
+      val payloadbytes = Files.readAllBytes(_path(fixture.root, metadata)).toVector
+      val sidecarbytes = Files.readAllBytes(_sidecar(fixture.root, metadata)).toVector
+      fixture.entity.reset()
+      val clock = new ManualJobTimeSource(_deadline)
+      val timer = new RetainedTimer
+      val admitted = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val sourcefailure = new AtomicReference[InterruptedException]()
+      val threadfailure = new AtomicReference[Throwable]()
+      val interrupted = new AtomicBoolean(false)
+      val source = new Source(Vector(_candidate(0, "close-interrupted")), action = () => {
+        admitted.countDown()
+        try {
+          if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("private-source-latch-timeout")
+        } catch {
+          case exception: InterruptedException => sourcefailure.set(exception); throw exception
+        }
+      })
+      val owner = new DurableJobMaintenanceScheduler(fixture.maintenance, source, 1, Duration.ofSeconds(1), clock, timer)
+      val thread = new Thread(() => {
+        try timer.fire(0) catch {
+          case exception: InterruptedException => threadfailure.set(exception)
+          case NonFatal(exception) => threadfailure.set(exception)
+        } finally interrupted.set(Thread.currentThread().isInterrupted)
+      })
+
+      try {
+        When("the due callback is admitted and close overlaps its blocked source")
+        _success(owner.start())
+        clock.advanceBy(Duration.ofSeconds(1))
+        thread.start()
+        val entered = admitted.await(5, TimeUnit.SECONDS)
+        owner.close()
+        val closing = owner.status
+        Then("the closed owner truthfully retains in-flight work until the callback physically completes")
+        entered shouldBe true
+        closing.closed shouldBe true
+        closing.started shouldBe false
+        closing.inFlight shouldBe true
+        closing.nextDueAt shouldBe None
+        closing.lastResult shouldBe None
+        Thread.currentThread().isInterrupted shouldBe false
+
+        When("the blocked callback is actually interrupted, boundedly joined and its retained generation is exercised")
+        thread.interrupt()
+        thread.join(5000)
+        val completed = owner.status
+        timer.fire(0)
+        Then("interruption propagates with its flag while the completed closed owner retains a bounded failure without extra effects")
+        thread.isAlive shouldBe false
+        sourcefailure.get() shouldBe a[InterruptedException]
+        threadfailure.get() should be theSameInstanceAs sourcefailure.get()
+        interrupted.get() shouldBe true
+        Thread.currentThread().isInterrupted shouldBe false
+        completed.closed shouldBe true
+        completed.started shouldBe false
+        completed.inFlight shouldBe false
+        completed.nextDueAt shouldBe None
+        completed.lastResult.get shouldBe a[Consequence.Failure[_]]
+        _message(completed.lastResult.get).length should be < 1024
+        _message(completed.lastResult.get) should not include "private-source"
+        owner.status shouldBe completed
+        source.calls shouldBe 1
+        timer.registrations shouldBe 1
+        timer.cancelled shouldBe Vector.empty
+        timer.shutdownCount shouldBe 0
+        fixture.entity.loads shouldBe 0
+        fixture.entity.writes shouldBe 0
+        fixture.blob.deleted shouldBe Vector.empty
+        _load(fixture, "close-interrupted") shouldBe attached
+        _success(fixture.entity.load[Blob](metadata.id)).get shouldBe metadata
+        Files.readAllBytes(_path(fixture.root, metadata)).toVector shouldBe payloadbytes
+        Files.readAllBytes(_sidecar(fixture.root, metadata)).toVector shouldBe sidecarbytes
+      } finally {
+        release.countDown()
+        owner.close()
+        if (thread.isAlive) thread.interrupt()
+        thread.join(5000)
       }
     }
 

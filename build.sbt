@@ -609,9 +609,10 @@ lazy val root = project
 
     publishLocal := (publishLocal dependsOn exportTextusRuntimeCatalog).value,
 
-    Test / fork := false,
+    Test / fork := true,
     Test / parallelExecution := false,
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
+    Test / javaOptions += "-Dtextus.test=true",
     Test / testOnly / javaOptions += "-Dtextus.test=true",
     (Test / test / testOptions) += Tests.Setup(() => System.setProperty("textus.test", "true")),
     (Test / test / testOptions) += Tests.Argument(

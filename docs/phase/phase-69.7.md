@@ -1,6 +1,6 @@
 # Phase 69.7 - Job Operations and Downstream Acceptance
 
-status=in_progress
+status=closed
 planned_at=2026-09-09
 split_from=[Phase 69](phase-69.md)
 depends_on=[Phase 69.6](phase-69.6.md)
@@ -10,6 +10,36 @@ split_full_test_policy=final-only
 validation_ownership=aggregate-final-owner
 aggregate_validation_owner=PHASE-69.7
 aggregate_validation_sequence=["PHASE-69.4","PHASE-69.5","PHASE-69.6","PHASE-69.7"]
+
+## Current Phase closure — 2026-10-07
+
+JM69-09 and CNCF JM69-10 are DONE in native local Step commits
+`7aee36edb5651e3b6c1223bd2bc60c6412da11ac` and
+`5500e8e4c4ababd55d551bfce771318433484fbe`. The sole original-epoch Phase
+full review and two independent focused repair closures are complete.
+Actual aggregate repository-full `sbt --batch test` completed
+**604 suites / 4594 successful tests**,
+zero failures/aborts, 13 inherited deliberate cancellations,
+1 inherited ignored test and 46 inherited pending
+examples. SBT/wrapper exited0 and the serial lock was released. These disabled
+examples belong to pre-existing placeholders, historical CV ownership and
+optional live MySQL/Docker coverage; no current Job acceptance scenario is disabled.
+
+The [final closure evidence](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md#current-phase-release-and-closure--2026-10-07)
+records original scope/base/Steps, the one-full-review lineage, both repairs,
+actual full-test evidence and limitations, predecessor deferrals, source versions
+and all five exact accepted Hygiene records. Development Candidate is empty.
+Eligible unstarted native work recovers once; started Running/Suspended work
+retains the normative RecoveryRequired refusal. No retained non-CBD criterion is waived.
+
+This closed state takes effect in the distinct containing local Phase release
+commit with `Phase-Closure-Binding: PHASE-69.7-final-closure01@1`, after its
+native committed-tree closure receipt verifies. Preparation alone creates no
+release commit or completed Goal. Dated authoring/pending sections below retain
+historical evidence and are superseded by this current disposition. CBD remains
+excluded/HANDED_OFF_UNVALIDATED in its canonical repository. Twenty unrelated
+dirty documents, including shared Phase-index/strategy and successor planning,
+are preserved; only shared projection synchronization is deferred.
 
 ## Purpose
 

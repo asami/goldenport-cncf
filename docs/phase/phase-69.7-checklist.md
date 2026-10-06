@@ -1,10 +1,40 @@
 # Phase 69.7 Checklist - Job Operations and Downstream Acceptance
 
-status=in_progress
+status=closed
 phase=[Phase 69.7](phase-69.7.md)
 
 Phase 69.6 must be CLOSED before this checklist starts. Only one stage may be
 `IN_PROGRESS`.
+
+## Current Phase closure — 2026-10-07
+
+JM69-09 and CNCF JM69-10 are DONE in native local Step commits
+`7aee36edb5651e3b6c1223bd2bc60c6412da11ac` and
+`5500e8e4c4ababd55d551bfce771318433484fbe`. The sole original-epoch Phase
+full review and two independent focused repair closures are complete.
+Actual aggregate repository-full `sbt --batch test` completed
+**604 suites / 4594 successful tests**,
+zero failures/aborts, 13 inherited deliberate cancellations,
+1 inherited ignored test and 46 inherited pending
+examples. SBT/wrapper exited0 and the serial lock was released. These disabled
+examples belong to pre-existing placeholders, historical CV ownership and
+optional live MySQL/Docker coverage; no current Job acceptance scenario is disabled.
+
+The [final closure evidence](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md#current-phase-release-and-closure--2026-10-07)
+records original scope/base/Steps, the one-full-review lineage, both repairs,
+actual full-test evidence and limitations, predecessor deferrals, source versions
+and all five exact accepted Hygiene records. Development Candidate is empty.
+Eligible unstarted native work recovers once; started Running/Suspended work
+retains the normative RecoveryRequired refusal. No retained non-CBD criterion is waived.
+
+This closed state takes effect in the distinct containing local Phase release
+commit with `Phase-Closure-Binding: PHASE-69.7-final-closure01@1`, after its
+native committed-tree closure receipt verifies. Preparation alone creates no
+release commit or completed Goal. Dated authoring/pending sections below retain
+historical evidence and are superseded by this current disposition. CBD remains
+excluded/HANDED_OFF_UNVALIDATED in its canonical repository. Twenty unrelated
+dirty documents, including shared Phase-index/strategy and successor planning,
+are preserved; only shared projection synchronization is deferred.
 
 ## JM69-09: Security, Retention, Observability, and Operations
 
@@ -544,10 +574,10 @@ HANDED_OFF_UNVALIDATED; no completed CBD runtime acceptance is claimed.
 
 ## Phase Completion Gate
 
-- [ ] JM69-09 and JM69-10 are DONE.
-- [ ] Every retained non-CBD Phase 69 acceptance statement has executable or exact operational evidence; the human-excluded CBD requirement is explicitly recorded as HANDED_OFF_UNVALIDATED.
-- [ ] Phase69.4–69.6 ancestry/reciprocal deferrals and actual aggregate repository-full CNCF validation are recorded under PHASE-69.7 ownership; full validation is deferred-not-run until the Phase release gate.
-- [ ] Sole original-epoch comprehensive Phase review and any admitted convergence, documentation promotion, version evidence, final local release commit, clean intended tree and committed closure audit are recorded.
+- [x] JM69-09 and JM69-10 are DONE.
+- [x] Every retained non-CBD Phase 69 acceptance statement has executable or exact operational evidence; the human-excluded CBD requirement is explicitly recorded as HANDED_OFF_UNVALIDATED.
+- [x] Phase69.4–69.6 ancestry/reciprocal deferrals and actual aggregate repository-full CNCF validation are recorded under PHASE-69.7 ownership; actual repository-full validation passed at the final owner; predecessor historical executions remain deferred-not-run.
+- [x] Sole original-epoch comprehensive Phase review and any admitted convergence, documentation promotion, version evidence, final local release commit, clean intended tree and committed closure audit are recorded.
 
 Current gate ownership is detailed in the
 [D4 closure boundary](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md).
@@ -564,6 +594,8 @@ review/acceptance, C/D, JM69-10 actual
 two-process/CBD Support and original full Phase obligations remain open.
 See the [runtime validation chronology](../journal/2026/10/2026-10-02-phase-69.7-native-lifetime-runtime.md).
 
+
+These current gates are effective only with the containing distinct Phase release commit and its verified committed-tree closure receipt.
 
 ## JM69-09C4 authorized facade audit child items
 
