@@ -1,8 +1,50 @@
 # Phase 73 - Component Knowledge Contribution Hub
 
-status=planned
+status=in_progress
 planned_at=2026-09-09
+execution_plan_updated_at=2026-10-08
 checklist=[Phase 73 Checklist](phase-73-checklist.md)
+
+## Stage Status
+
+- Current status: IN_PROGRESS
+- Owner: CNCF maintainers
+- Update rule: Derive completion from the [Phase 73 Checklist](phase-73-checklist.md)
+  and its stated executable, review and release evidence.
+
+## Main-route authored status
+
+Updated 2026-10-08: P73-MR-01 inventory is accepted through independent review
+`p73-mr01-review-20261008-01a10b3f` revision 1 by
+`/root/p73_mr01_inventory_review`, followed by parent M0 amendment
+`p73-mr01-m0-amendment-20261008-01a10b3f` revision 1 resolving
+`CPB-P73-MR01-001`. The accepted
+[reuse inventory](../journal/2026/10/2026-10-08-phase-73-knowledge-contribution-inventory.md)
+supports P73-A-01 only.
+
+P73-MR-02 has authored the frozen
+[main-route design](../design/component-knowledge-contribution-hub.md),
+[public specification](../spec/component-knowledge-contribution-hub.md),
+provider/model/hub implementation and read-only activation-completion
+observation. The active
+[contract scenarios E1–E4](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubSpec.scala)
+and [assembled scenarios E5–E6](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubAssemblySpec.scala)
+include the 50-case opaque-byte property, one independent consumer and all
+six two-consumer admission permutations. Parent-recorded Stage A invocation
+`p73-mr02-red2-20261008-01a10b3f` compiled and completed with 11 tests in two
+suites: one absence pass and ten intended missing-route/property failures,
+with no aborted suite and the serial lock released. This is failing-first
+authoring evidence, not acceptance of the implemented route.
+
+Parent-verified final focused invocation `p73-mr02-final-20261008-01a10b3f`
+compiled and passed representative assembly (7/7), followed by contract and
+existing activation lifecycle evidence (16/16): 23/23 tests across three suites,
+zero failures or aborted suites. The active ScalaCheck opaque-byte property
+passed with a minimum of 50 successful generated cases. SBT and wrapper exited
+0 with `lock=released`. Independent review and Step acceptance remain pending,
+as do broader Phase full validation and closure. Broader E3 replacement, second
+provider, failure/compatibility/isolation and E4 handoff/closure obligations
+remain open. The original main-route-first execution plan below is retained.
 
 ## Goal
 
@@ -47,11 +89,125 @@ can discover and read it without depending directly on the provider.
 
 ## Work Groups
 
+### Execution order and evidence allocation
+
+Phase 73 is in progress. Keep P73-A/B/C as scope owners and preserve every
+existing checklist obligation. Execute the following four batches within this
+Phase; they do not introduce child Phases or change the accepted Phase 70
+contract. New product decisions must first be recorded in design/spec and
+Executable Specifications, not inferred from this execution plan.
+
+Execution principle: establish the main route end to end before developing
+branches. Start with one provider -> ordinary assembly -> CNCF discovery/read
+-> one consumer receiving the complete attributed snapshot. Prove this through
+the real public wiring, then add the second consumer on that same route. Do
+not require a complete exceptional-case catalog or every contract/fixture to
+be finished before this first executable result. Each increment specifies its
+own behavior before implementation; existing identity, authority, opacity and
+Phase 70 lifecycle constraints apply from the first increment.
+
+| Batch | Checklist ownership | Observable exit |
+| --- | --- | --- |
+| E1: minimum main-route contract | P73-A-01–02; main-route portions of P73-A-03–04 and P73-PREP-01–03 | Bounded reuse inventory and only the identity, snapshot, readiness and public read contract needed for one provider/one consumer, with its failing-first scenario. |
+| E2: establish the main route | P73-B-01–02, P73-B-04 and P73-C-01 | First one consumer reads a complete attributed opaque snapshot through actual assembled CNCF wiring; then a second independent consumer proves reuse of the same route. Retain this working baseline before E3. |
+| E3: develop branches on the working route | Complete P73-A-03–04 and P73-PREP-01–03; P73-B-03 and P73-C-02 | Specify and implement replacement, failure, conflicting registration and isolation increments against the working route; introduce the second provider here, not as an E1 prerequisite. |
+| E4: handoff and closure | P73-C-03–04 | One shared supplier contract plus provider/consumer handoff sections, settled documentation, independent Phase review, final validation and the existing release closure. |
+
+#### E1: settle only the boundaries needed for the main route
+
+- Inventory `Subsystem.components` / public Component resolution, runtime
+  service binding, `ComponentActivation`, resource resolution,
+  `ComponentKnowledgeManifest`, `ResolvedComponentKnowledge`, `KnowledgeSpace`
+  and the attributable KnowledgeSource references. Record reuse, adaptation or
+  non-applicability for each; avoid a second generic registry by default.
+- Existing knowledge manifests describe resource metadata and resolver evidence;
+  KnowledgeSpace stores and queries typed nodes/relationships. Neither alone
+  establishes the planned opaque domain contribution exchange. Reuse only
+  facilities compatible with its boundary; do not require domain records to
+  become CNCF knowledge nodes or expose resource internals as public payloads.
+- Freeze registration/discovery versus readiness/read for the selected
+  main-route run mode; complete the remaining mode-specific cases in E3.
+  Phase 70 ordinary activation is Server-only; Command, Client, Script and
+  ServerEmulator do not activate automatically. Controlled tests use the
+  existing explicit test seam. A discoverable descriptor must not imply a ready
+  snapshot, and provider/consumer callback order must not silently determine
+  success. Resolve the exact post-assembly read point before E2 without widening
+  activation or introducing a scheduler dependency.
+- Define generation identity, one supported schema and the binding of a
+  discovered descriptor to its read result for the main route. Do not infer
+  latest/current from names, ordering or hashes. E1 does not require the whole
+  replacement or failure contract to be finished.
+
+#### E3: specify each branch before extending the working route
+
+- Decide schema incompatibility, empty-ready versus
+  absent/unavailable/failed states and what happens when a selected generation
+  cannot be read.
+- Freeze duplicate-provider handling and explicit selection semantics. Stable
+  presentation order must not become implicit provider precedence. Exercise one
+  selected provider per domain and diagnose conflicting registrations according
+  to the frozen contract.
+- Distinguish complete-snapshot generation replacement from provider replacement.
+  Prove provider interchangeability with successive assemblies/configurations,
+  one active provider at a time; do not add hot swapping. Specify how a complete
+  generation becomes readable, retained-reader behavior and failed replacement
+  disposition before testing them; no patch merging, watcher or update loop.
+
+#### E2/E3: use one driver and separate mechanisms from integration
+
+Start with one opaque fixture provider and one consumer of the public CNCF
+interface, then add the second independent consumer after the first assembled
+read succeeds. Build the second provider only in E3. In E3 swap only
+the configured provider, retaining the domain and unchanged consumers.
+
+Keep one matrix linking each checklist ID to its public input, expected outcome
+and executable evidence. Start it with the main-route scenario and extend it
+alongside each branch; the full matrix is not an entry gate for E2. At closure,
+cover the normal read, ready-empty/absence/unavailable,
+provider failure, unsupported schema, conflicting registration, generation
+binding, complete replacement, provider attribution and assembly/consumer
+isolation. Tests may inspect fixture payload equality; the hub must not
+interpret fixture-specific domain fields. Add no persistence, remote service,
+search, domain mapping or automatic retry solely for this fixture.
+
+Pure contract specifications own the selection/generation/failure combinations.
+Assembled specifications own lifecycle placement, public wiring and isolation.
+Reuse their evidence for final supplier acceptance instead of repeating the
+same scenarios under P73-C.
+
+#### Validation and handoff
+
+- E1 uses contract/fixture specifications; E2/E3 run only new and affected
+  suites. Retain the E2 main-route scenario as the regression check for every
+  affected E3 increment. Existing selection candidates include
+  `ComponentActivationLifecycleSpec`, `ServerOperationActivationSpec`,
+  `SubsystemAssemblyAdmissionSpec`, `ComponentKnowledgeManifestSpec`,
+  `ResolvedComponentKnowledgeSpec` and `ComponentKnowledgeSpaceSpec`.
+  Select from the actual touched boundary rather than running all of them for
+  every batch. Freeze new suite names when implementation exists.
+- Keep each implementation batch's focused review and acceptance obligations.
+  E4 owns one independent full Phase review and final full serialized CNCF
+  validation for the settled implementation. Rerun affected checks after a
+  repair; repeat full validation only when the change or unresolved evidence
+  requires it. Documentation-only planning does not run SBT.
+- Deliver one versioned supplier package of contract references, runnable
+  fixture/spec locations, availability/failure examples and validation evidence.
+  Add separate TKE Phase 2 provider and BoK Phase 7.5 consumer instructions;
+  both use the same ABI. Missing local downstream checkouts limit verification
+  of their current plans, not local fixture development. Do not claim external
+  consumer acceptance or make downstream implementation a supplier prerequisite.
+- Use the normal checkout and registered serialized SBT runner. Worktree
+  operation remains suspended pending sm-workflow artifact management. Fixture
+  testing does not require publication into shared Ivy. This planning update
+  neither executes the Phase release nor authorizes downstream mutations.
+
 ### P73-A: Inventory and Contract Freeze
 
 Classify reusable CNCF facilities, freeze the domain/provider identity split,
 snapshot lifecycle, discovery/read contract, failure model, and failing-first
 acceptance fixtures.
+This is a scope group, not an all-or-nothing prerequisite for P73-B: freeze the
+main-route subset in E1 and complete branch contracts with their E3 increments.
 
 ### P73-B: Hub Implementation
 
