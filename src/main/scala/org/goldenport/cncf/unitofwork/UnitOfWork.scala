@@ -319,6 +319,31 @@ class UnitOfWork(
   def lastAbortResult: Option[Consequence[AbortResult]] =
     _last_abort_result
 
+  /** Internal opt-in subclasses may join only an otherwise empty UoW. Legacy
+    * callbacks/effects are not presumed enlisted in a native Workflow commit.
+    */
+  private[cncf] def managedCompletionAdmissionC: Consequence[Unit] =
+    if (_dirty_entities.nonEmpty || _pending_events.nonEmpty || _post_commit_callbacks.nonEmpty ||
+        _post_abort_callbacks.nonEmpty || _post_abort_outcome_callbacks.nonEmpty ||
+        _last_commit_result.nonEmpty || _last_abort_result.nonEmpty)
+      Consequence.stateConflict("Managed completion cannot enlist legacy pending effects or a finalized UnitOfWork")
+    else Consequence.unit
+
+  private[cncf] def executionOperationAdmissionC: Consequence[Unit] = Consequence.unit
+
+  private[cncf] def completeManagedResourcesC(termination: UnitOfWorkTermination): Consequence[Unit] = {
+    _clear_pending_commit_state()
+    _resource_registry.terminateC(termination)
+  }
+
+  private[cncf] def recordManagedCommit(result: Consequence[CommitResult], termination: UnitOfWorkTermination): Unit = {
+    _last_commit_termination = Some(termination)
+    _last_commit_result = Some(result)
+  }
+
+  private[cncf] def recordManagedAbort(result: Consequence[AbortResult]): Unit =
+    _last_abort_result = Some(result)
+
   def stagePostCommit(callback: => Unit): Unit =
     stagePostCommitC {
       try {

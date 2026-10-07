@@ -7,9 +7,12 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.{ContinuationResult, Work
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
+import org.goldenport.value.{BaseContent, DescriptiveAttributes}
 
 /** Binds an explicitly declared completion Operation to a persisted WorkOrder.
   * Result payload decoding and response projection remain application-owned.
+  * @since   Sep. 25, 2026
+  * @version Oct.  8, 2026
   */
 object WorkflowCompletionServiceOperation {
   final case class SelectedClosing(
@@ -50,13 +53,19 @@ object WorkflowCompletionServiceOperation {
     instancePersistence: WorkflowInstancePersistence,
     configuration: WorkflowInstancePersistence.Configuration,
     freshUnitOfWork: () => UnitOfWork,
-    closingProgram: Option[ClosingProgram[R]] = None
+    closingProgram: Option[ClosingProgram[R]] = None,
+    managedCompletion: Option[WorkflowManagedCompletion[R]] = None,
+    descriptiveAttributes: DescriptiveAttributes = DescriptiveAttributes.empty
   ): Consequence[spec.OperationDefinition] =
     if (definition == null || operation == null || requestDefinition == null ||
         responseDefinition == null || codec == null || runtime == null ||
-        runtime == ContinuationRuntime.empty || issuedPersistence == null ||
+        (runtime == ContinuationRuntime.empty && (managedCompletion == null || managedCompletion.isEmpty)) || issuedPersistence == null ||
         instancePersistence == null || configuration == null || freshUnitOfWork == null ||
+        descriptiveAttributes == null ||
         closingProgram == null || closingProgram.exists(_ == null) ||
+        managedCompletion == null || managedCompletion.exists(value => value == null ||
+          value.resultTypeIdentity != codec.resultTypeIdentity) ||
+        (managedCompletion.nonEmpty && closingProgram.isEmpty) ||
         definition.schemaVersion != GeneratedProvidedApiAbi.schemaVersion ||
         definition.generator != GeneratedProvidedApiAbi.generatorIdentity ||
         definition.providedOperations == null || !definition.providedOperations.contains(operation) ||
@@ -67,7 +76,8 @@ object WorkflowCompletionServiceOperation {
     else configuration.validateC.map { accepted =>
       new BoundOperation(
         definition, operation, requestDefinition, responseDefinition, codec,
-        runtime, issuedPersistence, instancePersistence, accepted, freshUnitOfWork, closingProgram
+        runtime, issuedPersistence, instancePersistence, accepted, freshUnitOfWork, closingProgram, managedCompletion,
+        descriptiveAttributes
       )
     }
 
@@ -82,10 +92,12 @@ object WorkflowCompletionServiceOperation {
     instancePersistence: WorkflowInstancePersistence,
     configuration: WorkflowInstancePersistence.Configuration,
     freshUnitOfWork: () => UnitOfWork,
-    closingProgram: Option[ClosingProgram[R]]
+    closingProgram: Option[ClosingProgram[R]],
+    managedCompletion: Option[WorkflowManagedCompletion[R]],
+    descriptiveAttributes: DescriptiveAttributes
   ) extends spec.OperationDefinition {
     val specification: spec.OperationDefinition.Specification = spec.OperationDefinition.Specification(
-      name = operation.name,
+      content = BaseContent.simple(operation.name, descriptiveAttributes),
       request = requestDefinition,
       response = responseDefinition
     )
@@ -105,7 +117,7 @@ object WorkflowCompletionServiceOperation {
           Consequence.stateConflict("public completion payload differs from the declared Workflow or result type")
         else submitted.handle.validateC.map { _ =>
           BoundAction(request, submitted, operation, codec, runtime,
-            issuedPersistence, instancePersistence, configuration, freshUnitOfWork, closingProgram)
+            issuedPersistence, instancePersistence, configuration, freshUnitOfWork, closingProgram, managedCompletion)
         }
       }
   }
@@ -120,12 +132,13 @@ object WorkflowCompletionServiceOperation {
     instancePersistence: WorkflowInstancePersistence,
     configuration: WorkflowInstancePersistence.Configuration,
     freshUnitOfWork: () => UnitOfWork,
-    closingProgram: Option[ClosingProgram[R]]
+    closingProgram: Option[ClosingProgram[R]],
+    managedCompletion: Option[WorkflowManagedCompletion[R]]
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode = CommandExecutionMode.Sync
     def createCall(core: ActionCall.Core): ActionCall =
       BoundCall(core, submitted, operation, codec, runtime,
-        issuedPersistence, instancePersistence, configuration, freshUnitOfWork, closingProgram)
+        issuedPersistence, instancePersistence, configuration, freshUnitOfWork, closingProgram, managedCompletion)
   }
 
   private final case class BoundCall[W, R](
@@ -138,7 +151,8 @@ object WorkflowCompletionServiceOperation {
     instancePersistence: WorkflowInstancePersistence,
     configuration: WorkflowInstancePersistence.Configuration,
     freshUnitOfWork: () => UnitOfWork,
-    closingProgram: Option[ClosingProgram[R]]
+    closingProgram: Option[ClosingProgram[R]],
+    managedCompletion: Option[WorkflowManagedCompletion[R]]
   ) extends ProcedureActionCall {
     private var _selected_closing: Option[(WorkflowInstancePersistence.InstanceRecord, SelectedClosing)] = None
     private def _admit_issued_c(): Consequence[Unit] =
@@ -187,25 +201,39 @@ object WorkflowCompletionServiceOperation {
         _ <- selected match {
           case Some((current, _)) =>
             instancePersistence.load(configuration, current.identity).flatMap {
-              case Some(stored) if stored == current => Consequence.unit
+              case Some(stored) => for {
+                actual <- WorkflowInstanceRecordJsonV1.encodeC(stored)
+                expected <- WorkflowInstanceRecordJsonV1.encodeC(current)
+                _ <- if (actual == expected) Consequence.unit
+                  else Consequence.stateConflict("public completion WorkflowInstance changed after closing Action selection")
+              } yield ()
               case _ => Consequence.stateConflict("public completion WorkflowInstance changed after closing Action selection")
             }
           case None => Consequence.unit
         }
-        resumed <- WorkflowProtocolV1.resumePersistedWorkOrderC(
-          owner, submitted, issuedPersistence, runtime, instancePersistence, configuration,
-          freshUnitOfWork, selected.map(_._2.program)
-        )
-        completed <- selected match {
-          case Some((current, SelectedClosing(_, Some(next)))) =>
-            instancePersistence.append(configuration, current.identity, current.revision, next.history.last)
-              .flatMap { persisted =>
-                if (persisted == next) Consequence.success(Some(persisted))
-                else Consequence.stateConflict("public completion WorkflowInstance append diverged")
-              }
-          case _ => Consequence.success(None)
+        completion <- managedCompletion match {
+          case Some(bound) => selected match {
+            case Some((current, closing)) =>
+              bound.completeC(owner, submitted, current, closing, executionContext)
+                .map(value => value.resume -> Some(value.instance))
+            case None => Consequence.stateConflict("Managed completion requires selected closing execution")
+          }
+          case None => for {
+            resumed <- WorkflowProtocolV1.resumePersistedWorkOrderC(
+              owner, submitted, issuedPersistence, runtime, instancePersistence, configuration,
+              freshUnitOfWork, selected.map(_._2.program))
+            completed <- selected match {
+              case Some((current, SelectedClosing(_, Some(next)))) =>
+                instancePersistence.append(configuration, current.identity, current.revision, next.history.last)
+                  .flatMap { persisted =>
+                    if (persisted == next) Consequence.success(Some(persisted))
+                    else Consequence.stateConflict("public completion WorkflowInstance append diverged")
+                  }
+              case _ => Consequence.success(None)
+            }
+          } yield resumed -> completed
         }
-        encoded <- codec.encodeAfterCommitC(resumed, submitted, completed)
+        encoded <- codec.encodeAfterCommitC(completion._1, submitted, completion._2)
       } yield encoded
     }
 
@@ -216,6 +244,8 @@ object WorkflowCompletionServiceOperation {
       if (selected == null || selected.program == null || selected.nextInstance == null)
         Consequence.stateConflict("public completion closing Action selection is incomplete")
       else selected.nextInstance match {
+        case None if managedCompletion.nonEmpty =>
+          Consequence.stateConflict("Managed completion requires an adjacent selected next instance")
         case None => Consequence.unit
         case Some(next) if next != null && next.history != null && next.history.nonEmpty =>
           current.appendC(current.revision, next.history.last).flatMap { projected =>

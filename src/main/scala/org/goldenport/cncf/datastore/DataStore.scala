@@ -17,7 +17,7 @@ import scala.util.control.NonFatal
  *  version Feb. 25, 2026
  *  version May.  2, 2026
  *  version Jul. 26, 2026
- * @version Aug.  5, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -205,7 +205,7 @@ object DataStore {
     recorder: CommitRecorder
   ) extends DataStore
       with EntityVersionedMutationDataStore
-      with EntityConditionalTransitionDataStore {
+      with EntityConditionalUpdateDataStore {
     def isAccept(cid: CollectionId): Boolean = true
 
     private var _collections: VectorMap[String, InMemoryDataStore.Collection] = VectorMap.empty
@@ -487,8 +487,64 @@ object DataStore {
               _apply_conditional_transition(
                 admitted,
                 rootkey,
-                existing
+                existing,
+                Vector.empty
               )
+        } yield result
+      }
+
+    /** Internal same-owner staging proof for S12. Cross-component admission
+      * must be supplied by DataStoreSpace before this becomes a capability.
+      */
+    private[datastore] def conditionalMultiGuardSameOwner(
+      plan: DataStoreConditionalMultiGuardPlan
+    )(using
+      ctx: ExecutionContext
+    ): Consequence[DataStoreConditionalTransitionResult] =
+      conditionalMultiGuardAcknowledgedSameOwner(plan).map {
+        case DataStoreMultiGuardAcknowledgement.NotMatched(existing) =>
+          DataStoreConditionalTransitionResult.NotMatched(existing)
+        case DataStoreMultiGuardAcknowledgement.Committed(records) =>
+          DataStoreConditionalTransitionResult.Transitioned(records(0).record, records(1).record)
+      }
+
+    /** Internal same-owner acknowledgement from staged native state, not a
+      * read after publication. This does not opt the provider into host routes.
+      */
+    private[datastore] def conditionalMultiGuardAcknowledgedSameOwner(
+      plan: DataStoreConditionalMultiGuardPlan
+    )(using
+      ctx: ExecutionContext
+    ): Consequence[DataStoreMultiGuardAcknowledgement] =
+      synchronized {
+        for {
+          admitted <- DataStoreConditionalMultiGuardPlan.validate(plan)
+          _ <-
+            if (admitted.additionalGuards.forall(_.componentOwner == admitted.scope.workflowOwner))
+              Consequence.unit
+            else
+              Consequence.operationInvalid("entity-conditional-multi-guard")
+          rootcollection <- take_collection(admitted.transition.root.collection)
+          rootkey <- rootcollection._entry_key(admitted.transition.root.entryId)
+          existing <- rootcollection
+            ._entries_snapshot
+            .get(rootkey)
+            .map(Consequence.success)
+            .getOrElse(Consequence.DataStoreNotFound(admitted.transition.root.entryId.print))
+          matches <- EntityConditionalTransitionSupport.rootMatches(
+            existing,
+            admitted.transition.root
+          )
+          result <-
+            if (!matches)
+              Consequence.success(DataStoreMultiGuardAcknowledgement.NotMatched(existing))
+            else
+              _apply_conditional_transition_with_records(
+                admitted.transition,
+                rootkey,
+                existing,
+                admitted.additionalGuards
+              ).map { case (_, records) => DataStoreMultiGuardAcknowledgement.Committed(records) }
         } yield result
       }
 
@@ -604,6 +660,19 @@ object DataStore {
           val collectionkey = collection_key(effect.collection)
           val entries = states.getOrElse(collectionkey, VectorMap.empty)
           effect match {
+            case EntityVersionedSideEffect.Create(_, entryid, record) =>
+              if (entries.contains(entryid.print))
+                Consequence.DataStoreDuplicate(entryid.print)
+              else
+                Consequence.success(
+                  states.updated(
+                    collectionkey,
+                    entries.updated(
+                      entryid.print,
+                      InMemoryDataStore._normalize_record(record)
+                    )
+                  )
+                )
             case EntityVersionedSideEffect.Save(_, entryid, record) =>
               Consequence.success(
                 states.updated(
@@ -628,11 +697,21 @@ object DataStore {
     private def _apply_conditional_transition(
       plan: DataStoreConditionalTransitionPlan,
       rootkey: String,
-      existingroot: Record
-    ): Consequence[DataStoreConditionalTransitionResult] = {
+      existingroot: Record,
+      additionalGuards: Vector[DataStoreConditionalRoot]
+    ): Consequence[DataStoreConditionalTransitionResult] =
+      _apply_conditional_transition_with_records(plan, rootkey, existingroot, additionalGuards).map(_._1)
+
+    private def _apply_conditional_transition_with_records(
+      plan: DataStoreConditionalTransitionPlan,
+      rootkey: String,
+      existingroot: Record,
+      additionalGuards: Vector[DataStoreConditionalRoot]
+    ): Consequence[(DataStoreConditionalTransitionResult, Vector[DataStoreMultiGuardRecord])] = {
       val collections =
-        plan.sideEffects
+        additionalGuards
           .map(_.collection)
+          .appendedAll(plan.sideEffects.map(_.collection))
           .appended(plan.successor.collection)
           .prepended(plan.root.collection)
           .distinct
@@ -673,7 +752,19 @@ object DataStore {
         _ <- conditional_transition_checkpoint(
           DataStoreConditionalTransitionCheckpoint.RootPrepared
         )
-        prepared <- _apply_side_effects(plan.sideEffects, rooted)
+        guarded <- _prepare_additional_guards(additionalGuards, rooted)
+        prepared <- _apply_side_effects(plan.sideEffects, guarded)
+        // Capture exact native post-images before the publication checkpoint.
+        // A failed checkpoint publishes neither the staged state nor an acknowledgement.
+        records = (Vector(plan.root.collection -> plan.root.entryId,
+          plan.successor.collection -> plan.successor.entryId) ++
+          additionalGuards.map(root => root.collection -> root.entryId) ++
+          plan.sideEffects.collect { case effect: EntityVersionedSideEffect.Create =>
+            effect.collection -> effect.entryId
+          }).map { case (collection, entryId) =>
+            DataStoreMultiGuardRecord(collection, entryId,
+              prepared(collection_key(collection))(entryId.print))
+          }
         _ <- conditional_transition_checkpoint(
           DataStoreConditionalTransitionCheckpoint.BeforePublish
         )
@@ -689,12 +780,41 @@ object DataStore {
               result.updated(collectionkey, collection)
           }
         _collections = nextcollections
-        DataStoreConditionalTransitionResult.Transitioned(
+        (DataStoreConditionalTransitionResult.Transitioned(
           rootrecord,
           successorrecord
-        )
+        ), records)
       }
     }
+
+    private def _prepare_additional_guards(
+      guards: Vector[DataStoreConditionalRoot],
+      initial: Map[String, VectorMap[String, Record]]
+    ): Consequence[Map[String, VectorMap[String, Record]]] =
+      guards.foldLeft(Consequence.success(initial)) { (result, guard) =>
+        result.flatMap { states =>
+          val collectionkey = collection_key(guard.collection)
+          val entries = states(collectionkey)
+          val entrykey = guard.entryId.print
+          entries.get(entrykey) match {
+            case None => Consequence.DataStoreNotFound(entrykey)
+            case Some(existing) =>
+              EntityConditionalTransitionSupport.rootMatches(existing, guard).flatMap {
+                case true =>
+                  val updated = EntityConditionalTransitionSupport.applyRootChanges(existing, guard)
+                  Consequence.success(states.updated(collectionkey, entries.updated(entrykey, updated)))
+                case false =>
+                  Consequence.operationConflict(
+                    "entity-conditional-multi-guard",
+                    Vector(
+                      org.goldenport.observation.Descriptor.Facet.Reason("additional-guard-conflict"),
+                      org.goldenport.observation.Descriptor.Facet.Policy("entity.conditional-multi-guard")
+                    )
+                  )
+              }
+          }
+        }
+      }
 
     private def _prepare_conditional_successor(
       successor: DataStoreConditionalSuccessor,
@@ -724,6 +844,19 @@ object DataStore {
                 entries.updated(entrykey, create.record)
               ) -> create.record
             )
+        case update: DataStoreConditionalSuccessor.Update =>
+          entries.get(entrykey) match {
+            case None => Consequence.DataStoreNotFound(update.entryId.print)
+            case Some(record) =>
+              EntityConditionalTransitionSupport.rootMatches(record, update.root).flatMap { matches =>
+                if (matches) {
+                  val next = EntityConditionalTransitionSupport.applyRootChanges(record, update.root)
+                  Consequence.success(initial.updated(collectionkey, entries.updated(entrykey, next)) -> next)
+                } else Consequence.operationConflict("entity-conditional-transition", Vector(
+                  org.goldenport.observation.Descriptor.Facet.Reason("updated-successor-state-conflict"),
+                  org.goldenport.observation.Descriptor.Facet.Policy("entity.conditional-transition.successor-update")))
+              }
+          }
         case bind: DataStoreConditionalSuccessor.Bind =>
           entries.get(entrykey) match {
             case None =>

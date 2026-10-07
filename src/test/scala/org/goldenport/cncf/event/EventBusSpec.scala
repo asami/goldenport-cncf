@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 14, 2026
- * @version Jul. 15, 2026
+ *  version Jul. 15, 2026
+ * @version Oct. 3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventBusSpec
@@ -24,6 +25,50 @@ final class EventBusSpec
   with GivenWhenThen {
 
   "EventBus" should {
+    "dispatch finalized native records without appending again and match subscriptions using selected persistence" in {
+      Given("an event bus with persistence-filtered subscriptions and finalized durable and transient records")
+      given ExecutionContext = ExecutionContext.create()
+      val store = EventStore.inMemory
+      val bus = EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = store))
+      val trace = ArrayBuffer.empty[String]
+      Vector(true, false).foreach { persistent =>
+        bus.register(EventSubscription(s"selected-$persistent", eventName = Some("native"), kind = Some("fact"),
+          persistentOnly = Some(persistent), handler = new EventDispatchHandler {
+            def dispatch(event: DomainEvent): Consequence[Unit] = event match {
+              case FinalizedRecordDomainEvent(record) => trace += s"$persistent:${record.sequence}"; Consequence.unit
+              case _ => Consequence.stateConflict("Expected exact finalized record")
+            }
+          }))
+      }
+      val time = Instant.parse("2026-10-01T00:00:00Z")
+      val durable = EventRecord(EventId("test", "native", Some(time), Some("durable")), "native", "fact",
+        Map("value" -> "exact"), Map.empty, time, true, EventRecord.Status.Stored, EventLane.Transactional, 7L)
+      val transient = durable.copy(id = EventId("test", "native", Some(time), Some("transient")), persistent = false, sequence = 0L)
+      When("the durable finalized record is dispatched")
+      val durableresult = bus.dispatchCommittedRecordC(durable)
+      Then("the result retains its selected persistence")
+      durableresult.toOption.get.persisted shouldBe true
+      When("the transient finalized record is dispatched")
+      val transientresult = bus.dispatchCommittedRecordC(transient)
+      Then("only matching subscriptions run and no record is appended again")
+      transientresult.toOption.get.persisted shouldBe false
+      trace.toVector shouldBe Vector("true:7", "false:0")
+      store.query(EventStore.Query()).toOption.get shouldBe empty
+      When("a durable record has no durable sequence")
+      val missingsequence = bus.dispatchCommittedRecordC(durable.copy(sequence = 0L))
+      Then("dispatch is rejected")
+      missingsequence.isSuccess shouldBe false
+      When("a transient record has a durable sequence")
+      val unexpectedsequence = bus.dispatchCommittedRecordC(transient.copy(sequence = 1L))
+      Then("dispatch is rejected")
+      unexpectedsequence.isSuccess shouldBe false
+      When("no finalized record is supplied")
+      val absentrecord = bus.dispatchCommittedRecordC(null)
+      Then("dispatch is rejected without invoking another handler")
+      absentrecord.isSuccess shouldBe false
+      trace.size shouldBe 2
+    }
+
     "register and dispatch in deterministic priority/order" in {
       Given("event bus with multiple subscriptions for same event")
       val recorder = new _InMemoryCommitRecorder

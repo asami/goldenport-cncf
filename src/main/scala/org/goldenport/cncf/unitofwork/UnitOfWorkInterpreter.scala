@@ -185,12 +185,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _execute[A](
     op: UnitOfWorkOp[A]
   ): Consequence[A] =
-    _validate_entity_collection_resolution(op)
+    uow.executionOperationAdmissionC.flatMap(_ => _validate_entity_collection_resolution(op))
       .flatMap(_ => _execute_validated(op))
 
   private def _execute_validated[A](
     op: UnitOfWorkOp[A]
   ): Consequence[A] = op match {
+    case UnitOfWorkOp.StageWorkflowClosingLocalIntent(_) =>
+      Consequence.stateConflict("Closing local intent requires its managed preparation interpreter")
     case UnitOfWorkOp.Authorize(authorization) =>
       _with_calltree("uow:authorize") {
         _authorize(Some(authorization))

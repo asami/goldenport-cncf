@@ -103,30 +103,31 @@ An explicitly selected component development directory MUST contain both
 Styled CML development evidence MUST use schema
 `cncf.car-development-runtime-manifest.v2` and source kind
 `development-directory`. Its descriptor evidence is
-`target/cncf.d/component-descriptor.json`. CNCF MUST continue to admit a
-digest-valid `cncf.car-development-runtime-manifest.v1` prepared before this
-change, whose descriptor evidence remains
-`src/main/car/component-descriptor.json`. Style-less legacy CML may continue
-to prepare that v1 form; it is never upgraded to an incomplete v2 snapshot.
+`target/cncf.d/component-descriptor.json`. The canonical development route
+requires v2; a v1 migration manifest is rejected with explicit recovery rather
+than adapted into the current descriptor/ABI contract.
 A packaged manifest MUST NOT be accepted as development evidence.
 
 ### R3 Stable contract evidence
 
 The manifest MUST match the component descriptor and ABI export evidence,
-reproduce a supported CNCF runtime range, verify each declared stable evidence
-identity and SHA-256 digest, and use a deterministic evidence digest.
-For v2, the development descriptor MUST be schema version `2` and carry the
-complete catalog-matching `componentStyle` snapshot. A v1 migration descriptor
-keeps its legacy descriptor shape.
+reproduce a supported CNCF runtime range and select the three declared evidence
+paths. Each selected file must exist, be nonempty and readable. Descriptor/ABI
+and classpath data are consumed as current inputs; no SHA-256, logical digest,
+evidence digest, saved-byte comparison or transit-immutability proof is required.
+The development descriptor MUST be schema version `3` with canonical component
+namespace/id/version, matching ABI format v2/export identity/ABI version1.
 
 ### R4 Mutable output exclusion
 
-Mutable compiled classes are not part of the development integrity set.
+Mutable compiled classes and unrelated generated files are not recursively
+inventoried. Only the declared evidence paths and referenced classpath entries
+are admission inputs; unrelated files are left outside this boundary.
 
 ### R5 Stale classpath rejection
 
 Every non-empty classpath entry referenced by the prepared classpath file MUST
-exist when the producer creates evidence and when CNCF admits it. A deleted or
+exist and be readable when CNCF admits it. A deleted or
 invalid entry is stale development evidence and MUST be rejected before
 classloading.
 
@@ -134,7 +135,7 @@ classloading.
 
 Missing, empty, malformed, contradictory, or stale development evidence MUST
 fail before component discovery or classloading, identify the failing path,
-and direct the developer to run `sbt cozyPrepareRuntime`. A development-source
+and direct the developer to prepare through the cncf launcher. A development-source
 failure MUST NOT fall back to a packaged CAR.
 
 ### R7 Structured admission failure
@@ -164,8 +165,12 @@ development counterpart.
 - E7: a deleted classpath entry is rejected as stale evidence (R3, R5, R6).
 - E8: an invalid classpath entry is normalized into structured recovery (R5, R6, R7).
 - E9: a descriptor changed after preparation is rejected as stale contract evidence (R3, R6).
-- E10: an incomplete schema-v2 componentStyle snapshot is rejected before development activation (R3, R6).
-- E11: a digest-valid v1 development directory retains its legacy source descriptor identity during migration (R2, R3).
+- E10: a schema-v2 descriptor is rejected before development activation (R3, R6).
+- E11: a v1 development manifest is rejected without a packaged fallback (R2, R3).
+- E17: current path-only producer evidence admits readable classpath presentation changes without a seal (R3, R5).
+- E18: independently consistent current descriptor metadata requires no saved-byte comparison (R3, R6).
+- E19: unrelated generated files are excluded from runtime admission (R4).
+- E20: empty interpreted classpaths and NUL-bearing entries are rejected as malformed input without integrity controls (R5, R6).
 
 The CNCF Information CML build resolves its invocation from the pinned Cozy
 generator version, the root build's effective CNCF artifact version, the output

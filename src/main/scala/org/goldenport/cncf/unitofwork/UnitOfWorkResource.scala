@@ -21,6 +21,7 @@ trait UnitOfWorkResource {
 enum UnitOfWorkTermination {
   case Committed
   case Aborted
+  case Indeterminate
   case Disposed
 }
 

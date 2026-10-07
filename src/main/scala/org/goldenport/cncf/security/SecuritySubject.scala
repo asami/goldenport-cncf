@@ -27,6 +27,8 @@ final case class SecuritySubject(
 
   def isProviderAuthenticated: Boolean = SecurityAuthenticationProvenance.isProviderAuthenticated(this)
 
+  def isTrustedLocalAuthenticated: Boolean = SecurityAuthenticationProvenance.isTrustedLocalAuthenticated(this)
+
   def isAnonymous: Boolean =
     authenticationState == SecuritySubject.AuthenticationState.Anonymous
 
@@ -214,8 +216,7 @@ object SecuritySubject {
       securityLevel = levelSet,
       attributes = attributes
     )
-    if (SecurityAuthenticationProvenance.isProviderAuthenticated(security))
-      SecurityAuthenticationProvenance.providerAuthenticated(result)
+    SecurityAuthenticationProvenance.inherit(security, result)
     result
   }
 
@@ -430,23 +431,4 @@ object SecuritySubject {
           case None => None
         }
     }
-}
-
-/** Internal provenance is deliberately detached from public security products. */
-private[cncf] object SecurityAuthenticationProvenance {
-  private val _provider_authenticated = java.util.Collections.synchronizedMap(
-    new java.util.WeakHashMap[AnyRef, java.lang.Boolean]()
-  )
-
-  def providerAuthenticated[A <: AnyRef](value: A): A = {
-    _provider_authenticated.put(value, java.lang.Boolean.TRUE)
-    value
-  }
-
-  def isProviderAuthenticated(value: AnyRef): Boolean =
-    _provider_authenticated.containsKey(value)
-
-  def inherit(source: AnyRef, target: AnyRef): Unit =
-    if (isProviderAuthenticated(source))
-      providerAuthenticated(target)
 }

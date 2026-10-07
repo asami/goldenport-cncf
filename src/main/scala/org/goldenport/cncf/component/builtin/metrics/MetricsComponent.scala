@@ -7,7 +7,7 @@ import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, C
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
-import org.goldenport.cncf.observability.OpenTelemetryExporter
+import org.goldenport.cncf.observability.{OpenTelemetryExportConfig, OpenTelemetryExporter}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -63,11 +63,11 @@ object MetricsComponent {
         services = spec.ServiceDefinitionGroup(services = Vector(service)),
         handler = ProtocolHandler.default
       )
-      val runtimeconfig = RuntimeConfig.from(params.subsystem.configuration)
+      val runtimeconfig = RuntimeConfig.settingsFrom(params.subsystem.configuration)
       comp.withPort(Component.Port.of(new DefaultMetricsService(
         params.subsystem.entityAccessMetrics,
         params.subsystem.componentMetrics,
-        runtimeconfig,
+        runtimeconfig.openTelemetryExportConfig,
         () => params.subsystem.runtimeOperationSecurityPolicyC
       )))
       val instanceid = ComponentInstanceId.default(componentId)
@@ -78,9 +78,16 @@ object MetricsComponent {
   private[cncf] final class DefaultMetricsService(
     registry: EntityAccessMetricsRegistry,
     componentmetrics: ComponentMetricsRegistry,
-    runtimeconfig: RuntimeConfig,
+    exportconfig: OpenTelemetryExportConfig,
     operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
   ) extends MetricsService {
+    def this(
+      registry: EntityAccessMetricsRegistry,
+      componentmetrics: ComponentMetricsRegistry,
+      runtimeconfig: RuntimeConfig,
+      operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
+    ) = this(registry, componentmetrics, runtimeconfig.openTelemetryExportConfig, operationmodesupplier)
+
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
 
@@ -88,7 +95,7 @@ object MetricsComponent {
       val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry, componentmetrics)
       val operationmode = MetricsComponent.operationMode(operationmodesupplier())
       val exportresult = OpenTelemetryExporter(
-        runtimeconfig.openTelemetryExportConfig.forOperationMode(operationmode),
+        exportconfig.forOperationMode(operationmode),
         operationmode
       ).exportMetrics(snapshot)
       Consequence.success(snapshot.toRecord ++ Record.dataAuto(

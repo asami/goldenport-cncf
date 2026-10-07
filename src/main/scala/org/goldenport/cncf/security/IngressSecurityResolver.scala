@@ -485,7 +485,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           profile.displayName.map("displayName" -> _)
         }.toMap
         val principalid = subsystem.resolvedStandaloneUserProfile.map(_.id).getOrElse(subject.id)
-        SecurityContext(
+        SecurityAuthenticationProvenance.trustedLocalAuthenticated(SecurityContext(
           principal = new Principal {
             val id: PrincipalId = PrincipalId(principalid)
             val attributes: Map[String, String] =
@@ -494,7 +494,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           capabilities = subject.capabilities.map(Capability.apply).toSet,
           level = SecurityLevel(subject.securityLevel),
           subjectKind = SubjectKind.User
-        )
+        ))
       }
 
   private def _fallback_privilege_enabled(base: ExecutionContext): Boolean =

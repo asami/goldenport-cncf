@@ -16,13 +16,23 @@ import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{
   DataStore,
+  DataStoreSpace,
+  DataStoreObservationTarget,
+  EntityObservationDataStore,
+  DataStoreConditionalMultiGuardPlan,
+  DataStoreMultiGuardAcknowledgement,
+  DataStoreMultiGuardReadback,
+  DataStoreMultiGuardRecord,
   DataStoreConditionalRoot,
   DataStoreConditionalSuccessor,
   DataStoreConditionalTransitionCheckpoint,
   DataStoreConditionalTransitionFailure,
   DataStoreConditionalTransitionPlan,
   DataStoreConditionalTransitionResult,
-  EntityConditionalTransitionDataStore,
+  EntityConditionalUpdateDataStore,
+  EntityVerifiedMultiGuardDataStore,
+  EntityRetainedEventDataStore,
+  EntityTransientEventDataStore,
   EntityConditionalTransitionSupport,
   EntityCompareAndSetMutationPlan,
   EntityDirectMutationPlan,
@@ -68,7 +78,7 @@ import org.simplemodeling.model.datatype.EntityRevision
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- * @version Jul. 26, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -79,7 +89,7 @@ class SqlDataStore(
 ) extends DataStore
     with SearchableDataStore
     with EntityVersionedMutationDataStore
-    with EntityConditionalTransitionDataStore {
+    with EntityConditionalUpdateDataStore {
   import DataStore.*
   private val _record_decoder = new RecordDecoder()
   @volatile private var _managed_resource: Option[ManagedSqlDataStoreResource] = None
@@ -110,6 +120,47 @@ class SqlDataStore(
 
   private[cncf] def managedResourceOption: Option[ManagedSqlDataStoreResource] =
     _managed_borrow_resource.orElse(_managed_resource)
+
+  /** A non-owning verified view is available only for borrowed managed SQLite.
+    * It grants no invocation authority and never changes the ordinary view.
+    */
+  private[cncf] def managedMultiGuardVerifiedViewC(): Consequence[SqlDataStore] =
+    (_managed_borrow_resource, _managed_borrow_admission) match {
+      case (Some(resource), Some(admission)) if dialect.name == SqliteDialectDriver.name =>
+        admission().map { _ =>
+          val view = new SqlDataStore(dialect, resource.datasource, recorder, config)
+              with EntityVerifiedMultiGuardDataStore with EntityObservationDataStore with EntityRetainedEventDataStore with EntityTransientEventDataStore {
+            override protected def commit_transient_events(inv: DataStoreSpace.TransientEventInvocation)
+                (using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] =
+              commitTransientEventsManagedC(inv)
+            override protected def readback_transient_events(inv: DataStoreSpace.TransientEventInvocation)
+                (using ExecutionContext): Consequence[Vector[DataStoreMultiGuardRecord]] =
+              readbackTransientEventsManagedC(inv)
+            override protected def commit_retained_events(inv: DataStoreSpace.RetainedEventInvocation)
+                (using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] =
+              commitRetainedEventsManagedC(inv)
+            override protected def readback_retained_events(inv: DataStoreSpace.RetainedEventInvocation)
+                (using ExecutionContext): Consequence[Vector[DataStoreMultiGuardRecord]] =
+              readbackRetainedEventsManagedC(inv)
+            override private[datastore] def supportsPreparedEvents: Boolean = true
+            override protected def observe_native(invocation: DataStoreSpace.ObservationInvocation)
+                (using ExecutionContext): Consequence[Vector[(DataStoreObservationTarget, Option[Record])]] =
+              observeDeclaredSnapshotC(invocation)
+            override protected def commit_multi_guard_for_readback(plan: DataStoreConditionalMultiGuardPlan)
+                (using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] =
+              Consequence.configurationInvalid("Managed multi-guard requires a host invocation")
+            override protected def commit_multi_guard_admitted(invocation: DataStoreSpace.MultiGuardInvocation)
+                (using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] =
+              conditionalMultiGuardAcknowledgedManaged(invocation)
+            override protected def readback_multi_guard(invocation: DataStoreSpace.MultiGuardInvocation)
+                (using ExecutionContext): Consequence[Vector[DataStoreMultiGuardRecord]] =
+              readbackMultiGuardSnapshotC(invocation)
+          }
+          view.useManagedResource(resource, admission)
+          view
+        }
+      case _ => Consequence.configurationInvalid("Verified multi-guard requires borrowed managed SQLite")
+    }
 
   def isAccept(cid: CollectionId): Boolean = true
 
@@ -322,6 +373,357 @@ class SqlDataStore(
           DataStoreConditionalTransitionFailure.normalizeProvider
         )
       }
+
+  /** Internal SQLite staging candidate; no production host capability opt-in.
+    * Cross-owner remains denied until managed authority/atomicity is admitted.
+    */
+  private[datastore] def conditionalMultiGuardAcknowledgedSameOwner(
+    plan: DataStoreConditionalMultiGuardPlan
+  )(using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] =
+    _conditional_multi_guard_acknowledged(plan, None)
+
+  private[datastore] def conditionalMultiGuardAcknowledgedManaged(
+    invocation: DataStoreSpace.MultiGuardInvocation
+  )(using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] =
+    if (invocation == null || _managed_borrow_resource.isEmpty || _managed_borrow_admission.isEmpty)
+      Consequence.configurationInvalid("Managed multi-guard host invocation is required")
+    else invocation.validateProviderC(this).flatMap { _ =>
+      _conditional_multi_guard_acknowledged(invocation.plan, Some(invocation))
+    }
+
+  private def _conditional_multi_guard_authority(
+    invocation: Option[DataStoreSpace.MultiGuardInvocation]
+  ): Consequence[Unit] = invocation.fold(Consequence.unit)(_.validateProviderC(this))
+
+  private[datastore] def commitTransientEventsManagedC(inv: DataStoreSpace.TransientEventInvocation)
+      (using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] = for {
+    _ <- inv.validateProviderC(this)
+    _ <- if (dialect.name == SqliteDialectDriver.name) Consequence.unit
+      else Consequence.operationInvalid("transient-event-native-transaction")
+    transition = inv.nativeTransition
+    changes = Vector(transition.root.changes) ++ inv.localGuards.map(_.changes) ++
+      transition.sideEffects.collect { case c: EntityVersionedSideEffect.Create => c.record } ++ (transition.successor match {
+      case update: DataStoreConditionalSuccessor.Update => Vector(update.root.changes)
+      case create: DataStoreConditionalSuccessor.Create => Vector(create.record)
+      case _ => Vector.empty
+    })
+    _ <- if (changes.forall(record => !record.fields.exists(_.key == "id"))) Consequence.unit
+      else Consequence.configurationInvalid("Transient completion reserves physical id")
+    result <- _with_conditional_transition { connection => for {
+      _ <- inv.validateProviderC(this)
+      existing <- _required_record(connection, transition.root.collection, transition.root.entryId)
+      matched <- EntityConditionalTransitionSupport.rootMatches(existing, transition.root)
+      result <- if (!matched) Consequence.success(DataStoreMultiGuardAcknowledgement.NotMatched(existing))
+        else for {
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.GuardAdmitted)
+          _ <- inv.validateProviderC(this)
+          _ <- _prepare_conditional_successor(connection, transition.successor)
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.SuccessorPrepared)
+          _ <- inv.validateProviderC(this)
+          _ <- _update_root_record(connection, transition.root)
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.RootPrepared)
+          _ <- inv.validateProviderC(this)
+          _ <- _apply_completion_local_guards_c(connection, inv.localGuards)
+          _ <- _apply_conditional_side_effects(connection, transition.sideEffects)
+          records <- _transient_event_records_c(connection, inv)
+          _ <- inv.validateReadbackC(records)
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.BeforePublish)
+          _ <- inv.validateProviderC(this)
+        } yield DataStoreMultiGuardAcknowledgement.Committed(records)
+      _ <- inv.validateProviderC(this)
+    } yield result }
+  } yield result
+
+  private def _transient_event_records_c(connection: Connection, inv: DataStoreSpace.TransientEventInvocation):
+      Consequence[Vector[DataStoreMultiGuardRecord]] =
+    inv.targets.foldLeft(Consequence.success(Vector.empty[DataStoreMultiGuardRecord])) { case (acc, (collection, id)) => for {
+      rows <- acc
+      _ <- inv.validateProviderC(this)
+      record <- _multi_guard_logical_record(connection, collection, id)
+    } yield rows :+ DataStoreMultiGuardRecord(collection, id, record) }
+
+  private[datastore] def readbackTransientEventsManagedC(inv: DataStoreSpace.TransientEventInvocation)
+      (using ExecutionContext): Consequence[Vector[DataStoreMultiGuardRecord]] =
+    inv.validateProviderC(this).flatMap { _ => _with_connection { connection =>
+      val autoCommit = connection.getAutoCommit
+      connection.setAutoCommit(false)
+      try _transient_event_records_c(connection, inv)
+      finally {
+        try connection.rollback()
+        finally connection.setAutoCommit(autoCommit)
+      }
+    }}
+
+  private[datastore] def commitRetainedEventsManagedC(inv: DataStoreSpace.RetainedEventInvocation)
+      (using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] = for {
+    _ <- inv.validateProviderC(this)
+    _ <- if (dialect.name == SqliteDialectDriver.name) Consequence.unit
+      else Consequence.operationInvalid("retained-event-native-transaction")
+    transition = inv.nativeTransition
+    changes = Vector(transition.root.changes) ++ inv.localGuards.map(_.changes) ++
+      transition.sideEffects.collect { case c: EntityVersionedSideEffect.Create => c.record } ++ (transition.successor match {
+      case update: DataStoreConditionalSuccessor.Update => Vector(update.root.changes)
+      case create: DataStoreConditionalSuccessor.Create => Vector(create.record)
+      case _ => Vector.empty
+    })
+    _ <- if (changes.forall(record => !record.fields.exists(_.key == "id"))) Consequence.unit
+      else Consequence.configurationInvalid("Retained completion reserves physical id")
+    result <- _with_conditional_transition { connection => for {
+      _ <- inv.validateProviderC(this)
+      _ <- _validate_prepared_observations_c(connection, inv.preparation)
+      existing <- _required_record(connection, transition.root.collection, transition.root.entryId)
+      matched <- EntityConditionalTransitionSupport.rootMatches(existing, transition.root)
+      result <- if (!matched) Consequence.success(DataStoreMultiGuardAcknowledgement.NotMatched(existing))
+        else for {
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.GuardAdmitted)
+          _ <- inv.validateProviderC(this)
+          _ <- _prepare_conditional_successor(connection, transition.successor)
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.SuccessorPrepared)
+          _ <- inv.validateProviderC(this)
+          _ <- _update_root_record(connection, transition.root)
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.RootPrepared)
+          _ <- inv.validateProviderC(this)
+          _ <- _apply_completion_local_guards_c(connection, inv.localGuards)
+          _ <- _apply_conditional_side_effects(connection, transition.sideEffects)
+          records <- _retained_event_records_c(connection, inv)
+          _ <- inv.validateReadbackC(records)
+          _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.BeforePublish)
+          _ <- inv.validateProviderC(this)
+        } yield DataStoreMultiGuardAcknowledgement.Committed(records)
+      _ <- inv.validateProviderC(this)
+    } yield result }
+  } yield result
+
+  private def _retained_event_records_c(connection: Connection, inv: DataStoreSpace.RetainedEventInvocation):
+      Consequence[Vector[DataStoreMultiGuardRecord]] = inv.targetsC.flatMap { targets =>
+    targets.foldLeft(Consequence.success(Vector.empty[DataStoreMultiGuardRecord])) { case (acc, (collection, id)) => for {
+      records <- acc
+      _ <- inv.validateProviderC(this)
+      record <- _multi_guard_logical_record(connection, collection, id)
+    } yield records :+ DataStoreMultiGuardRecord(collection, id, record) }
+  }
+
+  /** Local intents share the already-open native write connection. No second
+    * commit, schema preflight, executable callback or EventStore cursor write.
+    */
+  private def _apply_completion_local_guards_c(connection: Connection,
+      guards: Vector[DataStoreConditionalRoot]): Consequence[Unit] =
+    guards.foldLeft(Consequence.unit) { (acc, guard) => acc.flatMap { _ => for {
+      current <- _required_record(connection, guard.collection, guard.entryId)
+      matched <- EntityConditionalTransitionSupport.rootMatches(current, guard)
+      _ <- if (matched) _update_root_record(connection, guard)
+        else Consequence.operationConflict("local-completion", Vector(Descriptor.Facet.Reason("local-guard-conflict")))
+    } yield () }}
+
+  private[datastore] def readbackRetainedEventsManagedC(inv: DataStoreSpace.RetainedEventInvocation)
+      (using ExecutionContext): Consequence[Vector[DataStoreMultiGuardRecord]] =
+    inv.validateProviderC(this).flatMap { _ => _with_connection { connection =>
+      val autoCommit = connection.getAutoCommit
+      connection.setAutoCommit(false)
+      try _retained_event_records_c(connection, inv)
+      finally {
+        try connection.rollback()
+        finally connection.setAutoCommit(autoCommit)
+      }
+    }}
+
+  private def _conditional_multi_guard_acknowledged(
+    plan: DataStoreConditionalMultiGuardPlan,
+    invocation: Option[DataStoreSpace.MultiGuardInvocation]
+  )(using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] =
+    for {
+      admitted <- DataStoreConditionalMultiGuardPlan.validate(plan)
+      _ <- if (dialect.name == SqliteDialectDriver.name &&
+        (invocation.isDefined || admitted.additionalGuards.forall(_.componentOwner == admitted.scope.workflowOwner)))
+        Consequence.unit
+      else Consequence.operationInvalid("entity-conditional-multi-guard")
+      _ <- _conditional_multi_guard_authority(invocation)
+      _ <- if ((Vector(admitted.transition.root.changes) ++
+        admitted.additionalGuards.map(_.changes) ++
+        (admitted.transition.successor match {
+          case update: DataStoreConditionalSuccessor.Update => Vector(update.root.changes)
+          case create: DataStoreConditionalSuccessor.Create => Vector(create.record)
+          case _ => Vector.empty
+        }) ++ admitted.transition.sideEffects.collect {
+          case effect: EntityVersionedSideEffect.Create => effect.record
+        }).forall(record => !record.fields.exists(_.key == "id"))) Consequence.unit
+      else Consequence.configurationInvalid("SQLite multi-guard reserves the physical id column")
+      // SQLite schema expansion belongs to the same write transaction as the
+      // guarded records; no preflight DDL may survive a rejected proposal.
+      result <- _with_conditional_transition { connection =>
+        for {
+          _ <- _conditional_multi_guard_authority(invocation)
+          _ <- invocation.flatMap(_.preparation) match {
+            case None => Consequence.unit
+            case Some(prepared) => _validate_prepared_observations_c(connection, prepared)
+          }
+          existing <- _required_record(connection, admitted.transition.root.collection,
+            admitted.transition.root.entryId)
+          matches <- EntityConditionalTransitionSupport.rootMatches(existing, admitted.transition.root)
+          result <- if (!matches)
+            Consequence.success(DataStoreMultiGuardAcknowledgement.NotMatched(existing))
+          else for {
+            _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.GuardAdmitted)
+            _ <- _conditional_multi_guard_authority(invocation)
+            _ <- _prepare_conditional_successor(connection, admitted.transition.successor)
+            _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.SuccessorPrepared)
+            _ <- _update_root_record(connection, admitted.transition.root)
+            _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.RootPrepared)
+            _ <- admitted.additionalGuards.foldLeft(Consequence.unit) { (result, guard) =>
+              result.flatMap { _ => for {
+                current <- _required_record(connection, guard.collection, guard.entryId)
+                matched <- EntityConditionalTransitionSupport.rootMatches(current, guard)
+                _ <- if (matched) _update_root_record(connection, guard)
+                  else Consequence.operationConflict("entity-conditional-multi-guard", Vector(
+                    Descriptor.Facet.Reason("additional-guard-conflict"),
+                    Descriptor.Facet.Policy("entity.conditional-multi-guard")))
+              } yield () }
+            }
+            _ <- _apply_conditional_side_effects(connection, admitted.transition.sideEffects)
+            // Capture exact transaction post-images before native commit, never by later loads.
+            records <- _multi_guard_records(connection, admitted)
+            retained <- invocation.fold(Consequence.success(Vector.empty[DataStoreMultiGuardRecord]))(_.retainedC)
+            actualRetained <- retained.foldLeft(Consequence.success(Vector.empty[DataStoreMultiGuardRecord])) {
+              case (acc, expected) => for {
+                rows <- acc
+                actual <- _multi_guard_logical_record(connection, expected.collection, expected.entryId)
+              } yield rows :+ DataStoreMultiGuardRecord(expected.collection, expected.entryId, actual)
+            }
+            _ <- conditional_transition_checkpoint(DataStoreConditionalTransitionCheckpoint.BeforePublish)
+            _ <- _conditional_multi_guard_authority(invocation)
+          } yield DataStoreMultiGuardAcknowledgement.Committed(records ++ actualRetained)
+          _ <- _conditional_multi_guard_authority(invocation)
+        } yield result
+      }
+    } yield result
+
+  /** One connection and native read transaction for all admitted targets.
+    * Ending this read-only snapshot does not invoke the write-commit hook.
+    */
+  private[datastore] def readbackMultiGuardSnapshotC(
+    invocation: DataStoreSpace.MultiGuardInvocation
+  )(using ExecutionContext): Consequence[Vector[DataStoreMultiGuardRecord]] =
+    if (invocation == null) Consequence.configurationInvalid("Multi-guard invocation is missing")
+    else invocation.validateProviderC(this).flatMap { _ =>
+      _with_connection { connection =>
+        val autoCommit = connection.getAutoCommit
+        connection.setAutoCommit(false)
+        try invocation.readbackTargetsC.flatMap(_.foldLeft(Consequence.success(Vector.empty[DataStoreMultiGuardRecord])) {
+            case (result, (collection, entryId)) => for {
+              records <- result
+              _ <- invocation.validateProviderC(this)
+              record <- _multi_guard_logical_record(connection, collection, entryId)
+            } yield records :+ DataStoreMultiGuardRecord(collection, entryId, record)
+          })
+        finally {
+          try connection.rollback()
+          finally connection.setAutoCommit(autoCommit)
+        }
+      }
+    }
+
+  /** Runs on the SAME write connection, before root/successor staging or DDL.
+    * Every explicit absence and retained closure fact is rechecked; no retry.
+    */
+  private def _validate_prepared_observations_c(connection: Connection,
+      prepared: org.goldenport.cncf.datastore.ManagedEventPreparation): Consequence[Unit] = for {
+    _ <- prepared.validateProviderC(this)
+    expected <- prepared.recordsC
+    actual <- expected.foldLeft(Consequence.success(Vector.empty[(DataStoreObservationTarget, Option[Record])])) {
+      case (acc, (target, _)) => for {
+        rows <- acc
+        _ <- prepared.validateProviderC(this)
+        exists <- _table_exists(connection, target.collection)
+        _ <- if (exists) Consequence.unit else Consequence.stateConflict("Prepared observation collection is missing")
+        physical <- _select(connection, target.collection, target.entryId)
+        logical <- physical match {
+          case Some(record) if record.fields.count(_.key == "id") == 1 &&
+              record.getString("id").contains(target.entryId.print) && record.fields.map(_.key).distinct.size == record.fields.size =>
+            Consequence.success(Some(Record(record.fields.filterNot(_.key == "id").sortBy(_.key))))
+          case Some(_) => Consequence.stateConflict("Prepared observation physical identity or fields differ")
+          case None => Consequence.success(None)
+        }
+      } yield rows :+ (target -> logical)
+    }
+    _ <- prepared.validateObservedC(actual)
+    _ <- prepared.validateProviderC(this)
+  } yield ()
+
+  /** Fixed targets only. Missing tables are not evidence of row absence. */
+  private[datastore] def observeDeclaredSnapshotC(invocation: DataStoreSpace.ObservationInvocation)
+      (using ExecutionContext): Consequence[Vector[(DataStoreObservationTarget, Option[Record])]] =
+    invocation.validateProviderC(this).flatMap { _ => _with_connection { connection =>
+      val autoCommit = connection.getAutoCommit
+      connection.setAutoCommit(false)
+      def readTargets(targets: Vector[DataStoreObservationTarget],
+          previous: Vector[(DataStoreObservationTarget, Option[Record])]):
+          Consequence[Vector[(DataStoreObservationTarget, Option[Record])]] =
+        invocation.validateTargetsC((previous.map(_._1) ++ targets).distinct).flatMap { _ =>
+          targets.filterNot(t => previous.exists(_._1 == t)).foldLeft(
+        Consequence.success(previous)) { (acc, target) =>
+        for {
+          rows <- acc
+          _ <- invocation.validateProviderC(this)
+          exists <- _table_exists(connection, target.collection)
+          _ <- if (exists) Consequence.unit
+            else Consequence.configurationInvalid("Observation collection is not provisioned")
+          physical <- _select(connection, target.collection, target.entryId)
+          logical <- physical match {
+            case Some(record) if record.fields.count(_.key == "id") == 1 &&
+                record.getString("id").contains(target.entryId.print) &&
+                record.fields.map(_.key).distinct.size == record.fields.size =>
+              Consequence.success(Some(Record(record.fields.filterNot(_.key == "id").sortBy(_.key))))
+            case Some(_) => Consequence.configurationInvalid("Observation physical identity or fields differ")
+            case None if target == invocation.targets.head =>
+              Consequence.stateConflict("Observation cursor is missing")
+            case None => Consequence.success(None)
+          }
+        } yield rows :+ (target -> logical)
+      }}
+      try for {
+        initial <- readTargets(invocation.targets, Vector.empty)
+        complete <- invocation.eventRequest match {
+          case None => Consequence.success(initial)
+          case Some(request) => for {
+            refs <- request.referencedTargetsC(initial)
+            referenced <- readTargets(refs, initial)
+            intrinsic <- request.intrinsicTargetsC(referenced)
+            closed <- readTargets(intrinsic, referenced)
+          } yield closed
+        }
+      } yield complete
+      finally {
+        try connection.rollback()
+        finally connection.setAutoCommit(autoCommit)
+      }
+    }}
+
+  private def _multi_guard_records(
+    connection: Connection,
+    plan: DataStoreConditionalMultiGuardPlan
+  ): Consequence[Vector[DataStoreMultiGuardRecord]] =
+    DataStoreMultiGuardReadback.targets(plan)
+      .foldLeft(Consequence.success(Vector.empty[DataStoreMultiGuardRecord])) {
+        case (result, (collection, entryId)) => for {
+          records <- result
+          record <- _multi_guard_logical_record(connection, collection, entryId)
+        } yield records :+ DataStoreMultiGuardRecord(collection, entryId, record)
+      }
+
+  /** Exact physical identity is checked, then removed from the logical record.
+    * This reserved-column adapter does not drop arbitrary fields or values.
+    */
+  private def _multi_guard_logical_record(
+    connection: Connection,
+    collection: CollectionId,
+    entryId: EntryId
+  ): Consequence[Record] =
+    _required_record(connection, collection, entryId).flatMap { record =>
+      val ids = record.fields.filter(_.key == "id")
+      if (ids.size == 1 && record.getString("id").contains(entryId.print))
+        Consequence.success(Record(record.fields.filterNot(_.key == "id").sortBy(_.key)))
+      else Consequence.configurationInvalid("SQLite multi-guard physical record identity differs")
+    }
 
   def debugSearchSql(
     collection: CollectionId,
@@ -555,8 +957,15 @@ class SqlDataStore(
               )
             case _: DataStoreConditionalSuccessor.Bind =>
               Consequence.unit
+            case update: DataStoreConditionalSuccessor.Update =>
+              _ensure_existing_table_columns(connection, update.collection,
+                _conditional_root_columns(update.root))
           }
           _ <- plan.sideEffects.foldLeft(Consequence.unit) {
+            case (result, EntityVersionedSideEffect.Create(collection, _, record)) =>
+              result.flatMap(_ =>
+                _ensure_table(connection, collection, _record_columns(record))
+              )
             case (
                   result,
                   EntityVersionedSideEffect.Save(
@@ -606,6 +1015,10 @@ class SqlDataStore(
             _record_columns(rootrecord)
           )
           _ <- plan.sideEffects.foldLeft(Consequence.unit) {
+            case (result, EntityVersionedSideEffect.Create(collection, _, record)) =>
+              result.flatMap(_ =>
+                _ensure_table(connection, collection, _record_columns(record))
+              )
             case (
                   result,
                   EntityVersionedSideEffect.Save(
@@ -1082,6 +1495,17 @@ class SqlDataStore(
                 columns
               )
         } yield ()
+      case update: DataStoreConditionalSuccessor.Update =>
+        _select_conditional_root(connection, update.collection, update.entryId).flatMap {
+          case None => Consequence.DataStoreNotFound(update.entryId.print)
+          case Some(record) =>
+            EntityConditionalTransitionSupport.rootMatches(record, update.root).flatMap { matches =>
+              if (matches) _update_root_record(connection, update.root)
+              else Consequence.operationConflict("entity-conditional-transition", Vector(
+                Descriptor.Facet.Reason("updated-successor-state-conflict"),
+                Descriptor.Facet.Policy("entity.conditional-transition.successor-update")))
+            }
+        }
       case bind: DataStoreConditionalSuccessor.Bind =>
         _select_if_table_exists(
           connection,
@@ -1139,6 +1563,16 @@ class SqlDataStore(
     effects: Vector[EntityVersionedSideEffect]
   ): Consequence[Unit] =
     effects.foldLeft(Consequence.unit) {
+      case (result, EntityVersionedSideEffect.Create(collection, entryid, record)) =>
+        result.flatMap { _ =>
+          val columns = _record_columns(record)
+          for {
+            _ <- _ensure_table(connection, collection, columns)
+            exists <- _exists(connection, collection, entryid)
+            _ <- if (exists) Consequence.DataStoreDuplicate(entryid.print)
+              else _insert(connection, collection, entryid, columns)
+          } yield ()
+        }
       case (result, EntityVersionedSideEffect.Save(collection, entryid, record)) =>
         result.flatMap { _ =>
           val columns = _record_columns(record)

@@ -5,7 +5,11 @@ import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, InstanceRecord, WorkflowDefinitionIdentity, WorkflowDefinitionRevision}
 
-/** Minimum application-neutral Workflow values; JSON is an encoding, not their authority. */
+/**
+ * Minimum application-neutral Workflow values; JSON is an encoding, not their authority.
+ * @since   Sep. 25, 2026
+ * @version Oct.  8, 2026
+ */
 object WorkflowProtocolV1 {
   val schemaVersion = "cncf.workflow-protocol.v1"
 
@@ -224,6 +228,15 @@ object WorkflowProtocolV1 {
     issued: WorkflowInteraction[W, Nothing],
     submitted: ContinuationResult[R]
   ): Consequence[StateMachineOperationResult] =
+    admitIssuedResultC(issued, submitted, WorkflowIssuedContinuationKind.WorkOrder)
+
+  /** Structural Decision result admission only; not human verification or a claim. */
+  def admitDecisionResultC[W, R](issued: WorkflowInteraction[W, Nothing],
+    submitted: ContinuationResult[R]): Consequence[StateMachineOperationResult] =
+    admitIssuedResultC(issued, submitted, WorkflowIssuedContinuationKind.Decision)
+
+  private def admitIssuedResultC[W, R](issued: WorkflowInteraction[W, Nothing],
+    submitted: ContinuationResult[R], kind: WorkflowIssuedContinuationKind): Consequence[StateMachineOperationResult] =
     if (issued == null || issued.handle == null || submitted == null ||
         submitted.handle == null || submitted.result == null ||
         submitted.resultReference == null || submitted.completionFacts == null ||
@@ -231,15 +244,22 @@ object WorkflowProtocolV1 {
         submitted.evidence.workerIdentity == null || submitted.evidence.modelIdentity == null ||
         submitted.evidence.skillDispatch == null)
       Consequence.stateConflict("Workflow result is incomplete")
-    else issued.current match {
-      case work: WorkflowContinuation.WorkOrder[?] =>
-        val request = work.request
+    else {
+      val selected = issued.current match {
+        case work: WorkflowContinuation.WorkOrder[?] if kind == WorkflowIssuedContinuationKind.WorkOrder =>
+          Some(work.request -> Some(work.requirement))
+        case decision: WorkflowContinuation.Decision[?] if kind == WorkflowIssuedContinuationKind.Decision =>
+          Some(decision.request -> None)
+        case _ => None
+      }
+      selected match {
+      case Some((request, requirement)) =>
         if (request == null || request.context == null || request.context.snapshot == null ||
             request.completion == null || request.completion.requiredFacts == null ||
             request.evidence == null || request.evidence.requiredEvidence == null)
           Consequence.stateConflict("Issued WorkOrder is incomplete")
         else {
-          val requiredType = Option(request.resultType).flatten.map(_.value)
+          val requiredType = Option(request.resultType).flatten.flatMap(Option(_)).map(_.value)
           val actualType = Option(submitted.result.typeIdentity)
           val facts = submitted.completionFacts
           val evidence = submitted.evidence.references
@@ -257,7 +277,7 @@ object WorkflowProtocolV1 {
             submitted.evidence.workerIdentity.exists(x => !_name(x)) ||
             submitted.evidence.modelIdentity.exists(x => !_name(x)) ||
             submitted.evidence.skillDispatch.exists(x =>
-              x == null || x.requestedRequirement != work.requirement ||
+              x == null || !requirement.contains(x.requestedRequirement) ||
               x.validateC.toOption.isEmpty))
             Consequence.stateConflict("Workflow result does not satisfy the issued WorkOrder")
           else submitted.handle.validateC.flatMap(_ =>
@@ -270,6 +290,7 @@ object WorkflowProtocolV1 {
           )
         }
       case _ => Consequence.stateConflict("Workflow result requires an issued WorkOrder")
+      }
     }
 
   /** Trusted continuation adapter; the public result never carries claim ownership. */
@@ -396,6 +417,22 @@ object WorkflowProtocolV1 {
     } yield resumed
 
   /** Projection is possible only after the runtime has returned a durable claim. */
+  private[workflow] def projectClaimedDecisionC[W](handle: WorkflowHandle,
+    claim: ContinuationRuntime.Claim, input: Option[TypedValue[W]],
+    completionOperation: StateMachineOperationIdentity, presentation: MinimalPresentation
+  ): Consequence[WorkflowInteraction[W, Nothing]] =
+    if (handle == null || claim == null || claim.continuation == null || !_name(claim.claimId) ||
+        completionOperation == null || !_name(completionOperation.service) || !_name(completionOperation.operation) ||
+        input == null || presentation == null)
+      Consequence.stateConflict("Workflow Decision projection requires a claimed Continuation and complete bindings")
+    else for {
+      admittedHandle <- handle.validateC
+      admittedPresentation <- presentation.validateC
+      request <- _continuation_request_c(admittedHandle, claim.continuation, input, completionOperation)
+      _ <- if (request.resultType != null && request.resultType.nonEmpty) Consequence.unit
+        else Consequence.stateConflict("Claimed Decision requires an answer result type")
+    } yield WorkflowInteraction(admittedHandle, WorkflowContinuation.Decision(request, admittedPresentation))
+
   def projectClaimedWorkOrderC[W](
     handle: WorkflowHandle,
     claim: ContinuationRuntime.Claim,

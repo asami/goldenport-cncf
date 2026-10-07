@@ -19,6 +19,7 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
+import org.goldenport.value.{BaseContent, DescriptiveAttributes}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -739,12 +740,41 @@ final class GeneratedWorkflowAbiSpec
             WorkflowCompletionServiceOperation.SelectedClosing(closing, Some(next))
           }
       }
-      val completionoperation = WorkflowCompletionServiceOperation.bindC[String, String](
+      Given("test-only completion descriptions, not generated producer evidence")
+      val completiondescription = DescriptiveAttributes.Builder()
+        .summary("Submit an assigned review result")
+        .description("Resume the issued review WorkOrder through the existing public completion contract.")
+        .build()
+      val completionrequest = spec.RequestDefinition()
+      When("the existing completion binding is constructed without descriptions")
+      val defaultcompletionoperation = WorkflowCompletionServiceOperation.bindC[String, String](
         provided, provided.providedOperations.last, spec.RequestDefinition(),
         spec.ResponseDefinition.void, completioncodec, new PersistentContinuationRuntime(persistence),
         issuedstore, instances, configuration, () => new UnitOfWork(ExecutionContext.create()),
         Some(closingprogram)
       ).toOption.getOrElse(fail("declared public completion Operation must bind"))
+      Then("the legacy binding retains empty descriptions")
+      defaultcompletionoperation.specification.content.descriptiveAttributes shouldBe DescriptiveAttributes.empty
+      When("the same native binding receives descriptive metadata")
+      val completionoperation = WorkflowCompletionServiceOperation.bindC[String, String](
+        provided, provided.providedOperations.last, completionrequest,
+        spec.ResponseDefinition.void, completioncodec, new PersistentContinuationRuntime(persistence),
+        issuedstore, instances, configuration, () => new UnitOfWork(ExecutionContext.create()),
+        Some(closingprogram), descriptiveAttributes = completiondescription
+      ).toOption.getOrElse(fail("described public completion Operation must bind"))
+      val invaliddescription = WorkflowCompletionServiceOperation.bindC[String, String](
+        provided, provided.providedOperations.last, completionrequest,
+        spec.ResponseDefinition.void, completioncodec, new PersistentContinuationRuntime(persistence),
+        issuedstore, instances, configuration, () => new UnitOfWork(ExecutionContext.create()),
+        Some(closingprogram), descriptiveAttributes = null
+      )
+      Then("descriptions preserve the canonical name and exact transport, while null metadata is rejected")
+      completionoperation.specification.content.descriptiveAttributes shouldBe completiondescription
+      completionoperation.name shouldBe provided.providedOperations.last.name
+      completionoperation.specification.request should be theSameInstanceAs completionrequest
+      completionoperation.specification.response should be theSameInstanceAs spec.ResponseDefinition.void
+      completionoperation.specification.content.nameAttributes shouldBe BaseContent.simple(completionoperation.name).nameAttributes
+      invaliddescription shouldBe a[Consequence.Failure[_]]
       val service = spec.ServiceDefinition(
         name = "WorkflowService",
         operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation, completionoperation))

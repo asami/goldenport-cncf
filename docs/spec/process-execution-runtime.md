@@ -42,6 +42,12 @@ declared bounded-text admission may accept dynamic non-empty text arguments,
 but finite argument-count and encoded-size limits remain mandatory and unsafe
 control characters are rejected before driver selection.
 
+Trusted runtime definitions may instead explicitly select Template admission
+for complete ordered literal/lower-hex argument forms. The additive contract
+and paired executable examples are in [Process argument templates](process-argument-templates.md).
+Template matching does not replace native workflow authority or capability and
+resource-limit admission, and registered values are never its fallback.
+
 ## Program Definition And Effective Policy
 
 `ProcessProgramDefinition` is runtime configuration or framework registration,

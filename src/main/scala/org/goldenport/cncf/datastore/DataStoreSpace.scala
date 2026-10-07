@@ -22,11 +22,15 @@ import org.goldenport.record.io.RecordEncoder
  * @version Aug. 11, 2026
  * @author  ASAMI, Tomoharu
  */
-class DataStoreSpace {
+class DataStoreSpace private (
+  private val _multi_guard_host: Option[DataStoreSpace.MultiGuardHostAdmission]
+) {
+  def this() = this(None)
   // Nested ActionCalls restore the caller's component-scoped datastore.
   final case class Binding private[DataStoreSpace] (dataStore: Option[DataStore])
 
   private var _entity_stores: Vector[DataStore] = Vector.empty
+  private var _configured_default: Option[() => DataStore] = None
   private val _inject_sequence = new AtomicLong(0L)
   private val _scoped_entity_store = new ThreadLocal[DataStore]()
 
@@ -37,6 +41,7 @@ class DataStoreSpace {
 
   def useDataStore(ds: DataStore): DataStoreSpace = {
     _entity_stores = Vector(ds)
+    _configured_default = None
     this
   }
 
@@ -125,10 +130,24 @@ class DataStoreSpace {
     }
 
   def dataStore(cid: DataStore.CollectionId): Consequence[DataStore] =
-    Consequence.successOrServiceProviderByKeyNotFound(
+    Consequence {
       Option(_scoped_entity_store.get()).filter(_.isAccept(cid))
         .orElse(_entity_stores.find(_.isAccept(cid)))
-    )("datastore", cid.print)
+        .orElse(_configured_default_store().filter(_.isAccept(cid)))
+    }.flatMap(value => Consequence.successOrServiceProviderByKeyNotFound(value)("datastore", cid.print))
+
+  // A managed scoped binding wins before this standalone compatibility default
+  // is evaluated. Reading configuration never opens a physical SQL pool.
+  private def _configured_default_store(): Option[DataStore] = synchronized {
+    _configured_default match {
+      case Some(create) =>
+        val store = create()
+        _entity_stores = _entity_stores :+ store
+        _configured_default = None
+        Some(store)
+      case None => _entity_stores.headOption
+    }
+  }
 
   def search(
     cid: DataStore.CollectionId,
@@ -347,6 +366,289 @@ class DataStoreSpace {
         } yield result
       }
     }
+
+  /** S12 entry point. Host assembly supplies an immutable call-scoped view;
+    * plan scope alone cannot admit a provider call.
+    */
+  def conditionalMultiGuard(
+    plan: DataStoreConditionalMultiGuardPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[DataStoreConditionalTransitionResult] =
+    DataStoreConditionalMultiGuardPlan.validate(plan).flatMap { admitted =>
+      _multi_guard_host match {
+        case None => _multi_guard_rejection("host-admission-required")
+        case Some(host) =>
+          for {
+            _ <- host.ensureLiveC()
+            _ <- host.policy.validate(admitted)
+            providers <- _multi_guard_provider_snapshot(admitted)
+            _ <- if (providers.forall(_ eq host.provider)) Consequence.unit
+              else _multi_guard_rejection("provider-domain-mismatch")
+            result <- host.provider match {
+              case capability: EntityConditionalMultiGuardDataStore =>
+                capability.conditionalMultiGuardAdmitted(
+                  new DataStoreSpace.MultiGuardInvocation(admitted, host))
+              case _ => _multi_guard_rejection[DataStoreConditionalTransitionResult]("unsupported-capability")
+            }
+          } yield result
+      }
+    }
+
+  /** Complete readback requires a separate opt-in; legacy raw capability never
+    * commits on this route. Provider access remains within the admitted lease.
+    */
+  private[cncf] def conditionalMultiGuardVerified(
+    plan: DataStoreConditionalMultiGuardPlan
+  )(using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    DataStoreConditionalMultiGuardPlan.validate(plan).flatMap { admitted =>
+      _multi_guard_host match {
+        case None => _multi_guard_rejection("host-admission-required")
+        case Some(host) => for {
+          _ <- host.ensureLiveC()
+          _ <- host.policy.validate(admitted)
+          providers <- _multi_guard_provider_snapshot(admitted)
+          _ <- if (providers.forall(_ eq host.provider)) Consequence.unit
+            else _multi_guard_rejection("provider-domain-mismatch")
+          result <- host.provider match {
+            case capability: EntityVerifiedMultiGuardDataStore =>
+              capability.conditionalMultiGuardVerifiedAdmitted(new DataStoreSpace.MultiGuardInvocation(admitted, host))
+            case _ => _multi_guard_rejection[DataStoreMultiGuardReadbackResult]("unsupported-verified-capability")
+          }
+        } yield result
+      }
+    }
+
+  private def _multi_guard_provider_snapshot(
+    plan: DataStoreConditionalMultiGuardPlan
+  ): Consequence[Vector[DataStore]] = {
+    val scoped = Option(_scoped_entity_store.get())
+    val stores = _entity_stores
+    val collections = (Vector(plan.transition.root.collection, plan.transition.successor.collection) ++
+      plan.additionalGuards.map(_.collection) ++ plan.transition.sideEffects.map(_.collection)).distinct
+    collections.foldLeft(Consequence.success(Vector.empty[DataStore])) { (acc, collection) =>
+      for {
+        providers <- acc
+        provider <- Consequence.successOrServiceProviderByKeyNotFound(
+          scoped.filter(_.isAccept(collection)).orElse(stores.find(_.isAccept(collection))))(
+          "datastore", collection.print)
+      } yield providers :+ provider
+    }
+  }
+
+  private[cncf] def conditionalPreparedEventsVerified(transition: DataStoreConditionalTransitionPlan,
+      preparation: ManagedEventPreparation)(using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    conditionalPreparedEventsWithLocalIntentsVerified(transition, preparation, Vector.empty, Vector.empty)
+
+  /** Internal native composition, not closing-program execution or UoW
+    * activation. Local inputs grant no authority: the same captured host must
+    * admit each additional guard and Create, in the identical provider domain.
+    * All-retained/transient input requires its own composition, never fallback.
+    */
+  private[cncf] def conditionalPreparedEventsWithLocalIntentsVerified(transition: DataStoreConditionalTransitionPlan,
+      preparation: ManagedEventPreparation, guards: Vector[DataStoreConditionalRoot],
+      creates: Vector[EntityVersionedSideEffect.Create])(using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    _multi_guard_host match {
+      case Some(host) if preparation != null => for {
+        _ <- preparation.validateHostC(host)
+        plan <- preparation.planWithLocalIntentsC(transition, guards, creates)
+        _ <- host.policy.validate(plan)
+        providers <- _multi_guard_provider_snapshot(plan)
+        _ <- if (providers.forall(_ eq host.provider)) Consequence.unit
+          else _multi_guard_rejection("provider-domain-mismatch")
+        result <- host.provider match {
+          case capability: EntityVerifiedMultiGuardDataStore if capability.supportsPreparedEvents =>
+            capability.conditionalMultiGuardVerifiedAdmitted(new DataStoreSpace.MultiGuardInvocation(plan, host, Some(preparation)))
+          case _ => _multi_guard_rejection[DataStoreMultiGuardReadbackResult]("unsupported-prepared-event-capability")
+        }
+      } yield result
+      case _ => Consequence.configurationInvalid("Prepared events require their original live host")
+    }
+
+  private[cncf] def conditionalRetainedEventsVerified(transition: DataStoreConditionalTransitionPlan,
+      preparation: ManagedEventPreparation)(using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    _conditional_retained_events_c(transition, preparation, None)
+
+  private def _conditional_retained_events_c(transition: DataStoreConditionalTransitionPlan,
+      preparation: ManagedEventPreparation, local: Option[DataStoreLocalCompletionPlan])
+      (using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    _multi_guard_host match {
+      case Some(host) if preparation != null =>
+        val invocation = new DataStoreSpace.RetainedEventInvocation(transition, preparation, host, local)
+        invocation.validateProviderC(host.provider).flatMap { _ => for {
+          targets <- invocation.targetsC
+          observed <- preparation.recordsC
+        } yield targets ++ observed.map(r => r._1.collection -> r._1.entryId) }.flatMap { targets =>
+          targets.map(_._1).distinct.foldLeft(Consequence.unit) { (acc, collection) => acc.flatMap { _ =>
+            dataStore(collection).flatMap { actual =>
+              if (actual eq host.provider) Consequence.unit else _multi_guard_rejection("provider-domain-mismatch")
+            }
+          }}
+        }.flatMap { _ =>
+          host.provider match {
+            case capability: EntityRetainedEventDataStore => capability.retainedEventsVerified(invocation)
+            case _ => _multi_guard_rejection("unsupported-retained-event-capability")
+          }
+        }
+      case _ => Consequence.configurationInvalid("Retained completion requires its live original host")
+    }
+
+  /** Ordinary input is classified only by the captured service. No durable
+    * observation/cursor or caller-supplied selection is admitted on this route.
+    */
+  private[cncf] def conditionalTransientEventsVerified(transition: DataStoreConditionalTransitionPlan,
+      records: Vector[org.goldenport.cncf.event.EventRecord])(using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    _multi_guard_host match {
+      case Some(host) => host.eventStore match {
+        case Some(store) => for {
+          _ <- host.ensureLiveC()
+          selection <- org.goldenport.cncf.workflow.WorkflowEventSelection.prepareFromStoreC(store, records)
+          result <- _conditional_transient_selection_c(transition, selection, host)
+        } yield result
+        case _ => Consequence.configurationInvalid("Transient completion requires the captured EventStore")
+      }
+      case _ => Consequence.configurationInvalid("Transient completion requires its live host")
+    }
+
+  private def _conditional_transient_selection_c(transition: DataStoreConditionalTransitionPlan,
+      selection: org.goldenport.cncf.workflow.WorkflowEventSelection,
+      host: DataStoreSpace.MultiGuardHostAdmission, local: Option[DataStoreLocalCompletionPlan] = None)
+      (using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] = for {
+    _ <- if (selection.persistent.isEmpty) Consequence.unit
+      else Consequence.configurationInvalid("Transient completion cannot admit durable input")
+    inv = new DataStoreSpace.TransientEventInvocation(transition, host, local)
+    _ <- inv.validateProviderC(host.provider)
+    _ <- inv.targets.map(_._1).distinct.foldLeft(Consequence.unit) { (acc, collection) => acc.flatMap { _ =>
+      dataStore(collection).flatMap { actual =>
+        if (actual eq host.provider) Consequence.unit else _multi_guard_rejection("provider-domain-mismatch")
+      }
+    }}
+    result <- host.provider match {
+      case capability: EntityTransientEventDataStore => capability.transientEventsVerified(inv)
+      case _ => _multi_guard_rejection[DataStoreMultiGuardReadbackResult]("unsupported-transient-event-capability")
+    }
+  } yield result
+
+  /** One ordinary-input host entry. Branch selection is mechanical, never a
+    * caller/skill choice. This storage-only result grants no dispatch/UoW permit.
+    */
+  private[cncf] def conditionalHostEventsVerified(transition: DataStoreConditionalTransitionPlan,
+      records: Vector[org.goldenport.cncf.event.EventRecord])(using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    conditionalHostEventsWithLocalIntentsVerified(transition, records, Vector.empty, Vector.empty)
+
+  /** The host still selects exactly one route from ordinary events. Local
+    * intents cannot introduce EventStore writes or manufacture host admission.
+    */
+  private[cncf] def conditionalHostEventsWithLocalIntentsVerified(transition: DataStoreConditionalTransitionPlan,
+      records: Vector[org.goldenport.cncf.event.EventRecord], guards: Vector[DataStoreConditionalRoot],
+      creates: Vector[EntityVersionedSideEffect.Create])(using ExecutionContext): Consequence[DataStoreMultiGuardReadbackResult] =
+    conditionalHostEventsFinalizedC(transition, records, guards, creates).map(_._1)
+
+  /** Finalized projections are data, not a delivery permit. Only the managed
+    * UoW may dispatch them after its callbacks and resource completion.
+    */
+  private[cncf] def conditionalHostEventsFinalizedC(transition: DataStoreConditionalTransitionPlan,
+      records: Vector[org.goldenport.cncf.event.EventRecord], guards: Vector[DataStoreConditionalRoot],
+      creates: Vector[EntityVersionedSideEffect.Create])(using ExecutionContext):
+      Consequence[(DataStoreMultiGuardReadbackResult, Vector[org.goldenport.cncf.event.EventRecord])] =
+    _multi_guard_host match {
+      case Some(host) => host.eventStore match {
+        case Some(store) => for {
+          _ <- host.ensureLiveC()
+          _ <- host.policy.validateRetainedC(transition) // Caller may supply only the effect-free authorized pair.
+          local <- if (guards == Vector.empty && creates == Vector.empty) Consequence.success(None)
+            else for {
+              plan <- DataStoreLocalCompletionPlan.createC(transition, guards, creates)
+              _ <- host.validateLocalC(plan)
+            } yield Some(plan)
+          selection <- org.goldenport.cncf.workflow.WorkflowEventSelection.prepareFromStoreC(store, records)
+          result <- if (selection.persistent.isEmpty)
+            _conditional_transient_selection_c(transition, selection, host, local).map(_ -> selection.events)
+            else host.observationPolicy match {
+              case Some(policy) => for {
+                request <- org.goldenport.cncf.event.ManagedEventObservationRequest.createC(selection, policy)
+                snapshot <- _observe_declared_targets_c(request.initialTargets, Some(request), Some(store))
+                preparation <- snapshot.preparationC
+                classified <- preparation.classificationC
+                committed <- if (classified.newDurableCount > 0)
+                  conditionalPreparedEventsWithLocalIntentsVerified(transition, preparation, guards, creates)
+                  else _conditional_retained_events_c(transition, preparation, local)
+                finalized <- committed match {
+                  case verified: DataStoreMultiGuardReadbackResult.Verified =>
+                    classified.finalizedReadbackC(selection.events, policy.eventCollection, verified.records)
+                  case _ => Consequence.success(Vector.empty)
+                }
+              } yield committed -> finalized
+              case None => Consequence.configurationInvalid("Durable completion requires observation read admission")
+            }
+        } yield result
+        case _ => Consequence.configurationInvalid("Host completion requires the captured EventStore")
+      }
+      case None => Consequence.configurationInvalid("Host completion requires its live host")
+    }
+
+  /** Separate read admission; write-side collection permission is insufficient. */
+  private[cncf] def observeDeclaredTargetsC(targets: Vector[DataStoreObservationTarget])
+      (using ExecutionContext): Consequence[DataStoreObservationSnapshot] =
+    _observe_declared_targets_c(targets, None)
+
+  private[cncf] def observeSelectedEventsC(selection: org.goldenport.cncf.workflow.WorkflowEventSelection)
+      (using ExecutionContext): Consequence[DataStoreObservationSnapshot] =
+    _multi_guard_host.flatMap(_.observationPolicy) match {
+      case Some(policy) => org.goldenport.cncf.event.ManagedEventObservationRequest.createC(selection, policy)
+        .flatMap(request => _observe_declared_targets_c(request.initialTargets, Some(request)))
+      case None => Consequence.configurationInvalid("Event observation read admission is required")
+    }
+
+  /** Ordinary input only: selection comes from the installed host service.
+    * Pure selected-input observations above never gain this provenance.
+    */
+  private[cncf] def observeHostEventsC(records: Vector[org.goldenport.cncf.event.EventRecord])
+      (using ExecutionContext): Consequence[DataStoreObservationSnapshot] =
+    _multi_guard_host match {
+      case Some(host) => (host.eventStore, host.observationPolicy) match {
+        case (Some(store), Some(policy)) => for {
+          _ <- host.ensureLiveC()
+          selection <- org.goldenport.cncf.workflow.WorkflowEventSelection.prepareFromStoreC(store, records)
+          request <- org.goldenport.cncf.event.ManagedEventObservationRequest.createC(selection, policy)
+          result <- _observe_declared_targets_c(request.initialTargets, Some(request), Some(store))
+        } yield result
+        case _ => Consequence.configurationInvalid("Installed EventStore/read admission is required")
+      }
+      case None => Consequence.configurationInvalid("Event observation host is required")
+    }
+
+  private def _observe_declared_targets_c(targets: Vector[DataStoreObservationTarget],
+      request: Option[org.goldenport.cncf.event.ManagedEventObservationRequest],
+      selectedFrom: Option[org.goldenport.cncf.event.EventStore] = None)
+      (using ExecutionContext): Consequence[DataStoreObservationSnapshot] =
+    _multi_guard_host match {
+      case Some(host) => host.observationPolicy match {
+        case Some(policy) => for {
+          _ <- host.ensureLiveC()
+          _ <- policy.validateC(targets)
+          _ <- targets.foldLeft(Consequence.unit) { (acc, target) =>
+            acc.flatMap(_ => dataStore(target.collection).flatMap { provider =>
+              if (provider eq host.provider) Consequence.unit
+              else Consequence.configurationInvalid("Observation provider differs")
+            })
+          }
+          result <- host.provider match {
+            case provider: EntityObservationDataStore =>
+              provider.observeAdmittedC(new DataStoreSpace.ObservationInvocation(targets, policy, host, request, selectedFrom))
+            case _ => Consequence.configurationInvalid("Observation native capability is unavailable")
+          }
+        } yield result
+        case None => Consequence.configurationInvalid("Observation read admission is required")
+      }
+      case None => Consequence.configurationInvalid("Observation host admission is required")
+    }
+
+  private def _multi_guard_rejection[A](reason: String): Consequence[A] =
+    Consequence.operationInvalid(
+      "entity-conditional-multi-guard",
+      Vector(Descriptor.Facet.Reason(reason),
+        Descriptor.Facet.Capability("datastore.entity-conditional-multi-guard")))
 
   def inject(
     cid: DataStore.CollectionId,
@@ -647,6 +949,161 @@ class DataStoreSpace {
 }
 
 object DataStoreSpace {
+  private[datastore] final class TransientEventInvocation private[DataStoreSpace] (
+    val transition: DataStoreConditionalTransitionPlan,
+    private val host: MultiGuardHostAdmission,
+    private val local: Option[DataStoreLocalCompletionPlan] = None
+  ) {
+    def nativeTransition: DataStoreConditionalTransitionPlan = local.map(_.transition).getOrElse(transition)
+    def localGuards: Vector[DataStoreConditionalRoot] = local.map(_.guards).getOrElse(Vector.empty)
+    def validateProviderC(provider: DataStore): Consequence[Unit] = for {
+      _ <- host.ensureLiveC()
+      _ <- if (provider eq host.provider) Consequence.unit else Consequence.configurationInvalid("Transient provider differs")
+      _ <- host.policy.validateRetainedC(transition) // Same authorized, effect-free Workflow pair contract.
+      _ <- local.fold(Consequence.unit)(host.validateLocalC)
+    } yield ()
+    def targets: Vector[(DataStore.CollectionId, DataStore.EntryId)] = local.map(_.targets).getOrElse(Vector(
+      transition.root.collection -> transition.root.entryId, transition.successor.collection -> transition.successor.entryId))
+    def validateReadbackC(records: Vector[DataStoreMultiGuardRecord]): Consequence[Unit] =
+      local.fold(DataStoreMultiGuardReadback.validateTransitionC(transition, records))(_.validateReadbackC(records))
+  }
+
+  private[datastore] final class RetainedEventInvocation private[DataStoreSpace] (
+    val transition: DataStoreConditionalTransitionPlan,
+    val preparation: ManagedEventPreparation,
+    private val host: MultiGuardHostAdmission,
+    private val local: Option[DataStoreLocalCompletionPlan] = None
+  ) {
+    def nativeTransition: DataStoreConditionalTransitionPlan = local.map(_.transition).getOrElse(transition)
+    def localGuards: Vector[DataStoreConditionalRoot] = local.map(_.guards).getOrElse(Vector.empty)
+    private def writeTargets: Vector[(DataStore.CollectionId, DataStore.EntryId)] = local.map(_.targets).getOrElse(Vector(
+      transition.root.collection -> transition.root.entryId, transition.successor.collection -> transition.successor.entryId))
+    def validateProviderC(provider: DataStore): Consequence[Unit] = for {
+      _ <- host.ensureLiveC()
+      _ <- if (provider eq host.provider) Consequence.unit else Consequence.configurationInvalid("Retained provider differs")
+      _ <- host.policy.validateRetainedC(transition)
+      _ <- local.fold(Consequence.unit)(host.validateLocalC)
+      _ <- preparation.validateHostC(host)
+      classified <- preparation.classificationC
+      _ <- if (classified.newDurableCount == 0) Consequence.unit
+        else Consequence.configurationInvalid("Retained route cannot publish new durable facts")
+    } yield ()
+    def validationRecordsC: Consequence[Vector[DataStoreMultiGuardRecord]] = preparation.recordsC.map(_.collect {
+      case (target, Some(record)) => DataStoreMultiGuardRecord(target.collection, target.entryId, record)
+    })
+    def targetsC: Consequence[Vector[(DataStore.CollectionId, DataStore.EntryId)]] = validationRecordsC.map { rows =>
+      writeTargets ++ rows.map(r => r.collection -> r.entryId)
+    }
+    def validateReadbackC(records: Vector[DataStoreMultiGuardRecord]): Consequence[Unit] = for {
+      expected <- validationRecordsC
+      targets <- targetsC
+      _ <- if (records != null && records.forall(r => r != null && r.record != null) &&
+        records.map(r => r.collection -> r.entryId) == targets) Consequence.unit
+        else Consequence.configurationInvalid("Retained completion readback coverage differs")
+      _ <- local.fold(DataStoreMultiGuardReadback.validateTransitionC(transition, records.take(2)))(
+        _.validateReadbackC(records.take(writeTargets.size)))
+      _ <- if (records.drop(writeTargets.size).zip(expected).forall { case (actual, frozen) =>
+        actual.record.fields.map(_.key).distinct.size == actual.record.fields.size &&
+          actual.record.fields.sortBy(_.key) == frozen.record.fields.sortBy(_.key)
+      }) Consequence.unit else Consequence.stateConflict("Retained completion readback differs")
+    } yield ()
+  }
+  private[datastore] final class ObservationInvocation private[DataStoreSpace] (
+    val targets: Vector[DataStoreObservationTarget],
+    private[datastore] val policy: DataStoreObservationPolicy,
+    private val host: MultiGuardHostAdmission,
+    val eventRequest: Option[org.goldenport.cncf.event.ManagedEventObservationRequest],
+    private val selectedFrom: Option[org.goldenport.cncf.event.EventStore]
+  ) {
+    def validateCapturedSelectionC: Consequence[Unit] = selectedFrom match {
+      case Some(service) => validateHostSelectionC(service)
+      case None => Consequence.configurationInvalid("Observation has no captured host selection")
+    }
+    def validateHostC(expected: MultiGuardHostAdmission): Consequence[Unit] =
+      validateCapturedSelectionC.flatMap { _ =>
+        if (host eq expected) Consequence.unit else Consequence.configurationInvalid("Preparation belongs to another host view")
+      }
+    def validateHostSelectionC(expected: org.goldenport.cncf.event.EventStore): Consequence[Unit] =
+      host.ensureLiveC().flatMap { _ =>
+        if (expected != null && eventRequest.nonEmpty && selectedFrom.exists(_ eq expected) &&
+            host.eventStore.exists(_ eq expected)) Consequence.unit
+        else Consequence.configurationInvalid("Observation was not selected by this installed EventStore")
+      }
+    def validateTargetsC(expanded: Vector[DataStoreObservationTarget]): Consequence[Unit] =
+      host.ensureLiveC().flatMap(_ => policy.validateC(expanded))
+    def validateProviderC(provider: DataStore): Consequence[Unit] =
+      host.ensureLiveC().flatMap { _ =>
+        if (provider eq host.provider) policy.validateC(targets)
+        else Consequence.configurationInvalid("Observation belongs to another provider")
+      }
+  }
+  /** Opaque call-scoped invocation; neither owner labels nor a plan can
+    * construct it outside this DataStoreSpace assembly boundary.
+    */
+  private[datastore] final class MultiGuardInvocation private[DataStoreSpace] (
+    val plan: DataStoreConditionalMultiGuardPlan,
+    private val host: MultiGuardHostAdmission,
+    val preparation: Option[ManagedEventPreparation] = None
+  ) {
+    def validateProviderC(provider: DataStore): Consequence[Unit] =
+      host.ensureLiveC().flatMap { _ =>
+        if (provider eq host.provider) host.policy.validate(plan).flatMap(_ =>
+          preparation.fold(Consequence.unit)(_.validateHostC(host)))
+        else Consequence.configurationInvalid("Multi-guard invocation belongs to another provider")
+      }
+    def retainedC: Consequence[Vector[DataStoreMultiGuardRecord]] =
+      preparation.fold(Consequence.success(Vector.empty[DataStoreMultiGuardRecord]))(_.retainedRecordsC)
+    def readbackTargetsC: Consequence[Vector[(DataStore.CollectionId, DataStore.EntryId)]] =
+      retainedC.map(rows => DataStoreMultiGuardReadback.targets(plan) ++ rows.map(r => r.collection -> r.entryId))
+    def validateReadbackC(records: Vector[DataStoreMultiGuardRecord]): Consequence[Unit] = for {
+      retained <- retainedC
+      targets <- readbackTargetsC
+      _ <- if (records != null && records.map(r => r.collection -> r.entryId) == targets) Consequence.unit
+        else Consequence.configurationInvalid("Prepared complete readback coverage differs")
+      _ <- DataStoreMultiGuardReadback.validateC(plan, records.take(targets.size - retained.size))
+      _ <- if (records.takeRight(retained.size).zip(retained).forall { case (actual, expected) =>
+        actual.record != null && actual.record.fields.map(_.key).distinct.size == actual.record.fields.size &&
+          actual.record.fields.sortBy(_.key) == expected.record.fields.sortBy(_.key)
+      }) Consequence.unit else Consequence.stateConflict("Retained event readback differs")
+    } yield ()
+  }
+
+  private[datastore] final class MultiGuardHostAdmission(
+    val policy: DataStoreConditionalMultiGuardHostPolicy,
+    val provider: DataStore,
+    lease: SystemNodeResourceLease,
+    thread: Thread,
+    val observationPolicy: Option[DataStoreObservationPolicy],
+    val eventStore: Option[org.goldenport.cncf.event.EventStore]
+  ) {
+    def validateLocalC(plan: DataStoreLocalCompletionPlan): Consequence[Unit] = ensureLiveC().flatMap { _ =>
+      observationPolicy match {
+        case Some(read) => plan.validatePolicyC(policy, Vector(read.cursor.collection, read.eventCollection, read.indexCollection))
+        case None => Consequence.configurationInvalid("Local completion requires captured EventStore domain boundaries")
+      }
+    }
+    def ensureLiveC(): Consequence[Unit] =
+      if (lease.isReleased || lease.isRevoked || (Thread.currentThread() ne thread))
+        Consequence.stateInvalid("Multi-guard host view requires its live lease and issuing thread")
+      else Consequence.unit
+  }
+
+  /** Host-only assembly: authority is tied to one view, provider and lease. */
+  private[cncf] def multiGuardHostViewC(
+    policy: DataStoreConditionalMultiGuardHostPolicy,
+    provider: DataStore,
+    lease: SystemNodeResourceLease,
+    observationPolicy: Option[DataStoreObservationPolicy] = None,
+    eventStore: Option[org.goldenport.cncf.event.EventStore] = None
+  ): Consequence[DataStoreSpace] =
+    if (policy == null || provider == null || lease == null)
+      Consequence.configurationInvalid("Multi-guard host view is incomplete")
+    else {
+      val admission = new MultiGuardHostAdmission(policy, provider, lease, Thread.currentThread(), observationPolicy, eventStore)
+      admission.ensureLiveC().map(_ =>
+        new DataStoreSpace(Some(admission)).useDataStore(provider))
+    }
+
   final case class SeedEntry(
     collection: DataStore.CollectionId,
     record: Record
@@ -686,7 +1143,11 @@ object DataStoreSpace {
         "cncf.datastore.sqlite.normalize-column-names"
       ))
         .exists(_.trim.equalsIgnoreCase("true"))
-    val ds = datastorekind match {
+    if (datastorekind.exists(k => k == "local" || k == "sqlite") && sqlitepath.isEmpty)
+      Consequence.configurationInvalid(
+        "textus.datastore.path is required when textus.datastore.kind is local or sqlite"
+      ).RAISEC
+    dss._configured_default = Some(() => datastorekind match {
       case Some("in-memory" | "inmemory" | "memory") =>
         DataStore.inMemorySearchable()
       case Some("local" | "sqlite") =>
@@ -715,8 +1176,7 @@ object DataStoreSpace {
             )
           case None => DataStore.inMemorySearchable()
         }
-    }
-    dss.addDataStore(ds)
+    })
     dss
   }
 

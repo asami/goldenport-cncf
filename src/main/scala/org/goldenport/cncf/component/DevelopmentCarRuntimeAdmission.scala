@@ -2,7 +2,6 @@ package org.goldenport.cncf.component
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
@@ -16,7 +15,7 @@ import org.goldenport.cncf.component.identity.{ComponentId => SharedComponentId,
 /*
  * CNCF-owned admission of mutable component-development runtime evidence.
  *
- * Development evidence proves stable CAR contract inputs. It intentionally
+ * Development evidence selects current CAR contract inputs. It intentionally
  * does not reuse packaged-CAR archive inventory semantics or accept a
  * packaged manifest as a development substitute.
  *
@@ -35,7 +34,7 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
 
   private final case class Coordinate(name: String, version: String, component: String)
   private final case class RuntimeRange(minimum: String, maximum: Option[String], excluded: Vector[String], tested: Vector[String])
-  private final case class Evidence(path: String, sha256: String, logicalsha256: Option[String])
+  private final case class Evidence(path: String)
 
   def validate(base: Path): Consequence[Unit] =
     try {
@@ -65,7 +64,6 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
       _ <- _validate_runtime_range(range, CncfVersion.current)
       evidence <- _evidence(manifest.hcursor)
       _ <- _validate_evidence(root, evidence)
-      _ <- _validate_evidence_digest(manifest.hcursor, evidence)
     } yield ()
   }
 
@@ -170,11 +168,8 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
         for {
           accumulated <- result
           path <- _required_string(value.hcursor, "path", s"development runtime evidence $index")
-          digest <- _required_string(value.hcursor, "sha256", s"development runtime evidence $index")
-          logical <- _optional_string(value.hcursor, "logicalSha256", s"development runtime evidence $index")
           _ <- if (_safe_identity(path)) Right(()) else Left(s"development runtime evidence has unsafe path: $path")
-          _ <- if (digest.matches("[0-9a-f]{64}")) Right(()) else Left(s"development runtime evidence has invalid SHA-256: $path")
-        } yield accumulated :+ Evidence(path, digest, logical)
+        } yield accumulated :+ Evidence(path)
       }.flatMap { evidence =>
         val expected = Vector(RUNTIME_CLASSPATH_IDENTITY, COMPONENT_DESCRIPTOR_IDENTITY, ABI_MANIFEST_IDENTITY)
         if (evidence.map(_.path) == expected) Right(evidence)
@@ -188,60 +183,46 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
         val file = root.resolve(entry.path).normalize()
         if (!file.startsWith(root) || !Files.isRegularFile(file) || Files.size(file) == 0L)
           Left(s"development runtime evidence is missing or empty: $file")
-        else if (_sha256(file) != entry.sha256)
-          Left(s"development runtime evidence digest mismatch: ${entry.path}")
+        else if (!Files.isReadable(file))
+          Left(s"development runtime evidence cannot be read: $file")
         else if (entry.path == RUNTIME_CLASSPATH_IDENTITY)
-          _classpath_identity(root, file).flatMap { identity =>
-            if (entry.logicalsha256 == Some(identity)) Right(())
-            else Left(s"development runtime classpath logical identity mismatch: $file")
-          }
+          _validate_classpath(file)
         else
           Right(())
       }
     }
 
-  private def _validate_evidence_digest(cursor: HCursor, evidence: Vector[Evidence]): Either[String, Unit] =
-    for {
-      integrity <- cursor.downField("integrity").focus.toRight("development runtime manifest integrity is missing")
-      algorithm <- _required_string(integrity.hcursor, "algorithm", "development runtime manifest integrity")
-      _ <- _require_equal(algorithm, "SHA-256", "development runtime manifest integrity.algorithm")
-      digest <- _required_string(integrity.hcursor, "evidenceSha256", "development runtime manifest integrity")
-      _ <- if (digest == _evidence_digest(evidence)) Right(()) else Left("development runtime manifest evidence digest mismatch")
-    } yield ()
-
-  private def _evidence_digest(entries: Vector[Evidence]): String =
-    _sha256(entries.map { entry =>
-      s"${entry.path}\t${entry.sha256}\t${entry.logicalsha256.getOrElse("")}"
-    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
-
-  private def _classpath_identity(root: Path, path: Path): Either[String, String] =
+  private def _validate_classpath(path: Path): Either[String, Unit] =
     try {
-      val entries = Files.readAllLines(path, StandardCharsets.UTF_8).asScala.toVector
+      val lines = Files.readAllLines(path, StandardCharsets.UTF_8).asScala.toVector
+      val entries = lines
         .flatMap(_.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator)).toVector)
         .map(_.trim)
         .filter(_.nonEmpty)
-      entries.foldLeft(Right(Vector.empty): Either[String, Vector[String]]) { case (result, value) =>
+      if (lines.exists(_.indexOf('\u0000') >= 0))
+        Left(s"development runtime classpath contains an invalid NUL character: $path")
+      else if (entries.isEmpty)
+        Left(s"development runtime classpath has no referenced entries: $path")
+      else entries.foldLeft(Right(()): Either[String, Unit]) { case (result, value) =>
         for {
-          accumulated <- result
-          identity <- _classpath_entry_identity(root, path, value)
-        } yield accumulated :+ identity
-      }.map { identities =>
-        _sha256(identities.distinct.sorted.mkString("\n").getBytes(StandardCharsets.UTF_8))
+          _ <- result
+          _ <- _validate_classpath_entry(path, value)
+        } yield ()
       }
     } catch {
       case NonFatal(e) =>
         Left(s"development runtime classpath cannot be read: $path: ${Option(e.getMessage).getOrElse(e.getClass.getName)}")
     }
 
-  private def _classpath_entry_identity(root: Path, classpath: Path, value: String): Either[String, String] =
+  private def _validate_classpath_entry(classpath: Path, value: String): Either[String, Unit] =
     try {
       val entry = Path.of(value).toAbsolutePath.normalize()
       if (!Files.exists(entry))
         Left(s"development runtime classpath entry is missing: $entry (declared by $classpath)")
-      else if (entry.startsWith(root))
-        Right(s"project:${root.relativize(entry).toString.replace('\\', '/')}")
+      else if (!Files.isReadable(entry))
+        Left(s"development runtime classpath entry cannot be read: $entry (declared by $classpath)")
       else
-        Right(s"external:${entry.getFileName.toString}")
+        Right(())
     } catch {
       case NonFatal(e) =>
         Left(s"development runtime classpath entry is invalid: $value (declared by $classpath): ${Option(e.getMessage).getOrElse(e.getClass.getName)}")
@@ -285,10 +266,5 @@ private[cncf] object DevelopmentCarRuntimeAdmission {
 
   private def _safe_identity(value: String): Boolean =
     value.nonEmpty && !value.startsWith("/") && !value.contains('\\') && !value.split('/').contains("..")
-
-  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
-
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
 }
