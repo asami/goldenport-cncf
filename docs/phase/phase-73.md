@@ -12,7 +12,7 @@ checklist=[Phase 73 Checklist](phase-73-checklist.md)
 - Update rule: Derive completion from the [Phase 73 Checklist](phase-73-checklist.md)
   and its stated executable, review and release evidence.
 
-## Main-route authored status
+## Main-route accepted and branch focused-validation status
 
 Updated 2026-10-08: P73-MR-01 inventory is accepted through independent review
 `p73-mr01-review-20261008-01a10b3f` revision 1 by
@@ -41,10 +41,36 @@ compiled and passed representative assembly (7/7), followed by contract and
 existing activation lifecycle evidence (16/16): 23/23 tests across three suites,
 zero failures or aborted suites. The active ScalaCheck opaque-byte property
 passed with a minimum of 50 successful generated cases. SBT and wrapper exited
-0 with `lock=released`. Independent review and Step acceptance remain pending,
-as do broader Phase full validation and closure. Broader E3 replacement, second
-provider, failure/compatibility/isolation and E4 handoff/closure obligations
-remain open. The original main-route-first execution plan below is retained.
+0 with `lock=released`. P73-MAIN-ROUTE is accepted at commit
+`5111e3238a452008d08a6c1c41d68efd0ed77e16`, after independent review
+`p73-mr02-review-20261008-01a10b3f@1` by `/root/p73_mr02_main_route_review`.
+Parent M0 `p73-mr02-m0-amendment-20261008-01a10b3f@1` resolved
+`CPB-P73-MR02-001`; actual metadata evidence is 11/11 with main 23/23 retained.
+This accepts exactly P73-A-02, B-01, B-02, B-04 and C-01 in addition to A-01.
+
+P73-BR-01 has frozen R7–R9 and active E7–E15 branch scenarios. On 2026-10-08,
+parent-verified Stage A invocation `p73-e3-red3-20261008-01a10b3f` compiled:
+pure branches passed 52/52 and assembled branches 15/16. Only E12 B discovery
+was absent at line 72 after A exchange and ordinary B activation succeeded.
+The total was 67/68 across two suites, zero aborted suites, SBT/wrapper exit 1
+and `lock=released`. The preceding output-only Cozy stale-classpath refresh and
+separate anonymous concrete Component compile correction were prerequisites,
+not expected-red evidence.
+
+Stage B added SecondProvider's optional supplier capability only. Parent-verified
+`p73-e3-final-20261008-01a10b3f` compiled and passed assembled branches 16/16
+then the four-suite accumulator 75/75: 91/91 across five suites, zero failed,
+aborted, canceled, ignored or pending tests, retained active opaque property
+minimum 50 passed, SBT/wrapper exit 0 and `lock=released`.
+Independent E3 Step review/acceptance/commit, its checklist rows, E4 supplier
+handoffs, the sole full Phase review, full validation, release and closure remain
+pending. The original main-route-first execution plan below is retained.
+
+The [public E1–E15 matrix](../spec/component-knowledge-contribution-hub.md#executable-evidence-allocation)
+allocates focused-validated [pure branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubBranchSpec.scala)
+and [assembled branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubAssemblyBranchSpec.scala)
+to the open E3 rows. E4 will reuse this evidence after independent branch Step
+acceptance; focused validation alone does not check those rows.
 
 ## Goal
 

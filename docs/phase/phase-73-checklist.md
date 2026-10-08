@@ -13,7 +13,8 @@ phase=[Phase 73](phase-73.md)
 ## Execution preparation
 
 Execution order updated 2026-10-08. All 12 original outcomes retain their
-stable IDs below; only accepted inventory P73-A-01 is checked. Their batch ownership is recorded in the
+stable IDs below; accepted inventory and main-route allocations are checked.
+Their batch ownership is recorded in the
 [Phase execution order](phase-73.md#execution-order-and-evidence-allocation).
 
 P73-MR-02 authored the [frozen main-route design](../design/component-knowledge-contribution-hub.md),
@@ -32,10 +33,41 @@ compiled and passed the assembled suite (7/7), then contract plus existing
 activation lifecycle suites (16/16): 23/23 tests across three suites, zero
 failures or aborted suites. The active ScalaCheck opaque-byte property passed
 with a minimum of 50 successful generated cases. SBT and wrapper exited 0 with
-`lock=released`. Independent review and main-route Step acceptance remain
-pending, as do broader Phase full validation and closure.
-P73-A-03–04, P73-PREP-01–03 and main-route outcome rows remain open until their
-full obligations have accepted evidence.
+`lock=released`. P73-MAIN-ROUTE is accepted at commit
+`5111e3238a452008d08a6c1c41d68efd0ed77e16`, after independent review
+`p73-mr02-review-20261008-01a10b3f@1` by `/root/p73_mr02_main_route_review`.
+Parent M0 `p73-mr02-m0-amendment-20261008-01a10b3f@1` resolved
+`CPB-P73-MR02-001`; actual metadata evidence is 11/11, with main 23/23 retained.
+Accepted row allocation: A-02 uses E1 trusted domain/provider identity; B-01
+uses E1/E4 public membership/discovery/read; B-02 uses E1/E3 exact opaque delivery
+and its 50-case property; B-04 uses E5/E6 ordinary assembly/read timing; C-01
+uses E6 unchanged two-consumer code across all six admission orders.
+
+P73-BR-01 froze R7–R9/E7–E15 and has dated focused evidence on 2026-10-08.
+Parent-verified Stage A `p73-e3-red3-20261008-01a10b3f` compiled with pure
+branches 52/52 and assembled branches 15/16: only E12 B discovery absent at
+line 72 after A exchange and B ordinary activation succeeded. Total 67/68 across
+two suites, zero aborted suites, SBT/wrapper exit 1 and `lock=released`.
+The preceding output-only Cozy stale-classpath refresh and separate anonymous
+concrete Component compile correction were prerequisites, not expected-red.
+
+Stage B added SecondProvider's optional capability only. Parent-verified final
+`p73-e3-final-20261008-01a10b3f` compiled and passed assembled branches 16/16,
+then the four-suite accumulator 75/75: total 91/91 across five suites, zero
+failed, aborted, canceled, ignored or pending tests. The retained active
+opaque-byte property passed its minimum 50 successful cases; SBT/wrapper exited
+0 with `lock=released`. Independent E3 Step review/acceptance/commit remains
+pending; these focused results do not check additional rows.
+P73-A-03–04, B-03, C-02, P73-PREP-01–03 and C-03–04 remain open until their
+full obligations have accepted E3/E4 evidence. E4 supplier handoffs, the sole full
+Phase review, full validation, release and closure remain pending.
+
+The [shared E1–E15 matrix](../spec/component-knowledge-contribution-hub.md#executable-evidence-allocation)
+links the focused-validated [pure branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubBranchSpec.scala)
+and [assembled branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubAssemblyBranchSpec.scala)
+to their open row obligations. Independent acceptance is still required to check
+those rows. The [shared opaque fixture](../../src/test/scala/org/goldenport/cncf/testutil/ComponentKnowledgeFixtures.scala)
+now includes the Stage B concrete supplier capability.
 
 Main-route-first order: one provider -> assembled CNCF discovery/read -> one
 consumer, then a second independent consumer. Establish and retain that
@@ -67,7 +99,8 @@ solely because acceptance is a separate work-group heading.
       `p73-mr01-m0-amendment-20261008-01a10b3f` revision 1 resolving
       `CPB-P73-MR01-001` (`componentInstanceId` -> `instanceId`). This accepts
       inventory only; no executable-route acceptance is inherited.
-- [ ] P73-A-02: Freeze separate `knowledgeDomainId` and `providerComponent` identities.
+- [x] P73-A-02: Freeze separate `knowledgeDomainId` and `providerComponent` identities.
+      Evidence: accepted P73-MAIN-ROUTE commit and E1 allocation above.
 - [ ] P73-A-03: Freeze the versioned descriptor, complete immutable snapshot,
       generation, provenance, discovery/read, and failure contracts.
 - [ ] P73-A-04: Register opaque failing-first fixtures with two interchangeable
@@ -75,17 +108,21 @@ solely because acceptance is a separate work-group heading.
 
 ## P73-B: Hub Implementation
 
-- [ ] P73-B-01: Implement only missing domain-neutral provider registration and
+- [x] P73-B-01: Implement only missing domain-neutral provider registration and
       consumer discovery/read mechanics.
-- [ ] P73-B-02: Preserve opaque domain records without CNCF interpretation or inference.
+      Evidence: accepted P73-MAIN-ROUTE commit and E1/E4 allocation above.
+- [x] P73-B-02: Preserve opaque domain records without CNCF interpretation or inference.
+      Evidence: accepted P73-MAIN-ROUTE commit and E1/E3 opaque-property allocation above.
 - [ ] P73-B-03: Enforce deterministic selection, complete-snapshot replacement,
       attribution, isolation, and absence/failure behavior.
-- [ ] P73-B-04: Integrate availability after ordinary component assembly without direct
+- [x] P73-B-04: Integrate availability after ordinary component assembly without direct
       provider-to-consumer implementation wiring.
+      Evidence: accepted P73-MAIN-ROUTE commit and E5/E6 allocation above.
 
 ## P73-C: Supplier and Consumer Acceptance
 
-- [ ] P73-C-01: Verify one provider can be consumed independently by two consumers.
+- [x] P73-C-01: Verify one provider can be consumed independently by two consumers.
+      Evidence: accepted P73-MAIN-ROUTE commit and E6 two-consumer allocation above.
 - [ ] P73-C-02: Verify provider replacement can retain `knowledgeDomainId` while
       changing `providerComponent`.
 - [ ] P73-C-03: Produce frozen handoffs for Textus Knowledge Editor Phase 2 and Textus
