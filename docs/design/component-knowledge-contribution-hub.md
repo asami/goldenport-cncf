@@ -1,10 +1,43 @@
 # Component Knowledge Contribution Hub Design
 
-Status: main-route and E3 branch Steps accepted 2026-10-08; supplier handoff prepared, handoff Step acceptance and Phase closure pending
+Status: completed 2026-10-08; CNCF supplier acceptance only
 
 Identity: PHASE-73 / P73-MAIN-ROUTE / P73-MR-02-main-route
 
 Branch identity: PHASE-73 / P73-BRANCHES / P73-BR-01-replacement-failure-isolation
+
+## Phase 73 closure evidence — 2026-10-08
+
+The supplier handoff Step is accepted through independent
+`p73-e4-review-20261008-01a10b3f@1` and exact local commit
+`ca3045d5bce3f52abc2d6582900f505fb0387ae7`. It completes P73-C-03;
+the main-route and branch Step commits and their E1–E15 allocation remain valid.
+
+The sole epoch-1 full review `p73-full-review-20261008-01a10b3f@1`
+raised `CPB-P73-FULL-001`. Its two-fixture target-relative descriptor repair
+and the expressly admitted global-runtime-context restoration were independently
+accepted by `p73-global-context-focused-review-20261008-01a10b3f@2`
+from `/root/p73_global_context_focused_review2`, with no remaining blocker.
+
+Current focused validation passed factory 7/7, assembly branches followed by
+factory 23/23, and the Phase/lifecycle accumulator 91/91. Required serialized
+`sbt --batch test` (`p73-global-context-full-test-20261008-01a10b3f`) passed
+4,673 tests across 608 completed suites, zero failed or aborted, with the
+reported 13 canceled, one ignored and 46 pending cases retained. SBT/wrapper
+exited 0 and the serial lock was released. Seven context-restoration checks
+and the active opaque-byte property with at least 50 successes executed.
+Validation used Java 25.0.4; no separate Java 17 run is claimed.
+
+All 15 checklist outcomes are complete in the release tree. Four accepted
+nonblocking Hygiene records remain open in their original canonical journal;
+none is silently repaired or discarded. There are no Development Candidate
+records and no empty journal is created. Shared Phase-index/strategy projections
+retain concurrent planning with synchronization deferred to their owner.
+This is CNCF supplier acceptance only; downstream TKE/BoK acceptance is not claimed.
+
+Release binding: `Phase-Closure-Binding: p73-phase-closure-20261008-01a10b3f@1`.
+The completed status takes effect in the distinct local release commit carrying
+this binding and its verified committed-tree closure receipt.
 
 ## Responsibility and reuse baseline
 
@@ -135,7 +168,9 @@ pending tests. The existing active opaque-byte property passed its minimum 50
 successful cases; SBT/wrapper exited 0 with `lock=released`.
 Independent E3 review `p73-e3-review-20261008-01a10b3f@1` by
 `/root/p73_e3_branch_review` returned PASS. P73-BRANCHES is accepted at
-`1c96221e90eea92f73ab1a82d45275ea15436103`. The supplier package is prepared;
+`1c96221e90eea92f73ab1a82d45275ea15436103`. The following preparation-era
+status is historical and superseded by the closure evidence above: the supplier
+package is prepared;
 independent handoff Step acceptance and Phase closure remain open. These local
 Step results grant neither full Phase validation nor external consumer acceptance.
 No hot swapping, watcher, update loop,

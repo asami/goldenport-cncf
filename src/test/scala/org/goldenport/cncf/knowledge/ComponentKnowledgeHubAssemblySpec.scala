@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import org.goldenport.Consequence
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentActivation, ComponentActivationContext, ComponentInit, ComponentInstanceId, ComponentKnowledgeProvider, ComponentOrigin}
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.log.LogBackendHolder
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.{RuntimeOutputCapture, TestComponentFactory}
@@ -39,6 +40,7 @@ final class ComponentKnowledgeHubAssemblySpec extends AnyWordSpec with Matchers 
           Given("Spec: docs/spec/component-knowledge-contribution-hub.md; Rules: R1,R2,R4,R5; Example: E5; a standard Server descriptor and one opted-in activation provider plus one independent hub-only consumer")
           val previousflag = sys.props.get("textus.test")
           val previousbackend = LogBackendHolder.backend
+          val previouscontext = GlobalRuntimeContext.current
           _with_assembly(Vector("provider", "first")) { (subsystem, provider, first, _) =>
             subsystem.controlledTestExecutionEnabled shouldBe false
             subsystem.components should contain(provider)
@@ -89,9 +91,10 @@ final class ComponentKnowledgeHubAssemblySpec extends AnyWordSpec with Matchers 
             provider.readCount shouldBe 1
           }
 
-          Then("the ordinary assembly fixture restores the runtime flag and logging backend")
+          Then("the ordinary assembly fixture restores the runtime flag, logging backend and global runtime context")
           sys.props.get("textus.test") shouldBe previousflag
           LogBackendHolder.backend shouldBe previousbackend
+          GlobalRuntimeContext.current shouldBe previouscontext
         }
       }
     }
@@ -103,6 +106,7 @@ final class ComponentKnowledgeHubAssemblySpec extends AnyWordSpec with Matchers 
             Given(s"Spec: docs/spec/component-knowledge-contribution-hub.md; Rules: R1,R4,R5; Example: E6; a standard Server assembly admitting the provider and two independent consumers in order ${order.mkString(", ")}")
             val previousflag = sys.props.get("textus.test")
             val previousbackend = LogBackendHolder.backend
+            val previouscontext = GlobalRuntimeContext.current
             _with_assembly(order) { (subsystem, provider, first, secondoption) =>
               val second = secondoption.get
               subsystem.controlledTestExecutionEnabled shouldBe false
@@ -147,9 +151,10 @@ final class ComponentKnowledgeHubAssemblySpec extends AnyWordSpec with Matchers 
               provider.readCount shouldBe 2
             }
 
-            Then("each permutation restores the runtime flag and logging backend")
+            Then("each permutation restores the runtime flag, logging backend and global runtime context")
             sys.props.get("textus.test") shouldBe previousflag
             LogBackendHolder.backend shouldBe previousbackend
+            GlobalRuntimeContext.current shouldBe previouscontext
           }
         }
       }
@@ -160,6 +165,7 @@ final class ComponentKnowledgeHubAssemblySpec extends AnyWordSpec with Matchers 
     body: (Subsystem, ActivationProvider, IndependentConsumer, Option[IndependentConsumer]) => Unit
   ): Unit = {
     val previous = sys.props.get("textus.test")
+    val previouscontext = GlobalRuntimeContext.current
     val descriptor = _descriptor_path()
     var assembled = Option.empty[Subsystem]
     var provideroption = Option.empty[ActivationProvider]
@@ -196,10 +202,12 @@ final class ComponentKnowledgeHubAssemblySpec extends AnyWordSpec with Matchers 
       finally {
         try Files.deleteIfExists(descriptor)
         finally {
-          previous match {
-            case Some(value) => System.setProperty("textus.test", value)
-            case None => System.clearProperty("textus.test")
-          }
+          try {
+            previous match {
+              case Some(value) => System.setProperty("textus.test", value)
+              case None => System.clearProperty("textus.test")
+            }
+          } finally GlobalRuntimeContext.current = previouscontext
         }
       }
     }
@@ -218,7 +226,8 @@ final class ComponentKnowledgeHubAssemblySpec extends AnyWordSpec with Matchers 
   }
 
   private def _descriptor_path(): Path = {
-    val path = Files.createTempFile("component-knowledge-hub-spec-", ".yaml")
+    val directory = Files.createDirectories(Path.of("target/component-knowledge-hub/config/main-route"))
+    val path = Files.createTempFile(directory, "component-knowledge-hub-spec-", ".yaml")
     Files.writeString(path,
       """kind: test-descriptor
         |execution:

@@ -1,18 +1,55 @@
 # Phase 73 - Component Knowledge Contribution Hub
 
-status=in_progress
+status=completed
+closed_at=2026-10-08
 planned_at=2026-09-09
 execution_plan_updated_at=2026-10-08
 checklist=[Phase 73 Checklist](phase-73-checklist.md)
 
+## Phase 73 closure evidence — 2026-10-08
+
+The supplier handoff Step is accepted through independent
+`p73-e4-review-20261008-01a10b3f@1` and exact local commit
+`ca3045d5bce3f52abc2d6582900f505fb0387ae7`. It completes P73-C-03;
+the main-route and branch Step commits and their E1–E15 allocation remain valid.
+
+The sole epoch-1 full review `p73-full-review-20261008-01a10b3f@1`
+raised `CPB-P73-FULL-001`. Its two-fixture target-relative descriptor repair
+and the expressly admitted global-runtime-context restoration were independently
+accepted by `p73-global-context-focused-review-20261008-01a10b3f@2`
+from `/root/p73_global_context_focused_review2`, with no remaining blocker.
+
+Current focused validation passed factory 7/7, assembly branches followed by
+factory 23/23, and the Phase/lifecycle accumulator 91/91. Required serialized
+`sbt --batch test` (`p73-global-context-full-test-20261008-01a10b3f`) passed
+4,673 tests across 608 completed suites, zero failed or aborted, with the
+reported 13 canceled, one ignored and 46 pending cases retained. SBT/wrapper
+exited 0 and the serial lock was released. Seven context-restoration checks
+and the active opaque-byte property with at least 50 successes executed.
+Validation used Java 25.0.4; no separate Java 17 run is claimed.
+
+All 15 checklist outcomes are complete in the release tree. Four accepted
+nonblocking Hygiene records remain open in their original canonical journal;
+none is silently repaired or discarded. There are no Development Candidate
+records and no empty journal is created. Shared Phase-index/strategy projections
+retain concurrent planning with synchronization deferred to their owner.
+This is CNCF supplier acceptance only; downstream TKE/BoK acceptance is not claimed.
+
+Release binding: `Phase-Closure-Binding: p73-phase-closure-20261008-01a10b3f@1`.
+The completed status takes effect in the distinct local release commit carrying
+this binding and its verified committed-tree closure receipt.
+
 ## Stage Status
 
-- Current status: IN_PROGRESS
+- Current status: COMPLETED
 - Owner: CNCF maintainers
 - Update rule: Derive completion from the [Phase 73 Checklist](phase-73-checklist.md)
   and its stated executable, review and release evidence.
 
-## Accepted Steps and prepared handoff status
+## Historical Step evidence through supplier preparation
+
+The following preparation-era status statements are retained as history;
+current closure is recorded above.
 
 Updated 2026-10-08: P73-MR-01 inventory is accepted through independent review
 `p73-mr01-review-20261008-01a10b3f` revision 1 by

@@ -1,12 +1,13 @@
 package org.goldenport.cncf.testutil
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentActivation, ComponentActivationContext, ComponentInit, ComponentInstanceId, ComponentKnowledgeProvider, ComponentOrigin}
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.knowledge.*
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
@@ -204,12 +205,14 @@ object ComponentKnowledgeFixtures {
 
   def withAssembly[A](mode: RunMode, providerName: String, providerFactory: () => Component)(body: Assembly => A): A = {
     val previous = sys.props.get("textus.test")
+    val previouscontext = GlobalRuntimeContext.current
     var descriptor = Option.empty[java.nio.file.Path]
     var owners = Vector.empty[Subsystem]
     var assembly = Option.empty[Assembly]
     RuntimeOutputCapture.capture {
       try {
-        val path = Files.createTempFile("knowledge-branch-standard-", ".yaml")
+        val directory = Files.createDirectories(Path.of("target/component-knowledge-hub/config/branches"))
+        val path = Files.createTempFile(directory, "knowledge-branch-standard-", ".yaml")
         descriptor = Some(path)
         Files.writeString(path,
           """kind: test-descriptor
@@ -244,9 +247,13 @@ object ComponentKnowledgeFixtures {
         try owners.reverse.foreach(Subsystem.shutdownOwned)
         finally {
           try descriptor.foreach(path => Files.deleteIfExists(path))
-          finally previous match {
-            case Some(value) => System.setProperty("textus.test", value)
-            case None => System.clearProperty("textus.test")
+          finally {
+            try {
+              previous match {
+                case Some(value) => System.setProperty("textus.test", value)
+                case None => System.clearProperty("textus.test")
+              }
+            } finally GlobalRuntimeContext.current = previouscontext
           }
         }
       }

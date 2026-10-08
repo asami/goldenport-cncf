@@ -6,7 +6,40 @@ Contribution contractVersion: 1
 
 Identity: PHASE-73 / P73-HANDOFF / P73-HO-01-supplier-package-and-status
 
-Status: prepared 2026-10-08; independent handoff Step acceptance pending
+Status: completed 2026-10-08; CNCF supplier acceptance only
+
+## Phase 73 closure evidence — 2026-10-08
+
+The supplier handoff Step is accepted through independent
+`p73-e4-review-20261008-01a10b3f@1` and exact local commit
+`ca3045d5bce3f52abc2d6582900f505fb0387ae7`. It completes P73-C-03;
+the main-route and branch Step commits and their E1–E15 allocation remain valid.
+
+The sole epoch-1 full review `p73-full-review-20261008-01a10b3f@1`
+raised `CPB-P73-FULL-001`. Its two-fixture target-relative descriptor repair
+and the expressly admitted global-runtime-context restoration were independently
+accepted by `p73-global-context-focused-review-20261008-01a10b3f@2`
+from `/root/p73_global_context_focused_review2`, with no remaining blocker.
+
+Current focused validation passed factory 7/7, assembly branches followed by
+factory 23/23, and the Phase/lifecycle accumulator 91/91. Required serialized
+`sbt --batch test` (`p73-global-context-full-test-20261008-01a10b3f`) passed
+4,673 tests across 608 completed suites, zero failed or aborted, with the
+reported 13 canceled, one ignored and 46 pending cases retained. SBT/wrapper
+exited 0 and the serial lock was released. Seven context-restoration checks
+and the active opaque-byte property with at least 50 successes executed.
+Validation used Java 25.0.4; no separate Java 17 run is claimed.
+
+All 15 checklist outcomes are complete in the release tree. Four accepted
+nonblocking Hygiene records remain open in their original canonical journal;
+none is silently repaired or discarded. There are no Development Candidate
+records and no empty journal is created. Shared Phase-index/strategy projections
+retain concurrent planning with synchronization deferred to their owner.
+This is CNCF supplier acceptance only; downstream TKE/BoK acceptance is not claimed.
+
+Release binding: `Phase-Closure-Binding: p73-phase-closure-20261008-01a10b3f@1`.
+The completed status takes effect in the distinct local release commit carrying
+this binding and its verified committed-tree closure receipt.
 
 ## Package authority and recipients
 
@@ -16,7 +49,7 @@ This supplier-owned local package applies the accepted
 Those documents and the executable specifications own contract meaning.
 Package version 1 identifies this document; it does not release an artifact,
 convert dependency versions or publish anything. [Phase 73](../phase/phase-73.md)
-remains in progress. No downstream acceptance or Phase full validation is claimed.
+has the CNCF supplier closure recorded above. No downstream acceptance is claimed.
 
 Recipients are repository identities `textus-knowledge-editor` (TKE Phase 2,
 provider) and `textus-bok` (BoK Phase 7.5, consumer). Their exact plain portable
@@ -248,6 +281,8 @@ Accepted local evidence, in chronological order:
   Independent review `p73-e3-review-20261008-01a10b3f@1` by
   `/root/p73_e3_branch_review` returned PASS. Accepted exact commit:
   `1c96221e90eea92f73ab1a82d45275ea15436103`.
+
+Historical preparation status, superseded by the closure evidence above:
 
 These accepted Steps support 13 of the 15 stable checklist outcomes. C-03 awaits
 this handoff Step's independent acceptance; C-04 and both Phase status headers

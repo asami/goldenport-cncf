@@ -1,19 +1,55 @@
 # Phase 73 Checklist - Component Knowledge Contribution Hub
 
-status=in_progress
+status=completed
+closed_at=2026-10-08
 phase=[Phase 73](phase-73.md)
+
+## Phase 73 closure evidence — 2026-10-08
+
+The supplier handoff Step is accepted through independent
+`p73-e4-review-20261008-01a10b3f@1` and exact local commit
+`ca3045d5bce3f52abc2d6582900f505fb0387ae7`. It completes P73-C-03;
+the main-route and branch Step commits and their E1–E15 allocation remain valid.
+
+The sole epoch-1 full review `p73-full-review-20261008-01a10b3f@1`
+raised `CPB-P73-FULL-001`. Its two-fixture target-relative descriptor repair
+and the expressly admitted global-runtime-context restoration were independently
+accepted by `p73-global-context-focused-review-20261008-01a10b3f@2`
+from `/root/p73_global_context_focused_review2`, with no remaining blocker.
+
+Current focused validation passed factory 7/7, assembly branches followed by
+factory 23/23, and the Phase/lifecycle accumulator 91/91. Required serialized
+`sbt --batch test` (`p73-global-context-full-test-20261008-01a10b3f`) passed
+4,673 tests across 608 completed suites, zero failed or aborted, with the
+reported 13 canceled, one ignored and 46 pending cases retained. SBT/wrapper
+exited 0 and the serial lock was released. Seven context-restoration checks
+and the active opaque-byte property with at least 50 successes executed.
+Validation used Java 25.0.4; no separate Java 17 run is claimed.
+
+All 15 checklist outcomes are complete in the release tree. Four accepted
+nonblocking Hygiene records remain open in their original canonical journal;
+none is silently repaired or discarded. There are no Development Candidate
+records and no empty journal is created. Shared Phase-index/strategy projections
+retain concurrent planning with synchronization deferred to their owner.
+This is CNCF supplier acceptance only; downstream TKE/BoK acceptance is not claimed.
+
+Release binding: `Phase-Closure-Binding: p73-phase-closure-20261008-01a10b3f@1`.
+The completed status takes effect in the distinct local release commit carrying
+this binding and its verified committed-tree closure receipt.
 
 ## Stage Status
 
-- Current status: IN_PROGRESS
+- Current status: COMPLETED
 - Owner: CNCF maintainers
 - Update rule: Check an item only from the stated executable, review, or
   release evidence.
 
-## Execution preparation
+## Historical execution preparation
 
-Execution order updated 2026-10-08. All 15 stable IDs (12 original outcomes
-and three preparation rows) remain below; 13 accepted outcomes are checked.
+Execution order updated 2026-10-08. At E3 acceptance, 13 outcomes were accepted.
+The following preparation-era evidence is retained as history; current closure
+is recorded above. All 15 stable IDs (12 original outcomes and three preparation
+rows) remain below and are now checked.
 Their batch ownership is recorded in the
 [Phase execution order](phase-73.md#execution-order-and-evidence-allocation).
 
@@ -139,9 +175,13 @@ solely because acceptance is a separate work-group heading.
       changing `providerComponent`.
       Evidence: accepted E3 Step and E12 unchanged hub-only consumers across
       closed A then fresh B assembly; same domain/schema, different attribution.
-- [ ] P73-C-03: Produce frozen handoffs for Textus Knowledge Editor Phase 2 and Textus
+- [x] P73-C-03: Produce frozen handoffs for Textus Knowledge Editor Phase 2 and Textus
       BoK Phase 7.5 without claiming their consumer acceptance.
-      Prepared: supplier package version 1 above; independent P73-HANDOFF
-      Step review/acceptance/commit remains pending.
-- [ ] P73-C-04: Run proportionate CNCF validation, reconcile documentation, complete
+      Evidence: supplier package version 1, independent P73-HANDOFF review
+      `p73-e4-review-20261008-01a10b3f@1` and accepted local commit
+      `ca3045d5bce3f52abc2d6582900f505fb0387ae7`.
+- [x] P73-C-04: Run proportionate CNCF validation, reconcile documentation, complete
       independent review, and create the Phase release commit.
+      Evidence: sole full review and focused closure above, required full
+      4673/4673 validation, reconciled six-document status and exact local
+      release binding `p73-phase-closure-20261008-01a10b3f@1` with verified committed-tree receipt.
