@@ -12,7 +12,7 @@ checklist=[Phase 73 Checklist](phase-73-checklist.md)
 - Update rule: Derive completion from the [Phase 73 Checklist](phase-73-checklist.md)
   and its stated executable, review and release evidence.
 
-## Main-route accepted and branch focused-validation status
+## Accepted Steps and prepared handoff status
 
 Updated 2026-10-08: P73-MR-01 inventory is accepted through independent review
 `p73-mr01-review-20261008-01a10b3f` revision 1 by
@@ -62,15 +62,23 @@ Stage B added SecondProvider's optional supplier capability only. Parent-verifie
 then the four-suite accumulator 75/75: 91/91 across five suites, zero failed,
 aborted, canceled, ignored or pending tests, retained active opaque property
 minimum 50 passed, SBT/wrapper exit 0 and `lock=released`.
-Independent E3 Step review/acceptance/commit, its checklist rows, E4 supplier
-handoffs, the sole full Phase review, full validation, release and closure remain
-pending. The original main-route-first execution plan below is retained.
+Independent E3 review `p73-e3-review-20261008-01a10b3f@1` by
+`/root/p73_e3_branch_review` returned PASS. P73-BRANCHES is accepted at exact
+commit `1c96221e90eea92f73ab1a82d45275ea15436103`. Its evidence completes
+P73-A-03, A-04, B-03, C-02 and PREP-01–03, bringing the stable checklist to
+13 accepted outcomes out of 15. The original execution plan below is retained.
 
 The [public E1–E15 matrix](../spec/component-knowledge-contribution-hub.md#executable-evidence-allocation)
-allocates focused-validated [pure branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubBranchSpec.scala)
+allocates accepted [pure branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubBranchSpec.scala)
 and [assembled branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubAssemblyBranchSpec.scala)
-to the open E3 rows. E4 will reuse this evidence after independent branch Step
-acceptance; focused validation alone does not check those rows.
+to the completed E3 rows in the checklist. The prepared
+[supplier package version 1](../spec/component-knowledge-contribution-hub-supplier-handoff.md)
+reuses that matrix for TKE Phase 2 and BoK Phase 7.5. The chronological
+[supplier-handoff journal](../journal/2026/10/2026-10-08-phase-73-supplier-handoff.md)
+records preparation and evidence limits. C-03 awaits independent handoff Step
+acceptance. C-04, the sole full Phase review, final full serialized CNCF
+validation, Phase release commit and closure remain pending. No actual
+downstream provider/consumer acceptance or full Phase validation is claimed.
 
 ## Goal
 

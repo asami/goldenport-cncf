@@ -12,8 +12,8 @@ phase=[Phase 73](phase-73.md)
 
 ## Execution preparation
 
-Execution order updated 2026-10-08. All 12 original outcomes retain their
-stable IDs below; accepted inventory and main-route allocations are checked.
+Execution order updated 2026-10-08. All 15 stable IDs (12 original outcomes
+and three preparation rows) remain below; 13 accepted outcomes are checked.
 Their batch ownership is recorded in the
 [Phase execution order](phase-73.md#execution-order-and-evidence-allocation).
 
@@ -56,17 +56,21 @@ Stage B added SecondProvider's optional capability only. Parent-verified final
 then the four-suite accumulator 75/75: total 91/91 across five suites, zero
 failed, aborted, canceled, ignored or pending tests. The retained active
 opaque-byte property passed its minimum 50 successful cases; SBT/wrapper exited
-0 with `lock=released`. Independent E3 Step review/acceptance/commit remains
-pending; these focused results do not check additional rows.
-P73-A-03–04, B-03, C-02, P73-PREP-01–03 and C-03–04 remain open until their
-full obligations have accepted E3/E4 evidence. E4 supplier handoffs, the sole full
-Phase review, full validation, release and closure remain pending.
+0 with `lock=released`. Independent E3 review
+`p73-e3-review-20261008-01a10b3f@1` by `/root/p73_e3_branch_review` returned
+PASS. P73-BRANCHES is accepted at exact commit
+`1c96221e90eea92f73ab1a82d45275ea15436103`. This completes A-03–04, B-03,
+C-02 and PREP-01–03 using the allocations below. The
+[supplier package version 1](../spec/component-knowledge-contribution-hub-supplier-handoff.md)
+is prepared. C-03 remains pending independent handoff Step acceptance;
+C-04 remains pending the sole full Phase review, final full serialized CNCF
+validation, documentation closure and Phase release commit. Phase remains
+in progress, with no external consumer acceptance or full Phase credit.
 
 The [shared E1–E15 matrix](../spec/component-knowledge-contribution-hub.md#executable-evidence-allocation)
-links the focused-validated [pure branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubBranchSpec.scala)
+links the accepted [pure branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubBranchSpec.scala)
 and [assembled branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubAssemblyBranchSpec.scala)
-to their open row obligations. Independent acceptance is still required to check
-those rows. The [shared opaque fixture](../../src/test/scala/org/goldenport/cncf/testutil/ComponentKnowledgeFixtures.scala)
+to the accepted E3 row obligations. The [shared opaque fixture](../../src/test/scala/org/goldenport/cncf/testutil/ComponentKnowledgeFixtures.scala)
 now includes the Stage B concrete supplier capability.
 
 Main-route-first order: one provider -> assembled CNCF discovery/read -> one
@@ -77,12 +81,16 @@ keep the whole row open until all its obligations are proved, and finish
 replacement/failure/compatibility/isolation details alongside E3. Neither the
 second provider nor an exhaustive fixture matrix is an E2 entry prerequisite.
 
-- [ ] P73-PREP-01: Record run-mode-specific registration/readiness/read timing
+- [x] P73-PREP-01: Record run-mode-specific registration/readiness/read timing
       and provider/consumer ordering in the frozen design/spec, preserving Phase 70.
-- [ ] P73-PREP-02: Freeze generation scope, descriptor/read binding, duplicate
+      Evidence: accepted E3 Step, R5/R9 mode table and E5/E6/E13/E14.
+- [x] P73-PREP-02: Freeze generation scope, descriptor/read binding, duplicate
       provider disposition and complete-replacement behavior without hot swapping.
-- [ ] P73-PREP-03: Allocate one opaque provider/consumer evidence matrix between
+      Evidence: accepted E3 Step, R4/R7/R9 and E2/E9/E10/E11/E12/E15.
+- [x] P73-PREP-03: Allocate one opaque provider/consumer evidence matrix between
       pure contract checks, assembled integration and supplier handoff acceptance.
+      Evidence: accepted E3 Step and shared E1–E15 matrix, including E7–E15
+      pure/assembled allocation reused by the prepared supplier package.
 
 One attributable evidence record may satisfy multiple explicitly mapped rows.
 Existing Phase 70 acceptance is prerequisite evidence, not a fresh Phase 73
@@ -101,10 +109,13 @@ solely because acceptance is a separate work-group heading.
       inventory only; no executable-route acceptance is inherited.
 - [x] P73-A-02: Freeze separate `knowledgeDomainId` and `providerComponent` identities.
       Evidence: accepted P73-MAIN-ROUTE commit and E1 allocation above.
-- [ ] P73-A-03: Freeze the versioned descriptor, complete immutable snapshot,
+- [x] P73-A-03: Freeze the versioned descriptor, complete immutable snapshot,
       generation, provenance, discovery/read, and failure contracts.
-- [ ] P73-A-04: Register opaque failing-first fixtures with two interchangeable
+      Evidence: accepted main-route plus E3 Steps, R1–R9 and E1–E3/E7–E11.
+- [x] P73-A-04: Register opaque failing-first fixtures with two interchangeable
       providers, one active at a time, and two consumers.
+      Evidence: accepted E3 Step and E12 successive A/B assemblies, compiled
+      missing-B 67/68 red then final 91/91, retaining E6 two-consumer evidence.
 
 ## P73-B: Hub Implementation
 
@@ -113,8 +124,9 @@ solely because acceptance is a separate work-group heading.
       Evidence: accepted P73-MAIN-ROUTE commit and E1/E4 allocation above.
 - [x] P73-B-02: Preserve opaque domain records without CNCF interpretation or inference.
       Evidence: accepted P73-MAIN-ROUTE commit and E1/E3 opaque-property allocation above.
-- [ ] P73-B-03: Enforce deterministic selection, complete-snapshot replacement,
+- [x] P73-B-03: Enforce deterministic selection, complete-snapshot replacement,
       attribution, isolation, and absence/failure behavior.
+      Evidence: accepted E3 Step and E2/E4/E7–E11/E13–E15 fixed outcomes.
 - [x] P73-B-04: Integrate availability after ordinary component assembly without direct
       provider-to-consumer implementation wiring.
       Evidence: accepted P73-MAIN-ROUTE commit and E5/E6 allocation above.
@@ -123,9 +135,13 @@ solely because acceptance is a separate work-group heading.
 
 - [x] P73-C-01: Verify one provider can be consumed independently by two consumers.
       Evidence: accepted P73-MAIN-ROUTE commit and E6 two-consumer allocation above.
-- [ ] P73-C-02: Verify provider replacement can retain `knowledgeDomainId` while
+- [x] P73-C-02: Verify provider replacement can retain `knowledgeDomainId` while
       changing `providerComponent`.
+      Evidence: accepted E3 Step and E12 unchanged hub-only consumers across
+      closed A then fresh B assembly; same domain/schema, different attribution.
 - [ ] P73-C-03: Produce frozen handoffs for Textus Knowledge Editor Phase 2 and Textus
       BoK Phase 7.5 without claiming their consumer acceptance.
+      Prepared: supplier package version 1 above; independent P73-HANDOFF
+      Step review/acceptance/commit remains pending.
 - [ ] P73-C-04: Run proportionate CNCF validation, reconcile documentation, complete
       independent review, and create the Phase release commit.

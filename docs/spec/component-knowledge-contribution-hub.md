@@ -1,6 +1,6 @@
 # Component Knowledge Contribution Hub Specification
 
-Status: main-route accepted 2026-10-08; R7–R9 branch focused validation passed 2026-10-08, independent branch Step acceptance pending
+Status: main-route and R7–R9 branch Steps accepted 2026-10-08; supplier handoff prepared, handoff Step acceptance and Phase closure pending
 
 Identity: PHASE-73 / P73-MAIN-ROUTE / P73-MR-02-main-route
 
@@ -166,7 +166,7 @@ P73-MAIN-ROUTE is accepted at commit
 `p73-mr02-review-20261008-01a10b3f@1` by `/root/p73_mr02_main_route_review`.
 Parent M0 `p73-mr02-m0-amendment-20261008-01a10b3f@1` resolved
 `CPB-P73-MR02-001`; its metadata evidence passed 11/11, retaining main 23/23.
-Broader branch acceptance and Phase full validation/closure remain pending.
+Branch acceptance is recorded below; Phase full validation/closure remain pending.
 
 ### Branch focused evidence 2026-10-08
 
@@ -198,15 +198,19 @@ passed 75/75, retaining the main-route and existing lifecycle scenarios.
 Total: 91/91 across five suites, with zero failed, aborted, canceled, ignored or
 pending tests. The existing active opaque-byte property passed at least 50
 successful generated cases. SBT and wrapper exited 0 with `lock=released`.
-This evidence is focused validation, not independent E3 Step acceptance or
-full Phase validation. E3 review/acceptance/commit, E4 supplier handoffs, the sole
-full Phase review, full validation, release and closure remain pending.
+Independent E3 review `p73-e3-review-20261008-01a10b3f@1` by
+`/root/p73_e3_branch_review` returned PASS. P73-BRANCHES is accepted at exact
+commit `1c96221e90eea92f73ab1a82d45275ea15436103`. This accepts the E3
+allocation without granting full Phase validation or downstream acceptance.
+The [supplier package version 1](component-knowledge-contribution-hub-supplier-handoff.md)
+is prepared; its independent handoff Step acceptance, the sole full Phase
+review, full validation, release and closure remain pending.
 
 | Example | Rules | Checklist allocation | Public input and observable outcome / executable source |
 | --- | --- | --- | --- |
 | E1 | R1,R2,R3,R4 | P73-A-02,B-01,B-02 | [ComponentKnowledgeHubSpec](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubSpec.scala): installed nonactivating provider delivers normal complete metadata, opaque bytes and trusted instance attribution. Accepted main-route evidence. |
-| E2 | R4,R6 | P73-A-03,B-03 | Same contract suite: g1 handle passed to supplier; returned g2 fails `snapshot-binding-invalid` without latest fallback. Accepted main-route portion; broader rows remain open. |
-| E3 | R2,R4 | P73-B-02,A-03 | Same contract suite: active `Prop.forAll` over arbitrary nonempty signed byte vectors and opaque generation labels; `Test.check` minimum 50 exact-delivery cases. Accepted regression property; broader A-03 remains open. |
+| E2 | R4,R6 | P73-A-03,B-03 | Same contract suite: g1 handle passed to supplier; returned g2 fails `snapshot-binding-invalid` without latest fallback. Accepted main-route evidence, retained by accepted E3 Step. |
+| E3 | R2,R4 | P73-B-02,A-03 | Same contract suite: active `Prop.forAll` over arbitrary nonempty signed byte vectors and opaque generation labels; `Test.check` minimum 50 exact-delivery cases. Accepted regression property, retained by accepted E3 Step. |
 | E4 | R1,R3 | P73-B-01,B-03 | Same contract suite: unmatched domain gives successful absence with no read or unrelated activation. Accepted main-route portion. |
 | E5 | R1,R2,R4,R5 | P73-B-04,PREP-01 | [ComponentKnowledgeHubAssemblySpec](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubAssemblySpec.scala): ordinary standard Server discovers pre-activation and rejects early reads, then one consumer reads after coordinator success. Accepted main-route portion. |
 | E6 | R1,R4,R5 | P73-B-04,C-01,PREP-01 | Same assembled suite: all six provider/two-consumer admission orders reject during-coordinator probes, then two independent consumers receive equal full snapshots and same-owner facade reuse succeeds. Accepted main-route portion. |
@@ -227,8 +231,8 @@ full Phase review, full validation, release and closure remain pending.
 | E14 failed terminal | R4,R5,R9 | P73-B-03,PREP-01 | Same assembly branch suite: failed ordinary Server captured and rediscovered Ready handles reject reads/callback 0; equal-identity independent healthy owner activates and reads. |
 | E15 owner/consumer isolation | R3,R4,R9 | P73-B-03,PREP-02,PREP-03 | Same assembly branch suite: equal descriptor values across different owners deliver only their own bytes; foreign/null/unknown handles reject before callbacks, same-owner facades accept, and direct adversarial supplier scope rebinding gives `provider-not-installed`. |
 
-E7–E15 are active scenarios with the dated focused validation above; independent
-Step acceptance remains pending. Their domain-specific shared fixture is
+E7–E15 are accepted active scenarios with the dated focused validation,
+independent E3 PASS and exact Step commit above. Their domain-specific shared fixture is
 [ComponentKnowledgeFixtures](../../src/test/scala/org/goldenport/cncf/testutil/ComponentKnowledgeFixtures.scala).
 It owns supplier selection and initialization; consumers know only the public
 hub/domain/schema. SecondProvider is a separate ordinary activating Component
@@ -318,9 +322,11 @@ when failure cleanup already ran.
 
 The Phase execution-stage E3 branch contract is frozen above. Stage A's compiled
 missing-B red and Stage B's complete capability have the dated focused evidence
-above. Independent E3 Step review/acceptance/commit remains pending. Executable
-example E3 remains the opaque-byte property, not broader Phase closure.
+above, followed by independent E3 PASS and the exact accepted Step commit.
+Executable example E3 remains the opaque-byte property, not broader Phase closure.
 No hot swapping, automatic retry, update loop, central store, search, reasoner,
 domain mapping, persistence, remote service or downstream mutation is added.
-TKE Phase 2 and BoK Phase 7.5 handoffs remain supplier obligations of later
-closure work; this specification claims no downstream acceptance.
+The prepared [supplier package version 1](component-knowledge-contribution-hub-supplier-handoff.md)
+contains TKE Phase 2 provider and BoK Phase 7.5 consumer instructions using this
+unchanged contract. Handoff Step acceptance and final Phase closure work remain
+pending; this specification claims no downstream acceptance.

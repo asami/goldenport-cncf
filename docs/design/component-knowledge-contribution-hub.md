@@ -1,6 +1,6 @@
 # Component Knowledge Contribution Hub Design
 
-Status: main-route accepted 2026-10-08; E3 branch focused validation passed 2026-10-08, independent branch Step acceptance pending
+Status: main-route and E3 branch Steps accepted 2026-10-08; supplier handoff prepared, handoff Step acceptance and Phase closure pending
 
 Identity: PHASE-73 / P73-MAIN-ROUTE / P73-MR-02-main-route
 
@@ -12,7 +12,10 @@ The accepted [P73-A-01 reuse inventory](../journal/2026/10/2026-10-08-phase-73-k
 establishes the existing installed membership, assembly, instance attribution,
 Phase 70 activation and provenance facilities. Its M0 `instanceId` amendment
 is incorporated. The [public specification](../spec/component-knowledge-contribution-hub.md)
-owns the frozen R1–R6 contracts and E1–E6 evidence allocation.
+owns the frozen R1–R9 contracts and shared E1–E15 evidence allocation.
+The [supplier package version 1](../spec/component-knowledge-contribution-hub-supplier-handoff.md)
+applies those contracts to TKE Phase 2 provider and BoK Phase 7.5 consumer
+responsibilities without changing this design.
 
 The contribution hub fills only the missing opaque discovery/read route.
 Suppliers prepare complete immutable snapshots and own domain semantics;
@@ -130,8 +133,11 @@ compiled and passed assembled branches 16/16, then the four-suite accumulator
 75/75: 91/91 across five suites, with zero failed, aborted, canceled, ignored or
 pending tests. The existing active opaque-byte property passed its minimum 50
 successful cases; SBT/wrapper exited 0 with `lock=released`.
-This is focused branch validation. Independent E3 Step review/acceptance/commit,
-final TKE/BoK handoffs and Phase closure remain open.
+Independent E3 review `p73-e3-review-20261008-01a10b3f@1` by
+`/root/p73_e3_branch_review` returned PASS. P73-BRANCHES is accepted at
+`1c96221e90eea92f73ab1a82d45275ea15436103`. The supplier package is prepared;
+independent handoff Step acceptance and Phase closure remain open. These local
+Step results grant neither full Phase validation nor external consumer acceptance.
 No hot swapping, watcher, update loop,
 automatic retry, persistence, remote service or domain mapping is admitted.
 Broader Phase full validation and closure remain pending.
@@ -210,7 +216,7 @@ work. No additional property over metadata or duplicate acceptance driver is add
 Focused branch source allocation: [pure E7–E11 branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubBranchSpec.scala),
 [assembled E12–E15 branches](../../src/test/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeHubAssemblyBranchSpec.scala)
 and [opaque fixtures](../../src/test/scala/org/goldenport/cncf/testutil/ComponentKnowledgeFixtures.scala).
-These sources have the dated focused evidence above, with independent Step
-acceptance still pending. The canonical
+These sources have the dated focused evidence, independent E3 PASS and exact
+accepted Step commit above. The canonical
 [Hygiene journal](../journal/2026/10/2026-10-08-phase-73-hygiene-follow-up.md)
 retains the accepted separate follow-up debt; it is not branch acceptance.
