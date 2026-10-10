@@ -62,8 +62,8 @@ different relations. Neither relation implies the other.
 
 ### R7 Logical and physical identity separation
 
-Logical release identity MUST remain distinct from physical artifact identity,
-artifact digest, path, and provenance.
+Logical release identity MUST remain distinct from physical artifact
+coordinates, path, and provenance.
 
 ### R8 Publication does not activate
 
@@ -101,10 +101,10 @@ unknown-field inputs MUST follow the accepted compatibility boundary.
 
 ### R14 Packaging and publication behavior
 
-Parent/child CAR and payload packaging MUST be deterministic and retain
-post-package integrity evidence. Incomplete or invalid required membership
-MUST NOT become repository-visible. Local and remote publication,
-repeated-build, and source/archive evidence MUST remain equivalent.
+Parent/child CAR and payload packaging MUST be deterministic. Incomplete or
+invalid required membership MUST NOT become repository-visible. Local and
+remote publication, repeated-build, and source/archive payload behavior MUST
+remain equivalent; ordinary input, format, and I/O failures remain failures.
 
 ### R15 Resolution and source behavior
 
@@ -121,16 +121,18 @@ runtime-owned and deterministic. Production MUST NOT automatically resolve
 `SourceCode`, and an OperationMode MUST NOT enter Component-domain APIs or
 grant authority.
 
-### R17 Authorization and integrity behavior
+### R17 Authorization and path-safety behavior
 
-Authorization, parent/release evidence, digest, and signature MUST be checked
-before content exposure. Traversal, symlink escape, archive ambiguity, corrupt
-cache, and unauthorized sources MUST reject safely. Diagnostics MUST NOT leak
+Explicit role and repository grants, parent/release membership, availability,
+authorization, resource identity, and artifact coordinate/repository agreement
+MUST be checked before content exposure. Traversal, symlink escape, archive
+ambiguity, and unauthorized sources MUST reject safely. Supplied integrity
+state remains independent descriptive metadata. Diagnostics MUST NOT leak
 content, credentials, host paths, or secrets.
 
 ### R18 Lifecycle and observability behavior
 
-Shared immutable artifacts, in-flight resolution, refresh, and invalidation
+Shared resource objects, in-flight resolution, refresh, and invalidation
 MUST have deterministic concurrent ownership. Release, unload, shutdown,
 refresh, ordinary waiter cancellation, and interruption races MUST preserve
 their actual terminal outcomes. Observability data MUST be bounded,

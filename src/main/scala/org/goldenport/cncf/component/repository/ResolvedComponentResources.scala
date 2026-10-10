@@ -10,7 +10,8 @@ import org.goldenport.cncf.component._
  * it neither discovers sources nor grants runtime or deployment authority.
  *
  * @since   Aug. 21, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentResourceSourceKind(val precedence: Int) {
@@ -55,7 +56,6 @@ final case class ComponentResourceProvenance(
   sourceKind: ComponentResourceSourceKind,
   repository: String,
   artifactCoordinate: String,
-  sha256: String,
   normalizedRelativePath: String,
   logicalSource: String,
   physicalSource: String,
@@ -96,7 +96,6 @@ final case class ResolvedComponentResources(
 )
 
 object ResolvedComponentResources {
-  private val _sha256_pattern = "[0-9a-f]{64}".r
   private val _artifact_coordinate_pattern = "[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._-]*".r
   private val _source_pattern = "[A-Za-z][A-Za-z0-9+._-]*:[A-Za-z0-9][A-Za-z0-9+._/:=-]*".r
   private val _role_pattern = "[A-Za-z][A-Za-z0-9._-]*".r
@@ -314,7 +313,7 @@ object ResolvedComponentResources {
     val provenance = candidate.provenance
     Vector(
       identity.componentId.name, identity.logicalRelease, identity.parentComponentId.map(_.name).getOrElse(""), identity.childRole, identity.logicalResource,
-      provenance.repository, provenance.artifactCoordinate, provenance.sha256, provenance.normalizedRelativePath, provenance.logicalSource,
+      provenance.repository, provenance.artifactCoordinate, provenance.normalizedRelativePath, provenance.logicalSource,
       provenance.physicalSource, provenance.resolutionStep, provenance.access, provenance.license, candidate.availability.toString,
       candidate.integrity.toString, candidate.authorization.toString, provenance.externalDeploymentRequired.toString
     ).mkString("\u0000")
@@ -333,7 +332,6 @@ object ResolvedComponentResources {
       sourcekind,
       car.artifact.repository,
       car.artifact.coordinate,
-      car.artifact.sha256,
       car.artifact.physicalPath,
       car.provenance.logicalSource,
       car.provenance.physicalSource,
@@ -357,7 +355,6 @@ object ResolvedComponentResources {
     for {
       _ <- _repository(provenance.repository, s"$context.repository")
       _ <- _artifact_coordinate(provenance.artifactCoordinate, s"$context.artifactCoordinate")
-      _ <- _sha256(provenance.sha256, s"$context.sha256")
       _ <- _safe_path(provenance.normalizedRelativePath, s"$context.normalizedRelativePath")
       _ <- _source(provenance.logicalSource, s"$context.logicalSource")
       _ <- _source(provenance.physicalSource, s"$context.physicalSource")
@@ -372,7 +369,6 @@ object ResolvedComponentResources {
     for {
       _ <- Either.cond(car.classification == classification, (), s"$context.classification must be $classification")
       _ <- _artifact_coordinate(car.artifact.coordinate, s"$context.artifact.coordinate")
-      _ <- _sha256(car.artifact.sha256, s"$context.artifact.sha256")
       _ <- _repository(car.artifact.repository, s"$context.artifact.repository")
       _ <- _safe_path(car.artifact.physicalPath, s"$context.artifact.physicalPath")
       _ <- _source(car.provenance.logicalSource, s"$context.provenance.logicalSource")
@@ -418,9 +414,6 @@ object ResolvedComponentResources {
 
   private def _artifact_coordinate(value: String, context: String): Either[String, Unit] =
     Either.cond(_artifact_coordinate_pattern.matches(value), (), s"$context must be a three-part artifact coordinate")
-
-  private def _sha256(value: String, context: String): Either[String, Unit] =
-    Either.cond(_sha256_pattern.matches(value), (), s"$context must be a lowercase SHA-256 digest")
 
   private def _source(value: String, context: String): Either[String, Unit] =
     Either.cond(_source_pattern.matches(value), (), s"$context must be safe provenance evidence")

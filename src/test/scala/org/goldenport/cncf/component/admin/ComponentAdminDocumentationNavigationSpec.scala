@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * package-private, value-only Component Admin documentation navigation.
  *
  * @since   Aug. 28, 2026
- * @version Aug. 28, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentAdminDocumentationNavigationSpec
@@ -263,7 +263,6 @@ final class ComponentAdminDocumentationNavigationSpec
         sourceKind = sourcekind,
         repository = "https://repo.example.invalid/phase605",
         artifactCoordinate = coordinate,
-        sha256 = _digest,
         normalizedRelativePath = s"private/phase58/${definition.logicalpath}",
         logicalSource = logicalresource,
         physicalSource = s"phase605:${definition.key}",

@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * evidence; this specification does not invoke a resolver or read content.
  *
  * @since   Aug. 26, 2026
- * @version Aug. 26, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentDevelopmentContextSpec
@@ -197,7 +197,6 @@ final class ComponentDevelopmentContextSpec
         sourceKind = ComponentResourceSourceKind.ExpandedCar,
         repository = "https://repo.example.invalid/private-phase58",
         artifactCoordinate = "org.goldenport.cncf:development-context:0.1.0",
-        sha256 = _digest,
         normalizedRelativePath = s"private/phase58/${category.toString.toLowerCase}.md",
         logicalSource = s"urn:cncf:source:phase594:development-context:${category.toString.toLowerCase}",
         physicalSource = s"expanded-car:private-phase58-${category.toString.toLowerCase}",
@@ -242,7 +241,7 @@ final class ComponentDevelopmentContextSpec
         logicalSource = resource.provenance.logicalSource,
         resolutionStep = resource.provenance.resolutionStep,
         externalDeploymentRequired = resource.provenance.externalDeploymentRequired,
-        matchingDigest = resource.provenance.sha256
+        matchingDigest = _digest
       )
     )
     ResolvedComponentKnowledgeEntry(entry, resource)

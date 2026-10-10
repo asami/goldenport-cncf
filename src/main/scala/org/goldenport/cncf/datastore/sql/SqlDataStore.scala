@@ -12,7 +12,6 @@ import org.goldenport.text.Presentable
 import org.goldenport.record.Record
 import org.goldenport.record.RecordKeyNaming
 import org.goldenport.record.RecordPresentable
-import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{
   DataStore,
@@ -78,7 +77,8 @@ import org.simplemodeling.model.datatype.EntityRevision
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- * @version Sep. 29, 2026
+ *  version Sep. 29, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -91,7 +91,6 @@ class SqlDataStore(
     with EntityVersionedMutationDataStore
     with EntityConditionalUpdateDataStore {
   import DataStore.*
-  private val _record_decoder = new RecordDecoder()
   @volatile private var _managed_resource: Option[ManagedSqlDataStoreResource] = None
   @volatile private var _managed_borrow_resource: Option[ManagedSqlDataStoreResource] = None
   @volatile private var _managed_borrow_admission: Option[() => Consequence[Unit]] = None
@@ -1751,9 +1750,9 @@ class SqlDataStore(
       case s: String =>
         val trimmed = s.trim
         if (trimmed.startsWith("{") && trimmed.endsWith("}"))
-          _record_decoder.json(trimmed).toOption.getOrElse(s)
+          parse(trimmed).toOption.map(json => _json_to_value(json, number => number.toBigDecimal.getOrElse(BigDecimal(number.toDouble)))).getOrElse(s)
         else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
-          parse(trimmed).toOption.map(_json_to_value).getOrElse(s)
+          parse(trimmed).toOption.map(json => _json_to_value(json, number => number.toLong.getOrElse(number.toDouble))).getOrElse(s)
         else
           s
       case other =>
@@ -1762,15 +1761,16 @@ class SqlDataStore(
   }
 
   private def _json_to_value(
-    json: Json
+    json: Json,
+    numberdecoder: io.circe.JsonNumber => Any
   ): Any =
     json.fold(
       jsonNull = null,
       jsonBoolean = identity,
-      jsonNumber = n => n.toLong.getOrElse(n.toDouble),
+      jsonNumber = numberdecoder,
       jsonString = identity,
-      jsonArray = _.map(_json_to_value).toVector,
-      jsonObject = obj => Record.dataAuto(obj.toVector.map { case (k, v) => k -> _json_to_value(v) }*)
+      jsonArray = _.map(value => _json_to_value(value, numberdecoder)).toVector,
+      jsonObject = obj => Record.createFull(obj.toVector.map { case (k, v) => k -> _json_to_value(v, numberdecoder) })
     )
 
   private def _table_exists(
@@ -2375,7 +2375,7 @@ class SqlDataStore(
       val value = _decode_column_value(rs.getObject(i))
       name -> value
     }
-    Record.create(values)
+    Record.createFull(values.filterNot { case (_, value) => java.util.Objects.isNull(value) })
   }
 
   private def _column_name(name: String): String =

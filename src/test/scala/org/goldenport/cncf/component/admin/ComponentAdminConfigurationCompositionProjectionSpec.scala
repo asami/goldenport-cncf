@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * already-resolved resource composition.
  *
  * @since   Aug. 28, 2026
- * @version Aug. 28, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentAdminConfigurationCompositionProjectionSpec
@@ -249,7 +249,6 @@ final class ComponentAdminConfigurationCompositionProjectionSpec
         sourcekind,
         "https://repository.example.invalid/cncf/adm",
         s"org.example:adm-${role.toLowerCase}-car:1.0.0",
-        "0000000000000000000000000000000000000000000000000000000000000000",
         s"expanded/${role.toLowerCase}.car",
         "composition-registry:adm",
         physicalsource,

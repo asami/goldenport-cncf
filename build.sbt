@@ -1,7 +1,6 @@
 import sbt.TestFrameworks
 import sbt.Tests
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.util.Base64
 import org.goldenport.cncf.phase51.build.{CncfGenerationBuildContract, CncfGenerationInputs}
 
@@ -18,7 +17,6 @@ lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime se
 lazy val cncfRuntimeClasspathFile = taskKey[File]("Write the local CNCF runtime classpath consumed by cncf --runtime-dev-dir.")
 lazy val resolveInformationCmlGenerationInputs = taskKey[CncfGenerationInputs]("Resolve the exact Cozy generator, CNCF target, and runtime descriptor for Information CML generation.")
 lazy val generateInformationCmlModel = taskKey[Seq[File]]("Generate CNCF Information vocabulary model from CML.")
-lazy val verifyInformationCmlGenerationDeterminism = taskKey[Unit]("Verify repeated Information CML generation emits the same Scala file set and bytes.")
 lazy val copyTextusRuntimeCatalog = taskKey[File]("Copy the checked-in Textus runtime catalog into the warehouse repository.")
 lazy val publishTextusRuntimeCatalog = taskKey[File]("Publish Textus runtime catalog metadata into the warehouse repository.")
 
@@ -212,7 +210,6 @@ def cncfRuntimeDescriptorText(
     "  schemaVersion: cncf.component-style-catalog-carrier.v1",
     "  resource: META-INF/cncf/component-style-catalog.json",
     "  encoding: base64",
-    s"  sha256: ${sha256Bytes(componentStyleCatalog)}",
     "  bytes: \"" + Base64.getEncoder.encodeToString(componentStyleCatalog) + "\""
   ).mkString("\n")
   s"""schemaVersion: 1
@@ -225,9 +222,6 @@ def cncfRuntimeDescriptorText(
      |$componentstylecatalogblock
      |""".stripMargin
 }
-
-def sha256Bytes(bytes: Array[Byte]): String =
-  MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
 def informationCmlProcessLogger(log: sbt.util.Logger): scala.sys.process.ProcessLogger =
   scala.sys.process.ProcessLogger(
@@ -255,7 +249,7 @@ def runInformationCmlGeneration(
     identity
   )
   log.info(
-    s"Generating ${inputs.sourceIdentity}@${inputs.sourceSha256} with Cozy ${inputs.cozyGeneratorVersion} for CNCF ${inputs.cncfTargetVersion} using ${inputs.runtimeDescriptor.getAbsolutePath}"
+    s"Generating ${inputs.sourceIdentity} with Cozy ${inputs.cozyGeneratorVersion} for CNCF ${inputs.cncfTargetVersion} using ${inputs.runtimeDescriptor.getAbsolutePath}"
   )
   val processlogger = informationCmlProcessLogger(log)
   val exitcode = scala.sys.process.Process(command, baseDirectory).!(processlogger)
@@ -538,31 +532,6 @@ lazy val root = project
       )
     },
 
-    verifyInformationCmlGenerationDeterminism := {
-      val outputdir = target.value / "cncf-information-cml-determinism"
-      val generationinputs = resolveInformationCmlGenerationInputs.value
-      val log = streams.value.log
-      runInformationCmlGeneration(generationinputs, outputdir, baseDirectory.value, log)
-      val coldsnapshot =
-        CncfGenerationBuildContract.snapshot(outputdir).fold(
-          errors => sys.error(errors.mkString("Cold Information CML snapshot failed: ", " ", "")),
-          identity
-        )
-      runInformationCmlGeneration(generationinputs, outputdir, baseDirectory.value, log)
-      val repeatedsnapshot =
-        CncfGenerationBuildContract.snapshot(outputdir).fold(
-          errors => sys.error(errors.mkString("Repeated Information CML snapshot failed: ", " ", "")),
-          identity
-        )
-      if (repeatedsnapshot != coldsnapshot)
-        sys.error(
-          s"Information CML generation is not deterministic. Cold=$coldsnapshot repeated=$repeatedsnapshot"
-        )
-      log.info(
-        s"Information CML generation determinism verified for ${coldsnapshot.scalaArtifacts.size} Scala files and provenance ${coldsnapshot.provenanceSha256}."
-      )
-    },
-
     Compile / resourceGenerators += Def.task {
       Seq(generateCncfRuntimeDescriptor.value)
     }.taskValue,
@@ -572,8 +541,6 @@ lazy val root = project
     }.taskValue,
 
     Compile / sourceGenerators += generateInformationCmlModel.taskValue,
-
-    Test / test := (Test / test).dependsOn(verifyInformationCmlGenerationDeterminism).value,
 
     exportTextusRuntimeCatalog := {
       val source = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"

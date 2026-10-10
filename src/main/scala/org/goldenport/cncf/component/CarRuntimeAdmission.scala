@@ -1,8 +1,6 @@
 package org.goldenport.cncf.component
 
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
-import scala.jdk.CollectionConverters._
 
 import io.circe.{ACursor, HCursor, Json}
 import io.circe.parser.parse
@@ -15,11 +13,12 @@ import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
  * CNCF-owned admission of packaged CAR runtime evidence.
  *
  * The runtime deliberately does not load Cozy or interpret generation
- * compatibility/provenance. All regular CAR files are integrity-protected as
- * opaque bytes; ABI and CNCF runtime compatibility are validated separately.
+ * compatibility/provenance. Admission validates the canonical CAR coordinate,
+ * supported ABI export and CNCF runtime range.
  *
  * @since   Jul. 28, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] object CarRuntimeAdmission {
@@ -33,11 +32,6 @@ private[component] object CarRuntimeAdmission {
     maximum: Option[String],
     excluded: Vector[String],
     tested: Vector[String]
-  )
-
-  private final case class IntegrityEntry(
-    path: String,
-    sha256: String
   )
 
   private final case class CanonicalCoordinate(
@@ -81,8 +75,6 @@ private[component] object CarRuntimeAdmission {
       _ <- _validate_coordinate(manifest.hcursor, coordinate)
       range <- _runtime_range(manifest.hcursor)
       _ <- _validate_runtime_range(range, CncfVersion.current)
-      entries <- _integrity_entries(manifest.hcursor)
-      _ <- _validate_integrity(extracted.root, entries)
     } yield ()
   }
 
@@ -201,86 +193,6 @@ private[component] object CarRuntimeAdmission {
       Left(s"CNCF runtime ${current} is excluded by the CAR runtime range")
     else
       Right(())
-
-  private def _integrity_entries(
-    cursor: HCursor
-  ): Either[String, Vector[IntegrityEntry]] = {
-    val integrity = cursor.downField("integrity")
-    for {
-      algorithm <- _require_string(
-        integrity,
-        "algorithm",
-        "CAR runtime manifest integrity"
-      )
-      _ <- _require_equal(
-        algorithm,
-        "SHA-256",
-        "CAR runtime manifest integrity.algorithm"
-      )
-      values <- integrity.downField("entries").as[Vector[Json]].left.map { error =>
-        s"CAR runtime manifest integrity.entries is invalid: ${error.message}"
-      }
-      entries <- values.zipWithIndex.foldLeft(
-        Right(Vector.empty): Either[String, Vector[IntegrityEntry]]
-      ) { case (result, (value, index)) =>
-        for {
-          accumulated <- result
-          path <- _require_string(
-            value.hcursor,
-            "path",
-            s"CAR integrity entry ${index}"
-          )
-          digest <- _require_string(
-            value.hcursor,
-            "sha256",
-            s"CAR integrity entry ${index}"
-          )
-          _ <-
-            if (_is_safe_relative_path(path)) Right(())
-            else Left(s"CAR integrity entry has unsafe path: ${path}")
-          _ <-
-            if (digest.matches("[0-9a-f]{64}")) Right(())
-            else Left(s"CAR integrity entry has invalid SHA-256: ${path}")
-        } yield accumulated :+ IntegrityEntry(path, digest)
-      }
-      duplicates = entries.groupBy(_.path).collect {
-        case (path, xs) if xs.size > 1 => path
-      }.toVector.sorted
-      _ <-
-        if (duplicates.isEmpty) Right(())
-        else Left(
-          s"CAR runtime manifest has duplicate integrity paths: ${duplicates.mkString(", ")}"
-        )
-    } yield entries.sortBy(_.path)
-  }
-
-  private def _validate_integrity(
-    root: Path,
-    entries: Vector[IntegrityEntry]
-  ): Either[String, Unit] = {
-    val files = _regular_files(root).filterNot(_._1 == MANIFEST_FILE)
-    val expectedpaths = entries.map(_.path)
-    val actualpaths = files.map(_._1)
-    if (expectedpaths != actualpaths) {
-      val missing = actualpaths.toSet.diff(expectedpaths.toSet).toVector.sorted
-      val unexpected = expectedpaths.toSet.diff(actualpaths.toSet).toVector.sorted
-      Left(
-        s"CAR integrity file set mismatch: unlisted=${missing.mkString(",")}, missing=${unexpected.mkString(",")}"
-      )
-    } else {
-      val actualfiles = files.toMap
-      entries.collectFirst {
-        case entry
-            if _sha256(actualfiles(entry.path)) != entry.sha256 =>
-          entry
-      } match {
-        case Some(entry) =>
-          Left(s"CAR integrity digest mismatch: ${entry.path}")
-        case None =>
-          Right(())
-      }
-    }
-  }
 
   private def _validate_abi(
     cursor: HCursor,
@@ -408,42 +320,5 @@ private[component] object CarRuntimeAdmission {
   ): Either[String, Unit] =
     if (actual == expected) Right(())
     else Left(s"${owner} mismatch: expected=${expected}, actual=${actual}")
-
-  private def _regular_files(root: Path): Vector[(String, Path)] = {
-    val stream = Files.walk(root)
-    try {
-      stream.iterator().asScala.toVector.collect {
-        case path if Files.isRegularFile(path) =>
-          root.relativize(path).toString.replace('\\', '/') -> path
-      }.sortBy(_._1)
-    } finally {
-      stream.close()
-    }
-  }
-
-  private def _is_safe_relative_path(path: String): Boolean = {
-    val parts = path.split("/", -1).toVector
-    path.nonEmpty &&
-      !path.startsWith("/") &&
-      !path.contains('\\') &&
-      parts.forall(part => part.nonEmpty && part != "." && part != "..")
-  }
-
-  private def _sha256(path: Path): String = {
-    val digest = MessageDigest.getInstance("SHA-256")
-    val input = Files.newInputStream(path)
-    try {
-      val buffer = new Array[Byte](8192)
-      var count = input.read(buffer)
-      while (count >= 0) {
-        if (count > 0)
-          digest.update(buffer, 0, count)
-        count = input.read(buffer)
-      }
-    } finally {
-      input.close()
-    }
-    digest.digest().map(byte => f"${byte & 0xff}%02x").mkString
-  }
 
 }

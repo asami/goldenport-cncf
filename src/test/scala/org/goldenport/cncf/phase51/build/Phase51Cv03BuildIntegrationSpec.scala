@@ -7,16 +7,19 @@ import org.scalatest.wordspec.AnyWordSpec
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import java.util.Comparator
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext => ScalaExecutionContext, Future}
 
+/*
+ * @since   Jul. 28, 2026
+ * @version Oct.  9, 2026
+ */
 final class Phase51Cv03BuildIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private implicit val _execution_context: ExecutionContext = ExecutionContext.global
+  private implicit val _execution_context: ScalaExecutionContext = ScalaExecutionContext.global
 
   "Phase 51 CV-03 CNCF generation build integration" should {
-    "resolve one exact ambient-free generator, target, descriptor, and source snapshot" in {
+    "resolve exact selected generator, target, descriptor, source path, and identity" in {
       Given("the authoritative build versions, generated runtime descriptor, and project CML source")
       _with_temp_dir("cncf-phase51-cv03-resolve") { directory =>
         val descriptor = _write(directory.resolve("runtime.yaml"), "version: 0.5.2-SNAPSHOT\n")
@@ -48,10 +51,8 @@ final class Phase51Cv03BuildIntegrationSpec extends AnyWordSpec with Matchers wi
           "0.3.1-SNAPSHOT",
           "0.5.2-SNAPSHOT",
           descriptor.toAbsolutePath.normalize().toFile,
-          _sha256(descriptor),
           source.toAbsolutePath.normalize().toFile,
-          "src/main/cozy/information.cml",
-          _sha256(source)
+          "src/main/cozy/information.cml"
         ))
         propertyresult.passed shouldBe true
       }
@@ -120,8 +121,6 @@ final class Phase51Cv03BuildIntegrationSpec extends AnyWordSpec with Matchers wi
           "0.3.1-SNAPSHOT",
           "--cncf-runtime-descriptor",
           descriptor.toAbsolutePath.normalize().toString,
-          "--cncf-runtime-descriptor-sha256",
-          _sha256(descriptor),
           "--generation-source-identity",
           "src/main/cozy/information.cml",
           s"--save=${output.toAbsolutePath.normalize()}"
@@ -130,7 +129,7 @@ final class Phase51Cv03BuildIntegrationSpec extends AnyWordSpec with Matchers wi
     }
 
     "produce identical cold, repeated, and concurrent invocation plans" in {
-      Given("one immutable generation input set and initially absent output")
+      Given("one resolved generation input set and initially absent output")
       _with_temp_dir("cncf-phase51-cv03-repeat") { directory =>
         val descriptor = _write(directory.resolve("runtime.yaml"), "version: 0.5.2-SNAPSHOT\n")
         val source = _write(directory.resolve("information.cml"), "# COMPONENT\n")
@@ -189,14 +188,10 @@ final class Phase51Cv03BuildIntegrationSpec extends AnyWordSpec with Matchers wi
     path.toAbsolutePath.normalize()
   }
 
-  private def _sha256(path: Path): String =
-    MessageDigest.getInstance("SHA-256").
-      digest(Files.readAllBytes(path)).
-      map(byte => f"${byte & 0xff}%02x").
-      mkString
-
   private def _with_temp_dir[A](prefix: String)(body: Path => A): A = {
-    val directory = Files.createTempDirectory(prefix)
+    val workroot = Path.of("target/phase51-cv03-build-integration-spec/work").toAbsolutePath.normalize()
+    Files.createDirectories(workroot)
+    val directory = Files.createTempDirectory(workroot, prefix)
     try body(directory)
     finally {
       val stream = Files.walk(directory)

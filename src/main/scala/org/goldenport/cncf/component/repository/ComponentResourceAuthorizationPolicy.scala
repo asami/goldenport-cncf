@@ -1,15 +1,14 @@
 package org.goldenport.cncf.component.repository
 
-import java.security.MessageDigest
-
 import org.goldenport.Consequence
 import org.goldenport.cncf.component._
 
 /*
- * Authorization and integrity policy for resolved component resources.
+ * Explicit authorization and archive-safety policy for resolved component resources.
  *
  * @since   Aug. 21, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentResourceAccessDisposition:
@@ -20,11 +19,8 @@ enum ComponentResourceAccessDiagnosticKind:
   case Unauthorized
   case ParentMismatch
   case ReleaseMismatch
-  case DigestMismatch
-  case SignatureMismatch
   case UnsafeArchive
   case AmbiguousArchive
-  case CorruptCache
   case AuthorityViolation
   case Unavailable
 
@@ -48,13 +44,9 @@ final case class ComponentResourceArchiveEntry(
 final case class ComponentResourceAccessRequest(
   resource: ResolvedComponentResource,
   content: Array[Byte],
-  signature: String,
-  signingKeyId: String,
   grantedRoles: Set[String],
   admittedRepositories: Set[String],
-  trustedSignaturesByKeyId: Map[String, Set[String]],
-  archiveEntries: Vector[ComponentResourceArchiveEntry],
-  managedCacheVerified: Boolean
+  archiveEntries: Vector[ComponentResourceArchiveEntry]
 )
 
 object ComponentResourceAuthorizationPolicy:
@@ -90,8 +82,6 @@ object ComponentResourceAuthorizationPolicy:
         _reject_(ComponentResourceAccessDiagnosticKind.AuthorityViolation)
       else _archive_problem(request.archiveEntries) match
         case Some(problem) => _reject_(problem)
-        case None if resource.provenance.sourceKind == ComponentResourceSourceKind.ManagedCache && !request.managedCacheVerified =>
-          _reject_(ComponentResourceAccessDiagnosticKind.CorruptCache)
         case None =>
           _authorize_composition(composition, request) match
             case Some(result) => result
@@ -160,8 +150,6 @@ object ComponentResourceAuthorizationPolicy:
       _rejected_(ComponentResourceAccessDiagnosticKind.Unavailable)
     else if resource.authorization != ComponentResourceAuthorization.Granted then
       _restricted_
-    else if resource.integrity != ComponentResourceIntegrity.Verified then
-      _rejected_(ComponentResourceAccessDiagnosticKind.DigestMismatch)
     else
       val carmatch =
         provenance.artifactCoordinate == artifact.coordinate &&
@@ -175,22 +163,7 @@ object ComponentResourceAuthorizationPolicy:
       else if !admitted then
         _restricted_
       else
-        val digest = _sha256(request.content)
-        val digestmatch = digest == provenance.sha256 && digest == artifact.sha256
-        val trustedattestation =
-          request.trustedSignaturesByKeyId
-            .get(request.signingKeyId)
-            .exists(_.contains(request.signature))
-        val signaturematch =
-          request.signature == artifact.signature &&
-            trustedattestation
-
-        if !digestmatch then
-          _rejected_(ComponentResourceAccessDiagnosticKind.DigestMismatch)
-        else if !signaturematch then
-          _rejected_(ComponentResourceAccessDiagnosticKind.SignatureMismatch)
-        else
-          None
+        None
 
   private def _has_authority(resource: ResolvedComponentResource): Boolean =
     resource.activationAuthority ||
@@ -223,10 +196,3 @@ object ComponentResourceAuthorizationPolicy:
 
   private def _normalize_path(path: String): String =
     path.split("/", -1).iterator.filter(segment => segment.nonEmpty && segment != ".").mkString("/")
-
-  private def _sha256(content: Array[Byte]): String =
-    MessageDigest
-      .getInstance("SHA-256")
-      .digest(content)
-      .map(byte => f"${byte & 0xff}%02x")
-      .mkString

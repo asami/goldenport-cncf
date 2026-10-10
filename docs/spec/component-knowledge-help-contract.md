@@ -73,8 +73,10 @@ fail closed through `Consequence`.
 For an admitted pair, `accessC` shall delegate to
 `ResolvedComponentResourcesConsumerProjection.access` with
 `ComponentResourceConsumer.DirectAi`. The existing authorization policy shall
-remain responsible for restricted/unavailable/unverified evidence, policy
-rejection, bytes, digest, archive, and cache checks. The contract shall not
+remain responsible for explicit role/repository grants, parent/release
+membership, availability, authorization, coordinate/repository agreement,
+safe archive paths, content bytes, policy refusal, and non-disclosure. Supplied
+integrity state remains independent descriptive metadata. The contract shall not
 scan, fetch, mount, cache, re-resolve, fall back, inspect or transform hostile
 bytes, or grant activation, operation, MCP, disclosure, deployment, or Admin
 authority.

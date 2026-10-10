@@ -28,10 +28,10 @@ composition MUST NOT duplicate that identity or create another identity model.
 
 ### R2 Required-release completeness
 
-Parent/child CAR and payload packaging MUST be deterministic and retain
-post-package integrity evidence. An incomplete or invalid required membership
-MUST NOT become repository-visible. Publication completeness MUST NOT imply
-runtime activation.
+Parent/child CAR and payload packaging MUST be deterministic. An incomplete
+or invalid required membership MUST NOT become repository-visible. Ordinary
+input, format, and I/O failures remain failures. Publication completeness MUST
+NOT imply runtime activation.
 
 ### R3 Deterministic resolution and dual-form provenance
 
@@ -65,20 +65,22 @@ deterministic. The admitted resource policy is:
 
 An OperationMode MUST NOT enter Component-domain APIs or grant authority.
 
-### R6 Authorization, integrity, path safety, and non-disclosure
+### R6 Authorization, path safety, and non-disclosure
 
-Authorization, parent/release evidence, digest, signature, and path safety
-MUST be established before content exposure. Traversal, symlink escape,
-archive ambiguity, corrupt cache, and unauthorized source inputs MUST reject
-safely. Inventory visibility and authorized content access MUST remain
-distinct; restricted content and diagnostics MUST NOT reveal content,
-credentials, host paths, secrets, or other protected material. Membership or a
-registry entry MUST NOT grant authority.
+Explicit role and repository grants, parent/release membership, availability,
+authorization, resource identity, artifact coordinate/repository agreement,
+and safe archive paths MUST be established before content exposure. Traversal,
+symlink escape, archive ambiguity, and unauthorized source inputs MUST reject
+safely. Supplied integrity state remains independent descriptive metadata.
+Inventory visibility and authorized content access MUST remain distinct;
+restricted content and diagnostics MUST NOT reveal content, credentials, host
+paths, secrets, or other protected material. Membership or a registry entry
+MUST NOT grant authority.
 
-### R7 Immutable artifacts, cache, lifecycle, and concurrency
+### R7 Resource objects, cache, lifecycle, and concurrency
 
-Resource artifacts MUST be immutable release evidence. Shared artifacts,
-in-flight resolution, refresh, invalidation, cache ownership, release, unload,
+Shared resource objects, in-flight resolution, refresh, invalidation, cache
+ownership, release, unload,
 shutdown, waiter cancellation, and interruption MUST have deterministic
 concurrent ownership and preserve actual terminal outcomes. Observability MUST
 be bounded, non-sensitive, and isolate unrelated release failures.

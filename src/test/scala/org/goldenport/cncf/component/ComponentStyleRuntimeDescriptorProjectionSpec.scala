@@ -1,7 +1,6 @@
 package org.goldenport.cncf.component
 
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.util.Base64
 import scala.util.Using
 import org.scalatest.GivenWhenThen
@@ -10,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 31, 2026
- * @version Jul. 31, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentStyleRuntimeDescriptorProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -25,15 +24,13 @@ final class ComponentStyleRuntimeDescriptorProjectionSpec extends AnyWordSpec wi
       val schema = _field(carrier, "schemaVersion")
       val resource = _field(carrier, "resource")
       val encoding = _field(carrier, "encoding")
-      val digest = _field(carrier, "sha256")
       val payload = _field(carrier, "bytes").stripPrefix("\"").stripSuffix("\"")
       val decoded = Base64.getDecoder.decode(payload)
 
-      Then("resource identity, digest, and exact bytes agree with the packaged catalog")
+      Then("schema, resource identity, encoding, and exact bytes agree with the packaged catalog")
       schema shouldBe "cncf.component-style-catalog-carrier.v1"
       resource shouldBe ComponentStyleCatalog.RESOURCE_PATH
       encoding shouldBe "base64"
-      digest shouldBe _sha256(catalog)
       decoded shouldBe catalog
     }
   }
@@ -48,7 +45,4 @@ final class ComponentStyleRuntimeDescriptorProjectionSpec extends AnyWordSpec wi
 
   private def _field(text: String, key: String): String =
     text.linesIterator.find(_.trim.startsWith(s"$key:")).map(_.trim.stripPrefix(s"$key:").trim).getOrElse(fail(s"runtime descriptor field is missing: $key"))
-
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 }

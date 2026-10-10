@@ -2,7 +2,6 @@ package org.goldenport.cncf.component
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import java.util.Comparator
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
@@ -45,7 +44,8 @@ import org.scalacheck.{Gen, Prop, Test}
 /*
  * @since   Jul. 22, 2026
  *  version Aug. 11, 2026
- * @version Sep.  7, 2026
+ *  version Sep.  7, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationBootstrapSpec
@@ -871,29 +871,20 @@ final class ComponentInitializationBootstrapSpec
       StandardCharsets.UTF_8
     )
     val evidence = Vector(
-      ("target/cncf.d/runtime-classpath.txt", _sha256(classpath), Some(_sha256("project:target/classes".getBytes(StandardCharsets.UTF_8)))),
-      ("target/cncf.d/component-descriptor.json", _sha256(descriptor), None),
-      ("src/main/car/abi-manifest.json", _sha256(abi), None)
+      "target/cncf.d/runtime-classpath.txt",
+      "target/cncf.d/component-descriptor.json",
+      "src/main/car/abi-manifest.json"
     )
-    val entries = evidence.map { case (path, digest, logical) =>
-      val logicalfield = logical.map(value => s"\"logicalSha256\":\"$value\",").getOrElse("")
-      s"{$logicalfield\"path\":\"$path\",\"sha256\":\"$digest\"}"
+    val entries = evidence.map { path =>
+      s"""{"path":"$path"}"""
     }.mkString("[", ",", "]")
-    val evidencedigest = _sha256(evidence.map { case (path, digest, logical) =>
-      s"$path\t$digest\t${logical.getOrElse("")}"
-    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
     val artifact = "test-repository-parameter-probe"
     Files.writeString(
       cncfdir.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$artifact","version":"$release","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$artifact","version":"$release","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries}""",
       StandardCharsets.UTF_8
     )
   }
-
-  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
-
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
   private final class ParameterProbeComponent extends Component {
     var limit: Option[Int] = None

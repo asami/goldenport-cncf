@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * (Phase 59.2 / DOC-02 / DOC-02A).
  *
  * @since   Aug. 24, 2026
- * @version Aug. 24, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentKnowledgeManifestSpec
@@ -188,16 +188,10 @@ final class ComponentKnowledgeManifestSpec
   }
 
   "DOC02-AC-03 supplied Phase 58 binding without another resolver or identity input" should {
-    "accept matching supplied evidence and reject digest or provenance mismatch" in {
+    "accept matching supplied evidence and reject provenance mismatch" in {
       Given("only supplied Phase 58 resolved resources and a candidate with their safe identities and evidence")
       val supplied = _resolved_resources
       val candidate = _manifest
-      val digestmismatch = candidate.copy(resources = candidate.resources.map { entry =>
-        if (entry.binding.logicalIdentity.componentId == _documentation_id)
-          entry.copy(sha256 = _other_digest, provenance = entry.provenance.copy(matchingDigest = _other_digest))
-        else
-          entry
-      })
       val provenancemismatch = candidate.copy(resources = candidate.resources.map { entry =>
         if (entry.binding.logicalIdentity.componentId == _documentation_id)
           entry.copy(provenance = entry.provenance.copy(logicalSource = "component-registry:other"))
@@ -207,12 +201,10 @@ final class ComponentKnowledgeManifestSpec
 
       When("the creation adapter binds each candidate entry against that supplied value alone")
       val accepted = ComponentKnowledgeManifest.createC(suppliedResources = supplied, candidate = candidate).toOption
-      val digestrejected = ComponentKnowledgeManifest.createC(suppliedResources = supplied, candidate = digestmismatch).toOption
       val provenancerejected = ComponentKnowledgeManifest.createC(suppliedResources = supplied, candidate = provenancemismatch).toOption
 
-      Then("matching evidence is accepted, mismatches are rejected, and the adapter call has no resolver or replacement identity input")
+      Then("matching evidence is accepted, the provenance mismatch is rejected, and the adapter call has no resolver or replacement identity input")
       accepted shouldBe Some(candidate)
-      digestrejected shouldBe None
       provenancerejected shouldBe None
     }
   }
@@ -334,7 +326,6 @@ final class ComponentKnowledgeManifestSpec
         sourceKind = entry.provenance.sourceKind,
         repository = "https://repo.example.invalid/phase59",
         artifactCoordinate = entry.provenance.artifactCoordinate,
-        sha256 = _digest,
         normalizedRelativePath = "phase59/private/resource.bin",
         logicalSource = entry.provenance.logicalSource,
         physicalSource = "expanded-car:private-phase59",
