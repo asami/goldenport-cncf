@@ -3,6 +3,9 @@
 status=planned
 planned_at=2026-09-29
 driver=KnowledgeHubProject/nict-editing-studio-app
+driver_phase=KnowledgeHubProject/nict-editing-studio-app Phase 4
+integration_acceptance_phase=KnowledgeHubProject/nict-editing-studio-app Phase 5
+server_reference_phase=KnowledgeHubProject/nict-editing-studio Phase 2
 abstract_ui_dependency=asami/cozy Phase 74
 strategy=textus-knowledge-workbench/docs/strategy/knowledge-application-integration.md
 
@@ -23,6 +26,50 @@ Semantic/Application Model
             -> presentation clients
 
 Display Model instances conform to the target-neutral Abstract/Logical UI runtime contract owned by Cozy Phase 74.
+
+## Development-driver Phase relationship
+
+The UI/prototype driver is
+[nict-editing-studio-app Phase 4](../../../../Project2026/nict-editing-studio-app/docs/phase/phase-4.md).
+It owns UI-driven protocol/model proposals and fixture-backed client feasibility.
+[App Phase 5](../../../../Project2026/nict-editing-studio-app/docs/phase/phase-5.md)
+owns real-server integration and final aggregate/end-to-end acceptance. The
+2026-10-02 scope decision supersedes the earlier Phase 4 integration gate.
+[nict-editing-studio Phase 2](../../../../Project2026/nict-editing-studio/docs/phase/phase-2.md)
+is the server-side development child: it supplies concrete application
+DisplayModel content, semantic projection, admitted mutation contracts and
+deterministic reference fixtures before the client is connected.
+
+Phase 96 is a generic infrastructure dependency, not the owner of Editing
+Studio domain semantics. Develop the minimum projection/protocol contract from
+the concrete server fixtures; do not require the application to wait for all
+Phase 96 scope before its first contract handoff. Cozy
+[Phase 74, Abstract UI Runtime Contract](https://github.com/asami/cozy/blob/main/docs/phase/phase-74.md)
+owns the shared target-neutral vocabulary. Flutter Core consumes the versioned
+protocol/runtime fixtures, and TFAF owns visual realization.
+
+Handoffs identify the protocol/vocabulary version, fixture provenance and
+focused verification evidence. Scoped child/dependency handoffs do not require
+full-test runs; app Phase 5 owns final real-server aggregate/E2E validation for this
+integration line. Phase 96 retains its independent repository acceptance:
+app acceptance does not imply closure of unrelated generic scope.
+
+Use an existing admitted resource or an explicitly development-only fixture.
+The real Workbench/KnowledgeHub admission gate in server Phase 1.2 is separate;
+no production Knowledge Candidate/admission API is invented here to bypass it.
+Preparation is recorded in the non-normative
+[Phase 96 Display proposal](../notes/display-model-phase-96-proposal.md),
+Editing Studio's
+[ESS2-01 sample journal](../../../../Project2026/nict-editing-studio/docs/journal/2026/10/2026-10-01-display-model-phase-96-sample.md),
+and the [preparation history](../journal/2026/10/2026-10-01-display-model-phase-96-preparation.md).
+These records do not freeze the contract or close a Phase/stage.
+
+The 2026-10-02 [UI-driven Presentation Context proposal](../notes/display-protocol-presentation-context-proposal.md)
+adds the server-side handoff for presentation-relevant ExecutionContext
+projection, generic context families and validated continuation. Core carries
+context, TFAF uses supplied arm/variant identity to realize registered UI, and
+the app remains unaware of experiment logic. This is proposed Phase 96 scope
+for review against existing admission rules; no runtime or protocol is accepted.
 
 ## Initial scope
 
@@ -67,7 +114,9 @@ Semantic clients may continue to consume CNCF View Models independently.
 
 ## Development proof
 
-Use an Editing Studio/Knowledge Candidate fixture to prove:
+Use the concrete resource fixture supplied by Editing Studio Phase 2 to prove
+the following. A Knowledge Candidate example remains explicitly development-
+only until its production contract is admitted:
 
 1. semantic List View -> List Display Model;
 2. semantic Detail View -> Detail Display Model;
