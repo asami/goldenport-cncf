@@ -15,6 +15,19 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 105](phase-105.md) plans bounded Workflow validation simplification:
+  remove unnecessary type/provenance restrictions, repeated admission/history
+  checks and post-commit copy comparisons while preserving public interfaces.
+  `completeC` stays non-public. CNCF and sm-workflow Phase 5.2 can develop in
+  parallel; affected integration acceptance uses an explicitly selected corrected
+  CNCF artifact. [Checklist](phase-105-checklist.md). Planning does not start or
+  pause either development task.
+
+- [Phase 103](phase-103.md) plans the shared Validation/Test Metadata ABI and
+  operation discovery, driven by sm-workflow Phase 5. textus-cbd-support static
+  analysis/KPI is a separate Mac mini consumer; its completion does not block
+  the producer/runtime slice. [Checklist](phase-103-checklist.md).
+
 - [Phase 95](phase-95.md) plans a UI-facing View Model and Aggregate command
   contract over existing CNCF `ViewSpace`/`AggregateSpace`, with REST first and
   gRPC deferred. It does not block the Editing Studio Flutter application's
@@ -661,3 +674,7 @@ acceptance, successor, and resume evidence. This inventory changes no status.
 | [phase-93](phase-93.md) | No top-level status declared |
 | [phase-94-checklist](phase-94-checklist.md) | status=planned |
 | [phase-94](phase-94.md) | status=planned |
+| [phase-103](phase-103.md) | status=planned |
+| [phase-103-checklist](phase-103-checklist.md) | status=planned |
+| [phase-105](phase-105.md) | status=planned |
+| [phase-105-checklist](phase-105-checklist.md) | status=planned |
